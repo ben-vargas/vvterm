@@ -62,7 +62,7 @@ struct TerminalSnippetFormView: View {
                 } header: {
                     Text("Send Behavior")
                 } footer: {
-                    Text("Snippets send exactly as written. Ctrl/Alt modifiers are ignored for snippet taps.")
+                    Text("Snippets send exactly as written. Ctrl/Alt/Shift modifiers are ignored for snippet taps.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

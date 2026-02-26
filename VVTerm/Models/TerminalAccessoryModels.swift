@@ -19,6 +19,7 @@ enum TerminalSnippetSendMode: String, Codable, CaseIterable, Identifiable {
 enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, Identifiable {
     case escape
     case tab
+    case shiftTab
     case enter
     case backspace
     case delete
@@ -70,6 +71,7 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
         switch self {
         case .escape: return String(localized: "Esc")
         case .tab: return String(localized: "Tab")
+        case .shiftTab: return String(localized: "Shift+Tab")
         case .enter: return String(localized: "Enter")
         case .backspace: return String(localized: "Backspace")
         case .delete: return String(localized: "Delete")
@@ -110,6 +112,7 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
         switch self {
         case .escape: return String(localized: "Esc")
         case .tab: return String(localized: "Tab")
+        case .shiftTab: return String(localized: "S-Tab")
         case .enter: return String(localized: "Enter")
         case .backspace: return String(localized: "Bksp")
         case .delete: return String(localized: "Del")

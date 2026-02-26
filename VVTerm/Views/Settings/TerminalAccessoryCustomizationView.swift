@@ -50,6 +50,7 @@ struct TerminalAccessoryCustomizationView: View {
                     HStack(spacing: 8) {
                         previewChip(String(localized: "Ctrl"))
                         previewChip(String(localized: "Alt"))
+                        previewChip(String(localized: "Shift"))
                         ForEach(activeItems, id: \.self) { item in
                             previewChip(label(for: item))
                         }
@@ -77,7 +78,7 @@ struct TerminalAccessoryCustomizationView: View {
             } footer: {
                 Text(
                     String(
-                        format: String(localized: "Ctrl and Alt stay fixed. %lld/%lld active items."),
+                        format: String(localized: "Ctrl, Alt, and Shift stay fixed. %lld/%lld active items."),
                         Int64(activeItems.count),
                         Int64(TerminalAccessoryProfile.maxActiveItems)
                     )

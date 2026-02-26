@@ -1601,20 +1601,26 @@ indirect enum TerminalKey {
     case home, end, pageUp, pageDown
     case f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12
     case ctrlC, ctrlD, ctrlZ, ctrlL, ctrlA, ctrlE, ctrlK, ctrlU
-    case ctrl(TerminalKey), alt(TerminalKey), ctrlAlt(TerminalKey)
+    case modified(TerminalKey, mods: Ghostty.Input.Mods)
 
     func withCtrl() -> TerminalKey {
-        switch self {
-        case .ctrl, .alt, .ctrlAlt: return self
-        default: return .ctrl(self)
-        }
+        withModifier(.ctrl)
     }
 
     func withAlt() -> TerminalKey {
+        withModifier(.alt)
+    }
+
+    func withShift() -> TerminalKey {
+        withModifier(.shift)
+    }
+
+    private func withModifier(_ modifier: Ghostty.Input.Mods) -> TerminalKey {
         switch self {
-        case .ctrl(let key): return .ctrlAlt(key)
-        case .alt, .ctrlAlt: return self
-        default: return .alt(self)
+        case .modified(let key, let mods):
+            return .modified(key, mods: mods.union(modifier))
+        default:
+            return .modified(self, mods: modifier)
         }
     }
 
@@ -1654,15 +1660,8 @@ indirect enum TerminalKey {
         case .ctrlE: return Data([0x05])
         case .ctrlK: return Data([0x0B])
         case .ctrlU: return Data([0x15])
-        case .ctrl(let key): return key.ansiSequence
-        case .alt(let key):
-            var data = Data([0x1B])
-            data.append(key.ansiSequence)
-            return data
-        case .ctrlAlt(let key):
-            var data = Data([0x1B])
-            data.append(key.ansiSequence)
-            return data
+        case .modified(let key, _):
+            return key.ansiSequence
         }
     }
 }
@@ -1699,77 +1698,101 @@ extension GhosttyTerminalView {
     }
 
     private func handleToolbarKey(_ key: TerminalKey) {
-        // Use Ghostty key events for navigation keys (proper terminal escape sequences)
+        sendToolbarKey(key)
+    }
+
+    private func sendToolbarKey(_ key: TerminalKey, accumulatedMods: Ghostty.Input.Mods = []) {
         switch key {
+        case .modified(let baseKey, let mods):
+            sendToolbarKey(baseKey, accumulatedMods: accumulatedMods.union(mods))
         case .escape:
-            sendKeyPress(.escape)
+            sendToolbarGhosttyKey(.escape, mods: accumulatedMods)
         case .tab:
-            sendKeyPress(.tab)
+            sendToolbarGhosttyKey(.tab, mods: accumulatedMods)
         case .enter:
-            sendKeyPress(.enter)
+            sendToolbarGhosttyKey(.enter, mods: accumulatedMods)
         case .backspace:
-            sendKeyPress(.backspace)
+            sendToolbarGhosttyKey(.backspace, mods: accumulatedMods)
         case .delete:
-            sendKeyPress(.delete)
+            sendToolbarGhosttyKey(.delete, mods: accumulatedMods)
         case .insert:
-            sendKeyPress(.insert)
+            sendToolbarGhosttyKey(.insert, mods: accumulatedMods)
         case .arrowUp:
-            sendKeyPress(.arrowUp)
+            sendToolbarGhosttyKey(.arrowUp, mods: accumulatedMods)
         case .arrowDown:
-            sendKeyPress(.arrowDown)
+            sendToolbarGhosttyKey(.arrowDown, mods: accumulatedMods)
         case .arrowLeft:
-            sendKeyPress(.arrowLeft)
+            sendToolbarGhosttyKey(.arrowLeft, mods: accumulatedMods)
         case .arrowRight:
-            sendKeyPress(.arrowRight)
+            sendToolbarGhosttyKey(.arrowRight, mods: accumulatedMods)
         case .home:
-            sendKeyPress(.home)
+            sendToolbarGhosttyKey(.home, mods: accumulatedMods)
         case .end:
-            sendKeyPress(.end)
+            sendToolbarGhosttyKey(.end, mods: accumulatedMods)
         case .pageUp:
-            sendKeyPress(.pageUp)
+            sendToolbarGhosttyKey(.pageUp, mods: accumulatedMods)
         case .pageDown:
-            sendKeyPress(.pageDown)
+            sendToolbarGhosttyKey(.pageDown, mods: accumulatedMods)
         case .f1:
-            sendKeyPress(.f1)
+            sendToolbarGhosttyKey(.f1, mods: accumulatedMods)
         case .f2:
-            sendKeyPress(.f2)
+            sendToolbarGhosttyKey(.f2, mods: accumulatedMods)
         case .f3:
-            sendKeyPress(.f3)
+            sendToolbarGhosttyKey(.f3, mods: accumulatedMods)
         case .f4:
-            sendKeyPress(.f4)
+            sendToolbarGhosttyKey(.f4, mods: accumulatedMods)
         case .f5:
-            sendKeyPress(.f5)
+            sendToolbarGhosttyKey(.f5, mods: accumulatedMods)
         case .f6:
-            sendKeyPress(.f6)
+            sendToolbarGhosttyKey(.f6, mods: accumulatedMods)
         case .f7:
-            sendKeyPress(.f7)
+            sendToolbarGhosttyKey(.f7, mods: accumulatedMods)
         case .f8:
-            sendKeyPress(.f8)
+            sendToolbarGhosttyKey(.f8, mods: accumulatedMods)
         case .f9:
-            sendKeyPress(.f9)
+            sendToolbarGhosttyKey(.f9, mods: accumulatedMods)
         case .f10:
-            sendKeyPress(.f10)
+            sendToolbarGhosttyKey(.f10, mods: accumulatedMods)
         case .f11:
-            sendKeyPress(.f11)
+            sendToolbarGhosttyKey(.f11, mods: accumulatedMods)
         case .f12:
-            sendKeyPress(.f12)
-        case .ctrlC, .ctrlD, .ctrlZ, .ctrlL, .ctrlA, .ctrlE, .ctrlK, .ctrlU:
-            switch key {
-            case .ctrlC: sendControlShortcut("c")
-            case .ctrlD: sendControlShortcut("d")
-            case .ctrlZ: sendControlShortcut("z")
-            case .ctrlL: sendControlShortcut("l")
-            case .ctrlA: sendControlShortcut("a")
-            case .ctrlE: sendControlShortcut("e")
-            case .ctrlK: sendControlShortcut("k")
-            case .ctrlU: sendControlShortcut("u")
-            default:
-                sendAnsiSequence(key.ansiSequence)
-            }
-        case .ctrl, .alt, .ctrlAlt:
-            // Modified keys - use ANSI sequence
-            sendAnsiSequence(key.ansiSequence)
+            sendToolbarGhosttyKey(.f12, mods: accumulatedMods)
+        case .ctrlC:
+            sendToolbarControlShortcut(.c, letter: "c", mods: accumulatedMods)
+        case .ctrlD:
+            sendToolbarControlShortcut(.d, letter: "d", mods: accumulatedMods)
+        case .ctrlZ:
+            sendToolbarControlShortcut(.z, letter: "z", mods: accumulatedMods)
+        case .ctrlL:
+            sendToolbarControlShortcut(.l, letter: "l", mods: accumulatedMods)
+        case .ctrlA:
+            sendToolbarControlShortcut(.a, letter: "a", mods: accumulatedMods)
+        case .ctrlE:
+            sendToolbarControlShortcut(.e, letter: "e", mods: accumulatedMods)
+        case .ctrlK:
+            sendToolbarControlShortcut(.k, letter: "k", mods: accumulatedMods)
+        case .ctrlU:
+            sendToolbarControlShortcut(.u, letter: "u", mods: accumulatedMods)
         }
+    }
+
+    private func sendToolbarGhosttyKey(
+        _ key: Ghostty.Input.Key,
+        mods: Ghostty.Input.Mods,
+        text: String? = nil
+    ) {
+        let codepoint = text?.unicodeScalars.first?.value ?? 0
+        sendModifiedKey(key, mods: mods, text: text, unshiftedCodepoint: codepoint)
+    }
+
+    private func sendToolbarControlShortcut(
+        _ key: Ghostty.Input.Key,
+        letter: String,
+        mods: Ghostty.Input.Mods
+    ) {
+        var mergedMods = mods
+        mergedMods.insert(.ctrl)
+        sendToolbarGhosttyKey(key, mods: mergedMods, text: letter)
     }
 
     private func handleToolbarSnippet(_ snippet: TerminalSnippet) {
@@ -1792,11 +1815,16 @@ private class TerminalInputAccessoryView: UIInputView {
     }
     private var ctrlActive = false
     private var altActive = false
+    private var shiftActive = false
     private weak var ctrlButton: UIButton?
     private weak var altButton: UIButton?
+    private weak var shiftButton: UIButton?
     private weak var voiceButton: UIButton?
+    private weak var voiceSeparatorView: UIView?
     private weak var backgroundEffectView: UIVisualEffectView?
     private weak var dynamicItemsStack: UIStackView?
+    private var scrollLeadingToVoiceConstraint: NSLayoutConstraint?
+    private var scrollLeadingToEdgeConstraint: NSLayoutConstraint?
     private var defaultsObserver: NSObjectProtocol?
     private var accessoryProfileObserver: NSObjectProtocol?
     private var keyRepeatTimer: DispatchSourceTimer?
@@ -1861,7 +1889,13 @@ private class TerminalInputAccessoryView: UIInputView {
         addSubview(voice)
 
         let voiceSeparator = makeSeparator()
+        voiceSeparatorView = voiceSeparator
         addSubview(voiceSeparator)
+
+        let leadingToVoice = scrollView.leadingAnchor.constraint(equalTo: voiceSeparator.trailingAnchor, constant: 10)
+        let leadingToEdge = scrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12)
+        scrollLeadingToVoiceConstraint = leadingToVoice
+        scrollLeadingToEdgeConstraint = leadingToEdge
 
         NSLayoutConstraint.activate([
             voice.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
@@ -1872,7 +1906,7 @@ private class TerminalInputAccessoryView: UIInputView {
 
             scrollView.topAnchor.constraint(equalTo: topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: voiceSeparator.trailingAnchor, constant: 10),
+            leadingToVoice,
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
 
@@ -1901,10 +1935,16 @@ private class TerminalInputAccessoryView: UIInputView {
             self?.altActive.toggle()
             self?.updateModifierState()
         }
+        let shift = makeModifierButton(title: String(localized: "Shift")) { [weak self] in
+            self?.shiftActive.toggle()
+            self?.updateModifierState()
+        }
         ctrlButton = ctrl
         altButton = alt
+        shiftButton = shift
         stack.addArrangedSubview(ctrl)
         stack.addArrangedSubview(alt)
+        stack.addArrangedSubview(shift)
         stack.addArrangedSubview(makeSeparator())
 
         let dynamicStack = UIStackView()
@@ -2055,6 +2095,7 @@ private class TerminalInputAccessoryView: UIInputView {
         switch actionID {
         case .escape: return .escape
         case .tab: return .tab
+        case .shiftTab: return .tab.withShift()
         case .enter: return .enter
         case .backspace: return .backspace
         case .delete: return .delete
@@ -2306,21 +2347,27 @@ private class TerminalInputAccessoryView: UIInputView {
         var modifiedKey = key
         if ctrlActive {
             modifiedKey = modifiedKey.withCtrl()
-            ctrlActive = false
-            updateModifierState()
         }
         if altActive {
             modifiedKey = modifiedKey.withAlt()
+        }
+        if shiftActive {
+            modifiedKey = modifiedKey.withShift()
+        }
+        if ctrlActive || altActive || shiftActive {
+            ctrlActive = false
             altActive = false
+            shiftActive = false
             updateModifierState()
         }
         onKey(modifiedKey)
     }
 
     private func sendSnippet(_ snippet: TerminalSnippet) {
-        if ctrlActive || altActive {
+        if ctrlActive || altActive || shiftActive {
             ctrlActive = false
             altActive = false
+            shiftActive = false
             updateModifierState()
         }
         onSnippet(snippet)
@@ -2354,21 +2401,24 @@ private class TerminalInputAccessoryView: UIInputView {
         repeatingKey = nil
     }
 
-    func consumeModifiers() -> (ctrl: Bool, alt: Bool) {
+    func consumeModifiers() -> (ctrl: Bool, alt: Bool, shift: Bool) {
         let ctrl = ctrlActive
         let alt = altActive
-        if ctrl || alt {
+        let shift = shiftActive
+        if ctrl || alt || shift {
             ctrlActive = false
             altActive = false
+            shiftActive = false
             updateModifierState()
         }
-        return (ctrl, alt)
+        return (ctrl, alt, shift)
     }
 
     private func updateModifierState() {
         UIView.animate(withDuration: 0.2) {
             self.updateModifierButton(self.ctrlButton, isActive: self.ctrlActive)
             self.updateModifierButton(self.altButton, isActive: self.altActive)
+            self.updateModifierButton(self.shiftButton, isActive: self.shiftActive)
         }
     }
 
@@ -2400,9 +2450,14 @@ private class TerminalInputAccessoryView: UIInputView {
     }
 
     private func updateVoiceButtonState() {
-        let enabled = onVoice != nil
-        voiceButton?.isEnabled = enabled
-        voiceButton?.alpha = enabled ? 1.0 : 0.35
+        let visible = onVoice != nil
+        voiceButton?.isHidden = !visible
+        voiceSeparatorView?.isHidden = !visible
+        voiceButton?.isEnabled = visible
+        voiceButton?.alpha = 1.0
+        scrollLeadingToVoiceConstraint?.isActive = visible
+        scrollLeadingToEdgeConstraint?.isActive = !visible
+        setNeedsLayout()
     }
 }
 
@@ -2444,6 +2499,7 @@ extension GhosttyTerminalView: UIKeyInput, UITextInputTraits {
                         var ghostMods: Ghostty.Input.Mods = []
                         if mods.ctrl { ghostMods.insert(.ctrl) }
                         if mods.alt { ghostMods.insert(.alt) }
+                        if mods.shift { ghostMods.insert(.shift) }
                         let codepoint = lower.unicodeScalars.first?.value ?? 0
                         sendModifiedKey(key, mods: ghostMods, text: lower, unshiftedCodepoint: codepoint)
                     } else {
