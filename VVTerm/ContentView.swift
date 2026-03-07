@@ -13,6 +13,8 @@ struct ContentView: View {
     @State private var selectedWorkspace: Workspace?
     @State private var selectedServer: Server?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var restoredColumnVisibility: NavigationSplitViewVisibility = .all
+    @SceneStorage("vvterm.zenMode.macos") private var isZenModeEnabled = false
 
     /// Whether the selected server is connected
     private var isSelectedServerConnected: Bool {
@@ -25,6 +27,18 @@ struct ContentView: View {
         !tabManager.connectedServerIds.isEmpty
     }
 
+    private var canUseZenMode: Bool {
+        selectedServer != nil && isSelectedServerConnected
+    }
+
+    private var effectiveZenModeEnabled: Bool {
+        canUseZenMode && isZenModeEnabled
+    }
+
+    private var isSidebarVisible: Bool {
+        columnVisibility != .detailOnly
+    }
+
     @ViewBuilder
     private var detailContent: some View {
         if let server = selectedServer {
@@ -34,7 +48,10 @@ struct ContentView: View {
                 ConnectionTerminalContainer(
                     tabManager: tabManager,
                     serverManager: serverManager,
-                    server: server
+                    server: server,
+                    isZenModeEnabled: $isZenModeEnabled,
+                    isSidebarVisible: isSidebarVisible,
+                    onToggleSidebar: toggleSidebarInZenMode
                 )
                 .id(server.id) // Ensure isolation per server
             } else if !hasConnectedServers {
@@ -65,7 +82,53 @@ struct ContentView: View {
         }
     }
 
-    var body: some View {
+    private func applyZenPresentation(_ enabled: Bool) {
+        if enabled {
+            if columnVisibility != .detailOnly {
+                restoredColumnVisibility = columnVisibility
+            }
+            columnVisibility = .detailOnly
+        } else if columnVisibility == .detailOnly {
+            columnVisibility = restoredColumnVisibility == .detailOnly ? .all : restoredColumnVisibility
+        }
+    }
+
+    private func setZenMode(_ enabled: Bool) {
+        guard enabled != isZenModeEnabled else { return }
+        applyZenPresentation(enabled)
+        isZenModeEnabled = enabled
+    }
+
+    private func toggleZenMode() {
+        guard canUseZenMode || isZenModeEnabled else { return }
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+            setZenMode(!isZenModeEnabled)
+        }
+    }
+
+    private func setSidebarVisible(_ isVisible: Bool) {
+        if isVisible {
+            columnVisibility = restoredColumnVisibility == .detailOnly ? .all : restoredColumnVisibility
+        } else {
+            if columnVisibility != .detailOnly {
+                restoredColumnVisibility = columnVisibility
+            }
+            columnVisibility = .detailOnly
+        }
+    }
+
+    private func toggleSidebarInZenMode() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            setSidebarVisible(!isSidebarVisible)
+        }
+    }
+
+    private var zenToggleAction: (() -> Void)? {
+        guard canUseZenMode else { return nil }
+        return { toggleZenMode() }
+    }
+
+    private var splitViewContent: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // LEFT: Sidebar with workspace + servers
             ServerSidebarView(
@@ -79,9 +142,13 @@ struct ContentView: View {
             detailContent
         }
         .onAppear {
-            // Select first workspace
             if selectedWorkspace == nil {
                 selectedWorkspace = serverManager.workspaces.first
+            }
+            if !canUseZenMode {
+                setZenMode(false)
+            } else if isZenModeEnabled {
+                applyZenPresentation(true)
             }
         }
         .onChange(of: serverManager.workspaces) { workspaces in
@@ -89,11 +156,33 @@ struct ContentView: View {
                 selectedWorkspace = workspaces.first
             }
         }
-        .onChange(of: selectedServer) { _ in
-            // Auto-connect on selection (optional)
+        .onChange(of: columnVisibility) { newValue in
+            if !isZenModeEnabled && newValue != .detailOnly {
+                restoredColumnVisibility = newValue
+            }
         }
+        .onChange(of: isZenModeEnabled) { enabled in
+            applyZenPresentation(enabled && canUseZenMode)
+        }
+        .onChange(of: canUseZenMode) { available in
+            if !available && isZenModeEnabled {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    setZenMode(false)
+                }
+            }
+        }
+    }
+
+    var body: some View {
         #if os(macOS)
-        .frame(minWidth: 800, minHeight: 500)
+        splitViewContent
+            .toolbar(effectiveZenModeEnabled ? .hidden : .visible, for: .windowToolbar)
+            .focusedValue(\.toggleZenMode, zenToggleAction)
+            .focusedValue(\.isZenModeEnabled, canUseZenMode ? effectiveZenModeEnabled : nil)
+            .frame(minWidth: 800, minHeight: 500)
+        #endif
+        #if !os(macOS)
+        splitViewContent
         #endif
     }
 }

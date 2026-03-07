@@ -16,9 +16,13 @@ struct ConnectionTerminalContainer: View {
     @ObservedObject var tabManager: TerminalTabManager
     let serverManager: ServerManager
     let server: Server
+    @Binding var isZenModeEnabled: Bool
+    let isSidebarVisible: Bool
+    let onToggleSidebar: () -> Void
 
     @EnvironmentObject var ghosttyApp: Ghostty.App
     @Environment(\.colorScheme) private var colorScheme
+    @ObservedObject private var storeManager = StoreManager.shared
 
     /// Cached terminal background color from theme
     @State private var terminalBackgroundColor: Color = .black
@@ -33,6 +37,7 @@ struct ConnectionTerminalContainer: View {
 
     /// Tab limit alert
     @State private var showingTabLimitAlert = false
+    @State private var showingZenPanel = false
 
     /// Selected view type - persisted per server
     private var selectedView: String {
@@ -145,6 +150,14 @@ struct ConnectionTerminalContainer: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(selectedView == "terminal" ? terminalBackgroundColor : nil)
+        .overlay(alignment: .top) {
+            #if os(macOS)
+            if selectedView == "terminal" && !isZenModeEnabled {
+                MacOSToolbarBackdrop(color: terminalBackgroundColor)
+            }
+            #endif
+        }
+        .macOSZenExpandedTopSafeArea(isZenModeEnabled && selectedView == "terminal")
         .onAppear {
             updateTerminalBackgroundColor()
             // Select first tab if none selected
@@ -170,15 +183,27 @@ struct ConnectionTerminalContainer: View {
                 selectedTabIdBinding.wrappedValue = serverTabs.first?.id
             }
         }
+        .onChange(of: isZenModeEnabled) { newValue in
+            if !newValue {
+                showingZenPanel = false
+            }
+        }
         #if os(macOS)
         .focusedValue(\.openTerminalTab, handleNewTabCommand)
         .toolbar {
-            viewPickerToolbarItem
-            if selectedView == "terminal" && !serverTabs.isEmpty {
-                tabsToolbarItem
+            if !isZenModeEnabled {
+                viewPickerToolbarItem
+                if selectedView == "terminal" && !serverTabs.isEmpty {
+                    tabsToolbarItem
+                }
+                toolbarSpacer
+                trailingToolbarItems
             }
-            toolbarSpacer
-            disconnectToolbarItem
+        }
+        .overlay(alignment: .topTrailing) {
+            if isZenModeEnabled {
+                zenModeOverlay
+            }
         }
         #endif
         .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
@@ -215,6 +240,20 @@ struct ConnectionTerminalContainer: View {
                 // No-op: user cancelled biometric auth or open failed.
             }
         }
+    }
+
+    private func selectPreviousTab() {
+        guard let currentId = selectedTabId,
+              let currentIndex = serverTabs.firstIndex(where: { $0.id == currentId }),
+              currentIndex > 0 else { return }
+        selectedTabIdBinding.wrappedValue = serverTabs[currentIndex - 1].id
+    }
+
+    private func selectNextTab() {
+        guard let currentId = selectedTabId,
+              let currentIndex = serverTabs.firstIndex(where: { $0.id == currentId }),
+              currentIndex < serverTabs.count - 1 else { return }
+        selectedTabIdBinding.wrappedValue = serverTabs[currentIndex + 1].id
     }
 
     private func updateTerminalBackgroundColor() {
@@ -275,27 +314,77 @@ struct ConnectionTerminalContainer: View {
     }
 
     @ToolbarContentBuilder
-    private var disconnectToolbarItem: some ToolbarContent {
+    private var trailingToolbarItems: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            // Connection status
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(serverTabs.isEmpty ? Color.secondary : Color.green)
-                    .frame(width: 8, height: 8)
-                Text(tabsStatusText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            zenModeToolbarButton
+        }
+
+        if #available(macOS 26.0, *) {
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+        } else {
+            ToolbarItem(placement: .primaryAction) {
+                Color.clear
+                    .frame(width: 8, height: 1)
             }
-            .padding(.horizontal, 8)
         }
 
         ToolbarItem(placement: .primaryAction) {
+            connectionStatusToolbarGroup
+        }
+    }
+
+    private var zenModeToolbarButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                isZenModeEnabled = true
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Zen")
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+            }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help(Text("Enter Zen Mode"))
+    }
+
+    private var connectionStatusToolbarGroup: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(serverTabs.isEmpty ? Color.secondary : Color.green)
+                .frame(width: 8, height: 8)
+
+            Text(compactTabsStatusText)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Divider()
+                .frame(height: 16)
+
             Button {
                 showingDisconnectConfirmation = true
             } label: {
                 Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.red)
+                    .frame(width: 18, height: 18)
             }
+            .buttonStyle(.plain)
             .help(Text("Disconnect from server"))
             .alert(
                 disconnectAlertTitle,
@@ -310,21 +399,147 @@ struct ConnectionTerminalContainer: View {
                 Text(disconnectAlertMessage)
             }
         }
+        .padding(.leading, 10)
+        .padding(.trailing, 8)
+        .padding(.vertical, 6)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.primary.opacity(0.04))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+        )
+        .fixedSize()
     }
 
     private func disconnectFromServer() {
         tabManager.closeAllTabs(for: server.id)
         tabManager.connectedServerIds.remove(server.id)
     }
+
+    private var zenModeOverlay: some View {
+        ZenModeFloatingOverlay(
+            isPanelPresented: $showingZenPanel,
+            indicatorColor: zenIndicatorColor
+        ) { panelWidth in
+            MacOSZenModePanel(
+                width: panelWidth,
+                serverName: server.name,
+                statusText: tabsStatusText,
+                statusColor: zenIndicatorColor,
+                selectedView: selectedView,
+                selectedViewBinding: selectedViewBinding,
+                tabs: serverTabs,
+                selectedTabId: selectedTabIdBinding,
+                paneState: { tab in
+                    tabManager.paneStates[tab.focusedPaneId]
+                },
+                onPreviousTab: { selectPreviousTab() },
+                onNextTab: { selectNextTab() },
+                onNewTab: {
+                    showingZenPanel = false
+                    openNewTab(selectTerminalViewOnSuccess: true)
+                },
+                onCloseTab: { tab in
+                    tabManager.closeTab(tab)
+                },
+                onSplitRight: {
+                    guard let selectedTab else { return }
+                    _ = tabManager.splitHorizontal(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+                },
+                onSplitDown: {
+                    guard let selectedTab else { return }
+                    _ = tabManager.splitVertical(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+                },
+                onClosePane: {
+                    guard let selectedTab else { return }
+                    tabManager.closePane(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+                },
+                canSplit: selectedTab != nil && storeManager.isPro,
+                canClosePane: selectedTab != nil,
+                isSidebarVisible: isSidebarVisible,
+                onToggleSidebar: {
+                    showingZenPanel = false
+                    onToggleSidebar()
+                },
+                onDisconnect: {
+                    showingZenPanel = false
+                    showingDisconnectConfirmation = true
+                },
+                onExitZen: {
+                    showingZenPanel = false
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                        isZenModeEnabled = false
+                    }
+                }
+            )
+        }
+        .ignoresSafeArea(.container, edges: .top)
+    }
     #endif
 }
 
+private extension View {
+    @ViewBuilder
+    func macOSZenExpandedTopSafeArea(_ isEnabled: Bool) -> some View {
+        #if os(macOS)
+        if isEnabled {
+            self.ignoresSafeArea(.container, edges: .top)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}
+
 #if os(macOS)
+private struct MacOSToolbarBackdrop: View {
+    let color: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            let height = proxy.safeAreaInsets.top > 0 ? proxy.safeAreaInsets.top : 52
+            color
+                .frame(height: height)
+                .frame(maxWidth: .infinity, alignment: .top)
+                .ignoresSafeArea(.container, edges: .top)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 private extension ConnectionTerminalContainer {
+    var zenIndicatorColor: Color {
+        guard let state = selectedTab.flatMap({ tabManager.paneStates[$0.focusedPaneId] }) else {
+            return serverTabs.isEmpty ? .secondary : .green
+        }
+
+        switch state.connectionState {
+        case .connected:
+            return .green
+        case .connecting, .reconnecting:
+            return .orange
+        case .disconnected, .idle:
+            return .secondary
+        case .failed:
+            return .red
+        }
+    }
+
     var tabsStatusText: String {
         if serverTabs.isEmpty {
             return String(localized: "No terminals")
         }
+        let count = serverTabs.count
+        return count == 1
+            ? String(format: String(localized: "%lld tab"), count)
+            : String(format: String(localized: "%lld tabs"), count)
+    }
+
+    var compactTabsStatusText: String {
         let count = serverTabs.count
         return count == 1
             ? String(format: String(localized: "%lld tab"), count)

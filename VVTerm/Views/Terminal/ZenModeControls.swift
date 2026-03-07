@@ -1,0 +1,640 @@
+import SwiftUI
+
+struct ZenModeFloatingOverlay<Panel: View>: View {
+    @Binding var isPanelPresented: Bool
+    let indicatorColor: Color?
+    let panel: (CGFloat) -> Panel
+
+    #if os(macOS)
+    private let chromeTopPadding: CGFloat = 6
+    private let chromeTrailingPadding: CGFloat = 8
+    #else
+    private let chromeTopPadding: CGFloat = 12
+    private let chromeTrailingPadding: CGFloat = 12
+    #endif
+
+    init(
+        isPanelPresented: Binding<Bool>,
+        indicatorColor: Color? = nil,
+        @ViewBuilder panel: @escaping (CGFloat) -> Panel
+    ) {
+        self._isPanelPresented = isPanelPresented
+        self.indicatorColor = indicatorColor
+        self.panel = panel
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let panelWidth = max(250, min(proxy.size.width - 24, 360))
+
+            ZStack(alignment: .topTrailing) {
+                if isPanelPresented {
+                    Color.black.opacity(0.001)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            closePanel()
+                        }
+                        .transition(.opacity)
+                }
+
+                chromeStack(panelWidth: panelWidth)
+                    .padding(.top, chromeTopPadding)
+                    .padding(.trailing, chromeTrailingPadding)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        }
+    }
+
+    @ViewBuilder
+    private func chromeStack(panelWidth: CGFloat) -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            GlassEffectContainer(spacing: 12) {
+                overlayContent(panelWidth: panelWidth)
+            }
+        } else {
+            overlayContent(panelWidth: panelWidth)
+        }
+    }
+
+    private func overlayContent(panelWidth: CGFloat) -> some View {
+        VStack(alignment: .trailing, spacing: 10) {
+            launcherButton
+
+            if isPanelPresented {
+                panel(panelWidth)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+    }
+
+    private var launcherButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.84)) {
+                isPanelPresented.toggle()
+            }
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 40, height: 40)
+                    .foregroundStyle(.primary)
+                    .adaptiveGlassCircle()
+                    .overlay(
+                        Circle()
+                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                    )
+
+                if let indicatorColor {
+                    Circle()
+                        .fill(indicatorColor)
+                        .frame(width: 8, height: 8)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.black.opacity(0.22), lineWidth: 0.5)
+                        )
+                        .padding(5)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Zen controls")
+        .accessibilityValue(isPanelPresented ? "Expanded" : "Collapsed")
+    }
+
+    private func closePanel() {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isPanelPresented = false
+        }
+    }
+}
+
+struct ZenModePanelCard<Content: View>: View {
+    let width: CGFloat
+    let content: Content
+
+    init(width: CGFloat, @ViewBuilder content: () -> Content) {
+        self.width = width
+        self.content = content()
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+        }
+        .frame(width: width)
+        .frame(maxHeight: 430)
+        .adaptiveGlassRect(cornerRadius: 22)
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.14), radius: 14, y: 10)
+    }
+}
+
+struct ZenModeSection<Content: View>: View {
+    let title: LocalizedStringKey
+    let content: Content
+
+    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(sectionHeaderColor)
+                .textCase(.uppercase)
+
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var sectionHeaderColor: Color {
+        #if os(iOS)
+        Color.primary.opacity(0.78)
+        #else
+        Color.secondary
+        #endif
+    }
+}
+
+struct ZenModeChoiceChip: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.callout.weight(.medium))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .foregroundStyle(foregroundColor)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.primary.opacity(backgroundOpacity))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var foregroundColor: Color {
+        if isSelected {
+            return .primary
+        }
+
+        #if os(iOS)
+        return Color.primary.opacity(0.8)
+        #else
+        return Color.primary.opacity(0.72)
+        #endif
+    }
+
+    private var backgroundOpacity: Double {
+        if isSelected {
+            return 0.16
+        }
+
+        #if os(iOS)
+        return 0.1
+        #else
+        return 0.08
+        #endif
+    }
+}
+
+struct ZenModeActionButton: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    var tint: Color = .primary
+    var isDisabled = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .frame(width: 16)
+                Text(title)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .foregroundStyle(isDisabled ? Color.secondary : tint)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.primary.opacity(0.07))
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+    }
+}
+
+private struct ZenModeStatusLine: View {
+    let title: String
+    let subtitle: String
+    let indicatorColor: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(indicatorColor)
+                    .frame(width: 8, height: 8)
+                Text(title)
+                    .font(.headline)
+            }
+
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(subtitleColor)
+        }
+    }
+
+    private var subtitleColor: Color {
+        #if os(iOS)
+        Color.primary.opacity(0.72)
+        #else
+        .secondary
+        #endif
+    }
+}
+
+#if os(macOS)
+struct MacOSZenModePanel: View {
+    let width: CGFloat
+    let serverName: String
+    let statusText: String
+    let statusColor: Color
+    let selectedView: String
+    let selectedViewBinding: Binding<String>
+    let tabs: [TerminalTab]
+    let selectedTabId: Binding<UUID?>
+    let paneState: (TerminalTab) -> TerminalPaneState?
+    let onPreviousTab: () -> Void
+    let onNextTab: () -> Void
+    let onNewTab: () -> Void
+    let onCloseTab: (TerminalTab) -> Void
+    let onSplitRight: () -> Void
+    let onSplitDown: () -> Void
+    let onClosePane: () -> Void
+    let canSplit: Bool
+    let canClosePane: Bool
+    let isSidebarVisible: Bool
+    let onToggleSidebar: () -> Void
+    let onDisconnect: () -> Void
+    let onExitZen: () -> Void
+
+    var body: some View {
+        ZenModePanelCard(width: width) {
+            ZenModeStatusLine(
+                title: serverName,
+                subtitle: statusText,
+                indicatorColor: statusColor
+            )
+
+            ZenModeSection("View") {
+                HStack(spacing: 8) {
+                    ZenModeChoiceChip(
+                        title: "Stats",
+                        systemImage: "chart.bar.xaxis",
+                        isSelected: selectedView == "stats"
+                    ) {
+                        selectedViewBinding.wrappedValue = "stats"
+                    }
+
+                    ZenModeChoiceChip(
+                        title: "Terminal",
+                        systemImage: "terminal",
+                        isSelected: selectedView == "terminal"
+                    ) {
+                        selectedViewBinding.wrappedValue = "terminal"
+                    }
+                }
+            }
+
+            ZenModeSection("Tabs") {
+                HStack(spacing: 8) {
+                    ZenModeActionButton(title: "Previous Tab", systemImage: "chevron.left") {
+                        onPreviousTab()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .disabled(tabs.count <= 1)
+
+                    ZenModeActionButton(title: "Next Tab", systemImage: "chevron.right") {
+                        onNextTab()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .disabled(tabs.count <= 1)
+                }
+
+                ZenModeActionButton(title: "New Tab", systemImage: "plus") {
+                    onNewTab()
+                }
+
+                if tabs.isEmpty {
+                    Text("No terminals open.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(tabs) { tab in
+                            macOSTabRow(tab)
+                        }
+                    }
+                }
+            }
+
+            if selectedView == "terminal" {
+                ZenModeSection("Pane") {
+                    ZenModeActionButton(
+                        title: "Split Right",
+                        systemImage: "rectangle.split.2x1"
+                    ) {
+                        onSplitRight()
+                    }
+                    .disabled(!canSplit)
+
+                    ZenModeActionButton(
+                        title: "Split Down",
+                        systemImage: "rectangle.split.1x2"
+                    ) {
+                        onSplitDown()
+                    }
+                    .disabled(!canSplit)
+
+                    ZenModeActionButton(
+                        title: "Close Pane",
+                        systemImage: "xmark.square",
+                        tint: .red
+                    ) {
+                        onClosePane()
+                    }
+                    .disabled(!canClosePane)
+                }
+            }
+
+            ZenModeSection("Window") {
+                ZenModeActionButton(
+                    title: isSidebarVisible ? "Hide Sidebar" : "Show Sidebar",
+                    systemImage: "sidebar.left"
+                ) {
+                    onToggleSidebar()
+                }
+            }
+
+            ZenModeSection("Session") {
+                ZenModeActionButton(
+                    title: "Disconnect",
+                    systemImage: "xmark.circle",
+                    tint: .red
+                ) {
+                    onDisconnect()
+                }
+            }
+
+            ZenModeSection("Zen") {
+                ZenModeActionButton(
+                    title: "Exit Zen Mode",
+                    systemImage: "arrow.down.right.and.arrow.up.left"
+                ) {
+                    onExitZen()
+                }
+            }
+        }
+    }
+
+    private func macOSTabRow(_ tab: TerminalTab) -> some View {
+        let state = paneState(tab)
+        let tint = state?.connectionState.statusTintColor ?? .secondary
+        let isSelected = selectedTabId.wrappedValue == tab.id
+
+        return HStack(spacing: 8) {
+            Button {
+                selectedViewBinding.wrappedValue = "terminal"
+                selectedTabId.wrappedValue = tab.id
+            } label: {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(tint)
+                        .frame(width: 7, height: 7)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tab.title)
+                            .font(.callout.weight(isSelected ? .semibold : .regular))
+                            .lineLimit(1)
+
+                        if tab.paneCount > 1 {
+                            Text(String(format: String(localized: "%lld panes"), Int64(tab.paneCount)))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.primary.opacity(isSelected ? 0.14 : 0.07))
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                onCloseTab(tab)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(Color.primary.opacity(0.08))
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+#endif
+
+#if os(iOS)
+struct IOSZenModePanel: View {
+    let width: CGFloat
+    let serverName: String
+    let selectedView: String
+    let selectedViewBinding: Binding<String>
+    let sessions: [ConnectionSession]
+    let selectedSessionId: Binding<UUID?>
+    let onCloseSession: (ConnectionSession) -> Void
+    let onNewTab: () -> Void
+    let onOpenSettings: () -> Void
+    let onEditServer: (() -> Void)?
+    let onDisconnect: () -> Void
+    let onBack: () -> Void
+    let onExitZen: () -> Void
+
+    var body: some View {
+        ZenModePanelCard(width: width) {
+            ZenModeStatusLine(
+                title: serverName,
+                subtitle: sessions.isEmpty
+                    ? String(localized: "No open terminals")
+                    : String(format: String(localized: "%lld open tabs"), Int64(sessions.count)),
+                indicatorColor: sessions.first?.connectionState.statusTintColor ?? .secondary
+            )
+
+            ZenModeSection("View") {
+                HStack(spacing: 8) {
+                    ZenModeChoiceChip(
+                        title: "Stats",
+                        systemImage: "chart.bar.xaxis",
+                        isSelected: selectedView == "stats"
+                    ) {
+                        selectedViewBinding.wrappedValue = "stats"
+                    }
+
+                    ZenModeChoiceChip(
+                        title: "Terminal",
+                        systemImage: "terminal",
+                        isSelected: selectedView == "terminal"
+                    ) {
+                        selectedViewBinding.wrappedValue = "terminal"
+                    }
+                }
+            }
+
+            ZenModeSection("Tabs") {
+                ZenModeActionButton(title: "New Tab", systemImage: "plus") {
+                    onNewTab()
+                }
+
+                if sessions.isEmpty {
+                    Text("No terminals open.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(sessions) { session in
+                            iosSessionRow(session)
+                        }
+                    }
+                }
+            }
+
+            ZenModeSection("Server") {
+                ZenModeActionButton(title: "Settings", systemImage: "gear") {
+                    onOpenSettings()
+                }
+
+                if let onEditServer {
+                    ZenModeActionButton(title: "Edit Server", systemImage: "pencil") {
+                        onEditServer()
+                    }
+                }
+
+                ZenModeActionButton(title: "Back", systemImage: "chevron.left") {
+                    onBack()
+                }
+            }
+
+            ZenModeSection("Session") {
+                ZenModeActionButton(
+                    title: "Disconnect",
+                    systemImage: "xmark.circle",
+                    tint: .red
+                ) {
+                    onDisconnect()
+                }
+            }
+
+            ZenModeSection("Zen") {
+                ZenModeActionButton(
+                    title: "Exit Zen Mode",
+                    systemImage: "arrow.down.right.and.arrow.up.left"
+                ) {
+                    onExitZen()
+                }
+            }
+        }
+    }
+
+    private func iosSessionRow(_ session: ConnectionSession) -> some View {
+        let isSelected = selectedSessionId.wrappedValue == session.id
+
+        return HStack(spacing: 8) {
+            Button {
+                selectedViewBinding.wrappedValue = "terminal"
+                selectedSessionId.wrappedValue = session.id
+            } label: {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(session.connectionState.statusTintColor)
+                        .frame(width: 7, height: 7)
+
+                    Text(session.title)
+                        .font(.callout.weight(isSelected ? .semibold : .regular))
+                        .lineLimit(1)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.primary.opacity(isSelected ? 0.14 : 0.07))
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                onCloseSession(session)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.primary.opacity(0.92))
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(Color.primary.opacity(0.12))
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+#endif
+
+extension ConnectionState {
+    var statusTintColor: Color {
+        switch self {
+        case .connected:
+            return .green
+        case .connecting, .reconnecting:
+            return .orange
+        case .disconnected, .idle:
+            return .secondary
+        case .failed:
+            return .red
+        }
+    }
+}

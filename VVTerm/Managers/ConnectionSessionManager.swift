@@ -198,6 +198,10 @@ final class ConnectionSessionManager: ObservableObject {
     @Published var selectedSessionId: UUID? {
         didSet {
             schedulePersist()
+            if let selectedSessionId,
+               let session = sessions.first(where: { $0.id == selectedSessionId }) {
+                selectedSessionByServer[session.serverId] = selectedSessionId
+            }
             updateTmuxSelectionStatuses()
         }
     }

@@ -15,9 +15,19 @@ struct SplitCommands: Commands {
     @FocusedValue(\.activeServerId) var activeServerId
     @FocusedValue(\.activePaneId) var activePaneId
     @FocusedValue(\.terminalSplitActions) var splitActions
+    @FocusedValue(\.toggleZenMode) var toggleZenMode
+    @FocusedValue(\.isZenModeEnabled) var isZenModeEnabled
 
     var body: some Commands {
         CommandMenu("Terminal") {
+            Button(isZenModeEnabled == true ? "Exit Zen Mode" : "Enter Zen Mode") {
+                toggleZenMode?()
+            }
+            .keyboardShortcut("z", modifiers: [.command, .control])
+            .disabled(toggleZenMode == nil)
+
+            Divider()
+
             Group {
                 Button("Split Right") {
                     splitActions?.splitHorizontal()
@@ -83,6 +93,14 @@ struct OpenLocalSSHDiscoveryActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+struct ToggleZenModeActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+struct ZenModeEnabledKey: FocusedValueKey {
+    typealias Value = Bool
+}
+
 extension FocusedValues {
     var activeServerId: UUID? {
         get { self[ActiveServerIdKey.self] }
@@ -107,6 +125,16 @@ extension FocusedValues {
     var openLocalSSHDiscovery: (() -> Void)? {
         get { self[OpenLocalSSHDiscoveryActionKey.self] }
         set { self[OpenLocalSSHDiscoveryActionKey.self] = newValue }
+    }
+
+    var toggleZenMode: (() -> Void)? {
+        get { self[ToggleZenModeActionKey.self] }
+        set { self[ToggleZenModeActionKey.self] = newValue }
+    }
+
+    var isZenModeEnabled: Bool? {
+        get { self[ZenModeEnabledKey.self] }
+        set { self[ZenModeEnabledKey.self] = newValue }
     }
 }
 

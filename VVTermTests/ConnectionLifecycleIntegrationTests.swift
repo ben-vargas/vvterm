@@ -189,6 +189,29 @@ struct ConnectionLifecycleIntegrationTests {
     }
 
     @Test
+    func connectionManagerTracksSelectedSessionPerServer() async {
+        await withCleanConnectionManager { manager in
+            let serverId = UUID()
+            let first = ConnectionSession(
+                serverId: serverId,
+                title: "First",
+                connectionState: .disconnected
+            )
+            let second = ConnectionSession(
+                serverId: serverId,
+                title: "Second",
+                connectionState: .disconnected
+            )
+
+            manager.sessions = [first, second]
+            manager.selectSession(second)
+
+            #expect(manager.selectedSessionId == second.id)
+            #expect(manager.selectedSessionByServer[serverId] == second.id)
+        }
+    }
+
+    @Test
     func tabManagerTryBeginShellStartFailsWhenPaneIsMissing() async {
         await withCleanTabManager { manager in
             let missingPaneId = UUID()

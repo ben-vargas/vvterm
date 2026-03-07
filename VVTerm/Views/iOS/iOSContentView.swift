@@ -22,6 +22,10 @@ struct iOSContentView: View {
     @State private var connectingServer: Server?
     @State private var isConnecting = false
 
+    private var hasTerminalNavigationContext: Bool {
+        isConnecting || connectingServer != nil || !sessionManager.sessions.isEmpty
+    }
+
     var body: some View {
         NavigationStack {
             iOSServerListView(
@@ -89,6 +93,9 @@ struct iOSContentView: View {
             if selectedWorkspace == nil {
                 selectedWorkspace = serverManager.workspaces.first
             }
+            if showingTerminal && !hasTerminalNavigationContext {
+                showingTerminal = false
+            }
         }
         .onChange(of: serverManager.workspaces) { workspaces in
             if selectedWorkspace == nil {
@@ -97,7 +104,7 @@ struct iOSContentView: View {
         }
         // Sync navigation state with session state - dismiss terminal if session is gone
         .onChangeCompat(of: sessionManager.sessions) { _ in
-            if showingTerminal && sessionManager.selectedSession == nil {
+            if showingTerminal && !hasTerminalNavigationContext {
                 showingTerminal = false
             }
             if let connectingServer,
@@ -107,7 +114,7 @@ struct iOSContentView: View {
             }
         }
         .onChange(of: sessionManager.selectedSessionId) { selectedId in
-            if showingTerminal && selectedId == nil {
+            if showingTerminal && selectedId == nil && !hasTerminalNavigationContext {
                 showingTerminal = false
             }
         }
@@ -250,6 +257,7 @@ struct iOSServerListView: View {
                                     guard await AppLockManager.shared.ensureServerUnlocked(server) else { return }
                                     await MainActor.run {
                                         sessionManager.selectSession(connection.session)
+                                        sessionManager.selectedViewByServer[server.id] = "terminal"
                                         showingTerminal = true
                                     }
                                 }
@@ -657,6 +665,10 @@ struct iOSTerminalView: View {
     @State private var terminalBackgroundColor: Color = .black
     @State private var currentServerId: UUID?
     @State private var pendingCloseSession: ConnectionSession?
+    @State private var showingZenPanel = false
+    @State private var requestedTerminalDismissal = false
+
+    @SceneStorage("vvterm.zenMode.ios") private var isZenModeEnabled = false
 
     @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
     @AppStorage("terminalThemeNameLight") private var terminalThemeNameLight = "Aizen Light"
@@ -714,6 +726,21 @@ struct iOSTerminalView: View {
     private var selectedView: String {
         guard let serverId = currentServerId ?? selectedSession?.serverId else { return "stats" }
         return sessionManager.selectedViewByServer[serverId] ?? "stats"
+    }
+
+    private var canUseZenMode: Bool {
+        isConnecting || selectedServer != nil || !serverSessions.isEmpty
+    }
+
+    private var effectiveZenModeEnabled: Bool {
+        isZenModeEnabled && canUseZenMode
+    }
+
+    private var zenSelectedViewBinding: Binding<String> {
+        guard let serverId = currentServerId ?? selectedSession?.serverId else {
+            return .constant("stats")
+        }
+        return selectedViewBinding(for: serverId)
     }
 
     private func selectedViewBinding(for serverId: UUID) -> Binding<String> {
@@ -788,6 +815,8 @@ struct iOSTerminalView: View {
                    let fallbackId = serverSessions.first?.id {
                     sessionManager.selectedSessionId = fallbackId
                 }
+                synchronizeRecoveredTerminalState()
+                attemptForegroundReconnectIfNeeded()
             }
             .onChange(of: terminalThemeName) { _ in updateTerminalBackgroundColor() }
             .onChange(of: terminalThemeNameLight) { _ in updateTerminalBackgroundColor() }
@@ -805,19 +834,37 @@ struct iOSTerminalView: View {
                 }
             }
             .onChange(of: connectingServer?.id) { newValue in
-                guard let newValue else { return }
-                currentServerId = newValue
+                if let newValue {
+                    currentServerId = newValue
+                }
+                synchronizeRecoveredTerminalState()
             }
             .onChange(of: sessionManager.selectedSessionId) { newValue in
-                guard let newValue,
-                      let session = sessionManager.sessions.first(where: { $0.id == newValue }) else { return }
-                if currentServerId != session.serverId {
+                if let newValue,
+                   let session = sessionManager.sessions.first(where: { $0.id == newValue }),
+                   currentServerId != session.serverId {
                     currentServerId = session.serverId
                 }
+                synchronizeRecoveredTerminalState()
+                attemptForegroundReconnectIfNeeded()
+            }
+            .onChange(of: isConnecting) { _ in
+                synchronizeRecoveredTerminalState()
             }
             .onChange(of: selectedView) { newValue in
                 if newValue != "terminal" {
                     dismissKeyboardForCurrentSession()
+                } else {
+                    attemptForegroundReconnectIfNeeded()
+                }
+            }
+            .onChange(of: isZenModeEnabled) { newValue in
+                if newValue && !canUseZenMode {
+                    isZenModeEnabled = false
+                    return
+                }
+                if !newValue {
+                    showingZenPanel = false
                 }
             }
             .onChange(of: sessionManager.sessions) { _ in
@@ -841,6 +888,7 @@ struct iOSTerminalView: View {
                         focusTerminal(for: session)
                     }
                 }
+                synchronizeRecoveredTerminalState()
             }
     }
 
@@ -848,12 +896,18 @@ struct iOSTerminalView: View {
         mainContent
             .background(backgroundView)
             .overlay(alignment: .top) {
-                if selectedView == "terminal" {
+                if selectedView == "terminal" && !effectiveZenModeEnabled {
                     NavBarBackdrop(color: terminalBackgroundColor)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if effectiveZenModeEnabled {
+                    zenModeOverlay
                 }
             }
             .navigationBarBackButtonHidden(true)
             .toolbar { navigationToolbar }
+            .toolbar(effectiveZenModeEnabled ? .hidden : .visible, for: .navigationBar)
     }
 
     private var sheetContent: some View {
@@ -908,7 +962,7 @@ struct iOSTerminalView: View {
 
     @ViewBuilder
     private var headerTabsBar: some View {
-        if selectedView == "terminal" && serverSessions.count > 1 {
+        if !effectiveZenModeEnabled && selectedView == "terminal" && serverSessions.count > 1 {
             iOSTerminalTabsBar(
                 sessions: serverSessions,
                 selectedSessionId: selectedSessionIdBinding,
@@ -1014,6 +1068,14 @@ struct iOSTerminalView: View {
                     } label: {
                         Label("Edit Server", systemImage: "pencil")
                     }
+                }
+
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                        isZenModeEnabled = true
+                    }
+                } label: {
+                    Label("Zen Mode", systemImage: "arrow.up.left.and.arrow.down.right")
                 }
 
                 Button(role: .destructive) {
@@ -1136,6 +1198,72 @@ struct iOSTerminalView: View {
     private func disconnectAllSessions() {
         sessionManager.disconnectAll()
         onBack()
+    }
+
+    private func synchronizeRecoveredTerminalState() {
+        if !canUseZenMode {
+            showingZenPanel = false
+            isZenModeEnabled = false
+        }
+
+        guard !canUseZenMode else {
+            requestedTerminalDismissal = false
+            return
+        }
+
+        guard !requestedTerminalDismissal else { return }
+        requestedTerminalDismissal = true
+        DispatchQueue.main.async {
+            onBack()
+        }
+    }
+
+    private var zenModeOverlay: some View {
+        ZenModeFloatingOverlay(
+            isPanelPresented: $showingZenPanel,
+            indicatorColor: selectedSession?.connectionState.statusTintColor ?? .secondary
+        ) { panelWidth in
+            IOSZenModePanel(
+                width: panelWidth,
+                serverName: selectedServer?.name ?? String(localized: "Terminal"),
+                selectedView: selectedView,
+                selectedViewBinding: zenSelectedViewBinding,
+                sessions: serverSessions,
+                selectedSessionId: selectedSessionIdBinding,
+                onCloseSession: { session in
+                    pendingCloseSession = session
+                },
+                onNewTab: {
+                    showingZenPanel = false
+                    openNewTab()
+                },
+                onOpenSettings: {
+                    showingZenPanel = false
+                    showingSettings = true
+                },
+                onEditServer: selectedServer.map { server in
+                    {
+                        showingZenPanel = false
+                        serverToEdit = server
+                    }
+                },
+                onDisconnect: {
+                    showingZenPanel = false
+                    disconnectAllSessions()
+                },
+                onBack: {
+                    showingZenPanel = false
+                    dismissKeyboardForCurrentSession()
+                    onBack()
+                },
+                onExitZen: {
+                    showingZenPanel = false
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                        isZenModeEnabled = false
+                    }
+                }
+            )
+        }
     }
 
     /// Refresh terminal display and trigger server redraw
@@ -1444,12 +1572,16 @@ private struct iOSTerminalTabButton: View {
         .overlay(alignment: .trailing) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.primary.opacity(0.92))
                     .frame(width: 20, height: 20)
                     .background(
                         Circle()
-                            .fill(Color.primary.opacity(isSelected ? 0.12 : 0.08))
+                            .fill(Color.primary.opacity(isSelected ? 0.16 : 0.12))
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                            )
                     )
             }
             .buttonStyle(.plain)

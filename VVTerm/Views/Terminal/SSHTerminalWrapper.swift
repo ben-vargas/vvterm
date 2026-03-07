@@ -877,6 +877,22 @@ private struct SSHTerminalRepresentable: UIViewRepresentable {
             terminalView.resumeRendering()
         }
 
+        let autoReconnectEnabled = (UserDefaults.standard.object(forKey: "sshAutoReconnect") as? Bool) ?? true
+        let shellMissing = ConnectionSessionManager.shared.shellId(for: session) == nil
+        let shouldStartSSHConnection: Bool = {
+            switch session.connectionState {
+            case .connecting, .reconnecting, .connected:
+                return true
+            case .disconnected:
+                return isActive && autoReconnectEnabled
+            case .failed, .idle:
+                return false
+            }
+        }()
+        if context.coordinator.isTerminalReady && shellMissing && shouldStartSSHConnection {
+            context.coordinator.startSSHConnection(terminal: terminalView)
+        }
+
         if let container = uiView as? TerminalContainerUIView {
             container.isActive = isActive
             container.keyboardInset = context.coordinator.keyboardInset
