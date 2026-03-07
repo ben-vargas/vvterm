@@ -653,6 +653,7 @@ struct iOSTerminalView: View {
     @State private var reconnectTokenBySession: [UUID: UUID] = [:]
     @State private var showingTabLimitAlert = false
     @State private var serverToEdit: Server?
+    @State private var showingSettings = false
     @State private var terminalBackgroundColor: Color = .black
     @State private var currentServerId: UUID?
     @State private var pendingCloseSession: ConnectionSession?
@@ -858,6 +859,10 @@ struct iOSTerminalView: View {
     private var sheetContent: some View {
         baseContent
             .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
+                    .modifier(AppearanceModifier())
+            }
             .sheet(item: $serverToEdit) { server in
                 NavigationStack {
                     ServerFormSheet(
@@ -997,6 +1002,12 @@ struct iOSTerminalView: View {
             }
 
             Menu {
+                Button {
+                    showingSettings = true
+                } label: {
+                    Label("Settings", systemImage: "gear")
+                }
+
                 if let server = selectedServer {
                     Button {
                         serverToEdit = server
