@@ -19,6 +19,9 @@ DerivedData/
 *~
 
 # Vendor binaries committed directly for Xcode Cloud
+Vendor/libssh2/*/lib/cmake/
+Vendor/libssh2/*/lib/pkgconfig/
+Vendor/libssh2/*/share/
 
 # CocoaPods (if used)
 Pods/
