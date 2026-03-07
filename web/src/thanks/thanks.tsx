@@ -1,11 +1,10 @@
 import React from "react";
-import { createRoot } from "react-dom/client";
 import { ThanksPage } from "../pages";
 import "../index.css";
+import { mountApp } from "../mountApp";
 
 function start() {
-  const root = createRoot(document.getElementById("root")!);
-  root.render(<ThanksPage />);
+  mountApp(<ThanksPage />);
 }
 
 if (document.readyState === "loading") {

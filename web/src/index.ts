@@ -3,6 +3,7 @@ import index from "./index.html";
 import privacy from "./privacy/index.html";
 import terms from "./terms/index.html";
 import refund from "./refund/index.html";
+import support from "./support/index.html";
 import thanks from "./thanks/index.html";
 
 const server = serve({
@@ -12,6 +13,7 @@ const server = serve({
     "/privacy": privacy,
     "/terms": terms,
     "/refund": refund,
+    "/support": support,
     "/thanks": thanks,
     "/robots.txt": Bun.file("./src/robots.txt"),
     "/sitemap.xml": Bun.file("./src/sitemap.xml"),

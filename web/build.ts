@@ -3,6 +3,9 @@ import plugin from "bun-plugin-tailwind";
 import { existsSync } from "fs";
 import { rm } from "fs/promises";
 import path from "path";
+import { prerenderHtml } from "./prerender";
+
+type MutableBuildConfig = Partial<Bun.BuildConfig> & Record<string, any>;
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`
@@ -33,7 +36,7 @@ Example:
   process.exit(0);
 }
 
-const toCamelCase = (str: string): string => str.replace(/-([a-z])/g, g => g[1].toUpperCase());
+const toCamelCase = (str: string): string => str.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
 
 const parseValue = (value: string): any => {
   if (value === "true") return true;
@@ -47,8 +50,8 @@ const parseValue = (value: string): any => {
   return value;
 };
 
-function parseArgs(): Partial<Bun.BuildConfig> {
-  const config: Partial<Bun.BuildConfig> = {};
+function parseArgs(): MutableBuildConfig {
+  const config: MutableBuildConfig = {};
   const args = process.argv.slice(2);
 
   for (let i = 0; i < args.length; i++) {
@@ -72,7 +75,9 @@ function parseArgs(): Partial<Bun.BuildConfig> {
     let value: string;
 
     if (arg.includes("=")) {
-      [key, value] = arg.slice(2).split("=", 2) as [string, string];
+      const separatorIndex = arg.indexOf("=");
+      key = arg.slice(2, separatorIndex);
+      value = arg.slice(separatorIndex + 1);
     } else {
       key = arg.slice(2);
       value = args[++i] ?? "";
@@ -81,9 +86,14 @@ function parseArgs(): Partial<Bun.BuildConfig> {
     key = toCamelCase(key);
 
     if (key.includes(".")) {
-      const [parentKey, childKey] = key.split(".");
-      config[parentKey] = config[parentKey] || {};
-      config[parentKey][childKey] = parseValue(value);
+      const [parentKey, childKey] = key.split(".", 2);
+
+      if (!parentKey || !childKey) {
+        continue;
+      }
+
+      const parentConfig = (config[parentKey] ??= {});
+      parentConfig[childKey] = parseValue(value);
     } else {
       config[key] = parseValue(value);
     }
@@ -108,7 +118,7 @@ const formatFileSize = (bytes: number): string => {
 console.log("\nStarting build process...\n");
 
 const cliConfig = parseArgs();
-const outdir = cliConfig.outdir || path.join(process.cwd(), "dist");
+const outdir = typeof cliConfig.outdir === "string" ? cliConfig.outdir : path.join(process.cwd(), "dist");
 
 if (existsSync(outdir)) {
   console.log(`Cleaning previous build at ${outdir}`);
@@ -142,6 +152,22 @@ const result = await Bun.build({
 });
 
 const end = performance.now();
+
+const htmlOutputs = result.outputs.filter(output => output.path.endsWith(".html"));
+for (const output of htmlOutputs) {
+  const relativePath = path.relative(outdir, output.path);
+  const route = relativePath === "index.html"
+    ? "/"
+    : `/${relativePath.replace(/\/index\.html$/, "")}`;
+  const file = Bun.file(output.path);
+  const html = await file.text();
+  const prerenderedHtml = prerenderHtml(route, html);
+
+  if (prerenderedHtml !== html) {
+    await Bun.write(output.path, prerenderedHtml);
+    console.log(`Prerendered ${route} -> ${path.relative(process.cwd(), output.path)}`);
+  }
+}
 
 const outputTable = result.outputs.map(output => ({
   File: path.relative(process.cwd(), output.path),
@@ -178,6 +204,20 @@ const logo = Bun.file("./src/logo.png");
 if (await logo.exists()) {
   await Bun.write(path.join(outdir, "logo.png"), logo);
   console.log(`Copied logo.png to ${path.join(outdir, "logo.png")}`);
+}
+
+// Copy app-store-badge.svg to dist root for prerendered absolute path access
+const appStoreBadge = Bun.file("./src/app-store-badge.svg");
+if (await appStoreBadge.exists()) {
+  await Bun.write(path.join(outdir, "app-store-badge.svg"), appStoreBadge);
+  console.log(`Copied app-store-badge.svg to ${path.join(outdir, "app-store-badge.svg")}`);
+}
+
+// Copy preview.png to dist root for prerendered absolute path access
+const preview = Bun.file("./src/preview.png");
+if (await preview.exists()) {
+  await Bun.write(path.join(outdir, "preview.png"), preview);
+  console.log(`Copied preview.png to ${path.join(outdir, "preview.png")}`);
 }
 
 console.log(`\nBuild completed in ${buildTime}ms\n`);

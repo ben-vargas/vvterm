@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from "react";
+import React, { useState } from "react";
 import {
   Server,
   Terminal,
@@ -11,11 +11,9 @@ import {
   Check,
   Github,
 } from "lucide-react";
-import logo from "./logo.png";
-import appStoreBadge from "./app-store-badge.svg";
-import previewScreenshot from "./preview.png";
 import { useLanguage, LanguageProvider } from "./i18n/LanguageContext";
 import type { Language } from "./i18n/i18n";
+import FAQSection from "./components/FAQSection";
 
 declare global {
   interface Window {
@@ -27,8 +25,6 @@ declare global {
 
 const APP_STORE_URL = "https://apps.apple.com/app/vvterm/id6757482822";
 const GITHUB_REPO_URL = "https://github.com/vivy-company/vvterm";
-
-const FAQSection = lazy(() => import("./components/FAQSection"));
 
 type BillingCycle = "monthly" | "yearly";
 
@@ -83,7 +79,7 @@ function AppContent() {
       <main className="relative text-center py-20 px-6 pb-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(0,113,227,0.15),transparent)] animate-[gradient-shift_15s_ease-in-out_infinite]">
         <div className="max-w-[980px] mx-auto">
           <div className="inline-flex flex-col items-center mb-8 relative">
-            <img src={logo} alt="VVTerm" className="w-32 h-32 rounded-[28px] drop-shadow-[0_0_40px_rgba(0,113,227,0.3)]" />
+            <img src="/logo.png" alt="VVTerm app icon" className="w-32 h-32 rounded-[28px] drop-shadow-[0_0_40px_rgba(0,113,227,0.3)]" />
           </div>
           <h1 className="text-8xl font-semibold tracking-tight mb-6 leading-none">{t("hero.title")}</h1>
           <p className="text-[28px] text-[#86868b] mb-12">
@@ -97,7 +93,7 @@ function AppContent() {
               onClick={() => trackEvent("appstore_click")}
               className="transition-opacity duration-200 hover:opacity-80"
             >
-              <img src={appStoreBadge} alt="Download on the App Store" className="h-[52px] block rounded-[8px]" />
+              <img src="/app-store-badge.svg" alt="Download VVTerm on the App Store" className="h-[52px] block rounded-[8px]" />
             </a>
             <a
               href={GITHUB_REPO_URL}
@@ -121,8 +117,8 @@ function AppContent() {
         <div className="max-w-[1200px] mx-auto">
           <div className="min-h-[520px] flex items-center justify-center">
             <img
-              src={previewScreenshot}
-              alt="VVTerm app preview"
+              src="/preview.png"
+              alt="VVTerm on iPhone, iPad, and Mac"
               className="w-full block scale-115"
               fetchPriority="high"
               loading="eager"
@@ -288,9 +284,7 @@ function AppContent() {
       </section>
 
       {/* FAQ */}
-      <Suspense fallback={<div className="py-20 px-6"><div className="max-w-[720px] mx-auto text-center text-zinc-500">Loading...</div></div>}>
-        <FAQSection />
-      </Suspense>
+      <FAQSection />
 
       {/* Footer */}
       <footer className="py-12 px-6 border-t border-white/8 mt-20">

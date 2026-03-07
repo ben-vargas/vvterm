@@ -18,13 +18,16 @@
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="VVTerm" />
     <meta property="og:url" content="https://vvterm.com/" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content="VVTerm - SSH Terminal for iOS & macOS" />
     <meta property="og:description" content="Your servers. Everywhere. The SSH terminal app for iOS and macOS with Mosh, Tailscale SSH, Cloudflare Tunnel SSH, iCloud sync, and Keychain security." />
     <meta property="og:image" content="https://vvterm.com/og.png" />
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:site" content="@vvterm_com" />
     <meta property="twitter:url" content="https://vvterm.com/" />
     <meta property="twitter:title" content="VVTerm - SSH Terminal for iOS & macOS" />
     <meta property="twitter:description" content="Your servers. Everywhere. The SSH terminal app for iOS and macOS with Mosh, Tailscale SSH, Cloudflare Tunnel SSH, iCloud sync, and Keychain security." />
@@ -34,7 +37,7 @@
     <link rel="canonical" href="https://vvterm.com/" />
 
     <!-- Additional SEO -->
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="language" content="English" />
     <meta name="apple-itunes-app" content="app-id=6757482822" />
 
@@ -94,6 +97,61 @@
         "Environment filters",
         "Voice-to-command",
         "Multiple connection tabs"
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "name": "VVTerm",
+          "url": "https://vvterm.com/"
+        },
+        {
+          "@type": "Organization",
+          "name": "Vivy Technologies",
+          "url": "https://vvterm.com/",
+          "logo": "https://vvterm.com/logo.png"
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is VVTerm?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "VVTerm is an SSH terminal app for iOS and macOS. It helps you manage and connect to remote servers with iCloud sync across Apple devices."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How does iCloud sync work?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Server configurations sync through iCloud, while passwords and SSH keys stay in Apple Keychain and can sync through iCloud Keychain when enabled."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Which authentication methods are supported?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "VVTerm supports password authentication, SSH keys, SSH keys with passphrase, plus Mosh, Tailscale SSH, and Cloudflare Tunnel SSH."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What are the system requirements?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "VVTerm requires iOS 16 or later on iPhone and iPad, or macOS 13 Ventura or later on Apple Silicon Macs."
+              }
+            }
+          ]
+        }
       ]
     }
     </script>

@@ -1,11 +1,10 @@
 import React from "react";
-import { createRoot } from "react-dom/client";
 import { PrivacyPage } from "../pages";
 import "../index.css";
+import { mountApp } from "../mountApp";
 
 function start() {
-  const root = createRoot(document.getElementById("root")!);
-  root.render(<PrivacyPage />);
+  mountApp(<PrivacyPage />);
 }
 
 if (document.readyState === "loading") {
