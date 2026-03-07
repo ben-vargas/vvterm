@@ -81,6 +81,7 @@ class GhosttyTerminalView: UIView {
     private var lastPixelSize: CGSize = .zero
     private var lastContentScale: CGFloat = 0
     private var lastReportedGrid: (cols: Int, rows: Int) = (0, 0)
+    private static let minimumTextInputDocumentLength = 4096
 
     /// Cell size in points for row-to-pixel conversion
     var cellSize: CGSize = .zero
@@ -519,34 +520,58 @@ class GhosttyTerminalView: UIView {
         return (cols, rows, size, length)
     }
 
+    private func textInputDocumentLength() -> Int {
+        max(textInputGridMetrics().length, Self.minimumTextInputDocumentLength)
+    }
+
     private func clampTextInputIndex(_ index: Int) -> Int {
-        let length = textInputGridMetrics().length
+        let length = textInputDocumentLength()
         return min(max(index, 0), length)
+    }
+
+    private func collapsedTextRange(at index: Int) -> TerminalTextRange {
+        let clamped = clampTextInputIndex(index)
+        return TerminalTextRange(
+            start: TerminalTextPosition(clamped),
+            end: TerminalTextPosition(clamped)
+        )
+    }
+
+    private func setTextInputCursor(_ index: Int) {
+        let clamped = clampTextInputIndex(index)
+        textInputCursorIndex = clamped
+        selectedTextRangeInternal = collapsedTextRange(at: clamped)
+    }
+
+    private func moveTextInputCursor(by delta: Int) {
+        setTextInputCursor(textInputCursorIndex + delta)
+    }
+
+    private func clearMarkedTextState(syncPreedit: Bool) {
+        markedText = ""
+        markedTextRangeInternal = nil
+        markedTextStartIndex = nil
+        if syncPreedit {
+            syncIMEPreedit(nil)
+        }
     }
 
     private func clampTextInputCursorToBounds() {
         let clamped = clampTextInputIndex(textInputCursorIndex)
         textInputCursorIndex = clamped
         if selectedTextRangeInternal == nil {
-            selectedTextRangeInternal = TerminalTextRange(
-                start: TerminalTextPosition(clamped),
-                end: TerminalTextPosition(clamped)
-            )
+            selectedTextRangeInternal = collapsedTextRange(at: clamped)
         }
     }
 
-    private func resetTextInputCursorIfNeeded() {
-        guard selectedTextRangeInternal == nil else {
+    private func resetTextInputCursorIfNeeded(forceReanchor: Bool = false) {
+        guard selectedTextRangeInternal == nil || forceReanchor else {
             clampTextInputCursorToBounds()
             return
         }
-        let length = textInputGridMetrics().length
+        let length = textInputDocumentLength()
         let mid = max(length / 2, 0)
-        textInputCursorIndex = mid
-        selectedTextRangeInternal = TerminalTextRange(
-            start: TerminalTextPosition(mid),
-            end: TerminalTextPosition(mid)
-        )
+        setTextInputCursor(mid)
     }
 
     private func textInputCaretRect(for index: Int) -> CGRect {
@@ -571,7 +596,7 @@ class GhosttyTerminalView: UIView {
             ghostty_surface_set_focus(surface, true)
         }
         if result {
-            resetTextInputCursorIfNeeded()
+            resetTextInputCursorIfNeeded(forceReanchor: textInputCursorIndex <= 1)
             updateHardwareKeyboardState(reloadInputViewsIfNeeded: true)
         }
         return result
@@ -2547,15 +2572,8 @@ extension GhosttyTerminalView: UIKeyInput, UITextInputTraits {
             let start = markedTextStartIndex ?? clampTextInputIndex(textInputCursorIndex)
             let committedIndex = clampTextInputIndex(start + text.utf16.count)
             didCommitMarkedText = true
-            markedText = ""
-            markedTextRangeInternal = nil
-            markedTextStartIndex = nil
-            textInputCursorIndex = committedIndex
-            selectedTextRangeInternal = TerminalTextRange(
-                start: TerminalTextPosition(committedIndex),
-                end: TerminalTextPosition(committedIndex)
-            )
-            syncIMEPreedit(nil)
+            clearMarkedTextState(syncPreedit: true)
+            setTextInputCursor(committedIndex)
         }
 
         if let toolbar = keyboardToolbar {
@@ -2593,10 +2611,12 @@ extension GhosttyTerminalView: UIKeyInput, UITextInputTraits {
 
         if text == "\n" || text == "\r" {
             sendKeyPress(.enter)
+            moveTextInputCursor(by: 1)
             return
         }
         if text == "\t" {
             sendKeyPress(.tab)
+            moveTextInputCursor(by: 1)
             return
         }
 
@@ -2606,13 +2626,41 @@ extension GhosttyTerminalView: UIKeyInput, UITextInputTraits {
             .replacingOccurrences(of: "\r", with: "\n")
         if normalized.contains("\n") {
             sendText(normalized.replacingOccurrences(of: "\n", with: "\r"))
+            moveTextInputCursor(by: normalized.utf16.count)
             return
         }
 
         sendText(text)
+        moveTextInputCursor(by: text.utf16.count)
     }
 
     func deleteBackward() {
+        if hasActiveIMEComposition {
+            didCommitMarkedText = false
+            let start = markedTextStartIndex ?? clampTextInputIndex(textInputCursorIndex)
+            if !markedText.isEmpty {
+                let updatedText = String(markedText.dropLast())
+                if updatedText.isEmpty {
+                    clearMarkedTextState(syncPreedit: true)
+                    setTextInputCursor(start)
+                } else {
+                    markedText = updatedText
+                    let end = clampTextInputIndex(start + updatedText.utf16.count)
+                    markedTextRangeInternal = TerminalTextRange(
+                        start: TerminalTextPosition(start),
+                        end: TerminalTextPosition(end)
+                    )
+                    setTextInputCursor(end)
+                    syncIMEPreedit(updatedText)
+                }
+            } else {
+                clearMarkedTextState(syncPreedit: true)
+                setTextInputCursor(start)
+            }
+            return
+        }
+
+        moveTextInputCursor(by: -1)
         sendKeyPress(.backspace)
     }
 
@@ -2709,11 +2757,7 @@ extension GhosttyTerminalView: UITextInput {
             guard let range = newValue as? TerminalTextRange else { return }
             textInputDelegate?.selectionWillChange(self)
             let newIndex = clampTextInputIndex(min(range.startPosition.index, range.endPosition.index))
-            textInputCursorIndex = newIndex
-            selectedTextRangeInternal = TerminalTextRange(
-                start: TerminalTextPosition(newIndex),
-                end: TerminalTextPosition(newIndex)
-            )
+            setTextInputCursor(newIndex)
             textInputDelegate?.selectionDidChange(self)
         }
     }
@@ -2741,7 +2785,7 @@ extension GhosttyTerminalView: UITextInput {
     }
 
     var endOfDocument: UITextPosition {
-        TerminalTextPosition(textInputGridMetrics().length)
+        TerminalTextPosition(textInputDocumentLength())
     }
 
     func text(in range: UITextRange) -> String? {
@@ -2753,20 +2797,15 @@ extension GhosttyTerminalView: UITextInput {
     func replace(_ range: UITextRange, withText text: String) {
         if hasActiveIMEComposition {
             didCommitMarkedText = true
-            markedText = ""
-            markedTextRangeInternal = nil
-            markedTextStartIndex = nil
-            syncIMEPreedit(nil)
+            clearMarkedTextState(syncPreedit: true)
         }
         sendText(text)
-        let delta = text.count
-        if delta > 0 {
-            let newIndex = clampTextInputIndex(textInputCursorIndex + delta)
-            textInputCursorIndex = newIndex
-            selectedTextRangeInternal = TerminalTextRange(
-                start: TerminalTextPosition(newIndex),
-                end: TerminalTextPosition(newIndex)
-            )
+        if let range = range as? TerminalTextRange {
+            let baseIndex = clampTextInputIndex(range.startPosition.index)
+            let newIndex = clampTextInputIndex(baseIndex + text.utf16.count)
+            setTextInputCursor(newIndex)
+        } else if !text.isEmpty {
+            moveTextInputCursor(by: text.utf16.count)
         }
         textInputDelegate?.textDidChange(self)
     }
@@ -2785,17 +2824,11 @@ extension GhosttyTerminalView: UITextInput {
             )
             let selectionOffset = min(max(selectedRange.location, 0), composedText.utf16.count)
             let caretIndex = clampTextInputIndex(start + selectionOffset)
-            textInputCursorIndex = caretIndex
-            selectedTextRangeInternal = TerminalTextRange(
-                start: TerminalTextPosition(caretIndex),
-                end: TerminalTextPosition(caretIndex)
-            )
+            setTextInputCursor(caretIndex)
             syncIMEPreedit(composedText)
         } else {
-            self.markedText = ""
-            markedTextRangeInternal = nil
-            markedTextStartIndex = nil
-            syncIMEPreedit(nil)
+            didCommitMarkedText = false
+            clearMarkedTextState(syncPreedit: true)
         }
         textInputDelegate?.textDidChange(self)
     }
@@ -2803,12 +2836,10 @@ extension GhosttyTerminalView: UITextInput {
     func unmarkText() {
         if !didCommitMarkedText, !markedText.isEmpty {
             sendText(markedText)
+            moveTextInputCursor(by: markedText.utf16.count)
         }
+        clearMarkedTextState(syncPreedit: true)
         didCommitMarkedText = false
-        markedText = ""
-        markedTextRangeInternal = nil
-        markedTextStartIndex = nil
-        syncIMEPreedit(nil)
     }
 
     func textRange(from fromPosition: UITextPosition, to toPosition: UITextPosition) -> UITextRange? {
