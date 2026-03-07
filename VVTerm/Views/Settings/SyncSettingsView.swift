@@ -89,9 +89,9 @@ struct SyncSettingsView: View {
                     }
 
                     HStack {
-                        Label("Snippets", systemImage: "text.badge.plus")
+                        Label("Custom Actions", systemImage: "command.square")
                         Spacer()
-                        Text(terminalAccessory.snippets.count, format: .number)
+                        Text(terminalAccessory.customActions.count, format: .number)
                             .foregroundStyle(.secondary)
                     }
                 }

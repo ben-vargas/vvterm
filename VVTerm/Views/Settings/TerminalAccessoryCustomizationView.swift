@@ -2,7 +2,7 @@ import SwiftUI
 
 struct TerminalAccessoryCustomizationView: View {
     @StateObject private var preferences = TerminalAccessoryPreferencesManager.shared
-    @State private var showingCreateSnippetSheet = false
+    @State private var showingCreateActionSheet = false
 
     private var activeItems: [TerminalAccessoryItemRef] {
         preferences.activeItems
@@ -17,9 +17,9 @@ struct TerminalAccessoryCustomizationView: View {
         })
     }
 
-    private var activeSnippetIDs: Set<UUID> {
+    private var activeCustomActionIDs: Set<UUID> {
         Set(activeItems.compactMap { item in
-            if case .snippet(let id) = item {
+            if case .custom(let id) = item {
                 return id
             }
             return nil
@@ -31,16 +31,16 @@ struct TerminalAccessoryCustomizationView: View {
             .filter { !activeSystemActions.contains($0) }
     }
 
-    private var availableSnippets: [TerminalSnippet] {
-        preferences.snippets.filter { !activeSnippetIDs.contains($0.id) }
+    private var availableCustomActions: [TerminalAccessoryCustomAction] {
+        preferences.customActions.filter { !activeCustomActionIDs.contains($0.id) }
     }
 
-    private var hasAnySnippets: Bool {
-        !preferences.snippets.isEmpty
+    private var hasAnyCustomActions: Bool {
+        !preferences.customActions.isEmpty
     }
 
-    private var activeSnippetsByID: [UUID: TerminalSnippet] {
-        Dictionary(uniqueKeysWithValues: preferences.snippets.map { ($0.id, $0) })
+    private var activeCustomActionsByID: [UUID: TerminalAccessoryCustomAction] {
+        Dictionary(uniqueKeysWithValues: preferences.customActions.map { ($0.id, $0) })
     }
 
     var body: some View {
@@ -64,8 +64,8 @@ struct TerminalAccessoryCustomizationView: View {
                     HStack(spacing: 10) {
                         Text(label(for: item))
                         Spacer(minLength: 8)
-                        if case .snippet = item {
-                            Text("Snippet")
+                        if let detail = detailLabel(for: item) {
+                            Text(detail)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -106,27 +106,27 @@ struct TerminalAccessoryCustomizationView: View {
             }
 
             Section {
-                if availableSnippets.isEmpty {
+                if availableCustomActions.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(
-                            hasAnySnippets
-                                ? String(localized: "All snippets are already added.")
-                                : String(localized: "No snippets yet.")
+                            hasAnyCustomActions
+                                ? String(localized: "All custom actions are already added.")
+                                : String(localized: "No custom actions yet.")
                         )
                             .foregroundStyle(.secondary)
                     }
                 } else {
-                    ForEach(availableSnippets) { snippet in
+                    ForEach(availableCustomActions) { action in
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(snippet.title)
-                                Text(snippet.sendMode.title)
+                                Text(action.title)
+                                Text(action.detailText)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer(minLength: 8)
                             Button("Add") {
-                                preferences.addActiveItem(.snippet(snippet.id))
+                                preferences.addActiveItem(.custom(action.id))
                             }
                             .disabled(activeItems.count >= TerminalAccessoryProfile.maxActiveItems)
                         }
@@ -134,15 +134,15 @@ struct TerminalAccessoryCustomizationView: View {
                 }
             } header: {
                 HStack {
-                    Text("Available Snippets")
+                    Text("Available Custom Actions")
                     Spacer(minLength: 8)
                     Button {
-                        showingCreateSnippetSheet = true
+                        showingCreateActionSheet = true
                     } label: {
-                        Label("Create Snippet", systemImage: "plus")
+                        Label("Create Action", systemImage: "plus")
                     }
                     .buttonStyle(.borderless)
-                    .disabled(!preferences.canCreateSnippet)
+                    .disabled(!preferences.canCreateCustomAction)
                 }
             }
 
@@ -160,8 +160,8 @@ struct TerminalAccessoryCustomizationView: View {
             EditButton()
         }
         #endif
-        .sheet(isPresented: $showingCreateSnippetSheet) {
-            TerminalSnippetFormView()
+        .sheet(isPresented: $showingCreateActionSheet) {
+            TerminalCustomActionFormView()
         }
     }
 
@@ -182,8 +182,17 @@ struct TerminalAccessoryCustomizationView: View {
         switch item {
         case .system(let actionID):
             return actionID.listTitle
-        case .snippet(let id):
-            return activeSnippetsByID[id]?.title ?? String(localized: "Snippet")
+        case .custom(let id):
+            return activeCustomActionsByID[id]?.title ?? String(localized: "Custom Action")
+        }
+    }
+
+    private func detailLabel(for item: TerminalAccessoryItemRef) -> String? {
+        switch item {
+        case .system:
+            return nil
+        case .custom(let id):
+            return activeCustomActionsByID[id]?.kind.title
         }
     }
 }

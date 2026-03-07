@@ -215,14 +215,14 @@ struct TerminalSettingsView: View {
                 }
 
                 NavigationLink {
-                    TerminalSnippetLibraryView()
+                    TerminalCustomActionLibraryView()
                 } label: {
-                    Text("Manage Snippets")
+                    Text("Manage Custom Actions")
                 }
             } header: {
                 Text("Keyboard Accessory")
             } footer: {
-                Text("Reorder actions, add snippets, and sync your accessory bar across devices.")
+                Text("Reorder actions, add custom actions, and sync your accessory bar across devices.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

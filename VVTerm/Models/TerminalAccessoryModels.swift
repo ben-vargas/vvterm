@@ -16,6 +16,315 @@ enum TerminalSnippetSendMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum TerminalAccessoryCustomActionKind: String, Codable, CaseIterable, Identifiable {
+    case command
+    case shortcut
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .command:
+            return String(localized: "Command")
+        case .shortcut:
+            return String(localized: "Shortcut")
+        }
+    }
+}
+
+struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hashable {
+    var control: Bool = false
+    var alternate: Bool = false
+    var shift: Bool = false
+
+    static let none = TerminalAccessoryShortcutModifiers()
+
+    var displayParts: [String] {
+        var parts: [String] = []
+        if control {
+            parts.append(String(localized: "Ctrl"))
+        }
+        if alternate {
+            parts.append(String(localized: "Alt"))
+        }
+        if shift {
+            parts.append(String(localized: "Shift"))
+        }
+        return parts
+    }
+
+    func displayTitle(for keyTitle: String) -> String {
+        let parts = displayParts + [keyTitle]
+        return parts.joined(separator: "+")
+    }
+}
+
+enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Identifiable {
+    case a
+    case b
+    case c
+    case d
+    case e
+    case f
+    case g
+    case h
+    case i
+    case j
+    case k
+    case l
+    case m
+    case n
+    case o
+    case p
+    case q
+    case r
+    case s
+    case t
+    case u
+    case v
+    case w
+    case x
+    case y
+    case z
+    case digit0
+    case digit1
+    case digit2
+    case digit3
+    case digit4
+    case digit5
+    case digit6
+    case digit7
+    case digit8
+    case digit9
+    case backquote
+    case minus
+    case equal
+    case bracketLeft
+    case bracketRight
+    case backslash
+    case semicolon
+    case quote
+    case comma
+    case period
+    case slash
+    case space
+    case escape
+    case tab
+    case enter
+    case backspace
+    case delete
+    case insert
+    case home
+    case end
+    case pageUp
+    case pageDown
+    case arrowUp
+    case arrowDown
+    case arrowLeft
+    case arrowRight
+    case f1
+    case f2
+    case f3
+    case f4
+    case f5
+    case f6
+    case f7
+    case f8
+    case f9
+    case f10
+    case f11
+    case f12
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .a: return "A"
+        case .b: return "B"
+        case .c: return "C"
+        case .d: return "D"
+        case .e: return "E"
+        case .f: return "F"
+        case .g: return "G"
+        case .h: return "H"
+        case .i: return "I"
+        case .j: return "J"
+        case .k: return "K"
+        case .l: return "L"
+        case .m: return "M"
+        case .n: return "N"
+        case .o: return "O"
+        case .p: return "P"
+        case .q: return "Q"
+        case .r: return "R"
+        case .s: return "S"
+        case .t: return "T"
+        case .u: return "U"
+        case .v: return "V"
+        case .w: return "W"
+        case .x: return "X"
+        case .y: return "Y"
+        case .z: return "Z"
+        case .digit0: return "0"
+        case .digit1: return "1"
+        case .digit2: return "2"
+        case .digit3: return "3"
+        case .digit4: return "4"
+        case .digit5: return "5"
+        case .digit6: return "6"
+        case .digit7: return "7"
+        case .digit8: return "8"
+        case .digit9: return "9"
+        case .backquote: return "`"
+        case .minus: return "-"
+        case .equal: return "="
+        case .bracketLeft: return "["
+        case .bracketRight: return "]"
+        case .backslash: return "\\"
+        case .semicolon: return ";"
+        case .quote: return "'"
+        case .comma: return ","
+        case .period: return "."
+        case .slash: return "/"
+        case .space: return String(localized: "Space")
+        case .escape: return String(localized: "Esc")
+        case .tab: return String(localized: "Tab")
+        case .enter: return String(localized: "Enter")
+        case .backspace: return String(localized: "Backspace")
+        case .delete: return String(localized: "Delete")
+        case .insert: return String(localized: "Insert")
+        case .home: return String(localized: "Home")
+        case .end: return String(localized: "End")
+        case .pageUp: return String(localized: "Page Up")
+        case .pageDown: return String(localized: "Page Down")
+        case .arrowUp: return String(localized: "Arrow Up")
+        case .arrowDown: return String(localized: "Arrow Down")
+        case .arrowLeft: return String(localized: "Arrow Left")
+        case .arrowRight: return String(localized: "Arrow Right")
+        case .f1: return "F1"
+        case .f2: return "F2"
+        case .f3: return "F3"
+        case .f4: return "F4"
+        case .f5: return "F5"
+        case .f6: return "F6"
+        case .f7: return "F7"
+        case .f8: return "F8"
+        case .f9: return "F9"
+        case .f10: return "F10"
+        case .f11: return "F11"
+        case .f12: return "F12"
+        }
+    }
+
+    var unshiftedText: String? {
+        switch self {
+        case .a: return "a"
+        case .b: return "b"
+        case .c: return "c"
+        case .d: return "d"
+        case .e: return "e"
+        case .f: return "f"
+        case .g: return "g"
+        case .h: return "h"
+        case .i: return "i"
+        case .j: return "j"
+        case .k: return "k"
+        case .l: return "l"
+        case .m: return "m"
+        case .n: return "n"
+        case .o: return "o"
+        case .p: return "p"
+        case .q: return "q"
+        case .r: return "r"
+        case .s: return "s"
+        case .t: return "t"
+        case .u: return "u"
+        case .v: return "v"
+        case .w: return "w"
+        case .x: return "x"
+        case .y: return "y"
+        case .z: return "z"
+        case .digit0: return "0"
+        case .digit1: return "1"
+        case .digit2: return "2"
+        case .digit3: return "3"
+        case .digit4: return "4"
+        case .digit5: return "5"
+        case .digit6: return "6"
+        case .digit7: return "7"
+        case .digit8: return "8"
+        case .digit9: return "9"
+        case .backquote: return "`"
+        case .minus: return "-"
+        case .equal: return "="
+        case .bracketLeft: return "["
+        case .bracketRight: return "]"
+        case .backslash: return "\\"
+        case .semicolon: return ";"
+        case .quote: return "'"
+        case .comma: return ","
+        case .period: return "."
+        case .slash: return "/"
+        case .space: return " "
+        default: return nil
+        }
+    }
+
+    var shiftedText: String? {
+        switch self {
+        case .a: return "A"
+        case .b: return "B"
+        case .c: return "C"
+        case .d: return "D"
+        case .e: return "E"
+        case .f: return "F"
+        case .g: return "G"
+        case .h: return "H"
+        case .i: return "I"
+        case .j: return "J"
+        case .k: return "K"
+        case .l: return "L"
+        case .m: return "M"
+        case .n: return "N"
+        case .o: return "O"
+        case .p: return "P"
+        case .q: return "Q"
+        case .r: return "R"
+        case .s: return "S"
+        case .t: return "T"
+        case .u: return "U"
+        case .v: return "V"
+        case .w: return "W"
+        case .x: return "X"
+        case .y: return "Y"
+        case .z: return "Z"
+        case .digit0: return ")"
+        case .digit1: return "!"
+        case .digit2: return "@"
+        case .digit3: return "#"
+        case .digit4: return "$"
+        case .digit5: return "%"
+        case .digit6: return "^"
+        case .digit7: return "&"
+        case .digit8: return "*"
+        case .digit9: return "("
+        case .backquote: return "~"
+        case .minus: return "_"
+        case .equal: return "+"
+        case .bracketLeft: return "{"
+        case .bracketRight: return "}"
+        case .backslash: return "|"
+        case .semicolon: return ":"
+        case .quote: return "\""
+        case .comma: return "<"
+        case .period: return ">"
+        case .slash: return "?"
+        case .space: return " "
+        default: return nil
+        }
+    }
+}
+
 enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, Identifiable {
     case escape
     case tab
@@ -168,16 +477,18 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
 
 enum TerminalAccessoryItemRef: Codable, Hashable {
     case system(TerminalAccessorySystemActionID)
-    case snippet(UUID)
+    case custom(UUID)
 
     private enum CodingKeys: String, CodingKey {
         case kind
         case systemID
+        case customActionID
         case snippetID
     }
 
     private enum Kind: String, Codable {
         case system
+        case custom
         case snippet
     }
 
@@ -189,9 +500,12 @@ enum TerminalAccessoryItemRef: Codable, Hashable {
         case .system:
             let id = try container.decode(TerminalAccessorySystemActionID.self, forKey: .systemID)
             self = .system(id)
+        case .custom:
+            let id = try container.decode(UUID.self, forKey: .customActionID)
+            self = .custom(id)
         case .snippet:
             let id = try container.decode(UUID.self, forKey: .snippetID)
-            self = .snippet(id)
+            self = .custom(id)
         }
     }
 
@@ -202,9 +516,56 @@ enum TerminalAccessoryItemRef: Codable, Hashable {
         case .system(let id):
             try container.encode(Kind.system, forKey: .kind)
             try container.encode(id, forKey: .systemID)
-        case .snippet(let id):
-            try container.encode(Kind.snippet, forKey: .kind)
-            try container.encode(id, forKey: .snippetID)
+        case .custom(let id):
+            try container.encode(Kind.custom, forKey: .kind)
+            try container.encode(id, forKey: .customActionID)
+        }
+    }
+}
+
+struct TerminalAccessoryCustomAction: Identifiable, Codable, Equatable {
+    let id: UUID
+    var title: String
+    var kind: TerminalAccessoryCustomActionKind
+    var commandContent: String
+    var commandSendMode: TerminalSnippetSendMode
+    var shortcutKey: TerminalAccessoryShortcutKey
+    var shortcutModifiers: TerminalAccessoryShortcutModifiers
+    var updatedAt: Date
+    var deletedAt: Date?
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        kind: TerminalAccessoryCustomActionKind,
+        commandContent: String = "",
+        commandSendMode: TerminalSnippetSendMode = .insert,
+        shortcutKey: TerminalAccessoryShortcutKey = .a,
+        shortcutModifiers: TerminalAccessoryShortcutModifiers = .none,
+        updatedAt: Date = Date(),
+        deletedAt: Date? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.kind = kind
+        self.commandContent = commandContent
+        self.commandSendMode = commandSendMode
+        self.shortcutKey = shortcutKey
+        self.shortcutModifiers = shortcutModifiers
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+    }
+
+    var isDeleted: Bool {
+        deletedAt != nil
+    }
+
+    var detailText: String {
+        switch kind {
+        case .command:
+            return commandSendMode.title
+        case .shortcut:
+            return shortcutModifiers.displayTitle(for: shortcutKey.title)
         }
     }
 }
@@ -247,22 +608,70 @@ struct TerminalAccessoryLayout: Codable, Equatable {
 struct TerminalAccessoryProfile: Codable, Equatable {
     var schemaVersion: Int
     var layout: TerminalAccessoryLayout
-    var snippets: [TerminalSnippet]
+    var customActions: [TerminalAccessoryCustomAction]
     var updatedAt: Date
     var lastWriterDeviceId: String
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case layout
+        case customActions
+        case snippets
+        case updatedAt
+        case lastWriterDeviceId
+    }
+
+    init(
+        schemaVersion: Int,
+        layout: TerminalAccessoryLayout,
+        customActions: [TerminalAccessoryCustomAction],
+        updatedAt: Date,
+        lastWriterDeviceId: String
+    ) {
+        self.schemaVersion = schemaVersion
+        self.layout = layout
+        self.customActions = customActions
+        self.updatedAt = updatedAt
+        self.lastWriterDeviceId = lastWriterDeviceId
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        layout = try container.decodeIfPresent(TerminalAccessoryLayout.self, forKey: .layout)
+            ?? TerminalAccessoryLayout(version: 1, activeItems: Self.defaultActiveItems, updatedAt: .distantPast)
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast
+        lastWriterDeviceId = try container.decodeIfPresent(String.self, forKey: .lastWriterDeviceId) ?? DeviceIdentity.id
+
+        if let actions = try container.decodeIfPresent([TerminalAccessoryCustomAction].self, forKey: .customActions) {
+            customActions = actions
+        } else {
+            let legacySnippets = try container.decodeIfPresent([TerminalSnippet].self, forKey: .snippets) ?? []
+            customActions = legacySnippets.map(\.asCustomAction)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(layout, forKey: .layout)
+        try container.encode(customActions, forKey: .customActions)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(lastWriterDeviceId, forKey: .lastWriterDeviceId)
+    }
 }
 
 extension TerminalAccessoryProfile {
-    static let schemaVersion = 1
+    static let schemaVersion = 2
     static let recordType = "UserPreference"
     static let recordName = "terminalAccessory.v1"
     static let defaultsKey = "terminalAccessoryProfileV1"
 
     static let minActiveItems = 4
     static let maxActiveItems = 28
-    static let maxSnippets = 100
-    static let maxSnippetTitleLength = 24
-    static let maxSnippetContentLength = 2048
+    static let maxCustomActions = 100
+    static let maxCustomActionTitleLength = 24
+    static let maxCommandContentLength = 2048
 
     static let defaultActiveItems: [TerminalAccessoryItemRef] = [
         .system(.escape),
@@ -290,7 +699,7 @@ extension TerminalAccessoryProfile {
                 activeItems: defaultActiveItems,
                 updatedAt: .distantPast
             ),
-            snippets: [],
+            customActions: [],
             updatedAt: .distantPast,
             lastWriterDeviceId: DeviceIdentity.id
         )
@@ -301,37 +710,37 @@ extension TerminalAccessoryProfile {
     }
 
     func normalized() -> TerminalAccessoryProfile {
-        var snippetsByID: [UUID: TerminalSnippet] = [:]
-        for snippet in snippets {
-            let normalizedSnippet = snippet.normalized()
-            if let existing = snippetsByID[normalizedSnippet.id] {
-                if normalizedSnippet.updatedAt > existing.updatedAt {
-                    snippetsByID[normalizedSnippet.id] = normalizedSnippet
+        var customActionsByID: [UUID: TerminalAccessoryCustomAction] = [:]
+        for action in customActions {
+            let normalizedAction = action.normalized()
+            if let existing = customActionsByID[normalizedAction.id] {
+                if normalizedAction.updatedAt > existing.updatedAt {
+                    customActionsByID[normalizedAction.id] = normalizedAction
                 }
             } else {
-                snippetsByID[normalizedSnippet.id] = normalizedSnippet
+                customActionsByID[normalizedAction.id] = normalizedAction
             }
         }
 
-        let normalizedSnippets = snippetsByID.values.sorted { lhs, rhs in
+        let normalizedActions = customActionsByID.values.sorted { lhs, rhs in
             if lhs.updatedAt == rhs.updatedAt {
                 return lhs.id.uuidString < rhs.id.uuidString
             }
             return lhs.updatedAt > rhs.updatedAt
         }
 
-        let limitedActiveSnippetIDs = Set(
-            normalizedSnippets
+        let limitedActiveActionIDs = Set(
+            normalizedActions
                 .filter { !$0.isDeleted }
-                .prefix(Self.maxSnippets)
+                .prefix(Self.maxCustomActions)
                 .map(\.id)
         )
 
-        let normalizedAndLimitedSnippets = normalizedSnippets.filter {
-            $0.isDeleted || limitedActiveSnippetIDs.contains($0.id)
+        let normalizedAndLimitedActions = normalizedActions.filter {
+            $0.isDeleted || limitedActiveActionIDs.contains($0.id)
         }
 
-        let activeSnippetIDs = Set(normalizedAndLimitedSnippets.filter { !$0.isDeleted }.map(\.id))
+        let activeActionIDs = Set(normalizedAndLimitedActions.filter { !$0.isDeleted }.map(\.id))
 
         var seenItems = Set<TerminalAccessoryItemRef>()
         var normalizedItems: [TerminalAccessoryItemRef] = []
@@ -340,8 +749,8 @@ extension TerminalAccessoryProfile {
             switch item {
             case .system(let actionID):
                 guard actionID != .unknown else { continue }
-            case .snippet(let snippetID):
-                guard activeSnippetIDs.contains(snippetID) else { continue }
+            case .custom(let actionID):
+                guard activeActionIDs.contains(actionID) else { continue }
             }
 
             guard !seenItems.contains(item) else { continue }
@@ -358,13 +767,13 @@ extension TerminalAccessoryProfile {
         }
 
         return TerminalAccessoryProfile(
-            schemaVersion: max(1, schemaVersion),
+            schemaVersion: max(Self.schemaVersion, schemaVersion),
             layout: TerminalAccessoryLayout(
                 version: max(1, layout.version),
                 activeItems: normalizedItems,
                 updatedAt: layout.updatedAt
             ),
-            snippets: Array(normalizedAndLimitedSnippets),
+            customActions: Array(normalizedAndLimitedActions),
             updatedAt: updatedAt,
             lastWriterDeviceId: lastWriterDeviceId.isEmpty ? DeviceIdentity.id : lastWriterDeviceId
         )
@@ -381,22 +790,22 @@ extension TerminalAccessoryProfile {
             mergedLayout = normalizedRemote.layout
         }
 
-        var snippetsByID: [UUID: TerminalSnippet] = [:]
-        for snippet in normalizedRemote.snippets {
-            snippetsByID[snippet.id] = snippet
+        var actionsByID: [UUID: TerminalAccessoryCustomAction] = [:]
+        for action in normalizedRemote.customActions {
+            actionsByID[action.id] = action
         }
 
-        for snippet in normalizedLocal.snippets {
-            if let existing = snippetsByID[snippet.id] {
-                if snippet.updatedAt >= existing.updatedAt {
-                    snippetsByID[snippet.id] = snippet
+        for action in normalizedLocal.customActions {
+            if let existing = actionsByID[action.id] {
+                if action.updatedAt >= existing.updatedAt {
+                    actionsByID[action.id] = action
                 }
             } else {
-                snippetsByID[snippet.id] = snippet
+                actionsByID[action.id] = action
             }
         }
 
-        let mergedSnippets = snippetsByID.values.sorted { lhs, rhs in
+        let mergedActions = actionsByID.values.sorted { lhs, rhs in
             if lhs.updatedAt == rhs.updatedAt {
                 return lhs.id.uuidString < rhs.id.uuidString
             }
@@ -407,7 +816,7 @@ extension TerminalAccessoryProfile {
             normalizedLocal.updatedAt,
             normalizedRemote.updatedAt,
             mergedLayout.updatedAt,
-            mergedSnippets.first?.updatedAt ?? .distantPast
+            mergedActions.first?.updatedAt ?? .distantPast
         )
 
         let writerDeviceID: String
@@ -424,7 +833,7 @@ extension TerminalAccessoryProfile {
         return TerminalAccessoryProfile(
             schemaVersion: max(normalizedLocal.schemaVersion, normalizedRemote.schemaVersion, Self.schemaVersion),
             layout: mergedLayout,
-            snippets: Array(mergedSnippets),
+            customActions: Array(mergedActions),
             updatedAt: mergedUpdatedAt,
             lastWriterDeviceId: writerDeviceID
         )
@@ -432,24 +841,48 @@ extension TerminalAccessoryProfile {
     }
 }
 
-private extension TerminalSnippet {
-    func normalized() -> TerminalSnippet {
+private extension TerminalAccessoryCustomAction {
+    func normalized() -> TerminalAccessoryCustomAction {
         let sanitizedTitle: String
-        let sanitizedContent: String
+        let sanitizedCommandContent: String
+
         if isDeleted {
             sanitizedTitle = ""
-            sanitizedContent = ""
+            sanitizedCommandContent = ""
         } else {
             let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            sanitizedTitle = String(trimmedTitle.prefix(TerminalAccessoryProfile.maxSnippetTitleLength))
-            sanitizedContent = String(content.prefix(TerminalAccessoryProfile.maxSnippetContentLength))
+            sanitizedTitle = String(trimmedTitle.prefix(TerminalAccessoryProfile.maxCustomActionTitleLength))
+            if kind == .command {
+                sanitizedCommandContent = String(commandContent.prefix(TerminalAccessoryProfile.maxCommandContentLength))
+            } else {
+                sanitizedCommandContent = ""
+            }
         }
 
-        return TerminalSnippet(
+        return TerminalAccessoryCustomAction(
             id: id,
             title: sanitizedTitle,
-            content: sanitizedContent,
-            sendMode: sendMode,
+            kind: kind,
+            commandContent: sanitizedCommandContent,
+            commandSendMode: commandSendMode,
+            shortcutKey: shortcutKey,
+            shortcutModifiers: shortcutModifiers,
+            updatedAt: updatedAt,
+            deletedAt: deletedAt
+        )
+    }
+}
+
+private extension TerminalSnippet {
+    var asCustomAction: TerminalAccessoryCustomAction {
+        TerminalAccessoryCustomAction(
+            id: id,
+            title: title,
+            kind: .command,
+            commandContent: content,
+            commandSendMode: sendMode,
+            shortcutKey: .a,
+            shortcutModifiers: .none,
             updatedAt: updatedAt,
             deletedAt: deletedAt
         )

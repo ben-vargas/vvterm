@@ -8,24 +8,24 @@ import AppKit
 #endif
 
 enum TerminalAccessoryValidationError: LocalizedError {
-    case snippetLimitReached
+    case customActionLimitReached
     case emptyTitle
-    case emptyContent
-    case snippetNotFound
+    case emptyCommandContent
+    case customActionNotFound
 
     var errorDescription: String? {
         switch self {
-        case .snippetLimitReached:
+        case .customActionLimitReached:
             return String(
-                format: String(localized: "You can create up to %lld snippets."),
-                Int64(TerminalAccessoryProfile.maxSnippets)
+                format: String(localized: "You can create up to %lld custom actions."),
+                Int64(TerminalAccessoryProfile.maxCustomActions)
             )
         case .emptyTitle:
-            return String(localized: "Snippet title cannot be empty.")
-        case .emptyContent:
-            return String(localized: "Snippet content cannot be empty.")
-        case .snippetNotFound:
-            return String(localized: "Snippet not found.")
+            return String(localized: "Action title cannot be empty.")
+        case .emptyCommandContent:
+            return String(localized: "Command content cannot be empty.")
+        case .customActionNotFound:
+            return String(localized: "Action not found.")
         }
     }
 }
@@ -80,8 +80,8 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         profile.layout.activeItems
     }
 
-    var snippets: [TerminalSnippet] {
-        profile.snippets
+    var customActions: [TerminalAccessoryCustomAction] {
+        profile.customActions
             .filter { !$0.isDeleted }
             .sorted { lhs, rhs in
                 if lhs.updatedAt == rhs.updatedAt {
@@ -91,93 +91,113 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
             }
     }
 
-    var deletedSnippets: [TerminalSnippet] {
-        profile.snippets.filter(\.isDeleted)
+    var deletedCustomActions: [TerminalAccessoryCustomAction] {
+        profile.customActions.filter(\.isDeleted)
     }
 
-    var canCreateSnippet: Bool {
-        snippets.count < TerminalAccessoryProfile.maxSnippets
+    var canCreateCustomAction: Bool {
+        customActions.count < TerminalAccessoryProfile.maxCustomActions
     }
 
-    func snippet(for id: UUID) -> TerminalSnippet? {
-        snippets.first { $0.id == id }
+    func customAction(for id: UUID) -> TerminalAccessoryCustomAction? {
+        customActions.first { $0.id == id }
     }
 
-    func createSnippet(title: String, content: String, sendMode: TerminalSnippetSendMode) throws -> TerminalSnippet {
-        guard canCreateSnippet else {
-            throw TerminalAccessoryValidationError.snippetLimitReached
+    func createCustomAction(
+        title: String,
+        kind: TerminalAccessoryCustomActionKind,
+        commandContent: String,
+        commandSendMode: TerminalSnippetSendMode,
+        shortcutKey: TerminalAccessoryShortcutKey,
+        shortcutModifiers: TerminalAccessoryShortcutModifiers
+    ) throws -> TerminalAccessoryCustomAction {
+        guard canCreateCustomAction else {
+            throw TerminalAccessoryValidationError.customActionLimitReached
         }
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCommandContent = commandContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else {
             throw TerminalAccessoryValidationError.emptyTitle
         }
-        guard !trimmedContent.isEmpty else {
-            throw TerminalAccessoryValidationError.emptyContent
+        if kind == .command && trimmedCommandContent.isEmpty {
+            throw TerminalAccessoryValidationError.emptyCommandContent
         }
 
         let now = Date()
-        let snippet = TerminalSnippet(
-            title: String(trimmedTitle.prefix(TerminalAccessoryProfile.maxSnippetTitleLength)),
-            content: String(content.prefix(TerminalAccessoryProfile.maxSnippetContentLength)),
-            sendMode: sendMode,
+        let action = TerminalAccessoryCustomAction(
+            title: String(trimmedTitle.prefix(TerminalAccessoryProfile.maxCustomActionTitleLength)),
+            kind: kind,
+            commandContent: kind == .command
+                ? String(commandContent.prefix(TerminalAccessoryProfile.maxCommandContentLength))
+                : "",
+            commandSendMode: commandSendMode,
+            shortcutKey: shortcutKey,
+            shortcutModifiers: shortcutModifiers,
             updatedAt: now,
             deletedAt: nil
         )
 
         var nextProfile = profile
-        nextProfile.snippets.insert(snippet, at: 0)
+        nextProfile.customActions.insert(action, at: 0)
         nextProfile.updatedAt = now
         nextProfile.lastWriterDeviceId = DeviceIdentity.id
         applyProfile(nextProfile, scheduleCloudSync: true)
-        return snippet
+        return action
     }
 
     @discardableResult
-    func updateSnippet(
+    func updateCustomAction(
         id: UUID,
         title: String,
-        content: String,
-        sendMode: TerminalSnippetSendMode
-    ) throws -> TerminalSnippet {
+        kind: TerminalAccessoryCustomActionKind,
+        commandContent: String,
+        commandSendMode: TerminalSnippetSendMode,
+        shortcutKey: TerminalAccessoryShortcutKey,
+        shortcutModifiers: TerminalAccessoryShortcutModifiers
+    ) throws -> TerminalAccessoryCustomAction {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCommandContent = commandContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else {
             throw TerminalAccessoryValidationError.emptyTitle
         }
-        guard !trimmedContent.isEmpty else {
-            throw TerminalAccessoryValidationError.emptyContent
+        if kind == .command && trimmedCommandContent.isEmpty {
+            throw TerminalAccessoryValidationError.emptyCommandContent
         }
 
-        guard let index = profile.snippets.firstIndex(where: { $0.id == id && !$0.isDeleted }) else {
-            throw TerminalAccessoryValidationError.snippetNotFound
+        guard let index = profile.customActions.firstIndex(where: { $0.id == id && !$0.isDeleted }) else {
+            throw TerminalAccessoryValidationError.customActionNotFound
         }
 
         let now = Date()
         var nextProfile = profile
-        nextProfile.snippets[index].title = String(trimmedTitle.prefix(TerminalAccessoryProfile.maxSnippetTitleLength))
-        nextProfile.snippets[index].content = String(content.prefix(TerminalAccessoryProfile.maxSnippetContentLength))
-        nextProfile.snippets[index].sendMode = sendMode
-        nextProfile.snippets[index].updatedAt = now
-        nextProfile.snippets[index].deletedAt = nil
+        nextProfile.customActions[index].title = String(trimmedTitle.prefix(TerminalAccessoryProfile.maxCustomActionTitleLength))
+        nextProfile.customActions[index].kind = kind
+        nextProfile.customActions[index].commandContent = kind == .command
+            ? String(commandContent.prefix(TerminalAccessoryProfile.maxCommandContentLength))
+            : ""
+        nextProfile.customActions[index].commandSendMode = commandSendMode
+        nextProfile.customActions[index].shortcutKey = shortcutKey
+        nextProfile.customActions[index].shortcutModifiers = shortcutModifiers
+        nextProfile.customActions[index].updatedAt = now
+        nextProfile.customActions[index].deletedAt = nil
         nextProfile.updatedAt = now
         nextProfile.lastWriterDeviceId = DeviceIdentity.id
         applyProfile(nextProfile, scheduleCloudSync: true)
-        return nextProfile.snippets[index]
+        return nextProfile.customActions[index]
     }
 
-    func deleteSnippet(id: UUID) {
-        guard let index = profile.snippets.firstIndex(where: { $0.id == id && !$0.isDeleted }) else {
+    func deleteCustomAction(id: UUID) {
+        guard let index = profile.customActions.firstIndex(where: { $0.id == id && !$0.isDeleted }) else {
             return
         }
 
         let now = Date()
         var nextProfile = profile
-        nextProfile.snippets[index].title = ""
-        nextProfile.snippets[index].content = ""
-        nextProfile.snippets[index].deletedAt = now
-        nextProfile.snippets[index].updatedAt = now
+        nextProfile.customActions[index].title = ""
+        nextProfile.customActions[index].commandContent = ""
+        nextProfile.customActions[index].deletedAt = now
+        nextProfile.customActions[index].updatedAt = now
         nextProfile.updatedAt = now
         nextProfile.lastWriterDeviceId = DeviceIdentity.id
         applyProfile(nextProfile, scheduleCloudSync: true)

@@ -1687,8 +1687,8 @@ extension GhosttyTerminalView {
         if keyboardToolbar == nil {
             let toolbar = TerminalInputAccessoryView(onKey: { [weak self] key in
                 self?.handleToolbarKey(key)
-            }, onSnippet: { [weak self] snippet in
-                self?.handleToolbarSnippet(snippet)
+            }, onCustomAction: { [weak self] action in
+                self?.handleToolbarCustomAction(action)
             }, onVoice: onVoiceButtonTapped)
             keyboardToolbar = toolbar
         } else {
@@ -1779,9 +1779,10 @@ extension GhosttyTerminalView {
     private func sendToolbarGhosttyKey(
         _ key: Ghostty.Input.Key,
         mods: Ghostty.Input.Mods,
-        text: String? = nil
+        text: String? = nil,
+        unshiftedCodepoint: UInt32? = nil
     ) {
-        let codepoint = text?.unicodeScalars.first?.value ?? 0
+        let codepoint = unshiftedCodepoint ?? text?.unicodeScalars.first?.value ?? 0
         sendModifiedKey(key, mods: mods, text: text, unshiftedCodepoint: codepoint)
     }
 
@@ -1792,14 +1793,48 @@ extension GhosttyTerminalView {
     ) {
         var mergedMods = mods
         mergedMods.insert(.ctrl)
-        sendToolbarGhosttyKey(key, mods: mergedMods, text: letter)
+        let codepoint = letter.unicodeScalars.first?.value ?? 0
+        sendToolbarGhosttyKey(key, mods: mergedMods, text: nil, unshiftedCodepoint: codepoint)
     }
 
-    private func handleToolbarSnippet(_ snippet: TerminalSnippet) {
-        sendText(snippet.content)
-        if snippet.sendMode == .insertAndEnter {
-            sendKeyPress(.enter)
+    private func handleToolbarCustomAction(_ action: TerminalAccessoryCustomAction) {
+        switch action.kind {
+        case .command:
+            sendText(action.commandContent)
+            if action.commandSendMode == .insertAndEnter {
+                sendKeyPress(.enter)
+            }
+        case .shortcut:
+            guard let key = Ghostty.Input.Key(rawValue: action.shortcutKey.rawValue) else { return }
+            let mods = action.shortcutModifiers.ghosttyModifiers
+            let text: String?
+            if action.shortcutModifiers.control || action.shortcutModifiers.alternate {
+                text = nil
+            } else if action.shortcutModifiers.shift {
+                text = action.shortcutKey.shiftedText ?? action.shortcutKey.unshiftedText
+            } else {
+                text = action.shortcutKey.unshiftedText
+            }
+
+            let codepoint = action.shortcutKey.unshiftedText?.unicodeScalars.first?.value ?? 0
+            sendToolbarGhosttyKey(key, mods: mods, text: text, unshiftedCodepoint: codepoint)
         }
+    }
+}
+
+private extension TerminalAccessoryShortcutModifiers {
+    var ghosttyModifiers: Ghostty.Input.Mods {
+        var mods: Ghostty.Input.Mods = []
+        if control {
+            mods.insert(.ctrl)
+        }
+        if alternate {
+            mods.insert(.alt)
+        }
+        if shift {
+            mods.insert(.shift)
+        }
+        return mods
     }
 }
 
@@ -1807,7 +1842,7 @@ extension GhosttyTerminalView {
 
 private class TerminalInputAccessoryView: UIInputView {
     private let onKey: (TerminalKey) -> Void
-    private let onSnippet: (TerminalSnippet) -> Void
+    private let onCustomAction: (TerminalAccessoryCustomAction) -> Void
     var onVoice: (() -> Void)? {
         didSet {
             updateVoiceButtonState()
@@ -1832,11 +1867,11 @@ private class TerminalInputAccessoryView: UIInputView {
 
     init(
         onKey: @escaping (TerminalKey) -> Void,
-        onSnippet: @escaping (TerminalSnippet) -> Void,
+        onCustomAction: @escaping (TerminalAccessoryCustomAction) -> Void,
         onVoice: (() -> Void)? = nil
     ) {
         self.onKey = onKey
-        self.onSnippet = onSnippet
+        self.onCustomAction = onCustomAction
         self.onVoice = onVoice
         super.init(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 48), inputViewStyle: .keyboard)
         setupView()
@@ -2043,16 +2078,16 @@ private class TerminalInputAccessoryView: UIInputView {
         }
 
         let profile = TerminalAccessoryPreferencesManager.shared.profile
-        let snippetsByID = Dictionary(uniqueKeysWithValues: profile.snippets.filter { !$0.isDeleted }.map { ($0.id, $0) })
+        let customActionsByID = Dictionary(uniqueKeysWithValues: profile.customActions.filter { !$0.isDeleted }.map { ($0.id, $0) })
 
         for item in profile.layout.activeItems {
             switch item {
             case .system(let actionID):
                 guard let button = makeSystemActionButton(for: actionID) else { continue }
                 dynamicItemsStack.addArrangedSubview(button)
-            case .snippet(let snippetID):
-                guard let snippet = snippetsByID[snippetID] else { continue }
-                let button = makeSnippetButton(for: snippet)
+            case .custom(let actionID):
+                guard let action = customActionsByID[actionID] else { continue }
+                let button = makeCustomActionButton(for: action)
                 dynamicItemsStack.addArrangedSubview(button)
             }
         }
@@ -2082,13 +2117,13 @@ private class TerminalInputAccessoryView: UIInputView {
         return button
     }
 
-    private func makeSnippetButton(for snippet: TerminalSnippet) -> UIButton {
-        let visibleTitle = String(snippet.title.prefix(12))
-        let title = visibleTitle.isEmpty ? String(localized: "Snippet") : visibleTitle
+    private func makeCustomActionButton(for action: TerminalAccessoryCustomAction) -> UIButton {
+        let visibleTitle = String(action.title.prefix(12))
+        let title = visibleTitle.isEmpty ? action.kind.title : visibleTitle
         let button = makePillButton(title: title) { [weak self] in
-            self?.sendSnippet(snippet)
+            self?.sendCustomAction(action)
         }
-        button.accessibilityLabel = snippet.title
+        button.accessibilityLabel = action.title
         return button
     }
 
@@ -2364,14 +2399,14 @@ private class TerminalInputAccessoryView: UIInputView {
         onKey(modifiedKey)
     }
 
-    private func sendSnippet(_ snippet: TerminalSnippet) {
+    private func sendCustomAction(_ action: TerminalAccessoryCustomAction) {
         if ctrlActive || altActive || shiftActive {
             ctrlActive = false
             altActive = false
             shiftActive = false
             updateModifierState()
         }
-        onSnippet(snippet)
+        onCustomAction(action)
     }
 
     @objc private func repeatButtonDown(_ sender: RepeatableKeyButton) {
