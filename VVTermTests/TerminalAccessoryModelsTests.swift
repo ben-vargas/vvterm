@@ -3,6 +3,24 @@ import Testing
 @testable import VVTerm
 
 struct TerminalAccessoryModelsTests {
+    private func makeCommandAction(
+        id: UUID = UUID(),
+        title: String,
+        command: String,
+        updatedAt: Date,
+        deletedAt: Date? = nil
+    ) -> TerminalAccessoryCustomAction {
+        TerminalAccessoryCustomAction(
+            id: id,
+            title: title,
+            kind: .command,
+            commandContent: command,
+            commandSendMode: .insert,
+            updatedAt: updatedAt,
+            deletedAt: deletedAt
+        )
+    }
+
     @Test
     func normalizedDeletedSnippetClearsPayload() {
         let deletedAt = Date(timeIntervalSince1970: 1000)
@@ -13,11 +31,10 @@ struct TerminalAccessoryModelsTests {
                 activeItems: TerminalAccessoryProfile.defaultActiveItems,
                 updatedAt: .distantPast
             ),
-            snippets: [
-                TerminalSnippet(
+            customActions: [
+                makeCommandAction(
                     title: "Sensitive Command",
-                    content: "export TOKEN=super-secret-value",
-                    sendMode: .insertAndEnter,
+                    command: "export TOKEN=super-secret-value",
                     updatedAt: deletedAt,
                     deletedAt: deletedAt
                 )
@@ -27,30 +44,27 @@ struct TerminalAccessoryModelsTests {
         )
 
         let normalized = profile.normalized()
-        #expect(normalized.snippets.count == 1)
-        #expect(normalized.snippets[0].isDeleted)
-        #expect(normalized.snippets[0].title.isEmpty)
-        #expect(normalized.snippets[0].content.isEmpty)
+        #expect(normalized.customActions.count == 1)
+        #expect(normalized.customActions[0].isDeleted)
+        #expect(normalized.customActions[0].title.isEmpty)
+        #expect(normalized.customActions[0].commandContent.isEmpty)
     }
 
     @Test
     func normalizedEnforcesActiveSnippetCapDeterministically() {
-        let totalActiveSnippets = TerminalAccessoryProfile.maxSnippets + 5
-        let activeSnippets: [TerminalSnippet] = (0..<totalActiveSnippets).map { index in
-            TerminalSnippet(
+        let totalActiveActions = TerminalAccessoryProfile.maxCustomActions + 5
+        let activeActions: [TerminalAccessoryCustomAction] = (0..<totalActiveActions).map { index in
+            makeCommandAction(
                 title: "S\(index)",
-                content: "echo \(index)",
-                sendMode: .insert,
-                updatedAt: Date(timeIntervalSince1970: Double(index)),
-                deletedAt: nil
+                command: "echo \(index)",
+                updatedAt: Date(timeIntervalSince1970: Double(index))
             )
         }
 
         let deletedAt = Date(timeIntervalSince1970: 10_000)
-        let deletedSnippet = TerminalSnippet(
+        let deletedAction = makeCommandAction(
             title: "Legacy Secret",
-            content: "rm -rf /tmp/secret",
-            sendMode: .insertAndEnter,
+            command: "rm -rf /tmp/secret",
             updatedAt: deletedAt,
             deletedAt: deletedAt
         )
@@ -60,8 +74,8 @@ struct TerminalAccessoryModelsTests {
             layout: TerminalAccessoryLayout(
                 version: 1,
                 activeItems: [
-                    .snippet(activeSnippets[0].id),
-                    .snippet(activeSnippets[totalActiveSnippets - 1].id),
+                    .custom(activeActions[0].id),
+                    .custom(activeActions[totalActiveActions - 1].id),
                     .system(.escape),
                     .system(.tab),
                     .system(.arrowUp),
@@ -69,28 +83,28 @@ struct TerminalAccessoryModelsTests {
                 ],
                 updatedAt: .distantPast
             ),
-            snippets: activeSnippets + [deletedSnippet],
+            customActions: activeActions + [deletedAction],
             updatedAt: Date(timeIntervalSince1970: 10_001),
             lastWriterDeviceId: "device-a"
         )
 
         let normalized = profile.normalized()
-        let activeSnippetsAfterNormalization = normalized.snippets.filter { !$0.isDeleted }
-        #expect(activeSnippetsAfterNormalization.count == TerminalAccessoryProfile.maxSnippets)
+        let activeActionsAfterNormalization = normalized.customActions.filter { !$0.isDeleted }
+        #expect(activeActionsAfterNormalization.count == TerminalAccessoryProfile.maxCustomActions)
 
-        let retainedIndexes = activeSnippetsAfterNormalization.compactMap { snippet in
-            Int(snippet.title.dropFirst())
+        let retainedIndexes = activeActionsAfterNormalization.compactMap { action in
+            Int(action.title.dropFirst())
         }
-        #expect(retainedIndexes.count == TerminalAccessoryProfile.maxSnippets)
-        #expect(retainedIndexes.min() == totalActiveSnippets - TerminalAccessoryProfile.maxSnippets)
-        #expect(retainedIndexes.max() == totalActiveSnippets - 1)
+        #expect(retainedIndexes.count == TerminalAccessoryProfile.maxCustomActions)
+        #expect(retainedIndexes.min() == totalActiveActions - TerminalAccessoryProfile.maxCustomActions)
+        #expect(retainedIndexes.max() == totalActiveActions - 1)
 
-        #expect(!normalized.layout.activeItems.contains(.snippet(activeSnippets[0].id)))
-        #expect(normalized.layout.activeItems.contains(.snippet(activeSnippets[totalActiveSnippets - 1].id)))
+        #expect(!normalized.layout.activeItems.contains(.custom(activeActions[0].id)))
+        #expect(normalized.layout.activeItems.contains(.custom(activeActions[totalActiveActions - 1].id)))
 
-        let normalizedDeletedSnippet = normalized.snippets.first { $0.id == deletedSnippet.id }
-        #expect(normalizedDeletedSnippet != nil)
-        #expect(normalizedDeletedSnippet?.title.isEmpty == true)
-        #expect(normalizedDeletedSnippet?.content.isEmpty == true)
+        let normalizedDeletedAction = normalized.customActions.first { $0.id == deletedAction.id }
+        #expect(normalizedDeletedAction != nil)
+        #expect(normalizedDeletedAction?.title.isEmpty == true)
+        #expect(normalizedDeletedAction?.commandContent.isEmpty == true)
     }
 }

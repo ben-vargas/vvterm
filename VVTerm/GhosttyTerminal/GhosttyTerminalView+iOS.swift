@@ -22,6 +22,7 @@ import GameController
 /// - Surface lifecycle management
 @MainActor
 class GhosttyTerminalView: UIView {
+    private static let textInputContextID = "app.vivy.VVTerm.GhosttyTerminalView"
     // MARK: - Properties
 
     private var ghosttyApp: ghostty_app_t?
@@ -492,6 +493,79 @@ class GhosttyTerminalView: UIView {
         }
     }
 
+    private func notifyTextInputStateDidChange(textChanged: Bool, selectionChanged: Bool) {
+        if textChanged {
+            textInputDelegate?.textDidChange(self)
+        }
+        if selectionChanged {
+            textInputDelegate?.selectionDidChange(self)
+        }
+    }
+
+    private func resetIMEContext() {
+        Self.clearTextInputContextIdentifier(Self.textInputContextID)
+    }
+
+    private var terminalTextInputModel: TerminalTextInputModel {
+        get {
+            TerminalTextInputModel(
+                markedText: markedText,
+                markedTextStartIndex: markedTextStartIndex,
+                didCommitMarkedText: didCommitMarkedText,
+                cursorIndex: textInputCursorIndex
+            )
+        }
+        set {
+            markedText = newValue.markedText
+            markedTextStartIndex = newValue.markedTextStartIndex
+            didCommitMarkedText = newValue.didCommitMarkedText
+
+            if let start = newValue.markedTextStartIndex, !newValue.markedText.isEmpty {
+                let end = clampTextInputIndex(start + newValue.markedText.utf16.count)
+                markedTextRangeInternal = TerminalTextRange(
+                    start: TerminalTextPosition(start),
+                    end: TerminalTextPosition(end)
+                )
+            } else {
+                markedTextRangeInternal = nil
+            }
+
+            setTextInputCursor(newValue.cursorIndex)
+        }
+    }
+
+    private func applyTerminalTextInputEffects(_ effects: [TerminalTextInputModel.Effect]) {
+        for effect in effects {
+            switch effect {
+            case .willTextChange:
+                textInputDelegate?.textWillChange(self)
+            case .willSelectionChange:
+                textInputDelegate?.selectionWillChange(self)
+            case .didTextChange:
+                textInputDelegate?.textDidChange(self)
+            case .didSelectionChange:
+                textInputDelegate?.selectionDidChange(self)
+            case let .syncPreedit(text):
+                syncIMEPreedit(text)
+            case .resetIMEContext:
+                resetIMEContext()
+            case let .sendText(text):
+                sendText(text)
+            case let .sendTextKeyEvent(text):
+                sendTextKeyEvent(text)
+            case let .sendSpecialKey(key):
+                switch key {
+                case .enter:
+                    sendKeyPress(.enter)
+                case .tab:
+                    sendKeyPress(.tab)
+                case .backspace:
+                    sendKeyPress(.backspace)
+                }
+            }
+        }
+    }
+
     private func clampTextInputCursorToBounds() {
         let clamped = clampTextInputIndex(textInputCursorIndex)
         textInputCursorIndex = clamped
@@ -524,6 +598,10 @@ class GhosttyTerminalView: UIView {
 
     override var canBecomeFirstResponder: Bool {
         return true
+    }
+
+    override var textInputContextIdentifier: String? {
+        Self.textInputContextID
     }
 
     override func becomeFirstResponder() -> Bool {
@@ -2499,13 +2577,6 @@ extension GhosttyTerminalView: UIKeyInput, UITextInputTraits {
         if text.hasPrefix("UIKeyInput") {
             return
         }
-        if hasActiveIMEComposition {
-            let start = markedTextStartIndex ?? clampTextInputIndex(textInputCursorIndex)
-            let committedIndex = clampTextInputIndex(start + text.utf16.count)
-            didCommitMarkedText = true
-            clearMarkedTextState(syncPreedit: true)
-            setTextInputCursor(committedIndex)
-        }
 
         if let toolbar = keyboardToolbar {
             let mods = toolbar.consumeModifiers()
@@ -2540,59 +2611,18 @@ extension GhosttyTerminalView: UIKeyInput, UITextInputTraits {
             }
         }
 
-        if text == "\n" || text == "\r" {
-            sendKeyPress(.enter)
-            moveTextInputCursor(by: 1)
-            return
-        }
-        if text == "\t" {
-            sendKeyPress(.tab)
-            moveTextInputCursor(by: 1)
-            return
-        }
-
-        // Normalize line endings for paste (convert to CR for terminals)
-        let normalized = text
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-        if normalized.contains("\n") {
-            sendText(normalized.replacingOccurrences(of: "\n", with: "\r"))
-            moveTextInputCursor(by: normalized.utf16.count)
-            return
-        }
-
-        sendText(text)
-        moveTextInputCursor(by: text.utf16.count)
+        var model = terminalTextInputModel
+        let operation = TerminalTextInputModel.insertOperation(for: text, fromIMEComposition: model.hasActiveIMEComposition)
+        let effects = model.handleInsert(operation)
+        terminalTextInputModel = model
+        applyTerminalTextInputEffects(effects)
     }
 
     func deleteBackward() {
-        if hasActiveIMEComposition {
-            didCommitMarkedText = false
-            let start = markedTextStartIndex ?? clampTextInputIndex(textInputCursorIndex)
-            if !markedText.isEmpty {
-                let updatedText = String(markedText.dropLast())
-                if updatedText.isEmpty {
-                    clearMarkedTextState(syncPreedit: true)
-                    setTextInputCursor(start)
-                } else {
-                    markedText = updatedText
-                    let end = clampTextInputIndex(start + updatedText.utf16.count)
-                    markedTextRangeInternal = TerminalTextRange(
-                        start: TerminalTextPosition(start),
-                        end: TerminalTextPosition(end)
-                    )
-                    setTextInputCursor(end)
-                    syncIMEPreedit(updatedText)
-                }
-            } else {
-                clearMarkedTextState(syncPreedit: true)
-                setTextInputCursor(start)
-            }
-            return
-        }
-
-        moveTextInputCursor(by: -1)
-        sendKeyPress(.backspace)
+        var model = terminalTextInputModel
+        let effects = model.handleDeleteBackward()
+        terminalTextInputModel = model
+        applyTerminalTextInputEffects(effects)
     }
 
     var keyboardType: UIKeyboardType {
@@ -2726,51 +2756,25 @@ extension GhosttyTerminalView: UITextInput {
     }
 
     func replace(_ range: UITextRange, withText text: String) {
-        if hasActiveIMEComposition {
-            didCommitMarkedText = true
-            clearMarkedTextState(syncPreedit: true)
-        }
-        sendText(text)
-        if let range = range as? TerminalTextRange {
-            let baseIndex = clampTextInputIndex(range.startPosition.index)
-            let newIndex = clampTextInputIndex(baseIndex + text.utf16.count)
-            setTextInputCursor(newIndex)
-        } else if !text.isEmpty {
-            moveTextInputCursor(by: text.utf16.count)
-        }
-        textInputDelegate?.textDidChange(self)
+        let rangeStart = (range as? TerminalTextRange).map { clampTextInputIndex($0.startPosition.index) }
+        var model = terminalTextInputModel
+        let effects = model.handleReplace(rangeStart: rangeStart, text: text)
+        terminalTextInputModel = model
+        applyTerminalTextInputEffects(effects)
     }
 
     func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
-        if let markedText {
-            let composedText = markedText.precomposedStringWithCanonicalMapping
-            didCommitMarkedText = false
-            self.markedText = composedText
-            let start = markedTextStartIndex ?? clampTextInputIndex(textInputCursorIndex)
-            markedTextStartIndex = start
-            let end = clampTextInputIndex(start + composedText.utf16.count)
-            markedTextRangeInternal = TerminalTextRange(
-                start: TerminalTextPosition(start),
-                end: TerminalTextPosition(end)
-            )
-            let selectionOffset = min(max(selectedRange.location, 0), composedText.utf16.count)
-            let caretIndex = clampTextInputIndex(start + selectionOffset)
-            setTextInputCursor(caretIndex)
-            syncIMEPreedit(composedText)
-        } else {
-            didCommitMarkedText = false
-            clearMarkedTextState(syncPreedit: true)
-        }
-        textInputDelegate?.textDidChange(self)
+        var model = terminalTextInputModel
+        let effects = model.handleSetMarkedText(markedText, selectedRangeLocation: selectedRange.location)
+        terminalTextInputModel = model
+        applyTerminalTextInputEffects(effects)
     }
 
     func unmarkText() {
-        if !didCommitMarkedText, !markedText.isEmpty {
-            sendText(markedText)
-            moveTextInputCursor(by: markedText.utf16.count)
-        }
-        clearMarkedTextState(syncPreedit: true)
-        didCommitMarkedText = false
+        var model = terminalTextInputModel
+        let effects = model.handleUnmarkText()
+        terminalTextInputModel = model
+        applyTerminalTextInputEffects(effects)
     }
 
     func textRange(from fromPosition: UITextPosition, to toPosition: UITextPosition) -> UITextRange? {
