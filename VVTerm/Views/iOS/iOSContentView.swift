@@ -888,6 +888,9 @@ struct iOSTerminalView: View {
                     currentServerId = session.serverId
                 }
                 synchronizeRecoveredTerminalState()
+                if selectedView == "terminal", let session = selectedSession {
+                    activateTerminal(session)
+                }
                 attemptForegroundReconnectIfNeeded()
             }
             .onChange(of: isConnecting) { _ in
@@ -1187,6 +1190,9 @@ struct iOSTerminalView: View {
                 focusTerminal(for: session)
             }
         }
+        .onChange(of: session.id) { _ in
+            activateTerminal(session)
+        }
         .onChange(of: viewSelection) { newValue in
             if newValue == "terminal" {
                 prepareTerminal(session: session, viewSelection: newValue, terminalAlreadyExists: terminalAlreadyExists)
@@ -1204,6 +1210,13 @@ struct iOSTerminalView: View {
         }
         if shouldShowTerminalBySession[session.id] == true { return }
         shouldShowTerminalBySession[session.id] = true
+    }
+
+    private func activateTerminal(_ session: ConnectionSession) {
+        let terminalAlreadyExists = ConnectionSessionManager.shared.getTerminal(for: session.id) != nil
+        prepareTerminal(session: session, viewSelection: selectedView, terminalAlreadyExists: terminalAlreadyExists)
+        guard selectedView == "terminal" else { return }
+        focusTerminal(for: session)
     }
 
     private func openNewTab() {
