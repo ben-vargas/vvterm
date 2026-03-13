@@ -212,6 +212,35 @@ struct ConnectionLifecycleIntegrationTests {
     }
 
     @Test
+    func connectionManagerDisconnectServerLeavesOtherServersConnected() async {
+        await withCleanConnectionManager { manager in
+            let firstServerId = UUID()
+            let secondServerId = UUID()
+            let first = ConnectionSession(
+                serverId: firstServerId,
+                title: "First Server",
+                connectionState: .connected
+            )
+            let second = ConnectionSession(
+                serverId: secondServerId,
+                title: "Second Server",
+                connectionState: .connected
+            )
+
+            manager.sessions = [first, second]
+            manager.selectedSessionId = first.id
+            manager.connectedServerIds = [firstServerId, secondServerId]
+
+            manager.disconnectServer(firstServerId)
+
+            #expect(manager.sessions.count == 1)
+            #expect(manager.sessions.first?.id == second.id)
+            #expect(manager.selectedSessionId == second.id)
+            #expect(manager.connectedServerIds == [secondServerId])
+        }
+    }
+
+    @Test
     func tabManagerTryBeginShellStartFailsWhenPaneIsMissing() async {
         await withCleanTabManager { manager in
             let missingPaneId = UUID()

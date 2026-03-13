@@ -1128,7 +1128,7 @@ struct iOSTerminalView: View {
                 }
 
                 Button(role: .destructive) {
-                    disconnectAllSessions()
+                    disconnectCurrentServerSessions()
                 } label: {
                     Label("Disconnect", systemImage: "xmark.circle")
                 }
@@ -1238,8 +1238,12 @@ struct iOSTerminalView: View {
         }
     }
 
-    private func disconnectAllSessions() {
-        sessionManager.disconnectAll()
+    private func disconnectCurrentServerSessions() {
+        guard let serverId = currentServerId ?? selectedSession?.serverId ?? connectingServer?.id else {
+            onBack()
+            return
+        }
+        sessionManager.disconnectServer(serverId)
         onBack()
     }
 
@@ -1292,7 +1296,7 @@ struct iOSTerminalView: View {
                 },
                 onDisconnect: {
                     showingZenPanel = false
-                    disconnectAllSessions()
+                    disconnectCurrentServerSessions()
                 },
                 onBack: {
                     showingZenPanel = false
