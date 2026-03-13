@@ -248,7 +248,7 @@ final class ConnectionSessionManager: ObservableObject {
     private var shellSuspendHandlers: [UUID: () -> Void] = [:]
     /// Server IDs with an in-flight open request, used to collapse repeated clicks.
     private var sessionOpensInFlight: Set<UUID> = []
-    private(set) var isSuspendingForBackground = false
+    @Published private(set) var isSuspendingForBackground = false
 
     /// Servers that already ran tmux cleanup (per app launch)
     private var tmuxCleanupServers: Set<UUID> = []

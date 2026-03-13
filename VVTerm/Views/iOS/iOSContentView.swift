@@ -715,6 +715,7 @@ struct iOSTerminalView: View {
     @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
     @AppStorage("terminalThemeNameLight") private var terminalThemeNameLight = "Aizen Light"
     @AppStorage("terminalUsePerAppearanceTheme") private var usePerAppearanceTheme = true
+    @AppStorage("sshAutoReconnect") private var autoReconnectEnabled = true
     private var effectiveThemeName: String {
         guard usePerAppearanceTheme else { return terminalThemeName }
         return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight
@@ -827,6 +828,27 @@ struct iOSTerminalView: View {
         }
     }
 
+    private func attemptForegroundReconnectIfNeeded(refreshTerminal: Bool = false) {
+        guard selectedView == "terminal" else { return }
+        guard let session = selectedSession else { return }
+
+        if refreshTerminal {
+            activateTerminal(session)
+        }
+
+        guard autoReconnectEnabled else { return }
+        guard !sessionManager.isSuspendingForBackground else { return }
+
+        switch session.connectionState {
+        case .disconnected, .failed:
+            Task { try? await sessionManager.reconnect(session: session) }
+            reconnectTokenBySession[session.id] = UUID()
+            shouldShowTerminalBySession[session.id] = true
+        default:
+            break
+        }
+    }
+
     var body: some View {
         alertContent
             .onAppear {
@@ -841,6 +863,7 @@ struct iOSTerminalView: View {
                     sessionManager.selectedSessionId = fallbackId
                 }
                 synchronizeRecoveredTerminalState()
+                attemptForegroundReconnectIfNeeded(refreshTerminal: true)
             }
             .onChange(of: terminalThemeName) { _ in updateTerminalBackgroundColor() }
             .onChange(of: terminalThemeNameLight) { _ in updateTerminalBackgroundColor() }
@@ -849,11 +872,7 @@ struct iOSTerminalView: View {
             .onChange(of: scenePhase) { newPhase in
                 if newPhase == .active {
                     updateTerminalBackgroundColor()
-                    // Refresh active terminal when returning from background
-                    if selectedView == "terminal",
-                       let session = selectedSession {
-                        refreshTerminal(for: session)
-                    }
+                    attemptForegroundReconnectIfNeeded(refreshTerminal: true)
                 }
             }
             .onChange(of: connectingServer?.id) { newValue in
@@ -872,6 +891,7 @@ struct iOSTerminalView: View {
                 if selectedView == "terminal", let session = selectedSession {
                     activateTerminal(session)
                 }
+                attemptForegroundReconnectIfNeeded()
             }
             .onChange(of: isConnecting) { _ in
                 synchronizeRecoveredTerminalState()
@@ -879,7 +899,13 @@ struct iOSTerminalView: View {
             .onChange(of: selectedView) { newValue in
                 if newValue != "terminal" {
                     dismissKeyboardForCurrentSession()
+                } else {
+                    attemptForegroundReconnectIfNeeded(refreshTerminal: true)
                 }
+            }
+            .onChange(of: sessionManager.isSuspendingForBackground) { isSuspending in
+                guard !isSuspending, scenePhase == .active else { return }
+                attemptForegroundReconnectIfNeeded(refreshTerminal: true)
             }
             .onChange(of: isZenModeEnabled) { newValue in
                 if newValue && !canUseZenMode {
