@@ -655,7 +655,8 @@ private struct SSHTerminalRepresentable: UIViewRepresentable {
             }
 
             onReady()
-            if ConnectionSessionManager.shared.shellId(for: session) == nil {
+            if ConnectionSessionManager.shared.shellId(for: session) == nil,
+               !ConnectionSessionManager.shared.isSuspendingForBackground {
                 coordinator.startSSHConnection(terminal: existingTerminal)
             }
             return existingTerminal
@@ -674,7 +675,8 @@ private struct SSHTerminalRepresentable: UIViewRepresentable {
         terminalView.onReady = { [weak coordinator, weak terminalView] in
             coordinator?.isTerminalReady = true
             onReady()
-            if let terminalView = terminalView {
+            if let terminalView = terminalView,
+               !ConnectionSessionManager.shared.isSuspendingForBackground {
                 coordinator?.startSSHConnection(terminal: terminalView)
             }
         }
@@ -764,7 +766,10 @@ private struct SSHTerminalRepresentable: UIViewRepresentable {
                 return false
             }
         }()
-        if context.coordinator.isTerminalReady && shellMissing && shouldStartSSHConnection {
+        if context.coordinator.isTerminalReady
+            && shellMissing
+            && shouldStartSSHConnection
+            && !ConnectionSessionManager.shared.isSuspendingForBackground {
             context.coordinator.startSSHConnection(terminal: terminalView)
         }
 

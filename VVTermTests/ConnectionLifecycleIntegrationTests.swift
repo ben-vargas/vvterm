@@ -47,6 +47,17 @@ struct ConnectionLifecycleIntegrationTests {
         }
     }
 
+    private func withServerList<T>(
+        _ servers: [Server],
+        _ body: @MainActor () async throws -> T
+    ) async rethrows -> T {
+        let serverManager = ServerManager.shared
+        let originalServers = serverManager.servers
+        serverManager.servers = servers
+        defer { serverManager.servers = originalServers }
+        return try await body()
+    }
+
     private func withCleanTabManager(
         _ body: @MainActor (TerminalTabManager) async throws -> Void
     ) async rethrows {
@@ -237,6 +248,68 @@ struct ConnectionLifecycleIntegrationTests {
             #expect(manager.sessions.first?.id == second.id)
             #expect(manager.selectedSessionId == second.id)
             #expect(manager.connectedServerIds == [secondServerId])
+        }
+    }
+
+    @Test
+    func connectionManagerSuspendAllForBackgroundPreservesTabsAndClearsShells() async {
+        await withCleanConnectionManager { manager in
+            let serverId = UUID()
+            let session = ConnectionSession(
+                serverId: serverId,
+                title: "Background Session",
+                connectionState: .connected
+            )
+            manager.sessions = [session]
+            manager.selectedSessionId = session.id
+            manager.connectedServerIds = [serverId]
+
+            let client = SSHClient()
+            manager.registerSSHClient(
+                client,
+                shellId: UUID(),
+                for: session.id,
+                serverId: serverId,
+                skipTmuxLifecycle: true
+            )
+
+            var suspendCalls = 0
+            manager.registerShellSuspendHandler({
+                suspendCalls += 1
+            }, for: session.id)
+
+            await manager.suspendAllForBackground()
+
+            #expect(manager.sessions.count == 1)
+            #expect(manager.sessions.first?.id == session.id)
+            #expect(manager.sessions.first?.connectionState == .disconnected)
+            #expect(manager.shellId(for: session.id) == nil)
+            #expect(manager.connectedServerIds.isEmpty)
+            #expect(suspendCalls == 1)
+            #expect(!manager.isSuspendingForBackground)
+        }
+    }
+
+    @Test
+    func connectionManagerReconnectDoesNothingWhileBackgroundSuspendIsActive() async {
+        await withCleanConnectionManager { manager in
+            let server = makeServer(connectionMode: .standard)
+            let session = ConnectionSession(
+                serverId: server.id,
+                title: "Reconnect Guard",
+                connectionState: .disconnected
+            )
+
+            await withServerList([server]) {
+                manager.sessions = [session]
+                manager.setBackgroundSuspendInProgressForTesting(true)
+                defer { manager.setBackgroundSuspendInProgressForTesting(false) }
+
+                try? await manager.reconnect(session: session)
+
+                #expect(manager.sessions.first?.connectionState == .disconnected)
+                #expect(manager.shellId(for: session.id) == nil)
+            }
         }
     }
 

@@ -248,6 +248,7 @@ final class ConnectionSessionManager: ObservableObject {
     private var shellSuspendHandlers: [UUID: () -> Void] = [:]
     /// Server IDs with an in-flight open request, used to collapse repeated clicks.
     private var sessionOpensInFlight: Set<UUID> = []
+    private(set) var isSuspendingForBackground = false
 
     /// Servers that already ran tmux cleanup (per app launch)
     private var tmuxCleanupServers: Set<UUID> = []
@@ -532,7 +533,12 @@ final class ConnectionSessionManager: ObservableObject {
     }
 
     /// Disconnects all sessions without removing tabs (used when app backgrounds)
-    func suspendAllForBackground() {
+    func suspendAllForBackground() async {
+        guard !isSuspendingForBackground else { return }
+        isSuspendingForBackground = true
+        defer { isSuspendingForBackground = false }
+
+        pauseCachedTerminalsForBackground()
         let sessionsToSuspend = sessions
         for session in sessionsToSuspend {
             if session.connectionState.isConnected || session.connectionState.isConnecting {
@@ -540,9 +546,9 @@ final class ConnectionSessionManager: ObservableObject {
             }
             // Cancel any in-flight connects while preserving terminal state
             shellSuspendHandlers[session.id]?()
-            Task.detached { [weak self] in
-                await self?.unregisterSSHClient(for: session.id)
-            }
+        }
+        for session in sessionsToSuspend {
+            await unregisterSSHClient(for: session.id)
         }
         logger.info("Suspended all sessions for background")
     }
@@ -878,6 +884,15 @@ final class ConnectionSessionManager: ObservableObject {
         shellSuspendHandlers.removeValue(forKey: sessionId)
     }
 
+    private func pauseCachedTerminalsForBackground() {
+        #if os(iOS)
+        for terminal in terminalViews.values {
+            terminal.pauseRendering()
+            _ = terminal.resignFirstResponder()
+        }
+        #endif
+    }
+
     func getTerminal(for sessionId: UUID) -> GhosttyTerminalView? {
         if let terminal = terminalViews[sessionId] {
             touchTerminal(sessionId)
@@ -895,6 +910,7 @@ final class ConnectionSessionManager: ObservableObject {
     // MARK: - Reconnection
 
     func reconnect(session: ConnectionSession) async throws {
+        guard !isSuspendingForBackground else { return }
         guard let serverManager = ServerManager.shared as ServerManager?,
               serverManager.servers.contains(where: { $0.id == session.serverId }) else {
             throw SSHError.connectionFailed("Server not found")
@@ -1378,6 +1394,7 @@ extension ConnectionSessionManager {
         shellCancelHandlers.removeAll()
         shellSuspendHandlers.removeAll()
         sessionOpensInFlight.removeAll()
+        isSuspendingForBackground = false
         tmuxCleanupServers.removeAll()
         terminalViews.removeAll()
         terminalAccessOrder.removeAll()
@@ -1390,6 +1407,10 @@ extension ConnectionSessionManager {
         for client in uniqueClients.values {
             await client.disconnect()
         }
+    }
+
+    func setBackgroundSuspendInProgressForTesting(_ isSuspending: Bool) {
+        isSuspendingForBackground = isSuspending
     }
 }
 #endif

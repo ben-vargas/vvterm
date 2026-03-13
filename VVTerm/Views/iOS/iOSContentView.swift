@@ -715,8 +715,6 @@ struct iOSTerminalView: View {
     @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
     @AppStorage("terminalThemeNameLight") private var terminalThemeNameLight = "Aizen Light"
     @AppStorage("terminalUsePerAppearanceTheme") private var usePerAppearanceTheme = true
-    @AppStorage("sshAutoReconnect") private var autoReconnectEnabled = true
-
     private var effectiveThemeName: String {
         guard usePerAppearanceTheme else { return terminalThemeName }
         return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight
@@ -829,21 +827,6 @@ struct iOSTerminalView: View {
         }
     }
 
-    private func attemptForegroundReconnectIfNeeded() {
-        guard autoReconnectEnabled else { return }
-        guard selectedView == "terminal" else { return }
-        guard let session = selectedSession else { return }
-
-        switch session.connectionState {
-        case .disconnected, .failed:
-            Task { try? await sessionManager.reconnect(session: session) }
-            reconnectTokenBySession[session.id] = UUID()
-            shouldShowTerminalBySession[session.id] = true
-        default:
-            break
-        }
-    }
-
     var body: some View {
         alertContent
             .onAppear {
@@ -858,7 +841,6 @@ struct iOSTerminalView: View {
                     sessionManager.selectedSessionId = fallbackId
                 }
                 synchronizeRecoveredTerminalState()
-                attemptForegroundReconnectIfNeeded()
             }
             .onChange(of: terminalThemeName) { _ in updateTerminalBackgroundColor() }
             .onChange(of: terminalThemeNameLight) { _ in updateTerminalBackgroundColor() }
@@ -872,7 +854,6 @@ struct iOSTerminalView: View {
                        let session = selectedSession {
                         refreshTerminal(for: session)
                     }
-                    attemptForegroundReconnectIfNeeded()
                 }
             }
             .onChange(of: connectingServer?.id) { newValue in
@@ -891,7 +872,6 @@ struct iOSTerminalView: View {
                 if selectedView == "terminal", let session = selectedSession {
                     activateTerminal(session)
                 }
-                attemptForegroundReconnectIfNeeded()
             }
             .onChange(of: isConnecting) { _ in
                 synchronizeRecoveredTerminalState()
@@ -899,8 +879,6 @@ struct iOSTerminalView: View {
             .onChange(of: selectedView) { newValue in
                 if newValue != "terminal" {
                     dismissKeyboardForCurrentSession()
-                } else {
-                    attemptForegroundReconnectIfNeeded()
                 }
             }
             .onChange(of: isZenModeEnabled) { newValue in
@@ -1321,7 +1299,12 @@ struct iOSTerminalView: View {
         terminal.resumeRendering()
 
         // Force layout + refresh after a brief delay to ensure the view is attached.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak terminal] in
+            guard let terminal else { return }
+            guard ConnectionSessionManager.shared.sessions.contains(where: { $0.id == session.id }) else { return }
+            guard ConnectionSessionManager.shared.getTerminal(for: session.id) === terminal else { return }
+            guard terminal.window != nil else { return }
+
             if let container = terminal.superview {
                 container.setNeedsLayout()
                 container.layoutIfNeeded()

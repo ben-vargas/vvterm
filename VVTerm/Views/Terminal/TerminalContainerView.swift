@@ -487,6 +487,7 @@ struct TerminalContainerView: View {
     private func attemptAutoReconnectIfNeeded() {
         guard scenePhase == .active else { return }
         guard !reconnectInFlight else { return }
+        guard !ConnectionSessionManager.shared.isSuspendingForBackground else { return }
         guard autoReconnectEnabled else { return }
         guard session.connectionState == .disconnected else { return }
         Task { await retryConnection() }

@@ -300,7 +300,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // Handle app going to background - suspend connections to save resources
     func applicationDidEnterBackground(_ application: UIApplication) {
         Task { @MainActor in
-            ConnectionSessionManager.shared.suspendAllForBackground()
+            await ConnectionSessionManager.shared.suspendAllForBackground()
             AppLockManager.shared.lockIfNeededForBackground()
         }
     }
