@@ -20,8 +20,11 @@ declare global {
     umami?: {
       track: (eventName: string) => void;
     };
+    gtag?: (...args: unknown[]) => void;
   }
 }
+
+const GTAG_CONVERSION_ID = "AW-17966112771/kskJCIz44oUcEIPA9PZC";
 
 const APP_STORE_URL = "https://apps.apple.com/app/vvterm/id6757482822";
 const GITHUB_REPO_URL = "https://github.com/vivy-company/vvterm";
@@ -61,6 +64,29 @@ function AppContent() {
     }
   };
 
+  const trackConversion = (e: React.MouseEvent<HTMLAnchorElement>, eventName: string, value?: number) => {
+    trackEvent(eventName);
+    if (typeof window !== "undefined" && window.gtag) {
+      e.preventDefault();
+      const url = (e.currentTarget as HTMLAnchorElement).href;
+      let navigated = false;
+      const navigate = () => {
+        if (!navigated) {
+          navigated = true;
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+      };
+      window.gtag("event", "conversion", {
+        send_to: GTAG_CONVERSION_ID,
+        value: value ?? 0,
+        currency: "USD",
+        event_callback: navigate,
+      });
+      // Fallback if gtag callback doesn't fire within 1s
+      setTimeout(navigate, 1000);
+    }
+  };
+
   const features = [
     { icon: Server, bg: "rgba(0,122,255,0.1)", color: "#007aff", key: "servers", span: true },
     { icon: Terminal, bg: "rgba(48,209,88,0.1)", color: "#30d158", key: "terminal", span: true },
@@ -90,7 +116,7 @@ function AppContent() {
               href={APP_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => trackEvent("appstore_click")}
+              onClick={(e) => trackConversion(e, "appstore_click")}
               className="transition-opacity duration-200 hover:opacity-80"
             >
               <img src="/app-store-badge.svg" alt="Download VVTerm on the App Store" className="h-[52px] block rounded-[8px]" />
@@ -200,7 +226,7 @@ function AppContent() {
                 href={APP_STORE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => trackEvent("pricing_free_click")}
+                onClick={(e) => trackConversion(e, "pricing_free_click")}
                 className="block w-full py-3 text-center text-[17px] font-normal border border-white/20 text-white rounded-full hover:bg-white/5 transition-all duration-200"
               >
                 {t("pricing.free.cta")}
@@ -243,7 +269,7 @@ function AppContent() {
                 href={APP_STORE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => trackEvent(billingCycle === "monthly" ? "pricing_pro_monthly_click" : "pricing_pro_yearly_click")}
+                onClick={(e) => trackConversion(e, billingCycle === "monthly" ? "pricing_pro_monthly_click" : "pricing_pro_yearly_click", billingCycle === "monthly" ? 6.49 : 19.99)}
                 className="block w-full py-3 text-center text-[17px] font-normal border border-white/20 text-white rounded-full hover:bg-white/5 transition-all duration-200"
               >
                 {billingCycle === "monthly" ? t("pricing.pro.ctaMonthly") : t("pricing.pro.ctaYearly")}
@@ -271,7 +297,7 @@ function AppContent() {
                   href={APP_STORE_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={() => trackEvent("pricing_lifetime_click")}
+                  onClick={(e) => trackConversion(e, "pricing_lifetime_click", 29.99)}
                   className="block w-full py-3 text-center text-[17px] font-normal bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-all duration-200"
                 >
                   {t("pricing.lifetime.cta")}
