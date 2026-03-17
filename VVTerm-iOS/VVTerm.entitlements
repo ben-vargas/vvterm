@@ -18,6 +18,12 @@
     <key>com.apple.developer.ubiquity-kvstore-identifier</key>
     <string>$(TeamIdentifierPrefix)app.vivy.VivyTerm</string>
 
+    <!-- Network -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <key>com.apple.security.network.server</key>
+    <true/>
+
     <!-- Keychain sharing -->
     <key>keychain-access-groups</key>
     <array>
