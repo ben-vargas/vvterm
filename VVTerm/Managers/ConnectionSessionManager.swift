@@ -1237,6 +1237,17 @@ extension ConnectionSessionManager {
             return
         }
 
+        // Send the pending tmux command IMMEDIATELY if available (already prepared by tmuxStartupPlan).
+        // The slow SSH operations (availability check, cleanup, config) run AFTER the command is sent
+        // so the user sees tmux start without delay.
+        if let pending = tmuxResolver.pendingPostShellCommands.removeValue(forKey: sessionId) {
+            await RemoteTmuxManager.shared.sendScript(pending, using: client, shellId: shellId)
+
+            let status = await MainActor.run { self.currentTmuxStatus(for: sessionId) }
+            await MainActor.run { self.updateTmuxStatus(sessionId, status: status) }
+            return
+        }
+
         let tmuxAvailable = await RemoteTmuxManager.shared.isTmuxAvailable(using: client)
         guard tmuxAvailable else {
             await MainActor.run {
@@ -1276,22 +1287,16 @@ extension ConnectionSessionManager {
 
         await RemoteTmuxManager.shared.prepareConfig(using: client)
 
-        let command: String
-        if let pending = tmuxResolver.pendingPostShellCommands.removeValue(forKey: sessionId) {
-            command = pending
-        } else {
-            let workingDirectory = await resolveTmuxWorkingDirectory(for: sessionId, using: client)
-            guard let rebuilt = tmuxResolver.buildAttachExecCommand(
-                for: sessionId,
-                selection: selection,
-                workingDirectory: workingDirectory
-            ) else {
-                return
-            }
-            command = rebuilt
+        let workingDirectory = await resolveTmuxWorkingDirectory(for: sessionId, using: client)
+        guard let rebuilt = tmuxResolver.buildAttachExecCommand(
+            for: sessionId,
+            selection: selection,
+            workingDirectory: workingDirectory
+        ) else {
+            return
         }
 
-        await RemoteTmuxManager.shared.sendScript(command, using: client, shellId: shellId)
+        await RemoteTmuxManager.shared.sendScript(rebuilt, using: client, shellId: shellId)
     }
 
     func tmuxStartupPlan(
@@ -1342,17 +1347,17 @@ extension ConnectionSessionManager {
         case .skipTmux:
             return (nil, true)
         case .createManaged:
-            let tmuxCommand = RemoteTmuxManager.shared.attachCommand(
+            tmuxResolver.pendingPostShellCommands[sessionId] = RemoteTmuxManager.shared.attachExecCommand(
                 sessionName: tmuxResolver.sessionName(for: sessionId),
                 workingDirectory: workingDirectory
             )
-            return (tmuxCommand, true)
+            return (nil, false)
         case .attachExisting(let sessionName, let scope):
-            let tmuxCommand = RemoteTmuxManager.shared.attachExistingCommand(
+            tmuxResolver.pendingPostShellCommands[sessionId] = RemoteTmuxManager.shared.attachExistingExecCommand(
                 sessionName: sessionName,
                 scope: scope
             )
-            return (tmuxCommand, true)
+            return (nil, false)
         }
     }
 
