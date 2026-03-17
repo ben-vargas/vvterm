@@ -484,8 +484,13 @@ actor SSHClient {
                     switch hostOp {
                     case .hostBytes(let bytes):
                         totalBytes += bytes.count
-                        if totalBytes <= 1000 {
-                            moshLogger.debug("Mosh hostBytes: \(bytes.count) bytes (total: \(totalBytes))")
+                        if totalBytes <= 2000 {
+                            let preview = String(data: bytes, encoding: .utf8)?
+                                .replacingOccurrences(of: "\u{1b}", with: "\\e")
+                                .replacingOccurrences(of: "\r", with: "\\r")
+                                .replacingOccurrences(of: "\n", with: "\\n")
+                                .prefix(300) ?? "<binary>"
+                            moshLogger.info("Mosh hostBytes: \(bytes.count)B (total: \(totalBytes)) content: \(preview)")
                         }
                         continuation.yield(bytes)
                     case .echoAck, .resize:
