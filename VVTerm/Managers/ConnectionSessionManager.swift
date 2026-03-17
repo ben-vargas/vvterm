@@ -1342,17 +1342,17 @@ extension ConnectionSessionManager {
         case .skipTmux:
             return (nil, true)
         case .createManaged:
-            tmuxResolver.pendingPostShellCommands[sessionId] = RemoteTmuxManager.shared.attachExecCommand(
+            let tmuxCommand = RemoteTmuxManager.shared.attachCommand(
                 sessionName: tmuxResolver.sessionName(for: sessionId),
                 workingDirectory: workingDirectory
             )
-            return (nil, false)
+            return (tmuxCommand, true)
         case .attachExisting(let sessionName, let scope):
-            tmuxResolver.pendingPostShellCommands[sessionId] = RemoteTmuxManager.shared.attachExistingExecCommand(
+            let tmuxCommand = RemoteTmuxManager.shared.attachExistingCommand(
                 sessionName: sessionName,
                 scope: scope
             )
-            return (nil, false)
+            return (tmuxCommand, true)
         }
     }
 
