@@ -2,7 +2,6 @@ import Foundation
 
 struct RemoteTmuxSession: Hashable {
     let name: String
-    let scope: TmuxSocketScope
     let attachedClients: Int
     let windowCount: Int
 }
@@ -17,7 +16,6 @@ actor RemoteTmuxManager {
 
     private let configDirectory = "~/.vvterm"
     private let configPath = "~/.vvterm/tmux.conf"
-    private let managedSocketName = "vvterm-managed"
     private let availabilityTimeout: Duration = .seconds(8)
     private let listTimeout: Duration = .seconds(12)
     private let configTimeout: Duration = .seconds(20)
@@ -34,19 +32,8 @@ actor RemoteTmuxManager {
         return output?.contains(okMarker) == true
     }
 
-    func listSessions(
-        using client: SSHClient,
-        scopes: [TmuxSocketScope] = TmuxSocketScope.allCases
-    ) async -> [RemoteTmuxSession] {
-        var sessions: [RemoteTmuxSession] = []
-        for scope in uniqueScopes(scopes) {
-            sessions.append(contentsOf: await listSessions(using: client, scope: scope))
-        }
-        return sortSessions(sessions)
-    }
-
-    private func listSessions(using client: SSHClient, scope: TmuxSocketScope) async -> [RemoteTmuxSession] {
-        let tmux = tmuxCommand(scope: scope, includeUTF8: false, includeConfig: false)
+    func listSessions(using client: SSHClient) async -> [RemoteTmuxSession] {
+        let tmux = tmuxCommand(includeUTF8: false, includeConfig: false)
         // Try richer format first, then fall back for older tmux versions.
         let candidates = [
             "\(RemoteTerminalBootstrap.shellPathExport()); \(tmux) list-sessions -F '#{session_name} #{session_attached} #{session_windows}' 2>/dev/null",
@@ -57,7 +44,7 @@ actor RemoteTmuxManager {
         for (index, body) in candidates.enumerated() {
             let command = "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
             guard let output = try? await client.execute(command, timeout: listTimeout) else { continue }
-            let sessions = parseSessionListOutput(output, scope: scope, allowLegacy: index == candidates.count - 1)
+            let sessions = parseSessionListOutput(output, allowLegacy: index == candidates.count - 1)
 
             if !sessions.isEmpty {
                 return sessions
@@ -76,42 +63,34 @@ actor RemoteTmuxManager {
     nonisolated func attachCommand(
         sessionName: String,
         workingDirectory: String,
-        scope: TmuxSocketScope = .managed,
         context: CommandContext = .startupExec
     ) -> String {
-        let body = attachOrCreateBody(sessionName: sessionName, workingDirectory: workingDirectory, scope: scope)
+        let body = attachOrCreateBody(sessionName: sessionName, workingDirectory: workingDirectory)
         return commandString(for: body, context: context)
     }
 
     nonisolated func attachExistingCommand(
         sessionName: String,
-        scope: TmuxSocketScope = .userDefault,
         context: CommandContext = .startupExec
     ) -> String {
         let body = attachExistingBody(
             sessionName: sessionName,
-            scopes: [scope],
             missingCommand: missingSessionCommand(for: context)
         )
         return commandString(for: body, context: context)
     }
 
-    nonisolated func attachExistingExecCommand(
-        sessionName: String,
-        scope: TmuxSocketScope = .userDefault
-    ) -> String {
-        attachExistingCommand(sessionName: sessionName, scope: scope, context: .interactiveShell)
+    nonisolated func attachExistingExecCommand(sessionName: String) -> String {
+        attachExistingCommand(sessionName: sessionName, context: .interactiveShell)
     }
 
     nonisolated func attachExecCommand(
         sessionName: String,
-        workingDirectory: String,
-        scope: TmuxSocketScope = .managed
+        workingDirectory: String
     ) -> String {
         attachCommand(
             sessionName: sessionName,
             workingDirectory: workingDirectory,
-            scope: scope,
             context: .interactiveShell
         )
     }
@@ -120,7 +99,6 @@ actor RemoteTmuxManager {
         let attach = attachCommand(
             sessionName: sessionName,
             workingDirectory: workingDirectory,
-            scope: .managed,
             context: .startupExec
         )
         let configWrite = configWriteCommand()
@@ -176,16 +154,10 @@ actor RemoteTmuxManager {
         try? await client.write(data, to: shellId)
     }
 
-    func killSession(
-        named sessionName: String,
-        using client: SSHClient,
-        scope: TmuxSocketScope = .managed
-    ) async {
+    func killSession(named sessionName: String, using client: SSHClient) async {
         let quoted = RemoteTerminalBootstrap.shellQuoted(sessionName)
-        let killCommands = lookupScopes(for: scope)
-            .map { "\(tmuxCommand(scope: $0, includeUTF8: false, includeConfig: false)) kill-session -t \(quoted) 2>/dev/null || true" }
-            .joined(separator: "; ")
-        let body = "\(RemoteTerminalBootstrap.shellPathExport()); \(killCommands)"
+        let tmux = tmuxCommand(includeUTF8: false, includeConfig: false)
+        let body = "\(RemoteTerminalBootstrap.shellPathExport()); \(tmux) kill-session -t \(quoted) 2>/dev/null || true"
         let command = "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
         _ = try? await client.execute(command, timeout: killTimeout)
     }
@@ -206,33 +178,24 @@ actor RemoteTmuxManager {
     func cleanupDetachedSessions(deviceId: String, keeping sessionNames: Set<String>, using client: SSHClient) async {
         let prefix = "vvterm_\(deviceId)_"
         let keep = sessionNames
-        let sessions = await listSessions(using: client, scopes: [.managed, .userDefault])
+        let sessions = await listSessions(using: client)
 
         for session in sessions {
             guard session.name.hasPrefix(prefix) else { continue }
             guard session.attachedClients == 0 else { continue }
             guard !keep.contains(session.name) else { continue }
-            await killSession(named: session.name, using: client, scope: session.scope)
+            await killSession(named: session.name, using: client)
         }
     }
 
-    func currentPath(
-        sessionName: String,
-        using client: SSHClient,
-        scope: TmuxSocketScope
-    ) async -> String? {
+    func currentPath(sessionName: String, using client: SSHClient) async -> String? {
         let quotedSession = RemoteTerminalBootstrap.shellQuoted(sessionName)
-        for lookupScope in lookupScopes(for: scope) {
-            let tmux = tmuxCommand(scope: lookupScope, includeUTF8: false, includeConfig: false)
-            let body = "\(RemoteTerminalBootstrap.shellPathExport()); \(tmux) list-panes -t \(quotedSession) -F '#{pane_current_path}' 2>/dev/null | head -n 1"
-            let command = "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
-            guard let output = try? await client.execute(command, timeout: pathTimeout) else { continue }
-            let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                return trimmed
-            }
-        }
-        return nil
+        let tmux = tmuxCommand(includeUTF8: false, includeConfig: false)
+        let body = "\(RemoteTerminalBootstrap.shellPathExport()); \(tmux) list-panes -t \(quotedSession) -F '#{pane_current_path}' 2>/dev/null | head -n 1"
+        let command = "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
+        guard let output = try? await client.execute(command, timeout: pathTimeout) else { return nil }
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     nonisolated private func shellDirectoryArgument(_ value: String) -> String {
@@ -241,24 +204,6 @@ actor RemoteTmuxManager {
         }
         let escaped = value.replacingOccurrences(of: "\"", with: "\\\"")
         return "\"\(escaped)\""
-    }
-
-    nonisolated private func uniqueScopes(_ scopes: [TmuxSocketScope]) -> [TmuxSocketScope] {
-        var seen: Set<TmuxSocketScope> = []
-        var result: [TmuxSocketScope] = []
-        for scope in scopes where seen.insert(scope).inserted {
-            result.append(scope)
-        }
-        return result
-    }
-
-    nonisolated private func lookupScopes(for scope: TmuxSocketScope) -> [TmuxSocketScope] {
-        switch scope {
-        case .managed:
-            return [.managed, .userDefault]
-        case .userDefault:
-            return [.userDefault]
-        }
     }
 
     nonisolated private func commandString(for body: String, context: CommandContext) -> String {
@@ -281,79 +226,53 @@ actor RemoteTmuxManager {
 
     nonisolated private func attachOrCreateBody(
         sessionName: String,
-        workingDirectory: String,
-        scope: TmuxSocketScope
+        workingDirectory: String
     ) -> String {
         let createCommand = createSessionCommand(
             sessionName: sessionName,
-            workingDirectory: workingDirectory,
-            scope: scope
+            workingDirectory: workingDirectory
         )
         return attachExistingBody(
             sessionName: sessionName,
-            scopes: lookupScopes(for: scope),
             missingCommand: createCommand
         )
     }
 
     nonisolated private func attachExistingBody(
         sessionName: String,
-        scopes: [TmuxSocketScope],
         missingCommand: String
     ) -> String {
         let exactSession = RemoteTerminalBootstrap.shellQuoted("=\(sessionName)")
         let plainSession = RemoteTerminalBootstrap.shellQuoted(sessionName)
-        let probeScopes = uniqueScopes(scopes)
+        let tmuxProbe = tmuxCommand(includeUTF8: false, includeConfig: false)
+        let tmuxAttach = tmuxCommand(includeUTF8: true, includeConfig: true)
+        let tmuxSource = tmuxCommand(includeUTF8: false, includeConfig: false)
 
-        var body = "\(RemoteTerminalBootstrap.shellPathExport()); "
-        var branches: [(condition: String, action: String)] = []
-        for scope in probeScopes {
-            let tmuxProbe = tmuxCommand(scope: scope, includeUTF8: false, includeConfig: false)
-            let tmuxAttach = tmuxCommand(scope: scope, includeUTF8: true, includeConfig: true)
-            let tmuxSource = tmuxCommand(scope: scope, includeUTF8: false, includeConfig: false)
-            branches.append((
-                condition: "\(tmuxProbe) has-session -t \(exactSession) 2>/dev/null",
-                action: "\(tmuxSource) source-file \(configPath) >/dev/null 2>&1 || true; exec \(tmuxAttach) attach-session -t \(exactSession)"
-            ))
-            branches.append((
-                condition: "\(tmuxProbe) has-session -t \(plainSession) 2>/dev/null",
-                action: "\(tmuxSource) source-file \(configPath) >/dev/null 2>&1 || true; exec \(tmuxAttach) attach-session -t \(plainSession)"
-            ))
-        }
-
-        for (index, branch) in branches.enumerated() {
-            if index == 0 {
-                body += "if \(branch.condition); then \(branch.action); "
-            } else {
-                body += "elif \(branch.condition); then \(branch.action); "
-            }
-        }
-        body += "else \(missingCommand); fi"
-        return body
+        return """
+        \(RemoteTerminalBootstrap.shellPathExport()); \
+        if \(tmuxProbe) has-session -t \(exactSession) 2>/dev/null; then \
+        \(tmuxSource) source-file \(configPath) >/dev/null 2>&1 || true; exec \(tmuxAttach) attach-session -t \(exactSession); \
+        elif \(tmuxProbe) has-session -t \(plainSession) 2>/dev/null; then \
+        \(tmuxSource) source-file \(configPath) >/dev/null 2>&1 || true; exec \(tmuxAttach) attach-session -t \(plainSession); \
+        else \(missingCommand); fi
+        """
     }
 
     nonisolated private func createSessionCommand(
         sessionName: String,
-        workingDirectory: String,
-        scope: TmuxSocketScope
+        workingDirectory: String
     ) -> String {
         let escapedDir = shellDirectoryArgument(workingDirectory)
         let escapedSession = RemoteTerminalBootstrap.shellQuoted(sessionName)
-        let tmux = tmuxCommand(scope: scope, includeUTF8: true, includeConfig: true)
+        let tmux = tmuxCommand(includeUTF8: true, includeConfig: true)
         return "exec \(tmux) new-session -A -s \(escapedSession) -c \(escapedDir)"
     }
 
     nonisolated private func tmuxCommand(
-        scope: TmuxSocketScope,
         includeUTF8: Bool,
         includeConfig: Bool
     ) -> String {
         var parts = ["tmux"]
-        if scope == .managed {
-            // Use a dedicated socket for VVTerm-managed sessions so a stale user server
-            // on the default socket does not break reattach after tmux upgrades.
-            parts.append("-L \(RemoteTerminalBootstrap.shellQuoted(managedSocketName))")
-        }
         if includeUTF8 {
             parts.append("-u")
         }
@@ -389,7 +308,6 @@ actor RemoteTmuxManager {
 
     nonisolated func parseSessionListOutput(
         _ output: String,
-        scope: TmuxSocketScope,
         allowLegacy: Bool
     ) -> [RemoteTmuxSession] {
         var sessions: [RemoteTmuxSession] = []
@@ -399,14 +317,13 @@ actor RemoteTmuxManager {
                 sessions.append(
                     RemoteTmuxSession(
                         name: parsed.name,
-                        scope: scope,
                         attachedClients: parsed.attachedClients,
                         windowCount: parsed.windowCount
                     )
                 )
                 continue
             }
-            if allowLegacy, let parsed = parseLegacySessionLine(line, scope: scope) {
+            if allowLegacy, let parsed = parseLegacySessionLine(line) {
                 sessions.append(parsed)
             }
         }
@@ -469,7 +386,7 @@ actor RemoteTmuxManager {
         return (name, max(0, attachedClients), max(1, windowCount))
     }
 
-    nonisolated private func parseLegacySessionLine(_ line: String, scope: TmuxSocketScope) -> RemoteTmuxSession? {
+    nonisolated private func parseLegacySessionLine(_ line: String) -> RemoteTmuxSession? {
         // Example legacy output:
         // "name: 1 windows (created ...) [80x24] (attached)"
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -487,7 +404,6 @@ actor RemoteTmuxManager {
 
         return RemoteTmuxSession(
             name: name,
-            scope: scope,
             attachedClients: max(0, attached),
             windowCount: max(1, windows)
         )
@@ -501,14 +417,7 @@ actor RemoteTmuxManager {
             if lhs.windowCount != rhs.windowCount {
                 return lhs.windowCount > rhs.windowCount
             }
-            let nameComparison = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
-            if nameComparison != .orderedSame {
-                return nameComparison == .orderedAscending
-            }
-            if lhs.scope != rhs.scope {
-                return lhs.scope == .managed
-            }
-            return lhs.name < rhs.name
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
     }
 

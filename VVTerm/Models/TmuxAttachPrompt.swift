@@ -1,17 +1,11 @@
 import Foundation
 
-enum TmuxSocketScope: String, Codable, CaseIterable, Equatable, Hashable {
-    case userDefault
-    case managed
-}
-
 struct TmuxAttachSessionInfo: Identifiable, Equatable {
     let name: String
-    let scope: TmuxSocketScope
     let attachedClients: Int
     let windowCount: Int
 
-    var id: String { "\(scope.rawValue):\(name)" }
+    var id: String { name }
 }
 
 struct TmuxAttachPrompt: Identifiable, Equatable {
@@ -24,6 +18,6 @@ struct TmuxAttachPrompt: Identifiable, Equatable {
 
 enum TmuxAttachSelection: Equatable {
     case createManaged
-    case attachExisting(sessionName: String, scope: TmuxSocketScope)
+    case attachExisting(sessionName: String)
     case skipTmux
 }

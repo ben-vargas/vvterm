@@ -1,8 +1,10 @@
 import Foundation
 import MoshBootstrap
+import os
 
 actor RemoteMoshManager {
     static let shared = RemoteMoshManager()
+    private let logger = Logger(subsystem: "app.vivy.VivyTerm", category: "mosh-bootstrap")
     private static let installSuccessMarker = "__VVTERM_MOSH_INSTALLED__"
     private let availabilityTimeout: Duration = .seconds(8)
     private let bootstrapTimeout: Duration = .seconds(25)
@@ -24,12 +26,14 @@ actor RemoteMoshManager {
         portRange: ClosedRange<Int> = 60001...61000
     ) async throws -> MoshServerConnectInfo {
         let resolvedStartup = RemoteTerminalBootstrap.moshStartupScript(startCommand: startCommand)
+        let quotedStartup = RemoteTerminalBootstrap.shellQuoted(resolvedStartup)
         let body = """
         \(RemoteTerminalBootstrap.shellPathExport());
         \(utf8LocaleExportScript());
-        mosh-server new -s -c 256 -p \(portRange.lowerBound):\(portRange.upperBound) -- /bin/sh -lc \(RemoteTerminalBootstrap.shellQuoted(resolvedStartup)) 2>&1
+        mosh-server new -s -c 256 -p \(portRange.lowerBound):\(portRange.upperBound) -- /bin/sh -lc \(quotedStartup) 2>&1
         """
         let command = "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
+        logger.info("Mosh bootstrap startup: \(resolvedStartup.prefix(300))")
         let output = try await client.execute(command, timeout: bootstrapTimeout)
         return try parseConnectInfo(from: output)
     }
