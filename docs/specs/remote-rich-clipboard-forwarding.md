@@ -7,13 +7,14 @@ Draft date: 2026-03-25
 
 Core V1 behavior:
 - Text clipboard keeps using normal terminal paste.
-- Image clipboard is uploaded to the remote host as a temporary file.
+- If terminal-native rich clipboard is unavailable, image clipboard is uploaded to the remote host as a temporary file.
 - VVTerm uses a layered fallback strategy:
   - future terminal-native rich clipboard path via Kitty `OSC 5522` when supported
-  - remote machine clipboard seeding from the temporary file
+  - temporary remote file upload over SSH side channel
+  - optional remote machine clipboard seeding from the temporary file
   - temporary remote file path insertion into the active terminal session
 
-This is aimed at modern agent workflows where the remote CLI may prefer native clipboard paste behavior, but can still fall back to consuming a remote file path.
+This is aimed at modern agent workflows where a future terminal-native rich clipboard path can preserve true paste semantics, while the shipped V1 path still makes the image immediately usable by inserting a remote file path.
 
 ## Problem
 Today VVTerm forwards clipboard reads through Ghostty as text only.
@@ -41,7 +42,8 @@ Relevant constraints:
 Conclusion:
 - Rich clipboard forwarding still needs a separate remote transfer path.
 - Terminal-native rich clipboard support should be treated as an optimization layer above that transfer path, not a replacement for it.
-- The terminal input stream should only receive normal paste input after the clipboard path is prepared, or a textual fallback reference to the transferred asset.
+- Remote clipboard seeding is additive preparation, not a substitute for terminal-native image paste.
+- Until end-to-end rich clipboard support exists, the terminal input stream should receive either terminal-native rich clipboard traffic or a textual fallback reference to the transferred asset.
 
 ## Goals (V1)
 - Support pasting host clipboard images into a remote SSH session in a way that is useful immediately.
@@ -50,7 +52,7 @@ Conclusion:
 - Keep the user flow close to normal paste.
 - Avoid shell corruption and avoid depending on terminal escape hacks.
 - Keep Mosh sessions supported by using SSH as the transfer side channel.
-- Prefer remote-native clipboard behavior when the remote host supports it.
+- Seed the remote system clipboard when supported, without making overall success depend on it.
 - Support a future terminal-native rich clipboard path where terminal and remote TUI both speak Kitty `OSC 5522`.
 
 ## Non-Goals (V1)
@@ -63,7 +65,8 @@ Conclusion:
 
 ## User Stories
 - As a user, when my clipboard contains text, paste behaves exactly like today.
-- As a user, when my clipboard contains a screenshot, paste makes that image available in the remote machine clipboard when possible.
+- As a user, when my clipboard contains a screenshot, paste uploads it to the remote host and inserts a usable remote file path.
+- As a user, when the remote environment supports it, VVTerm also seeds the remote machine clipboard as a best-effort convenience.
 - As a user, after image paste completes, I can immediately reference the uploaded file in Codex or another agent running on the server.
 - As a user on Mosh, image paste still works even though terminal traffic is not going through the SSH shell channel.
 
@@ -74,12 +77,11 @@ When the terminal is focused and the user triggers paste:
 
 1. VVTerm inspects the host clipboard.
 2. If clipboard has text and no richer supported payload, use existing `paste_from_clipboard`.
-3. If clipboard has an image, VVTerm uploads the image to a temporary file on the remote host.
-4. VVTerm checks whether terminal-native rich clipboard transfer is available for this session.
-5. If Kitty `OSC 5522` is supported and succeeds, VVTerm uses normal native paste semantics.
-6. Otherwise VVTerm tries to copy that image into the remote machine clipboard.
-7. If remote clipboard seeding succeeds, VVTerm triggers normal paste behavior.
-8. If remote clipboard seeding fails or is unsupported, VVTerm pastes the temporary remote absolute path as text into the terminal.
+3. If clipboard has an image, VVTerm first checks whether terminal-native rich clipboard transfer is available for this session.
+4. If Kitty `OSC 5522` is supported and succeeds, VVTerm completes a true rich paste without creating a remote temp file.
+5. Otherwise VVTerm uploads the image to a temporary file on the remote host.
+6. VVTerm optionally tries to copy that image into the remote machine clipboard.
+7. VVTerm inserts the temporary remote absolute path as text into the terminal.
 
 Example pasted text:
 ```text
@@ -90,13 +92,13 @@ Example pasted text:
 - While uploading: lightweight non-terminal progress UI.
 - On success: optional toast, no modal interruption.
 - On failure: show actionable error and do not inject partial text.
-- If VVTerm had to fall back from Kitty `5522` to remote clipboard seeding or from remote clipboard seeding to file path insertion, the UI should say so clearly.
+- If VVTerm had to fall back from Kitty `5522` to upload/path insertion, or if remote clipboard seeding succeeded or failed along the way, the UI should say so clearly.
 
 ### Settings
 Add terminal settings:
 - `Rich Clipboard Paste`: `Off | Ask | Auto`
 - `Terminal Rich Clipboard`: `Auto | Prefer Kitty | Disable Kitty`
-- `Remote Clipboard Strategy`: `Prefer Native Clipboard | File Path Only`
+- `Remote Clipboard Seeding`: `Seed When Supported | Never Seed`
 - `Image Paste Format`: `PNG | JPEG`
 - `Paste Insert Style`: `Path only | Quoted path`
 
@@ -105,10 +107,10 @@ Recommended default:
 
 ### Ask mode behavior
 If an image is on the clipboard, prompt:
-- `Upload image to remote host and prepare remote paste?`
+- `Upload image to remote host and paste its path?`
 
 Actions:
-- `Upload and Paste`
+- `Upload and Paste Path`
 - `Paste Text Instead` if clipboard also contains text
 - `Cancel`
 
@@ -131,6 +133,7 @@ Likely touchpoints:
 Important distinction:
 - Ghostty clipboard callbacks remain for terminal-native text copy/paste.
 - Rich clipboard forwarding is an app-level feature above Ghostty.
+- On macOS, interception may need to happen in the responder/menu command path rather than in Ghostty's clipboard callback alone.
 
 ### 2) Add a clipboard payload abstraction
 Extend clipboard utilities to detect more than strings.
@@ -195,15 +198,14 @@ Possible final outcome model:
 enum RichPasteOutcome {
     case plainText
     case kittyClipboard
-    case remoteClipboard
-    case remotePath(String)
+    case uploadedPath(remotePath: String, seededRemoteClipboard: Bool)
 }
 ```
 
 ### 4) Transfer over SSH side channel, not terminal stdin
 Use the existing SSH connection as a control/transfer channel.
 
-V1 preferred implementation:
+V1 preferred implementation after Kitty capability has been ruled out or disabled:
 - add an SSH upload primitive in [SSHClient.swift](/Users/uyakauleu/vivy/development/VivyTerm/VVTerm/Services/SSH/SSHClient.swift)
 - create remote directories with `execute(...)`
 - transfer file bytes with a dedicated SFTP or SCP-style implementation
@@ -250,37 +252,41 @@ Permissions:
 - VVTerm should track and clean up files it created
 
 Cleanup policy:
-- delete on successful session-managed cleanup
-- delete on disconnect when possible
+- delete only failed or abandoned uploads immediately
+- do not delete on normal disconnect by default, because the pasted path may still be in use
 - add a TTL sweep for leftovers, for example files older than 24 hours
 
 Ownership:
-- VVTerm should track temp files per `sessionId`
-- `ConnectionSessionManager` should own normal lifecycle cleanup
+- VVTerm should track temp files per `sessionId` for provenance and cleanup hints
+- `ConnectionSessionManager` may coordinate best-effort cleanup of abandoned transfers, but should not treat session end as proof the file is no longer needed
 - a best-effort background sweeper can remove stale VVTerm temp files left behind after crashes
 
-### 6) Seed remote clipboard, then fall back to terminal text insertion
-After upload succeeds, VVTerm should first attempt the richest supported paste mechanism for the current session.
+### 6) Use terminal-native rich clipboard when available; otherwise insert the uploaded path
+For image payloads, VVTerm has two distinct completion modes:
+1. true terminal-native rich clipboard via Kitty `OSC 5522`
+2. uploaded remote file path insertion, optionally after best-effort remote clipboard seeding
+
+Important semantic distinction:
+- successful remote clipboard seeding does not make the original paste gesture deliver an image to the focused remote program
+- the existing normal paste path still resolves the local host clipboard as text through Ghostty, so it cannot complete an image paste into a remote TUI
+- therefore V1 must treat remote clipboard seeding as additive preparation, not as a substitute for rich terminal paste
 
 Priority order:
-1. Kitty `OSC 5522` rich clipboard path
-2. remote machine clipboard seeding from temp file
-3. terminal text insertion of temp file path
+1. Check Kitty `OSC 5522` capability before any remote upload.
+2. If supported and enabled, try terminal-native rich paste directly from the local clipboard payload.
+3. If that succeeds, finish with no remote temp file creation.
+4. Otherwise upload the image to a temporary remote file.
+5. If configured, attempt to seed the remote machine clipboard from that file.
+6. Insert the temporary remote absolute path as text into the active terminal session.
 
 If Kitty `OSC 5522` succeeds:
 - VVTerm should complete the paste in-app without requiring a second user gesture
-- this is the most direct future path for clipboard-aware TUIs
+- this is the only path that preserves true native paste semantics for image content
 
 If Kitty `OSC 5522` is unavailable or fails:
-- VVTerm should attempt to populate the remote machine clipboard from the temporary file
-
-If that succeeds:
-- VVTerm should complete the paste in-app without requiring a second user gesture
-- this preserves native TUI semantics for tools like Codex
-
-If that fails:
-- VVTerm should send only text into the active shell
-- the inserted text should be the temporary remote file path
+- VVTerm should continue with upload and path-based completion
+- remote clipboard seeding remains best-effort
+- regardless of seeding result, V1 completes by inserting the temp file path as text, because that is the only deterministic completion path available without end-to-end terminal rich clipboard support
 
 Default insertion:
 - absolute remote path
@@ -294,11 +300,12 @@ V1 should not inject a trailing newline automatically.
 Implementation note:
 - the app-triggered paste step must avoid recursive re-entry into rich-paste routing
 - a simple internal `pasteSource` flag such as `userInitiated` vs `programmaticAfterPreparation` is sufficient
-- programmatic paste after successful Kitty or remote-clipboard preparation should bypass rich-paste detection and invoke the normal terminal paste path directly
+- path insertion after upload should use the terminal's direct text-send path, not `paste_from_clipboard`, so it does not re-read the host clipboard
+- programmatic path insertion should bypass rich-paste detection entirely
 
 Rationale:
 - Kitty rich clipboard is the most semantically correct terminal-native protocol for image paste when available
-- native remote clipboard behavior is the most semantically correct path for clipboard-aware TUIs
+- remote clipboard seeding is still useful for workflows that later read the remote system clipboard
 - avoids accidental command execution
 - works for shells, editors, REPLs, and agent prompts
 - lets the remote program decide how to consume the file
@@ -311,35 +318,36 @@ For Mosh sessions:
 
 This matches the existing architecture, where Mosh already depends on SSH for bootstrap and management.
 
-### 8) Remote clipboard seeding
-Remote clipboard support is environment-dependent and must be capability-detected.
+### 8) Best-effort remote clipboard seeding
+Remote clipboard support is environment-dependent, must be capability-detected, and is optional in V1.
 
 V1 target support:
-- macOS remote hosts with `pbcopy`
 - Linux hosts with `wl-copy` when Wayland clipboard access is available
-- Linux hosts with `xclip` or `xsel` when X11 clipboard access is available
+- Linux hosts with `xclip` when X11 clipboard access is available
+- macOS remote hosts only when an active GUI session is available and AppleScript/AppKit clipboard access succeeds
 
 Likely unsupported in V1:
 - headless Linux servers without GUI clipboard access
 - minimal containers
 - CI environments
+- many macOS SSH logins without an attached Aqua session
 - many Windows remotes
 
 Important constraint:
-- VVTerm must upload and seed the remote clipboard before invoking paste semantics in the terminal
-- this cannot be deferred until after the TUI asks for clipboard contents
+- command presence alone is not sufficient; the relevant GUI session and environment variables must also be available
+- remote clipboard seeding is additive preparation and should not be the mechanism that completes the original paste gesture
 
 Recommended capability flow:
 1. Detect remote platform via existing environment resolution.
-2. Probe for a supported clipboard command.
+2. Probe for a supported clipboard command and required session state such as `DISPLAY`, `WAYLAND_DISPLAY`, or macOS GUI-session availability.
 3. Attempt clipboard seeding from the uploaded temp file.
-4. If seeding succeeds, trigger normal paste.
-5. Otherwise, fall back to path insertion.
+4. Cache the capability result per session.
+5. Continue with path insertion unless Kitty already handled the paste.
 
 Capability probing should be cached per session to avoid reprobe overhead on every paste.
 
 Example command families:
-- macOS:
+- macOS GUI session:
 ```sh
 osascript -e 'set the clipboard to (read (POSIX file "/tmp/vvterm-clipboard-a1b2c3.png") as PNG picture)'
 ```
@@ -369,13 +377,13 @@ Current constraints:
 
 Architecture implication:
 - VVTerm should model Kitty support as a capability on the session
-- successful use of Kitty `OSC 5522` should bypass remote clipboard seeding
-- the temp-file upload path should remain available because it is also the fallback input to remote system clipboard seeding and path insertion
+- successful use of Kitty `OSC 5522` should bypass remote upload and remote clipboard seeding
+- the temp-file upload path should remain available because it is the fallback input to remote system clipboard seeding and path insertion
 
 Recommended gating:
 - enable only for direct SSH sessions, not Mosh
 - require explicit terminal capability confirmation
-- fail fast into remote clipboard seeding if any negotiation step is missing
+- fail fast into the upload/path flow if any negotiation step is missing
 
 Capability probing for Kitty support should also be cached per session.
 
@@ -395,11 +403,14 @@ Examples:
 - fall back to inserting the temporary remote file path
 - show concise status such as `Remote clipboard unavailable, pasted temp file path instead`
 
+### If remote clipboard seeding succeeds
+- still complete V1 by inserting the temporary remote file path unless Kitty already handled the paste
+- show concise status such as `Remote clipboard prepared and temp file path pasted`
+
 ### If Kitty `OSC 5522` fails
 - do not fail the entire operation by default
-- fall back to remote clipboard seeding
-- if remote clipboard seeding also fails, fall back to temp file path insertion
-- show concise status such as `Terminal rich clipboard unavailable, used remote clipboard fallback`
+- fall back to upload/path completion, with remote clipboard seeding attempted only if configured
+- show concise status such as `Terminal rich clipboard unavailable, uploaded image and pasted temp file path instead`
 
 ### If clipboard contains both text and image
 Behavior in `Ask` mode:
@@ -448,9 +459,11 @@ Reasonable V1 constraints:
 ### Integration tests
 - Text paste remains unchanged.
 - Kitty `OSC 5522` path is attempted only when capability detection says it is available.
-- Kitty `OSC 5522` failure falls back cleanly to remote clipboard seeding.
-- Image paste uploads file, seeds remote clipboard, and triggers native paste when supported.
-- Image paste falls back to temp file path insertion when remote clipboard is unsupported.
+- Kitty capability is checked before remote upload, and successful Kitty paste does not create a temp file.
+- Kitty `OSC 5522` failure falls back cleanly to upload/path completion.
+- Image paste uploads file, optionally seeds remote clipboard, and inserts the remote file path when Kitty is unavailable.
+- Image paste still inserts the remote file path when remote clipboard is unsupported.
+- Programmatic path insertion bypasses `paste_from_clipboard` and does not recurse into rich-paste routing.
 - Failure to create temp file surfaces error without input injection.
 - Mosh session image paste still uploads through SSH.
 - Mosh sessions skip Kitty `OSC 5522` entirely.
@@ -459,11 +472,11 @@ Reasonable V1 constraints:
 - macOS local screenshot paste into remote shell prompt.
 - iOS photo clipboard paste into remote shell prompt.
 - Direct SSH session with a Kitty-clipboard-aware TUI once Ghostty support exists.
-- Paste image into Codex CLI session on a remote host with clipboard support and confirm native paste works.
+- Paste image into Codex CLI session on a remote host with clipboard support and confirm the remote path is pasted and the remote clipboard is optionally prepared.
 - Paste image into Codex CLI session on a headless remote host and confirm temp-path fallback is usable.
 - Clipboard containing both copied text and screenshot.
 - Repeated pastes produce unique files.
-- Temp files are cleaned up on normal session shutdown.
+- TTL-based cleanup removes stale temp files without breaking recently pasted paths.
 
 ## Rollout
 1. Add behind feature flag: `richClipboardPasteEnabled`
@@ -482,10 +495,10 @@ Reasonable V1 constraints:
 ## Recommended V1 Decision
 Implement image-only rich clipboard paste as:
 - app-level clipboard detection
-- SSH side-channel upload to a temporary remote file
-- future Kitty `OSC 5522` fast path when terminal/runtime support exists
-- remote clipboard seeding when supported
-- normal paste semantics after either successful clipboard path
-- plain-text temp-path fallback when remote clipboard seeding is unavailable
+- capability check for Kitty `OSC 5522` before any remote upload
+- current shipped V1 path: SSH side-channel upload to a temporary remote file
+- optional best-effort remote clipboard seeding from the uploaded file
+- deterministic completion by inserting the remote file path as text
+- future Kitty `OSC 5522` fast path can bypass upload and path insertion when end-to-end support exists
 
 This is the simplest design that is technically correct, useful for agent workflows, and consistent with how terminals and SSH actually work.
