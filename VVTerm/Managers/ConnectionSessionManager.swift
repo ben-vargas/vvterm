@@ -698,6 +698,10 @@ final class ConnectionSessionManager: ObservableObject {
         shellRegistry.client(for: session.id)
     }
 
+    func sshClient(forSessionId sessionId: UUID) -> SSHClient? {
+        shellRegistry.client(for: sessionId)
+    }
+
     func shellId(for session: ConnectionSession) -> UUID? {
         shellRegistry.shellId(for: session.id)
     }
@@ -775,10 +779,6 @@ final class ConnectionSessionManager: ObservableObject {
 
     func activeSSHClient(for serverId: UUID) -> SSHClient? {
         preferredSSHClient(for: serverId, allowPendingStart: false)
-    }
-
-    func activeTransport(for sessionId: UUID) -> ShellTransport {
-        sessions.first(where: { $0.id == sessionId })?.activeTransport ?? .ssh
     }
 
     func sharedStatsClient(for serverId: UUID) -> SSHClient? {

@@ -337,6 +337,7 @@ struct SSHTerminalWrapper: NSViewRepresentable {
     let session: ConnectionSession
     let server: Server
     let credentials: ServerCredentials
+    let richPasteUIModel: TerminalRichPasteUIModel
     var isActive: Bool = true
     let onProcessExit: () -> Void
     let onReady: () -> Void
@@ -348,7 +349,14 @@ struct SSHTerminalWrapper: NSViewRepresentable {
         // Use a dedicated SSH client per tab/session to avoid channel contention
         // and startup races when many tabs are opened quickly.
         let client = SSHClient()
-        return Coordinator(server: server, credentials: credentials, sessionId: session.id, onProcessExit: onProcessExit, sshClient: client)
+        return Coordinator(
+            server: server,
+            credentials: credentials,
+            sessionId: session.id,
+            onProcessExit: onProcessExit,
+            sshClient: client,
+            richPasteUIModel: richPasteUIModel
+        )
     }
 
     func makeNSView(context: Context) -> NSView {
@@ -383,6 +391,7 @@ struct SSHTerminalWrapper: NSViewRepresentable {
             existingTerminal.writeCallback = { [weak coordinator] data in
                 coordinator?.sendToSSH(data)
             }
+            coordinator.installRichPasteInterception(on: existingTerminal)
 
             // Re-wrap in scroll view
             let scrollView = TerminalScrollView(
@@ -428,6 +437,7 @@ struct SSHTerminalWrapper: NSViewRepresentable {
 
         // Store terminal reference in coordinator and register with session manager
         coordinator.terminalView = terminalView
+        coordinator.installRichPasteInterception(on: terminalView)
         ConnectionSessionManager.shared.registerTerminal(terminalView, for: session.id)
 
         // Register shell cancel handler so closeSession can cancel the shell task
@@ -487,6 +497,7 @@ struct SSHTerminalWrapper: NSViewRepresentable {
         let sshClient: SSHClient
         var shellId: UUID?
         var shellTask: Task<Void, Never>?
+        private let richPasteRuntime: TerminalRichPasteRuntime
         let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "SSHTerminal")
 
         /// Last known terminal size to detect changes
@@ -495,12 +506,29 @@ struct SSHTerminalWrapper: NSViewRepresentable {
         /// If true, this coordinator is reusing an existing terminal and should NOT cleanup on deinit
         var isReusingTerminal = false
 
-        init(server: Server, credentials: ServerCredentials, sessionId: UUID, onProcessExit: @escaping () -> Void, sshClient: SSHClient) {
+        init(
+            server: Server,
+            credentials: ServerCredentials,
+            sessionId: UUID,
+            onProcessExit: @escaping () -> Void,
+            sshClient: SSHClient,
+            richPasteUIModel: TerminalRichPasteUIModel
+        ) {
             self.server = server
             self.credentials = credentials
             self.sessionId = sessionId
             self.onProcessExit = onProcessExit
             self.sshClient = sshClient
+            self.richPasteRuntime = .connectionSession(
+                sessionId: sessionId,
+                sshClient: sshClient,
+                uiModel: richPasteUIModel
+            )
+        }
+
+        @MainActor
+        func installRichPasteInterception(on terminal: GhosttyTerminalView) {
+            richPasteRuntime.install(on: terminal)
         }
 
         /// Handle terminal resize notification from GhosttyTerminalView
@@ -570,6 +598,7 @@ struct SSHTerminalWrapper: View {
     let session: ConnectionSession
     let server: Server
     let credentials: ServerCredentials
+    let richPasteUIModel: TerminalRichPasteUIModel
     var isActive: Bool = true
     var shouldPreserveKeyboardDuringReconnect: Bool = false
     let onProcessExit: () -> Void
@@ -582,6 +611,7 @@ struct SSHTerminalWrapper: View {
                 session: session,
                 server: server,
                 credentials: credentials,
+                richPasteUIModel: richPasteUIModel,
                 size: geo.size,
                 isActive: isActive,
                 shouldPreserveKeyboardDuringReconnect: shouldPreserveKeyboardDuringReconnect,
@@ -598,6 +628,7 @@ private struct SSHTerminalRepresentable: UIViewRepresentable {
     let session: ConnectionSession
     let server: Server
     let credentials: ServerCredentials
+    let richPasteUIModel: TerminalRichPasteUIModel
     let size: CGSize
     var isActive: Bool = true
     var shouldPreserveKeyboardDuringReconnect: Bool = false
@@ -612,7 +643,14 @@ private struct SSHTerminalRepresentable: UIViewRepresentable {
         // Use a dedicated SSH client per tab/session to avoid channel contention
         // and startup races when many tabs are opened quickly.
         let client = SSHClient()
-        return Coordinator(server: server, credentials: credentials, sessionId: session.id, onProcessExit: onProcessExit, sshClient: client)
+        return Coordinator(
+            server: server,
+            credentials: credentials,
+            sessionId: session.id,
+            onProcessExit: onProcessExit,
+            sshClient: client,
+            richPasteUIModel: richPasteUIModel
+        )
     }
 
     func makeUIView(context: Context) -> UIView {
@@ -640,6 +678,7 @@ private struct SSHTerminalRepresentable: UIViewRepresentable {
             existingTerminal.writeCallback = { [weak coordinator] data in
                 coordinator?.sendToSSH(data)
             }
+            coordinator.installRichPasteInterception(on: existingTerminal)
             existingTerminal.onResize = { [session] cols, rows in
                 guard cols > 0 && rows > 0 else { return }
                 Task {
@@ -700,6 +739,7 @@ private struct SSHTerminalRepresentable: UIViewRepresentable {
         }
 
         coordinator.terminalView = terminalView
+        coordinator.installRichPasteInterception(on: terminalView)
         ConnectionSessionManager.shared.registerTerminal(terminalView, for: session.id)
         ConnectionSessionManager.shared.registerShellCancelHandler({ [weak coordinator] in
             coordinator?.cancelShell()
@@ -859,6 +899,7 @@ private struct SSHTerminalRepresentable: UIViewRepresentable {
         let sshClient: SSHClient
         var shellId: UUID?
         var shellTask: Task<Void, Never>?
+        private let richPasteRuntime: TerminalRichPasteRuntime
         let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "SSHTerminal")
 
         /// Tracks whether the terminal surface has been created and is ready for interaction
@@ -869,12 +910,29 @@ private struct SSHTerminalRepresentable: UIViewRepresentable {
         var wasActive = false
         var lastReportedSize: CGSize = .zero
 
-        init(server: Server, credentials: ServerCredentials, sessionId: UUID, onProcessExit: @escaping () -> Void, sshClient: SSHClient) {
+        init(
+            server: Server,
+            credentials: ServerCredentials,
+            sessionId: UUID,
+            onProcessExit: @escaping () -> Void,
+            sshClient: SSHClient,
+            richPasteUIModel: TerminalRichPasteUIModel
+        ) {
             self.server = server
             self.credentials = credentials
             self.sessionId = sessionId
             self.onProcessExit = onProcessExit
             self.sshClient = sshClient
+            self.richPasteRuntime = .connectionSession(
+                sessionId: sessionId,
+                sshClient: sshClient,
+                uiModel: richPasteUIModel
+            )
+        }
+
+        @MainActor
+        func installRichPasteInterception(on terminal: GhosttyTerminalView) {
+            richPasteRuntime.install(on: terminal)
         }
 
         // MARK: - SSHTerminalCoordinator hooks

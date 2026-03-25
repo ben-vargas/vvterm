@@ -958,3 +958,29 @@
 "Show keyboard dismiss button" = "Паказваць кнопку схавання клавіятуры";
 "Hide keyboard" = "Схаваць клавіятуру";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Змяняйце парадак дзеянняў, дадавайце карыстальніцкія дзеянні, паказвайце або хавайце кнопку схавання клавіятуры і сінхранізуйце панэль аксесуараў паміж прыладамі.";
+
+/* Image Paste */
+"Behavior" = "Паводзіны";
+"Image Paste" = "Устаўка выяў";
+"Automatically" = "Аўтаматычна";
+"Ask Before Upload" = "Пытаць перад загрузкай";
+"Off" = "Выкл.";
+"Image paste is turned off." = "Устаўка выяў выключана.";
+"You’ll be asked before the image is uploaded." = "Перад загрузкай выявы будзе паказаны запыт.";
+"Images upload right away without showing the confirmation sheet." = "Выявы загружаюцца адразу без паказу акна пацверджання.";
+"Clipboard image is too large. The limit is %@." = "Выява ў буферы абмену занадта вялікая. Ліміт: %@.";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "Пашыраная ўстаўка з буфера абмену ў V1 падтрымліваецца толькі для POSIX-аддаленых сістэм. Аддаленая платформа: %@.";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "Пашыраная ўстаўка з буфера абмену патрабуе аддаленай абалонкі з падтрымкай POSIX.";
+"Remote upload failed: could not create temporary file" = "Не ўдалося загрузіць на аддалены хост: не ўдалося стварыць часовы файл";
+"Remote upload failed: %@" = "Не ўдалося загрузіць на аддалены хост: %@";
+"timed out while creating remote temporary file" = "час чакання пры стварэнні аддаленага часовага файла скончыўся";
+"timed out while uploading image bytes" = "час чакання пры загрузцы даных выявы скончыўся";
+"Upload this %@ image and paste its path?" = "Загрузіць гэту выяву %@ і ўставіць яе шлях?";
+"Paste image" = "Уставіць выяву";
+"Reconnect the terminal before uploading images." = "Перад загрузкай выяў паўторна падключыце тэрмінал.";
+"Uploading image to remote host..." = "Загрузка выявы на аддалены хост...";
+"Upload image" = "Загрузіць выяву";
+"Always Upload" = "Заўсёды загружаць";
+"Paste Text Instead" = "Уставіць тэкст замест гэтага";
+"Always Upload skips this prompt next time." = "«Заўсёды загружаць» прапусціць гэты запыт наступным разам.";
+"Image ready to upload" = "Выява гатовая да загрузкі";

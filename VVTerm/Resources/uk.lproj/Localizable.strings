@@ -964,3 +964,29 @@
 "Show keyboard dismiss button" = "Показувати кнопку приховування клавіатури";
 "Hide keyboard" = "Сховати клавіатуру";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Змінюйте порядок дій, додавайте користувацькі дії, показуйте або приховуйте кнопку приховування клавіатури та синхронізуйте панель аксесуарів між пристроями.";
+
+/* Image Paste */
+"Behavior" = "Поведінка";
+"Image Paste" = "Вставлення зображень";
+"Automatically" = "Автоматично";
+"Ask Before Upload" = "Запитувати перед завантаженням";
+"Off" = "Вимк.";
+"Image paste is turned off." = "Вставлення зображень вимкнено.";
+"You’ll be asked before the image is uploaded." = "Перед завантаженням зображення буде показано запит.";
+"Images upload right away without showing the confirmation sheet." = "Зображення завантажуються одразу без показу аркуша підтвердження.";
+"Clipboard image is too large. The limit is %@." = "Зображення в буфері обміну надто велике. Обмеження: %@.";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "Розширене вставлення з буфера обміну у V1 підтримується лише для POSIX-віддалених систем. Віддалена платформа: %@.";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "Розширене вставлення з буфера обміну потребує віддаленої оболонки з підтримкою POSIX.";
+"Remote upload failed: could not create temporary file" = "Не вдалося завантажити на віддалений хост: не вдалося створити тимчасовий файл";
+"Remote upload failed: %@" = "Не вдалося завантажити на віддалений хост: %@";
+"timed out while creating remote temporary file" = "вичерпано час на створення віддаленого тимчасового файла";
+"timed out while uploading image bytes" = "вичерпано час на завантаження даних зображення";
+"Upload this %@ image and paste its path?" = "Завантажити це зображення %@ і вставити його шлях?";
+"Paste image" = "Вставити зображення";
+"Reconnect the terminal before uploading images." = "Перш ніж завантажувати зображення, повторно підключіть термінал.";
+"Uploading image to remote host..." = "Завантаження зображення на віддалений хост...";
+"Upload image" = "Завантажити зображення";
+"Always Upload" = "Завжди завантажувати";
+"Paste Text Instead" = "Замість цього вставити текст";
+"Always Upload skips this prompt next time." = "«Завжди завантажувати» пропустить цей запит наступного разу.";
+"Image ready to upload" = "Зображення готове до завантаження";

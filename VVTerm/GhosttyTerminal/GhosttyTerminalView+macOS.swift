@@ -21,7 +21,7 @@ import QuartzCore
 /// - Focus management
 /// - Surface lifecycle management
 @MainActor
-class GhosttyTerminalView: NSView {
+class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     // MARK: - Properties
 
     private var ghosttyApp: ghostty_app_t?
@@ -50,6 +50,9 @@ class GhosttyTerminalView: NSView {
 
     /// Callback when terminal size changes (cols, rows) - used for SSH PTY resize
     var onResize: ((Int, Int) -> Void)?
+
+    /// Optional app-level paste interceptor used for rich clipboard routing.
+    var richPasteInterceptor: ((GhosttyTerminalView) -> Bool)?
 
     private var didSignalReady = false
 
@@ -117,6 +120,7 @@ class GhosttyTerminalView: NSView {
         onPwdChange = nil
         onProgressReport = nil
         onResize = nil
+        richPasteInterceptor = nil
         writeCallback = nil
 
         // Stop rendering/input callbacks
@@ -489,9 +493,53 @@ class GhosttyTerminalView: NSView {
     // MARK: - Keyboard Input
 
     override func keyDown(with event: NSEvent) {
+        if handleRichPasteShortcut(event) {
+            return
+        }
         inputHandler.handleKeyDown(with: event) { [weak self] events in
             self?.interpretKeyEvents(events)
         }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard modifiers == [.command],
+              let characters = event.charactersIgnoringModifiers?.lowercased() else {
+            return super.performKeyEquivalent(with: event)
+        }
+
+        switch characters {
+        case "v":
+            paste(nil)
+            return true
+        case "c":
+            copy(nil)
+            return true
+        default:
+            return super.performKeyEquivalent(with: event)
+        }
+    }
+
+    private func handleRichPasteShortcut(_ event: NSEvent) -> Bool {
+        guard isRichPasteShortcut(event) else { return false }
+        return interceptRichPasteIfNeeded()
+    }
+
+    private func isRichPasteShortcut(_ event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        return modifiers == [.control] && event.charactersIgnoringModifiers?.lowercased() == "v"
+    }
+
+    @discardableResult
+    private func interceptRichPasteIfNeeded() -> Bool {
+        richPasteInterceptor?(self) == true
+    }
+
+    private func performPasteAction() {
+        if interceptRichPasteIfNeeded() {
+            return
+        }
+        pasteTextFromClipboard()
     }
 
     override func keyUp(with event: NSEvent) {
@@ -506,6 +554,26 @@ class GhosttyTerminalView: NSView {
         // Override to suppress NSBeep when interpretKeyEvents encounters unhandled commands
         // Without this, keys like delete at beginning of line, cmd+c with no selection, etc. cause beeps
         // Terminal handles all input via Ghostty, so we silently ignore unhandled commands
+    }
+
+    func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        switch item.action {
+        case #selector(copy(_:)):
+            guard let cSurface = surface?.unsafeCValue else { return false }
+            return ghostty_surface_has_selection(cSurface)
+        case #selector(paste(_:)):
+            return true
+        default:
+            return true
+        }
+    }
+
+    @objc func copy(_ sender: Any?) {
+        _ = surface?.perform(action: "copy_to_clipboard")
+    }
+
+    @objc func paste(_ sender: Any?) {
+        performPasteAction()
     }
 
     // MARK: - Mouse Input
@@ -655,6 +723,11 @@ class GhosttyTerminalView: NSView {
     /// Send text to the terminal (used by voice input)
     func sendText(_ text: String) {
         surface?.sendText(text)
+        requestRender()
+    }
+
+    func pasteTextFromClipboard() {
+        _ = surface?.perform(action: "paste_from_clipboard")
         requestRender()
     }
 

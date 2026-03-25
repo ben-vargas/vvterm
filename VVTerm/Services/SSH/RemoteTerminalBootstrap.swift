@@ -11,14 +11,14 @@ enum RemoteShellLaunchPlan: Hashable, Sendable {
 }
 
 enum RemoteTerminalBootstrap {
-    static let terminalType = "xterm-256color"
-    static let termProgram = "vvterm"
+    nonisolated static let terminalType = "xterm-256color"
+    nonisolated static let termProgram = "vvterm"
 
-    static func appVersion(bundle: Bundle = .main) -> String {
+    nonisolated static func appVersion(bundle: Bundle = .main) -> String {
         (bundle.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
     }
 
-    static func terminalEnvironment(bundle: Bundle = .main) -> [RemoteTerminalEnvironmentVariable] {
+    nonisolated static func terminalEnvironment(bundle: Bundle = .main) -> [RemoteTerminalEnvironmentVariable] {
         [
             RemoteTerminalEnvironmentVariable(name: "COLORTERM", value: "truecolor"),
             RemoteTerminalEnvironmentVariable(name: "TERM_PROGRAM", value: termProgram),
@@ -26,18 +26,18 @@ enum RemoteTerminalBootstrap {
         ]
     }
 
-    static func terminalEnvironmentNames(bundle: Bundle = .main) -> [String] {
+    nonisolated static func terminalEnvironmentNames(bundle: Bundle = .main) -> [String] {
         terminalEnvironment(bundle: bundle).map(\.name)
     }
 
-    static func environmentExportScript(bundle: Bundle = .main) -> String {
+    nonisolated static func environmentExportScript(bundle: Bundle = .main) -> String {
         let assignments = terminalEnvironment(bundle: bundle)
             .map { "\($0.name)=\(shellQuoted($0.value))" }
             .joined(separator: " ")
         return "export \(assignments);"
     }
 
-    static func defaultLoginShellCommand() -> String {
+    nonisolated static func defaultLoginShellCommand() -> String {
         """
         if [ -n "$SHELL" ]; then exec "$SHELL" -l; fi;
         if command -v bash >/dev/null 2>&1; then exec bash -l; fi;
@@ -46,7 +46,7 @@ enum RemoteTerminalBootstrap {
         """
     }
 
-    static func launchPlan(
+    nonisolated static func launchPlan(
         startupCommand: String?,
         environment: RemoteEnvironment = .fallbackPOSIX,
         bundle: Bundle = .main
@@ -54,60 +54,64 @@ enum RemoteTerminalBootstrap {
         environment.shellProfile.launchPlan(startupCommand: startupCommand, bundle: bundle)
     }
 
-    static func moshStartupScript(startCommand: String?, bundle: Bundle = .main) -> String {
+    nonisolated static func moshStartupScript(startCommand: String?, bundle: Bundle = .main) -> String {
         let command = trimmedStartupCommand(startCommand)
             .flatMap { unwrapPOSIXShellInvocationIfNeeded($0) ?? $0 }
             ?? defaultLoginShellCommand()
         return prefixedPOSIXScript(for: command, bundle: bundle)
     }
 
-    static func wrapPOSIXShellCommand(_ script: String) -> String {
+    nonisolated static func wrapPOSIXShellCommand(_ script: String) -> String {
         "/bin/sh -lc \(shellQuoted(script))"
     }
 
-    static func wrapPowerShellCommand(_ script: String, executableName: String) -> String {
+    nonisolated static func wrapPowerShellCommand(_ script: String, executableName: String) -> String {
         let data = script.data(using: .utf16LittleEndian) ?? Data()
         return "\(executableName) -NoLogo -NoProfile -EncodedCommand \(data.base64EncodedString())"
     }
 
-    static func wrapCmdCommand(_ command: String) -> String {
+    nonisolated static func wrapCmdCommand(_ command: String) -> String {
         let escaped = command.replacingOccurrences(of: "\"", with: "\"\"")
         return "cmd.exe /d /s /k \"\(escaped)\""
     }
 
-    static func wrapCmdExecCommand(_ command: String) -> String {
+    nonisolated static func wrapCmdExecCommand(_ command: String) -> String {
         // Use a direct `cmd /c <command>` form for non-interactive execution.
         // The quoted `/s /c "..."` form has proven unreliable for launching
         // nested PowerShell commands over Windows OpenSSH exec channels.
         "cmd.exe /d /c \(command)"
     }
 
-    static func shellQuoted(_ value: String) -> String {
+    nonisolated static func shellQuoted(_ value: String) -> String {
         let escaped = value.replacingOccurrences(of: "'", with: "'\\''")
         return "'\(escaped)'"
     }
 
-    static func directoryChangeCommand(
+    nonisolated static func posixPastedPath(_ path: String) -> String {
+        shellQuoted(path)
+    }
+
+    nonisolated static func directoryChangeCommand(
         for path: String,
         environment: RemoteEnvironment = .fallbackPOSIX
     ) -> String {
         environment.shellProfile.directoryChangeCommand(for: path)
     }
 
-    static func posixDirectoryChangeCommand(for path: String) -> String {
+    nonisolated static func posixDirectoryChangeCommand(for path: String) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "\n" }
         return "cd -- \(shellQuoted(trimmed))\n"
     }
 
-    static func powerShellDirectoryChangeCommand(for path: String) -> String {
+    nonisolated static func powerShellDirectoryChangeCommand(for path: String) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "\n" }
         let resolved = normalizedWindowsPath(from: trimmed) ?? trimmed
         return "Set-Location -LiteralPath \(powerShellQuoted(resolved))\n"
     }
 
-    static func cmdDirectoryChangeCommand(for path: String) -> String {
+    nonisolated static func cmdDirectoryChangeCommand(for path: String) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "\n" }
         let resolved = normalizedWindowsPath(from: trimmed) ?? trimmed
@@ -115,15 +119,15 @@ enum RemoteTerminalBootstrap {
         return "cd /d \"\(escaped)\"\r\n"
     }
 
-    static func shellPathExport() -> String {
+    nonisolated static func shellPathExport() -> String {
         "export PATH=\"\(shellPathValue())\""
     }
 
-    static func tmuxUpdateEnvironmentVariables(bundle: Bundle = .main) -> [String] {
+    nonisolated static func tmuxUpdateEnvironmentVariables(bundle: Bundle = .main) -> [String] {
         ["LANG", "LC_ALL", "LC_CTYPE"] + terminalEnvironmentNames(bundle: bundle)
     }
 
-    static func tmuxArrayOptionCommands(option: String, values: [String]) -> [String] {
+    nonisolated static func tmuxArrayOptionCommands(option: String, values: [String]) -> [String] {
         let reset = "set -gu \(option)"
         let assignments = values.enumerated().map { index, value in
             "set -g \(option)[\(index)] \"\(value)\""
@@ -131,29 +135,29 @@ enum RemoteTerminalBootstrap {
         return [reset] + assignments
     }
 
-    static func tmuxEnvironmentCommands(bundle: Bundle = .main) -> [String] {
+    nonisolated static func tmuxEnvironmentCommands(bundle: Bundle = .main) -> [String] {
         terminalEnvironment(bundle: bundle).map { variable in
             "set-environment -g \(variable.name) \"\(variable.value)\""
         }
     }
 
-    static func prefixedPOSIXScript(for command: String, bundle: Bundle = .main) -> String {
+    nonisolated static func prefixedPOSIXScript(for command: String, bundle: Bundle = .main) -> String {
         "\(environmentExportScript(bundle: bundle)) \(command)"
     }
 
-    static func prefixedPowerShellScript(for command: String, bundle: Bundle = .main) -> String {
+    nonisolated static func prefixedPowerShellScript(for command: String, bundle: Bundle = .main) -> String {
         let environmentSetup = terminalEnvironment(bundle: bundle)
             .map { "$env:\($0.name) = \(powerShellQuoted($0.value))" }
             .joined(separator: "; ")
         return "\(environmentSetup); \(command)"
     }
 
-    private static func trimmedStartupCommand(_ startupCommand: String?) -> String? {
+    nonisolated private static func trimmedStartupCommand(_ startupCommand: String?) -> String? {
         let trimmed = startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private static func unwrapPOSIXShellInvocationIfNeeded(_ command: String) -> String? {
+    nonisolated private static func unwrapPOSIXShellInvocationIfNeeded(_ command: String) -> String? {
         let prefixes = ["sh -lc ", "/bin/sh -lc "]
         guard let prefix = prefixes.first(where: { command.hasPrefix($0) }) else {
             return nil
@@ -180,7 +184,7 @@ enum RemoteTerminalBootstrap {
         return payload
     }
 
-    private static func shellPathValue() -> String {
+    nonisolated private static func shellPathValue() -> String {
         let paths = [
             "$HOME/.local/bin",
             "/opt/homebrew/bin",
@@ -198,11 +202,11 @@ enum RemoteTerminalBootstrap {
         return paths.joined(separator: ":") + ":$PATH"
     }
 
-    private static func powerShellQuoted(_ value: String) -> String {
+    nonisolated private static func powerShellQuoted(_ value: String) -> String {
         "'\(value.replacingOccurrences(of: "'", with: "''"))'"
     }
 
-    private static func normalizedWindowsPath(from path: String) -> String? {
+    nonisolated private static func normalizedWindowsPath(from path: String) -> String? {
         if let directDriveLetter = directWindowsDriveLetter(in: path) {
             let startIndex = path.index(path.startIndex, offsetBy: 2)
             let suffix = startIndex < path.endIndex ? String(path[startIndex...]) : ""
@@ -228,7 +232,7 @@ enum RemoteTerminalBootstrap {
         return nil
     }
 
-    private static func directWindowsDriveLetter(in path: String) -> Character? {
+    nonisolated private static func directWindowsDriveLetter(in path: String) -> Character? {
         let scalars = Array(path.unicodeScalars)
         guard scalars.count >= 2 else { return nil }
 
@@ -243,7 +247,7 @@ enum RemoteTerminalBootstrap {
         return nil
     }
 
-    private static func oscWindowsDriveLetter(in path: String) -> Character? {
+    nonisolated private static func oscWindowsDriveLetter(in path: String) -> Character? {
         let scalars = Array(path.unicodeScalars)
         guard scalars.count >= 4 else { return nil }
 

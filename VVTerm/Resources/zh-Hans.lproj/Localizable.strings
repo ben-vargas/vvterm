@@ -937,3 +937,29 @@
 "Show keyboard dismiss button" = "显示隐藏键盘按钮";
 "Hide keyboard" = "隐藏键盘";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "重新排序操作，添加自定义操作，显示或隐藏隐藏键盘按钮，并在设备之间同步您的辅助栏。";
+
+/* Image Paste */
+"Behavior" = "行为";
+"Image Paste" = "图像粘贴";
+"Automatically" = "自动";
+"Ask Before Upload" = "上传前询问";
+"Off" = "关闭";
+"Image paste is turned off." = "图像粘贴已关闭。";
+"You’ll be asked before the image is uploaded." = "上传图像前会先询问您。";
+"Images upload right away without showing the confirmation sheet." = "图像会立即上传，不再显示确认面板。";
+"Clipboard image is too large. The limit is %@." = "剪贴板图像太大。上限为 %@。";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "V1 版本的富剪贴板粘贴仅支持 POSIX 远程主机。远程平台：%@。";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "富剪贴板粘贴需要支持 POSIX 的远程 shell。";
+"Remote upload failed: could not create temporary file" = "远程上传失败：无法创建临时文件";
+"Remote upload failed: %@" = "远程上传失败：%@";
+"timed out while creating remote temporary file" = "创建远程临时文件时超时";
+"timed out while uploading image bytes" = "上传图像数据时超时";
+"Upload this %@ image and paste its path?" = "上传这张 %@ 图像并粘贴其路径？";
+"Paste image" = "粘贴图像";
+"Reconnect the terminal before uploading images." = "上传图像前请重新连接终端。";
+"Uploading image to remote host..." = "正在将图像上传到远程主机...";
+"Upload image" = "上传图像";
+"Always Upload" = "始终上传";
+"Paste Text Instead" = "改为粘贴文本";
+"Always Upload skips this prompt next time." = "选择“始终上传”后，下次将跳过此提示。";
+"Image ready to upload" = "图像已准备好上传";

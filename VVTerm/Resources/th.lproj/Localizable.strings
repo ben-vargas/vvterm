@@ -957,3 +957,29 @@
 "Show keyboard dismiss button" = "แสดงปุ่มซ่อนแป้นพิมพ์";
 "Hide keyboard" = "ซ่อนแป้นพิมพ์";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "จัดลำดับการทำงานใหม่ เพิ่มการทำงานกำหนดเอง แสดงหรือซ่อนปุ่มซ่อนแป้นพิมพ์ และซิงค์แถบอุปกรณ์เสริมของคุณระหว่างอุปกรณ์ต่างๆ";
+
+/* Image Paste */
+"Behavior" = "พฤติกรรม";
+"Image Paste" = "วางรูปภาพ";
+"Automatically" = "อัตโนมัติ";
+"Ask Before Upload" = "ถามก่อนอัปโหลด";
+"Off" = "ปิด";
+"Image paste is turned off." = "ปิดการวางรูปภาพแล้ว";
+"You’ll be asked before the image is uploaded." = "ระบบจะถามก่อนอัปโหลดรูปภาพ";
+"Images upload right away without showing the confirmation sheet." = "รูปภาพจะอัปโหลดทันทีโดยไม่แสดงหน้าต่างยืนยัน";
+"Clipboard image is too large. The limit is %@." = "รูปภาพในคลิปบอร์ดมีขนาดใหญ่เกินไป จำกัดไว้ที่ %@";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "การวางคลิปบอร์ดแบบริชใน V1 รองรับเฉพาะรีโมตแบบ POSIX เท่านั้น แพลตฟอร์มรีโมต: %@";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "การวางคลิปบอร์ดแบบริชต้องใช้เชลล์รีโมตที่รองรับ POSIX";
+"Remote upload failed: could not create temporary file" = "การอัปโหลดไปยังรีโมตล้มเหลว: ไม่สามารถสร้างไฟล์ชั่วคราวได้";
+"Remote upload failed: %@" = "การอัปโหลดไปยังรีโมตล้มเหลว: %@";
+"timed out while creating remote temporary file" = "หมดเวลาขณะสร้างไฟล์ชั่วคราวบนรีโมต";
+"timed out while uploading image bytes" = "หมดเวลาขณะอัปโหลดข้อมูลรูปภาพ";
+"Upload this %@ image and paste its path?" = "อัปโหลดรูปภาพ %@ นี้และวางพาธของมันหรือไม่";
+"Paste image" = "วางรูปภาพ";
+"Reconnect the terminal before uploading images." = "โปรดเชื่อมต่อเทอร์มินัลใหม่ก่อนอัปโหลดรูปภาพ";
+"Uploading image to remote host..." = "กำลังอัปโหลดรูปภาพไปยังโฮสต์รีโมต...";
+"Upload image" = "อัปโหลดรูปภาพ";
+"Always Upload" = "อัปโหลดเสมอ";
+"Paste Text Instead" = "วางข้อความแทน";
+"Always Upload skips this prompt next time." = "เลือก “อัปโหลดเสมอ” เพื่อข้ามข้อความนี้ในครั้งถัดไป";
+"Image ready to upload" = "รูปภาพพร้อมอัปโหลด";

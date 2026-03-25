@@ -957,3 +957,29 @@
 "Show keyboard dismiss button" = "キーボードを閉じるボタンを表示";
 "Hide keyboard" = "キーボードを閉じる";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "アクションを並べ替え、カスタムアクションを追加し、キーボードを閉じるボタンの表示/非表示を切り替え、アクセサリバーをデバイス間で同期します。";
+
+/* Image Paste */
+"Behavior" = "動作";
+"Image Paste" = "画像の貼り付け";
+"Automatically" = "自動";
+"Ask Before Upload" = "アップロード前に確認";
+"Off" = "オフ";
+"Image paste is turned off." = "画像の貼り付けはオフです。";
+"You’ll be asked before the image is uploaded." = "画像をアップロードする前に確認されます。";
+"Images upload right away without showing the confirmation sheet." = "確認シートを表示せずに画像をすぐアップロードします。";
+"Clipboard image is too large. The limit is %@." = "クリップボードの画像が大きすぎます。上限は %@ です。";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "V1 ではリッチクリップボード貼り付けは POSIX リモートでのみサポートされます。リモートプラットフォーム: %@。";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "リッチクリップボード貼り付けには POSIX 対応のリモートシェルが必要です。";
+"Remote upload failed: could not create temporary file" = "リモートへのアップロードに失敗しました: 一時ファイルを作成できませんでした";
+"Remote upload failed: %@" = "リモートへのアップロードに失敗しました: %@";
+"timed out while creating remote temporary file" = "リモート一時ファイルの作成がタイムアウトしました";
+"timed out while uploading image bytes" = "画像データのアップロードがタイムアウトしました";
+"Upload this %@ image and paste its path?" = "この %@ の画像をアップロードして、そのパスを貼り付けますか？";
+"Paste image" = "画像を貼り付け";
+"Reconnect the terminal before uploading images." = "画像をアップロードする前にターミナルを再接続してください。";
+"Uploading image to remote host..." = "画像をリモートホストにアップロードしています...";
+"Upload image" = "画像をアップロード";
+"Always Upload" = "常にアップロード";
+"Paste Text Instead" = "代わりにテキストを貼り付け";
+"Always Upload skips this prompt next time." = "「常にアップロード」を選ぶと、次回からこの確認は表示されません。";
+"Image ready to upload" = "アップロードする画像の準備ができました";

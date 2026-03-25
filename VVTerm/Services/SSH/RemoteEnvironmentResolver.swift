@@ -125,7 +125,7 @@ struct RemoteEnvironment: Hashable, Sendable {
 }
 
 enum RemoteEnvironmentResolver {
-    private static let probeTimeout: Duration = .milliseconds(500)
+    private static let probeTimeout: Duration = .seconds(2)
 
     static func resolve(using client: SSHClient) async -> RemoteEnvironment {
         let platform = await detectPlatform(using: client)
@@ -173,6 +173,13 @@ enum RemoteEnvironmentResolver {
         }
 
         if let output = await probe("uname -s", using: client) {
+            return RemotePlatform.detect(from: output)
+        }
+
+        if let output = await probe(
+            RemoteTerminalBootstrap.wrapPOSIXShellCommand("/usr/bin/uname -s 2>/dev/null || /bin/uname -s 2>/dev/null || uname -s"),
+            using: client
+        ) {
             return RemotePlatform.detect(from: output)
         }
 

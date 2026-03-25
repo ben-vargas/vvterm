@@ -957,3 +957,29 @@
 "Show keyboard dismiss button" = "Mostrar botón para ocultar el teclado";
 "Hide keyboard" = "Ocultar teclado";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Reordene acciones, agregue acciones personalizadas, muestre u oculte el botón para ocultar el teclado y sincronice la barra accesoria en todos sus dispositivos.";
+
+/* Image Paste */
+"Behavior" = "Comportamiento";
+"Image Paste" = "Pegado de imágenes";
+"Automatically" = "Automáticamente";
+"Ask Before Upload" = "Preguntar antes de subir";
+"Off" = "Desactivado";
+"Image paste is turned off." = "El pegado de imágenes está desactivado.";
+"You’ll be asked before the image is uploaded." = "Se te preguntará antes de subir la imagen.";
+"Images upload right away without showing the confirmation sheet." = "Las imágenes se suben de inmediato sin mostrar la hoja de confirmación.";
+"Clipboard image is too large. The limit is %@." = "La imagen del portapapeles es demasiado grande. El límite es %@.";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "El pegado enriquecido del portapapeles en V1 solo es compatible con remotos POSIX. Plataforma remota: %@.";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "El pegado enriquecido del portapapeles requiere un shell remoto compatible con POSIX.";
+"Remote upload failed: could not create temporary file" = "La subida remota falló: no se pudo crear el archivo temporal";
+"Remote upload failed: %@" = "La subida remota falló: %@";
+"timed out while creating remote temporary file" = "se agotó el tiempo al crear el archivo temporal remoto";
+"timed out while uploading image bytes" = "se agotó el tiempo al subir los datos de la imagen";
+"Upload this %@ image and paste its path?" = "¿Subir esta imagen %@ y pegar su ruta?";
+"Paste image" = "Pegar imagen";
+"Reconnect the terminal before uploading images." = "Vuelve a conectar el terminal antes de subir imágenes.";
+"Uploading image to remote host..." = "Subiendo imagen al host remoto...";
+"Upload image" = "Subir imagen";
+"Always Upload" = "Subir siempre";
+"Paste Text Instead" = "Pegar texto en su lugar";
+"Always Upload skips this prompt next time." = "“Subir siempre” omitirá este aviso la próxima vez.";
+"Image ready to upload" = "Imagen lista para subir";

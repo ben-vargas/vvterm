@@ -55,6 +55,9 @@ struct TerminalSettingsView: View {
     @AppStorage("terminalCopyRemoveBoxDrawing") private var copyRemoveBoxDrawing = false
     @AppStorage("terminalCopyStripAnsiCodes") private var copyStripAnsiCodes = true
 
+    // Image paste settings
+    @AppStorage("terminalImagePasteBehavior") private var imagePasteBehaviorRaw = ImagePasteBehavior.askOnce.rawValue
+
     // SSH settings
     @AppStorage("sshKeepAliveEnabled") private var keepAliveEnabled = true
     @AppStorage("sshKeepAliveInterval") private var keepAliveInterval = 30
@@ -98,6 +101,19 @@ struct TerminalSettingsView: View {
         Binding(
             get: { TmuxStartupBehavior(rawValue: tmuxStartupBehaviorDefaultRaw) ?? .askEveryTime },
             set: { tmuxStartupBehaviorDefaultRaw = $0.rawValue }
+        )
+    }
+
+    private var imagePasteBehavior: ImagePasteBehavior {
+        ImagePasteBehavior(rawValue: imagePasteBehaviorRaw) ?? .askOnce
+    }
+
+    private var imagePasteBehaviorBinding: Binding<ImagePasteBehavior> {
+        Binding(
+            get: { imagePasteBehavior },
+            set: { behavior in
+                imagePasteBehaviorRaw = behavior.rawValue
+            }
         )
     }
 
@@ -274,6 +290,37 @@ struct TerminalSettingsView: View {
         }
     }
 
+    private var richClipboardSection: some View {
+        Section {
+            Picker("Behavior", selection: imagePasteBehaviorBinding) {
+                Text(ImagePasteBehavior.automatic.settingsTitle)
+                    .tag(ImagePasteBehavior.automatic)
+                Text(ImagePasteBehavior.askOnce.settingsTitle)
+                    .tag(ImagePasteBehavior.askOnce)
+                Text(ImagePasteBehavior.disabled.settingsTitle)
+                    .tag(ImagePasteBehavior.disabled)
+            }
+            .pickerStyle(.menu)
+        } header: {
+            Text("Image Paste")
+        } footer: {
+            Text(imagePasteSectionFooter)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var imagePasteSectionFooter: String {
+        switch imagePasteBehavior {
+        case .disabled:
+            return String(localized: "Image paste is turned off.")
+        case .askOnce:
+            return String(localized: "You’ll be asked before the image is uploaded.")
+        case .automatic:
+            return String(localized: "Images upload right away without showing the confirmation sheet.")
+        }
+    }
+
     private var sshConnectionSection: some View {
         Section("SSH Connection") {
             Toggle("Auto-reconnect on disconnect", isOn: $autoReconnect)
@@ -293,6 +340,7 @@ struct TerminalSettingsView: View {
             keyboardAccessorySection
             sessionPersistenceSection
             copyProcessingSection
+            richClipboardSection
             sshConnectionSection
         }
         .formStyle(.grouped)

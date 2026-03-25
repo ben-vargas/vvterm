@@ -957,3 +957,29 @@
 "Show keyboard dismiss button" = "Schaltfläche zum Ausblenden der Tastatur anzeigen";
 "Hide keyboard" = "Tastatur ausblenden";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Ordnen Sie Aktionen neu an, fügen Sie benutzerdefinierte Aktionen hinzu, zeigen oder verbergen Sie die Schaltfläche zum Ausblenden der Tastatur und synchronisieren Sie Ihre Zubehörleiste auf allen Geräten.";
+
+/* Image Paste */
+"Behavior" = "Verhalten";
+"Image Paste" = "Bilder einfügen";
+"Automatically" = "Automatisch";
+"Ask Before Upload" = "Vor dem Hochladen fragen";
+"Off" = "Aus";
+"Image paste is turned off." = "Das Einfügen von Bildern ist deaktiviert.";
+"You’ll be asked before the image is uploaded." = "Vor dem Hochladen des Bildes wirst du gefragt.";
+"Images upload right away without showing the confirmation sheet." = "Bilder werden sofort hochgeladen, ohne das Bestätigungsfenster anzuzeigen.";
+"Clipboard image is too large. The limit is %@." = "Das Bild in der Zwischenablage ist zu groß. Das Limit beträgt %@.";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "Rich-Clipboard-Einfügen wird in V1 nur für POSIX-Remotes unterstützt. Remote-Plattform: %@.";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "Rich-Clipboard-Einfügen erfordert eine POSIX-fähige Remote-Shell.";
+"Remote upload failed: could not create temporary file" = "Remote-Upload fehlgeschlagen: Temporäre Datei konnte nicht erstellt werden";
+"Remote upload failed: %@" = "Remote-Upload fehlgeschlagen: %@";
+"timed out while creating remote temporary file" = "Zeitüberschreitung beim Erstellen der temporären Datei auf dem Remote-Host";
+"timed out while uploading image bytes" = "Zeitüberschreitung beim Hochladen der Bilddaten";
+"Upload this %@ image and paste its path?" = "Dieses %@-Bild hochladen und seinen Pfad einfügen?";
+"Paste image" = "Bild einfügen";
+"Reconnect the terminal before uploading images." = "Verbinde das Terminal erneut, bevor du Bilder hochlädst.";
+"Uploading image to remote host..." = "Bild wird zum Remote-Host hochgeladen...";
+"Upload image" = "Bild hochladen";
+"Always Upload" = "Immer hochladen";
+"Paste Text Instead" = "Stattdessen Text einfügen";
+"Always Upload skips this prompt next time." = "„Immer hochladen“ überspringt diesen Hinweis beim nächsten Mal.";
+"Image ready to upload" = "Bild zum Hochladen bereit";

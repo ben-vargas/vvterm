@@ -959,3 +959,29 @@
 "Show keyboard dismiss button" = "Pokaż przycisk ukrywania klawiatury";
 "Hide keyboard" = "Ukryj klawiaturę";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Zmieniaj kolejność akcji, dodawaj akcje niestandardowe, pokazuj lub ukrywaj przycisk ukrywania klawiatury i synchronizuj pasek akcesoriów między urządzeniami.";
+
+/* Image Paste */
+"Behavior" = "Zachowanie";
+"Image Paste" = "Wklejanie obrazów";
+"Automatically" = "Automatycznie";
+"Ask Before Upload" = "Zapytaj przed przesłaniem";
+"Off" = "Wył.";
+"Image paste is turned off." = "Wklejanie obrazów jest wyłączone.";
+"You’ll be asked before the image is uploaded." = "Zostaniesz zapytany przed przesłaniem obrazu.";
+"Images upload right away without showing the confirmation sheet." = "Obrazy są przesyłane od razu bez wyświetlania arkusza potwierdzenia.";
+"Clipboard image is too large. The limit is %@." = "Obraz w schowku jest zbyt duży. Limit to %@.";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "Rozszerzone wklejanie ze schowka w wersji V1 jest obsługiwane tylko dla zdalnych systemów POSIX. Platforma zdalna: %@.";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "Rozszerzone wklejanie ze schowka wymaga zdalnej powłoki zgodnej z POSIX.";
+"Remote upload failed: could not create temporary file" = "Przesyłanie na host zdalny nie powiodło się: nie można utworzyć pliku tymczasowego";
+"Remote upload failed: %@" = "Przesyłanie na host zdalny nie powiodło się: %@";
+"timed out while creating remote temporary file" = "Limit czasu podczas tworzenia zdalnego pliku tymczasowego";
+"timed out while uploading image bytes" = "Limit czasu podczas przesyłania danych obrazu";
+"Upload this %@ image and paste its path?" = "Przesłać ten obraz %@ i wkleić jego ścieżkę?";
+"Paste image" = "Wklej obraz";
+"Reconnect the terminal before uploading images." = "Połącz terminal ponownie przed przesyłaniem obrazów.";
+"Uploading image to remote host..." = "Przesyłanie obrazu na zdalny host...";
+"Upload image" = "Prześlij obraz";
+"Always Upload" = "Zawsze przesyłaj";
+"Paste Text Instead" = "Wklej tekst zamiast tego";
+"Always Upload skips this prompt next time." = "„Zawsze przesyłaj” pominie ten monit następnym razem.";
+"Image ready to upload" = "Obraz gotowy do przesłania";

@@ -959,3 +959,29 @@
 "Show keyboard dismiss button" = "Afficher le bouton de masquage du clavier";
 "Hide keyboard" = "Masquer le clavier";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Réorganisez les actions, ajoutez des actions personnalisées, affichez ou masquez le bouton de masquage du clavier et synchronisez votre barre d'accessoires sur tous vos appareils.";
+
+/* Image Paste */
+"Behavior" = "Comportement";
+"Image Paste" = "Collage d’images";
+"Automatically" = "Automatiquement";
+"Ask Before Upload" = "Demander avant l’envoi";
+"Off" = "Désactivé";
+"Image paste is turned off." = "Le collage d’images est désactivé.";
+"You’ll be asked before the image is uploaded." = "Une confirmation vous sera demandée avant l’envoi de l’image.";
+"Images upload right away without showing the confirmation sheet." = "Les images sont envoyées immédiatement sans afficher la feuille de confirmation.";
+"Clipboard image is too large. The limit is %@." = "L’image du presse-papiers est trop volumineuse. La limite est de %@.";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "Dans V1, le collage enrichi du presse-papiers n’est pris en charge que pour les hôtes distants POSIX. Plateforme distante : %@.";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "Le collage enrichi du presse-papiers nécessite un shell distant compatible POSIX.";
+"Remote upload failed: could not create temporary file" = "Échec de l’envoi distant : impossible de créer le fichier temporaire";
+"Remote upload failed: %@" = "Échec de l’envoi distant : %@";
+"timed out while creating remote temporary file" = "délai dépassé lors de la création du fichier temporaire distant";
+"timed out while uploading image bytes" = "délai dépassé lors de l’envoi des données de l’image";
+"Upload this %@ image and paste its path?" = "Envoyer cette image %@ et coller son chemin ?";
+"Paste image" = "Coller l’image";
+"Reconnect the terminal before uploading images." = "Reconnectez le terminal avant d’envoyer des images.";
+"Uploading image to remote host..." = "Envoi de l’image vers l’hôte distant...";
+"Upload image" = "Envoyer l’image";
+"Always Upload" = "Toujours envoyer";
+"Paste Text Instead" = "Coller du texte à la place";
+"Always Upload skips this prompt next time." = "« Toujours envoyer » ignorera cette invite la prochaine fois.";
+"Image ready to upload" = "Image prête à être envoyée";

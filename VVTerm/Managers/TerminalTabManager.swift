@@ -493,10 +493,6 @@ final class TerminalTabManager: ObservableObject {
         shellRegistry.hasOtherRegistrations(using: client, excluding: paneId)
     }
 
-    func activeTransport(for paneId: UUID) -> ShellTransport {
-        paneStates[paneId]?.activeTransport ?? .ssh
-    }
-
     func sharedStatsClient(for serverId: UUID) -> SSHClient? {
         if selectedTransport(for: serverId) == .mosh {
             return nil

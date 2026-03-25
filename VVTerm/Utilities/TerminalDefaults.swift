@@ -18,6 +18,11 @@ enum TerminalDefaults {
         if defaults.object(forKey: fontSizeKey) == nil {
             defaults.set(defaultFontSize, forKey: fontSizeKey)
         }
+
+        if defaults.object(forKey: ImagePasteBehavior.userDefaultsKey) == nil {
+            let imagePasteBehavior = RichClipboardSettings.resolvedImagePasteBehavior(defaults: defaults)
+            defaults.set(imagePasteBehavior.rawValue, forKey: ImagePasteBehavior.userDefaultsKey)
+        }
     }
 
     static var defaultFontSize: Double {

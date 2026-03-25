@@ -974,3 +974,29 @@
 "Show keyboard dismiss button" = "Show keyboard dismiss button";
 "Hide keyboard" = "Hide keyboard";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices.";
+
+/* Image Paste */
+"Behavior" = "Behavior";
+"Image Paste" = "Image Paste";
+"Automatically" = "Automatically";
+"Ask Before Upload" = "Ask Before Upload";
+"Off" = "Off";
+"Image paste is turned off." = "Image paste is turned off.";
+"You’ll be asked before the image is uploaded." = "You’ll be asked before the image is uploaded.";
+"Images upload right away without showing the confirmation sheet." = "Images upload right away without showing the confirmation sheet.";
+"Clipboard image is too large. The limit is %@." = "Clipboard image is too large. The limit is %@.";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@.";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "Rich clipboard paste requires a POSIX-capable remote shell.";
+"Remote upload failed: could not create temporary file" = "Remote upload failed: could not create temporary file";
+"Remote upload failed: %@" = "Remote upload failed: %@";
+"timed out while creating remote temporary file" = "timed out while creating remote temporary file";
+"timed out while uploading image bytes" = "timed out while uploading image bytes";
+"Upload this %@ image and paste its path?" = "Upload this %@ image and paste its path?";
+"Paste image" = "Paste image";
+"Reconnect the terminal before uploading images." = "Reconnect the terminal before uploading images.";
+"Uploading image to remote host..." = "Uploading image to remote host...";
+"Upload image" = "Upload image";
+"Always Upload" = "Always Upload";
+"Paste Text Instead" = "Paste Text Instead";
+"Always Upload skips this prompt next time." = "Always Upload skips this prompt next time.";
+"Image ready to upload" = "Image ready to upload";

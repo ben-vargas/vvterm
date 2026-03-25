@@ -958,3 +958,29 @@
 "Show keyboard dismiss button" = "Zobrazit tlačítko pro skrytí klávesnice";
 "Hide keyboard" = "Skrýt klávesnici";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Měňte pořadí akcí, přidávejte vlastní akce, zobrazujte nebo skrývejte tlačítko pro skrytí klávesnice a synchronizujte panel příslušenství mezi zařízeními.";
+
+/* Image Paste */
+"Behavior" = "Chování";
+"Image Paste" = "Vkládání obrázků";
+"Automatically" = "Automaticky";
+"Ask Before Upload" = "Zeptat se před nahráním";
+"Off" = "Vypnuto";
+"Image paste is turned off." = "Vkládání obrázků je vypnuto.";
+"You’ll be asked before the image is uploaded." = "Před nahráním obrázku budete dotázáni.";
+"Images upload right away without showing the confirmation sheet." = "Obrázky se nahrají hned bez zobrazení potvrzovacího dialogu.";
+"Clipboard image is too large. The limit is %@." = "Obrázek ve schránce je příliš velký. Limit je %@.";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "Rozšířené vkládání ze schránky je ve verzi V1 podporováno pouze pro vzdálené POSIX systémy. Vzdálená platforma: %@.";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "Rozšířené vkládání ze schránky vyžaduje vzdálený shell s podporou POSIX.";
+"Remote upload failed: could not create temporary file" = "Nahrávání na vzdálený host selhalo: nepodařilo se vytvořit dočasný soubor";
+"Remote upload failed: %@" = "Nahrávání na vzdálený host selhalo: %@";
+"timed out while creating remote temporary file" = "vypršel čas při vytváření vzdáleného dočasného souboru";
+"timed out while uploading image bytes" = "vypršel čas při nahrávání dat obrázku";
+"Upload this %@ image and paste its path?" = "Nahrát tento obrázek %@ a vložit jeho cestu?";
+"Paste image" = "Vložit obrázek";
+"Reconnect the terminal before uploading images." = "Před nahráváním obrázků znovu připojte terminál.";
+"Uploading image to remote host..." = "Nahrávání obrázku na vzdálený host...";
+"Upload image" = "Nahrát obrázek";
+"Always Upload" = "Vždy nahrát";
+"Paste Text Instead" = "Místo toho vložit text";
+"Always Upload skips this prompt next time." = "„Vždy nahrát“ tento dotaz příště přeskočí.";
+"Image ready to upload" = "Obrázek je připraven k nahrání";

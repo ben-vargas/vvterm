@@ -1002,3 +1002,29 @@
 "Show keyboard dismiss button" = "Hiển thị nút ẩn bàn phím";
 "Hide keyboard" = "Ẩn bàn phím";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Sắp xếp lại hành động, thêm hành động tùy chỉnh, hiển thị hoặc ẩn nút ẩn bàn phím và đồng bộ thanh phụ kiện giữa các thiết bị.";
+
+/* Image Paste */
+"Behavior" = "Hành vi";
+"Image Paste" = "Dán ảnh";
+"Automatically" = "Tự động";
+"Ask Before Upload" = "Hỏi trước khi tải lên";
+"Off" = "Tắt";
+"Image paste is turned off." = "Đã tắt dán ảnh.";
+"You’ll be asked before the image is uploaded." = "Bạn sẽ được hỏi trước khi ảnh được tải lên.";
+"Images upload right away without showing the confirmation sheet." = "Ảnh sẽ được tải lên ngay mà không hiển thị bảng xác nhận.";
+"Clipboard image is too large. The limit is %@." = "Ảnh trong khay nhớ tạm quá lớn. Giới hạn là %@.";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "Dán clipboard nâng cao trong V1 chỉ hỗ trợ máy từ xa POSIX. Nền tảng từ xa: %@.";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "Dán clipboard nâng cao yêu cầu shell từ xa hỗ trợ POSIX.";
+"Remote upload failed: could not create temporary file" = "Tải lên từ xa thất bại: không thể tạo tệp tạm";
+"Remote upload failed: %@" = "Tải lên từ xa thất bại: %@";
+"timed out while creating remote temporary file" = "Hết thời gian khi tạo tệp tạm từ xa";
+"timed out while uploading image bytes" = "Hết thời gian khi tải dữ liệu ảnh lên";
+"Upload this %@ image and paste its path?" = "Tải lên ảnh %@ này và dán đường dẫn của nó?";
+"Paste image" = "Dán ảnh";
+"Reconnect the terminal before uploading images." = "Hãy kết nối lại terminal trước khi tải ảnh lên.";
+"Uploading image to remote host..." = "Đang tải ảnh lên máy chủ từ xa...";
+"Upload image" = "Tải ảnh lên";
+"Always Upload" = "Luôn tải lên";
+"Paste Text Instead" = "Dán văn bản thay thế";
+"Always Upload skips this prompt next time." = "Chọn “Luôn tải lên” để bỏ qua lời nhắc này vào lần sau.";
+"Image ready to upload" = "Ảnh đã sẵn sàng để tải lên";

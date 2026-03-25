@@ -239,6 +239,9 @@ class GhosttyTerminalView: UIView {
             keyboardToolbar?.onVoice = onVoiceButtonTapped
         }
     }
+
+    /// Optional app-level paste interceptor used for rich clipboard routing.
+    var richPasteInterceptor: ((GhosttyTerminalView) -> Bool)?
     private var didSignalReady = false
 
     /// Prevent rendering when the view is offscreen or being torn down.
@@ -479,6 +482,7 @@ class GhosttyTerminalView: UIView {
         onPwdChange = nil
         onProgressReport = nil
         onResize = nil
+        richPasteInterceptor = nil
         writeCallback = nil
 
         // Stop rendering/input callbacks and mark the surface as not visible.
@@ -1278,7 +1282,7 @@ class GhosttyTerminalView: UIView {
     }
 
     @objc override func paste(_ sender: Any?) {
-        _ = surface?.perform(action: "paste_from_clipboard")
+        performPasteAction()
     }
 
     // MARK: - Software Keyboard (UIKeyInput)
@@ -1290,14 +1294,45 @@ class GhosttyTerminalView: UIView {
         return nil
     }
 
+    private func handlePasteShortcut(_ key: UIKey) -> Bool {
+        let input = key.charactersIgnoringModifiers.lowercased()
+        guard input == "v" else { return false }
+
+        if key.modifierFlags.contains(.command) {
+            performPasteAction(requestRenderAfterward: true)
+            return true
+        }
+
+        if key.modifierFlags.contains(.control), interceptRichPasteIfNeeded() {
+            return true
+        }
+
+        return false
+    }
+
+    @discardableResult
+    private func interceptRichPasteIfNeeded() -> Bool {
+        richPasteInterceptor?(self) == true
+    }
+
+    private func performPasteAction(requestRenderAfterward: Bool = false) {
+        if interceptRichPasteIfNeeded() {
+            if requestRenderAfterward {
+                requestRender()
+            }
+            return
+        }
+
+        pasteTextFromClipboard()
+        if requestRenderAfterward {
+            requestRender()
+        }
+    }
+
     private func handleCommandShortcut(_ key: UIKey) -> Bool {
         guard key.modifierFlags.contains(.command) else { return false }
         let input = key.charactersIgnoringModifiers.lowercased()
         switch input {
-        case "v":
-            paste(nil)
-            requestRender()
-            return true
         case "c":
             if canPerformAction(#selector(copy(_:)), withSender: nil) {
                 copy(nil)
@@ -1532,6 +1567,10 @@ class GhosttyTerminalView: UIView {
                 continue
             }
             markHardwareKeyboardDetectedFromKeyPress()
+            if handlePasteShortcut(key) {
+                result.didHandleGhosttyInput = true
+                continue
+            }
             if handleCommandShortcut(key) { continue }
             if shouldRoutePressToSystemTextInput(key) {
                 systemTextInputPresses.insert(UInt16(key.keyCode.rawValue))
@@ -1657,6 +1696,12 @@ class GhosttyTerminalView: UIView {
         requestRender()
     }
 
+    func pasteTextFromClipboard() {
+        guard acceptsTerminalInput else { return }
+        _ = surface?.perform(action: "paste_from_clipboard")
+        requestRender()
+    }
+
     private func sendTerminalInputText(_ text: String) {
         guard acceptsTerminalInput else { return }
 
@@ -1694,6 +1739,10 @@ class GhosttyTerminalView: UIView {
         }
 
         let mods = keyboardToolbar?.consumeModifiers() ?? (ctrl: false, alt: false, command: false, shift: false)
+        if mods.ctrl, normalized.compare("v", options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame,
+           interceptRichPasteIfNeeded() {
+            return true
+        }
         if normalized == "\n" || normalized == "\r" {
             commitIMEProxyMarkedTextIfNeeded()
             sendToolbarGhosttyKey(.enter, mods: imeProxyGhosttyModifiers(from: mods))

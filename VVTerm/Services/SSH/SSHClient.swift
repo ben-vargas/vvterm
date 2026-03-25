@@ -69,6 +69,11 @@ struct ShellHandle {
     }
 }
 
+enum SSHUploadStrategy: Sendable {
+    case automatic
+    case execPreferred
+}
+
 actor SSHClient {
     private struct MoshShellRuntime {
         let session: MoshClientSession
@@ -88,6 +93,7 @@ actor SSHClient {
     private let connectTimeout: Duration = .seconds(30)
     private let disconnectTimeout: Duration = .seconds(4)
     private let execTimeout: Duration = .seconds(20)
+    private let uploadTimeout: Duration = .seconds(60)
 
     /// Stored session reference for nonisolated abort access
     private nonisolated(unsafe) var _sessionForAbort: SSHSession?
@@ -264,6 +270,33 @@ actor SSHClient {
         return try await SSHClient.runWithTimeout(effectiveTimeout) {
             try Task.checkCancellation()
             return try await session.execute(command)
+        }
+    }
+
+    func upload(
+        _ data: Data,
+        to remotePath: String,
+        permissions: Int32 = 0o600,
+        strategy: SSHUploadStrategy = .automatic
+    ) async throws {
+        guard !_isAborted else {
+            throw SSHError.notConnected
+        }
+        guard let session = session else {
+            throw SSHError.notConnected
+        }
+
+        logger.info(
+            "Starting SSH upload [path: \(remotePath, privacy: .public)] [bytes: \(data.count)] [strategy: \(String(describing: strategy), privacy: .public)]"
+        )
+        try await SSHClient.runWithTimeout(uploadTimeout) {
+            try Task.checkCancellation()
+            try await session.upload(
+                data,
+                to: remotePath,
+                permissions: permissions,
+                strategy: strategy
+            )
         }
     }
 
@@ -730,6 +763,7 @@ actor SSHSession {
         let continuation: CheckedContinuation<String, Error>
         var channel: OpaquePointer?
         var output = Data()
+        var stderr = Data()
         var isStarted = false
 
         init(id: UUID, command: String, continuation: CheckedContinuation<String, Error>) {
@@ -1351,6 +1385,17 @@ actor SSHSession {
                         continue
                     }
 
+                    let stderrRead = libssh2_channel_read_ex(execChannel, 1, &buffer, buffer.count)
+                    if stderrRead > 0 {
+                        request.stderr.append(Data(bytes: buffer, count: Int(stderrRead)))
+                        didWork = true
+                    } else if stderrRead == Int(LIBSSH2_ERROR_EAGAIN) {
+                        // No stderr data yet
+                    } else if stderrRead < 0 {
+                        finishExecRequest(requestId, error: SSHError.socketError("Exec stderr read failed: \(stderrRead)"))
+                        continue
+                    }
+
                     if let currentChannel = request.channel, libssh2_channel_eof(currentChannel) != 0 {
                         finishExecRequest(requestId, error: nil)
                         didWork = true
@@ -1492,6 +1537,12 @@ actor SSHSession {
         if let error = error {
             request.continuation.resume(throwing: error)
         } else {
+            if !request.stderr.isEmpty,
+               let stderr = String(data: request.stderr, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+               !stderr.isEmpty {
+                logger.debug("Exec command stderr: \(stderr, privacy: .public)")
+            }
             let output = String(data: request.output, encoding: .utf8) ?? ""
             request.continuation.resume(returning: output)
         }
@@ -1581,6 +1632,289 @@ actor SSHSession {
             } else {
                 throw SSHError.socketError("Write failed: \(written)")
             }
+        }
+    }
+
+    func upload(
+        _ data: Data,
+        to remotePath: String,
+        permissions: Int32 = 0o600,
+        strategy: SSHUploadStrategy = .automatic
+    ) async throws {
+        if strategy == .execPreferred {
+            logger.info("Using exec-preferred upload strategy [path: \(remotePath, privacy: .public)]")
+            try await uploadViaExec(data, to: remotePath)
+            return
+        }
+
+        do {
+            logger.info("Trying SCP upload [path: \(remotePath, privacy: .public)]")
+            try await uploadViaSCP(data, to: remotePath, permissions: permissions)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            logger.warning("SCP upload failed, retrying with exec channel: \(error.localizedDescription, privacy: .public)")
+            try await uploadViaExec(data, to: remotePath)
+        }
+    }
+
+    private func uploadViaSCP(_ data: Data, to remotePath: String, permissions: Int32) async throws {
+        guard let session = libssh2Session else {
+            throw SSHError.notConnected
+        }
+        guard !remotePath.isEmpty else {
+            throw SSHError.unknown("Upload path is empty")
+        }
+        logger.info("Opening SCP upload channel [path: \(remotePath, privacy: .public)]")
+
+        var scpChannel: OpaquePointer?
+        do {
+            while scpChannel == nil {
+                try Task.checkCancellation()
+                scpChannel = remotePath.withCString { pathPtr in
+                    libssh2_scp_send64(
+                        session,
+                        pathPtr,
+                        permissions,
+                        Int64(data.count),
+                        0,
+                        0
+                    )
+                }
+
+                if scpChannel != nil {
+                    break
+                }
+
+                let lastError = libssh2_session_last_errno(session)
+                if lastError == LIBSSH2_ERROR_EAGAIN {
+                    await waitForSocket()
+                    continue
+                }
+                throw SSHError.socketError("SCP channel open failed: \(lastError)")
+            }
+
+            guard let scpChannel else {
+                throw SSHError.socketError("SCP channel open failed")
+            }
+
+            let bytes = [UInt8](data)
+            var offset = 0
+            while offset < bytes.count {
+                try Task.checkCancellation()
+                let written = bytes.withUnsafeBufferPointer { buffer -> Int in
+                    guard let baseAddress = buffer.baseAddress else { return -1 }
+                    let pointer = UnsafeRawPointer(baseAddress.advanced(by: offset)).assumingMemoryBound(to: CChar.self)
+                    return Int(libssh2_channel_write_ex(scpChannel, 0, pointer, bytes.count - offset))
+                }
+
+                if written > 0 {
+                    offset += written
+                } else if written == Int(LIBSSH2_ERROR_EAGAIN) {
+                    await waitForSocket()
+                } else {
+                    throw SSHError.socketError("SCP write failed: \(written)")
+                }
+            }
+
+            _ = try await finishUploadChannel(scpChannel)
+            logger.info("SCP upload finished [path: \(remotePath, privacy: .public)]")
+        } catch {
+            if let scpChannel {
+                libssh2_channel_close(scpChannel)
+                libssh2_channel_free(scpChannel)
+            }
+            throw error
+        }
+    }
+
+    private func uploadViaExec(_ data: Data, to remotePath: String) async throws {
+        guard let session = libssh2Session else {
+            throw SSHError.notConnected
+        }
+        guard !remotePath.isEmpty else {
+            throw SSHError.unknown("Upload path is empty")
+        }
+        logger.info("Opening exec upload channel [path: \(remotePath, privacy: .public)]")
+
+        let command = "cat > \(RemoteTerminalBootstrap.shellQuoted(remotePath))"
+
+        var execChannel: OpaquePointer?
+        do {
+            while execChannel == nil {
+                try Task.checkCancellation()
+                execChannel = libssh2_channel_open_ex(
+                    session,
+                    "session",
+                    UInt32("session".utf8.count),
+                    2 * 1024 * 1024,
+                    32768,
+                    nil,
+                    0
+                )
+
+                if execChannel != nil {
+                    break
+                }
+
+                let lastError = libssh2_session_last_errno(session)
+                if lastError == LIBSSH2_ERROR_EAGAIN {
+                    await waitForSocket()
+                    continue
+                }
+                throw SSHError.socketError("Exec upload channel open failed: \(lastError)")
+            }
+
+            guard let execChannel else {
+                throw SSHError.socketError("Exec upload channel open failed")
+            }
+
+            _ = libssh2_channel_handle_extended_data2(
+                execChannel,
+                LIBSSH2_CHANNEL_EXTENDED_DATA_IGNORE
+            )
+
+            while true {
+                try Task.checkCancellation()
+                let execResult = libssh2_channel_process_startup(
+                    execChannel,
+                    "exec",
+                    4,
+                    command,
+                    UInt32(command.utf8.count)
+                )
+                if execResult == 0 {
+                    break
+                }
+                if execResult == Int32(LIBSSH2_ERROR_EAGAIN) {
+                    await waitForSocket()
+                    continue
+                }
+                throw SSHError.socketError("Exec upload startup failed: \(execResult)")
+            }
+
+            let bytes = [UInt8](data)
+            var offset = 0
+            while offset < bytes.count {
+                try Task.checkCancellation()
+                let written = bytes.withUnsafeBufferPointer { buffer -> Int in
+                    guard let baseAddress = buffer.baseAddress else { return -1 }
+                    let pointer = UnsafeRawPointer(baseAddress.advanced(by: offset)).assumingMemoryBound(to: CChar.self)
+                    return Int(libssh2_channel_write_ex(execChannel, 0, pointer, bytes.count - offset))
+                }
+
+                if written > 0 {
+                    offset += written
+                } else if written == Int(LIBSSH2_ERROR_EAGAIN) {
+                    await waitForSocket()
+                } else {
+                    throw SSHError.socketError("Exec upload write failed: \(written)")
+                }
+            }
+
+            let exitStatus = try await finishUploadChannel(execChannel, drainOutput: true)
+            guard exitStatus == 0 else {
+                throw SSHError.socketError("Exec upload failed with exit status \(exitStatus)")
+            }
+            logger.info("Exec upload finished [path: \(remotePath, privacy: .public)]")
+        } catch {
+            if let execChannel {
+                libssh2_channel_close(execChannel)
+                libssh2_channel_free(execChannel)
+            }
+            throw error
+        }
+    }
+
+    private func finishUploadChannel(
+        _ channel: OpaquePointer,
+        drainOutput: Bool = false
+    ) async throws -> Int32 {
+        while true {
+            try Task.checkCancellation()
+            let sendEOFResult = libssh2_channel_send_eof(channel)
+            if sendEOFResult == 0 {
+                break
+            }
+            if sendEOFResult == Int32(LIBSSH2_ERROR_EAGAIN) {
+                await waitForSocket()
+                continue
+            }
+            throw SSHError.socketError("SCP send EOF failed: \(sendEOFResult)")
+        }
+
+        while true {
+            try Task.checkCancellation()
+            if drainOutput {
+                try await drainChannelOutput(channel)
+            }
+            let waitEOFResult = libssh2_channel_wait_eof(channel)
+            if waitEOFResult == 0 {
+                break
+            }
+            if waitEOFResult == Int32(LIBSSH2_ERROR_EAGAIN) {
+                await waitForSocket()
+                continue
+            }
+            throw SSHError.socketError("SCP wait EOF failed: \(waitEOFResult)")
+        }
+
+        while true {
+            try Task.checkCancellation()
+            let closeResult = libssh2_channel_close(channel)
+            if closeResult == 0 {
+                break
+            }
+            if closeResult == Int32(LIBSSH2_ERROR_EAGAIN) {
+                await waitForSocket()
+                continue
+            }
+            throw SSHError.socketError("SCP close failed: \(closeResult)")
+        }
+
+        while true {
+            try Task.checkCancellation()
+            let waitClosedResult = libssh2_channel_wait_closed(channel)
+            if waitClosedResult == 0 {
+                break
+            }
+            if waitClosedResult == Int32(LIBSSH2_ERROR_EAGAIN) {
+                await waitForSocket()
+                continue
+            }
+            throw SSHError.socketError("SCP wait close failed: \(waitClosedResult)")
+        }
+
+        let exitStatus = libssh2_channel_get_exit_status(channel)
+        libssh2_channel_free(channel)
+        return exitStatus
+    }
+
+    private func drainChannelOutput(_ channel: OpaquePointer) async throws {
+        var buffer = [CChar](repeating: 0, count: 4096)
+
+        while true {
+            try Task.checkCancellation()
+            let stdoutRead = libssh2_channel_read_ex(channel, 0, &buffer, buffer.count)
+            if stdoutRead > 0 {
+                continue
+            }
+            if stdoutRead == Int(LIBSSH2_ERROR_EAGAIN) || stdoutRead == 0 {
+                break
+            }
+            throw SSHError.socketError("Exec upload stdout drain failed: \(stdoutRead)")
+        }
+
+        while true {
+            try Task.checkCancellation()
+            let stderrRead = libssh2_channel_read_ex(channel, 1, &buffer, buffer.count)
+            if stderrRead > 0 {
+                continue
+            }
+            if stderrRead == Int(LIBSSH2_ERROR_EAGAIN) || stderrRead == 0 {
+                break
+            }
+            throw SSHError.socketError("Exec upload stderr drain failed: \(stderrRead)")
         }
     }
 

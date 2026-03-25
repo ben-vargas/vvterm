@@ -957,3 +957,29 @@
 "Show keyboard dismiss button" = "Показывать кнопку скрытия клавиатуры";
 "Hide keyboard" = "Скрыть клавиатуру";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Меняйте порядок действий, добавляйте пользовательские действия, показывайте или скрывайте кнопку скрытия клавиатуры и синхронизируйте панель аксессуаров между устройствами.";
+
+/* Image Paste */
+"Behavior" = "Поведение";
+"Image Paste" = "Вставка изображений";
+"Automatically" = "Автоматически";
+"Ask Before Upload" = "Спрашивать перед загрузкой";
+"Off" = "Выкл.";
+"Image paste is turned off." = "Вставка изображений отключена.";
+"You’ll be asked before the image is uploaded." = "Перед загрузкой изображения будет показан запрос.";
+"Images upload right away without showing the confirmation sheet." = "Изображения загружаются сразу без показа окна подтверждения.";
+"Clipboard image is too large. The limit is %@." = "Изображение в буфере обмена слишком большое. Лимит: %@.";
+"Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@." = "Расширенная вставка из буфера обмена в V1 поддерживается только для POSIX-удалённых систем. Удалённая платформа: %@.";
+"Rich clipboard paste requires a POSIX-capable remote shell." = "Расширенная вставка из буфера обмена требует удалённой оболочки с поддержкой POSIX.";
+"Remote upload failed: could not create temporary file" = "Не удалось загрузить на удалённый хост: не удалось создать временный файл";
+"Remote upload failed: %@" = "Не удалось загрузить на удалённый хост: %@";
+"timed out while creating remote temporary file" = "истекло время ожидания при создании временного файла на удалённом хосте";
+"timed out while uploading image bytes" = "истекло время ожидания при загрузке данных изображения";
+"Upload this %@ image and paste its path?" = "Загрузить это изображение %@ и вставить его путь?";
+"Paste image" = "Вставить изображение";
+"Reconnect the terminal before uploading images." = "Перед загрузкой изображений переподключите терминал.";
+"Uploading image to remote host..." = "Загрузка изображения на удалённый хост...";
+"Upload image" = "Загрузить изображение";
+"Always Upload" = "Всегда загружать";
+"Paste Text Instead" = "Вставить текст вместо этого";
+"Always Upload skips this prompt next time." = "«Всегда загружать» пропустит этот запрос в следующий раз.";
+"Image ready to upload" = "Изображение готово к загрузке";

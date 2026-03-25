@@ -278,7 +278,7 @@ struct TerminalTabView: View {
     private func setupKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
-            handleVoiceShortcut(event)
+            handleMonitoredKeyDown(event)
         }
     }
 
@@ -287,6 +287,10 @@ struct TerminalTabView: View {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
         }
+    }
+
+    private func handleMonitoredKeyDown(_ event: NSEvent) -> NSEvent? {
+        handleVoiceShortcut(event)
     }
 
     private func handleVoiceShortcut(_ event: NSEvent) -> NSEvent? {
@@ -396,6 +400,7 @@ struct TerminalPaneView: View {
     @State private var reconnectInFlight = false
     @State private var terminalBackgroundColor: Color = Self.initialTerminalBackgroundColor()
     @State private var connectWatchdogToken = UUID()
+    @StateObject private var richPasteUI = TerminalRichPasteUIModel()
 
     @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
     @AppStorage("terminalThemeNameLight") private var terminalThemeNameLight = "Aizen Light"
@@ -453,6 +458,7 @@ struct TerminalPaneView: View {
                     paneId: paneId,
                     server: server,
                     credentials: credentials,
+                    richPasteUIModel: richPasteUI,
                     isActive: shouldFocus,
                     onProcessExit: onProcessExit,
                     onReady: { isReady = true }
@@ -588,32 +594,20 @@ struct TerminalPaneView: View {
                 }
             }
 
+            TerminalRichPasteProgressOverlay(uiModel: richPasteUI)
+
             if let fallbackBannerMessage {
-                VStack {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.trianglehead.2.clockwise")
-                            .foregroundStyle(.orange)
-                        Text(fallbackBannerMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer(minLength: 0)
-                        Button {
-                            dismissFallbackBanner = true
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Dismiss fallback message")
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                    Spacer()
+                TerminalTopBannerView(
+                    icon: "arrow.trianglehead.2.clockwise",
+                    tint: .orange,
+                    message: fallbackBannerMessage,
+                    dismissAccessibilityLabel: "Dismiss fallback message"
+                ) {
+                    dismissFallbackBanner = true
                 }
             }
+
+            TerminalRichPasteBannerOverlay(uiModel: richPasteUI)
 
             if showsVoiceButton && isFocused && isTabSelected && connectionState.isConnected {
                 voiceTriggerButton
@@ -714,6 +708,7 @@ struct TerminalPaneView: View {
         } message: {
             Text("Mosh is selected for this server, but mosh-server is missing on the host.")
         }
+        .terminalRichPastePrompt(using: richPasteUI)
     }
 
     private func disableTmuxForServer() {
@@ -859,6 +854,7 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
     let paneId: UUID
     let server: Server
     let credentials: ServerCredentials
+    let richPasteUIModel: TerminalRichPasteUIModel
     let isActive: Bool
     let onProcessExit: () -> Void
     let onReady: () -> Void
@@ -872,7 +868,6 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
         }
 
         let coordinator = context.coordinator
-        coordinator.paneId = paneId
 
         // Check if terminal already exists for this pane (reuse to save memory)
         if let existingTerminal = TerminalTabManager.shared.getTerminal(for: paneId) {
@@ -900,6 +895,7 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
                     }
                 }
             }
+            coordinator.installRichPasteInterception(on: existingTerminal)
 
             // Re-wrap in scroll view
             let scrollView = TerminalScrollView(
@@ -940,6 +936,7 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
 
         // Store terminal reference
         coordinator.terminal = terminalView
+        coordinator.installRichPasteInterception(on: terminalView)
         TerminalTabManager.shared.registerTerminal(terminalView, for: paneId)
 
         // Setup write callback to send keyboard input to SSH
@@ -998,28 +995,54 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
         // Use a dedicated SSH client per pane to avoid channel contention
         // and startup races when many panes/tabs are opened quickly.
         let client = SSHClient()
-        return Coordinator(server: server, credentials: credentials, onProcessExit: onProcessExit, sshClient: client)
+        return Coordinator(
+            paneId: paneId,
+            server: server,
+            credentials: credentials,
+            onProcessExit: onProcessExit,
+            sshClient: client,
+            richPasteUIModel: richPasteUIModel
+        )
     }
 
     class Coordinator {
+        let paneId: UUID
         let server: Server
         let credentials: ServerCredentials
         let onProcessExit: () -> Void
         weak var terminal: GhosttyTerminalView?
-        var paneId: UUID?
         let sshClient: SSHClient
         var shellId: UUID?
         var shellTask: Task<Void, Never>?
         var isReusingTerminal = false
         var wasActive = false
+        private let richPasteRuntime: TerminalRichPasteRuntime
         private var lastSize: (cols: Int, rows: Int) = (0, 0)
         private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "SSHPane")
 
-        init(server: Server, credentials: ServerCredentials, onProcessExit: @escaping () -> Void, sshClient: SSHClient) {
+        init(
+            paneId: UUID,
+            server: Server,
+            credentials: ServerCredentials,
+            onProcessExit: @escaping () -> Void,
+            sshClient: SSHClient,
+            richPasteUIModel: TerminalRichPasteUIModel
+        ) {
+            self.paneId = paneId
             self.server = server
             self.credentials = credentials
             self.onProcessExit = onProcessExit
             self.sshClient = sshClient
+            self.richPasteRuntime = .terminalPane(
+                paneId: paneId,
+                sshClient: sshClient,
+                uiModel: richPasteUIModel
+            )
+        }
+
+        @MainActor
+        func installRichPasteInterception(on terminal: GhosttyTerminalView) {
+            richPasteRuntime.install(on: terminal)
         }
 
         func sendToSSH(_ data: Data) {
@@ -1056,10 +1079,7 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
                 return
             }
 
-            guard let paneId = self.paneId else {
-                logger.error("Cannot start SSH connection without paneId")
-                return
-            }
+            let paneId = self.paneId
 
             if let existingShellId = TerminalTabManager.shared.shellId(for: paneId) {
                 shellId = existingShellId

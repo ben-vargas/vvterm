@@ -21,7 +21,7 @@ import Combine
 /// - `scrollView`: The outermost NSScrollView that manages scrollbar rendering and behavior
 /// - `documentView`: A blank NSView whose height represents total scrollback (in pixels)
 /// - `surfaceView`: The actual Ghostty terminal renderer, positioned to fill the visible rect
-class TerminalScrollView: NSView {
+class TerminalScrollView: NSView, NSUserInterfaceValidations {
     private let scrollView: NSScrollView
     private let documentView: NSView
     let surfaceView: GhosttyTerminalView
@@ -136,6 +136,40 @@ class TerminalScrollView: NSView {
     // The entire bounds is a safe area, so we override any default insets.
     override var safeAreaInsets: NSEdgeInsets { return NSEdgeInsetsZero }
 
+    override var acceptsFirstResponder: Bool { surfaceView.acceptsFirstResponder }
+
+    override func becomeFirstResponder() -> Bool {
+        guard let window else { return false }
+        return window.makeFirstResponder(surfaceView)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        ensureSurfaceViewIsFirstResponder()
+        surfaceView.keyDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        ensureSurfaceViewIsFirstResponder()
+        if surfaceView.performKeyEquivalent(with: event) {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    @objc func copy(_ sender: Any?) {
+        ensureSurfaceViewIsFirstResponder()
+        surfaceView.copy(sender)
+    }
+
+    @objc func paste(_ sender: Any?) {
+        ensureSurfaceViewIsFirstResponder()
+        surfaceView.paste(sender)
+    }
+
+    func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        surfaceView.validateUserInterfaceItem(item)
+    }
+
     override func layout() {
         super.layout()
 
@@ -160,6 +194,11 @@ class TerminalScrollView: NSView {
         let hasLightBackground = scrollView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
         scrollView.appearance = NSAppearance(named: hasLightBackground ? .aqua : .darkAqua)
         updateTrackingAreas()
+    }
+
+    private func ensureSurfaceViewIsFirstResponder() {
+        guard let window, window.firstResponder !== surfaceView else { return }
+        window.makeFirstResponder(surfaceView)
     }
 
     /// Positions the surface view to fill the currently visible rectangle.

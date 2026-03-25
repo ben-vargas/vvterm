@@ -30,6 +30,7 @@ struct TerminalContainerView: View {
     @State private var reconnectInFlight = false
     @State private var connectWatchdogToken = UUID()
     @State private var hasEstablishedConnection = false
+    @StateObject private var richPasteUI = TerminalRichPasteUIModel()
     @AppStorage("sshAutoReconnect") private var autoReconnectEnabled = true
 
     /// Check if terminal already exists (was previously created)
@@ -206,6 +207,7 @@ struct TerminalContainerView: View {
             guard !Task.isCancelled else { return }
             dismissFallbackBanner = true
         }
+        .terminalRichPastePrompt(using: richPasteUI)
         #if os(macOS) || os(iOS)
         .alert("Voice Input Unavailable", isPresented: $showingPermissionError) {
             Button("OK", role: .cancel) { }
@@ -308,6 +310,7 @@ struct TerminalContainerView: View {
             session: session,
             server: server,
             credentials: credentials,
+            richPasteUIModel: richPasteUI,
             isActive: isActive,
             shouldPreserveKeyboardDuringReconnect: true,
             onProcessExit: {
@@ -325,6 +328,7 @@ struct TerminalContainerView: View {
             session: session,
             server: server,
             credentials: credentials,
+            richPasteUIModel: richPasteUI,
             isActive: isActive,
             onProcessExit: {
                 DispatchQueue.main.async {
@@ -469,29 +473,31 @@ struct TerminalContainerView: View {
                 .multilineTextAlignment(.center)
             }
         }
+        TerminalRichPasteProgressOverlay(uiModel: richPasteUI)
     }
 
     @ViewBuilder
     private var topBannerOverlayLayer: some View {
         if let fallbackBannerMessage {
-            bannerOverlay(
+            TerminalTopBannerView(
                 icon: "arrow.trianglehead.2.clockwise",
                 tint: .orange,
                 message: fallbackBannerMessage,
-                showsDismissButton: true
+                dismissAccessibilityLabel: "Dismiss fallback message"
             ) {
                 dismissFallbackBanner = true
             }
         }
 
         if shouldUseInlineReconnectPresentation {
-            bannerOverlay(
+            TerminalTopBannerView(
                 progressTint: .orange,
                 tint: .orange,
                 message: String(localized: "Reconnecting…")
             )
             .transition(.opacity)
         }
+        TerminalRichPasteBannerOverlay(uiModel: richPasteUI)
     }
 
     @ViewBuilder
@@ -537,52 +543,6 @@ struct TerminalContainerView: View {
                 .zIndex(1)
         }
         #endif
-    }
-
-    @ViewBuilder
-    private func bannerOverlay(
-        icon: String? = nil,
-        progressTint: Color? = nil,
-        tint: Color,
-        message: String,
-        showsDismissButton: Bool = false,
-        onDismiss: (() -> Void)? = nil
-    ) -> some View {
-        VStack {
-            HStack(spacing: 8) {
-                if let progressTint {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(progressTint)
-                }
-
-                if let icon {
-                    Image(systemName: icon)
-                        .foregroundStyle(tint)
-                }
-
-                Text(message)
-                    .font(.caption.weight(progressTint == nil ? .regular : .semibold))
-                    .foregroundStyle(progressTint == nil ? .secondary : tint)
-
-                Spacer(minLength: 0)
-
-                if showsDismissButton, let onDismiss {
-                    Button(action: onDismiss) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Dismiss fallback message")
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            Spacer()
-        }
     }
 
     private func updateTerminalBackgroundColor() {
@@ -761,7 +721,7 @@ struct TerminalContainerView: View {
     private func setupKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
-            handleVoiceShortcut(event)
+            handleMonitoredKeyDown(event)
         }
     }
 
@@ -770,6 +730,10 @@ struct TerminalContainerView: View {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
         }
+    }
+
+    private func handleMonitoredKeyDown(_ event: NSEvent) -> NSEvent? {
+        handleVoiceShortcut(event)
     }
 
     private func handleVoiceShortcut(_ event: NSEvent) -> NSEvent? {

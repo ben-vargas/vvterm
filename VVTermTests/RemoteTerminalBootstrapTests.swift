@@ -102,4 +102,11 @@ struct RemoteTerminalBootstrapTests {
 
         #expect(command == "cd /d \"C:\\Users\\test\\project\"\r\n")
     }
+
+    @Test
+    func posixPastedPathQuotesShellSensitiveRemotePaths() {
+        let pastedPath = RemoteTerminalBootstrap.posixPastedPath("/tmp/vv term/file's name.png")
+
+        #expect(pastedPath == "'/tmp/vv term/file'\\''s name.png'")
+    }
 }
