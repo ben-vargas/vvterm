@@ -753,10 +753,7 @@ struct TerminalContainerView: View {
             }
         }
 
-        // Check for Cmd+Shift+M
-        guard event.modifierFlags.contains(.command),
-              event.modifierFlags.contains(.shift),
-              event.charactersIgnoringModifiers?.lowercased() == "m" else {
+        guard MacTerminalShortcut.toggleVoiceRecording.matches(event) else {
             return event
         }
         toggleVoiceRecording()

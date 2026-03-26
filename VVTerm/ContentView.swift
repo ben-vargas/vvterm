@@ -210,6 +210,7 @@ struct ContentView: View {
                 )
                     .frame(width: 0, height: 0)
             )
+            .background(MacAppShortcutBindingsView())
             .frame(minWidth: 800, minHeight: 500)
         #endif
         #if !os(macOS)

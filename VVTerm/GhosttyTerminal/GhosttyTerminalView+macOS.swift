@@ -502,17 +502,11 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard modifiers == [.command],
-              let characters = event.charactersIgnoringModifiers?.lowercased() else {
-            return super.performKeyEquivalent(with: event)
-        }
-
-        switch characters {
-        case "v":
+        switch true {
+        case MacTerminalShortcut.paste.matches(event):
             paste(nil)
             return true
-        case "c":
+        case MacTerminalShortcut.copy.matches(event):
             copy(nil)
             return true
         default:
@@ -526,8 +520,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     }
 
     private func isRichPasteShortcut(_ event: NSEvent) -> Bool {
-        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        return modifiers == [.control] && event.charactersIgnoringModifiers?.lowercased() == "v"
+        MacTerminalShortcut.richPaste.matches(event)
     }
 
     @discardableResult
