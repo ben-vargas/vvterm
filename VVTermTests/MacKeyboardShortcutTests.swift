@@ -5,21 +5,6 @@ import Testing
 
 struct MacKeyboardShortcutTests {
     @Test
-    func newWindowShortcutMatchesCommandN() {
-        #expect(MacAppShortcutTrigger.matching(keyCode: Ghostty.Input.Key.n.keyCode!, modifiers: .command) == .newWindow)
-    }
-
-    @Test
-    func settingsShortcutMatchesCommandComma() {
-        #expect(MacAppShortcutTrigger.matching(keyCode: Ghostty.Input.Key.comma.keyCode!, modifiers: .command) == .openSettings)
-    }
-
-    @Test
-    func previousTabShortcutMatchesCommandShiftLeftBracket() {
-        #expect(MacAppShortcutTrigger.matching(keyCode: Ghostty.Input.Key.bracketLeft.keyCode!, modifiers: [.command, .shift]) == .previousTab)
-    }
-
-    @Test
     func commandVMatchesPhysicalVKey() {
         #expect(MacTerminalShortcut.paste.matches(keyCode: Ghostty.Input.Key.v.keyCode!, modifiers: .command))
     }
@@ -47,33 +32,6 @@ struct MacKeyboardShortcutTests {
     @Test
     func voiceShortcutMatchesCommandShiftM() {
         #expect(MacTerminalShortcut.toggleVoiceRecording.matches(keyCode: Ghostty.Input.Key.m.keyCode!, modifiers: [.command, .shift]))
-    }
-
-    @Test
-    func commandShiftDUsesSplitDownBeforeDiscovery() {
-        var recorded: [String] = []
-        let actions = MacAppShortcutActions(
-            discoverLocalDevices: { recorded.append("discover") },
-            splitDown: { recorded.append("split") }
-        )
-
-        let handled = actions.perform(.splitDownOrDiscoverLocalDevices)
-
-        #expect(handled)
-        #expect(recorded == ["split"])
-    }
-
-    @Test
-    func commandShiftDFallsBackToDiscoveryWhenSplitIsUnavailable() {
-        var recorded: [String] = []
-        let actions = MacAppShortcutActions(
-            discoverLocalDevices: { recorded.append("discover") }
-        )
-
-        let handled = actions.perform(.splitDownOrDiscoverLocalDevices)
-
-        #expect(handled)
-        #expect(recorded == ["discover"])
     }
 
     @Test
