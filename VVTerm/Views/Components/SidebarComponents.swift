@@ -85,7 +85,7 @@ struct ServerRow: View {
                         if let onConnect {
                             onConnect(server)
                         } else {
-                            tabManager.selectedViewByServer[server.id] = "stats"
+                            tabManager.selectedViewByServer[server.id] = ViewTabConfigurationManager.shared.effectiveDefaultTab()
                             tabManager.connectedServerIds.insert(server.id)
                         }
                     } label: {

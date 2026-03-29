@@ -269,6 +269,7 @@ struct GeneralSettingsView: View {
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.system.rawValue
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
     @StateObject private var appLockManager = AppLockManager.shared
+    @StateObject private var viewTabConfig = ViewTabConfigurationManager.shared
 
     private let authGraceOptions = [0, 15, 30, 60, 120, 300]
 
@@ -292,6 +293,65 @@ struct GeneralSettingsView: View {
             Section("Appearance") {
                 AppearancePickerView(selection: $appearanceMode)
                     .frame(maxWidth: .infinity)
+            }
+
+            Section {
+                if viewTabConfig.currentVisibleTabs.isEmpty {
+                    Text("At least one server view must remain enabled.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(viewTabConfig.tabOrder) { tab in
+                        HStack(spacing: 12) {
+                            Label(tab.localizedKey, systemImage: tab.icon)
+                                .labelStyle(.titleAndIcon)
+
+                            Spacer(minLength: 8)
+
+                            Toggle(
+                                "",
+                                isOn: viewTabConfig.visibilityBinding(for: tab.id)
+                            )
+                            .labelsHidden()
+                        }
+                    }
+                    .onMove(perform: viewTabConfig.moveTab)
+                }
+            } header: {
+                HStack {
+                    Text("Server Views")
+                    Spacer()
+                    #if os(iOS)
+                    EditButton()
+                    #endif
+                }
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Hide views you do not use. The server selector and Zen mode will only show enabled views.")
+                    Text("The default view falls back automatically if it is hidden.")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Picker("Default View", selection: viewTabConfig.defaultTabBinding()) {
+                    ForEach(viewTabConfig.currentVisibleTabs) { tab in
+                        Label(tab.localizedKey, systemImage: tab.icon)
+                            .tag(tab.id)
+                    }
+                }
+            } header: {
+                Text("Default View")
+            } footer: {
+                Text("This view is shown when a server opens or when a hidden selection needs to fall back.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Button("Reset Server Views") {
+                    viewTabConfig.resetToDefaults()
+                }
             }
 
             Section {

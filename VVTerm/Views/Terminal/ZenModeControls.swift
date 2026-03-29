@@ -299,6 +299,7 @@ struct MacOSZenModePanel: View {
     let statusColor: Color
     let selectedView: String
     let selectedViewBinding: Binding<String>
+    let viewTabs: [ConnectionViewTab]
     let tabs: [TerminalTab]
     let selectedTabId: Binding<UUID?>
     let paneState: (TerminalTab) -> TerminalPaneState?
@@ -314,6 +315,10 @@ struct MacOSZenModePanel: View {
     let isSidebarVisible: Bool
     let onToggleSidebar: () -> Void
     let onDisconnect: () -> Void
+    let canFilesGoUp: Bool
+    let filesShowHiddenBinding: Binding<Bool>
+    let onFilesGoUp: () -> Void
+    let onFilesRefresh: () -> Void
     let onExitZen: () -> Void
 
     var body: some View {
@@ -339,20 +344,14 @@ struct MacOSZenModePanel: View {
 
         ZenModeSection("View") {
             HStack(spacing: 8) {
-                ZenModeChoiceChip(
-                    title: "Stats",
-                    systemImage: "chart.bar.xaxis",
-                    isSelected: selectedView == "stats"
-                ) {
-                    selectedViewBinding.wrappedValue = "stats"
-                }
-
-                ZenModeChoiceChip(
-                    title: "Terminal",
-                    systemImage: "terminal",
-                    isSelected: selectedView == "terminal"
-                ) {
-                    selectedViewBinding.wrappedValue = "terminal"
+                ForEach(viewTabs) { tab in
+                    ZenModeChoiceChip(
+                        title: LocalizedStringKey(tab.localizedKey),
+                        systemImage: tab.icon,
+                        isSelected: selectedView == tab.id
+                    ) {
+                        selectedViewBinding.wrappedValue = tab.id
+                    }
                 }
             }
         }
@@ -416,6 +415,36 @@ struct MacOSZenModePanel: View {
                     onClosePane()
                 }
                 .disabled(!canClosePane)
+            }
+        }
+
+        if selectedView == "files" {
+            ZenModeSection("Files") {
+                HStack(spacing: 8) {
+                    ZenModeActionButton(title: "Parent", systemImage: "arrow.turn.up.left") {
+                        onFilesGoUp()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .disabled(!canFilesGoUp)
+
+                    ZenModeActionButton(title: "Refresh", systemImage: "arrow.clockwise") {
+                        onFilesRefresh()
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+
+                ZenModeActionButton(
+                    title: filesShowHiddenBinding.wrappedValue
+                        ? "Hide Hidden Files"
+                        : "Show Hidden Files",
+                    systemImage: filesShowHiddenBinding.wrappedValue
+                        ? "eye.slash"
+                        : "eye",
+                    tint: filesShowHiddenBinding.wrappedValue ? .orange : .primary
+                ) {
+                    filesShowHiddenBinding.wrappedValue.toggle()
+                }
+                .frame(maxWidth: .infinity)
             }
         }
 
@@ -510,6 +539,7 @@ struct IOSZenModePanel: View {
     let serverName: String
     let selectedView: String
     let selectedViewBinding: Binding<String>
+    let viewTabs: [ConnectionViewTab]
     let sessions: [ConnectionSession]
     let selectedSessionId: Binding<UUID?>
     let onCloseSession: (ConnectionSession) -> Void
@@ -532,20 +562,14 @@ struct IOSZenModePanel: View {
 
             ZenModeSection("View") {
                 HStack(spacing: 8) {
-                    ZenModeChoiceChip(
-                        title: "Stats",
-                        systemImage: "chart.bar.xaxis",
-                        isSelected: selectedView == "stats"
-                    ) {
-                        selectedViewBinding.wrappedValue = "stats"
-                    }
-
-                    ZenModeChoiceChip(
-                        title: "Terminal",
-                        systemImage: "terminal",
-                        isSelected: selectedView == "terminal"
-                    ) {
-                        selectedViewBinding.wrappedValue = "terminal"
+                    ForEach(viewTabs) { tab in
+                        ZenModeChoiceChip(
+                            title: LocalizedStringKey(tab.localizedKey),
+                            systemImage: tab.icon,
+                            isSelected: selectedView == tab.id
+                        ) {
+                            selectedViewBinding.wrappedValue = tab.id
+                        }
                     }
                 }
             }

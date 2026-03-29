@@ -6,7 +6,7 @@ Add a read-only SFTP file browser and file viewer for remote hosts. The feature 
 - `Terminal`
 - `Files`
 
-This is a cross-platform feature for macOS and iOS.
+This is a cross-platform feature for macOS and iOS. All three server views are enabled by default, and users can hide views they do not use from Settings. Zen remains a presentation mode layered on top of the selected server view; it is not a separate fourth view tab.
 
 ## Problem
 VVTerm can connect and run shell commands, but users cannot browse remote files or quickly inspect file contents without typing shell commands (`ls`, `cat`, `less`) in Terminal. This adds friction for routine tasks like checking config files, logs, and deployment artifacts.
@@ -17,6 +17,8 @@ VVTerm can connect and run shell commands, but users cannot browse remote files 
 - View file metadata and read file contents (read-only).
 - Support both macOS and iOS UI patterns.
 - Reuse existing SSH credentials and host-key verification flow.
+- Support user-configurable view visibility for `Stats`, `Terminal`, and `Files`, with all enabled by default.
+- Ensure `Files` works correctly inside Zen mode without changing Zen into a separate server view type.
 - Keep tab/session limits unchanged (no new Pro gating in V1).
 - Preserve current terminal behavior and performance.
 
@@ -38,15 +40,49 @@ VVTerm can connect and run shell commands, but users cannot browse remote files 
 
 ### View Tab Placement
 - Add `Files` to the per-server view selector after `Terminal`.
-- Final order: `Stats`, `Terminal`, `Files`.
+- Default order: `Stats`, `Terminal`, `Files`.
 - Keep per-server selected-view persistence (`selectedViewByServer`) and accept `"files"` values.
 - Update `ConnectionViewTab.defaultOrder` to include `.files` and append missing tab IDs during order migration.
+- Extend `ViewTabConfigurationManager` visibility support with `showFilesTab` (`true` by default), alongside `showStatsTab` and `showTerminalTab`.
+- The per-server view selector only shows tabs that are currently enabled in Settings.
+- At least one server view must remain enabled. Settings must prevent hiding the last visible view.
+- If a stored `selectedViewByServer[serverId]` value points to a hidden view, fall back to `ViewTabConfigurationManager.effectiveDefaultTab(...)`.
+
+### View Visibility Settings
+- Add a Settings section for server view visibility and order.
+- Default state for fresh installs: `Stats = on`, `Terminal = on`, `Files = on`.
+- Users may hide views they do not use, for example leaving only `Terminal` visible.
+- Reuse `ViewTabConfigurationManager` as the source of truth for:
+  - tab order
+  - default tab
+  - per-tab visibility (`showStatsTab`, `showTerminalTab`, `showFilesTab`)
+- Hidden views are removed from:
+  - macOS toolbar segmented picker
+  - iOS segmented control
+  - Zen mode view chips
+
+### Zen Mode Compatibility
+- Zen is not a `ConnectionViewTab` and must not be added as a separate top-level server view.
+- Zen mode must support whichever server view is currently selected, including `Files`.
+- Entering or leaving Zen mode must preserve:
+  - current selected server view
+  - current remote path
+  - current directory entries
+  - current selected file viewer payload
+  - current terminal tab/session selection
+- Zen mode view chips should reflect only currently enabled server views in configured order.
+- Zen mode action groups remain view-specific:
+  - `Terminal`: existing tab and pane actions
+  - `Files`: file-browser actions such as Up, Refresh, Sort, Show Hidden Files
+  - `Stats`: no terminal/file-specific actions
+- Switching `Terminal <-> Files` while Zen mode is active must not disconnect the underlying terminal session or clear the browser state.
 
 ### macOS
 - Update `ConnectionTerminalContainer` toolbar picker in `VVTerm/Views/Tabs/ConnectionTabsView.swift`:
   - `Stats` (`chart.bar.xaxis`)
   - `Terminal` (`terminal`)
   - `Files` (`folder`)
+- Render only currently enabled view tabs in the picker, preserving configured order.
 - Show terminal tab strip only when `selectedView == "terminal"`.
 - In `Files` view, toolbar actions:
   - Back / Up directory
@@ -58,6 +94,7 @@ VVTerm can connect and run shell commands, but users cannot browse remote files 
 - Update segmented control in `VVTerm/Views/iOS/iOSContentView.swift`:
   - Tags: `["stats", "terminal", "files"]`
   - Icons: `["chart.bar.xaxis", "terminal", "folder"]`
+- Render only currently enabled view tabs in the segmented control, preserving configured order.
 - Keep Terminal-only actions (`+` new terminal tab) hidden unless `selectedView == "terminal"`.
 - Add Files-specific actions in trailing menu: Refresh, toggle hidden files, sort.
 
@@ -115,6 +152,7 @@ Implementation notes:
 - Handle `LIBSSH2_ERROR_EAGAIN` using existing socket wait flow.
 - Reuse existing authenticated SSH sessions when possible.
 - If no reusable session exists, create a dedicated short-lived SSH client for file browsing.
+- Track whether the file browser is using a borrowed client or an owned client. `disconnect(serverId:)` must only tear down owned SFTP clients.
 
 ### File Browser Manager
 Create `VVTerm/Managers/RemoteFileBrowserManager.swift` (`@MainActor`, `ObservableObject`):
@@ -137,6 +175,7 @@ Create `VVTerm/Managers/RemoteFileBrowserManager.swift` (`@MainActor`, `Observab
 - Prefer existing shared SSH client from:
   - `TerminalTabManager` (macOS path)
   - `ConnectionSessionManager` (iOS path)
+- If the active server transport is Mosh, do not expect a reusable shared SSH client. In that case, create an owned SSH/SFTP client for Files.
 - If unavailable, manager creates an owned `SSHClient`, connects using `KeychainManager` credentials, and disconnects on idle/teardown.
 - On explicit server disconnect, always tear down any owned SFTP connections.
 
@@ -147,20 +186,25 @@ Create `VVTerm/Managers/RemoteFileBrowserManager.swift` (`@MainActor`, `Observab
   - show hidden files
 - Key example: `remoteFileBrowserState.v1`
 - Do not sync file browser state with CloudKit in V1.
+- Store view visibility settings separately from per-server browser state, reusing the existing `ViewTabConfigurationManager` keys and adding `showFilesTab`.
 
 ## View Integration
 
 ### macOS Path
 Update `VVTerm/Views/Tabs/ConnectionTabsView.swift`:
 - Add `Files` picker tag.
+- Update the picker to render from visible tabs instead of hardcoding only `Stats` and `Terminal`.
 - Render new `RemoteFileBrowserView` when `selectedView == "files"`.
 - Keep terminal-only rendering/background logic scoped to `selectedView == "terminal"`.
+- Update macOS Zen mode controls to include `Files`, respect hidden views, and show file-browser actions when `selectedView == "files"`.
 
 ### iOS Path
 Update `VVTerm/Views/iOS/iOSContentView.swift`:
 - Add `files` segmented option in `iOSNativeSegmentedPicker`.
+- Update `iOSNativeSegmentedPicker` to support a dynamic list of visible tabs instead of a fixed two-item array.
 - In `sessionContent`, render `RemoteFileBrowserView` for the active server when selected view is files.
 - Keep terminal warmup logic (`shouldShowTerminalBySession`) untouched and only for terminal mode.
+- Update iOS Zen mode controls to include `Files`, respect hidden views, and show file-browser actions when `selectedView == "files"`.
 
 ### New Views
 Create:
@@ -214,14 +258,17 @@ Create:
 ### UI Tests
 - macOS and iOS:
   - `Files` tab appears after `Terminal`.
+  - hiding `Stats` or `Files` in Settings removes them from the picker/segmented control without breaking selection.
+  - users cannot hide the last remaining server view.
   - switching `Terminal <-> Files` preserves session stability.
+  - entering Zen mode from `Files` preserves current path and entries.
+  - switching views inside Zen mode preserves browser state and terminal stability.
   - opening file shows viewer and metadata.
   - refresh and breadcrumb navigation work.
 
 ## Rollout
-- Feature flag: `sftpBrowserEnabled` (default off for first internal build).
-- Phase 1: internal QA with mixed host types (Linux/macOS/BSD).
-- Phase 2: enable by default in public build after stability validation.
+- Ship enabled by default.
+- Validate with internal QA across mixed host types (Linux/macOS/BSD) before public release.
 
 ## Open Questions
 - Should V1 include image preview (PNG/JPEG) or keep text-only preview?

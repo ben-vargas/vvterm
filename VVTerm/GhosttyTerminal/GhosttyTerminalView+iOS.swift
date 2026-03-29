@@ -23,6 +23,30 @@ private struct IMEProxySnapshot: Equatable {
 @MainActor
 private final class TerminalIMEProxyTextView: UITextView {
     weak var terminalOwner: GhosttyTerminalView?
+    private static let terminalNavigationInputs: [String] = [
+        UIKeyCommand.inputEscape,
+        UIKeyCommand.inputUpArrow,
+        UIKeyCommand.inputDownArrow,
+        UIKeyCommand.inputLeftArrow,
+        UIKeyCommand.inputRightArrow,
+        UIKeyCommand.inputHome,
+        UIKeyCommand.inputEnd,
+        UIKeyCommand.inputPageUp,
+        UIKeyCommand.inputPageDown,
+    ]
+    private static let terminalNavigationModifierCombinations: [UIKeyModifierFlags] = {
+        let supportedFlags: [UIKeyModifierFlags] = [.shift, .control, .alternate, .command]
+        return (0..<(1 << supportedFlags.count)).map { mask in
+            var modifiers: UIKeyModifierFlags = []
+            for (index, flag) in supportedFlags.enumerated() where (mask & (1 << index)) != 0 {
+                modifiers.insert(flag)
+            }
+            return modifiers
+        }
+    }()
+    private lazy var terminalNavigationCommands: [UIKeyCommand] = Self.makeTerminalNavigationCommands(
+        action: #selector(handleTerminalNavigationCommand(_:))
+    )
 
     override var selectedTextRange: UITextRange? {
         get { super.selectedTextRange }
@@ -39,6 +63,10 @@ private final class TerminalIMEProxyTextView: UITextView {
         terminalOwner?.imeProxyCanBecomeFirstResponder ?? false
     }
 
+    override var canResignFirstResponder: Bool {
+        terminalOwner?.imeProxyCanResignFirstResponder ?? true
+    }
+
     override var inputAccessoryView: UIView? {
         get { terminalOwner?.resolvedInputAccessoryView() }
         set { super.inputAccessoryView = newValue }
@@ -46,6 +74,12 @@ private final class TerminalIMEProxyTextView: UITextView {
 
     override var textInputContextIdentifier: String? {
         terminalOwner?.currentTextInputContextIdentifier
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+        // UITextView consumes bare arrows/home/end/page keys as editing commands.
+        // Register explicit key commands so the terminal still receives them.
+        terminalNavigationCommands + (super.keyCommands ?? [])
     }
 
     override var keyboardType: UIKeyboardType {
@@ -111,6 +145,10 @@ private final class TerminalIMEProxyTextView: UITextView {
     }
 
     override func resignFirstResponder() -> Bool {
+        guard canResignFirstResponder else {
+            terminalOwner?.imeProxyFocusDidChange(isFocused: isFirstResponder)
+            return false
+        }
         let result = super.resignFirstResponder()
         terminalOwner?.imeProxyFocusDidChange(isFocused: isFirstResponder)
         return result
@@ -181,6 +219,11 @@ private final class TerminalIMEProxyTextView: UITextView {
         terminalOwner?.processHardwarePressesCancelled(presses)
     }
 
+    @objc
+    private func handleTerminalNavigationCommand(_ sender: UIKeyCommand) {
+        terminalOwner?.handleIMEProxyNavigationCommand(sender)
+    }
+
     private func normalizedSelectedTextRange(_ range: UITextRange?) -> UITextRange? {
         guard let range else { return nil }
         guard super.markedTextRange == nil else { return range }
@@ -190,6 +233,20 @@ private final class TerminalIMEProxyTextView: UITextView {
         guard end > start else { return range }
         guard let collapsed = position(from: beginningOfDocument, offset: end) else { return range }
         return textRange(from: collapsed, to: collapsed)
+    }
+
+    private static func makeTerminalNavigationCommands(action: Selector) -> [UIKeyCommand] {
+        terminalNavigationInputs.flatMap { input in
+            terminalNavigationModifierCombinations.map { modifiers in
+                let command = UIKeyCommand(input: input, modifierFlags: modifiers, action: action)
+                if #available(iOS 15.0, *) {
+                    command.wantsPriorityOverSystemBehavior = true
+                    command.allowsAutomaticLocalization = false
+                    command.allowsAutomaticMirroring = false
+                }
+                return command
+            }
+        }
     }
 }
 
@@ -312,6 +369,8 @@ class GhosttyTerminalView: UIView {
     private var configReloadObserver: NSObjectProtocol?
     private var hardwareKeyboardObservers: [NSObjectProtocol] = []
     private var hasHardwareKeyboardAttached = false
+    private var allowIMEProxyProgrammaticResign = false
+    private var suppressUnexpectedIMEProxyResignUntil = 0.0
 
     // MARK: - Text Input (for spacebar cursor control)
     private var textInputModel = TerminalTextInputModel()
@@ -681,6 +740,13 @@ class GhosttyTerminalView: UIView {
         isTextInputSessionEligible
     }
 
+    fileprivate var imeProxyCanResignFirstResponder: Bool {
+        if allowIMEProxyProgrammaticResign || !isTextInputSessionEligible {
+            return true
+        }
+        return !shouldSuppressUnexpectedIMEProxyResign
+    }
+
     fileprivate var currentTextInputContextIdentifier: String? {
         isTextInputSessionEligible ? Self.textInputContextID : nil
     }
@@ -814,6 +880,14 @@ class GhosttyTerminalView: UIView {
         }
     }
 
+    private func suppressUnexpectedIMEProxyResign() {
+        suppressUnexpectedIMEProxyResignUntil = Date.timeIntervalSinceReferenceDate + 0.35
+    }
+
+    private var shouldSuppressUnexpectedIMEProxyResign: Bool {
+        Date.timeIntervalSinceReferenceDate < suppressUnexpectedIMEProxyResignUntil
+    }
+
     fileprivate func imeProxyCaretRect(for position: UITextPosition) -> CGRect {
         let index = imeProxyTextView.offset(from: imeProxyTextView.beginningOfDocument, to: position)
         return textInputCaretRect(for: index)
@@ -929,7 +1003,21 @@ class GhosttyTerminalView: UIView {
 
     override func resignFirstResponder() -> Bool {
         guard imeProxyTextView.isFirstResponder || super.isFirstResponder else { return true }
-        let proxyResult = imeProxyTextView.isFirstResponder ? imeProxyTextView.resignFirstResponder() : true
+        if imeProxyTextView.isFirstResponder,
+           isTextInputSessionEligible,
+           shouldSuppressUnexpectedIMEProxyResign {
+            imeProxyFocusDidChange(isFocused: true)
+            return false
+        }
+        let proxyResult: Bool
+        if imeProxyTextView.isFirstResponder {
+            let previous = allowIMEProxyProgrammaticResign
+            allowIMEProxyProgrammaticResign = true
+            defer { allowIMEProxyProgrammaticResign = previous }
+            proxyResult = imeProxyTextView.resignFirstResponder()
+        } else {
+            proxyResult = true
+        }
         let ownResult = super.isFirstResponder ? super.resignFirstResponder() : true
         if (proxyResult && ownResult) || !isTextInputSessionEligible {
             if let surface = surface?.unsafeCValue {
@@ -1018,7 +1106,7 @@ class GhosttyTerminalView: UIView {
     }
 
     private func updateHardwareKeyboardState(reloadInputViewsIfNeeded: Bool) {
-        let hasHardwareKeyboard = traitCollection.userInterfaceIdiom == .pad && GCKeyboard.coalesced != nil
+        let hasHardwareKeyboard = GCKeyboard.coalesced != nil
         guard hasHardwareKeyboard != hasHardwareKeyboardAttached else { return }
         hasHardwareKeyboardAttached = hasHardwareKeyboard
         if reloadInputViewsIfNeeded, imeProxyTextView.isFirstResponder, isTextInputSessionEligible {
@@ -1027,7 +1115,6 @@ class GhosttyTerminalView: UIView {
     }
 
     private func markHardwareKeyboardDetectedFromKeyPress() {
-        guard traitCollection.userInterfaceIdiom == .pad else { return }
         guard !hasHardwareKeyboardAttached else { return }
         hasHardwareKeyboardAttached = true
         if imeProxyTextView.isFirstResponder, isTextInputSessionEligible {
@@ -1294,6 +1381,17 @@ class GhosttyTerminalView: UIView {
         return nil
     }
 
+    fileprivate func handleIMEProxyNavigationCommand(_ command: UIKeyCommand) {
+        guard acceptsTerminalInput else { return }
+        guard let input = command.input,
+              let key = terminalKey(forKeyCommandInput: input) else { return }
+        if case .escape = key {
+            suppressUnexpectedIMEProxyResign()
+        }
+        let mods = Ghostty.Input.Mods(uiKeyModifiers: command.modifierFlags)
+        sendToolbarKey(key, accumulatedMods: mods)
+    }
+
     private func handlePasteShortcut(_ key: UIKey) -> Bool {
         let input = key.charactersIgnoringModifiers.lowercased()
         guard input == "v" else { return false }
@@ -1444,6 +1542,31 @@ class GhosttyTerminalView: UIView {
         }
 
         return nil
+    }
+
+    private func terminalKey(forKeyCommandInput input: String) -> TerminalKey? {
+        switch input {
+        case UIKeyCommand.inputEscape:
+            return .escape
+        case UIKeyCommand.inputUpArrow:
+            return .arrowUp
+        case UIKeyCommand.inputDownArrow:
+            return .arrowDown
+        case UIKeyCommand.inputLeftArrow:
+            return .arrowLeft
+        case UIKeyCommand.inputRightArrow:
+            return .arrowRight
+        case UIKeyCommand.inputHome:
+            return .home
+        case UIKeyCommand.inputEnd:
+            return .end
+        case UIKeyCommand.inputPageUp:
+            return .pageUp
+        case UIKeyCommand.inputPageDown:
+            return .pageDown
+        default:
+            return nil
+        }
     }
 
     private func startKeyRepeat(for key: UIKey) {
@@ -1734,6 +1857,13 @@ class GhosttyTerminalView: UIView {
         guard acceptsTerminalInput else { return true }
 
         let normalized = text.precomposedStringWithCanonicalMapping
+        if let key = terminalKey(forKeyCommandInput: normalized) {
+            if case .escape = key {
+                suppressUnexpectedIMEProxyResign()
+            }
+            sendToolbarKey(key)
+            return true
+        }
         if normalized.hasPrefix("UIKeyInput") {
             return true
         }
@@ -2210,7 +2340,7 @@ extension GhosttyTerminalView {
     }
 
     private var shouldHideKeyboardAccessoryBar: Bool {
-        traitCollection.userInterfaceIdiom == .pad && hasHardwareKeyboardAttached
+        hasHardwareKeyboardAttached
     }
 
     fileprivate func resolvedInputAccessoryView() -> UIView? {

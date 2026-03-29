@@ -1,14 +1,46 @@
 import SwiftUI
 import Charts
 
-// MARK: - Cross-platform colors
+private struct StatsCardSurfaceStyle: Equatable {
+    let fill: Color
+    let stroke: Color
+    let pageBackground: Color
 
-#if os(iOS)
-private let cardBackground = Color(UIColor.secondarySystemBackground)
-#else
-// Use a visible card background that contrasts with the window background
-private let cardBackground = Color.primary.opacity(0.06)
-#endif
+    static func make(for backgroundColor: Color) -> StatsCardSurfaceStyle {
+        #if os(iOS)
+        StatsCardSurfaceStyle(
+            fill: Color(UIColor.secondarySystemGroupedBackground),
+            stroke: .clear,
+            pageBackground: Color(UIColor.systemGroupedBackground)
+        )
+        #else
+        StatsCardSurfaceStyle(
+            fill: Color.primary.opacity(0.06),
+            stroke: Color.primary.opacity(0.08),
+            pageBackground: backgroundColor
+        )
+        #endif
+    }
+}
+
+private struct StatsCardModifier: ViewModifier {
+    let surfaceStyle: StatsCardSurfaceStyle
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        content
+            .background(surfaceStyle.fill, in: shape)
+            .overlay {
+                shape.stroke(surfaceStyle.stroke, lineWidth: 1)
+            }
+    }
+}
+
+private extension View {
+    func statsCardSurface(_ surfaceStyle: StatsCardSurfaceStyle) -> some View {
+        modifier(StatsCardModifier(surfaceStyle: surfaceStyle))
+    }
+}
 
 // MARK: - Server Stats View
 
@@ -21,13 +53,15 @@ struct ServerStatsView: View {
     @StateObject private var statsCollector = ServerStatsCollector()
 
     var body: some View {
+        let cardSurfaceStyle = StatsCardSurfaceStyle.make(for: backgroundColor)
         ZStack {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     // Header with server name and OS
                     ServerHeaderCard(
                         serverName: server.name,
-                        osInfo: statsCollector.stats.osInfo
+                        osInfo: statsCollector.stats.osInfo,
+                        surfaceStyle: cardSurfaceStyle
                     )
 
                     // CPU Card
@@ -40,7 +74,8 @@ struct ServerStatsView: View {
                         idle: statsCollector.stats.cpuIdle,
                         cores: statsCollector.stats.cpuCores,
                         uptime: statsCollector.stats.uptime,
-                        loadAverage: statsCollector.stats.loadAverage
+                        loadAverage: statsCollector.stats.loadAverage,
+                        surfaceStyle: cardSurfaceStyle
                     )
 
                     // Memory Card
@@ -49,7 +84,8 @@ struct ServerStatsView: View {
                         free: statsCollector.stats.memoryFree,
                         cached: statsCollector.stats.memoryCached,
                         total: statsCollector.stats.memoryTotal,
-                        percent: statsCollector.stats.memoryPercent
+                        percent: statsCollector.stats.memoryPercent,
+                        surfaceStyle: cardSurfaceStyle
                     )
 
                     // Network Card
@@ -57,14 +93,15 @@ struct ServerStatsView: View {
                         txSpeed: statsCollector.stats.networkTxSpeed,
                         rxSpeed: statsCollector.stats.networkRxSpeed,
                         txTotal: statsCollector.stats.networkTxTotal,
-                        rxTotal: statsCollector.stats.networkRxTotal
+                        rxTotal: statsCollector.stats.networkRxTotal,
+                        surfaceStyle: cardSurfaceStyle
                     )
 
                     // Volumes - always show, empty state handled inside
-                    VolumesCard(volumes: statsCollector.stats.volumes)
+                    VolumesCard(volumes: statsCollector.stats.volumes, surfaceStyle: cardSurfaceStyle)
 
                     // Top Processes - always show, empty state handled inside
-                    ProcessesCard(processes: statsCollector.stats.topProcesses)
+                    ProcessesCard(processes: statsCollector.stats.topProcesses, surfaceStyle: cardSurfaceStyle)
                 }
                 .padding()
                 .drawingGroup()
@@ -95,7 +132,7 @@ struct ServerStatsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(backgroundColor)
+        .background(cardSurfaceStyle.pageBackground)
         .task(id: makeTaskKey()) {
             // Start/stop collection based on visibility
             if isVisible {
@@ -120,6 +157,7 @@ struct ServerStatsView: View {
 private struct ServerHeaderCard: View, Equatable {
     let serverName: String
     let osInfo: String
+    let surfaceStyle: StatsCardSurfaceStyle
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -135,7 +173,7 @@ private struct ServerHeaderCard: View, Equatable {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(cardBackground, in: RoundedRectangle(cornerRadius: 12))
+        .statsCardSurface(surfaceStyle)
     }
 }
 
@@ -151,12 +189,14 @@ private struct CPUStatsCard: View, Equatable {
     let cores: Int
     let uptime: TimeInterval
     let loadAverage: (Double, Double, Double)
+    let surfaceStyle: StatsCardSurfaceStyle
 
     static func == (lhs: CPUStatsCard, rhs: CPUStatsCard) -> Bool {
         lhs.usage == rhs.usage && lhs.user == rhs.user && lhs.system == rhs.system &&
         lhs.iowait == rhs.iowait && lhs.steal == rhs.steal && lhs.idle == rhs.idle &&
         lhs.cores == rhs.cores && lhs.uptime == rhs.uptime &&
-        lhs.loadAverage.0 == rhs.loadAverage.0 && lhs.loadAverage.1 == rhs.loadAverage.1 && lhs.loadAverage.2 == rhs.loadAverage.2
+        lhs.loadAverage.0 == rhs.loadAverage.0 && lhs.loadAverage.1 == rhs.loadAverage.1 &&
+        lhs.loadAverage.2 == rhs.loadAverage.2 && lhs.surfaceStyle == rhs.surfaceStyle
     }
 
     var body: some View {
@@ -198,7 +238,7 @@ private struct CPUStatsCard: View, Equatable {
             }
         }
         .padding()
-        .background(cardBackground, in: RoundedRectangle(cornerRadius: 12))
+        .statsCardSurface(surfaceStyle)
     }
 
     private var cpuColor: Color {
@@ -223,6 +263,7 @@ private struct MemoryStatsCard: View, Equatable {
     let cached: UInt64
     let total: UInt64
     let percent: Double
+    let surfaceStyle: StatsCardSurfaceStyle
 
     var body: some View {
         HStack(spacing: 16) {
@@ -250,7 +291,7 @@ private struct MemoryStatsCard: View, Equatable {
             .frame(width: 50, height: 50)
         }
         .padding()
-        .background(cardBackground, in: RoundedRectangle(cornerRadius: 12))
+        .statsCardSurface(surfaceStyle)
     }
 
     private var memoryColor: Color {
@@ -274,6 +315,7 @@ private struct NetworkStatsCard: View, Equatable {
     let rxSpeed: UInt64
     let txTotal: UInt64
     let rxTotal: UInt64
+    let surfaceStyle: StatsCardSurfaceStyle
 
     var body: some View {
         HStack(spacing: 16) {
@@ -315,7 +357,7 @@ private struct NetworkStatsCard: View, Equatable {
             }
         }
         .padding()
-        .background(cardBackground, in: RoundedRectangle(cornerRadius: 12))
+        .statsCardSurface(surfaceStyle)
     }
 
     private func formatSpeed(_ bytesPerSec: UInt64) -> String {
@@ -340,6 +382,7 @@ private struct NetworkStatsCard: View, Equatable {
 
 private struct VolumesCard: View {
     let volumes: [VolumeInfo]
+    let surfaceStyle: StatsCardSurfaceStyle
 
     var body: some View {
         if !volumes.isEmpty {
@@ -353,7 +396,7 @@ private struct VolumesCard: View {
                 }
             }
             .padding(.vertical)
-            .background(cardBackground, in: RoundedRectangle(cornerRadius: 12))
+            .statsCardSurface(surfaceStyle)
         }
     }
 }
@@ -414,6 +457,7 @@ private struct VolumeRow: View {
 
 private struct ProcessesCard: View {
     let processes: [ProcessInfo]
+    let surfaceStyle: StatsCardSurfaceStyle
 
     var body: some View {
         if !processes.isEmpty {
@@ -462,7 +506,7 @@ private struct ProcessesCard: View {
                 }
             }
             .padding()
-            .background(cardBackground, in: RoundedRectangle(cornerRadius: 12))
+            .statsCardSurface(surfaceStyle)
         }
     }
 }

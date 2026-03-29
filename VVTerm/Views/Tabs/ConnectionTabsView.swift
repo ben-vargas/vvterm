@@ -22,6 +22,8 @@ struct ConnectionTerminalContainer: View {
 
     @EnvironmentObject var ghosttyApp: Ghostty.App
     @Environment(\.colorScheme) private var colorScheme
+    @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
+    @ObservedObject private var fileBrowser = RemoteFileBrowserManager.shared
 
     /// Theme name from settings
     @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
@@ -30,6 +32,7 @@ struct ConnectionTerminalContainer: View {
 
     /// Disconnect confirmation
     @State private var showingDisconnectConfirmation = false
+    @State private var serverToEdit: Server?
 
     /// Tab limit alert
     @State private var showingTabLimitAlert = false
@@ -41,7 +44,11 @@ struct ConnectionTerminalContainer: View {
 
     /// Selected view type - persisted per server
     private var selectedView: String {
-        tabManager.selectedViewByServer[server.id] ?? "stats"
+        viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id])
+    }
+
+    private var visibleViewTabs: [ConnectionViewTab] {
+        viewTabConfig.currentVisibleTabs
     }
 
     private var effectiveThemeName: String {
@@ -51,12 +58,14 @@ struct ConnectionTerminalContainer: View {
 
     private var selectedViewBinding: Binding<String> {
         Binding(
-            get: { tabManager.selectedViewByServer[server.id] ?? "stats" },
+            get: { viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id]) },
             set: { newValue in
-                let current = tabManager.selectedViewByServer[server.id] ?? "stats"
+                let current = viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id])
                 guard current != newValue else { return }
                 DispatchQueue.main.async {
-                    tabManager.selectedViewByServer[server.id] = newValue
+                    tabManager.selectedViewByServer[server.id] = viewTabConfig.isTabVisible(newValue)
+                        ? newValue
+                        : viewTabConfig.effectiveDefaultTab()
                 }
             }
         )
@@ -203,6 +212,14 @@ struct ConnectionTerminalContainer: View {
                 .allowsHitTesting(selectedView == "stats")
                 .zIndex(selectedView == "stats" ? 1 : 0)
 
+            if selectedView == "files" {
+                RemoteFileBrowserView(
+                    server: server,
+                    initialPath: selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
+                )
+                    .zIndex(1)
+            }
+
             #if os(macOS)
             // Each tab is an isolated terminal view
             ForEach(serverTabs, id: \.id) { tab in
@@ -259,7 +276,9 @@ struct ConnectionTerminalContainer: View {
                 let tab = try await tabManager.openTab(for: server)
                 await MainActor.run {
                     if selectTerminalViewOnSuccess {
-                        tabManager.selectedViewByServer[server.id] = "terminal"
+                        tabManager.selectedViewByServer[server.id] = viewTabConfig.isTabVisible(ConnectionViewTab.terminal.id)
+                            ? ConnectionViewTab.terminal.id
+                            : viewTabConfig.effectiveDefaultTab()
                     }
                     selectedTabIdBinding.wrappedValue = tab.id
                 }
@@ -327,6 +346,24 @@ struct ConnectionTerminalContainer: View {
             } message: {
                 Text(disconnectAlertMessage)
             }
+            .sheet(item: $serverToEdit) { editingServer in
+                ServerFormSheet(
+                    serverManager: serverManager,
+                    workspace: serverManager.workspaces.first { $0.id == editingServer.workspaceId },
+                    server: editingServer,
+                    onSave: { _ in
+                        serverToEdit = nil
+                    }
+                )
+                .frame(
+                    minWidth: 640,
+                    idealWidth: 700,
+                    maxWidth: 760,
+                    minHeight: 520,
+                    idealHeight: 620,
+                    maxHeight: 680
+                )
+            }
     }
 
     @ToolbarContentBuilder
@@ -338,10 +375,10 @@ struct ConnectionTerminalContainer: View {
 
     private var viewPickerControl: some View {
         Picker("View", selection: selectedViewBinding) {
-            Label("Stats", systemImage: "chart.bar.xaxis")
-                .tag("stats")
-            Label("Terminal", systemImage: "terminal")
-                .tag("terminal")
+            ForEach(visibleViewTabs) { tab in
+                Label(tab.localizedKey, systemImage: tab.icon)
+                    .tag(tab.id)
+            }
         }
         .pickerStyle(.segmented)
     }
@@ -380,12 +417,18 @@ struct ConnectionTerminalContainer: View {
 
     @ToolbarContentBuilder
     private var trailingToolbarItems: some ToolbarContent {
+        if selectedView == "files" {
+            ToolbarItem(placement: .primaryAction) {
+                filesActionsToolbarButton
+            }
+        }
+
         ToolbarItem(placement: .primaryAction) {
             zenModeToolbarButton
         }
 
         ToolbarItem(placement: .primaryAction) {
-            disconnectToolbarButton
+            serverMenuToolbarButton
         }
     }
 
@@ -396,19 +439,90 @@ struct ConnectionTerminalContainer: View {
             }
         } label: {
             Label("Zen", systemImage: "arrow.up.left.and.arrow.down.right")
-                .labelStyle(.titleAndIcon)
+                .labelStyle(.iconOnly)
         }
         .help(Text("Enter Zen Mode"))
     }
 
-    private var disconnectToolbarButton: some View {
-        Button {
-            showingDisconnectConfirmation = true
+    private var filesActionsToolbarButton: some View {
+        let currentPath = fileBrowser.currentPath(for: server.id)
+        let areHiddenFilesVisible = fileBrowser.showHiddenFiles(for: server.id)
+
+        return Menu {
+            Button {
+                Task { await fileBrowser.goUp(server: server) }
+            } label: {
+                Label("Parent", systemImage: "arrow.turn.up.left")
+            }
+            .disabled(currentPath == "/")
+
+            Button {
+                Task { await fileBrowser.refresh(server: server) }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+
+            Divider()
+
+            Button {
+                fileBrowser.requestUploadPicker(for: server.id, destinationPath: currentPath)
+            } label: {
+                Label("Upload…", systemImage: "square.and.arrow.up")
+            }
+
+            Button {
+                fileBrowser.requestCreateFolder(for: server.id, destinationPath: currentPath)
+            } label: {
+                Label("New Folder…", systemImage: "folder.badge.plus")
+            }
+
+            Button {
+                fileBrowser.setShowHiddenFiles(!areHiddenFilesVisible, serverId: server.id)
+            } label: {
+                Label(
+                    areHiddenFilesVisible ? "Hide Hidden Files" : "Show Hidden Files",
+                    systemImage: areHiddenFilesVisible ? "eye.slash" : "eye"
+                )
+            }
+
+            Divider()
+
+            Button {
+                Clipboard.copy(currentPath)
+            } label: {
+                Label("Copy Path", systemImage: "document.on.document")
+            }
         } label: {
-            Label("Disconnect", systemImage: "xmark")
+            Label("Files", systemImage: "folder")
+                .labelStyle(.titleAndIcon)
+        }
+        .help(Text("Files Menu"))
+    }
+
+    private var serverMenuToolbarButton: some View {
+        Menu {
+            Button {
+                SettingsWindowManager.shared.show()
+            } label: {
+                Label("Settings", systemImage: "gear")
+            }
+
+            Button {
+                serverToEdit = server
+            } label: {
+                Label("Edit Server", systemImage: "pencil")
+            }
+
+            Button(role: .destructive) {
+                showingDisconnectConfirmation = true
+            } label: {
+                Label("Disconnect", systemImage: "xmark.circle")
+            }
+        } label: {
+            Label("Server", systemImage: "ellipsis.circle")
                 .labelStyle(.iconOnly)
         }
-        .help(Text("Disconnect from server"))
+        .help(Text("Server Options"))
     }
 
     private var zenModePanelToolbarButton: some View {
@@ -429,6 +543,7 @@ struct ConnectionTerminalContainer: View {
                 statusColor: zenIndicatorColor,
                 selectedView: selectedView,
                 selectedViewBinding: selectedViewBinding,
+                viewTabs: visibleViewTabs,
                 tabs: serverTabs,
                 selectedTabId: selectedTabIdBinding,
                 paneState: { tab in
@@ -464,6 +579,17 @@ struct ConnectionTerminalContainer: View {
                     showingZenPanel = false
                     showingDisconnectConfirmation = true
                 },
+                canFilesGoUp: fileBrowser.currentPath(for: server.id) != "/",
+                filesShowHiddenBinding: Binding(
+                    get: { fileBrowser.showHiddenFiles(for: server.id) },
+                    set: { fileBrowser.setShowHiddenFiles($0, serverId: server.id) }
+                ),
+                onFilesGoUp: {
+                    Task { await fileBrowser.goUp(server: server) }
+                },
+                onFilesRefresh: {
+                    Task { await fileBrowser.refresh(server: server) }
+                },
                 onExitZen: {
                     showingZenPanel = false
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
@@ -476,6 +602,7 @@ struct ConnectionTerminalContainer: View {
 
     private func disconnectFromServer() {
         tabManager.closeAllTabs(for: server.id)
+        RemoteFileBrowserManager.shared.disconnect(serverId: server.id)
         tabManager.connectedServerIds.remove(server.id)
     }
 

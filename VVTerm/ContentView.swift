@@ -100,7 +100,7 @@ struct ContentView: View {
     private func connectToServer(_ server: Server) {
         Task { @MainActor in
             guard await AppLockManager.shared.ensureServerUnlocked(server) else { return }
-            tabManager.selectedViewByServer[server.id] = "stats"
+            tabManager.selectedViewByServer[server.id] = ViewTabConfigurationManager.shared.effectiveDefaultTab()
             tabManager.connectedServerIds.insert(server.id)
         }
     }

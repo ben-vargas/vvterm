@@ -12,6 +12,7 @@ import UIKit
 struct iOSContentView: View {
     @StateObject private var serverManager = ServerManager.shared
     @StateObject private var sessionManager = ConnectionSessionManager.shared
+    @StateObject private var viewTabConfig = ViewTabConfigurationManager.shared
 
     @State private var selectedWorkspace: Workspace?
     @State private var selectedServer: Server?
@@ -24,6 +25,12 @@ struct iOSContentView: View {
 
     private var hasTerminalNavigationContext: Bool {
         isConnecting || connectingServer != nil || !sessionManager.sessions.isEmpty
+    }
+
+    private var preferredConnectViewId: String {
+        viewTabConfig.isTabVisible(ConnectionViewTab.terminal.id)
+            ? ConnectionViewTab.terminal.id
+            : viewTabConfig.effectiveDefaultTab()
     }
 
     var body: some View {
@@ -41,13 +48,13 @@ struct iOSContentView: View {
                             connectingServer = server
                             isConnecting = true
                             showingTerminal = true
-                            sessionManager.selectedViewByServer[server.id] = "terminal"
+                            sessionManager.selectedViewByServer[server.id] = preferredConnectViewId
                         }
 
                         do {
                             let session = try await sessionManager.openConnection(to: server)
                             await MainActor.run {
-                                sessionManager.selectedViewByServer[server.id] = "terminal"
+                                sessionManager.selectedViewByServer[server.id] = preferredConnectViewId
                                 sessionManager.selectedSessionId = session.id
                                 isConnecting = false
                                 connectingServer = nil
@@ -139,6 +146,7 @@ struct iOSServerListView: View {
     let onServerSelected: (Server) -> Void
 
     @ObservedObject private var storeManager = StoreManager.shared
+    @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
 
     @State private var showingAddServer = false
     @State private var showingLocalDiscovery = false
@@ -157,6 +165,12 @@ struct iOSServerListView: View {
     @State private var addServerPrefill: ServerFormPrefill?
     @State private var queuedDiscoveryPrefill: ServerFormPrefill?
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
+
+    private var preferredConnectViewId: String {
+        viewTabConfig.isTabVisible(ConnectionViewTab.terminal.id)
+            ? ConnectionViewTab.terminal.id
+            : viewTabConfig.effectiveDefaultTab()
+    }
 
     var body: some View {
         List {
@@ -257,9 +271,10 @@ struct iOSServerListView: View {
                                 Task {
                                     guard let server = serverManager.servers.first(where: { $0.id == connection.id }) else { return }
                                     guard await AppLockManager.shared.ensureServerUnlocked(server) else { return }
+                                    let targetViewId = preferredConnectViewId
                                     await MainActor.run {
                                         sessionManager.selectSession(connection.session)
-                                        sessionManager.selectedViewByServer[server.id] = "terminal"
+                                        sessionManager.selectedViewByServer[server.id] = targetViewId
                                         showingTerminal = true
                                     }
                                 }
@@ -696,6 +711,7 @@ struct iOSTerminalView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
 
     /// Delayed flag to allow tab animation to complete before creating terminal
     @State private var shouldShowTerminalBySession: [UUID: Bool] = [:]
@@ -765,8 +781,10 @@ struct iOSTerminalView: View {
     }
 
     private var selectedView: String {
-        guard let serverId = currentServerId ?? selectedSession?.serverId else { return "stats" }
-        return sessionManager.selectedViewByServer[serverId] ?? "stats"
+        guard let serverId = currentServerId ?? selectedSession?.serverId else {
+            return viewTabConfig.effectiveDefaultTab()
+        }
+        return viewTabConfig.effectiveView(for: sessionManager.selectedViewByServer[serverId])
     }
 
     private var canUseZenMode: Bool {
@@ -779,18 +797,20 @@ struct iOSTerminalView: View {
 
     private var zenSelectedViewBinding: Binding<String> {
         guard let serverId = currentServerId ?? selectedSession?.serverId else {
-            return .constant("stats")
+            return .constant(viewTabConfig.effectiveDefaultTab())
         }
         return selectedViewBinding(for: serverId)
     }
 
     private func selectedViewBinding(for serverId: UUID) -> Binding<String> {
         Binding(
-            get: { sessionManager.selectedViewByServer[serverId] ?? "stats" },
+            get: { viewTabConfig.effectiveView(for: sessionManager.selectedViewByServer[serverId]) },
             set: { newValue in
-                let current = sessionManager.selectedViewByServer[serverId] ?? "stats"
+                let current = viewTabConfig.effectiveView(for: sessionManager.selectedViewByServer[serverId])
                 guard current != newValue else { return }
-                sessionManager.selectedViewByServer[serverId] = newValue
+                sessionManager.selectedViewByServer[serverId] = viewTabConfig.isTabVisible(newValue)
+                    ? newValue
+                    : viewTabConfig.effectiveDefaultTab()
             }
         )
     }
@@ -1035,11 +1055,13 @@ struct iOSTerminalView: View {
             TerminalEmptyStateView(server: selectedServer) {
                 openNewTab()
             }
+        } else if selectedView == "files", let server = selectedServer {
+            RemoteFileBrowserView(server: server, initialPath: nil)
         } else if let server = selectedServer {
             ServerStatsView(
                 server: server,
                 isVisible: true,
-                backgroundColor: terminalBackgroundColor,
+                backgroundColor: Color(UIColor.systemGroupedBackground),
                 sharedClientProvider: { sessionManager.sharedStatsClient(for: server.id) }
             )
         }
@@ -1051,10 +1073,20 @@ struct iOSTerminalView: View {
                 ServerStatsView(
                     server: server,
                     isVisible: true,
-                    backgroundColor: terminalBackgroundColor,
+                    backgroundColor: Color(UIColor.systemGroupedBackground),
                     sharedClientProvider: { sessionManager.sharedStatsClient(for: server.id) }
                 )
                 .zIndex(1)
+            }
+
+            if selectedView == "files" {
+                if let server = selectedServer {
+                    RemoteFileBrowserView(
+                        server: server,
+                        initialPath: selectedSession?.workingDirectory
+                    )
+                    .zIndex(1)
+                }
             }
 
             if selectedView == "terminal", let session = selectedSession ?? serverSessions.first {
@@ -1081,18 +1113,16 @@ struct iOSTerminalView: View {
     @ToolbarContentBuilder
     private var navigationToolbar: some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
-            Button {
-                dismissKeyboardForCurrentSession()
-                onBack()
-            } label: {
-                Image(systemName: "chevron.left")
-            }
+            navigationBackButton
         }
 
         ToolbarItem(placement: .principal) {
-            if let serverId = selectedSession?.serverId {
-                iOSNativeSegmentedPicker(selection: selectedViewBinding(for: serverId))
-                    .fixedSize()
+            if let serverId = currentServerId ?? selectedSession?.serverId {
+                iOSNativeSegmentedPicker(
+                    selection: selectedViewBinding(for: serverId),
+                    tabs: viewTabConfig.currentVisibleTabs
+                )
+                .fixedSize()
             }
         }
 
@@ -1139,6 +1169,15 @@ struct iOSTerminalView: View {
         }
     }
 
+    private var navigationBackButton: some View {
+        Button {
+            dismissKeyboardForCurrentSession()
+            onBack()
+        } label: {
+            Image(systemName: "chevron.left")
+        }
+    }
+
     private func dismissKeyboardForCurrentSession() {
         guard let selectedId = effectiveSelectedSessionId,
               let terminal = ConnectionSessionManager.shared.peekTerminal(for: selectedId) else { return }
@@ -1164,7 +1203,8 @@ struct iOSTerminalView: View {
     @ViewBuilder
     private func sessionPage(_ session: ConnectionSession) -> some View {
         let server = serverManager.servers.first { $0.id == session.serverId }
-        let viewSelection = sessionManager.selectedViewByServer[session.serverId] ?? "stats"
+        let viewSelection = sessionManager.selectedViewByServer[session.serverId] ?? viewTabConfig.effectiveDefaultTab()
+        let effectiveViewSelection = viewTabConfig.effectiveView(for: viewSelection)
         let terminalAlreadyExists = ConnectionSessionManager.shared.hasTerminal(for: session.id)
         let shouldShowTerminal = shouldShowTerminalBySession[session.id] ?? false
         let reconnectToken = reconnectTokenBySession[session.id] ?? session.id
@@ -1174,12 +1214,21 @@ struct iOSTerminalView: View {
                 TerminalContainerView(
                     session: session,
                     server: server,
-                    isActive: viewSelection == "terminal"
+                    isActive: effectiveViewSelection == "terminal"
                 )
                 .id(reconnectToken)
             }
 
-            if viewSelection == "terminal" && !shouldShowTerminal && !terminalAlreadyExists {
+            if effectiveViewSelection == "files" {
+                if let server {
+                    RemoteFileBrowserView(
+                        server: server,
+                        initialPath: session.workingDirectory
+                    )
+                }
+            }
+
+            if effectiveViewSelection == "terminal" && !shouldShowTerminal && !terminalAlreadyExists {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .scaleEffect(1.2)
@@ -1187,8 +1236,8 @@ struct iOSTerminalView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            prepareTerminal(session: session, viewSelection: viewSelection, terminalAlreadyExists: terminalAlreadyExists)
-            if viewSelection == "terminal" {
+            prepareTerminal(session: session, viewSelection: effectiveViewSelection, terminalAlreadyExists: terminalAlreadyExists)
+            if effectiveViewSelection == "terminal" {
                 focusTerminal(for: session)
             }
         }
@@ -1196,12 +1245,13 @@ struct iOSTerminalView: View {
             activateTerminal(session)
         }
         .onChange(of: viewSelection) { newValue in
-            if newValue == "terminal" {
-                prepareTerminal(session: session, viewSelection: newValue, terminalAlreadyExists: terminalAlreadyExists)
+            let effectiveSelection = viewTabConfig.effectiveView(for: newValue)
+            if effectiveSelection == "terminal" {
+                prepareTerminal(session: session, viewSelection: effectiveSelection, terminalAlreadyExists: terminalAlreadyExists)
                 focusTerminal(for: session)
             }
         }
-        .overlay(terminalSwipeOverlay(isEnabled: viewSelection == "terminal"))
+        .overlay(terminalSwipeOverlay(isEnabled: effectiveViewSelection == "terminal"))
     }
 
     private func prepareTerminal(session: ConnectionSession, viewSelection: String, terminalAlreadyExists: Bool) {
@@ -1231,7 +1281,9 @@ struct iOSTerminalView: View {
             do {
                 let session = try await sessionManager.openConnection(to: server, forceNew: true)
                 await MainActor.run {
-                    sessionManager.selectedViewByServer[server.id] = "terminal"
+                    sessionManager.selectedViewByServer[server.id] = viewTabConfig.isTabVisible(ConnectionViewTab.terminal.id)
+                        ? ConnectionViewTab.terminal.id
+                        : viewTabConfig.effectiveDefaultTab()
                     sessionManager.selectedSessionId = session.id
                 }
             } catch {
@@ -1277,6 +1329,7 @@ struct iOSTerminalView: View {
                 serverName: selectedServer?.name ?? String(localized: "Terminal"),
                 selectedView: selectedView,
                 selectedViewBinding: zenSelectedViewBinding,
+                viewTabs: viewTabConfig.currentVisibleTabs,
                 sessions: serverSessions,
                 selectedSessionId: selectedSessionIdBinding,
                 onCloseSession: { session in
@@ -1441,17 +1494,17 @@ struct iOSTerminalView: View {
         generator.prepare()
         generator.impactOccurred()
     }
+
 }
 
 #if os(iOS)
 private struct iOSNativeSegmentedPicker: UIViewRepresentable {
     @Binding var selection: String
-
-    private let tags = ["stats", "terminal"]
-    private let images = ["chart.bar.xaxis", "terminal"]
+    let tabs: [ConnectionViewTab]
 
     func makeUIView(context: Context) -> UISegmentedControl {
-        let control = UISegmentedControl(items: images.compactMap { UIImage(systemName: $0) })
+        let control = UISegmentedControl()
+        configure(control, tabs: tabs)
         control.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
         control.selectedSegmentIndex = selectedIndex
         control.apportionsSegmentWidthsByContent = true
@@ -1461,6 +1514,21 @@ private struct iOSNativeSegmentedPicker: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UISegmentedControl, context: Context) {
+        context.coordinator.tabs = tabs
+        if uiView.numberOfSegments != tabs.count {
+            configure(uiView, tabs: tabs)
+            uiView.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
+        } else {
+            for (index, tab) in tabs.enumerated() {
+                uiView.setImage(UIImage(systemName: tab.icon), forSegmentAt: index)
+            }
+        }
+
+        let resolvedSelection = tabs.contains(where: { $0.id == selection }) ? selection : tabs.first?.id ?? selection
+        if resolvedSelection != selection {
+            selection = resolvedSelection
+        }
+
         let targetIndex = selectedIndex
         guard uiView.selectedSegmentIndex != targetIndex else { return }
         UIView.performWithoutAnimation {
@@ -1475,26 +1543,34 @@ private struct iOSNativeSegmentedPicker: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(selection: $selection, tags: tags)
+        Coordinator(selection: $selection, tabs: tabs)
     }
 
     private var selectedIndex: Int {
-        tags.firstIndex(of: selection) ?? 0
+        tabs.firstIndex(where: { $0.id == selection }) ?? 0
+    }
+
+    private func configure(_ control: UISegmentedControl, tabs: [ConnectionViewTab]) {
+        control.removeAllSegments()
+        for (index, tab) in tabs.enumerated() {
+            control.insertSegment(with: UIImage(systemName: tab.icon), at: index, animated: false)
+        }
+        control.accessibilityLabel = tabs.map(\.localizedKey).joined(separator: ", ")
     }
 
     final class Coordinator: NSObject {
         private var selection: Binding<String>
-        private let tags: [String]
+        var tabs: [ConnectionViewTab]
 
-        init(selection: Binding<String>, tags: [String]) {
+        init(selection: Binding<String>, tabs: [ConnectionViewTab]) {
             self.selection = selection
-            self.tags = tags
+            self.tabs = tabs
         }
 
         @objc func valueChanged(_ sender: UISegmentedControl) {
             let index = sender.selectedSegmentIndex
-            guard tags.indices.contains(index) else { return }
-            selection.wrappedValue = tags[index]
+            guard tabs.indices.contains(index) else { return }
+            selection.wrappedValue = tabs[index].id
         }
     }
 }

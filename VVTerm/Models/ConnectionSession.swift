@@ -121,10 +121,16 @@ struct ConnectionViewTab: Identifiable, Hashable, Codable, Equatable {
         icon: "terminal"
     )
 
-    static let defaultOrder: [ConnectionViewTab] = [.stats, .terminal]
+    static let files = ConnectionViewTab(
+        id: "files",
+        localizedKey: "Files",
+        icon: "folder"
+    )
+
+    static let defaultOrder: [ConnectionViewTab] = [.stats, .terminal, .files]
     static let allTabs: [ConnectionViewTab] = defaultOrder
 
     static func from(id: String) -> ConnectionViewTab? {
-        defaultOrder.first { $0.id == id }
+        allTabs.first { $0.id == id }
     }
 }
