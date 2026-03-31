@@ -175,19 +175,22 @@ final class TerminalThemeManager: ObservableObject {
 
     private let defaults: UserDefaults
     private let cloudKit: CloudKitManager
+    private let syncCoordinator = CloudKitSyncCoordinator.shared
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm", category: "TerminalThemeManager")
 
-    private let customThemesKey = "terminalCustomThemesV1"
-    private let darkThemeKey = "terminalThemeName"
-    private let lightThemeKey = "terminalThemeNameLight"
-    private let perAppearanceThemeKey = "terminalUsePerAppearanceTheme"
-    private let preferenceUpdatedAtKey = "terminalThemePreferenceUpdatedAt"
+    private let customThemesKey = CloudKitSyncConstants.terminalCustomThemesStorageKey
+    private let darkThemeKey = CloudKitSyncConstants.terminalThemeNameKey
+    private let lightThemeKey = CloudKitSyncConstants.terminalThemeNameLightKey
+    private let perAppearanceThemeKey = CloudKitSyncConstants.terminalUsePerAppearanceThemeKey
+    private let preferenceUpdatedAtKey = CloudKitSyncConstants.terminalThemePreferenceUpdatedAtKey
 
     private var defaultsObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
     private var lastKnownPreferenceSnapshot: PreferenceSnapshot
+    private var lastForegroundSyncAt: Date = .distantPast
     private var isApplyingRemotePreference = false
     private var pendingPreferenceSyncTask: Task<Void, Never>?
+    private let foregroundSyncMinimumInterval: TimeInterval = 20
 
     private init(defaults: UserDefaults = .standard, cloudKit: CloudKitManager = .shared) {
         self.defaults = defaults
@@ -206,6 +209,7 @@ final class TerminalThemeManager: ObservableObject {
 
         Task {
             await syncFromCloud()
+            await syncCoordinator.drainPendingMutations()
         }
     }
 
@@ -505,9 +509,20 @@ final class TerminalThemeManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                await self?.syncFromCloud()
+                await self?.syncFromCloudIfNeededForForeground()
             }
         }
+    }
+
+    private func syncFromCloudIfNeededForForeground() async {
+        let now = Date()
+        guard now.timeIntervalSince(lastForegroundSyncAt) >= foregroundSyncMinimumInterval else {
+            return
+        }
+
+        lastForegroundSyncAt = now
+        await syncFromCloud()
+        await syncCoordinator.drainPendingMutations()
     }
 
     private func handleThemePreferenceChange() {
@@ -552,24 +567,18 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     private func pushThemeToCloud(_ theme: TerminalTheme) {
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
             guard SyncSettings.isEnabled else { return }
-            do {
-                try await self.cloudKit.saveTerminalTheme(theme)
-            } catch {
-                self.logger.warning("Failed to sync custom theme '\(theme.name)': \(error.localizedDescription)")
-            }
+            self.syncCoordinator.enqueueTerminalThemeUpsert(theme)
+            await self.syncCoordinator.drainPendingMutations()
         }
     }
 
     private func pushPreferenceToCloud(_ preference: TerminalThemePreference) async {
         guard SyncSettings.isEnabled else { return }
-        do {
-            try await cloudKit.saveTerminalThemePreference(preference)
-        } catch {
-            logger.warning("Failed to sync terminal theme preference: \(error.localizedDescription)")
-        }
+        syncCoordinator.enqueueTerminalThemePreferenceUpsert(preference)
+        await syncCoordinator.drainPendingMutations()
     }
 
     private func syncFromCloud() async {

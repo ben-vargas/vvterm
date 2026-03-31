@@ -422,7 +422,7 @@ actor RemoteTmuxManager {
     }
 
     nonisolated private func configWriteCommand() -> String {
-        let themeName = UserDefaults.standard.string(forKey: "terminalThemeName") ?? "Aizen Dark"
+        let themeName = UserDefaults.standard.string(forKey: CloudKitSyncConstants.terminalThemeNameKey) ?? "Aizen Dark"
         let modeStyle = ThemeColorParser.tmuxModeStyle(for: themeName)
         var lines = [
             "# VVTerm tmux configuration",

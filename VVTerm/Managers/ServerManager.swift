@@ -1,4 +1,5 @@
 import Foundation
+import CloudKit
 import Combine
 import SwiftUI
 import os.log
@@ -65,13 +66,19 @@ final class ServerManager: ObservableObject {
     @Published var error: String?
 
     private let cloudKit = CloudKitManager.shared
+    private let syncCoordinator = CloudKitSyncCoordinator.shared
     private let keychain = KeychainManager.shared
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "ServerManager")
     private var isSyncEnabled: Bool { SyncSettings.isEnabled }
 
     // Local storage keys
-    private let serversKey = "com.vivy.vvterm.servers"
-    private let workspacesKey = "com.vivy.vvterm.workspaces"
+    private let serversKey = CloudKitSyncConstants.serverStorageKey
+    private let workspacesKey = CloudKitSyncConstants.workspaceStorageKey
+
+    private struct FullFetchBackfillResult {
+        let changes: CloudKitChanges
+        let canReplaceLocalState: Bool
+    }
 
     private init() {
         // Load local data first (fast)
@@ -109,6 +116,111 @@ final class ServerManager: ObservableObject {
         if let data = try? JSONEncoder().encode(workspaces) {
             UserDefaults.standard.set(data, forKey: workspacesKey)
         }
+    }
+
+    // MARK: - Pending CloudKit Sync
+
+    private func enqueuePendingServerUpsert(_ server: Server) {
+        syncCoordinator.enqueueServerUpsert(server)
+    }
+
+    private func enqueuePendingServerDelete(_ server: Server) {
+        syncCoordinator.enqueueServerDelete(server)
+    }
+
+    private func enqueuePendingWorkspaceUpsert(_ workspace: Workspace) {
+        syncCoordinator.enqueueWorkspaceUpsert(workspace)
+    }
+
+    private func enqueuePendingWorkspaceDelete(_ workspace: Workspace) {
+        syncCoordinator.enqueueWorkspaceDelete(workspace)
+    }
+
+    private func applyPendingSyncOverlay() {
+        let snapshot = syncCoordinator.snapshot()
+
+        for mutation in snapshot where mutation.entity == .workspace && mutation.operation == .upsert {
+            if let workspace = mutation.workspace {
+                applyPendingWorkspaceUpsert(workspace)
+            }
+        }
+
+        for mutation in snapshot where mutation.entity == .server && mutation.operation == .upsert {
+            if let server = mutation.server {
+                applyPendingServerUpsert(server)
+            }
+        }
+
+        for mutation in snapshot where mutation.entity == .server && mutation.operation == .delete {
+            applyPendingServerDelete(mutation.entityKey)
+        }
+
+        for mutation in snapshot where mutation.entity == .workspace && mutation.operation == .delete {
+            applyPendingWorkspaceDelete(mutation.entityKey)
+        }
+    }
+
+    private func reconcilePendingServerAndWorkspaceUpsertsAgainstCloudKit(_ changes: CloudKitChanges) {
+        let snapshot = syncCoordinator.snapshot()
+        let fetchedServersByID = Dictionary(uniqueKeysWithValues: changes.servers.map { ($0.id, $0) })
+        let fetchedWorkspacesByID = Dictionary(uniqueKeysWithValues: changes.workspaces.map { ($0.id, $0) })
+
+        for mutation in snapshot where mutation.operation == .upsert {
+            switch mutation.entity {
+            case .server:
+                guard let pendingServer = mutation.server,
+                      let fetchedServer = fetchedServersByID[pendingServer.id] else {
+                    continue
+                }
+
+                if fetchedServer.updatedAt >= pendingServer.updatedAt {
+                    syncCoordinator.removePendingMutation(mutation.id)
+                }
+            case .workspace:
+                guard let pendingWorkspace = mutation.workspace,
+                      let fetchedWorkspace = fetchedWorkspacesByID[pendingWorkspace.id] else {
+                    continue
+                }
+
+                if fetchedWorkspace.updatedAt >= pendingWorkspace.updatedAt {
+                    syncCoordinator.removePendingMutation(mutation.id)
+                }
+            case .terminalTheme, .terminalThemePreference, .terminalAccessoryProfile:
+                continue
+            }
+        }
+    }
+
+    private func applyPendingServerUpsert(_ server: Server) {
+        if let index = servers.firstIndex(where: { $0.id == server.id }) {
+            servers[index] = server
+        } else {
+            servers.append(server)
+        }
+    }
+
+    private func applyPendingServerDelete(_ serverKey: String) {
+        guard let serverID = UUID(uuidString: serverKey) else { return }
+        servers.removeAll { $0.id == serverID }
+    }
+
+    private func applyPendingWorkspaceUpsert(_ workspace: Workspace) {
+        if let index = workspaces.firstIndex(where: { $0.id == workspace.id }) {
+            workspaces[index] = workspace
+        } else {
+            workspaces.append(workspace)
+        }
+    }
+
+    private func applyPendingWorkspaceDelete(_ workspaceKey: String) {
+        guard let workspaceID = UUID(uuidString: workspaceKey) else { return }
+        workspaces.removeAll { $0.id == workspaceID }
+        servers.removeAll { $0.workspaceId == workspaceID }
+    }
+
+    private func drainPendingCloudKitMutations() async {
+        guard isSyncEnabled else { return }
+        await syncCoordinator.drainPendingMutations()
     }
 
     func seedReviewDataIfNeeded() {
@@ -166,6 +278,7 @@ final class ServerManager: ObservableObject {
         // Clear local storage
         UserDefaults.standard.removeObject(forKey: serversKey)
         UserDefaults.standard.removeObject(forKey: workspacesKey)
+        syncCoordinator.clearPendingMutations(for: [.server, .workspace])
 
         // Clear in-memory data
         servers = []
@@ -192,26 +305,28 @@ final class ServerManager: ObservableObject {
 
         do {
             let fetchedChanges = try await cloudKit.fetchChanges()
-            let changes = await backfillMissingLocalRecordsIfNeeded(for: fetchedChanges)
+            let backfillResult = await backfillMissingLocalRecordsIfNeeded(for: fetchedChanges)
+            let changes = backfillResult.changes
 
             // Merge CloudKit data with local (CloudKit wins for conflicts, dedupe by ID)
             logger.info(
                 "CloudKit returned \(changes.workspaces.count) workspaces, \(changes.servers.count) servers (full fetch: \(changes.isFullFetch))"
             )
 
-            applyCloudKitChanges(changes)
+            applyCloudKitChanges(changes, canReplaceLocalState: backfillResult.canReplaceLocalState)
+            reconcilePendingServerAndWorkspaceUpsertsAgainstCloudKit(changes)
+            applyPendingSyncOverlay()
 
             // Ensure at least one workspace exists before checking orphans
             if workspaces.isEmpty {
                 workspaces = [createDefaultWorkspace()]
-                if isSyncEnabled {
-                    try await cloudKit.saveWorkspace(workspaces[0])
-                }
+                enqueuePendingWorkspaceUpsert(workspaces[0])
                 logger.info("Created default workspace: \(self.workspaces[0].name)")
             }
 
             // Check for and repair orphaned servers (workspaceId doesn't match any workspace)
             await repairOrphanedServers()
+            await drainPendingCloudKitMutations()
 
             // Save merged data locally
             saveLocalData()
@@ -234,24 +349,38 @@ final class ServerManager: ObservableObject {
 
     /// If a full fetch is missing local records (common after schema was unavailable),
     /// push the missing records to CloudKit so users don't need to edit each item manually.
-    private func backfillMissingLocalRecordsIfNeeded(for changes: CloudKitChanges) async -> CloudKitChanges {
+    private func backfillMissingLocalRecordsIfNeeded(for changes: CloudKitChanges) async -> FullFetchBackfillResult {
         guard changes.isFullFetch, isSyncEnabled, cloudKit.isAvailable else {
-            return changes
+            return FullFetchBackfillResult(changes: changes, canReplaceLocalState: true)
+        }
+
+        if changes.workspaces.isEmpty && changes.servers.isEmpty && localCacheContainsUserData {
+            logger.warning(
+                "CloudKit full fetch returned no workspaces or servers while local cache contains user data; preserving local state until an explicit recovery path resolves the mismatch"
+            )
+            return FullFetchBackfillResult(changes: changes, canReplaceLocalState: false)
         }
 
         let cloudWorkspaceIDs = Set(changes.workspaces.map(\.id))
         let cloudServerIDs = Set(changes.servers.map(\.id))
-
         let missingWorkspaces = workspaces.filter { !cloudWorkspaceIDs.contains($0.id) }
         let missingServers = servers.filter { !cloudServerIDs.contains($0.id) }
 
         guard !missingWorkspaces.isEmpty || !missingServers.isEmpty else {
-            return changes
+            return FullFetchBackfillResult(changes: changes, canReplaceLocalState: true)
         }
 
         logger.warning(
-            "Detected \(missingWorkspaces.count) local workspaces and \(missingServers.count) local servers missing from CloudKit full fetch; attempting backfill"
+            "CloudKit full fetch is missing \(missingWorkspaces.count) local workspaces and \(missingServers.count) local servers; queuing recovery upserts and attempting backfill"
         )
+
+        for workspace in missingWorkspaces {
+            enqueuePendingWorkspaceUpsert(workspace)
+        }
+
+        for server in missingServers {
+            enqueuePendingServerUpsert(server)
+        }
 
         var uploadedWorkspaces: [Workspace] = []
         for workspace in missingWorkspaces {
@@ -281,13 +410,49 @@ final class ServerManager: ObservableObject {
             }
         }
 
-        return CloudKitChanges(
-            servers: changes.servers + uploadedServers,
-            workspaces: changes.workspaces + uploadedWorkspaces,
-            deletedServerIDs: changes.deletedServerIDs,
-            deletedWorkspaceIDs: changes.deletedWorkspaceIDs,
-            isFullFetch: changes.isFullFetch
+        let backfillCompleted = uploadedWorkspaces.count == missingWorkspaces.count &&
+            uploadedServers.count == missingServers.count
+
+        return FullFetchBackfillResult(
+            changes: CloudKitChanges(
+                servers: changes.servers + uploadedServers,
+                workspaces: changes.workspaces + uploadedWorkspaces,
+                deletedServerIDs: changes.deletedServerIDs,
+                deletedWorkspaceIDs: changes.deletedWorkspaceIDs,
+                isFullFetch: changes.isFullFetch
+            ),
+            canReplaceLocalState: backfillCompleted
         )
+    }
+
+    private var localCacheContainsUserData: Bool {
+        if !servers.isEmpty {
+            return true
+        }
+
+        guard !workspaces.isEmpty else {
+            return false
+        }
+
+        if workspaces.count > 1 {
+            return true
+        }
+
+        guard let workspace = workspaces.first else {
+            return false
+        }
+
+        return !isCanonicalDefaultWorkspace(workspace)
+    }
+
+    private func isCanonicalDefaultWorkspace(_ workspace: Workspace) -> Bool {
+        workspace.name == String(localized: "My Servers") &&
+            workspace.colorHex == "#007AFF" &&
+            workspace.icon == nil &&
+            workspace.order == 0 &&
+            workspace.environments == ServerEnvironment.builtInEnvironments &&
+            workspace.lastSelectedEnvironmentId == nil &&
+            workspace.lastSelectedServerId == nil
     }
 
     private func createDefaultWorkspace() -> Workspace {
@@ -298,14 +463,10 @@ final class ServerManager: ObservableObject {
         )
     }
 
-    private func applyCloudKitChanges(_ changes: CloudKitChanges) {
-        if changes.isFullFetch {
-            if !changes.workspaces.isEmpty {
-                workspaces = dedupedWorkspaces(from: changes.workspaces)
-            }
-            if !changes.servers.isEmpty {
-                servers = dedupedServers(from: changes.servers)
-            }
+    private func applyCloudKitChanges(_ changes: CloudKitChanges, canReplaceLocalState: Bool = true) {
+        if changes.isFullFetch && canReplaceLocalState {
+            workspaces = dedupedWorkspaces(from: changes.workspaces)
+            servers = dedupedServers(from: changes.servers)
             return
         }
 
@@ -412,13 +573,8 @@ final class ServerManager: ObservableObject {
                 )
                 logger.info("Reassigned server '\(self.servers[i].name)' from \(oldWorkspaceId) to \(defaultWorkspace.id)")
 
-                // Save updated server to CloudKit
-                do {
-                    if isSyncEnabled {
-                        try await cloudKit.saveServer(servers[i])
-                    }
-                } catch {
-                    logger.warning("Failed to save repaired server to CloudKit: \(error.localizedDescription)")
+                if isSyncEnabled {
+                    enqueuePendingServerUpsert(servers[i])
                 }
             }
         }
@@ -506,17 +662,10 @@ final class ServerManager: ObservableObject {
             )
         }
 
-        // Save to CloudKit (ignore errors, local is primary)
-        do {
-            if isSyncEnabled {
-                try await cloudKit.saveServer(newServer)
-            }
-        } catch {
-            logger.warning("CloudKit save failed, using local storage: \(error.localizedDescription)")
-        }
-
         servers.append(newServer)
+        enqueuePendingServerUpsert(newServer)
         saveLocalData()
+        await drainPendingCloudKitMutations()
         logger.info("Added server: \(newServer.name)")
     }
 
@@ -546,35 +695,22 @@ final class ServerManager: ObservableObject {
             updatedAt: Date()
         )
 
-        // Save to CloudKit (ignore errors, local is primary)
-        do {
-            if isSyncEnabled {
-                try await cloudKit.saveServer(updatedServer)
-            }
-        } catch {
-            logger.warning("CloudKit save failed, using local storage: \(error.localizedDescription)")
-        }
-
         if let index = servers.firstIndex(where: { $0.id == server.id }) {
             servers[index] = updatedServer
         }
+        enqueuePendingServerUpsert(updatedServer)
         saveLocalData()
+        await drainPendingCloudKitMutations()
         logger.info("Updated server: \(updatedServer.name)")
     }
 
     func deleteServer(_ server: Server) async throws {
-        // Delete from CloudKit (ignore errors)
-        do {
-            if isSyncEnabled {
-                try await cloudKit.deleteServer(server)
-            }
-        } catch {
-            logger.warning("CloudKit delete failed: \(error.localizedDescription)")
-        }
         try keychain.deleteCredentials(for: server.id)
 
         servers.removeAll { $0.id == server.id }
+        enqueuePendingServerDelete(server)
         saveLocalData()
+        await drainPendingCloudKitMutations()
         logger.info("Deleted server: \(server.name)")
     }
 
@@ -625,17 +761,10 @@ final class ServerManager: ObservableObject {
             updatedAt: Date()
         )
 
-        // Save to CloudKit (ignore errors, local is primary)
-        do {
-            if isSyncEnabled {
-                try await cloudKit.saveWorkspace(newWorkspace)
-            }
-        } catch {
-            logger.warning("CloudKit save failed, using local storage: \(error.localizedDescription)")
-        }
-
         workspaces.append(newWorkspace)
+        enqueuePendingWorkspaceUpsert(newWorkspace)
         saveLocalData()
+        await drainPendingCloudKitMutations()
         logger.info("Added workspace: \(newWorkspace.name)")
     }
 
@@ -654,19 +783,12 @@ final class ServerManager: ObservableObject {
             updatedAt: Date()
         )
 
-        // Save to CloudKit (ignore errors, local is primary)
-        do {
-            if isSyncEnabled {
-                try await cloudKit.saveWorkspace(updatedWorkspace)
-            }
-        } catch {
-            logger.warning("CloudKit save failed, using local storage: \(error.localizedDescription)")
-        }
-
         if let index = workspaces.firstIndex(where: { $0.id == workspace.id }) {
             workspaces[index] = updatedWorkspace
         }
+        enqueuePendingWorkspaceUpsert(updatedWorkspace)
         saveLocalData()
+        await drainPendingCloudKitMutations()
         logger.info("Updated workspace: \(updatedWorkspace.name)")
     }
 
@@ -677,17 +799,10 @@ final class ServerManager: ObservableObject {
             try await deleteServer(server)
         }
 
-        // Delete from CloudKit (ignore errors)
-        do {
-            if isSyncEnabled {
-                try await cloudKit.deleteWorkspace(workspace)
-            }
-        } catch {
-            logger.warning("CloudKit delete failed: \(error.localizedDescription)")
-        }
-
         workspaces.removeAll { $0.id == workspace.id }
+        enqueuePendingWorkspaceDelete(workspace)
         saveLocalData()
+        await drainPendingCloudKitMutations()
         logger.info("Deleted workspace: \(workspace.name)")
     }
 
@@ -710,16 +825,10 @@ final class ServerManager: ObservableObject {
                 updatedAt: Date()
             )
             workspaces[index] = updated
-            // Save to CloudKit (ignore errors)
-            do {
-                if isSyncEnabled {
-                    try await cloudKit.saveWorkspace(updated)
-                }
-            } catch {
-                logger.warning("CloudKit save failed: \(error.localizedDescription)")
-            }
+            enqueuePendingWorkspaceUpsert(updated)
         }
         saveLocalData()
+        await drainPendingCloudKitMutations()
         logger.info("Reordered workspaces")
     }
 

@@ -2949,9 +2949,9 @@ private class TerminalInputAccessoryView: UIInputView {
             return UIColor(Color.fromHex(cachedHex))
         }
 
-        let usePerAppearance = defaults.object(forKey: "terminalUsePerAppearanceTheme") as? Bool ?? true
-        let darkTheme = defaults.string(forKey: "terminalThemeName") ?? "Aizen Dark"
-        let lightTheme = defaults.string(forKey: "terminalThemeNameLight") ?? "Aizen Light"
+        let usePerAppearance = defaults.object(forKey: CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) as? Bool ?? true
+        let darkTheme = defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameKey) ?? "Aizen Dark"
+        let lightTheme = defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameLightKey) ?? "Aizen Light"
         let themeName: String
         if usePerAppearance {
             themeName = traitCollection.userInterfaceStyle == .dark ? darkTheme : lightTheme

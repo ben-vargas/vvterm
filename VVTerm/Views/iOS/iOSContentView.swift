@@ -728,9 +728,9 @@ struct iOSTerminalView: View {
 
     @SceneStorage("vvterm.zenMode.ios") private var isZenModeEnabled = false
 
-    @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
-    @AppStorage("terminalThemeNameLight") private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage("terminalUsePerAppearanceTheme") private var usePerAppearanceTheme = true
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
+    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     @AppStorage("sshAutoReconnect") private var autoReconnectEnabled = true
     private var effectiveThemeName: String {
         guard usePerAppearanceTheme else { return terminalThemeName }

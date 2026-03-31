@@ -25,11 +25,11 @@ final class CloudKitManager: ObservableObject {
     private let container: CKContainer
     private let database: CKDatabase
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "CloudKit")
-    private let recordZoneName = "VVTermZone"
+    private let recordZoneName = CloudKitSyncConstants.recordZoneName
     private lazy var recordZone = CKRecordZone(zoneName: recordZoneName)
     private var recordZoneID: CKRecordZone.ID { recordZone.zoneID }
-    private lazy var changeTokenKey = "com.vivy.vvterm.cloudkit.\(recordZoneName).token"
-    private var zoneReadyKey: String { "com.vivy.vvterm.cloudkit.\(recordZoneName).ready" }
+    private var changeTokenKey: String { CloudKitSyncConstants.changeTokenKey(for: recordZoneName) }
+    private var zoneReadyKey: String { CloudKitSyncConstants.zoneReadyKey(for: recordZoneName) }
 
     // Record types
     private enum RecordType {
@@ -65,9 +65,9 @@ final class CloudKitManager: ObservableObject {
     private var zoneReady: Bool
 
     private init() {
-        container = CKContainer(identifier: "iCloud.app.vivy.VivyTerm")
+        container = CKContainer(identifier: CloudKitSyncConstants.cloudKitContainerIdentifier)
         database = container.privateCloudDatabase
-        zoneReady = UserDefaults.standard.bool(forKey: "com.vivy.vvterm.cloudkit.\(recordZoneName).ready")
+        zoneReady = UserDefaults.standard.bool(forKey: CloudKitSyncConstants.zoneReadyKey(for: recordZoneName))
         Task { await checkAccountStatus() }
     }
 
@@ -604,15 +604,21 @@ final class CloudKitManager: ObservableObject {
         await ensureAccountStatusChecked()
         guard isSyncEnabled, isAvailable else { return }
 
+        let subscriptionID = CloudKitSyncConstants.databaseSubscriptionID
+
         let notification = CKSubscription.NotificationInfo()
         notification.shouldSendContentAvailable = true
 
-        let subscription = CKDatabaseSubscription(subscriptionID: "database-changes")
+        let subscription = CKDatabaseSubscription(subscriptionID: subscriptionID)
         subscription.notificationInfo = notification
 
         do {
-            _ = try? await database.deleteSubscription(withID: "server-changes")
-            _ = try? await database.deleteSubscription(withID: "workspace-changes")
+            if let existing = try? await database.subscription(for: subscriptionID) as? CKDatabaseSubscription,
+               existing.notificationInfo?.shouldSendContentAvailable == true {
+                logger.debug("CloudKit database subscription already configured")
+                return
+            }
+
             try await database.save(subscription)
             logger.info("Subscribed to database changes")
         } catch {

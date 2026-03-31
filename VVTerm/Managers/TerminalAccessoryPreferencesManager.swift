@@ -42,6 +42,7 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
 
     private let defaults: UserDefaults
     private let cloudKit: CloudKitManager
+    private let syncCoordinator = CloudKitSyncCoordinator.shared
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm",
         category: "TerminalAccessoryPreferences"
@@ -49,8 +50,11 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
 
     private var foregroundObserver: NSObjectProtocol?
     private var syncToggleObserver: NSObjectProtocol?
+    private var cloudResolutionObserver: NSObjectProtocol?
     private var pendingSyncTask: Task<Void, Never>?
     private var lastKnownSyncEnabled: Bool
+    private var lastForegroundSyncAt: Date = .distantPast
+    private let foregroundSyncMinimumInterval: TimeInterval = 20
 
     init(defaults: UserDefaults = .standard, cloudKit: CloudKitManager? = nil) {
         self.defaults = defaults
@@ -60,9 +64,11 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
 
         observeForegroundSync()
         observeSyncToggleChanges()
+        observeCloudResolutionChanges()
 
         Task {
             await syncWithCloud()
+            await syncCoordinator.drainPendingMutations()
         }
     }
 
@@ -72,6 +78,9 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         }
         if let syncToggleObserver {
             NotificationCenter.default.removeObserver(syncToggleObserver)
+        }
+        if let cloudResolutionObserver {
+            NotificationCenter.default.removeObserver(cloudResolutionObserver)
         }
         pendingSyncTask?.cancel()
     }
@@ -334,8 +343,14 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         pendingSyncTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 650_000_000)
             guard !Task.isCancelled else { return }
-            await self?.syncWithCloud()
+            await self?.enqueueProfileSync()
         }
+    }
+
+    private func enqueueProfileSync() async {
+        guard SyncSettings.isEnabled else { return }
+        syncCoordinator.enqueueTerminalAccessoryProfileUpsert(profile)
+        await syncCoordinator.drainPendingMutations()
     }
 
     private func syncWithCloud() async {
@@ -367,9 +382,20 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                await self?.syncWithCloud()
+                await self?.syncWithCloudIfNeededForForeground()
             }
         }
+    }
+
+    private func syncWithCloudIfNeededForForeground() async {
+        let now = Date()
+        guard now.timeIntervalSince(lastForegroundSyncAt) >= foregroundSyncMinimumInterval else {
+            return
+        }
+
+        lastForegroundSyncAt = now
+        await syncWithCloud()
+        await syncCoordinator.drainPendingMutations()
     }
 
     private func observeSyncToggleChanges() {
@@ -389,6 +415,26 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
                     self.pendingSyncTask?.cancel()
                     self.pendingSyncTask = nil
                 }
+            }
+        }
+    }
+
+    private func observeCloudResolutionChanges() {
+        cloudResolutionObserver = NotificationCenter.default.addObserver(
+            forName: CloudKitSyncCoordinator.terminalAccessoryProfileDidResolveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      let resolvedProfile = notification.userInfo?["profile"] as? TerminalAccessoryProfile else {
+                    return
+                }
+
+                let mergedWithCurrent = TerminalAccessoryProfile
+                    .merged(local: self.profile, remote: resolvedProfile)
+                    .normalized()
+                self.applyProfile(mergedWithCurrent, scheduleCloudSync: false)
             }
         }
     }

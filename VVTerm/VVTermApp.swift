@@ -38,9 +38,9 @@ struct VVTermApp: App {
     // Terminal settings to watch for changes
     @AppStorage("terminalFontName") private var terminalFontName = "JetBrainsMono Nerd Font"
     @AppStorage("terminalFontSize") private var terminalFontSize = 8.0
-    @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
-    @AppStorage("terminalThemeNameLight") private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage("terminalUsePerAppearanceTheme") private var usePerAppearanceTheme = true
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
+    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
 
     private var activeCustomThemeVersionToken: String {
         let activeThemes = terminalThemeManager.customThemes.filter { !$0.isDeleted }

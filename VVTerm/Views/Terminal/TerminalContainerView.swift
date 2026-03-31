@@ -56,9 +56,9 @@ struct TerminalContainerView: View {
     @State private var terminalBackgroundColor: Color = Self.initialTerminalBackgroundColor()
 
     /// Theme name from settings
-    @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
-    @AppStorage("terminalThemeNameLight") private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage("terminalUsePerAppearanceTheme") private var usePerAppearanceTheme = true
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
+    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
 
     private var effectiveThemeName: String {
         guard usePerAppearanceTheme else { return terminalThemeName }

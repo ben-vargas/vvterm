@@ -30,19 +30,31 @@ extension Server {
             return nil
         }
 
-        guard let port = record["port"] as? Int else {
-            logger.error("Server \(id): missing/invalid port. Raw value: \(String(describing: record["port"]))")
-            return nil
-        }
-
         guard let username = record["username"] as? String else {
             logger.error("Server \(id): missing username")
             return nil
         }
 
+        let port: Int
+        if let storedPort = record["port"] as? Int, (1...65535).contains(storedPort) {
+            port = storedPort
+        } else if let storedPort = record["port"] as? NSNumber, (1...65535).contains(storedPort.intValue) {
+            port = storedPort.intValue
+            logger.warning("Server \(id): coerced NSNumber port \(storedPort)")
+        } else {
+            let rawPortValue = String(describing: record["port"])
+            logger.error(
+                "Server \(id): missing/invalid port. Raw value: \(rawPortValue)"
+            )
+            return nil
+        }
+
         guard let authMethodRaw = record["authMethod"] as? String,
               let authMethod = AuthMethod(rawValue: authMethodRaw) else {
-            logger.error("Server \(id): invalid authMethod. Raw value: \(String(describing: record["authMethod"]))")
+            let rawAuthMethodValue = String(describing: record["authMethod"])
+            logger.error(
+                "Server \(id): invalid authMethod. Raw value: \(rawAuthMethodValue)"
+            )
             return nil
         }
 

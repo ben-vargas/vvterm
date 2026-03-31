@@ -27,9 +27,9 @@ struct TerminalTabView: View {
 
     @EnvironmentObject var ghosttyApp: Ghostty.App
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
-    @AppStorage("terminalThemeNameLight") private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage("terminalUsePerAppearanceTheme") private var usePerAppearanceTheme = true
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
+    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     @AppStorage("terminalVoiceButtonEnabled") private var voiceButtonEnabled = true
 
     @StateObject private var audioService = AudioService()
@@ -399,9 +399,9 @@ struct TerminalPaneView: View {
     @State private var connectWatchdogToken = UUID()
     @StateObject private var richPasteUI = TerminalRichPasteUIModel()
 
-    @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
-    @AppStorage("terminalThemeNameLight") private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage("terminalUsePerAppearanceTheme") private var usePerAppearanceTheme = true
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
+    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     @AppStorage("sshAutoReconnect") private var autoReconnectEnabled = true
 
     private var paneState: TerminalPaneState? {
@@ -820,9 +820,9 @@ struct TerminalPaneView: View {
             return Color.fromHex(cachedHex)
         }
 
-        let usePerAppearanceTheme = defaults.object(forKey: "terminalUsePerAppearanceTheme") as? Bool ?? true
-        let darkThemeName = defaults.string(forKey: "terminalThemeName") ?? "Aizen Dark"
-        let lightThemeName = defaults.string(forKey: "terminalThemeNameLight") ?? "Aizen Light"
+        let usePerAppearanceTheme = defaults.object(forKey: CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) as? Bool ?? true
+        let darkThemeName = defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameKey) ?? "Aizen Dark"
+        let lightThemeName = defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameLightKey) ?? "Aizen Light"
         let isDarkAppearance = NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         let themeName = usePerAppearanceTheme ? (isDarkAppearance ? darkThemeName : lightThemeName) : darkThemeName
 

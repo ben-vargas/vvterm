@@ -37,9 +37,9 @@ struct TerminalSettingsView: View {
     @Binding var fontName: String
     @Binding var fontSize: Double
 
-    @AppStorage("terminalThemeName") private var themeName = "Aizen Dark"
-    @AppStorage("terminalThemeNameLight") private var themeNameLight = "Aizen Light"
-    @AppStorage("terminalUsePerAppearanceTheme") private var usePerAppearanceTheme = true
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var themeName = "Aizen Dark"
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var themeNameLight = "Aizen Light"
+    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     @AppStorage("terminalNotificationsEnabled") private var terminalNotificationsEnabled = true
     @AppStorage("terminalProgressEnabled") private var terminalProgressEnabled = true
     @AppStorage("terminalAccessoryCustomizationEnabled") private var terminalAccessoryCustomizationEnabled = true

@@ -19,9 +19,9 @@ struct ContentView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var restoredColumnVisibility: NavigationSplitViewVisibility = .all
     @SceneStorage("vvterm.zenMode.macos") private var isZenModeEnabled = false
-    @AppStorage("terminalThemeName") private var terminalThemeName = "Aizen Dark"
-    @AppStorage("terminalThemeNameLight") private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage("terminalUsePerAppearanceTheme") private var usePerAppearanceTheme = true
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
+    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
 
     /// Whether the selected server is connected
     private var isSelectedServerConnected: Bool {

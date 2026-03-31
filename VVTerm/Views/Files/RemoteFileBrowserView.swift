@@ -13,9 +13,9 @@ struct RemoteFileBrowserView: View {
 
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var browser = RemoteFileBrowserManager.shared
-    @AppStorage("terminalThemeName") var terminalThemeName = "Aizen Dark"
-    @AppStorage("terminalThemeNameLight") var terminalThemeNameLight = "Aizen Light"
-    @AppStorage("terminalUsePerAppearanceTheme") var usePerAppearanceTheme = true
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) var terminalThemeName = "Aizen Dark"
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) var terminalThemeNameLight = "Aizen Light"
+    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) var usePerAppearanceTheme = true
     @State var presentedPreviewPath: String?
     @State var uploadDestinationPath: String?
     @State var downloadExportDocument: RemoteFileDownloadDocument?

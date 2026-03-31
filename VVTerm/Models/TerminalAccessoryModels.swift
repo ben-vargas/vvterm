@@ -707,7 +707,7 @@ extension TerminalAccessoryProfile {
     static let schemaVersion = 2
     static let recordType = "UserPreference"
     static let recordName = "terminalAccessory.v1"
-    static let defaultsKey = "terminalAccessoryProfileV1"
+    static let defaultsKey = CloudKitSyncConstants.terminalAccessoryProfileStorageKey
 
     static let minActiveItems = 4
     static let maxActiveItems = 28
