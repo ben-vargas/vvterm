@@ -1149,6 +1149,27 @@ extension ConnectionSessionManager {
         updateTmuxStatus(sessionId, status: status)
     }
 
+    private func runTmuxCleanupIfNeeded(
+        for serverId: UUID,
+        sessionId: UUID,
+        selection: TmuxAttachSelection,
+        using client: SSHClient
+    ) async {
+        var cleanupSet = tmuxCleanupServers
+        await tmuxResolver.runCleanupIfNeeded(
+            serverId: serverId,
+            cleanupSet: &cleanupSet,
+            managedNames: tmuxSessionNamesToKeep(for: serverId, sessionId: sessionId, selection: selection),
+            using: client
+        )
+        tmuxCleanupServers = cleanupSet
+    }
+
+    private func prepareActiveTmuxSession(for sessionId: UUID, using client: SSHClient) async {
+        updateTmuxStatus(sessionId, status: currentTmuxStatus(for: sessionId))
+        await RemoteTmuxManager.shared.prepareConfig(using: client)
+    }
+
     private func handleTmuxLifecycle(
         sessionId: UUID,
         serverId: UUID,
@@ -1189,23 +1210,8 @@ extension ConnectionSessionManager {
             tmuxResolver.sessionOwnership[sessionId] = .managed
         }
 
-        var cleanupSet = tmuxCleanupServers
-        await tmuxResolver.runCleanupIfNeeded(
-            serverId: serverId,
-            cleanupSet: &cleanupSet,
-            managedNames: tmuxSessionNamesToKeep(for: serverId, sessionId: sessionId, selection: selection),
-            using: client
-        )
-        tmuxCleanupServers = cleanupSet
-
-        let status = await MainActor.run {
-            self.currentTmuxStatus(for: sessionId)
-        }
-        await MainActor.run {
-            self.updateTmuxStatus(sessionId, status: status)
-        }
-
-        await RemoteTmuxManager.shared.prepareConfig(using: client)
+        await runTmuxCleanupIfNeeded(for: serverId, sessionId: sessionId, selection: selection, using: client)
+        await prepareActiveTmuxSession(for: sessionId, using: client)
 
         let workingDirectory = await resolveTmuxWorkingDirectory(for: sessionId, using: client)
         guard let rebuilt = tmuxResolver.buildAttachExecCommand(
@@ -1250,17 +1256,8 @@ extension ConnectionSessionManager {
             return (nil, true)
         }
 
-        var cleanupSet = tmuxCleanupServers
-        await tmuxResolver.runCleanupIfNeeded(
-            serverId: serverId,
-            cleanupSet: &cleanupSet,
-            managedNames: tmuxSessionNamesToKeep(for: serverId, sessionId: sessionId, selection: selection),
-            using: client
-        )
-        tmuxCleanupServers = cleanupSet
-
-        updateTmuxStatus(sessionId, status: currentTmuxStatus(for: sessionId))
-        await RemoteTmuxManager.shared.prepareConfig(using: client)
+        await runTmuxCleanupIfNeeded(for: serverId, sessionId: sessionId, selection: selection, using: client)
+        await prepareActiveTmuxSession(for: sessionId, using: client)
 
         let workingDirectory = await resolveTmuxWorkingDirectory(for: sessionId, using: client)
 
