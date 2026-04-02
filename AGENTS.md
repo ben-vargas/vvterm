@@ -13,6 +13,7 @@ Cross-platform (iOS/macOS) SSH terminal app with iCloud sync and Keychain creden
 ```
 VVTerm/
 ├── App/
+│   └── iOS/                      # iOS app shell and root navigation views
 ├── Core/                         # Shared infrastructure and platform glue
 │   ├── Network/
 │   ├── UI/
@@ -97,6 +98,7 @@ Current migration status:
 - `Core/UI` is extracted for shared view primitives reused across features.
 - `Core/SSH` is extracted for shared SSH bootstrap, known-hosts, key generation, environment detection, and rich-paste support.
 - `Features/ConnectionViews` is migrated for connection view tab configuration types and state.
+- `App/iOS` is extracted for iOS app-shell composition and root navigation views.
 - `Features/RemoteFiles` is fully migrated and is the reference pattern for larger features.
 - `Features/LocalDiscovery` is migrated for discovery-specific code and UI.
 - `Features/Servers` is migrated for server/workspace domain models, server management, and server/workspace UI flows.
