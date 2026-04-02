@@ -34,6 +34,11 @@ VVTerm/
 │   │   ├── Domain/
 │   │   ├── Application/
 │   │   └── UI/
+│   ├── TerminalThemes/
+│   │   ├── Domain/
+│   │   ├── Application/
+│   │   ├── Infrastructure/
+│   │   └── UI/
 │   └── Stats/
 │       ├── Domain/
 │       ├── Application/
@@ -56,6 +61,7 @@ Current migration status:
 - `Features/Stats` is migrated for server metrics collection and presentation.
 - `Features/Security` is migrated for app lock and biometric authentication flows.
 - `Features/Store` is migrated for Pro entitlements, purchases, and upgrade surfaces.
+- `Features/TerminalThemes` is migrated for theme models, validation, storage paths, parsing, and theme management.
 - Other areas may still live in legacy top-level buckets such as `Models`, `Managers`, `Services`, and `Views`.
 - New work inside migrated features must stay inside their `Features/<FeatureName>` subtree and should not add code for those features back into the legacy structure.
 
