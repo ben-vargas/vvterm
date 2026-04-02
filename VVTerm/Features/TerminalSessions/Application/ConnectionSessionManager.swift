@@ -143,6 +143,11 @@ final class ConnectionSessionManager: ObservableObject {
         sessionWithID(sessionId)?.tmuxStatus
     }
 
+    private func setTmuxStatus(_ status: TmuxStatus, for sessionId: UUID) {
+        guard let index = indexOfSession(sessionId) else { return }
+        sessions[index].tmuxStatus = status
+    }
+
     private func setTransport(
         _ transport: ShellTransport,
         fallbackReason: MoshFallbackReason?,
@@ -273,7 +278,7 @@ final class ConnectionSessionManager: ObservableObject {
             connectedServerIds.insert(serverId)
         case .disconnected, .failed:
             if sessions[index].tmuxStatus == .foreground {
-                sessions[index].tmuxStatus = .background
+                setTmuxStatus(.background, for: sessionId)
             }
             let hasOtherConnections = sessions.contains {
                 $0.serverId == serverId && $0.connectionState.isConnected
@@ -308,14 +313,12 @@ final class ConnectionSessionManager: ObservableObject {
     }
 
     func updateTmuxStatus(_ sessionId: UUID, status: TmuxStatus) {
-        guard let index = indexOfSession(sessionId) else { return }
-        sessions[index].tmuxStatus = status
+        setTmuxStatus(status, for: sessionId)
     }
 
     func updateSessionWorkingDirectory(_ sessionId: UUID, rawDirectory: String) {
         guard let normalized = normalizeWorkingDirectory(rawDirectory) else { return }
-        guard let index = indexOfSession(sessionId) else { return }
-        sessions[index].workingDirectory = normalized
+        setStoredWorkingDirectory(normalized, for: sessionId)
     }
 
     // MARK: - Close Terminal
@@ -1077,7 +1080,7 @@ extension ConnectionSessionManager {
         guard let selectedId = selectedSessionId else {
             for index in sessions.indices {
                 if sessions[index].tmuxStatus == .foreground {
-                    sessions[index].tmuxStatus = .background
+                    setTmuxStatus(.background, for: sessions[index].id)
                 }
             }
             return
@@ -1085,7 +1088,7 @@ extension ConnectionSessionManager {
         for index in sessions.indices {
             let status = sessions[index].tmuxStatus
             guard status == .foreground || status == .background else { continue }
-            sessions[index].tmuxStatus = (sessions[index].id == selectedId) ? .foreground : .background
+            setTmuxStatus((sessions[index].id == selectedId) ? .foreground : .background, for: sessions[index].id)
         }
     }
 
@@ -1325,8 +1328,9 @@ extension ConnectionSessionManager {
 
     func disableTmux(for serverId: UUID) {
         for index in sessions.indices where sessions[index].serverId == serverId {
-            sessions[index].tmuxStatus = .off
-            tmuxResolver.clearRuntimeState(for: sessions[index].id, setPrompt: setTmuxAttachPrompt)
+            let sessionId = sessions[index].id
+            setTmuxStatus(.off, for: sessionId)
+            tmuxResolver.clearRuntimeState(for: sessionId, setPrompt: setTmuxAttachPrompt)
         }
     }
 }
