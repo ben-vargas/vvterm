@@ -36,6 +36,9 @@ VVTerm/
 │   │   ├── Application/
 │   │   ├── Infrastructure/
 │   │   └── UI/
+│   ├── VoiceInput/
+│   │   ├── Infrastructure/
+│   │   └── UI/
 │   ├── Security/
 │   │   ├── Domain/
 │   │   ├── Application/
@@ -97,6 +100,7 @@ Current migration status:
 - `Features/TerminalAccessories` is migrated for keyboard accessory models, preferences, settings UI, and accessory validation flows.
 - `Features/TerminalPresets` is migrated for terminal preset models, persistence, and preset form UI.
 - `Features/TerminalSessions` is migrated for terminal session/tab domain models, session/tab managers, tmux prompt coordination, live activity support, and terminal session UI.
+- `Features/VoiceInput` is migrated for transcription/audio capture infrastructure, MLX model management, and transcription settings UI.
 - `Features/Welcome` is migrated for welcome/onboarding copy and presentation.
 - Other areas may still live in legacy top-level buckets such as `Models`, `Managers`, `Services`, and `Views`.
 - New work inside migrated features must stay inside their `Features/<FeatureName>` subtree and should not add code for those features back into the legacy structure.
