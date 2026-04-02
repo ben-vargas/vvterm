@@ -269,108 +269,56 @@ final class CloudKitManager: ObservableObject {
     // MARK: - Server Operations
 
     func saveServer(_ server: Server) async throws {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
-
+        try await prepareSyncMutation()
         let record = server.toRecord(in: recordZoneID)
-
-        do {
+        try await performSyncMutation(
+            successLog: "Saved server \(server.name) to CloudKit",
+            failureLog: "Failed to save server"
+        ) {
             try await withZoneRetry {
                 try await saveRecordWithUpsert(record)
             }
-            lastSyncDate = Date()
-            logger.info("Saved server \(server.name) to CloudKit")
-        } catch {
-            logger.error("Failed to save server: \(error.localizedDescription)")
-            syncStatus = .error(error.localizedDescription)
-            throw error
         }
     }
 
     func deleteServer(_ server: Server) async throws {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
-
+        try await prepareSyncMutation()
         let recordID = CKRecord.ID(recordName: server.id.uuidString, zoneID: recordZoneID)
-
-        do {
+        _ = try await performSyncMutation(
+            successLog: "Deleted server \(server.name) from CloudKit",
+            failureLog: "Failed to delete server"
+        ) {
             _ = try await withZoneRetry {
                 try await database.modifyRecords(saving: [], deleting: [recordID])
             }
-            lastSyncDate = Date()
-            logger.info("Deleted server \(server.name) from CloudKit")
-        } catch {
-            logger.error("Failed to delete server: \(error.localizedDescription)")
-            syncStatus = .error(error.localizedDescription)
-            throw error
         }
     }
 
     // MARK: - Workspace Operations
 
     func saveWorkspace(_ workspace: Workspace) async throws {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
-
+        try await prepareSyncMutation()
         let record = workspace.toRecord(in: recordZoneID)
-
-        do {
+        try await performSyncMutation(
+            successLog: "Saved workspace \(workspace.name) to CloudKit",
+            failureLog: "Failed to save workspace"
+        ) {
             try await withZoneRetry {
                 try await saveRecordWithUpsert(record)
             }
-            lastSyncDate = Date()
-            logger.info("Saved workspace \(workspace.name) to CloudKit")
-        } catch {
-            logger.error("Failed to save workspace: \(error.localizedDescription)")
-            syncStatus = .error(error.localizedDescription)
-            throw error
         }
     }
 
     func deleteWorkspace(_ workspace: Workspace) async throws {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
-
+        try await prepareSyncMutation()
         let recordID = CKRecord.ID(recordName: workspace.id.uuidString, zoneID: recordZoneID)
-
-        do {
+        _ = try await performSyncMutation(
+            successLog: "Deleted workspace \(workspace.name) from CloudKit",
+            failureLog: "Failed to delete workspace"
+        ) {
             _ = try await withZoneRetry {
                 try await database.modifyRecords(saving: [], deleting: [recordID])
             }
-            lastSyncDate = Date()
-            logger.info("Deleted workspace \(workspace.name) from CloudKit")
-        } catch {
-            logger.error("Failed to delete workspace: \(error.localizedDescription)")
-            syncStatus = .error(error.localizedDescription)
-            throw error
         }
     }
 
@@ -390,27 +338,15 @@ final class CloudKitManager: ObservableObject {
     }
 
     func saveTerminalTheme(_ theme: TerminalTheme) async throws {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
-
+        try await prepareSyncMutation()
         let record = theme.toRecord(in: recordZoneID)
-        do {
+        try await performSyncMutation(
+            successLog: "Saved terminal theme \(theme.name) to CloudKit",
+            failureLog: "Failed to save terminal theme"
+        ) {
             try await withZoneRetry {
                 try await saveRecordWithUpsert(record)
             }
-            lastSyncDate = Date()
-            logger.info("Saved terminal theme \(theme.name) to CloudKit")
-        } catch {
-            logger.error("Failed to save terminal theme: \(error.localizedDescription)")
-            syncStatus = .error(error.localizedDescription)
-            throw error
         }
     }
 
@@ -436,27 +372,15 @@ final class CloudKitManager: ObservableObject {
     }
 
     func saveTerminalThemePreference(_ preference: TerminalThemePreference) async throws {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
-
+        try await prepareSyncMutation()
         let record = preference.toRecord(in: recordZoneID)
-        do {
+        try await performSyncMutation(
+            successLog: "Saved terminal theme preference to CloudKit",
+            failureLog: "Failed to save terminal theme preference"
+        ) {
             try await withZoneRetry {
                 try await saveRecordWithUpsert(record)
             }
-            lastSyncDate = Date()
-            logger.info("Saved terminal theme preference to CloudKit")
-        } catch {
-            logger.error("Failed to save terminal theme preference: \(error.localizedDescription)")
-            syncStatus = .error(error.localizedDescription)
-            throw error
         }
     }
 
@@ -488,40 +412,21 @@ final class CloudKitManager: ObservableObject {
     }
 
     func saveTerminalAccessoryProfile(_ profile: TerminalAccessoryProfile) async throws {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
-
+        try await prepareSyncMutation()
         let recordID = terminalAccessoryRecordID()
         let record = try makeTerminalAccessoryRecord(from: profile.normalized(), recordID: recordID)
-
-        do {
+        try await performSyncMutation(
+            successLog: "Saved terminal accessory profile to CloudKit",
+            failureLog: "Failed to save terminal accessory profile"
+        ) {
             try await withZoneRetry {
                 try await saveRecordWithUpsert(record)
             }
-            lastSyncDate = Date()
-            logger.info("Saved terminal accessory profile to CloudKit")
-        } catch {
-            logger.error("Failed to save terminal accessory profile: \(error.localizedDescription)")
-            syncStatus = .error(error.localizedDescription)
-            throw error
         }
     }
 
     func syncTerminalAccessoryProfile(_ localProfile: TerminalAccessoryProfile) async throws -> TerminalAccessoryProfile {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-
+        try await prepareSyncMutation()
         syncStatus = .syncing
         defer { syncStatus = .idle }
 
@@ -596,6 +501,34 @@ final class CloudKitManager: ObservableObject {
 
         logger.error("Failed to sync terminal accessory profile after retries")
         throw CloudKitError.recordNotFound
+    }
+
+    private func prepareSyncMutation() async throws {
+        await ensureAccountStatusChecked()
+        guard isAvailable else {
+            throw CloudKitError.notAvailable
+        }
+        try await ensureCustomZone()
+    }
+
+    private func performSyncMutation<T>(
+        successLog: String,
+        failureLog: String,
+        _ operation: () async throws -> T
+    ) async throws -> T {
+        syncStatus = .syncing
+        defer { syncStatus = .idle }
+
+        do {
+            let result = try await operation()
+            lastSyncDate = Date()
+            logger.info("\(successLog)")
+            return result
+        } catch {
+            logger.error("\(failureLog): \(error.localizedDescription)")
+            syncStatus = .error(error.localizedDescription)
+            throw error
+        }
     }
 
     // MARK: - Subscriptions
