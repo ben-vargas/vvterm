@@ -10,7 +10,7 @@ import SwiftUI
 struct SyncSettingsView: View {
     @ObservedObject private var cloudKit = CloudKitManager.shared
     @ObservedObject private var serverManager = ServerManager.shared
-    @ObservedObject private var terminalThemeManager = TerminalThemeManager.shared
+    @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @ObservedObject private var terminalAccessory = TerminalAccessoryPreferencesManager.shared
     @AppStorage(SyncSettings.enabledKey) private var syncEnabled = true
 

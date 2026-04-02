@@ -63,7 +63,7 @@ struct TerminalSettingsView: View {
     @AppStorage("sshKeepAliveInterval") private var keepAliveInterval = 30
     @AppStorage("sshAutoReconnect") private var autoReconnect = true
 
-    @StateObject private var terminalThemeManager = TerminalThemeManager.shared
+    @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
 
     @State private var availableFonts: [String] = []
     @State private var builtInThemeNames: [String] = []
