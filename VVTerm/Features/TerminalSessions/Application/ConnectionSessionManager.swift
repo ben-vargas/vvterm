@@ -728,19 +728,26 @@ final class ConnectionSessionManager: ObservableObject {
     }
 
     func unregisterTerminal(for sessionId: UUID) {
-        if let terminal = terminalViews.removeValue(forKey: sessionId) {
-            // Ensure cleanup is called to free Ghostty surface
-            terminal.cleanup()
-        }
+        cleanupTerminalSurface(for: sessionId)
         terminalsNeedingReconnectReset.remove(sessionId)
-        terminalAccessOrder.removeAll { $0 == sessionId }
+        removeTerminalFromAccessOrder(sessionId)
         logger.debug("Unregistered terminal, remaining: \(self.terminalViews.count)")
     }
 
     /// Update access order for LRU tracking
     private func touchTerminal(_ sessionId: UUID) {
-        terminalAccessOrder.removeAll { $0 == sessionId }
+        removeTerminalFromAccessOrder(sessionId)
         terminalAccessOrder.append(sessionId)
+    }
+
+    private func cleanupTerminalSurface(for sessionId: UUID) {
+        if let terminal = terminalViews.removeValue(forKey: sessionId) {
+            terminal.cleanup()
+        }
+    }
+
+    private func removeTerminalFromAccessOrder(_ sessionId: UUID) {
+        terminalAccessOrder.removeAll { $0 == sessionId }
     }
 
     /// Evict least recently used terminals if over capacity
@@ -759,9 +766,7 @@ final class ConnectionSessionManager: ObservableObject {
             terminalAccessOrder.removeFirst()
 
             // Cleanup and remove terminal
-            if let terminal = terminalViews.removeValue(forKey: oldestId) {
-                terminal.cleanup()
-            }
+            cleanupTerminalSurface(for: oldestId)
 
             // Also cleanup associated SSH shell
             scheduleSSHUnregister(for: oldestId)
