@@ -116,7 +116,7 @@ struct RemoteEnvironment: Hashable, Sendable {
         }
     }
 
-    static let fallbackPOSIX = RemoteEnvironment(
+    nonisolated static let fallbackPOSIX = RemoteEnvironment(
         platform: .linux,
         shellProfile: .posix(shellName: "sh"),
         activeShellName: "sh",

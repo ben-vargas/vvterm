@@ -1,9 +1,9 @@
 import Foundation
 
 enum SyncSettings {
-    static let enabledKey = CloudKitSyncConstants.syncEnabledKey
+    nonisolated static let enabledKey = CloudKitSyncConstants.syncEnabledKey
 
-    static var isEnabled: Bool {
+    nonisolated static var isEnabled: Bool {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
     }
 }

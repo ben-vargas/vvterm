@@ -11,7 +11,7 @@ import Security
 final class KeychainStore: @unchecked Sendable {
     private let service: String
 
-    init(service: String) {
+    nonisolated init(service: String) {
         self.service = service
     }
 
