@@ -1170,6 +1170,16 @@ extension ConnectionSessionManager {
         await RemoteTmuxManager.shared.prepareConfig(using: client)
     }
 
+    private func immediateTmuxSelection(for sessionId: UUID) -> TmuxAttachSelection {
+        if tmuxResolver.sessionOwnership[sessionId] == .external {
+            return .attachExisting(sessionName: tmuxResolver.sessionName(for: sessionId))
+        }
+
+        tmuxResolver.sessionNames[sessionId] = tmuxResolver.managedSessionName(for: sessionId)
+        tmuxResolver.sessionOwnership[sessionId] = .managed
+        return .createManaged
+    }
+
     private func handleTmuxLifecycle(
         sessionId: UUID,
         serverId: UUID,
@@ -1199,16 +1209,7 @@ extension ConnectionSessionManager {
             return
         }
 
-        let selection: TmuxAttachSelection
-        if tmuxResolver.sessionOwnership[sessionId] == .external {
-            selection = .attachExisting(
-                sessionName: tmuxResolver.sessionName(for: sessionId)
-            )
-        } else {
-            selection = .createManaged
-            tmuxResolver.sessionNames[sessionId] = tmuxResolver.managedSessionName(for: sessionId)
-            tmuxResolver.sessionOwnership[sessionId] = .managed
-        }
+        let selection = immediateTmuxSelection(for: sessionId)
 
         await runTmuxCleanupIfNeeded(for: serverId, sessionId: sessionId, selection: selection, using: client)
         await prepareActiveTmuxSession(for: sessionId, using: client)
