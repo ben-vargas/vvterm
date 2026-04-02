@@ -11,7 +11,7 @@ struct SyncSettingsView: View {
     @ObservedObject private var cloudKit = CloudKitManager.shared
     @ObservedObject private var serverManager = ServerManager.shared
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
-    @ObservedObject private var terminalAccessory = TerminalAccessoryPreferencesManager.shared
+    @EnvironmentObject private var terminalAccessory: TerminalAccessoryPreferencesManager
     @AppStorage(SyncSettings.enabledKey) private var syncEnabled = true
 
     var body: some View {
@@ -138,7 +138,7 @@ struct SyncSettingsView: View {
             if enabled {
                 Task {
                     await serverManager.loadData()
-                    await TerminalAccessoryPreferencesManager.shared.refreshFromCloud()
+                    await terminalAccessory.refreshFromCloud()
                 }
             }
         }

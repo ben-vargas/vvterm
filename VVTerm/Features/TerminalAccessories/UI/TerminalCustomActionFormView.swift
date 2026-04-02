@@ -2,7 +2,7 @@ import SwiftUI
 
 struct TerminalCustomActionFormView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var preferences = TerminalAccessoryPreferencesManager.shared
+    @EnvironmentObject private var preferences: TerminalAccessoryPreferencesManager
 
     let action: TerminalAccessoryCustomAction?
 

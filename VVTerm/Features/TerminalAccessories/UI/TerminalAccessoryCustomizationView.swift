@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct TerminalAccessoryCustomizationView: View {
-    @StateObject private var preferences = TerminalAccessoryPreferencesManager.shared
+    @EnvironmentObject private var preferences: TerminalAccessoryPreferencesManager
     @State private var showingCreateActionSheet = false
 
     private var activeItems: [TerminalAccessoryItemRef] {

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct TerminalCustomActionLibraryView: View {
-    @StateObject private var preferences = TerminalAccessoryPreferencesManager.shared
+    @EnvironmentObject private var preferences: TerminalAccessoryPreferencesManager
 
     @State private var showingCreateSheet = false
     @State private var editingAction: TerminalAccessoryCustomAction?
