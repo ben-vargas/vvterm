@@ -86,7 +86,6 @@ VVTerm/
 │       ├── Domain/
 │       └── UI/
 ├── GhosttyTerminal/              # libghostty terminal emulation
-├── Bridge/                       # Vendor and native integration glue
 ├── Compatibility/                # Version/platform compatibility helpers
 ├── Generated/                    # Build-time generated sources
 └── Resources/                    # Bundled assets, themes, terminfo, l10n
