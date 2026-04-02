@@ -430,7 +430,7 @@ struct ProUpgradeSheet: View {
 
     // MARK: - State Change Handlers
 
-    private func handlePurchaseStateChange(_ newState: StoreManager.PurchaseState) {
+    private func handlePurchaseStateChange(_ newState: PurchaseState) {
         switch newState {
         case .purchased:
             withAnimation(.easeInOut(duration: 0.3)) {
@@ -458,7 +458,7 @@ struct ProUpgradeSheet: View {
         }
     }
 
-    private func handleRestoreStateChange(_ newState: StoreManager.RestoreState) {
+    private func handleRestoreStateChange(_ newState: RestoreState) {
         switch newState {
         case .restored(let hasAccess):
             alertInfo = AlertInfo(

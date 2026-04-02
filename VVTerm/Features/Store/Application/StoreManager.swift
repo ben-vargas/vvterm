@@ -25,44 +25,6 @@ final class StoreManager: ObservableObject {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "Store")
     private let reviewModeDuration: TimeInterval = 60 * 60 * 5
 
-    enum PurchaseState: Equatable {
-        case idle
-        case purchasing
-        case purchased
-        case failed(String)
-
-        static func == (lhs: PurchaseState, rhs: PurchaseState) -> Bool {
-            switch (lhs, rhs) {
-            case (.idle, .idle), (.purchasing, .purchasing), (.purchased, .purchased):
-                return true
-            case (.failed(let l), .failed(let r)):
-                return l == r
-            default:
-                return false
-            }
-        }
-    }
-
-    enum RestoreState: Equatable {
-        case idle
-        case restoring
-        case restored(hasAccess: Bool)
-        case failed(String)
-
-        static func == (lhs: RestoreState, rhs: RestoreState) -> Bool {
-            switch (lhs, rhs) {
-            case (.idle, .idle), (.restoring, .restoring):
-                return true
-            case (.restored(let l), .restored(let r)):
-                return l == r
-            case (.failed(let l), .failed(let r)):
-                return l == r
-            default:
-                return false
-            }
-        }
-    }
-
     // MARK: - Sorted Products
 
     var monthlyProduct: Product? {
@@ -300,36 +262,6 @@ final class StoreManager: ObservableObject {
         guard isReviewModeEnabled else { return }
         if let expiresAt = reviewModeExpiresAt, Date() >= expiresAt {
             setReviewModeEnabled(false)
-        }
-    }
-}
-
-// MARK: - Product IDs
-
-enum VVTermProducts {
-    // Auto-renewable subscriptions (same group)
-    static let proMonthly = "com.vivy.vivyterm.pro.monthly"
-    static let proYearly = "com.vivy.vivyterm.pro.yearly"
-
-    // Non-consumable (one-time)
-    static let proLifetime = "com.vivy.vivyterm.pro.lifetime"
-
-    static let subscriptionGroupId = "vivyterm_pro"
-    static let allProducts = [proMonthly, proYearly, proLifetime]
-}
-
-// MARK: - Store Error
-
-enum StoreError: LocalizedError {
-    case verificationFailed
-    case productNotFound
-    case purchaseFailed(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .verificationFailed: return String(localized: "Purchase verification failed")
-        case .productNotFound: return String(localized: "Product not found")
-        case .purchaseFailed(let msg): return String(format: String(localized: "Purchase failed: %@"), msg)
         }
     }
 }
