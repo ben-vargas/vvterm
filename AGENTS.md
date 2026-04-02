@@ -15,7 +15,22 @@ VVTerm/
 ├── App/
 ├── Core/                         # Shared infrastructure and platform glue
 ├── Features/                     # Feature-first architecture target
-│   └── RemoteFiles/              # First feature being migrated
+│   ├── LocalDiscovery/
+│   │   ├── Domain/
+│   │   ├── Application/
+│   │   ├── Infrastructure/
+│   │   └── UI/
+│   ├── RemoteFiles/
+│   │   ├── Domain/
+│   │   ├── Application/
+│   │   ├── Infrastructure/
+│   │   └── UI/
+│   ├── Security/
+│   │   ├── Domain/
+│   │   ├── Application/
+│   │   ├── Infrastructure/
+│   │   └── UI/
+│   └── Stats/
 │       ├── Domain/
 │       ├── Application/
 │       ├── Infrastructure/
@@ -32,9 +47,12 @@ VVTerm/
 VVTerm is moving from app-wide technical buckets toward **feature-first architecture**.
 
 Current migration status:
-- `Features/RemoteFiles` is the first direct-cutover feature migration.
+- `Features/RemoteFiles` is fully migrated and is the reference pattern for larger features.
+- `Features/LocalDiscovery` is migrated for discovery-specific code and UI.
+- `Features/Stats` is migrated for server metrics collection and presentation.
+- `Features/Security` is migrated for app lock and biometric authentication flows.
 - Other areas may still live in legacy top-level buckets such as `Models`, `Managers`, `Services`, and `Views`.
-- New work inside the Files/SFTP feature should stay inside `Features/RemoteFiles` and should not add new Files code back into the legacy structure.
+- New work inside migrated features must stay inside their `Features/<FeatureName>` subtree and should not add code for those features back into the legacy structure.
 
 Feature-first target shape:
 - `Domain`: pure feature types and rules
@@ -47,6 +65,11 @@ For Files/SFTP specifically:
 - no feature policy inside `SSHClient` beyond low-level transport/session behavior
 - use explicit dependency injection at the feature boundary
 - do direct cutovers, not compatibility shims
+
+For every migrated feature:
+- keep `Domain`, `Application`, `Infrastructure`, and `UI` boundaries intact
+- prefer view-owned dependencies to be injected from the app/screen boundary instead of created inside leaf views
+- if shared cross-feature primitives are needed, extract them into `Core` instead of pushing them back into legacy buckets
 
 ## Refactoring Rules
 
