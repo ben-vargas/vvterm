@@ -1180,6 +1180,24 @@ extension ConnectionSessionManager {
         return .createManaged
     }
 
+    private func tmuxStartupCommand(
+        for sessionId: UUID,
+        selection: TmuxAttachSelection,
+        workingDirectory: String
+    ) -> String? {
+        switch selection {
+        case .skipTmux:
+            return nil
+        case .createManaged:
+            return RemoteTmuxManager.shared.attachCommand(
+                sessionName: tmuxResolver.sessionName(for: sessionId),
+                workingDirectory: workingDirectory
+            )
+        case .attachExisting(let sessionName):
+            return RemoteTmuxManager.shared.attachExistingCommand(sessionName: sessionName)
+        }
+    }
+
     private func handleTmuxLifecycle(
         sessionId: UUID,
         serverId: UUID,
@@ -1261,22 +1279,7 @@ extension ConnectionSessionManager {
         await prepareActiveTmuxSession(for: sessionId, using: client)
 
         let workingDirectory = await resolveTmuxWorkingDirectory(for: sessionId, using: client)
-
-        switch selection {
-        case .skipTmux:
-            return (nil, true)
-        case .createManaged:
-            let tmuxCommand = RemoteTmuxManager.shared.attachCommand(
-                sessionName: tmuxResolver.sessionName(for: sessionId),
-                workingDirectory: workingDirectory
-            )
-            return (tmuxCommand, true)
-        case .attachExisting(let sessionName):
-            let tmuxCommand = RemoteTmuxManager.shared.attachExistingCommand(
-                sessionName: sessionName
-            )
-            return (tmuxCommand, true)
-        }
+        return (tmuxStartupCommand(for: sessionId, selection: selection, workingDirectory: workingDirectory), true)
     }
 
     func startTmuxInstall(for sessionId: UUID) async {
