@@ -84,7 +84,7 @@ final class RemoteFileBrowserStore: ObservableObject {
         }
     }
 
-    private struct DirectorySnapshot: Sendable {
+    struct DirectorySnapshot: Sendable {
         let path: String
         let entries: [RemoteFileEntry]
         let isTruncated: Bool
@@ -92,7 +92,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     }
 
     @Published private(set) var states: [UUID: BrowserState] = [:]
-    @Published private(set) var pendingToolbarCommand: ToolbarCommand?
+    @Published var pendingToolbarCommand: ToolbarCommand?
 
     let defaults: UserDefaults
     let persistenceKey = "remoteFileBrowserState.v1"
@@ -195,25 +195,6 @@ final class RemoteFileBrowserStore: ObservableObject {
         state(for: serverId).breadcrumbs
     }
 
-    func requestUploadPicker(for serverId: UUID, destinationPath: String) {
-        pendingToolbarCommand = ToolbarCommand(
-            serverId: serverId,
-            action: .upload(destinationPath: RemoteFilePath.normalize(destinationPath))
-        )
-    }
-
-    func requestCreateFolder(for serverId: UUID, destinationPath: String) {
-        pendingToolbarCommand = ToolbarCommand(
-            serverId: serverId,
-            action: .createFolder(destinationPath: RemoteFilePath.normalize(destinationPath))
-        )
-    }
-
-    func consumeToolbarCommand(_ command: ToolbarCommand) {
-        guard pendingToolbarCommand?.id == command.id else { return }
-        pendingToolbarCommand = nil
-    }
-
     func loadInitialPath(for server: Server, initialPath: String? = nil) async {
         let currentState = state(for: server.id)
         guard !currentState.isLoadingDirectory else { return }
@@ -265,6 +246,10 @@ final class RemoteFileBrowserStore: ObservableObject {
         await refresh(serverId: server.id)
     }
 
+    func openBreadcrumb(_ breadcrumb: RemoteFileBreadcrumb, server: Server) async {
+        await loadDirectory(path: breadcrumb.path, for: server)
+    }
+
     func openDirectory(_ entry: RemoteFileEntry, serverId: UUID) async {
         guard let server = server(for: serverId) else { return }
         await loadDirectory(path: entry.path, for: server)
@@ -308,22 +293,6 @@ final class RemoteFileBrowserStore: ObservableObject {
         await activate(entry, serverId: server.id)
     }
 
-    func goUp(serverId: UUID) async {
-        guard let server = server(for: serverId) else { return }
-        let currentPath = state(for: serverId).currentPath ?? "/"
-        let parentPath = RemoteFilePath.parent(of: currentPath)
-        guard parentPath != currentPath else { return }
-        await loadDirectory(path: parentPath, for: server)
-    }
-
-    func goUp(server: Server) async {
-        await goUp(serverId: server.id)
-    }
-
-    func openBreadcrumb(_ breadcrumb: RemoteFileBreadcrumb, server: Server) async {
-        await loadDirectory(path: breadcrumb.path, for: server)
-    }
-
     func updateSort(_ sort: RemoteFileSort, serverId: UUID) {
         updateSort(sort, direction: sort.defaultDirection, serverId: serverId)
     }
@@ -352,9 +321,21 @@ final class RemoteFileBrowserStore: ObservableObject {
         remoteFileServiceAdapter.disconnect(serverId: serverId)
     }
 
+    func goUp(serverId: UUID) async {
+        guard let server = server(for: serverId) else { return }
+        let currentPath = state(for: serverId).currentPath ?? "/"
+        let parentPath = RemoteFilePath.parent(of: currentPath)
+        guard parentPath != currentPath else { return }
+        await loadDirectory(path: parentPath, for: server)
+    }
+
+    func goUp(server: Server) async {
+        await goUp(serverId: server.id)
+    }
+
     // MARK: - Private
 
-    private func loadDirectory(path: String, for server: Server) async {
+    func loadDirectory(path: String, for server: Server) async {
         let normalizedPath = RemoteFilePath.normalize(path)
         let requestID = UUID()
         directoryRequestIDs[server.id] = requestID
@@ -383,7 +364,7 @@ final class RemoteFileBrowserStore: ObservableObject {
         }
     }
 
-    private func resolveInitialDirectorySnapshot(for server: Server, initialPath: String?) async throws -> DirectorySnapshot {
+    func resolveInitialDirectorySnapshot(for server: Server, initialPath: String?) async throws -> DirectorySnapshot {
         let persistedPath = persistedState(for: server.id).lastVisitedPath
         let workingDirectory = bestWorkingDirectory(for: server.id)
 
@@ -423,7 +404,7 @@ final class RemoteFileBrowserStore: ObservableObject {
         )
     }
 
-    private func applyDirectorySnapshot(_ snapshot: DirectorySnapshot, for serverId: UUID) {
+    func applyDirectorySnapshot(_ snapshot: DirectorySnapshot, for serverId: UUID) {
         updateState(for: serverId) { state in
             state.currentPath = snapshot.path
             state.entries = snapshot.entries
@@ -435,7 +416,7 @@ final class RemoteFileBrowserStore: ObservableObject {
         persistState(for: serverId)
     }
 
-    private func selectFile(_ entry: RemoteFileEntry, serverId: UUID) {
+    func selectFile(_ entry: RemoteFileEntry, serverId: UUID) {
         focus(entry, serverId: serverId)
     }
 
@@ -446,7 +427,7 @@ final class RemoteFileBrowserStore: ObservableObject {
         try await remoteFileServiceAdapter.withService(for: server, operation: operation)
     }
 
-    private func bestWorkingDirectory(for serverId: UUID) -> String? {
+    func bestWorkingDirectory(for serverId: UUID) -> String? {
         if let selectedSessionId = ConnectionSessionManager.shared.selectedSessionByServer[serverId],
            let path = ConnectionSessionManager.shared.workingDirectory(for: selectedSessionId) {
             return path
@@ -479,9 +460,13 @@ final class RemoteFileBrowserStore: ObservableObject {
     func server(for serverId: UUID) -> Server? {
         ServerManager.shared.servers.first { $0.id == serverId }
     }
+
+    func setPendingToolbarCommand(_ command: ToolbarCommand?) {
+        pendingToolbarCommand = command
+    }
 }
 
-private extension String {
+extension String {
     var nonEmptyString: String? {
         isEmpty ? nil : self
     }
