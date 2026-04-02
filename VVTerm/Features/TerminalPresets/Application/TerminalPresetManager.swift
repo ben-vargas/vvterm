@@ -23,7 +23,7 @@ class TerminalPresetManager: ObservableObject {
 
     @Published private(set) var presets: [TerminalPreset] = []
 
-    private init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         loadPresets()
     }
