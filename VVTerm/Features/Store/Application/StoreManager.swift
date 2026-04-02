@@ -86,17 +86,13 @@ final class StoreManager: ObservableObject {
                 let transaction = try checkVerified(verification)
                 await transaction.finish()
                 await checkEntitlements()
-                lastPurchasedProductId = product.id
-                purchaseState = .purchased
-                logger.info("Purchase successful: \(product.id)")
+                applySuccessfulPurchase(of: product)
 
             case .userCancelled:
-                purchaseState = .idle
-                logger.info("Purchase cancelled by user")
+                applyIdlePurchaseState(logMessage: "Purchase cancelled by user")
 
             case .pending:
-                purchaseState = .idle
-                logger.info("Purchase pending")
+                applyIdlePurchaseState(logMessage: "Purchase pending")
 
             @unknown default:
                 purchaseState = .idle
@@ -115,8 +111,7 @@ final class StoreManager: ObservableObject {
         do {
             try await AppStore.sync()
             await checkEntitlements()
-            restoreState = .restored(hasAccess: isPro)
-            logger.info("Purchases restored")
+            applyRestoreResult(hasAccess: isPro)
         } catch {
             restoreState = .failed(error.localizedDescription)
             logger.error("Failed to restore purchases: \(error.localizedDescription)")
@@ -164,11 +159,7 @@ final class StoreManager: ObservableObject {
             }
         }
 
-        isPro = hasAccess || isReviewModeEnabled
-        isLifetime = hasLifetime
-        subscriptionStatus = activeStatus
-
-        logger.info("Entitlements checked: isPro=\(hasAccess), isLifetime=\(hasLifetime), reviewMode=\(self.isReviewModeEnabled)")
+        applyEntitlements(hasAccess: hasAccess, hasLifetime: hasLifetime, status: activeStatus)
     }
 
     // MARK: - Transaction Listener
@@ -263,5 +254,32 @@ final class StoreManager: ObservableObject {
         if let expiresAt = reviewModeExpiresAt, Date() >= expiresAt {
             setReviewModeEnabled(false)
         }
+    }
+
+    private func applySuccessfulPurchase(of product: Product) {
+        lastPurchasedProductId = product.id
+        purchaseState = .purchased
+        logger.info("Purchase successful: \(product.id)")
+    }
+
+    private func applyIdlePurchaseState(logMessage: String) {
+        purchaseState = .idle
+        logger.info("\(logMessage)")
+    }
+
+    private func applyRestoreResult(hasAccess: Bool) {
+        restoreState = .restored(hasAccess: hasAccess)
+        logger.info("Purchases restored")
+    }
+
+    private func applyEntitlements(
+        hasAccess: Bool,
+        hasLifetime: Bool,
+        status: Product.SubscriptionInfo.Status?
+    ) {
+        isPro = hasAccess || isReviewModeEnabled
+        isLifetime = hasLifetime
+        subscriptionStatus = status
+        logger.info("Entitlements checked: isPro=\(hasAccess), isLifetime=\(hasLifetime), reviewMode=\(self.isReviewModeEnabled)")
     }
 }
