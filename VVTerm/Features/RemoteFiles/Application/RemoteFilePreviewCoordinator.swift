@@ -1,4 +1,3 @@
-import AVFoundation
 import Foundation
 import os.log
 
@@ -59,8 +58,8 @@ extension RemoteFileBrowserStore {
         do {
             let readLimit = min(Int(entry.size ?? UInt64(Self.defaultPreviewBytes)), Self.hardPreviewBytes)
             let effectiveReadLimit = max(Self.defaultPreviewBytes, readLimit)
-            let data = try await withClient(for: server) { client in
-                try await client.readFile(at: entry.path, maxBytes: effectiveReadLimit)
+            let data = try await withRemoteFileService(for: server) { service in
+                try await service.readFile(at: entry.path, maxBytes: effectiveReadLimit)
             }
 
             guard viewerRequestIDs[serverId] == requestID else { return }
@@ -69,7 +68,7 @@ extension RemoteFileBrowserStore {
             let isTruncated = (entry.size.map { $0 > UInt64(Self.defaultPreviewBytes) } ?? false)
                 || data.count > Self.defaultPreviewBytes
                 || data.count >= Self.hardPreviewBytes
-            let previewKind = RemoteFilePreviewDetector.previewKind(for: entry, data: previewData)
+            let previewKind = previewLoader.previewKind(for: entry, data: previewData)
             let payload: RemoteFileViewerPayload
 
             switch previewKind {
@@ -77,7 +76,7 @@ extension RemoteFileBrowserStore {
                 payload = RemoteFileViewerPayload(
                     previewKind: .text,
                     entry: entry,
-                    textPreview: RemoteFilePreviewDetector.decodeTextPreview(from: previewData),
+                    textPreview: previewLoader.decodeTextPreview(from: previewData),
                     previewFileURL: nil,
                     isTruncated: isTruncated,
                     unavailableMessage: nil,
@@ -96,8 +95,8 @@ extension RemoteFileBrowserStore {
                 } else {
                     let tempURL = try makePreviewFileURL(for: entry)
                     do {
-                        try await withClient(for: server) { client in
-                            try await client.downloadFile(at: entry.path, to: tempURL)
+                        try await withRemoteFileService(for: server) { service in
+                            try await service.downloadFile(at: entry.path, to: tempURL)
                         }
                         if await validateDownloadedPreview(at: tempURL, kind: previewKind) {
                             previewFileURL = tempURL
@@ -109,7 +108,7 @@ extension RemoteFileBrowserStore {
                             )
                         }
                     } catch {
-                        try? FileManager.default.removeItem(at: tempURL)
+                        temporaryStorage.removeItem(at: tempURL)
                         throw error
                     }
                 }
@@ -164,44 +163,51 @@ extension RemoteFileBrowserStore {
         viewerRequestIDs.removeValue(forKey: serverId)
     }
 
-    private func makePreviewFileURL(for entry: RemoteFileEntry) throws -> URL {
-        let previewsDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("VVTermRemoteFilePreviews", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: previewsDirectory,
-            withIntermediateDirectories: true
-        )
-
-        let fileExtension = URL(fileURLWithPath: entry.name).pathExtension
-        var url = previewsDirectory.appendingPathComponent(UUID().uuidString)
-        if !fileExtension.isEmpty {
-            url.appendPathExtension(fileExtension)
+    func saveTextPreview(_ text: String, for entry: RemoteFileEntry, serverId: UUID) async throws {
+        guard let server = server(for: serverId) else {
+            throw RemoteFileBrowserError.disconnected
         }
-        return url
+
+        guard let data = text.data(using: .utf8) else {
+            throw RemoteFileBrowserError.unsupportedEncoding
+        }
+
+        let updatedEntry = try await withRemoteFileService(for: server) { service in
+            let effectivePermissions = Int32(entry.permissions ?? 0o644)
+            try await service.upload(data, to: entry.path, permissions: effectivePermissions, strategy: .automatic)
+            return try await service.lstat(at: entry.path)
+        }
+
+        updateState(for: serverId) { state in
+            if let index = state.entries.firstIndex(where: { $0.path == entry.path }) {
+                state.entries[index] = updatedEntry
+            }
+
+            if state.selectedEntryPath == entry.path {
+                state.viewerPayload = RemoteFileViewerPayload(
+                    previewKind: .text,
+                    entry: updatedEntry,
+                    textPreview: text,
+                    previewFileURL: nil,
+                    isTruncated: false,
+                    unavailableMessage: nil,
+                    requiresExplicitDownload: false,
+                    previewByteCount: UInt64(data.count)
+                )
+                state.viewerError = nil
+            }
+        }
+    }
+
+    func makePreviewFileURL(for entry: RemoteFileEntry) throws -> URL {
+        try temporaryStorage.makePreviewFileURL(for: entry)
     }
 
     func cleanupPreviewArtifact(for payload: RemoteFileViewerPayload?) {
-        guard let previewFileURL = payload?.previewFileURL else { return }
-        try? FileManager.default.removeItem(at: previewFileURL)
+        temporaryStorage.removePreviewArtifact(for: payload)
     }
 
-    private func validateDownloadedPreview(at url: URL, kind: RemoteFilePreviewKind) async -> Bool {
-        switch kind {
-        case .text, .unavailable:
-            return false
-        case .image:
-            return FileManager.default.fileExists(atPath: url.path)
-        case .video:
-            let asset = AVURLAsset(url: url)
-            do {
-                let isPlayable = try await asset.load(.isPlayable)
-                let hasProtectedContent = try await asset.load(.hasProtectedContent)
-                let videoTracks = try await asset.loadTracks(withMediaType: .video)
-                return isPlayable && !hasProtectedContent && !videoTracks.isEmpty
-            } catch {
-                logger.error("Failed to validate remote video preview at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                return false
-            }
-        }
+    func validateDownloadedPreview(at url: URL, kind: RemoteFilePreviewKind) async -> Bool {
+        await previewLoader.validateDownloadedPreview(at: url, kind: kind, logger: logger)
     }
 }

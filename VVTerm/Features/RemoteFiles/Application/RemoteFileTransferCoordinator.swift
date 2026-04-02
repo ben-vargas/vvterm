@@ -1,64 +1,34 @@
 import Foundation
 
-private struct LocalUploadItemInfo: Sendable {
-    let name: String
-    let isDirectory: Bool
-}
-
-private final class TransferProgressTracker {
-    private(set) var completedUnitCount = 0
-    let totalUnitCount: Int
-    let onProgress: (@MainActor @Sendable (RemoteFileBrowserStore.TransferProgress) -> Void)?
-
-    init(
-        totalUnitCount: Int,
-        onProgress: (@MainActor @Sendable (RemoteFileBrowserStore.TransferProgress) -> Void)?
-    ) {
-        self.totalUnitCount = max(1, totalUnitCount)
-        self.onProgress = onProgress
-    }
-
-    @MainActor
-    func advance(currentItemName: String) {
-        completedUnitCount += 1
-        onProgress?(
-            RemoteFileBrowserStore.TransferProgress(
-                completedUnitCount: min(completedUnitCount, totalUnitCount),
-                totalUnitCount: totalUnitCount,
-                currentItemName: currentItemName
-            )
-        )
-    }
-}
-
 extension RemoteFileBrowserStore {
-    struct TransferProgress: Sendable {
-        let completedUnitCount: Int
+    struct LocalUploadItemInfo: Sendable {
+        let name: String
+        let isDirectory: Bool
+    }
+
+    final class TransferProgressTracker {
+        private(set) var completedUnitCount = 0
         let totalUnitCount: Int
-        let currentItemName: String
-    }
+        let onProgress: (@MainActor @Sendable (TransferProgress) -> Void)?
 
-    struct LocalUploadPlanItem: Identifiable, Sendable {
-        let sourceURL: URL
-        let remoteName: String
-
-        var id: String {
-            "\(sourceURL.absoluteString)->\(remoteName)"
-        }
-    }
-
-    struct LocalUploadPlanCandidate: Identifiable, Sendable {
-        let sourceURL: URL
-        let originalName: String
-        let existingEntry: RemoteFileEntry?
-        let suggestedName: String?
-
-        var id: String {
-            "\(sourceURL.absoluteString)->\(originalName)"
+        init(
+            totalUnitCount: Int,
+            onProgress: (@MainActor @Sendable (TransferProgress) -> Void)?
+        ) {
+            self.totalUnitCount = max(1, totalUnitCount)
+            self.onProgress = onProgress
         }
 
-        var hasConflict: Bool {
-            existingEntry != nil
+        @MainActor
+        func advance(currentItemName: String) {
+            completedUnitCount += 1
+            onProgress?(
+                TransferProgress(
+                    completedUnitCount: min(completedUnitCount, totalUnitCount),
+                    totalUnitCount: totalUnitCount,
+                    currentItemName: currentItemName
+                )
+            )
         }
     }
 
@@ -69,8 +39,8 @@ extension RemoteFileBrowserStore {
         permissions: Int32 = 0o600,
         strategy: SSHUploadStrategy = .automatic
     ) async throws {
-        try await performMutation(serverId: serverId) { client in
-            try await client.upload(
+        try await performMutation(serverId: serverId) { service in
+            try await service.upload(
                 data,
                 to: remotePath,
                 permissions: permissions,
@@ -102,8 +72,8 @@ extension RemoteFileBrowserStore {
         serverId: UUID,
         permissions: Int32 = 0o755
     ) async throws {
-        try await performMutation(serverId: serverId) { client in
-            try await client.createDirectory(at: remotePath, permissions: permissions)
+        try await performMutation(serverId: serverId) { service in
+            try await service.createDirectory(at: remotePath, permissions: permissions)
         }
     }
 
@@ -125,20 +95,20 @@ extension RemoteFileBrowserStore {
         to destinationPath: String,
         serverId: UUID
     ) async throws {
-        try await performMutation(serverId: serverId) { client in
-            try await client.renameItem(at: sourcePath, to: destinationPath)
+        try await performMutation(serverId: serverId) { service in
+            try await service.renameItem(at: sourcePath, to: destinationPath)
         }
     }
 
     func deleteFile(at remotePath: String, serverId: UUID) async throws {
-        try await performMutation(serverId: serverId) { client in
-            try await client.deleteFile(at: remotePath)
+        try await performMutation(serverId: serverId) { service in
+            try await service.deleteFile(at: remotePath)
         }
     }
 
     func deleteDirectory(at remotePath: String, serverId: UUID) async throws {
-        try await performMutation(serverId: serverId) { client in
-            try await client.deleteDirectory(at: remotePath)
+        try await performMutation(serverId: serverId) { service in
+            try await service.deleteDirectory(at: remotePath)
         }
     }
 
@@ -160,9 +130,9 @@ extension RemoteFileBrowserStore {
             throw RemoteFileBrowserError.disconnected
         }
 
-        let updatedEntry = try await withClient(for: server) { client in
-            try await client.setPermissions(at: entry.path, permissions: permissions)
-            return try await client.lstat(at: entry.path)
+        let updatedEntry = try await withRemoteFileService(for: server) { service in
+            try await service.setPermissions(at: entry.path, permissions: permissions)
+            return try await service.lstat(at: entry.path)
         }
 
         let requestedPermissionBits = permissions & 0o7777
@@ -193,42 +163,6 @@ extension RemoteFileBrowserStore {
                     requiresExplicitDownload: payload.requiresExplicitDownload,
                     previewByteCount: payload.previewByteCount
                 )
-            }
-        }
-    }
-
-    func saveTextPreview(_ text: String, for entry: RemoteFileEntry, serverId: UUID) async throws {
-        guard let server = server(for: serverId) else {
-            throw RemoteFileBrowserError.disconnected
-        }
-
-        guard let data = text.data(using: .utf8) else {
-            throw RemoteFileBrowserError.unsupportedEncoding
-        }
-
-        let updatedEntry = try await withClient(for: server) { client in
-            let effectivePermissions = Int32(entry.permissions ?? 0o644)
-            try await client.upload(data, to: entry.path, permissions: effectivePermissions)
-            return try await client.lstat(at: entry.path)
-        }
-
-        updateState(for: serverId) { state in
-            if let index = state.entries.firstIndex(where: { $0.path == entry.path }) {
-                state.entries[index] = updatedEntry
-            }
-
-            if state.selectedEntryPath == entry.path {
-                state.viewerPayload = RemoteFileViewerPayload(
-                    previewKind: .text,
-                    entry: updatedEntry,
-                    textPreview: text,
-                    previewFileURL: nil,
-                    isTruncated: false,
-                    unavailableMessage: nil,
-                    requiresExplicitDownload: false,
-                    previewByteCount: UInt64(data.count)
-                )
-                state.viewerError = nil
             }
         }
     }
@@ -265,13 +199,13 @@ extension RemoteFileBrowserStore {
                 totalUnitCount: try await countLocalTransferUnits(at: urls),
                 onProgress: onProgress
             )
-            try await withClient(for: server) { client in
+            try await withRemoteFileService(for: server) { service in
                 for plan in plans {
                     try await self.uploadItem(
                         at: plan.sourceURL,
                         to: destinationDirectory,
                         remoteName: plan.remoteName,
-                        using: client,
+                        using: service,
                         progressTracker: progressTracker
                     )
                 }
@@ -293,7 +227,7 @@ extension RemoteFileBrowserStore {
 
         let destinationDirectory = RemoteFilePath.normalize(directoryPath)
         return try await withSecurityScopedAccess(to: urls) {
-            try await withClient(for: server) { client in
+            try await withRemoteFileService(for: server) { service in
                 var reservedNames: Set<String> = []
                 var candidates: [LocalUploadPlanCandidate] = []
 
@@ -303,11 +237,11 @@ extension RemoteFileBrowserStore {
                     let remotePath = RemoteFilePath.appending(originalName, to: destinationDirectory)
 
                     do {
-                        let existingEntry = try await client.lstat(at: remotePath)
+                        let existingEntry = try await service.lstat(at: remotePath)
                         let suggestedName = try await self.uniqueUploadName(
                             for: originalName,
                             in: destinationDirectory,
-                            using: client,
+                            using: service,
                             reservedNames: &reservedNames
                         )
                         candidates.append(
@@ -356,22 +290,22 @@ extension RemoteFileBrowserStore {
         guard !uniqueEntries.isEmpty else { return }
 
         let destinationDirectory = RemoteFilePath.normalize(destinationDirectoryPath)
-        let totalUnitCount = try await withClient(for: sourceServer) { client in
-            try await self.countRemoteTransferUnits(for: uniqueEntries, using: client)
+        let totalUnitCount = try await withRemoteFileService(for: sourceServer) { service in
+            try await self.countRemoteTransferUnits(for: uniqueEntries, using: service)
         }
         let progressTracker = TransferProgressTracker(
             totalUnitCount: totalUnitCount,
             onProgress: onProgress
         )
 
-        try await withClient(for: sourceServer) { sourceClient in
-            try await self.withClient(for: destinationServer) { destinationClient in
+        try await withRemoteFileService(for: sourceServer) { sourceService in
+            try await self.withRemoteFileService(for: destinationServer) { destinationService in
                 for entry in uniqueEntries {
                     try await self.copyRemoteEntry(
                         entry,
                         to: destinationDirectory,
-                        sourceClient: sourceClient,
-                        destinationClient: destinationClient,
+                        sourceService: sourceService,
+                        destinationService: destinationService,
                         progressTracker: progressTracker
                     )
                 }
@@ -391,8 +325,8 @@ extension RemoteFileBrowserStore {
             throw RemoteFileBrowserError.disconnected
         }
 
-        try await withClient(for: server) { client in
-            try await client.downloadFile(at: remotePath, to: localURL)
+        try await withRemoteFileService(for: server) { service in
+            try await service.downloadFile(at: remotePath, to: localURL)
         }
     }
 
@@ -405,8 +339,8 @@ extension RemoteFileBrowserStore {
             throw RemoteFileBrowserError.disconnected
         }
 
-        try await withClient(for: server) { client in
-            try await self.downloadItem(entry, to: localURL, using: client)
+        try await withRemoteFileService(for: server) { service in
+            try await self.downloadItem(entry, to: localURL, using: service)
         }
     }
 
@@ -416,35 +350,35 @@ extension RemoteFileBrowserStore {
         }
 
         let normalizedPath = RemoteFilePath.normalize(path)
-        let entries = try await withClient(for: server) { client in
-            try await client.listDirectory(at: normalizedPath, maxEntries: Self.directoryEntryLimit)
+        let entries = try await withRemoteFileService(for: server) { service in
+            try await service.listDirectory(at: normalizedPath, maxEntries: Self.directoryEntryLimit)
         }
         return entries
             .filter { $0.type == .directory }
             .sortedForBrowser(using: .name, direction: .ascending)
     }
 
-    private func performMutation(
+    func performMutation(
         serverId: UUID,
-        operation: @escaping (SSHClient) async throws -> Void
+        operation: @escaping (any RemoteFileService) async throws -> Void
     ) async throws {
         guard let server = server(for: serverId) else {
             throw RemoteFileBrowserError.disconnected
         }
 
-        try await withClient(for: server) { client in
-            try await operation(client)
+        try await withRemoteFileService(for: server) { service in
+            try await operation(service)
         }
         await refresh(serverId: serverId)
     }
 
-    private func loadLocalFileData(from url: URL) async throws -> Data {
+    func loadLocalFileData(from url: URL) async throws -> Data {
         try await Task.detached(priority: .utility) {
             try Data(contentsOf: url, options: [.mappedIfSafe])
         }.value
     }
 
-    private func localItemInfo(at url: URL) async throws -> LocalUploadItemInfo {
+    func localItemInfo(at url: URL) async throws -> LocalUploadItemInfo {
         try await Task.detached(priority: .utility) {
             let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey, .nameKey])
             return LocalUploadItemInfo(
@@ -454,7 +388,7 @@ extension RemoteFileBrowserStore {
         }.value
     }
 
-    private func localDirectoryContents(at url: URL) async throws -> [URL] {
+    func localDirectoryContents(at url: URL) async throws -> [URL] {
         try await Task.detached(priority: .utility) {
             let fileManager = FileManager.default
             let contents = try fileManager.contentsOfDirectory(
@@ -468,11 +402,11 @@ extension RemoteFileBrowserStore {
         }.value
     }
 
-    private func uploadItem(
+    func uploadItem(
         at localURL: URL,
         to remoteDirectoryPath: String,
         remoteName: String? = nil,
-        using client: SSHClient,
+        using client: any RemoteFileService,
         progressTracker: TransferProgressTracker? = nil
     ) async throws {
         let itemInfo = try await localItemInfo(at: localURL)
@@ -499,14 +433,14 @@ extension RemoteFileBrowserStore {
         }
 
         let data = try await loadLocalFileData(from: localURL)
-        try await client.upload(data, to: remotePath, permissions: 0o644)
+        try await client.upload(data, to: remotePath, permissions: Int32(0o644), strategy: .automatic)
         progressTracker?.advance(currentItemName: targetName)
     }
 
-    private func uniqueUploadName(
+    func uniqueUploadName(
         for originalName: String,
         in remoteDirectoryPath: String,
-        using client: SSHClient,
+        using client: any RemoteFileService,
         reservedNames: inout Set<String>
     ) async throws -> String {
         let fileURL = URL(fileURLWithPath: originalName)
@@ -543,73 +477,74 @@ extension RemoteFileBrowserStore {
         )
     }
 
-    private func downloadItem(
+    func downloadItem(
         _ entry: RemoteFileEntry,
         to localURL: URL,
-        using client: SSHClient
+        using service: any RemoteFileService
     ) async throws {
-        let effectiveEntry = try await resolvedTransferEntry(for: entry, using: client)
+        let effectiveEntry = try await resolvedTransferEntry(for: entry, using: service)
 
         if effectiveEntry.type == .directory {
             try await createLocalDirectory(at: localURL)
-            let children = try await client.listDirectory(at: entry.path)
+            let children = try await service.listDirectory(at: entry.path, maxEntries: nil)
             for child in children {
                 let childURL = localURL.appendingPathComponent(
                     child.name,
                     isDirectory: child.type == .directory
                 )
-                try await downloadItem(child, to: childURL, using: client)
+                try await downloadItem(child, to: childURL, using: service)
             }
             return
         }
 
-        try await client.downloadFile(at: entry.path, to: localURL)
+        try await service.downloadFile(at: entry.path, to: localURL)
     }
 
-    private func copyRemoteEntry(
+    func copyRemoteEntry(
         _ entry: RemoteFileEntry,
         to remoteDirectoryPath: String,
-        sourceClient: SSHClient,
-        destinationClient: SSHClient,
+        sourceService: any RemoteFileService,
+        destinationService: any RemoteFileService,
         progressTracker: TransferProgressTracker?
     ) async throws {
-        let effectiveEntry = try await resolvedTransferEntry(for: entry, using: sourceClient)
+        let effectiveEntry = try await resolvedTransferEntry(for: entry, using: sourceService)
         let remotePath = RemoteFilePath.appending(entry.name, to: remoteDirectoryPath)
 
         if effectiveEntry.type == .directory {
             try await ensureRemoteDirectoryExists(
                 at: remotePath,
                 permissions: Int32(effectiveEntry.permissions ?? 0o755),
-                using: destinationClient
+                using: destinationService
             )
             progressTracker?.advance(currentItemName: entry.name)
-            let children = try await sourceClient.listDirectory(at: entry.path)
+            let children = try await sourceService.listDirectory(at: entry.path, maxEntries: nil)
             for child in children {
                 try await copyRemoteEntry(
                     child,
                     to: remotePath,
-                    sourceClient: sourceClient,
-                    destinationClient: destinationClient,
+                    sourceService: sourceService,
+                    destinationService: destinationService,
                     progressTracker: progressTracker
                 )
             }
             return
         }
 
-        let temporaryURL = try temporaryTransferURL(for: entry)
-        defer { try? FileManager.default.removeItem(at: temporaryURL) }
+        let temporaryURL = try temporaryStorage.makeTransferFileURL(for: entry)
+        defer { temporaryStorage.removeItem(at: temporaryURL) }
 
-        try await sourceClient.downloadFile(at: entry.path, to: temporaryURL)
+        try await sourceService.downloadFile(at: entry.path, to: temporaryURL)
         let data = try await loadLocalFileData(from: temporaryURL)
-        try await destinationClient.upload(
+        try await destinationService.upload(
             data,
             to: remotePath,
-            permissions: Int32(effectiveEntry.permissions ?? 0o644)
+            permissions: Int32(effectiveEntry.permissions ?? 0o644),
+            strategy: .automatic
         )
         progressTracker?.advance(currentItemName: entry.name)
     }
 
-    private func countLocalTransferUnits(at urls: [URL]) async throws -> Int {
+    func countLocalTransferUnits(at urls: [URL]) async throws -> Int {
         var totalUnitCount = 0
 
         for url in urls {
@@ -619,7 +554,7 @@ extension RemoteFileBrowserStore {
         return max(1, totalUnitCount)
     }
 
-    private func countLocalTransferUnits(at url: URL) async throws -> Int {
+    func countLocalTransferUnits(at url: URL) async throws -> Int {
         let itemInfo = try await localItemInfo(at: url)
         guard itemInfo.isDirectory else { return 1 }
 
@@ -633,9 +568,9 @@ extension RemoteFileBrowserStore {
         return totalUnitCount
     }
 
-    private func countRemoteTransferUnits(
+    func countRemoteTransferUnits(
         for entries: [RemoteFileEntry],
-        using client: SSHClient
+        using client: any RemoteFileService
     ) async throws -> Int {
         var totalUnitCount = 0
 
@@ -646,14 +581,14 @@ extension RemoteFileBrowserStore {
         return max(1, totalUnitCount)
     }
 
-    private func countRemoteTransferUnits(
+    func countRemoteTransferUnits(
         for entry: RemoteFileEntry,
-        using client: SSHClient
+        using client: any RemoteFileService
     ) async throws -> Int {
         let effectiveEntry = try await resolvedTransferEntry(for: entry, using: client)
         guard effectiveEntry.type == .directory else { return 1 }
 
-        let children = try await client.listDirectory(at: entry.path)
+        let children = try await client.listDirectory(at: entry.path, maxEntries: nil)
         var totalUnitCount = 1
 
         for child in children {
@@ -663,9 +598,9 @@ extension RemoteFileBrowserStore {
         return totalUnitCount
     }
 
-    private func resolvedTransferEntry(
+    func resolvedTransferEntry(
         for entry: RemoteFileEntry,
-        using client: SSHClient
+        using client: any RemoteFileService
     ) async throws -> RemoteFileEntry {
         guard entry.type == .symlink else { return entry }
 
@@ -681,10 +616,10 @@ extension RemoteFileBrowserStore {
         )
     }
 
-    private func ensureRemoteDirectoryExists(
+    func ensureRemoteDirectoryExists(
         at remotePath: String,
         permissions: Int32,
-        using client: SSHClient
+        using client: any RemoteFileService
     ) async throws {
         do {
             let existingEntry = try await client.lstat(at: remotePath)
@@ -704,27 +639,18 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    private func temporaryTransferURL(for entry: RemoteFileEntry) throws -> URL {
-        let rootDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("VVTermTransferStaging", isDirectory: true)
-        try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
-
-        let itemName = entry.name.isEmpty ? "download" : entry.name
-        return rootDirectory.appendingPathComponent(UUID().uuidString + "-" + itemName)
-    }
-
-    private func uniqueTransferEntries(_ entries: [RemoteFileEntry]) -> [RemoteFileEntry] {
+    func uniqueTransferEntries(_ entries: [RemoteFileEntry]) -> [RemoteFileEntry] {
         var seenPaths: Set<String> = []
         return entries.filter { seenPaths.insert($0.path).inserted }
     }
 
-    private func createLocalDirectory(at url: URL) async throws {
+    func createLocalDirectory(at url: URL) async throws {
         try await Task.detached(priority: .utility) {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         }.value
     }
 
-    private func withSecurityScopedAccess<T>(
+    func withSecurityScopedAccess<T>(
         to urls: [URL],
         operation: () async throws -> T
     ) async throws -> T {
@@ -739,7 +665,7 @@ extension RemoteFileBrowserStore {
         return try await operation()
     }
 
-    private func validatedRemoteName(_ name: String) throws -> String {
+    func validatedRemoteName(_ name: String) throws -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw RemoteFileBrowserError.failed(String(localized: "A name is required."))

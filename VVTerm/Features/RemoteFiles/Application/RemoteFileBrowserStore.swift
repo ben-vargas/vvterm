@@ -15,6 +15,36 @@ final class RemoteFileBrowserStore: ObservableObject {
         let action: ToolbarCommandAction
     }
 
+    struct TransferProgress: Sendable {
+        let completedUnitCount: Int
+        let totalUnitCount: Int
+        let currentItemName: String
+    }
+
+    struct LocalUploadPlanItem: Identifiable, Sendable {
+        let sourceURL: URL
+        let remoteName: String
+
+        var id: String {
+            "\(sourceURL.absoluteString)->\(remoteName)"
+        }
+    }
+
+    struct LocalUploadPlanCandidate: Identifiable, Sendable {
+        let sourceURL: URL
+        let originalName: String
+        let existingEntry: RemoteFileEntry?
+        let suggestedName: String?
+
+        var id: String {
+            "\(sourceURL.absoluteString)->\(originalName)"
+        }
+
+        var hasConflict: Bool {
+            existingEntry != nil
+        }
+    }
+
     struct BrowserState: Sendable {
         var currentPath: String?
         var entries: [RemoteFileEntry]
@@ -54,16 +84,6 @@ final class RemoteFileBrowserStore: ObservableObject {
         }
     }
 
-    private enum ClientOwnership: Sendable {
-        case borrowed
-        case owned
-    }
-
-    private struct ClientRegistration: Sendable {
-        let client: SSHClient
-        let ownership: ClientOwnership
-    }
-
     private struct DirectorySnapshot: Sendable {
         let path: String
         let entries: [RemoteFileEntry]
@@ -77,9 +97,11 @@ final class RemoteFileBrowserStore: ObservableObject {
     let defaults: UserDefaults
     let persistenceKey = "remoteFileBrowserState.v1"
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "RemoteFiles")
+    let remoteFileServiceAdapter: SSHSFTPAdapter
+    let temporaryStorage: RemoteFileTemporaryStorage
+    let previewLoader: RemoteFilePreviewLoader
 
     var persistedStates: [String: RemoteFileBrowserPersistedState] = [:]
-    private var clients: [UUID: ClientRegistration] = [:]
     var directoryRequestIDs: [UUID: UUID] = [:]
     var viewerRequestIDs: [UUID: UUID] = [:]
 
@@ -89,8 +111,16 @@ final class RemoteFileBrowserStore: ObservableObject {
     static let previewConfirmationBytes = 1 * 1_024 * 1_024
     static let maxMediaPreviewBytes = 64 * 1_024 * 1_024
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        remoteFileServiceAdapter: SSHSFTPAdapter? = nil,
+        temporaryStorage: RemoteFileTemporaryStorage = RemoteFileTemporaryStorage(),
+        previewLoader: RemoteFilePreviewLoader = RemoteFilePreviewLoader()
+    ) {
         self.defaults = defaults
+        self.remoteFileServiceAdapter = remoteFileServiceAdapter ?? SSHSFTPAdapter()
+        self.temporaryStorage = temporaryStorage
+        self.previewLoader = previewLoader
         loadPersistedStates()
     }
 
@@ -244,8 +274,8 @@ final class RemoteFileBrowserStore: ObservableObject {
         case .symlink:
             guard let server = server(for: serverId) else { return }
             do {
-                let resolvedEntry = try await withClient(for: server) { client in
-                    try await client.stat(at: entry.path)
+                let resolvedEntry = try await withRemoteFileService(for: server) { service in
+                    try await service.stat(at: entry.path)
                 }
                 if resolvedEntry.type == .directory {
                     await loadDirectory(path: entry.path, for: server)
@@ -314,15 +344,9 @@ final class RemoteFileBrowserStore: ObservableObject {
     func disconnect(serverId: UUID) {
         directoryRequestIDs.removeValue(forKey: serverId)
         viewerRequestIDs.removeValue(forKey: serverId)
-        cleanupPreviewArtifact(for: states[serverId]?.viewerPayload)
+        temporaryStorage.removePreviewArtifact(for: states[serverId]?.viewerPayload)
         states.removeValue(forKey: serverId)
-
-        guard let registration = clients.removeValue(forKey: serverId) else { return }
-        guard registration.ownership == .owned else { return }
-
-        Task.detached(priority: .utility) {
-            await registration.client.disconnect()
-        }
+        remoteFileServiceAdapter.disconnect(serverId: serverId)
     }
 
     // MARK: - Private
@@ -374,19 +398,19 @@ final class RemoteFileBrowserStore: ObservableObject {
             }
         }
 
-        let homePath = try await withClient(for: server) { client in
-            try await client.resolveHomeDirectory()
+        let homePath = try await withRemoteFileService(for: server) { service in
+            try await service.resolveHomeDirectory()
         }
         return try await directorySnapshot(path: homePath, for: server)
     }
 
     private func directorySnapshot(path: String, for server: Server) async throws -> DirectorySnapshot {
         let normalizedPath = RemoteFilePath.normalize(path)
-        let entries = try await withClient(for: server) { client in
-            try await client.listDirectory(at: normalizedPath, maxEntries: Self.directoryEntryLimit)
+        let entries = try await withRemoteFileService(for: server) { service in
+            try await service.listDirectory(at: normalizedPath, maxEntries: Self.directoryEntryLimit)
         }
-        let filesystemStatus = try? await withClient(for: server) { client in
-            try await client.fileSystemStatus(at: normalizedPath)
+        let filesystemStatus = try? await withRemoteFileService(for: server) { service in
+            try await service.fileSystemStatus(at: normalizedPath)
         }
         return DirectorySnapshot(
             path: normalizedPath,
@@ -412,56 +436,11 @@ final class RemoteFileBrowserStore: ObservableObject {
         focus(entry, serverId: serverId)
     }
 
-    private func borrowedClient(for serverId: UUID) -> SSHClient? {
-        ConnectionSessionManager.shared.sharedStatsClient(for: serverId)
-            ?? TerminalTabManager.shared.sharedStatsClient(for: serverId)
-    }
-
-    private func clientRegistration(for server: Server) -> ClientRegistration {
-        if let existing = clients[server.id], existing.ownership == .owned {
-            return existing
-        }
-
-        if let borrowedClient = borrowedClient(for: server.id) {
-            if let existing = clients[server.id], existing.client === borrowedClient {
-                return existing
-            }
-            let registration = ClientRegistration(client: borrowedClient, ownership: .borrowed)
-            clients[server.id] = registration
-            return registration
-        }
-
-        if let existing = clients[server.id], existing.ownership == .owned {
-            return existing
-        }
-
-        let ownedClient = SSHClient()
-        let registration = ClientRegistration(client: ownedClient, ownership: .owned)
-        clients[server.id] = registration
-        return registration
-    }
-
-    func withClient<T>(
+    func withRemoteFileService<T>(
         for server: Server,
-        operation: @escaping (SSHClient) async throws -> T
+        operation: @escaping (any RemoteFileService) async throws -> T
     ) async throws -> T {
-        let registration = clientRegistration(for: server)
-        let credentials = try KeychainManager.shared.getCredentials(for: server)
-
-        do {
-            return try await SSHConnectionOperationService.shared.runWithConnection(
-                using: registration.client,
-                server: server,
-                credentials: credentials,
-                disconnectWhenDone: false,
-                operation: operation
-            )
-        } catch {
-            if registration.ownership == .borrowed {
-                clients.removeValue(forKey: server.id)
-            }
-            throw error
-        }
+        try await remoteFileServiceAdapter.withService(for: server, operation: operation)
     }
 
     private func bestWorkingDirectory(for serverId: UUID) -> String? {
