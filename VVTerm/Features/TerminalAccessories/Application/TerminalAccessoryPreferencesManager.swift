@@ -7,33 +7,6 @@ import UIKit
 import AppKit
 #endif
 
-enum TerminalAccessoryValidationError: LocalizedError {
-    case customActionLimitReached
-    case emptyTitle
-    case emptyCommandContent
-    case customActionNotFound
-
-    var errorDescription: String? {
-        switch self {
-        case .customActionLimitReached:
-            return String(
-                format: String(localized: "You can create up to %lld custom actions."),
-                Int64(TerminalAccessoryProfile.maxCustomActions)
-            )
-        case .emptyTitle:
-            return String(localized: "Action title cannot be empty.")
-        case .emptyCommandContent:
-            return String(localized: "Command content cannot be empty.")
-        case .customActionNotFound:
-            return String(localized: "Action not found.")
-        }
-    }
-}
-
-extension Notification.Name {
-    static let terminalAccessoryProfileDidChange = Notification.Name("TerminalAccessoryProfileDidChange")
-}
-
 @MainActor
 final class TerminalAccessoryPreferencesManager: ObservableObject {
     static let shared = TerminalAccessoryPreferencesManager()
