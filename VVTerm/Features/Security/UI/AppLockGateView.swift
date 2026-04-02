@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AppLockContainer<Content: View>: View {
-    @StateObject private var appLockManager = AppLockManager.shared
+    @EnvironmentObject private var appLockManager: AppLockManager
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
 
@@ -62,7 +62,7 @@ private struct AppPrivacyShieldView: View {
 }
 
 struct AppLockGateView: View {
-    @StateObject private var appLockManager = AppLockManager.shared
+    @EnvironmentObject private var appLockManager: AppLockManager
 
     private var unlockLabel: String {
         String(format: String(localized: "Unlock with %@"), appLockManager.biometryDisplayName)

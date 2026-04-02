@@ -115,7 +115,7 @@ struct ServerFormCredentialBuilder {
 struct ServerFormSheet: View {
     @ObservedObject var serverManager: ServerManager
     @ObservedObject private var storeManager = StoreManager.shared
-    @StateObject private var appLockManager = AppLockManager.shared
+    @EnvironmentObject private var appLockManager: AppLockManager
     let workspace: Workspace?
     let server: Server?
     let prefill: ServerFormPrefill?

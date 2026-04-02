@@ -268,7 +268,7 @@ struct GeneralSettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.system.rawValue
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.system.rawValue
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
-    @StateObject private var appLockManager = AppLockManager.shared
+    @EnvironmentObject private var appLockManager: AppLockManager
     @StateObject private var viewTabConfig = ViewTabConfigurationManager.shared
 
     private let authGraceOptions = [0, 15, 30, 60, 120, 300]
