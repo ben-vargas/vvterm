@@ -354,7 +354,7 @@ struct iOSServerListView: View {
             }
         }
         .sheet(isPresented: $showingLocalDiscovery) {
-            LocalDeviceDiscoverySheet { discoveredHost in
+            LocalDeviceDiscoverySheet(manager: LocalSSHDiscoveryManager()) { discoveredHost in
                 queuedDiscoveryPrefill = ServerFormPrefill(discoveredHost: discoveredHost)
                 showingLocalDiscovery = false
             }

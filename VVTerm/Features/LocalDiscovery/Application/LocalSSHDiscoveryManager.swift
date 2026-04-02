@@ -30,8 +30,12 @@ final class LocalSSHDiscoveryManager: ObservableObject {
     private var streamTask: Task<Void, Never>?
     private let maxHosts = 200
 
-    init(service: LocalSSHDiscoveryService? = nil) {
-        self.service = service ?? LocalSSHDiscoveryService()
+    init(service: LocalSSHDiscoveryService) {
+        self.service = service
+    }
+
+    convenience init() {
+        self.init(service: LocalSSHDiscoveryService())
     }
 
     deinit {

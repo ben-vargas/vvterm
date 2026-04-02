@@ -9,11 +9,23 @@ struct LocalDeviceDiscoverySheet: View {
     let onUse: (DiscoveredSSHHost) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var manager = LocalSSHDiscoveryManager()
+    @StateObject private var manager: LocalSSHDiscoveryManager
     #if os(macOS)
     @State private var selectedHostID: String?
     @State private var hoveredHostID: String?
     #endif
+
+    init(
+        manager: LocalSSHDiscoveryManager,
+        onUse: @escaping (DiscoveredSSHHost) -> Void
+    ) {
+        self.onUse = onUse
+        _manager = StateObject(wrappedValue: manager)
+    }
+
+    init(onUse: @escaping (DiscoveredSSHHost) -> Void) {
+        self.init(manager: LocalSSHDiscoveryManager(), onUse: onUse)
+    }
 
     var body: some View {
         #if os(iOS)

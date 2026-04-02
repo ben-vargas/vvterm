@@ -448,7 +448,7 @@ struct ServerFormSheet: View {
                 )
             }
             .sheet(isPresented: $showingLocalDiscoverySheet) {
-                LocalDeviceDiscoverySheet { discoveredHost in
+                LocalDeviceDiscoverySheet(manager: LocalSSHDiscoveryManager()) { discoveredHost in
                     applyPrefill(ServerFormPrefill(discoveredHost: discoveredHost))
                 }
             }
