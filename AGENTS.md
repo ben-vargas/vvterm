@@ -20,6 +20,10 @@ VVTerm/
 │   │   ├── Application/
 │   │   ├── Infrastructure/
 │   │   └── UI/
+│   ├── Servers/
+│   │   ├── Domain/
+│   │   ├── Application/
+│   │   └── UI/
 │   ├── RemoteFiles/
 │   │   ├── Domain/
 │   │   ├── Application/
@@ -62,6 +66,7 @@ VVTerm is moving from app-wide technical buckets toward **feature-first architec
 Current migration status:
 - `Features/RemoteFiles` is fully migrated and is the reference pattern for larger features.
 - `Features/LocalDiscovery` is migrated for discovery-specific code and UI.
+- `Features/Servers` is migrated for server/workspace domain models, server management, and server/workspace UI flows.
 - `Features/Stats` is migrated for server metrics collection and presentation.
 - `Features/Security` is migrated for app lock and biometric authentication flows.
 - `Features/Store` is migrated for Pro entitlements, purchases, and upgrade surfaces.
