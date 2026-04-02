@@ -1,5 +1,12 @@
 import Foundation
 
+struct RemoteFileBreadcrumb: Identifiable, Hashable, Sendable {
+    let title: String
+    let path: String
+
+    var id: String { path }
+}
+
 enum RemoteFilePath {
     static func normalize(_ path: String, relativeTo currentPath: String? = nil) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -64,7 +71,9 @@ enum RemoteFilePath {
         var current = ""
         for component in components {
             current += "/" + component
-            breadcrumbs.append(RemoteFileBreadcrumb(title: String(component), path: current))
+            breadcrumbs.append(
+                RemoteFileBreadcrumb(title: String(component), path: current)
+            )
         }
         return breadcrumbs
     }

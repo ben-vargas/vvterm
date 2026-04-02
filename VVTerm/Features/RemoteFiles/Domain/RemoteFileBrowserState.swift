@@ -19,11 +19,43 @@ struct RemoteFileFilesystemStatus: Hashable, Sendable {
     }
 }
 
-struct RemoteFileBreadcrumb: Identifiable, Hashable, Sendable {
-    let title: String
-    let path: String
+struct RemoteFileBrowserState: Sendable {
+    var currentPath: String?
+    var entries: [RemoteFileEntry]
+    var sort: RemoteFileSort
+    var sortDirection: RemoteFileSortDirection
+    var showHiddenFiles: Bool
+    var hasCustomizedHiddenFiles: Bool
+    var isLoadingDirectory: Bool
+    var isLoadingViewer: Bool
+    var isDirectoryTruncated: Bool
+    var filesystemStatus: RemoteFileFilesystemStatus?
+    var error: RemoteFileBrowserError?
+    var viewerError: RemoteFileBrowserError?
+    var viewerPayload: RemoteFileViewerPayload?
+    var selectedEntryPath: String?
 
-    var id: String { path }
+    init(persisted: RemoteFileBrowserPersistedState = .init()) {
+        currentPath = persisted.lastVisitedPath.map { RemoteFilePath.normalize($0) }
+        entries = []
+        sort = persisted.sort
+        sortDirection = persisted.sortDirection
+        showHiddenFiles = persisted.showHiddenFiles
+        hasCustomizedHiddenFiles = persisted.hasCustomizedHiddenFiles
+        isLoadingDirectory = false
+        isLoadingViewer = false
+        isDirectoryTruncated = false
+        filesystemStatus = nil
+        error = nil
+        viewerError = nil
+        viewerPayload = nil
+        selectedEntryPath = nil
+    }
+
+    var breadcrumbs: [RemoteFileBreadcrumb] {
+        guard let currentPath else { return [] }
+        return RemoteFilePath.breadcrumbs(for: currentPath)
+    }
 }
 
 private extension UInt64 {
