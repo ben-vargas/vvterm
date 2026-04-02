@@ -108,6 +108,19 @@ final class ConnectionSessionManager: ObservableObject {
         sessions.firstIndex { $0.id == sessionId }
     }
 
+    private func storedWorkingDirectory(for sessionId: UUID) -> String? {
+        sessionWithID(sessionId)?.workingDirectory
+    }
+
+    private func setStoredWorkingDirectory(_ workingDirectory: String, for sessionId: UUID) {
+        guard let index = indexOfSession(sessionId) else { return }
+        sessions[index].workingDirectory = workingDirectory
+    }
+
+    private func tmuxStatus(for sessionId: UUID) -> TmuxStatus? {
+        sessionWithID(sessionId)?.tmuxStatus
+    }
+
     // MARK: - Session Management
 
     var selectedSession: ConnectionSession? {
@@ -808,13 +821,13 @@ final class ConnectionSessionManager: ObservableObject {
             throw SSHError.connectionFailed("Server not found")
         }
 
-        if let current = sessions.first(where: { $0.id == session.id }),
+        if let current = sessionWithID(session.id),
            current.connectionState.isConnecting {
             return
         }
 
         // Update state
-        if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+        if let index = indexOfSession(session.id) {
             sessions[index].connectionState = .reconnecting(attempt: 1)
         }
         markTerminalForReconnectReset(for: session.id)
@@ -842,7 +855,7 @@ final class ConnectionSessionManager: ObservableObject {
         }
 
         if unregisterResult.registration != nil,
-           let index = sessions.firstIndex(where: { $0.id == sessionId }) {
+           let index = indexOfSession(sessionId) {
             sessions[index].activeTransport = .ssh
             sessions[index].moshFallbackReason = nil
         }
@@ -995,13 +1008,11 @@ extension ConnectionSessionManager {
             sessionName: tmuxResolver.sessionName(for: sessionId),
             using: client
         ) {
-            if let index = sessions.firstIndex(where: { $0.id == sessionId }) {
-                sessions[index].workingDirectory = path
-            }
+            setStoredWorkingDirectory(path, for: sessionId)
             return path
         }
 
-        if let candidate = sessions.first(where: { $0.id == sessionId })?.workingDirectory?.trimmingCharacters(in: .whitespacesAndNewlines),
+        if let candidate = storedWorkingDirectory(for: sessionId)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !candidate.isEmpty {
             return candidate
         }
@@ -1010,11 +1021,11 @@ extension ConnectionSessionManager {
     }
 
     func workingDirectory(for sessionId: UUID) -> String? {
-        sessions.first(where: { $0.id == sessionId })?.workingDirectory
+        storedWorkingDirectory(for: sessionId)
     }
 
     func shouldApplyWorkingDirectory(for sessionId: UUID) -> Bool {
-        guard let status = sessions.first(where: { $0.id == sessionId })?.tmuxStatus else { return false }
+        guard let status = tmuxStatus(for: sessionId) else { return false }
         return status == .off || status == .missing
     }
 
