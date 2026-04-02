@@ -205,7 +205,7 @@ struct ConnectionTerminalContainer: View {
                 .zIndex(selectedView == "stats" ? 1 : 0)
 
             if selectedView == "files" {
-                RemoteFileBrowserView(
+                RemoteFileBrowserScreen(
                     server: server,
                     initialPath: selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
                 )

@@ -2266,7 +2266,7 @@ struct RemoteFileDropOverlay: View {
 }
 
 struct RemoteFileTransferStatusView: View {
-    let status: RemoteFileBrowserView.TransferStatus
+    let status: RemoteFileBrowserScreen.TransferStatus
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

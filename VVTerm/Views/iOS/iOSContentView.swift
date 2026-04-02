@@ -1059,7 +1059,7 @@ struct iOSTerminalView: View {
                 openNewTab()
             }
         } else if selectedView == "files", let server = selectedServer {
-            RemoteFileBrowserView(server: server, initialPath: nil)
+            RemoteFileBrowserScreen(server: server, initialPath: nil)
         } else if let server = selectedServer {
             ServerStatsView(
                 server: server,
@@ -1084,7 +1084,7 @@ struct iOSTerminalView: View {
 
             if selectedView == "files" {
                 if let server = selectedServer {
-                    RemoteFileBrowserView(
+                    RemoteFileBrowserScreen(
                         server: server,
                         initialPath: selectedSession?.workingDirectory
                     )
@@ -1224,7 +1224,7 @@ struct iOSTerminalView: View {
 
             if effectiveViewSelection == "files" {
                 if let server {
-                    RemoteFileBrowserView(
+                    RemoteFileBrowserScreen(
                         server: server,
                         initialPath: session.workingDirectory
                     )
