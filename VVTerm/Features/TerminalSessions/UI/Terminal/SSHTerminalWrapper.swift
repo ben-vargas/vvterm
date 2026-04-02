@@ -38,7 +38,7 @@ enum SSHConnectionRunner {
                 _ = try await sshClient.connect(to: server, credentials: credentials)
                 guard !Task.isCancelled else { return }
 
-                let size = await terminal.terminalSize()
+                let size = terminal.terminalSize()
                 let cols = Int(size?.columns ?? 80)
                 let rows = Int(size?.rows ?? 24)
 
