@@ -30,7 +30,7 @@ final class ViewTabConfigurationManager: ObservableObject {
     @Published private(set) var showTerminalTab: Bool = true
     @Published private(set) var showFilesTab: Bool = true
 
-    private init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         loadConfiguration()
     }
