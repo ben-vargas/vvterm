@@ -31,11 +31,7 @@ final class ServerStatsCollector: ObservableObject {
         guard !isCollecting else { return }
         isCollecting = true
         connectionError = nil
-
-        // Reset state
-        context.reset()
-        remotePlatform = .unknown
-        platformCollector = nil
+        resetCollectionState()
 
         // Use shared client if available, otherwise create one
         let client: SSHClient
@@ -47,16 +43,14 @@ final class ServerStatsCollector: ObservableObject {
             client = SSHClient()
             ownsClient = true
         }
-        self.ownsClient = ownsClient
-        self.sshClient = client
+        configureConnectionState(client: client, ownsClient: ownsClient)
 
         // Get credentials
         let credentials: ServerCredentials
         do {
             credentials = try KeychainManager.shared.getCredentials(for: server)
         } catch {
-            connectionError = "No credentials found"
-            isCollecting = false
+            finishCollection(withError: "No credentials found")
             return
         }
 
@@ -85,14 +79,11 @@ final class ServerStatsCollector: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    self.connectionError = error.localizedDescription
-                    self.isCollecting = false
+                    self.finishCollection(withError: error.localizedDescription)
                 }
             }
             await MainActor.run { [weak self] in
-                self?.isCollecting = false
-                self?.sshClient = nil
-                self?.ownsClient = false
+                self?.finishCollection()
             }
         }
     }
@@ -108,8 +99,7 @@ final class ServerStatsCollector: ObservableObject {
                 await client.disconnect()
             }
         }
-        sshClient = nil
-        ownsClient = false
+        clearConnectionState()
     }
 
     // MARK: - Stats Collection
@@ -126,9 +116,7 @@ final class ServerStatsCollector: ObservableObject {
                 // Get initial system info
                 let systemInfo = try await platformCollector?.getSystemInfo(client: client)
                 await MainActor.run {
-                    self.stats.hostname = systemInfo?.hostname ?? ""
-                    self.stats.osInfo = systemInfo?.osInfo ?? ""
-                    self.stats.cpuCores = systemInfo?.cpuCores ?? 1
+                    self.applySystemInfo(systemInfo)
                 }
             }
 
@@ -145,23 +133,52 @@ final class ServerStatsCollector: ObservableObject {
 
             // Update on main thread
             await MainActor.run {
-                self.stats = newStats
-
-                // Update history
-                self.cpuHistory.append(StatsPoint(timestamp: newStats.timestamp, value: newStats.cpuUsage))
-                self.memoryHistory.append(StatsPoint(timestamp: newStats.timestamp, value: Double(newStats.memoryUsed)))
-
-                // Keep last 60 points
-                if self.cpuHistory.count > 60 { self.cpuHistory.removeFirst() }
-                if self.memoryHistory.count > 60 { self.memoryHistory.removeFirst() }
+                self.applyCollectedStats(newStats)
             }
 
         } catch {
             logger.error("Failed to collect stats: \(error.localizedDescription)")
             await MainActor.run {
-                self.connectionError = error.localizedDescription
-                self.isCollecting = false
+                self.finishCollection(withError: error.localizedDescription)
             }
         }
+    }
+
+    private func resetCollectionState() {
+        context.reset()
+        remotePlatform = .unknown
+        platformCollector = nil
+    }
+
+    private func configureConnectionState(client: SSHClient, ownsClient: Bool) {
+        self.sshClient = client
+        self.ownsClient = ownsClient
+    }
+
+    private func clearConnectionState() {
+        sshClient = nil
+        ownsClient = false
+    }
+
+    private func finishCollection(withError error: String? = nil) {
+        connectionError = error
+        isCollecting = false
+        clearConnectionState()
+    }
+
+    private func applySystemInfo(_ systemInfo: (hostname: String, osInfo: String, cpuCores: Int)?) {
+        stats.hostname = systemInfo?.hostname ?? ""
+        stats.osInfo = systemInfo?.osInfo ?? ""
+        stats.cpuCores = systemInfo?.cpuCores ?? 1
+    }
+
+    private func applyCollectedStats(_ newStats: ServerStats) {
+        stats = newStats
+
+        cpuHistory.append(StatsPoint(timestamp: newStats.timestamp, value: newStats.cpuUsage))
+        memoryHistory.append(StatsPoint(timestamp: newStats.timestamp, value: Double(newStats.memoryUsed)))
+
+        if cpuHistory.count > 60 { cpuHistory.removeFirst() }
+        if memoryHistory.count > 60 { memoryHistory.removeFirst() }
     }
 }
