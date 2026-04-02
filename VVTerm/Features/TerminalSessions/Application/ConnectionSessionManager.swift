@@ -265,34 +265,18 @@ final class ConnectionSessionManager: ObservableObject {
         let sessionId = session.id
         let title = session.title
         let wasSelected = selectedSessionId == sessionId
-        var replacementSessionId: UUID?
 
         if session.tmuxStatus == .foreground || session.tmuxStatus == .background || session.tmuxStatus == .installing {
             killTmuxIfNeeded(for: sessionId)
         }
 
-        if wasSelected {
-            let serverSessions = sessions.filter { $0.serverId == session.serverId }
-            if let index = serverSessions.firstIndex(where: { $0.id == sessionId }) {
-                if index + 1 < serverSessions.count {
-                    replacementSessionId = serverSessions[index + 1].id
-                } else if index > 0 {
-                    replacementSessionId = serverSessions[index - 1].id
-                }
-            }
+        let replacementSessionId = replacementSessionIDAfterClosing(
+            sessionId: sessionId,
+            serverId: session.serverId,
+            wasSelected: wasSelected
+        )
 
-            if replacementSessionId == nil,
-               let fallback = sessions.first(where: { $0.id != sessionId }) {
-                replacementSessionId = fallback.id
-            }
-        }
-
-        // Cancel shell task first to stop async work
-        shellCancelHandlers[sessionId]?()
-        shellCancelHandlers.removeValue(forKey: sessionId)
-        shellSuspendHandlers.removeValue(forKey: sessionId)
-        terminalsNeedingReconnectReset.remove(sessionId)
-        tmuxResolver.clearRuntimeState(for: sessionId, setPrompt: setTmuxAttachPrompt)
+        clearRuntimeStateForClosedSession(sessionId)
 
         // Remove from UI immediately
         sessions.removeAll { $0.id == sessionId }
@@ -302,26 +286,11 @@ final class ConnectionSessionManager: ObservableObject {
             selectedSessionId = replacementSessionId
         }
 
-        // Unregister terminal view (defer cleanup if still attached to a window)
-        if let terminal = terminalViews[sessionId], terminal.window != nil {
-            terminal.pauseRendering()
-            if !wasSelected {
-                _ = terminal.resignFirstResponder()
-            }
-        } else {
-            unregisterTerminal(for: sessionId)
-        }
-
-        if let replacementSessionId,
-           let replacementTerminal = terminalViews[replacementSessionId],
-           replacementTerminal.window != nil {
-            DispatchQueue.main.async {
-                #if os(iOS)
-                guard UIApplication.shared.applicationState == .active else { return }
-                #endif
-                _ = replacementTerminal.becomeFirstResponder()
-            }
-        }
+        handleTerminalCloseUI(
+            sessionId: sessionId,
+            wasSelected: wasSelected,
+            replacementSessionId: replacementSessionId
+        )
 
         // Disconnect SSH client in background
         Task.detached(priority: .high) { [weak self] in
@@ -336,6 +305,62 @@ final class ConnectionSessionManager: ObservableObject {
         }
 
         logger.info("Closed terminal session \(title)")
+    }
+
+    private func replacementSessionIDAfterClosing(
+        sessionId: UUID,
+        serverId: UUID,
+        wasSelected: Bool
+    ) -> UUID? {
+        guard wasSelected else { return nil }
+
+        let serverSessions = sessions.filter { $0.serverId == serverId }
+        if let index = serverSessions.firstIndex(where: { $0.id == sessionId }) {
+            if index + 1 < serverSessions.count {
+                return serverSessions[index + 1].id
+            }
+            if index > 0 {
+                return serverSessions[index - 1].id
+            }
+        }
+
+        return sessions.first(where: { $0.id != sessionId })?.id
+    }
+
+    private func clearRuntimeStateForClosedSession(_ sessionId: UUID) {
+        shellCancelHandlers[sessionId]?()
+        shellCancelHandlers.removeValue(forKey: sessionId)
+        shellSuspendHandlers.removeValue(forKey: sessionId)
+        terminalsNeedingReconnectReset.remove(sessionId)
+        tmuxResolver.clearRuntimeState(for: sessionId, setPrompt: setTmuxAttachPrompt)
+    }
+
+    private func handleTerminalCloseUI(
+        sessionId: UUID,
+        wasSelected: Bool,
+        replacementSessionId: UUID?
+    ) {
+        if let terminal = terminalViews[sessionId], terminal.window != nil {
+            terminal.pauseRendering()
+            if !wasSelected {
+                _ = terminal.resignFirstResponder()
+            }
+        } else {
+            unregisterTerminal(for: sessionId)
+        }
+
+        guard let replacementSessionId,
+              let replacementTerminal = terminalViews[replacementSessionId],
+              replacementTerminal.window != nil else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            #if os(iOS)
+            guard UIApplication.shared.applicationState == .active else { return }
+            #endif
+            _ = replacementTerminal.becomeFirstResponder()
+        }
     }
 
     private func redrawSessionAfterClose(_ session: ConnectionSession) {
