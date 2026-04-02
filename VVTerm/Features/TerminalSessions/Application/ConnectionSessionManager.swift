@@ -143,6 +143,31 @@ final class ConnectionSessionManager: ObservableObject {
         sessionWithID(sessionId)?.tmuxStatus
     }
 
+    private func setTransport(
+        _ transport: ShellTransport,
+        fallbackReason: MoshFallbackReason?,
+        for sessionId: UUID
+    ) {
+        guard let index = indexOfSession(sessionId) else { return }
+        sessions[index].activeTransport = transport
+        sessions[index].moshFallbackReason = fallbackReason
+    }
+
+    private func handleStaleShellStartContext(
+        _ staleContext: SSHShellRegistry.StartContext?,
+        logMessage: StaticString,
+        sessionId: UUID
+    ) {
+        guard let staleContext else { return }
+
+        logger.warning("\(logMessage) \(sessionId.uuidString, privacy: .public)")
+        if !shellRegistry.hasClientReferences(staleContext.client) {
+            Task.detached(priority: .utility) { [client = staleContext.client] in
+                await client.disconnect()
+            }
+        }
+    }
+
     // MARK: - Session Management
 
     var selectedSession: ConnectionSession? {
@@ -567,10 +592,7 @@ final class ConnectionSessionManager: ObservableObject {
             }
         }
 
-        if let index = indexOfSession(sessionId) {
-            sessions[index].activeTransport = transport
-            sessions[index].moshFallbackReason = fallbackReason
-        }
+        setTransport(transport, fallbackReason: fallbackReason, for: sessionId)
         terminalsNeedingReconnectReset.remove(sessionId)
 
         if !skipTmuxLifecycle {
@@ -613,14 +635,11 @@ final class ConnectionSessionManager: ObservableObject {
             client: client
         )
 
-        if let context = startResult.staleContext {
-            logger.warning("Recovered stale session shell-start lock for \(sessionId.uuidString, privacy: .public)")
-            if !shellRegistry.hasClientReferences(context.client) {
-                Task.detached(priority: .utility) { [client = context.client] in
-                    await client.disconnect()
-                }
-            }
-        }
+        handleStaleShellStartContext(
+            startResult.staleContext,
+            logMessage: "Recovered stale session shell-start lock for",
+            sessionId: sessionId
+        )
         return startResult.started
     }
 
@@ -630,14 +649,11 @@ final class ConnectionSessionManager: ObservableObject {
 
     func isShellStartInFlight(for sessionId: UUID) -> Bool {
         let result = shellRegistry.isStartInFlight(for: sessionId)
-        if let context = result.staleContext {
-            logger.warning("Cleared stale session shell-start in-flight flag for \(sessionId.uuidString, privacy: .public)")
-            if !shellRegistry.hasClientReferences(context.client) {
-                Task.detached(priority: .utility) { [client = context.client] in
-                    await client.disconnect()
-                }
-            }
-        }
+        handleStaleShellStartContext(
+            result.staleContext,
+            logMessage: "Cleared stale session shell-start in-flight flag for",
+            sessionId: sessionId
+        )
         return result.inFlight
     }
 
@@ -870,10 +886,8 @@ final class ConnectionSessionManager: ObservableObject {
             clientToDisconnect = pendingStart.client
         }
 
-        if unregisterResult.registration != nil,
-           let index = indexOfSession(sessionId) {
-            sessions[index].activeTransport = .ssh
-            sessions[index].moshFallbackReason = nil
+        if unregisterResult.registration != nil {
+            setTransport(.ssh, fallbackReason: nil, for: sessionId)
         }
 
         return SSHUnregisterResult(
