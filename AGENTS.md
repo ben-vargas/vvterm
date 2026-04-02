@@ -15,13 +15,16 @@ VVTerm/
 ├── App/
 │   ├── VVTermApp.swift           # App entry point and composition root
 │   ├── ContentView.swift         # Shared root container
+│   ├── Localization/             # App-scoped localization preferences
 │   └── iOS/                      # iOS app shell and root navigation views
 ├── Core/                         # Shared infrastructure and platform glue
+│   ├── Logging/
 │   ├── Network/
 │   ├── UI/
 │   ├── SSH/
 │   ├── Security/
-│   └── Sync/
+│   ├── Sync/
+│   └── Terminal/
 ├── Features/                     # Feature-first architecture target
 │   ├── ConnectionViews/
 │   │   ├── Domain/
@@ -86,8 +89,7 @@ VVTerm/
 ├── Bridge/                       # Vendor and native integration glue
 ├── Compatibility/                # Version/platform compatibility helpers
 ├── Generated/                    # Build-time generated sources
-├── Resources/                    # Bundled assets, themes, terminfo, l10n
-└── Utilities/                    # Small cross-cutting helpers and extensions
+└── Resources/                    # Bundled assets, themes, terminfo, l10n
 ```
 
 ## Architecture Direction
@@ -96,12 +98,14 @@ VVTerm is moving from app-wide technical buckets toward **feature-first architec
 
 Current migration status:
 - `Core/Sync` is extracted for CloudKit sync infrastructure.
-- `Core/Security` is extracted for keychain infrastructure.
+- `Core/Security` is extracted for keychain, device identity, and privacy-mode infrastructure.
 - `Core/Network` is extracted for shared connectivity monitoring and Cloudflare transport support.
-- `Core/UI` is extracted for shared view primitives reused across features.
+- `Core/UI` is extracted for shared view primitives and presentation helpers reused across features.
+- `Core/Terminal` is extracted for shared clipboard, paste, and terminal text/default helpers.
+- `Core/Logging` is extracted for shared logging utilities.
 - `Core/SSH` is extracted for shared SSH bootstrap, known-hosts, key generation, environment detection, rich-paste support, tmux/mosh runtime helpers, and `SSHClient`.
 - `Features/ConnectionViews` is migrated for connection view tab configuration types and state.
-- `App` is extracted for app entry, composition roots, shared root containers, and iOS app-shell navigation.
+- `App` is extracted for app entry, composition roots, shared root containers, localization preferences, and iOS app-shell navigation.
 - `Features/RemoteFiles` is fully migrated and is the reference pattern for larger features.
 - `Features/LocalDiscovery` is migrated for discovery-specific code and UI.
 - `Features/Servers` is migrated for server/workspace domain models, server management, and server/workspace UI flows.
