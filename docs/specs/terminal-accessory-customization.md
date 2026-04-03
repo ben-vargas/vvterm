@@ -3,6 +3,8 @@
 ## Summary
 Add iOS settings that let users customize the terminal keyboard accessory bar by reordering, adding, and removing quick actions, plus custom text snippets/macros. Sync this configuration across devices with CloudKit.
 
+Path note: this spec predates the feature-first migration. Any legacy `Models/`, `Managers/`, `Services/`, or `Views/` file paths in this document should be mapped to the current `App/`, `Core/`, and `Features/` tree.
+
 ## Problem
 The current accessory bar is hard-coded in `GhosttyTerminalView+iOS.swift` and shows one fixed action order for every user. Power users need:
 - personalized quick actions

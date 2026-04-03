@@ -3,6 +3,8 @@
 ## Summary
 Add host-to-remote clipboard forwarding for non-text payloads, starting with images, so a user can press paste in VVTerm and have the image become usable on the remote machine.
 
+Path note: this draft predates the feature-first migration. Any legacy `Models/`, `Managers/`, `Services/`, or `Views/` file paths in this document should be mapped to the current `App/`, `Core/`, and `Features/` tree.
+
 Draft date: 2026-03-25
 
 Core V1 behavior:

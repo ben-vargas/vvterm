@@ -6,6 +6,8 @@ Add a read-only SFTP file browser and file viewer for remote hosts. The feature 
 - `Terminal`
 - `Files`
 
+Path note: this original feature spec predates the feature-first migration. Any legacy `Models/`, `Managers/`, `Services/`, or `Views/` file paths in this document should be mapped to the current `App/`, `Core/`, and `Features/` tree.
+
 This is a cross-platform feature for macOS and iOS. All three server views are enabled by default, and users can hide views they do not use from Settings. Zen remains a presentation mode layered on top of the selected server view; it is not a separate fourth view tab.
 
 ## Problem

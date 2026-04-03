@@ -5,6 +5,8 @@ Add two security features:
 - `Per-server lock`: selected servers require biometric authentication before opening/connecting.
 - `Full-app lock`: VVTerm requires biometric authentication when the app becomes active.
 
+Path note: this spec predates the feature-first migration. Any legacy `Models/`, `Managers/`, `Services/`, or `Views/` file paths in this document should be mapped to the current `App/`, `Core/`, and `Features/` tree.
+
 This spec targets:
 - iOS 16+
 - macOS 13.3+

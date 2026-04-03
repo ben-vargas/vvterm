@@ -3,6 +3,8 @@
 ## Summary
 Explore a future non-Apple expansion of VVTerm that keeps each platform UI fully native while moving shared connection and session logic into a headless portable core exposed through a small C ABI / FFI bridge.
 
+Path note: this draft predates the feature-first migration. Any legacy `Models/`, `Managers/`, `Services/`, or `Views/` file paths in this document should be mapped to the current `App/`, `Core/`, and `Features/` tree.
+
 Draft date: 2026-03-08
 
 Status: Backlog idea only. This is not an approved roadmap item.

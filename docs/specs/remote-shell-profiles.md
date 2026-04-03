@@ -3,6 +3,8 @@
 ## Summary
 Refactor VVTerm's remote SSH bootstrap logic around explicit remote shell profiles so shell-specific behavior is modeled in one place instead of being spread across generic SSH, tmux, mosh, and terminal restore paths.
 
+Path note: this draft predates the feature-first migration. Any legacy `Models/`, `Managers/`, `Services/`, or `Views/` file paths in this document should be mapped to the current `App/`, `Core/`, and `Features/` tree.
+
 Draft date: 2026-03-18
 
 ## Problem

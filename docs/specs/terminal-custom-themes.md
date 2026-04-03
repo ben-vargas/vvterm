@@ -3,6 +3,8 @@
 ## Summary
 Add first-class custom terminal themes with a single entry point in settings: `Custom Theme...` -> `Paste from Clipboard`, `Import from File`, `Builder`. Support per-appearance assignment (dark/light) and sync custom themes through iCloud from V1.
 
+Path note: this spec predates the feature-first migration. Any legacy `Models/`, `Managers/`, `Services/`, or `Views/` file paths in this document should be mapped to the current `App/`, `Core/`, and `Features/` tree.
+
 ## Problem
 VVTerm ships many built-in Ghostty themes, but users cannot create or import their own themes. Theme choice is currently name-based and built-in-oriented, which blocks:
 - importing popular Ghostty-compatible theme files

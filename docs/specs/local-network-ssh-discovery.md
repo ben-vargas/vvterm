@@ -3,6 +3,8 @@
 ## Summary
 Add a user-initiated "Discover Local Devices" flow that finds nearby SSH hosts on the current LAN and pre-fills `Add Server` for fast setup.
 
+Path note: this spec predates the feature-first migration. Any legacy `Models/`, `Managers/`, `Services/`, or `Views/` file paths in this document should be mapped to the current `App/`, `Core/`, and `Features/` tree.
+
 ## Problem
 Creating a server currently requires users to know host/IP details in advance and manually type them into `ServerFormSheet`. This is high-friction when setting up home-lab devices, local VMs, Raspberry Pis, or newly provisioned machines on the same network.
 

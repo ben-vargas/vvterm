@@ -25,7 +25,7 @@ VVTerm/
 │   ├── Security/
 │   ├── Sync/
 │   └── Terminal/
-├── Features/                     # Feature-first architecture target
+├── Features/                     # Feature-first product features
 │   ├── ConnectionViews/
 │   │   ├── Domain/
 │   │   └── Application/
@@ -93,9 +93,9 @@ VVTerm/
 
 ## Architecture Direction
 
-VVTerm is moving from app-wide technical buckets toward **feature-first architecture**.
+VVTerm now uses a **feature-first architecture** for app-owned source code.
 
-Current migration status:
+Current architecture:
 - `Core/Sync` is extracted for CloudKit sync infrastructure.
 - `Core/Security` is extracted for keychain, device identity, and privacy-mode infrastructure.
 - `Core/Network` is extracted for shared connectivity monitoring and Cloudflare transport support.
@@ -122,7 +122,7 @@ Current migration status:
 - The legacy top-level source buckets have been removed. New app code should land in `Features`, `Core`, or `App` based on ownership.
 - New work inside migrated features must stay inside their `Features/<FeatureName>` subtree and should not reintroduce app-wide bucket folders.
 
-Feature-first target shape:
+Feature-first shape:
 - `Domain`: pure feature types and rules
 - `Application`: feature state, orchestration, coordinators, use-case style logic
 - `Infrastructure`: transport, persistence, adapters, external integrations

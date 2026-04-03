@@ -19,7 +19,7 @@ This refactor must be safe:
 The default expectation is behavior preservation while splitting responsibilities into better file and folder boundaries.
 
 ## Problem
-The current SFTP Files implementation is spread across multiple top-level technical buckets and oversized files:
+Before the feature-first migration, the SFTP Files implementation was spread across multiple top-level technical buckets and oversized files:
 - `Models/RemoteFile.swift`
 - `Views/Files/RemoteFileBrowserManager.swift`
 - `Views/Files/RemoteFileBrowserView.swift`
