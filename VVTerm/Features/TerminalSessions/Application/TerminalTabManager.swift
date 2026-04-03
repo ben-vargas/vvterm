@@ -908,6 +908,66 @@ final class TerminalTabManager: ObservableObject {
 
     // MARK: - Persistence
 
+    private func makeServerSnapshots() -> [TerminalTabsSnapshot.ServerSnapshot] {
+        tabsByServer.map { serverId, tabs in
+            TerminalTabsSnapshot.ServerSnapshot(
+                serverId: serverId,
+                tabs: tabs.map { TerminalTabsSnapshot.TabSnapshot(from: $0) },
+                selectedTabId: selectedTabByServer[serverId],
+                selectedView: selectedViewByServer[serverId]
+            )
+        }
+    }
+
+    private func makeSnapshot() -> TerminalTabsSnapshot {
+        TerminalTabsSnapshot(servers: makeServerSnapshots())
+    }
+
+    private func makeRestoredPaneStates(from tabsByServer: [UUID: [TerminalTab]]) -> [UUID: TerminalPaneState] {
+        var restoredPaneStates: [UUID: TerminalPaneState] = [:]
+
+        for tabs in tabsByServer.values {
+            for tab in tabs {
+                for paneId in tab.allPaneIds {
+                    var paneState = TerminalPaneState(
+                        paneId: paneId,
+                        tabId: tab.id,
+                        serverId: tab.serverId
+                    )
+                    if !tmuxResolver.isTmuxEnabled(for: tab.serverId) {
+                        paneState.tmuxStatus = .off
+                    }
+                    restoredPaneStates[paneId] = paneState
+                }
+            }
+        }
+
+        return restoredPaneStates
+    }
+
+    private func applyRestoredSnapshot(_ snapshot: TerminalTabsSnapshot) {
+        var restoredTabsByServer: [UUID: [TerminalTab]] = [:]
+        var restoredSelectedTabs: [UUID: UUID] = [:]
+        var restoredSelectedViews: [UUID: String] = [:]
+
+        for server in snapshot.servers {
+            let tabs = server.tabs.map { $0.toTerminalTab() }
+            restoredTabsByServer[server.serverId] = tabs
+            if let selected = server.selectedTabId {
+                restoredSelectedTabs[server.serverId] = selected
+            }
+            if let view = server.selectedView {
+                restoredSelectedViews[server.serverId] = view
+            }
+        }
+
+        tabsByServer = restoredTabsByServer
+        selectedTabByServer = restoredSelectedTabs
+        selectedViewByServer = restoredSelectedViews
+        paneStates = makeRestoredPaneStates(from: restoredTabsByServer)
+        connectedServerIds = Set(restoredTabsByServer.keys)
+    }
+
     private func schedulePersist() {
         guard !isRestoring else { return }
         persistTask?.cancel()
@@ -920,18 +980,8 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func persistSnapshot() {
-        let serverSnapshots = tabsByServer.map { serverId, tabs in
-            TerminalTabsSnapshot.ServerSnapshot(
-                serverId: serverId,
-                tabs: tabs.map { TerminalTabsSnapshot.TabSnapshot(from: $0) },
-                selectedTabId: selectedTabByServer[serverId],
-                selectedView: selectedViewByServer[serverId]
-            )
-        }
-
-        let snapshot = TerminalTabsSnapshot(servers: serverSnapshots)
         do {
-            let data = try JSONEncoder().encode(snapshot)
+            let data = try JSONEncoder().encode(makeSnapshot())
             UserDefaults.standard.set(data, forKey: persistenceKey)
         } catch {
             logger.error("Failed to persist tabs snapshot: \(error.localizedDescription)")
@@ -943,42 +993,7 @@ final class TerminalTabManager: ObservableObject {
         do {
             let snapshot = try JSONDecoder().decode(TerminalTabsSnapshot.self, from: data)
             isRestoring = true
-
-            var restoredTabsByServer: [UUID: [TerminalTab]] = [:]
-            var restoredSelectedTabs: [UUID: UUID] = [:]
-            var restoredSelectedViews: [UUID: String] = [:]
-            var restoredPaneStates: [UUID: TerminalPaneState] = [:]
-
-            for server in snapshot.servers {
-                let tabs = server.tabs.map { $0.toTerminalTab() }
-                restoredTabsByServer[server.serverId] = tabs
-                if let selected = server.selectedTabId {
-                    restoredSelectedTabs[server.serverId] = selected
-                }
-                if let view = server.selectedView {
-                    restoredSelectedViews[server.serverId] = view
-                }
-
-                for tab in tabs {
-                    for paneId in tab.allPaneIds {
-                        var paneState = TerminalPaneState(
-                            paneId: paneId,
-                            tabId: tab.id,
-                            serverId: tab.serverId
-                        )
-                        if !tmuxResolver.isTmuxEnabled(for: tab.serverId) {
-                            paneState.tmuxStatus = .off
-                        }
-                        restoredPaneStates[paneId] = paneState
-                    }
-                }
-            }
-
-            tabsByServer = restoredTabsByServer
-            selectedTabByServer = restoredSelectedTabs
-            selectedViewByServer = restoredSelectedViews
-            paneStates = restoredPaneStates
-            connectedServerIds = Set(restoredTabsByServer.keys)
+            applyRestoredSnapshot(snapshot)
         } catch {
             logger.error("Failed to restore tabs snapshot: \(error.localizedDescription)")
         }
