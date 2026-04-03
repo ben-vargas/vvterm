@@ -552,7 +552,7 @@ final class TerminalTabManager: ObservableObject {
             killTmuxIfNeeded(for: paneId)
         }
 
-        tmuxResolver.clearRuntimeState(for: paneId, setPrompt: setTmuxAttachPrompt)
+        clearTmuxRuntimeState(for: paneId)
         unregisterTerminal(for: paneId)
         paneStates.removeValue(forKey: paneId)
 
@@ -600,6 +600,10 @@ final class TerminalTabManager: ObservableObject {
 
     private func setTmuxAttachPrompt(_ prompt: TmuxAttachPrompt?) {
         tmuxAttachPrompt = prompt
+    }
+
+    private func clearTmuxRuntimeState(for paneId: UUID) {
+        tmuxResolver.clearRuntimeState(for: paneId, setPrompt: setTmuxAttachPrompt)
     }
 
     func resolveTmuxAttachPrompt(paneId: UUID, selection: TmuxAttachSelection) {
@@ -902,7 +906,7 @@ final class TerminalTabManager: ObservableObject {
     func disableTmux(for serverId: UUID) {
         for (paneId, state) in paneStates where state.serverId == serverId {
             setPaneTmuxStatus(.off, for: paneId)
-            tmuxResolver.clearRuntimeState(for: paneId, setPrompt: setTmuxAttachPrompt)
+            clearTmuxRuntimeState(for: paneId)
         }
     }
 
@@ -1056,7 +1060,7 @@ extension TerminalTabManager {
         let allPaneIds = Set(paneStates.keys)
             .union(shellRegistry.startsInFlight.keys)
         for paneId in allPaneIds {
-            tmuxResolver.clearRuntimeState(for: paneId, setPrompt: setTmuxAttachPrompt)
+            clearTmuxRuntimeState(for: paneId)
         }
 
         var uniqueClients: [ObjectIdentifier: SSHClient] = [:]
