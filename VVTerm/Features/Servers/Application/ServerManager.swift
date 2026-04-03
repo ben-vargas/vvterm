@@ -419,6 +419,14 @@ final class ServerManager: ObservableObject {
         )
     }
 
+    private func makeWorkspaceMap(from workspaces: [Workspace]) -> [UUID: Workspace] {
+        Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
+    }
+
+    private func makeServerMap(from servers: [Server]) -> [UUID: Server] {
+        Dictionary(uniqueKeysWithValues: servers.map { ($0.id, $0) })
+    }
+
     private func applyCloudKitChanges(_ changes: CloudKitChanges, canReplaceLocalState: Bool = true) {
         if changes.isFullFetch && canReplaceLocalState {
             workspaces = dedupedWorkspaces(from: changes.workspaces)
@@ -459,7 +467,7 @@ final class ServerManager: ObservableObject {
     }
 
     private func upsertWorkspaces(_ updates: [Workspace]) {
-        var workspaceMap = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
+        var workspaceMap = makeWorkspaceMap(from: workspaces)
         for workspace in updates {
             workspaceMap[workspace.id] = workspace
             logger.info("Workspace updated from CloudKit: \(workspace.name) (id: \(workspace.id))")
@@ -468,7 +476,7 @@ final class ServerManager: ObservableObject {
     }
 
     private func upsertServers(_ updates: [Server]) {
-        var serverMap = Dictionary(uniqueKeysWithValues: servers.map { ($0.id, $0) })
+        var serverMap = makeServerMap(from: servers)
         for server in updates {
             serverMap[server.id] = server
             logger.info("Server updated from CloudKit: \(server.name) (id: \(server.id), workspaceId: \(server.workspaceId))")
