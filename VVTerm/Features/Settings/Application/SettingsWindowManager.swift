@@ -15,12 +15,18 @@ import AppKit
 /// Wrapper view that observes language changes and applies locale environment
 private struct LocalizedSettingsView: View {
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.system.rawValue
+    @StateObject private var appLockManager = AppLockManager.shared
+    @StateObject private var terminalThemeManager = TerminalThemeManager.shared
+    @StateObject private var terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager.shared
 
     var body: some View {
         let locale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
         SettingsView()
             .modifier(AppearanceModifier())
             .environment(\.locale, locale)
+            .environmentObject(appLockManager)
+            .environmentObject(terminalThemeManager)
+            .environmentObject(terminalAccessoryPreferencesManager)
     }
 }
 
