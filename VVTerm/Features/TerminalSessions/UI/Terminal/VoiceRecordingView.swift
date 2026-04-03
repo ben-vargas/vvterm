@@ -25,7 +25,7 @@ struct VoiceRecordingView: View {
     }
 
     private var recordingView: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             // Transcription preview
             if !audioService.partialTranscription.isEmpty || !audioService.transcribedText.isEmpty {
                 Text(audioService.transcribedText.isEmpty ? audioService.partialTranscription : audioService.transcribedText)
@@ -33,10 +33,10 @@ struct VoiceRecordingView: View {
                     .foregroundColor(.secondary)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 4)
-                    .padding(.leading, 12)
-                    .padding(.trailing, 10)
-                    .padding(.bottom, 4)
+                    .padding(.top, 2)
+                    .padding(.leading, 10)
+                    .padding(.trailing, 8)
+                    .padding(.bottom, 2)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
@@ -53,8 +53,8 @@ struct VoiceRecordingView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .padding(.leading, 2)
-                .padding(.trailing, 10)
+                .padding(.leading, 0)
+                .padding(.trailing, 8)
 
                 // Recording indicator + Timer
                 HStack(spacing: 6) {
@@ -64,7 +64,7 @@ struct VoiceRecordingView: View {
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
-                .padding(.trailing, 10)
+                .padding(.trailing, 8)
 
                 // Responsive waveform
                 GeometryReader { geometry in
@@ -96,14 +96,14 @@ struct VoiceRecordingView: View {
                         .foregroundColor(.blue)
                 }
                 .buttonStyle(.plain)
-                .padding(.leading, 10)
-                .padding(.trailing, 2)
+                .padding(.leading, 8)
+                .padding(.trailing, 0)
             }
-            .padding(.leading, 12)
-            .padding(.trailing, 10)
-            .frame(height: 46)
+            .padding(.leading, 8)
+            .padding(.trailing, 8)
+            .frame(height: 42)
         }
-        .padding(.top, 4)
+        .padding(.top, 2)
     }
 
     private var processingView: some View {
