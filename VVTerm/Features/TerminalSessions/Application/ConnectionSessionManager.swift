@@ -923,6 +923,50 @@ final class ConnectionSessionManager: ObservableObject {
 // MARK: - Persistence
 
 extension ConnectionSessionManager {
+    private func makeServerSnapshots() -> [ConnectionSessionsSnapshot.ServerSnapshot] {
+        Set(sessions.map(\.serverId)).map { serverId in
+            ConnectionSessionsSnapshot.ServerSnapshot(
+                serverId: serverId,
+                selectedSessionId: selectedSessionByServer[serverId],
+                selectedView: selectedViewByServer[serverId]
+            )
+        }
+    }
+
+    private func makeSnapshot() -> ConnectionSessionsSnapshot {
+        ConnectionSessionsSnapshot(
+            sessions: sessions.map { ConnectionSessionsSnapshot.SessionSnapshot(from: $0) },
+            selectedSessionId: selectedSessionId,
+            serverSelections: makeServerSnapshots()
+        )
+    }
+
+    private func applyRestoredSnapshot(_ snapshot: ConnectionSessionsSnapshot) {
+        var restoredSessions = snapshot.sessions.map { $0.toSession() }
+        for index in restoredSessions.indices {
+            let serverId = restoredSessions[index].serverId
+            if !tmuxResolver.isTmuxEnabled(for: serverId) {
+                restoredSessions[index].tmuxStatus = .off
+            }
+        }
+
+        sessions = restoredSessions
+        selectedSessionId = snapshot.selectedSessionId
+        selectedSessionByServer = Dictionary(
+            uniqueKeysWithValues: snapshot.serverSelections.compactMap { snapshot in
+                guard let selected = snapshot.selectedSessionId else { return nil }
+                return (snapshot.serverId, selected)
+            }
+        )
+        selectedViewByServer = Dictionary(
+            uniqueKeysWithValues: snapshot.serverSelections.compactMap { snapshot in
+                guard let view = snapshot.selectedView else { return nil }
+                return (snapshot.serverId, view)
+            }
+        )
+        connectedServerIds = Set(restoredSessions.map(\.serverId))
+    }
+
     private func schedulePersist() {
         guard !isRestoring else { return }
         persistTask?.cancel()
@@ -935,23 +979,8 @@ extension ConnectionSessionManager {
     }
 
     private func persistSnapshot() {
-        let sessionsSnapshot = sessions.map { ConnectionSessionsSnapshot.SessionSnapshot(from: $0) }
-        let serverSelections = Set(sessions.map(\.serverId)).map { serverId in
-            ConnectionSessionsSnapshot.ServerSnapshot(
-                serverId: serverId,
-                selectedSessionId: selectedSessionByServer[serverId],
-                selectedView: selectedViewByServer[serverId]
-            )
-        }
-
-        let snapshot = ConnectionSessionsSnapshot(
-            sessions: sessionsSnapshot,
-            selectedSessionId: selectedSessionId,
-            serverSelections: serverSelections
-        )
-
         do {
-            let data = try JSONEncoder().encode(snapshot)
+            let data = try JSONEncoder().encode(makeSnapshot())
             UserDefaults.standard.set(data, forKey: persistenceKey)
         } catch {
             logger.error("Failed to persist session snapshot: \(error.localizedDescription)")
@@ -963,29 +992,7 @@ extension ConnectionSessionManager {
         do {
             let snapshot = try JSONDecoder().decode(ConnectionSessionsSnapshot.self, from: data)
             isRestoring = true
-
-            var restoredSessions = snapshot.sessions.map { $0.toSession() }
-            for index in restoredSessions.indices {
-                let serverId = restoredSessions[index].serverId
-                if !tmuxResolver.isTmuxEnabled(for: serverId) {
-                    restoredSessions[index].tmuxStatus = .off
-                }
-            }
-            sessions = restoredSessions
-            selectedSessionId = snapshot.selectedSessionId
-            selectedSessionByServer = Dictionary(
-                uniqueKeysWithValues: snapshot.serverSelections.compactMap { snapshot in
-                    guard let selected = snapshot.selectedSessionId else { return nil }
-                    return (snapshot.serverId, selected)
-                }
-            )
-            selectedViewByServer = Dictionary(
-                uniqueKeysWithValues: snapshot.serverSelections.compactMap { snapshot in
-                    guard let view = snapshot.selectedView else { return nil }
-                    return (snapshot.serverId, view)
-                }
-            )
-            connectedServerIds = Set(restoredSessions.map(\.serverId))
+            applyRestoredSnapshot(snapshot)
         } catch {
             logger.error("Failed to restore session snapshot: \(error.localizedDescription)")
         }
