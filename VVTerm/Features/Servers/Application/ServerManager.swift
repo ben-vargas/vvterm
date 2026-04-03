@@ -87,23 +87,23 @@ final class ServerManager: ObservableObject {
     private func applyPendingSyncOverlay() {
         let snapshot = syncCoordinator.snapshot()
 
-        for mutation in snapshot where mutation.entity == .workspace && mutation.operation == .upsert {
+        for mutation in pendingMutations(in: snapshot, entity: .workspace, operation: .upsert) {
             if let workspace = mutation.workspace {
                 applyPendingWorkspaceUpsert(workspace)
             }
         }
 
-        for mutation in snapshot where mutation.entity == .server && mutation.operation == .upsert {
+        for mutation in pendingMutations(in: snapshot, entity: .server, operation: .upsert) {
             if let server = mutation.server {
                 applyPendingServerUpsert(server)
             }
         }
 
-        for mutation in snapshot where mutation.entity == .server && mutation.operation == .delete {
+        for mutation in pendingMutations(in: snapshot, entity: .server, operation: .delete) {
             applyPendingServerDelete(mutation.entityKey)
         }
 
-        for mutation in snapshot where mutation.entity == .workspace && mutation.operation == .delete {
+        for mutation in pendingMutations(in: snapshot, entity: .workspace, operation: .delete) {
             applyPendingWorkspaceDelete(mutation.entityKey)
         }
     }
@@ -113,30 +113,35 @@ final class ServerManager: ObservableObject {
         let fetchedServersByID = Dictionary(uniqueKeysWithValues: changes.servers.map { ($0.id, $0) })
         let fetchedWorkspacesByID = Dictionary(uniqueKeysWithValues: changes.workspaces.map { ($0.id, $0) })
 
-        for mutation in snapshot where mutation.operation == .upsert {
-            switch mutation.entity {
-            case .server:
-                guard let pendingServer = mutation.server,
-                      let fetchedServer = fetchedServersByID[pendingServer.id] else {
-                    continue
-                }
-
-                if fetchedServer.updatedAt >= pendingServer.updatedAt {
-                    syncCoordinator.removePendingMutation(mutation.id)
-                }
-            case .workspace:
-                guard let pendingWorkspace = mutation.workspace,
-                      let fetchedWorkspace = fetchedWorkspacesByID[pendingWorkspace.id] else {
-                    continue
-                }
-
-                if fetchedWorkspace.updatedAt >= pendingWorkspace.updatedAt {
-                    syncCoordinator.removePendingMutation(mutation.id)
-                }
-            case .terminalTheme, .terminalThemePreference, .terminalAccessoryProfile:
+        for mutation in pendingMutations(in: snapshot, entity: .server, operation: .upsert) {
+            guard let pendingServer = mutation.server,
+                  let fetchedServer = fetchedServersByID[pendingServer.id] else {
                 continue
             }
+
+            if fetchedServer.updatedAt >= pendingServer.updatedAt {
+                syncCoordinator.removePendingMutation(mutation.id)
+            }
         }
+
+        for mutation in pendingMutations(in: snapshot, entity: .workspace, operation: .upsert) {
+            guard let pendingWorkspace = mutation.workspace,
+                  let fetchedWorkspace = fetchedWorkspacesByID[pendingWorkspace.id] else {
+                continue
+            }
+
+            if fetchedWorkspace.updatedAt >= pendingWorkspace.updatedAt {
+                syncCoordinator.removePendingMutation(mutation.id)
+            }
+        }
+    }
+
+    private func pendingMutations(
+        in snapshot: [PendingCloudKitMutation],
+        entity: PendingCloudKitEntity,
+        operation: PendingCloudKitOperation
+    ) -> [PendingCloudKitMutation] {
+        snapshot.filter { $0.entity == entity && $0.operation == operation }
     }
 
     private func applyPendingServerUpsert(_ server: Server) {
