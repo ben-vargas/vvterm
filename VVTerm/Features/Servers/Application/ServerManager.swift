@@ -483,11 +483,19 @@ final class ServerManager: ObservableObject {
 
     private func applyCloudKitChanges(_ changes: CloudKitChanges, canReplaceLocalState: Bool = true) {
         if changes.isFullFetch && canReplaceLocalState {
-            workspaces = dedupedWorkspaces(from: changes.workspaces)
-            servers = dedupedServers(from: changes.servers)
+            applyFullFetchCloudKitChanges(changes)
             return
         }
 
+        applyIncrementalCloudKitChanges(changes)
+    }
+
+    private func applyFullFetchCloudKitChanges(_ changes: CloudKitChanges) {
+        workspaces = dedupedWorkspaces(from: changes.workspaces)
+        servers = dedupedServers(from: changes.servers)
+    }
+
+    private func applyIncrementalCloudKitChanges(_ changes: CloudKitChanges) {
         if !changes.workspaces.isEmpty {
             upsertWorkspaces(changes.workspaces)
         }
