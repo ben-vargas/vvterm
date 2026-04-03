@@ -75,6 +75,30 @@ final class TerminalTabManager: ObservableObject {
         restoreSnapshot()
     }
 
+    private func setPaneTransport(
+        _ transport: ShellTransport,
+        fallbackReason: MoshFallbackReason?,
+        for paneId: UUID
+    ) {
+        paneStates[paneId]?.activeTransport = transport
+        paneStates[paneId]?.moshFallbackReason = fallbackReason
+    }
+
+    private func handleStaleShellStartContext(
+        _ staleContext: SSHShellRegistry.StartContext?,
+        logMessage: StaticString,
+        paneId: UUID
+    ) {
+        guard let staleContext else { return }
+
+        logger.warning("\(logMessage) \(paneId.uuidString, privacy: .public)")
+        if !shellRegistry.hasClientReferences(staleContext.client) {
+            Task.detached(priority: .utility) { [client = staleContext.client] in
+                await client.disconnect()
+            }
+        }
+    }
+
     // MARK: - Tab Management
 
     /// Get tabs for a server
@@ -359,8 +383,7 @@ final class TerminalTabManager: ObservableObject {
             }
         }
 
-        paneStates[paneId]?.activeTransport = transport
-        paneStates[paneId]?.moshFallbackReason = fallbackReason
+        setPaneTransport(transport, fallbackReason: fallbackReason, for: paneId)
 
         if !skipTmuxLifecycle {
             Task { [weak self] in
@@ -388,8 +411,7 @@ final class TerminalTabManager: ObservableObject {
             await registration.client.disconnect()
         }
 
-        paneStates[paneId]?.activeTransport = .ssh
-        paneStates[paneId]?.moshFallbackReason = nil
+        setPaneTransport(.ssh, fallbackReason: nil, for: paneId)
     }
 
     /// Get SSH client for a pane
@@ -413,14 +435,11 @@ final class TerminalTabManager: ObservableObject {
             client: client
         )
 
-        if let context = startResult.staleContext {
-            logger.warning("Recovered stale pane shell-start lock for \(paneId.uuidString, privacy: .public)")
-            if !shellRegistry.hasClientReferences(context.client) {
-                Task.detached(priority: .utility) { [client = context.client] in
-                    await client.disconnect()
-                }
-            }
-        }
+        handleStaleShellStartContext(
+            startResult.staleContext,
+            logMessage: "Recovered stale pane shell-start lock for",
+            paneId: paneId
+        )
         return startResult.started
     }
 
@@ -430,14 +449,11 @@ final class TerminalTabManager: ObservableObject {
 
     func isShellStartInFlight(for paneId: UUID) -> Bool {
         let result = shellRegistry.isStartInFlight(for: paneId)
-        if let context = result.staleContext {
-            logger.warning("Cleared stale pane shell-start in-flight flag for \(paneId.uuidString, privacy: .public)")
-            if !shellRegistry.hasClientReferences(context.client) {
-                Task.detached(priority: .utility) { [client = context.client] in
-                    await client.disconnect()
-                }
-            }
-        }
+        handleStaleShellStartContext(
+            result.staleContext,
+            logMessage: "Cleared stale pane shell-start in-flight flag for",
+            paneId: paneId
+        )
         return result.inFlight
     }
 
@@ -536,8 +552,7 @@ final class TerminalTabManager: ObservableObject {
         paneStates[paneId]?.connectionState = connectionState
         switch connectionState {
         case .connecting, .reconnecting:
-            paneStates[paneId]?.activeTransport = .ssh
-            paneStates[paneId]?.moshFallbackReason = nil
+            setPaneTransport(.ssh, fallbackReason: nil, for: paneId)
         case .disconnected, .failed:
             if paneStates[paneId]?.tmuxStatus == .foreground {
                 paneStates[paneId]?.tmuxStatus = .background
