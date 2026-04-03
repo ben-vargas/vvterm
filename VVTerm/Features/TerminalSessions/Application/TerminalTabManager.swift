@@ -75,6 +75,22 @@ final class TerminalTabManager: ObservableObject {
         restoreSnapshot()
     }
 
+    private func paneTmuxStatus(for paneId: UUID) -> TmuxStatus? {
+        paneStates[paneId]?.tmuxStatus
+    }
+
+    private func setPaneTmuxStatus(_ status: TmuxStatus, for paneId: UUID) {
+        paneStates[paneId]?.tmuxStatus = status
+    }
+
+    private func paneWorkingDirectory(for paneId: UUID) -> String? {
+        paneStates[paneId]?.workingDirectory
+    }
+
+    private func setPaneWorkingDirectory(_ workingDirectory: String, for paneId: UUID) {
+        paneStates[paneId]?.workingDirectory = workingDirectory
+    }
+
     private func setPaneTransport(
         _ transport: ShellTransport,
         fallbackReason: MoshFallbackReason?,
@@ -531,7 +547,7 @@ final class TerminalTabManager: ObservableObject {
 
     /// Clean up a pane (terminal + SSH)
     private func cleanupPane(_ paneId: UUID) {
-        if let status = paneStates[paneId]?.tmuxStatus,
+        if let status = paneTmuxStatus(for: paneId),
            status == .foreground || status == .background || status == .installing {
             killTmuxIfNeeded(for: paneId)
         }
@@ -554,8 +570,8 @@ final class TerminalTabManager: ObservableObject {
         case .connecting, .reconnecting:
             setPaneTransport(.ssh, fallbackReason: nil, for: paneId)
         case .disconnected, .failed:
-            if paneStates[paneId]?.tmuxStatus == .foreground {
-                paneStates[paneId]?.tmuxStatus = .background
+            if paneTmuxStatus(for: paneId) == .foreground {
+                setPaneTmuxStatus(.background, for: paneId)
             }
         case .connected, .idle:
             break
@@ -564,20 +580,20 @@ final class TerminalTabManager: ObservableObject {
 
     func updatePaneWorkingDirectory(_ paneId: UUID, rawDirectory: String) {
         guard let normalized = normalizeWorkingDirectory(rawDirectory) else { return }
-        paneStates[paneId]?.workingDirectory = normalized
+        setPaneWorkingDirectory(normalized, for: paneId)
     }
 
     func workingDirectory(for paneId: UUID) -> String? {
-        paneStates[paneId]?.workingDirectory
+        paneWorkingDirectory(for: paneId)
     }
 
     func shouldApplyWorkingDirectory(for paneId: UUID) -> Bool {
-        guard let status = paneStates[paneId]?.tmuxStatus else { return false }
+        guard let status = paneTmuxStatus(for: paneId) else { return false }
         return status == .off || status == .missing
     }
 
     func updatePaneTmuxStatus(_ paneId: UUID, status: TmuxStatus) {
-        paneStates[paneId]?.tmuxStatus = status
+        setPaneTmuxStatus(status, for: paneId)
     }
 
     // MARK: - tmux Integration
@@ -634,7 +650,7 @@ final class TerminalTabManager: ObservableObject {
                sessionName: tmuxResolver.sessionName(for: seedPaneId),
                using: client
            ) {
-            paneStates[paneId]?.workingDirectory = path
+            setPaneWorkingDirectory(path, for: paneId)
             return path
         }
 
@@ -642,11 +658,11 @@ final class TerminalTabManager: ObservableObject {
             sessionName: tmuxResolver.sessionName(for: paneId),
             using: client
         ) {
-            paneStates[paneId]?.workingDirectory = path
+            setPaneWorkingDirectory(path, for: paneId)
             return path
         }
 
-        if let candidate = paneStates[paneId]?.workingDirectory?.trimmingCharacters(in: .whitespacesAndNewlines),
+        if let candidate = paneWorkingDirectory(for: paneId)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !candidate.isEmpty {
             return candidate
         }
@@ -684,7 +700,7 @@ final class TerminalTabManager: ObservableObject {
             guard state.tmuxStatus == .foreground || state.tmuxStatus == .background else { continue }
             let newStatus: TmuxStatus = (isSelectedTab && tab.focusedPaneId == paneId) ? .foreground : .background
             if state.tmuxStatus != newStatus {
-                paneStates[paneId]?.tmuxStatus = newStatus
+                setPaneTmuxStatus(newStatus, for: paneId)
             }
         }
     }
