@@ -427,6 +427,14 @@ final class ServerManager: ObservableObject {
         Dictionary(uniqueKeysWithValues: servers.map { ($0.id, $0) })
     }
 
+    private func sortedWorkspaces(from workspaceMap: [UUID: Workspace]) -> [Workspace] {
+        Array(workspaceMap.values).sorted { $0.order < $1.order }
+    }
+
+    private func sortedServers(from serverMap: [UUID: Server]) -> [Server] {
+        Array(serverMap.values).sorted { $0.name < $1.name }
+    }
+
     private func applyCloudKitChanges(_ changes: CloudKitChanges, canReplaceLocalState: Bool = true) {
         if changes.isFullFetch && canReplaceLocalState {
             workspaces = dedupedWorkspaces(from: changes.workspaces)
@@ -454,7 +462,7 @@ final class ServerManager: ObservableObject {
             workspaceMap[workspace.id] = workspace
             logger.info("Workspace from CloudKit: \(workspace.name) (id: \(workspace.id))")
         }
-        return Array(workspaceMap.values).sorted { $0.order < $1.order }
+        return sortedWorkspaces(from: workspaceMap)
     }
 
     private func dedupedServers(from updates: [Server]) -> [Server] {
@@ -463,7 +471,7 @@ final class ServerManager: ObservableObject {
             serverMap[server.id] = server
             logger.info("Server from CloudKit: \(server.name) (id: \(server.id), workspaceId: \(server.workspaceId))")
         }
-        return Array(serverMap.values).sorted { $0.name < $1.name }
+        return sortedServers(from: serverMap)
     }
 
     private func upsertWorkspaces(_ updates: [Workspace]) {
@@ -472,7 +480,7 @@ final class ServerManager: ObservableObject {
             workspaceMap[workspace.id] = workspace
             logger.info("Workspace updated from CloudKit: \(workspace.name) (id: \(workspace.id))")
         }
-        workspaces = Array(workspaceMap.values).sorted { $0.order < $1.order }
+        workspaces = sortedWorkspaces(from: workspaceMap)
     }
 
     private func upsertServers(_ updates: [Server]) {
@@ -481,7 +489,7 @@ final class ServerManager: ObservableObject {
             serverMap[server.id] = server
             logger.info("Server updated from CloudKit: \(server.name) (id: \(server.id), workspaceId: \(server.workspaceId))")
         }
-        servers = Array(serverMap.values).sorted { $0.name < $1.name }
+        servers = sortedServers(from: serverMap)
     }
 
     private func removeWorkspaces(withIDs ids: [UUID]) {
