@@ -5,7 +5,7 @@ Cross-platform (iOS/macOS) SSH terminal app with iCloud sync and Keychain creden
 ## Target Versions
 
 - **macOS**: 13.3+ (Ventura), arm64 only
-- **iOS**: 16.0+, arm64 only
+- **iOS**: 16.1+, arm64 only
 - **Xcode**: 16.0+
 
 ## Architecture
@@ -93,34 +93,34 @@ VVTerm/
 
 ## Architecture Direction
 
-VVTerm now uses a **feature-first architecture** for app-owned source code.
+VVTerm uses a **feature-first architecture** for app-owned source code.
 
 Current architecture:
-- `Core/Sync` is extracted for CloudKit sync infrastructure.
-- `Core/Security` is extracted for keychain, device identity, and privacy-mode infrastructure.
-- `Core/Network` is extracted for shared connectivity monitoring and Cloudflare transport support.
-- `Core/UI` is extracted for shared view primitives and presentation helpers reused across features.
-- `Core/Terminal` is extracted for shared clipboard, paste, and terminal text/default helpers.
-- `Core/Logging` is extracted for shared logging utilities.
-- `Core/SSH` is extracted for shared SSH bootstrap, known-hosts, key generation, environment detection, rich-paste support, tmux/mosh runtime helpers, and `SSHClient`.
-- `Features/ConnectionViews` is migrated for connection view tab configuration types and state.
-- `App` is extracted for app entry, composition roots, shared root containers, localization preferences, and iOS app-shell navigation.
-- `Features/RemoteFiles` is fully migrated and is the reference pattern for larger features.
-- `Features/LocalDiscovery` is migrated for discovery-specific code and UI.
-- `Features/Servers` is migrated for server/workspace domain models, server management, and server/workspace UI flows.
-- `Features/Stats` is migrated for server metrics collection and presentation.
-- `Features/Security` is migrated for app lock and biometric authentication flows.
-- `Features/Settings` is migrated for settings window presentation and settings screens.
-- `Features/Store` is migrated for Pro entitlements, purchases, and upgrade surfaces.
-- `Features/Support` is migrated for support/contact UI surfaces.
-- `Features/TerminalThemes` is migrated for theme models, validation, storage paths, parsing, and theme management.
-- `Features/TerminalAccessories` is migrated for keyboard accessory models, preferences, settings UI, and accessory validation flows.
-- `Features/TerminalPresets` is migrated for terminal preset models, persistence, and preset form UI.
-- `Features/TerminalSessions` is migrated for terminal session/tab domain models, session/tab managers, tmux prompt coordination, live activity support, and terminal session UI.
-- `Features/VoiceInput` is migrated for transcription/audio capture infrastructure, MLX model management, and transcription settings UI.
-- `Features/Welcome` is migrated for welcome/onboarding copy and presentation.
-- The legacy top-level source buckets have been removed. New app code should land in `Features`, `Core`, or `App` based on ownership.
-- New work inside migrated features must stay inside their `Features/<FeatureName>` subtree and should not reintroduce app-wide bucket folders.
+- `App` owns app entry, composition roots, shared root containers, localization preferences, and iOS app-shell navigation.
+- `Core/Sync` owns CloudKit sync infrastructure.
+- `Core/Security` owns keychain, device identity, and privacy-mode infrastructure.
+- `Core/Network` owns shared connectivity monitoring and Cloudflare transport support.
+- `Core/UI` owns shared view primitives and presentation helpers reused across features.
+- `Core/Terminal` owns shared clipboard, paste, and terminal text/default helpers.
+- `Core/Logging` owns shared logging utilities.
+- `Core/SSH` owns shared SSH bootstrap, known-hosts, key generation, environment detection, rich-paste support, tmux/mosh runtime helpers, and `SSHClient`.
+- `Features/ConnectionViews` owns connection view tab configuration types and state.
+- `Features/RemoteFiles` owns remote file browsing, preview, transfer, and SFTP integration.
+- `Features/LocalDiscovery` owns discovery-specific code and UI.
+- `Features/Servers` owns server/workspace domain models, server management, and server/workspace UI flows.
+- `Features/Stats` owns server metrics collection and presentation.
+- `Features/Security` owns app lock and biometric authentication flows.
+- `Features/Settings` owns settings window presentation and settings screens.
+- `Features/Store` owns Pro entitlements, purchases, and upgrade surfaces.
+- `Features/Support` owns support/contact UI surfaces.
+- `Features/TerminalThemes` owns theme models, validation, storage paths, parsing, and theme management.
+- `Features/TerminalAccessories` owns keyboard accessory models, preferences, settings UI, and accessory validation flows.
+- `Features/TerminalPresets` owns terminal preset models, persistence, and preset form UI.
+- `Features/TerminalSessions` owns terminal session/tab domain models, session/tab managers, tmux prompt coordination, live activity support, and terminal session UI.
+- `Features/VoiceInput` owns transcription/audio capture infrastructure, MLX model management, and transcription settings UI.
+- `Features/Welcome` owns welcome/onboarding copy and presentation.
+- New app code should land in `Features`, `Core`, or `App` based on ownership.
+- New work inside a feature should stay inside its `Features/<FeatureName>` subtree and should not reintroduce app-wide bucket folders.
 
 Feature-first shape:
 - `Domain`: pure feature types and rules
@@ -134,10 +134,10 @@ For Files/SFTP specifically:
 - use explicit dependency injection at the feature boundary
 - do direct cutovers, not compatibility shims
 
-For every migrated feature:
+For every feature:
 - keep `Domain`, `Application`, `Infrastructure`, and `UI` boundaries intact
 - prefer view-owned dependencies to be injected from the app/screen boundary instead of created inside leaf views
-- if shared cross-feature primitives are needed, extract them into `Core` instead of pushing them back into legacy buckets
+- if shared cross-feature primitives are needed, extract them into `Core` instead of creating new app-wide bucket folders
 
 ## Refactoring Rules
 

@@ -73,7 +73,7 @@ VVTerm is a cross-platform SSH terminal app for Apple platforms. The current cod
 
 ## Architecture
 
-VVTerm now uses a feature-first structure for app-owned code. The old `Models / Managers / Services / Views` description no longer matches the repository.
+VVTerm uses a feature-first structure for app-owned code.
 
 ```text
 VVTerm/
@@ -114,8 +114,6 @@ Feature modules follow these boundaries:
 - `Application`: state, orchestration, coordinators, managers
 - `Infrastructure`: persistence, transport, adapters, external integrations
 - `UI`: SwiftUI/AppKit/UIKit presentation
-
-Most active product code has already been migrated into this layout, including `RemoteFiles`, `LocalDiscovery`, `Servers`, `Security`, `Settings`, `Stats`, `Store`, `Support`, `TerminalThemes`, `TerminalAccessories`, `TerminalPresets`, `TerminalSessions`, `VoiceInput`, and `Welcome`.
 
 Other top-level folders in the repo:
 
