@@ -55,6 +55,7 @@ final class RemoteFileBrowserStore: ObservableObject {
         var sortDirection: RemoteFileSortDirection
         var showHiddenFiles: Bool
         var hasCustomizedHiddenFiles: Bool
+        var hasLoadedDirectory: Bool
         var isLoadingDirectory: Bool
         var isLoadingViewer: Bool
         var isDirectoryTruncated: Bool
@@ -71,6 +72,7 @@ final class RemoteFileBrowserStore: ObservableObject {
             sortDirection = persisted.sortDirection
             showHiddenFiles = persisted.showHiddenFiles
             hasCustomizedHiddenFiles = persisted.hasCustomizedHiddenFiles
+            hasLoadedDirectory = false
             isLoadingDirectory = false
             isLoadingViewer = false
             isDirectoryTruncated = false
@@ -231,18 +233,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     func loadInitialPath(for server: Server, initialPath: String? = nil) async {
         let currentState = state(for: server.id)
         guard !currentState.isLoadingDirectory else { return }
-
-        let normalizedInitialPath = initialPath?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .nonEmptyString
-            .map { RemoteFilePath.normalize($0) }
-        if let normalizedInitialPath,
-           currentState.currentPath != normalizedInitialPath {
-            await loadDirectory(path: normalizedInitialPath, for: server)
-            return
-        }
-
-        guard currentState.entries.isEmpty else { return }
+        guard !currentState.hasLoadedDirectory else { return }
 
         let requestID = UUID()
         directoryRequestIDs[server.id] = requestID
@@ -441,6 +432,7 @@ final class RemoteFileBrowserStore: ObservableObject {
         updateState(for: serverId) { state in
             state.currentPath = snapshot.path
             state.entries = snapshot.entries
+            state.hasLoadedDirectory = true
             state.isDirectoryTruncated = snapshot.isTruncated
             state.filesystemStatus = snapshot.filesystemStatus
             state.isLoadingDirectory = false

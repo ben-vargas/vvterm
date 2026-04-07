@@ -104,8 +104,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     var initialLoadTaskID: String {
-        let hasEntries = !snapshot.entries.isEmpty
-        return "\(server.id.uuidString):\(initialPath ?? ""):\(hasEntries)"
+        "\(server.id.uuidString):\(initialPath ?? "")"
     }
 
     var remoteRowDropTypeIdentifiers: [String] {

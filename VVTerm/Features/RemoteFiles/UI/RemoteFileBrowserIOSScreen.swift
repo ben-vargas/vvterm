@@ -237,6 +237,14 @@ extension RemoteFileBrowserScreen {
         }
 
         if displayedEntries.isEmpty && !snapshot.isLoadingDirectory {
+            guard !trimmedIOSSearchQuery.isEmpty else {
+                return EmptyStateContent(
+                    icon: "folder",
+                    title: String(localized: "Empty Folder"),
+                    message: String(localized: "This remote folder does not contain any files yet.")
+                )
+            }
+
             return EmptyStateContent(
                 icon: "magnifyingglass",
                 title: String(localized: "No Results"),
