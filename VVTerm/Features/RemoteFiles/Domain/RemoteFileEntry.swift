@@ -44,6 +44,10 @@ struct RemoteFileEntry: Identifiable, Hashable, Codable, Sendable {
         type.displayName
     }
 
+    var supportsPreview: Bool {
+        type != .directory
+    }
+
     var sortableModifiedAt: Date {
         modifiedAt ?? .distantPast
     }

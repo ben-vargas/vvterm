@@ -45,6 +45,7 @@ struct RemoteFileBrowserScreen: View {
     @State var isDropTargeted = false
     @StateObject private var noticeHost = NoticeHostModel()
     #if os(macOS)
+    @State var macOSInlineEditor: MacOSInlineEditor?
     @State var macOSSelectedPaths: Set<String> = []
     @State var macOSTitlebarHeight: CGFloat = 0
     #endif
@@ -77,6 +78,39 @@ struct RemoteFileBrowserScreen: View {
         let id = UUID()
         let destinationPath: String
     }
+
+    #if os(macOS)
+    enum MacOSInlineEditor: Equatable {
+        case createFolder(parentPath: String, proposedName: String, isSubmitting: Bool)
+        case rename(entryPath: String, originalName: String, proposedName: String, isSubmitting: Bool)
+
+        var proposedName: String {
+            switch self {
+            case .createFolder(_, let proposedName, _),
+                 .rename(_, _, let proposedName, _):
+                return proposedName
+            }
+        }
+
+        var isSubmitting: Bool {
+            switch self {
+            case .createFolder(_, _, let isSubmitting),
+                 .rename(_, _, _, let isSubmitting):
+                return isSubmitting
+            }
+        }
+
+        var createFolderParentPath: String? {
+            guard case .createFolder(let parentPath, _, _) = self else { return nil }
+            return parentPath
+        }
+
+        var renameEntryPath: String? {
+            guard case .rename(let entryPath, _, _, _) = self else { return nil }
+            return entryPath
+        }
+    }
+    #endif
 
     var snapshot: Snapshot {
         let entries = browser.entries(for: server.id)
@@ -316,6 +350,7 @@ struct RemoteFileBrowserScreen: View {
             handleCurrentDirectoryDrop(providers, to: snapshot.currentPath)
         }
         #endif
+        #if os(iOS)
         .sheet(isPresented: newFolderPromptBinding, onDismiss: resetNewFolderPrompt) {
             if let destinationPath = newFolderDestinationPath {
                 RemoteFileCreateFolderSheet(
@@ -325,27 +360,20 @@ struct RemoteFileBrowserScreen: View {
                     onCancel: resetNewFolderPrompt,
                     onCreate: createFolder
                 )
-                #if os(macOS)
-                .frame(
-                    minWidth: 460,
-                    idealWidth: 500,
-                    maxWidth: 560,
-                    minHeight: 220,
-                    idealHeight: 250,
-                    maxHeight: 300
-                )
-                #endif
             }
         }
+        #endif
         .alert(
             String(localized: "Files"),
             isPresented: operationErrorBinding,
             actions: { operationErrorActions },
             message: { operationErrorMessageView }
         )
+        #if os(iOS)
         .sheet(item: $renameTargetEntry, onDismiss: resetRenamePrompt) { entry in
             renameSheet(entry: entry)
         }
+        #endif
         .sheet(item: $moveTargetEntry, onDismiss: resetMovePrompt) { entry in
             moveSheet(entry: entry)
         }
@@ -362,6 +390,7 @@ struct RemoteFileBrowserScreen: View {
                 resetNewFolderPrompt()
             }
             #if os(macOS)
+            cancelMacOSInlineEdit()
             macOSSelectedPaths.removeAll()
             #endif
         }
@@ -373,6 +402,12 @@ struct RemoteFileBrowserScreen: View {
             let nextSelection = macOSSelectedPaths.intersection(Set(visiblePaths))
             if nextSelection != macOSSelectedPaths {
                 macOSSelectedPaths = nextSelection
+            }
+
+            if let inlineRenamePath = macOSInlineEditor?.renameEntryPath,
+               !visiblePaths.contains(inlineRenamePath),
+               macOSInlineEditor?.isSubmitting == false {
+                macOSInlineEditor = nil
             }
         }
         .onChange(of: snapshot.selectedPath) { newValue in
@@ -982,19 +1017,30 @@ struct RemoteFileBrowserScreen: View {
     }
 
     func beginCreateFolder(in remotePath: String) {
-        newFolderDestinationPath = remotePath
         #if os(macOS)
-        newFolderName = String(localized: "New Folder")
+        beginMacOSInlineCreateFolder(in: remotePath)
         #else
+        newFolderDestinationPath = remotePath
         newFolderName = ""
-        #endif
         isCreateFolderSubmitting = false
+        #endif
     }
 
     func beginRename(_ entry: RemoteFileEntry) {
+        #if os(macOS)
+        macOSSelectedPaths = [entry.id]
+        browser.focus(entry, serverId: server.id)
+        macOSInlineEditor = .rename(
+            entryPath: entry.path,
+            originalName: entry.name,
+            proposedName: entry.name,
+            isSubmitting: false
+        )
+        #else
         renameTargetEntry = entry
         renameName = entry.name
         isRenameSubmitting = false
+        #endif
     }
 
     func beginMove(_ entry: RemoteFileEntry) {
@@ -1612,6 +1658,186 @@ struct RemoteFileBrowserScreen: View {
         moveDestinationDirectory = ""
         isMoveSubmitting = false
     }
+
+    #if os(macOS)
+    func beginMacOSInlineCreateFolder(in remotePath: String) {
+        let destinationPath = RemoteFilePath.normalize(remotePath, relativeTo: snapshot.currentPath)
+
+        Task {
+            if snapshot.currentPath != destinationPath {
+                await browser.openBreadcrumb(
+                    RemoteFileBreadcrumb(title: "", path: destinationPath),
+                    server: server
+                )
+            }
+
+            let folderName = await MainActor.run {
+                uniqueMacOSFolderName(in: browser.entries(for: server.id))
+            }
+
+            let createdPath = RemoteFilePath.appending(folderName, to: destinationPath)
+
+            do {
+                try await browser.createDirectory(
+                    named: folderName,
+                    in: destinationPath,
+                    serverId: server.id
+                )
+
+                await MainActor.run {
+                    macOSSelectedPaths = [createdPath]
+                    browser.clearViewer(serverId: server.id)
+                    macOSInlineEditor = .rename(
+                        entryPath: createdPath,
+                        originalName: folderName,
+                        proposedName: folderName,
+                        isSubmitting: false
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    presentOperationError(error)
+                }
+            }
+        }
+    }
+
+    func cancelMacOSInlineEdit() {
+        guard macOSInlineEditor?.isSubmitting != true else { return }
+        macOSInlineEditor = nil
+    }
+
+    func submitMacOSInlineEdit(_ proposedName: String) {
+        guard let editor = macOSInlineEditor, !editor.isSubmitting else { return }
+
+        switch editor {
+        case .createFolder(let parentPath, _, _):
+            let trimmedName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedName.isEmpty else {
+                macOSInlineEditor = nil
+                return
+            }
+            do {
+                let validatedName = try validatedRemoteName(proposedName)
+                let createdPath = RemoteFilePath.appending(validatedName, to: parentPath)
+                macOSInlineEditor = .createFolder(
+                    parentPath: parentPath,
+                    proposedName: proposedName,
+                    isSubmitting: true
+                )
+
+                performOperation(
+                    operation: {
+                        try await browser.createDirectory(
+                            named: validatedName,
+                            in: parentPath,
+                            serverId: server.id
+                        )
+                    },
+                    onSuccess: { _ in
+                        macOSInlineEditor = nil
+                        selectMacOSEntry(at: createdPath)
+                    },
+                    onFailure: { error in
+                        macOSInlineEditor = .createFolder(
+                            parentPath: parentPath,
+                            proposedName: proposedName,
+                            isSubmitting: false
+                        )
+                        presentOperationError(error)
+                    }
+                )
+            } catch {
+                macOSInlineEditor = .createFolder(
+                    parentPath: parentPath,
+                    proposedName: proposedName,
+                    isSubmitting: false
+                )
+                presentOperationError(error)
+            }
+
+        case .rename(let entryPath, let originalName, _, _):
+            do {
+                let validatedName = try validatedRemoteName(proposedName)
+                if validatedName == originalName {
+                    macOSInlineEditor = nil
+                    return
+                }
+
+                let destinationPath = RemoteFilePath.appending(
+                    validatedName,
+                    to: RemoteFilePath.parent(of: entryPath)
+                )
+
+                macOSInlineEditor = .rename(
+                    entryPath: entryPath,
+                    originalName: originalName,
+                    proposedName: proposedName,
+                    isSubmitting: true
+                )
+
+                performOperation(
+                    operation: {
+                        try await browser.renameItem(
+                            at: entryPath,
+                            to: destinationPath,
+                            serverId: server.id
+                        )
+                    },
+                    onSuccess: { _ in
+                        macOSInlineEditor = nil
+                        selectMacOSEntry(at: destinationPath)
+                    },
+                    onFailure: { error in
+                        macOSInlineEditor = .rename(
+                            entryPath: entryPath,
+                            originalName: originalName,
+                            proposedName: proposedName,
+                            isSubmitting: false
+                        )
+                        presentOperationError(error)
+                    }
+                )
+            } catch {
+                macOSInlineEditor = .rename(
+                    entryPath: entryPath,
+                    originalName: originalName,
+                    proposedName: proposedName,
+                    isSubmitting: false
+                )
+                presentOperationError(error)
+            }
+        }
+    }
+
+    func selectMacOSEntry(at path: String) {
+        macOSSelectedPaths = [path]
+        if let entry = browser.entries(for: server.id).first(where: { $0.path == path }) {
+            browser.focus(entry, serverId: server.id)
+        } else {
+            browser.clearViewer(serverId: server.id)
+        }
+    }
+
+    func uniqueMacOSFolderName(in entries: [RemoteFileEntry]) -> String {
+        let baseName = String(localized: "Untitled Folder")
+        let existingNames = Set(entries.map { $0.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current) })
+
+        guard !existingNames.contains(baseName.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)) else {
+            for index in 2...10_000 {
+                let candidate = "\(baseName) \(index)"
+                let foldedCandidate = candidate.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                if !existingNames.contains(foldedCandidate) {
+                    return candidate
+                }
+            }
+
+            return "\(baseName) \(UUID().uuidString.prefix(4))"
+        }
+
+        return baseName
+    }
+    #endif
 
     func applyPermissions() {
         guard let entry = permissionTargetEntry, !isPermissionSubmitting else { return }

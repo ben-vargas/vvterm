@@ -381,6 +381,10 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
     let selectedPaths: Set<String>
     let sort: RemoteFileSort
     let sortDirection: RemoteFileSortDirection
+    let inlineCreateFolderParentPath: String?
+    let inlineRenamePath: String?
+    let inlineProposedName: String
+    let isInlineSubmitting: Bool
     let onSelectionChange: @MainActor (Set<String>, NSEvent.ModifierFlags) -> Void
     let onActivate: @MainActor (RemoteFileEntry) -> Void
     let onSortChange: @MainActor (RemoteFileSort, RemoteFileSortDirection) -> Void
@@ -391,6 +395,8 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
     let exportEntry: @MainActor (RemoteFileEntry, URL) async throws -> Void
     let fileTypeIdentifier: (RemoteFileEntry) -> String
     let kindLabel: (RemoteFileEntry) -> String
+    let onSubmitInlineEdit: @MainActor (String) -> Void
+    let onCancelInlineEdit: @MainActor () -> Void
     let serverId: UUID
 
     func makeCoordinator() -> Coordinator {
@@ -408,6 +414,33 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+        enum RowKind {
+            case inlineCreatePlaceholder
+            case entry(index: Int)
+        }
+
+        struct TableRenderState: Equatable {
+            let entries: [RemoteFileEntry]
+            let currentPath: String
+            let sort: RemoteFileSort
+            let sortDirection: RemoteFileSortDirection
+            let inlineCreateFolderParentPath: String?
+            let inlineRenamePath: String?
+            let inlineProposedName: String
+            let isInlineSubmitting: Bool
+
+            init(parent: MacOSRemoteFileTableView) {
+                entries = parent.entries
+                currentPath = parent.currentPath
+                sort = parent.sort
+                sortDirection = parent.sortDirection
+                inlineCreateFolderParentPath = parent.inlineCreateFolderParentPath
+                inlineRenamePath = parent.inlineRenamePath
+                inlineProposedName = parent.inlineProposedName
+                isInlineSubmitting = parent.isInlineSubmitting
+            }
+        }
+
         var parent: MacOSRemoteFileTableView
         private let tableView = RemoteFileTableView()
         private let scrollView = NSScrollView()
@@ -415,6 +448,8 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         private var promiseDelegates: [UUID: FilePromiseDelegate] = [:]
         private var currentDropRow: Int = -1
         private var currentDropOperation: NSTableView.DropOperation = .on
+        private var activeInlineEditorIdentity: String?
+        private var lastRenderedState: TableRenderState?
 
         init(_ parent: MacOSRemoteFileTableView) {
             self.parent = parent
@@ -445,10 +480,15 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             tableView.dataSource = self
             tableView.menuProvider = { [weak self] row in
                 guard let self else { return nil }
-                if let row, row >= 0, row < self.parent.entries.count {
-                    let entry = self.parent.entries[row]
-                    self.selectRowIfNeeded(row)
-                    return self.parent.menuForEntry(entry)
+                if let row, let rowKind = self.rowKind(for: row) {
+                    switch rowKind {
+                    case .inlineCreatePlaceholder:
+                        return self.parent.menuForBackground()
+                    case .entry(let index):
+                        let entry = self.parent.entries[index]
+                        self.selectRowIfNeeded(row)
+                        return self.parent.menuForEntry(entry)
+                    }
                 }
                 return self.parent.menuForBackground()
             }
@@ -473,32 +513,86 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
 
         func update(scrollView: NSScrollView) {
-            tableView.reloadData()
-            applySortDescriptors()
+            let renderState = TableRenderState(parent: parent)
+            let shouldReloadData = lastRenderedState != renderState
+            lastRenderedState = renderState
+
+            if shouldReloadData {
+                tableView.reloadData()
+                applySortDescriptors()
+            }
+
             syncSelection()
+            if shouldReloadData || inlineEditorIdentity != nil {
+                tableView.layoutSubtreeIfNeeded()
+            }
+            syncInlineEditorFocus()
         }
 
         func numberOfRows(in tableView: NSTableView) -> Int {
-            parent.entries.count
+            parent.entries.count + (inlineCreateRowIndex == nil ? 0 : 1)
         }
 
         func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-            let entry = parent.entries[row]
-            return entry.type == .symlink && entry.symlinkTarget != nil ? 38 : 30
+            switch rowKind(for: row) {
+            case .inlineCreatePlaceholder:
+                return 30
+            case .entry(let index):
+                let entry = parent.entries[index]
+                return entry.type == .symlink && entry.symlinkTarget != nil ? 38 : 30
+            case .none:
+                return 30
+            }
         }
 
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-            guard row >= 0, row < parent.entries.count, let tableColumn else { return nil }
-            let entry = parent.entries[row]
+            guard let tableColumn, let rowKind = rowKind(for: row) else { return nil }
 
             switch ColumnID(rawValue: tableColumn.identifier.rawValue) {
             case .name:
                 let view = tableView.makeView(withIdentifier: tableColumn.identifier, owner: nil) as? NameCellView
                     ?? NameCellView()
                 view.identifier = tableColumn.identifier
-                view.configure(entry: entry)
+                switch rowKind {
+                case .inlineCreatePlaceholder:
+                    view.configureInlineEditing(
+                        iconName: "folder.fill",
+                        iconTintColor: .systemBlue,
+                        title: parent.inlineProposedName.isEmpty ? String(localized: "New Folder") : parent.inlineProposedName,
+                        subtitle: "",
+                        proposedName: parent.inlineProposedName,
+                        isSubmitting: parent.isInlineSubmitting,
+                        onSubmit: parent.onSubmitInlineEdit,
+                        onCancel: parent.onCancelInlineEdit
+                    )
+                case .entry(let index):
+                    let entry = parent.entries[index]
+                    if parent.inlineRenamePath == entry.path {
+                        view.configureInlineEditing(
+                            iconName: entry.iconName,
+                            iconTintColor: entry.type == .directory ? .systemBlue : .secondaryLabelColor,
+                            title: entry.name,
+                            subtitle: entry.type == .symlink ? (entry.symlinkTarget ?? "") : "",
+                            proposedName: parent.inlineProposedName,
+                            isSubmitting: parent.isInlineSubmitting,
+                            onSubmit: parent.onSubmitInlineEdit,
+                            onCancel: parent.onCancelInlineEdit
+                        )
+                    } else {
+                        view.configure(entry: entry)
+                    }
+                }
                 return view
             case .modifiedAt:
+                guard case .entry(let index) = rowKind else {
+                    return makeTextCell(
+                        tableView: tableView,
+                        identifier: tableColumn.identifier,
+                        text: "",
+                        alignment: .left
+                    )
+                }
+                let entry = parent.entries[index]
                 return makeTextCell(
                     tableView: tableView,
                     identifier: tableColumn.identifier,
@@ -506,6 +600,15 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
                     alignment: .left
                 )
             case .size:
+                guard case .entry(let index) = rowKind else {
+                    return makeTextCell(
+                        tableView: tableView,
+                        identifier: tableColumn.identifier,
+                        text: "",
+                        alignment: .right
+                    )
+                }
+                let entry = parent.entries[index]
                 let sizeText = entry.type == .directory || entry.size == nil
                     ? "—"
                     : ByteCountFormatter.string(fromByteCount: Int64(entry.size ?? 0), countStyle: .file)
@@ -516,6 +619,15 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
                     alignment: .right
                 )
             case .kind:
+                guard case .entry(let index) = rowKind else {
+                    return makeTextCell(
+                        tableView: tableView,
+                        identifier: tableColumn.identifier,
+                        text: "",
+                        alignment: .left
+                    )
+                }
+                let entry = parent.entries[index]
                 return makeTextCell(
                     tableView: tableView,
                     identifier: tableColumn.identifier,
@@ -530,8 +642,8 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         func tableViewSelectionDidChange(_ notification: Notification) {
             guard !isUpdatingSelection else { return }
             let selectedPaths: [String] = tableView.selectedRowIndexes.compactMap { index in
-                guard parent.entries.indices.contains(index) else { return nil }
-                return parent.entries[index].id
+                guard case .entry(let entryIndex) = rowKind(for: index) else { return nil }
+                return parent.entries[entryIndex].id
             }
             let selected = Set(selectedPaths)
             parent.onSelectionChange(selected, NSApp.currentEvent?.modifierFlags ?? [])
@@ -554,8 +666,8 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
 
         func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
-            guard parent.entries.indices.contains(row) else { return nil }
-            let entry = parent.entries[row]
+            guard case .entry(let index) = rowKind(for: row) else { return nil }
+            let entry = parent.entries[index]
             let delegate = FilePromiseDelegate(
                 entry: entry,
                 fileTypeIdentifier: parent.fileTypeIdentifier(entry),
@@ -567,8 +679,8 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
 
         func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
             let draggedEntries = rowIndexes.compactMap { index -> RemoteFileEntry? in
-                guard parent.entries.indices.contains(index) else { return nil }
-                return parent.entries[index]
+                guard case .entry(let entryIndex) = rowKind(for: index) else { return nil }
+                return parent.entries[entryIndex]
             }
             MacOSRemoteFileDragSessionStore.shared.payload = RemoteFileDragPayload(
                 serverId: parent.serverId,
@@ -617,8 +729,8 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         @objc
         private func handleDoubleAction(_ sender: Any?) {
             let row = tableView.clickedRow
-            guard row >= 0, parent.entries.indices.contains(row) else { return }
-            parent.onActivate(parent.entries[row])
+            guard case .entry(let index) = rowKind(for: row) else { return }
+            parent.onActivate(parent.entries[index])
         }
 
         private func destinationPath(for row: Int, dropOperation: NSTableView.DropOperation) -> String? {
@@ -626,8 +738,8 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
                 return parent.currentPath
             }
 
-            if dropOperation == .on, row >= 0, parent.entries.indices.contains(row) {
-                let entry = parent.entries[row]
+            if dropOperation == .on, case .entry(let index) = rowKind(for: row) {
+                let entry = parent.entries[index]
                 return entry.type == .directory ? entry.path : nil
             }
 
@@ -639,14 +751,21 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             proposedRow row: Int,
             dropOperation: NSTableView.DropOperation
         ) {
-            guard row >= 0, parent.entries.indices.contains(row) else {
+            guard let rowKind = rowKind(for: row) else {
                 currentDropRow = -1
                 currentDropOperation = .on
                 tableView.setDropRow(-1, dropOperation: .on)
                 return
             }
 
-            let entry = parent.entries[row]
+            guard case .entry(let index) = rowKind else {
+                currentDropRow = -1
+                currentDropOperation = .on
+                tableView.setDropRow(-1, dropOperation: .on)
+                return
+            }
+
+            let entry = parent.entries[index]
             if entry.type == .directory {
                 currentDropRow = row
                 currentDropOperation = .on
@@ -662,15 +781,52 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
 
         private func syncSelection() {
-            let rowIndexes = IndexSet(
-                parent.entries.enumerated().compactMap { index, entry in
-                    parent.selectedPaths.contains(entry.id) ? index : nil
-                }
-            )
+            let rowIndexes: IndexSet
+            if let inlineCreateRowIndex {
+                rowIndexes = IndexSet(integer: inlineCreateRowIndex)
+            } else {
+                rowIndexes = IndexSet(
+                    parent.entries.enumerated().compactMap { index, entry in
+                        guard parent.selectedPaths.contains(entry.id) else { return nil }
+                        return displayRow(forEntryIndex: index)
+                    }
+                )
+            }
             guard tableView.selectedRowIndexes != rowIndexes else { return }
             isUpdatingSelection = true
             tableView.selectRowIndexes(rowIndexes, byExtendingSelection: false)
             isUpdatingSelection = false
+        }
+
+        private func syncInlineEditorFocus() {
+            let identity = inlineEditorIdentity
+            guard let identity else {
+                activeInlineEditorIdentity = nil
+                return
+            }
+
+            guard let editRow = inlineEditingDisplayRow,
+                  let nameColumn = tableView.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier(ColumnID.name.rawValue)) else {
+                activeInlineEditorIdentity = identity
+                return
+            }
+
+            tableView.scrollRowToVisible(editRow)
+            tableView.layoutSubtreeIfNeeded()
+
+            let columnIndex = tableView.column(withIdentifier: nameColumn.identifier)
+            guard columnIndex >= 0,
+                  let cell = tableView.view(atColumn: columnIndex, row: editRow, makeIfNecessary: true) as? NameCellView else {
+                activeInlineEditorIdentity = identity
+                return
+            }
+
+            let shouldRestoreFocus = activeInlineEditorIdentity != identity || !cell.isEditingActive
+            activeInlineEditorIdentity = identity
+
+            if shouldRestoreFocus {
+                cell.requestEditingFocus()
+            }
         }
 
         private func configureColumns() {
@@ -739,6 +895,103 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
                 tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
             }
         }
+
+        private var inlineEditorIdentity: String? {
+            if let parentPath = parent.inlineCreateFolderParentPath, parent.currentPath == parentPath {
+                return "create:\(parentPath)"
+            }
+            if let inlineRenamePath = parent.inlineRenamePath {
+                return "rename:\(inlineRenamePath)"
+            }
+            return nil
+        }
+
+        private var inlineCreateRowIndex: Int? {
+            guard let parentPath = parent.inlineCreateFolderParentPath,
+                  parent.currentPath == parentPath else { return nil }
+
+            let placeholder = RemoteFileEntry(
+                name: parent.inlineProposedName,
+                path: RemoteFilePath.appending(parent.inlineProposedName, to: parent.currentPath),
+                type: .directory,
+                size: nil,
+                modifiedAt: nil,
+                permissions: nil,
+                symlinkTarget: nil
+            )
+
+            for (index, entry) in parent.entries.enumerated() where sortsBefore(placeholder, entry) {
+                return index
+            }
+            return parent.entries.count
+        }
+
+        private var inlineEditingDisplayRow: Int? {
+            if let inlineCreateRowIndex {
+                return inlineCreateRowIndex
+            }
+
+            guard let inlineRenamePath = parent.inlineRenamePath,
+                  let entryIndex = parent.entries.firstIndex(where: { $0.path == inlineRenamePath }) else {
+                return nil
+            }
+
+            return displayRow(forEntryIndex: entryIndex)
+        }
+
+        private func rowKind(for row: Int) -> RowKind? {
+            guard row >= 0, row < numberOfRows(in: tableView) else { return nil }
+
+            if let inlineCreateRowIndex {
+                if row == inlineCreateRowIndex {
+                    return .inlineCreatePlaceholder
+                }
+                return .entry(index: row > inlineCreateRowIndex ? row - 1 : row)
+            }
+
+            guard parent.entries.indices.contains(row) else { return nil }
+            return .entry(index: row)
+        }
+
+        private func displayRow(forEntryIndex entryIndex: Int) -> Int {
+            if let inlineCreateRowIndex, entryIndex >= inlineCreateRowIndex {
+                return entryIndex + 1
+            }
+            return entryIndex
+        }
+
+        private func sortsBefore(_ lhs: RemoteFileEntry, _ rhs: RemoteFileEntry) -> Bool {
+            let lhsDirectoryRank = lhs.type == .directory ? 0 : 1
+            let rhsDirectoryRank = rhs.type == .directory ? 0 : 1
+            if lhsDirectoryRank != rhsDirectoryRank {
+                return lhsDirectoryRank < rhsDirectoryRank
+            }
+
+            switch parent.sort {
+            case .name:
+                let comparison = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+                if comparison != .orderedSame {
+                    return parent.sortDirection == .ascending
+                        ? comparison == .orderedAscending
+                        : comparison == .orderedDescending
+                }
+                return lhs.path.localizedCaseInsensitiveCompare(rhs.path) == .orderedAscending
+            case .modifiedAt:
+                let lhsDate = lhs.modifiedAt ?? .distantPast
+                let rhsDate = rhs.modifiedAt ?? .distantPast
+                if lhsDate != rhsDate {
+                    return parent.sortDirection == .ascending ? lhsDate < rhsDate : lhsDate > rhsDate
+                }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            case .size:
+                let lhsSize = lhs.size ?? 0
+                let rhsSize = rhs.size ?? 0
+                if lhsSize != rhsSize {
+                    return parent.sortDirection == .ascending ? lhsSize < rhsSize : lhsSize > rhsSize
+                }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+        }
     }
 
     private enum ColumnID: String {
@@ -772,10 +1025,16 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
     }
 
-    final class NameCellView: NSTableCellView {
+    final class NameCellView: NSTableCellView, NSTextFieldDelegate {
         private let iconView = NSImageView()
         private let titleField = NSTextField(labelWithString: "")
         private let subtitleField = NSTextField(labelWithString: "")
+        private let editorField = InlineEditingTextField(string: "")
+        private let progressIndicator = NSProgressIndicator()
+        private var isConfiguringEditor = false
+        private var suppressNextEndEditing = false
+        private var onSubmit: ((String) -> Void)?
+        private var onCancel: (() -> Void)?
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
@@ -792,6 +1051,27 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             subtitleField.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
             subtitleField.textColor = .secondaryLabelColor
 
+            editorField.translatesAutoresizingMaskIntoConstraints = false
+            editorField.font = .systemFont(ofSize: NSFont.systemFontSize)
+            editorField.isBordered = false
+            editorField.isBezeled = false
+            editorField.drawsBackground = true
+            editorField.backgroundColor = .textBackgroundColor
+            editorField.focusRingType = .none
+            editorField.lineBreakMode = .byTruncatingTail
+            editorField.delegate = self
+            editorField.wantsLayer = true
+            editorField.onCancelOperation = { [weak self] in
+                self?.onCancel?()
+            }
+            editorField.isHidden = true
+
+            progressIndicator.translatesAutoresizingMaskIntoConstraints = false
+            progressIndicator.controlSize = .small
+            progressIndicator.style = .spinning
+            progressIndicator.isDisplayedWhenStopped = false
+            progressIndicator.isHidden = true
+
             let stack = NSStackView(views: [titleField, subtitleField])
             stack.orientation = .vertical
             stack.spacing = 1
@@ -800,6 +1080,8 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
 
             addSubview(iconView)
             addSubview(stack)
+            addSubview(editorField)
+            addSubview(progressIndicator)
 
             NSLayoutConstraint.activate([
                 iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
@@ -808,8 +1090,16 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
                 iconView.heightAnchor.constraint(equalToConstant: 18),
 
                 stack.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 8),
-                stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-                stack.centerYAnchor.constraint(equalTo: centerYAnchor)
+                stack.trailingAnchor.constraint(equalTo: progressIndicator.leadingAnchor, constant: -6),
+                stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+
+                editorField.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 8),
+                editorField.trailingAnchor.constraint(equalTo: progressIndicator.leadingAnchor, constant: -6),
+                editorField.centerYAnchor.constraint(equalTo: centerYAnchor),
+                editorField.heightAnchor.constraint(equalToConstant: 24),
+
+                progressIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+                progressIndicator.centerYAnchor.constraint(equalTo: centerYAnchor)
             ])
         }
 
@@ -819,11 +1109,103 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
 
         func configure(entry: RemoteFileEntry) {
+            onSubmit = nil
+            onCancel = nil
+            suppressNextEndEditing = false
             titleField.stringValue = entry.name
             subtitleField.stringValue = entry.type == .symlink ? (entry.symlinkTarget ?? "") : ""
             subtitleField.isHidden = subtitleField.stringValue.isEmpty
             iconView.image = NSImage(systemSymbolName: entry.iconName, accessibilityDescription: entry.name)
             iconView.contentTintColor = entry.type == .directory ? .systemBlue : .secondaryLabelColor
+            titleField.isHidden = false
+            editorField.isHidden = true
+            progressIndicator.stopAnimation(nil)
+            progressIndicator.isHidden = true
+        }
+
+        func configureInlineEditing(
+            iconName: String,
+            iconTintColor: NSColor,
+            title: String,
+            subtitle: String,
+            proposedName: String,
+            isSubmitting: Bool,
+            onSubmit: @escaping (String) -> Void,
+            onCancel: @escaping () -> Void
+        ) {
+            self.onSubmit = onSubmit
+            self.onCancel = onCancel
+            suppressNextEndEditing = false
+
+            titleField.stringValue = title
+            subtitleField.stringValue = subtitle
+            subtitleField.isHidden = true
+            iconView.image = NSImage(systemSymbolName: iconName, accessibilityDescription: title)
+            iconView.contentTintColor = iconTintColor
+
+            isConfiguringEditor = true
+            editorField.stringValue = proposedName
+            editorField.isEditable = !isSubmitting
+            editorField.isSelectable = !isSubmitting
+            editorField.textColor = isSubmitting ? .secondaryLabelColor : .labelColor
+            editorField.placeholderString = proposedName.isEmpty ? title : nil
+            editorField.applyInlineEditingAppearance(isSubmitting: isSubmitting)
+            isConfiguringEditor = false
+
+            titleField.isHidden = true
+            editorField.isHidden = false
+            progressIndicator.isHidden = !isSubmitting
+            if isSubmitting {
+                progressIndicator.startAnimation(nil)
+            } else {
+                progressIndicator.stopAnimation(nil)
+            }
+        }
+
+        func requestEditingFocus() {
+            guard !editorField.isHidden, !editorField.isHiddenOrHasHiddenAncestor, editorField.window != nil else { return }
+            editorField.window?.makeFirstResponder(editorField)
+            editorField.applyInlineEditingAppearance(isFocused: true, isSubmitting: !editorField.isEditable)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let editor = self.editorField.currentEditor() else { return }
+                editor.selectedRange = NSRange(location: 0, length: self.editorField.stringValue.count)
+            }
+        }
+
+        var isEditingActive: Bool {
+            guard let window = editorField.window else { return false }
+            return window.firstResponder === editorField || window.firstResponder === editorField.currentEditor()
+        }
+
+        func controlTextDidEndEditing(_ notification: Notification) {
+            guard !editorField.isHidden, !isConfiguringEditor else { return }
+            if suppressNextEndEditing {
+                suppressNextEndEditing = false
+                return
+            }
+            editorField.applyInlineEditingAppearance(isFocused: false, isSubmitting: !editorField.isEditable)
+            let movement = notification.userInfo?["NSTextMovement"] as? Int ?? NSIllegalTextMovement
+            if movement == NSCancelTextMovement {
+                onCancel?()
+                return
+            }
+            onSubmit?(editorField.stringValue)
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            switch commandSelector {
+            case #selector(NSResponder.insertNewline(_:)),
+                 #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+                suppressNextEndEditing = true
+                onSubmit?(editorField.stringValue)
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                suppressNextEndEditing = true
+                onCancel?()
+                return true
+            default:
+                return false
+            }
         }
     }
 
@@ -851,6 +1233,117 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         func configure(text: String, alignment: NSTextAlignment) {
             label.stringValue = text
             label.alignment = alignment
+        }
+    }
+
+    final class InlineEditingTextField: NSTextField {
+        override class var cellClass: AnyClass? {
+            get { InlineEditingTextFieldCell.self }
+            set {}
+        }
+
+        var onCancelOperation: (() -> Void)?
+
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            configureAppearance()
+        }
+
+        convenience init(string: String) {
+            self.init(frame: .zero)
+            stringValue = string
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func cancelOperation(_ sender: Any?) {
+            onCancelOperation?()
+        }
+
+        func applyInlineEditingAppearance(isFocused: Bool = false, isSubmitting: Bool) {
+            guard let layer else { return }
+
+            let borderColor: NSColor
+            if isSubmitting {
+                borderColor = .separatorColor
+            } else if isFocused {
+                borderColor = .controlAccentColor
+            } else {
+                borderColor = .quaternaryLabelColor
+            }
+
+            layer.borderColor = borderColor.cgColor
+            alphaValue = isSubmitting ? 0.8 : 1.0
+        }
+
+        override func textDidBeginEditing(_ notification: Notification) {
+            super.textDidBeginEditing(notification)
+            applyInlineEditingAppearance(isFocused: true, isSubmitting: !isEditable)
+        }
+
+        override func textDidEndEditing(_ notification: Notification) {
+            super.textDidEndEditing(notification)
+            applyInlineEditingAppearance(isFocused: false, isSubmitting: !isEditable)
+        }
+
+        private func configureAppearance() {
+            focusRingType = .none
+            wantsLayer = true
+            layer?.cornerRadius = 6
+            layer?.borderWidth = 1
+            layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+            textColor = .labelColor
+            applyInlineEditingAppearance(isSubmitting: false)
+        }
+    }
+
+    final class InlineEditingTextFieldCell: NSTextFieldCell {
+        private let horizontalInset: CGFloat = 8
+        private let verticalInset: CGFloat = 3
+
+        override func drawingRect(forBounds rect: NSRect) -> NSRect {
+            insetBounds(rect)
+        }
+
+        override func edit(
+            withFrame rect: NSRect,
+            in controlView: NSView,
+            editor textObj: NSText,
+            delegate: Any?,
+            event: NSEvent?
+        ) {
+            super.edit(
+                withFrame: insetBounds(rect),
+                in: controlView,
+                editor: textObj,
+                delegate: delegate,
+                event: event
+            )
+        }
+
+        override func select(
+            withFrame rect: NSRect,
+            in controlView: NSView,
+            editor textObj: NSText,
+            delegate: Any?,
+            start selStart: Int,
+            length selLength: Int
+        ) {
+            super.select(
+                withFrame: insetBounds(rect),
+                in: controlView,
+                editor: textObj,
+                delegate: delegate,
+                start: selStart,
+                length: selLength
+            )
+        }
+
+        private func insetBounds(_ rect: NSRect) -> NSRect {
+            rect.insetBy(dx: horizontalInset, dy: verticalInset)
         }
     }
 

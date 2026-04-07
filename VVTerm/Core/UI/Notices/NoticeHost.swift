@@ -115,22 +115,36 @@ struct NoticeHost<Content: View>: View {
 
     var body: some View {
         content
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if let topBanner {
-                    NoticeBannerView(item: topBanner, surfaceStyle: bannerSurfaceStyle)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, topHorizontalPadding)
-                        .padding(.top, topVerticalPadding)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let bottomOperation {
-                    OperationNoticeView(item: bottomOperation, surfaceStyle: operationSurfaceStyle)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, bottomHorizontalPadding)
-                        .padding(.bottom, bottomVerticalPadding)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+            .overlay {
+                GeometryReader { proxy in
+                    ZStack {
+                        VStack(spacing: 0) {
+                            if let topBanner {
+                                NoticeBannerView(item: topBanner, surfaceStyle: bannerSurfaceStyle)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.horizontal, topHorizontalPadding)
+                                    .padding(.top, proxy.safeAreaInsets.top + topVerticalPadding)
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                                    .allowsHitTesting(true)
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+
+                            if let bottomOperation {
+                                OperationNoticeView(item: bottomOperation, surfaceStyle: operationSurfaceStyle)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.horizontal, bottomHorizontalPadding)
+                                    .padding(.bottom, proxy.safeAreaInsets.bottom + bottomVerticalPadding)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                                    .allowsHitTesting(true)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: topBanner?.id)

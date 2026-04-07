@@ -59,6 +59,10 @@ extension RemoteFileBrowserScreen {
             selectedPaths: effectiveMacOSSelection(snapshot: snapshot, entries: snapshot.entries),
             sort: snapshot.sort,
             sortDirection: snapshot.sortDirection,
+            inlineCreateFolderParentPath: macOSInlineEditor?.createFolderParentPath,
+            inlineRenamePath: macOSInlineEditor?.renameEntryPath,
+            inlineProposedName: macOSInlineEditor?.proposedName ?? "",
+            isInlineSubmitting: macOSInlineEditor?.isSubmitting == true,
             onSelectionChange: { selection, modifierFlags in
                 handleMacOSSelectionChange(selection, modifierFlags: modifierFlags, entries: snapshot.entries)
             },
@@ -88,6 +92,12 @@ extension RemoteFileBrowserScreen {
             },
             kindLabel: { entry in
                 kindLabel(for: entry)
+            },
+            onSubmitInlineEdit: { proposedName in
+                submitMacOSInlineEdit(proposedName)
+            },
+            onCancelInlineEdit: {
+                cancelMacOSInlineEdit()
             },
             serverId: server.id
         )
@@ -285,7 +295,7 @@ extension RemoteFileBrowserScreen {
         )
         menu.addItem(
             makeMacOSMenuItem(
-                title: String(localized: "New Folder…"),
+                title: String(localized: "New Folder"),
                 systemImage: "folder.badge.plus"
             ) {
                 beginCreateFolder(in: currentPath)
@@ -324,7 +334,7 @@ extension RemoteFileBrowserScreen {
                 }
             )
             menu.addItem(
-                makeMacOSMenuItem(title: String(localized: "New Folder…"), systemImage: "folder.badge.plus") {
+                makeMacOSMenuItem(title: String(localized: "New Folder"), systemImage: "folder.badge.plus") {
                     beginCreateFolder(in: entry.path)
                 }
             )
@@ -358,7 +368,7 @@ extension RemoteFileBrowserScreen {
                 }
             )
             menu.addItem(
-                makeMacOSMenuItem(title: String(localized: "New Folder Here…"), systemImage: "folder.badge.plus") {
+                makeMacOSMenuItem(title: String(localized: "New Folder Here"), systemImage: "folder.badge.plus") {
                     beginCreateFolder(in: RemoteFilePath.parent(of: entry.path))
                 }
             )
@@ -373,7 +383,7 @@ extension RemoteFileBrowserScreen {
 
         menu.addItem(makeMacOSSeparatorMenuItem())
         menu.addItem(
-            makeMacOSMenuItem(title: String(localized: "Rename…"), systemImage: "pencil") {
+            makeMacOSMenuItem(title: String(localized: "Rename"), systemImage: "pencil") {
                 beginRename(entry)
             }
         )

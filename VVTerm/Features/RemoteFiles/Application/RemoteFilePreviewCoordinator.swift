@@ -7,6 +7,7 @@ extension RemoteFileBrowserStore {
         serverId: UUID,
         allowLargeDownloads: Bool = false
     ) async {
+        guard entry.supportsPreview else { return }
         guard let server = server(for: serverId) else { return }
 
         let currentState = state(for: serverId)

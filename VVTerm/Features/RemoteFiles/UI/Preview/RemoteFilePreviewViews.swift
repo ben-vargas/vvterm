@@ -72,12 +72,17 @@ struct RemoteFileInspectorView: View {
             textSaveErrorMessage = nil
             editableText = viewerPayload?.textPreview ?? ""
         }
+        .onChange(of: selectedEntry?.supportsPreview) { supportsPreview in
+            if supportsPreview != true {
+                selectedTab = .metadata
+            }
+        }
         .onChange(of: viewerPayload?.textPreview) { newValue in
             guard !isEditingText else { return }
             editableText = newValue ?? ""
         }
         .task(id: previewRequestID) {
-            guard selectedTab == .content, let selectedEntry else { return }
+            guard activeTab == .content, let selectedEntry, selectedEntry.supportsPreview else { return }
             guard viewerPayload?.entry.path != selectedEntry.path else { return }
             guard !isLoadingViewer else { return }
             guard viewerError == nil else { return }
@@ -101,12 +106,14 @@ struct RemoteFileInspectorView: View {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: chrome == .sidebar ? 12 : 16) {
                     inspectorHeader(for: selectedEntry)
-                    inspectorTabs
+                    if showsPreviewTab {
+                        inspectorTabs
+                    }
                 }
                 .padding(chrome == .sidebar ? 12 : 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                if selectedTab == .metadata {
+                if activeTab == .metadata {
                     Form {
                         metadataFormSection(for: selectedEntry)
                     }
@@ -142,8 +149,8 @@ struct RemoteFileInspectorView: View {
                     } else {
                         RemoteFileEmptyState(
                             icon: "doc.text.magnifyingglass",
-                            title: String(localized: "Select a File"),
-                            message: String(localized: "Choose a file to inspect its metadata.")
+                            title: String(localized: "Select an Item"),
+                            message: String(localized: "Choose a file or folder to inspect its metadata.")
                         )
                     }
                 }
@@ -155,7 +162,7 @@ struct RemoteFileInspectorView: View {
 
     private var sheetInspectorContent: some View {
         VStack(spacing: 0) {
-            if selectedEntry != nil {
+            if selectedEntry != nil, showsPreviewTab {
                 inspectorTabs
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
@@ -164,7 +171,7 @@ struct RemoteFileInspectorView: View {
 
             Form {
                 if let selectedEntry {
-                    if selectedTab == .metadata {
+                    if activeTab == .metadata {
                         metadataFormSection(for: selectedEntry)
 
                         if showsPrimaryActions(for: selectedEntry) {
@@ -188,8 +195,8 @@ struct RemoteFileInspectorView: View {
                 } else {
                     Section {
                         inspectorStatusMessage(
-                            title: String(localized: "Select a File"),
-                            message: String(localized: "Choose a file to inspect its metadata."),
+                            title: String(localized: "Select an Item"),
+                            message: String(localized: "Choose a file or folder to inspect its metadata."),
                             systemImage: "doc.text.magnifyingglass"
                         )
                     }
@@ -1107,8 +1114,16 @@ struct RemoteFileInspectorView: View {
         chrome == .sidebar ? 108 : 120
     }
 
+    private var showsPreviewTab: Bool {
+        selectedEntry?.supportsPreview == true
+    }
+
+    private var activeTab: InspectorTab {
+        showsPreviewTab ? selectedTab : .metadata
+    }
+
     private var previewRequestID: String {
-        guard selectedTab == .content, let selectedEntry else { return "metadata" }
+        guard activeTab == .content, let selectedEntry else { return "metadata" }
         return selectedEntry.path
     }
 
