@@ -18,6 +18,7 @@ struct RemoteFileBrowserScreen: View {
     @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) var usePerAppearanceTheme = true
     @State var presentedPreviewPath: String?
     @State var uploadDestinationPath: String?
+    @State var uploadImportRequest: UploadImportRequest?
     @State var downloadExportDocument: RemoteFileDownloadDocument?
     @State var downloadExportFilename = ""
     @State var isDownloadExporterPresented = false
@@ -70,6 +71,11 @@ struct RemoteFileBrowserScreen: View {
         let icon: String
         let title: String
         let message: String
+    }
+
+    struct UploadImportRequest: Identifiable {
+        let id = UUID()
+        let destinationPath: String
     }
 
     struct TransferStatus: Identifiable {
@@ -271,10 +277,10 @@ struct RemoteFileBrowserScreen: View {
                     .allowsHitTesting(false)
             }
         }
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: .bottom) {
             if let transferStatus {
                 RemoteFileTransferStatusView(status: transferStatus)
-                    .padding(.trailing, 20)
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -282,6 +288,7 @@ struct RemoteFileBrowserScreen: View {
         .task(id: initialLoadTaskID) {
             await browser.loadInitialPath(for: server, initialPath: initialPath)
         }
+        #if os(macOS)
         .fileImporter(
             isPresented: uploadImporterBinding,
             allowedContentTypes: [.item, .folder],
@@ -289,6 +296,13 @@ struct RemoteFileBrowserScreen: View {
         ) { result in
             handleUploadSelection(result)
         }
+        #else
+        .sheet(item: $uploadImportRequest) { request in
+            RemoteFileImportPicker { result in
+                handleUploadSelection(result, for: request)
+            }
+        }
+        #endif
         .fileExporter(
             isPresented: $isDownloadExporterPresented,
             document: downloadExportDocument,
@@ -323,7 +337,6 @@ struct RemoteFileBrowserScreen: View {
             handleCurrentDirectoryDrop(providers, to: snapshot.currentPath)
         }
         #endif
-        #if os(macOS)
         .sheet(isPresented: newFolderPromptBinding, onDismiss: resetNewFolderPrompt) {
             if let destinationPath = newFolderDestinationPath {
                 RemoteFileCreateFolderSheet(
@@ -333,6 +346,7 @@ struct RemoteFileBrowserScreen: View {
                     onCancel: resetNewFolderPrompt,
                     onCreate: createFolder
                 )
+                #if os(macOS)
                 .frame(
                     minWidth: 460,
                     idealWidth: 500,
@@ -341,17 +355,9 @@ struct RemoteFileBrowserScreen: View {
                     idealHeight: 250,
                     maxHeight: 300
                 )
+                #endif
             }
         }
-        #endif
-        #if os(iOS)
-        .alert(
-            String(localized: "New Folder"),
-            isPresented: newFolderPromptBinding,
-            actions: { newFolderPromptActions },
-            message: { newFolderPromptMessage }
-        )
-        #endif
         .alert(
             String(localized: "Files"),
             isPresented: operationErrorBinding,
@@ -879,7 +885,7 @@ struct RemoteFileBrowserScreen: View {
         #if os(macOS)
         presentMacOSUploadPanel(for: remotePath)
         #else
-        uploadDestinationPath = remotePath
+        uploadImportRequest = UploadImportRequest(destinationPath: remotePath)
         #endif
     }
 
@@ -997,7 +1003,17 @@ struct RemoteFileBrowserScreen: View {
     func handleUploadSelection(_ result: Result<[URL], Error>) {
         guard let destinationPath = uploadDestinationPath else { return }
         uploadDestinationPath = nil
+        handleUploadSelection(result, to: destinationPath)
+    }
 
+    func handleUploadSelection(_ result: Result<[URL], Error>, for request: UploadImportRequest) {
+        if uploadImportRequest?.id == request.id {
+            uploadImportRequest = nil
+        }
+        handleUploadSelection(result, to: request.destinationPath)
+    }
+
+    func handleUploadSelection(_ result: Result<[URL], Error>, to destinationPath: String) {
         switch result {
         case .success(let urls):
             guard !urls.isEmpty else { return }

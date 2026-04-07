@@ -216,7 +216,11 @@ struct RemoteFileTransferStatusView: View {
             #endif
         }
         .padding(14)
+        #if os(iOS)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        #else
         .frame(width: 340, alignment: .leading)
+        #endif
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.ultraThinMaterial)

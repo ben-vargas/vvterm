@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 #if os(macOS)
 import AppKit
 import ObjectiveC.runtime
+#else
+import UIKit
 #endif
 
 struct RemoteFileIOSRow: View {
@@ -195,6 +197,49 @@ struct RemoteFileShareSheet: UIViewControllerRepresentable {
             guard !didFinish else { return }
             didFinish = true
             onComplete()
+        }
+    }
+}
+
+struct RemoteFileImportPicker: UIViewControllerRepresentable {
+    let onComplete: (Result<[URL], Error>) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onComplete: onComplete)
+    }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let controller = UIDocumentPickerViewController(
+            forOpeningContentTypes: [.item, .folder],
+            asCopy: true
+        )
+        controller.delegate = context.coordinator
+        controller.allowsMultipleSelection = true
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        private let onComplete: (Result<[URL], Error>) -> Void
+        private var didFinish = false
+
+        init(onComplete: @escaping (Result<[URL], Error>) -> Void) {
+            self.onComplete = onComplete
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            finish(.success(urls))
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            finish(.success([]))
+        }
+
+        private func finish(_ result: Result<[URL], Error>) {
+            guard !didFinish else { return }
+            didFinish = true
+            onComplete(result)
         }
     }
 }
