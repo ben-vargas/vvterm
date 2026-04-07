@@ -4,72 +4,25 @@ import SwiftUI
 
 struct OfflineBanner: View {
     @ObservedObject var networkMonitor: NetworkMonitor = .shared
-    @State private var isExpanded = false
+
+    private var noticeItem: NoticeItem {
+        NoticeItem(
+            id: "offline-banner",
+            lane: .topBanner,
+            level: .warning,
+            leading: .icon("wifi.slash"),
+            title: String(localized: "Offline"),
+            message: String(localized: "No network connection. Network-dependent features are paused.")
+        )
+    }
 
     var body: some View {
         if !networkMonitor.isConnected {
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "wifi.slash")
-                        .font(.subheadline)
-                    Text("No network connection")
-                        .font(.subheadline)
-
-                    Spacer()
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isExpanded.toggle()
-                        }
-                    } label: {
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-
-                if isExpanded {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("You're currently offline. Some features may not work:")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            OfflineFeatureRow(icon: "server.rack", text: "Cannot connect to servers")
-                            OfflineFeatureRow(icon: "icloud.slash", text: "iCloud sync paused")
-                            OfflineFeatureRow(icon: "checkmark.circle", text: "Saved servers still accessible")
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                }
-            }
-            .background(.orange.opacity(0.15))
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(.orange.opacity(0.3))
-                    .frame(height: 1)
-            }
+            NoticeBannerView(item: noticeItem)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
             .transition(.move(edge: .top).combined(with: .opacity))
-        }
-    }
-}
-
-private struct OfflineFeatureRow: View {
-    let icon: String
-    let text: LocalizedStringKey
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 }

@@ -1195,15 +1195,18 @@ struct iOSTerminalView: View {
 
     @ViewBuilder
     private func connectingStateView(serverName: String) -> some View {
-        VStack(spacing: 12) {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .scaleEffect(1.1)
-            Text(String(format: String(localized: "Connecting to %@..."), serverName))
-                .font(.headline)
-            Text(String(localized: "Preparing server details..."))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        BlockingStatusView(showsScrim: false) {
+            VStack(spacing: 12) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .scaleEffect(1.1)
+                Text(String(format: String(localized: "Connecting to %@..."), serverName))
+                    .font(.headline)
+                Text(String(localized: "Preparing server details..."))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

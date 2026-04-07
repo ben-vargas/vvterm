@@ -42,8 +42,8 @@ struct RemoteFileBrowserScreen: View {
     @State var isPermissionSubmitting = false
     @State var permissionErrorMessage: String?
     @State var operationErrorMessage: String?
-    @State var transferStatus: TransferStatus?
     @State var isDropTargeted = false
+    @StateObject private var noticeHost = NoticeHostModel()
     #if os(macOS)
     @State var macOSSelectedPaths: Set<String> = []
     @State var macOSTitlebarHeight: CGFloat = 0
@@ -76,23 +76,6 @@ struct RemoteFileBrowserScreen: View {
     struct UploadImportRequest: Identifiable {
         let id = UUID()
         let destinationPath: String
-    }
-
-    struct TransferStatus: Identifiable {
-        enum Phase {
-            case running
-            case succeeded
-        }
-
-        let id: UUID
-        let title: String
-        let message: String
-        let completedUnitCount: Int?
-        let totalUnitCount: Int?
-        let phase: Phase
-        let fileURL: URL?
-        let fileName: String?
-        let filePath: String?
     }
 
     var snapshot: Snapshot {
@@ -261,28 +244,25 @@ struct RemoteFileBrowserScreen: View {
     }
 
     var body: some View {
-        ZStack {
-            Group {
-                #if os(macOS)
-                macOSContent(snapshot)
-                #else
-                iOSContent(snapshot)
-                #endif
-            }
+        NoticeHost(
+            topBanner: noticeHost.topBanner,
+            bottomOperation: noticeHost.bottomOperation
+        ) {
+            ZStack {
+                Group {
+                    #if os(macOS)
+                    macOSContent(snapshot)
+                    #else
+                    iOSContent(snapshot)
+                    #endif
+                }
 
-            if isDropTargeted {
-                RemoteFileDropOverlay()
-                    .padding(20)
-                    .transition(.opacity)
-                    .allowsHitTesting(false)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if let transferStatus {
-                RemoteFileTransferStatusView(status: transferStatus)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 20)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                if isDropTargeted {
+                    RemoteFileDropOverlay()
+                        .padding(20)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
             }
         }
         .task(id: initialLoadTaskID) {
@@ -482,7 +462,6 @@ struct RemoteFileBrowserScreen: View {
 
     @MainActor
     func presentOperationError(_ error: Error) {
-        transferStatus = nil
         operationErrorMessage = remoteOperationErrorMessage(for: error)
     }
 
@@ -497,16 +476,22 @@ struct RemoteFileBrowserScreen: View {
         fileName: String? = nil,
         filePath: String? = nil
     ) {
-        transferStatus = TransferStatus(
-            id: id,
-            title: title,
-            message: message,
-            completedUnitCount: completedUnitCount,
-            totalUnitCount: totalUnitCount,
-            phase: .running,
-            fileURL: fileURL,
-            fileName: fileName,
-            filePath: filePath
+        noticeHost.show(
+            NoticeItem(
+                id: id.uuidString,
+                lane: .bottomOperation,
+                level: .info,
+                leading: .activity,
+                title: title,
+                message: message,
+                detail: transferDetail(fileName: fileName, filePath: filePath),
+                progress: transferProgress(
+                    completedUnitCount: completedUnitCount,
+                    totalUnitCount: totalUnitCount
+                ),
+                action: transferCompletionAction(fileURL: fileURL),
+                dismissAction: { noticeHost.dismiss(id: id.uuidString) }
+            )
         )
     }
 
@@ -518,17 +503,20 @@ struct RemoteFileBrowserScreen: View {
         completedUnitCount: Int,
         totalUnitCount: Int
     ) {
-        guard transferStatus?.id == id else { return }
-        transferStatus = TransferStatus(
-            id: id,
-            title: title,
-            message: message,
-            completedUnitCount: completedUnitCount,
-            totalUnitCount: totalUnitCount,
-            phase: .running,
-            fileURL: transferStatus?.fileURL,
-            fileName: transferStatus?.fileName,
-            filePath: transferStatus?.filePath
+        noticeHost.show(
+            NoticeItem(
+                id: id.uuidString,
+                lane: .bottomOperation,
+                level: .info,
+                leading: .activity,
+                title: title,
+                message: message,
+                progress: NoticeProgress(
+                    completedUnitCount: completedUnitCount,
+                    totalUnitCount: totalUnitCount
+                ),
+                dismissAction: { noticeHost.dismiss(id: id.uuidString) }
+            )
         )
     }
 
@@ -541,26 +529,54 @@ struct RemoteFileBrowserScreen: View {
         fileName: String? = nil,
         filePath: String? = nil
     ) {
-        guard transferStatus?.id == id else { return }
-        transferStatus = TransferStatus(
-            id: id,
-            title: title,
-            message: message,
-            completedUnitCount: transferStatus?.totalUnitCount,
-            totalUnitCount: transferStatus?.totalUnitCount,
-            phase: .succeeded,
-            fileURL: fileURL ?? transferStatus?.fileURL,
-            fileName: fileName ?? transferStatus?.fileName,
-            filePath: filePath ?? transferStatus?.filePath
+        noticeHost.show(
+            NoticeItem(
+                id: id.uuidString,
+                lane: .bottomOperation,
+                level: .success,
+                leading: .icon("checkmark.circle.fill"),
+                title: title,
+                message: message,
+                detail: transferDetail(fileName: fileName, filePath: filePath),
+                lifetime: .autoDismiss(.seconds(2)),
+                action: transferCompletionAction(fileURL: fileURL)
+            )
         )
+    }
 
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            guard transferStatus?.id == id else { return }
-            withAnimation(.easeInOut(duration: 0.2)) {
-                transferStatus = nil
-            }
+    func transferProgress(
+        completedUnitCount: Int?,
+        totalUnitCount: Int?
+    ) -> NoticeProgress? {
+        guard let completedUnitCount, let totalUnitCount else { return nil }
+        return NoticeProgress(
+            completedUnitCount: completedUnitCount,
+            totalUnitCount: totalUnitCount
+        )
+    }
+
+    func transferDetail(fileName: String?, filePath: String?) -> String? {
+        if let filePath, !filePath.isEmpty {
+            return filePath
         }
+
+        if let fileName, !fileName.isEmpty {
+            return fileName
+        }
+
+        return nil
+    }
+
+    func transferCompletionAction(fileURL: URL?) -> NoticeAction? {
+        #if os(macOS)
+        guard let fileURL else { return nil }
+
+        return NoticeAction(id: "show-in-finder", title: String(localized: "Show in Finder")) {
+            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+        }
+        #else
+        return nil
+        #endif
     }
 
     func performTransfer(
@@ -618,10 +634,17 @@ struct RemoteFileBrowserScreen: View {
                 }
             } catch {
                 await MainActor.run {
-                    if transferStatus?.id == transferID {
-                        transferStatus = nil
-                    }
-                    presentOperationError(error)
+                    noticeHost.show(
+                        NoticeItem(
+                            id: transferID.uuidString,
+                            lane: .bottomOperation,
+                            level: .error,
+                            leading: .icon("xmark.octagon.fill"),
+                            title: title,
+                            message: remoteOperationErrorMessage(for: error),
+                            dismissAction: { noticeHost.dismiss(id: transferID.uuidString) }
+                        )
+                    )
                 }
             }
         }
@@ -1033,11 +1056,17 @@ struct RemoteFileBrowserScreen: View {
         switch result {
         case .success:
             cleanupDownloadExport()
-            if let transferStatus, transferStatus.phase == .succeeded {
-                completeTransferStatus(
-                    id: transferStatus.id,
-                    title: transferStatus.title,
-                    message: String(localized: "Export complete.")
+            if let currentNotice = noticeHost.bottomOperation {
+                noticeHost.show(
+                    NoticeItem(
+                        id: currentNotice.id,
+                        lane: .bottomOperation,
+                        level: .success,
+                        leading: .icon("checkmark.circle.fill"),
+                        title: currentNotice.title,
+                        message: String(localized: "Export complete."),
+                        lifetime: .autoDismiss(.seconds(2))
+                    )
                 )
             }
         case .failure(let error):

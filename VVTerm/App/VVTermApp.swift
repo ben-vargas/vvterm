@@ -68,46 +68,48 @@ struct VVTermApp: App {
         WindowGroup("", id: "main") {
             let appLocale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
             AppLockContainer {
-                Group {
-                    #if os(iOS)
-                    iOSContentView(fileBrowser: remoteFileBrowserStore)
-                        .environmentObject(ghosttyApp)
-                        .environmentObject(terminalThemeManager)
-                        .environmentObject(terminalAccessoryPreferencesManager)
-                        .modifier(AppearanceModifier())
-                        .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalThemeName)\(terminalThemeNameLight)\(usePerAppearanceTheme)\(activeCustomThemeVersionToken)") {
-                            ghosttyApp.reloadConfig()
-                        }
-                        .sheet(isPresented: .init(
-                            get: { !hasSeenWelcome },
-                            set: { if !$0 { hasSeenWelcome = true } }
-                        )) {
-                            WelcomeView(hasSeenWelcome: $hasSeenWelcome)
-                        }
-                    #else
-                    ContentView(fileBrowser: remoteFileBrowserStore)
-                        .environmentObject(ghosttyApp)
-                        .environmentObject(terminalThemeManager)
-                        .environmentObject(terminalAccessoryPreferencesManager)
-                        .modifier(AppearanceModifier())
-                        .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalThemeName)\(terminalThemeNameLight)\(usePerAppearanceTheme)\(activeCustomThemeVersionToken)") {
-                            ghosttyApp.reloadConfig()
-                        }
-                        .sheet(isPresented: .init(
-                            get: { !hasSeenWelcome },
-                            set: { if !$0 { hasSeenWelcome = true } }
-                        )) {
-                            WelcomeView(hasSeenWelcome: $hasSeenWelcome)
-                        }
-                    #endif
-                }
-                .environment(\.locale, appLocale)
-                .environment(\.privacyModeEnabled, privacyModeEnabled)
-                .onAppear {
-                    AppLanguage.applySelection(appLanguage)
-                }
-                .onChange(of: appLanguage) { newValue in
-                    AppLanguage.applySelection(newValue)
+                NoticeAppHost {
+                    Group {
+                        #if os(iOS)
+                        iOSContentView(fileBrowser: remoteFileBrowserStore)
+                            .environmentObject(ghosttyApp)
+                            .environmentObject(terminalThemeManager)
+                            .environmentObject(terminalAccessoryPreferencesManager)
+                            .modifier(AppearanceModifier())
+                            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalThemeName)\(terminalThemeNameLight)\(usePerAppearanceTheme)\(activeCustomThemeVersionToken)") {
+                                ghosttyApp.reloadConfig()
+                            }
+                            .sheet(isPresented: .init(
+                                get: { !hasSeenWelcome },
+                                set: { if !$0 { hasSeenWelcome = true } }
+                            )) {
+                                WelcomeView(hasSeenWelcome: $hasSeenWelcome)
+                            }
+                        #else
+                        ContentView(fileBrowser: remoteFileBrowserStore)
+                            .environmentObject(ghosttyApp)
+                            .environmentObject(terminalThemeManager)
+                            .environmentObject(terminalAccessoryPreferencesManager)
+                            .modifier(AppearanceModifier())
+                            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalThemeName)\(terminalThemeNameLight)\(usePerAppearanceTheme)\(activeCustomThemeVersionToken)") {
+                                ghosttyApp.reloadConfig()
+                            }
+                            .sheet(isPresented: .init(
+                                get: { !hasSeenWelcome },
+                                set: { if !$0 { hasSeenWelcome = true } }
+                            )) {
+                                WelcomeView(hasSeenWelcome: $hasSeenWelcome)
+                            }
+                        #endif
+                    }
+                    .environment(\.locale, appLocale)
+                    .environment(\.privacyModeEnabled, privacyModeEnabled)
+                    .onAppear {
+                        AppLanguage.applySelection(appLanguage)
+                    }
+                    .onChange(of: appLanguage) { newValue in
+                        AppLanguage.applySelection(newValue)
+                    }
                 }
             }
             .environmentObject(appLockManager)

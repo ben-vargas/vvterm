@@ -5,25 +5,27 @@ import UIKit
 import AppKit
 #endif
 
-/// A compact, native-looking status card for terminal overlays.
-struct TerminalStatusCard<Content: View>: View {
-    var maxWidth: CGFloat = 300
+struct BlockingStatusView<Content: View>: View {
+    var maxWidth: CGFloat = NoticeMetrics.blockingMaxWidth
     var showsScrim: Bool = true
-    var cornerRadius: CGFloat = 12
+    var cornerRadius: CGFloat = NoticeMetrics.cornerRadius
+    var surfaceStyle: NoticeSurfaceStyle = .standard
     let content: Content
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     init(
-        maxWidth: CGFloat = 300,
+        maxWidth: CGFloat = NoticeMetrics.blockingMaxWidth,
         showsScrim: Bool = true,
-        cornerRadius: CGFloat = 12,
+        cornerRadius: CGFloat = NoticeMetrics.cornerRadius,
+        surfaceStyle: NoticeSurfaceStyle = .standard,
         @ViewBuilder content: () -> Content
     ) {
         self.maxWidth = maxWidth
         self.showsScrim = showsScrim
         self.cornerRadius = cornerRadius
+        self.surfaceStyle = surfaceStyle
         self.content = content()
     }
 
@@ -31,7 +33,7 @@ struct TerminalStatusCard<Content: View>: View {
         ZStack {
             if showsScrim {
                 Color.black
-                    .opacity(colorScheme == .dark ? 0.35 : 0.25)
+                    .opacity(colorScheme == .dark ? 0.32 : 0.22)
                     .ignoresSafeArea()
             }
 
@@ -46,32 +48,25 @@ struct TerminalStatusCard<Content: View>: View {
         }
     }
 
+    @ViewBuilder
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(cardFill)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        switch surfaceStyle {
+        case .standard:
+            if reduceTransparency {
+                shape.fill(platformBaseColor)
+            } else {
+                shape.fill(.ultraThinMaterial)
+            }
+        case .terminal(let backgroundColor):
+            shape.fill(backgroundColor.opacity(colorScheme == .dark ? 0.96 : 0.98))
+        }
     }
 
     private var cardBorder: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .stroke(borderColor, lineWidth: 1)
-    }
-
-    private var cardFill: Color {
-        let base: Color = {
-            #if os(iOS)
-            return Color(UIColor.secondarySystemBackground)
-            #elseif os(macOS)
-            return Color(NSColor.windowBackgroundColor)
-            #else
-            return Color.black
-            #endif
-        }()
-
-        if reduceTransparency {
-            return base
-        }
-
-        return base.opacity(colorScheme == .dark ? 0.92 : 0.98)
     }
 
     private var borderColor: Color {
@@ -89,22 +84,15 @@ struct TerminalStatusCard<Content: View>: View {
         return 22
         #endif
     }
-}
 
-#Preview("Terminal Status Card") {
-    ZStack {
-        Color.black.ignoresSafeArea()
-        TerminalStatusCard {
-            VStack(spacing: 12) {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                Text("Reconnecting...")
-                    .font(.headline)
-                Text("Attempt 2")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .multilineTextAlignment(.center)
-        }
+    private var platformBaseColor: Color {
+        #if os(iOS)
+        return Color(UIColor.secondarySystemBackground)
+        #elseif os(macOS)
+        return Color(NSColor.windowBackgroundColor)
+        #else
+        return .black
+        #endif
     }
 }
+

@@ -120,223 +120,47 @@ extension TerminalRichPasteUIModel {
             }
         )
     }
-}
 
-struct TerminalTopBannerView: View {
-    let icon: String?
-    let progressTint: Color?
-    let tint: Color
-    let message: String
-    let dismissAccessibilityLabel: LocalizedStringKey
-    let onDismiss: (() -> Void)?
+    var topBannerNotice: NoticeItem? {
+        guard let banner else { return nil }
 
-    init(
-        icon: String? = nil,
-        progressTint: Color? = nil,
-        tint: Color,
-        message: String,
-        dismissAccessibilityLabel: LocalizedStringKey = "Dismiss message",
-        onDismiss: (() -> Void)? = nil
-    ) {
-        self.icon = icon
-        self.progressTint = progressTint
-        self.tint = tint
-        self.message = message
-        self.dismissAccessibilityLabel = dismissAccessibilityLabel
-        self.onDismiss = onDismiss
-    }
-
-    var body: some View {
-        VStack {
-#if os(macOS)
-            Spacer()
-#endif
-            bannerContent
-#if os(macOS)
-                .frame(maxWidth: 500)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 18)
-#else
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-#endif
-#if !os(macOS)
-            Spacer()
-#endif
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var bannerContent: some View {
-        HStack(spacing: bannerSpacing) {
-            if let progressTint {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(progressTint)
-                    .scaleEffect(progressScale)
+        return NoticeItem(
+            id: "rich-paste-banner-\(banner.id.uuidString)",
+            lane: .topBanner,
+            level: banner.kind.noticeLevel,
+            leading: .icon(banner.kind.icon),
+            message: banner.message,
+            dismissAction: { [weak self] in
+                self?.dismissBanner()
             }
-
-            if let icon {
-                Image(systemName: icon)
-                    .font(iconFont)
-                    .foregroundStyle(tint)
-            }
-
-            Text(message)
-                .font(messageFont)
-                .foregroundStyle(progressTint == nil ? .secondary : tint)
-
-            Spacer(minLength: 0)
-
-            if let onDismiss {
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(closeIconFont)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(dismissAccessibilityLabel)
-            }
-        }
-        .padding(.horizontal, horizontalPadding)
-        .padding(.vertical, verticalPadding)
-        .background(.ultraThinMaterial, in: bannerShape)
-        .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: shadowY)
+        )
     }
 
-    private var bannerSpacing: CGFloat {
-#if os(macOS)
-        12
-#else
-        8
-#endif
-    }
+    var bottomOperationNotice: NoticeItem? {
+        guard let progressMessage else { return nil }
 
-    private var horizontalPadding: CGFloat {
-#if os(macOS)
-        16
-#else
-        12
-#endif
-    }
-
-    private var verticalPadding: CGFloat {
-#if os(macOS)
-        12
-#else
-        8
-#endif
-    }
-
-    private var cornerRadius: CGFloat {
-#if os(macOS)
-        999
-#else
-        10
-#endif
-    }
-
-    private var progressScale: CGFloat {
-#if os(macOS)
-        1.05
-#else
-        1
-#endif
-    }
-
-    private var shadowColor: Color {
-#if os(macOS)
-        Color.black.opacity(0.16)
-#else
-        .clear
-#endif
-    }
-
-    private var shadowRadius: CGFloat {
-#if os(macOS)
-        14
-#else
-        0
-#endif
-    }
-
-    private var shadowY: CGFloat {
-#if os(macOS)
-        6
-#else
-        0
-#endif
-    }
-
-    @ViewBuilder
-    private var bannerShape: some InsettableShape {
-#if os(macOS)
-        Capsule()
-#else
-        RoundedRectangle(cornerRadius: cornerRadius)
-#endif
-    }
-
-    private var iconFont: Font {
-#if os(macOS)
-        .title3.weight(.semibold)
-#else
-        .body
-#endif
-    }
-
-    private var closeIconFont: Font {
-#if os(macOS)
-        .title3
-#else
-        .body
-#endif
-    }
-
-    private var messageFont: Font {
-#if os(macOS)
-        .body.weight(progressTint == nil ? .medium : .semibold)
-#else
-        .caption.weight(progressTint == nil ? .regular : .semibold)
-#endif
+        return NoticeItem(
+            id: "rich-paste-progress",
+            lane: .bottomOperation,
+            level: .info,
+            leading: .activity,
+            title: String(localized: "Rich Paste"),
+            message: progressMessage
+        )
     }
 }
 
-struct TerminalRichPasteProgressOverlay: View {
-    @ObservedObject var uiModel: TerminalRichPasteUIModel
-
-    var body: some View {
-        Group {
-            if let progressMessage = uiModel.progressMessage {
-                TerminalStatusCard(showsScrim: false) {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                        Text(progressMessage)
-                            .foregroundStyle(.secondary)
-                    }
-                    .multilineTextAlignment(.center)
-                }
-            }
-        }
-    }
-}
-
-struct TerminalRichPasteBannerOverlay: View {
-    @ObservedObject var uiModel: TerminalRichPasteUIModel
-
-    var body: some View {
-        Group {
-            if let banner = uiModel.banner {
-                TerminalTopBannerView(
-                    icon: banner.kind.icon,
-                    tint: banner.kind.tint,
-                    message: banner.message,
-                    dismissAccessibilityLabel: "Dismiss rich paste message"
-                ) {
-                    uiModel.dismissBanner()
-                }
-            }
+private extension TerminalRichPasteUIModel.Banner.Kind {
+    var noticeLevel: NoticeLevel {
+        switch self {
+        case .info:
+            return .info
+        case .success:
+            return .success
+        case .warning:
+            return .warning
+        case .error:
+            return .error
         }
     }
 }
