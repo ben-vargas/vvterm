@@ -10,6 +10,8 @@ enum CloudKitSyncConstants {
     static let pendingCloudKitSyncQueueStorageKey = "\(appPrefix).pendingCloudKitSyncQueue"
     static let serverStorageKey = "\(appPrefix).servers"
     static let workspaceStorageKey = "\(appPrefix).workspaces"
+    static let didBootstrapDefaultWorkspaceKey = "\(appPrefix).didBootstrapDefaultWorkspace"
+    static let pendingBootstrapWorkspaceIDKey = "\(appPrefix).pendingBootstrapWorkspaceID"
     static let terminalCustomThemesStorageKey = "terminalCustomThemesV1"
     static let terminalThemeNameKey = "terminalThemeName"
     static let terminalThemeNameLightKey = "terminalThemeNameLight"

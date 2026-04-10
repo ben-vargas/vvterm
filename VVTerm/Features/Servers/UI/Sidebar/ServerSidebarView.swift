@@ -33,6 +33,10 @@ struct ServerSidebarView: View {
 
     // MARK: - Filter State
 
+    private var canAddServer: Bool {
+        !serverManager.workspaces.isEmpty
+    }
+
     private var selectedEnvironmentIds: Set<UUID> {
         guard !storedEnvironmentFilters.isEmpty else { return [] }
         return Set(storedEnvironmentFilters.split(separator: ",").compactMap { UUID(uuidString: String($0)) })
@@ -322,6 +326,14 @@ struct ServerSidebarView: View {
             guard !isPresented, let queued = queuedDiscoveryPrefill else { return }
             queuedDiscoveryPrefill = nil
             presentAddServer(prefill: queued)
+        }
+        .onChange(of: selectedWorkspace?.id) { _ in
+            guard showingWorkspaceSwitcher else { return }
+            dismissWorkspacePickerForPendingPrefilledAddServerIfNeeded()
+        }
+        .onChange(of: showingWorkspaceSwitcher) { isPresented in
+            guard !isPresented else { return }
+            resumePendingPrefilledAddServerIfNeeded()
         }
         .onChange(of: showingAddServer) { isPresented in
             if !isPresented {
@@ -674,6 +686,19 @@ struct ServerSidebarView: View {
                 Text("No servers found.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+            } else if serverManager.workspaces.isEmpty {
+                Image(systemName: "folder")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.tertiary)
+                Text("No workspaces available.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Button {
+                    showingWorkspaceSwitcher = true
+                } label: {
+                    Text("Create Workspace")
+                }
+                .buttonStyle(.bordered)
             } else {
                 Image(systemName: "server.rack")
                     .font(.system(size: 32))
@@ -737,6 +762,7 @@ struct ServerSidebarView: View {
                 Label("Add Server", systemImage: "plus")
             }
             .buttonStyle(.plain)
+            .disabled(!canAddServer)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
 
@@ -769,6 +795,20 @@ struct ServerSidebarView: View {
 
     private func presentAddServer(prefill: ServerFormPrefill? = nil) {
         addServerPrefill = prefill
+        guard canAddServer else {
+            showingWorkspaceSwitcher = true
+            return
+        }
+        showingAddServer = true
+    }
+
+    private func dismissWorkspacePickerForPendingPrefilledAddServerIfNeeded() {
+        guard addServerPrefill != nil, canAddServer else { return }
+        showingWorkspaceSwitcher = false
+    }
+
+    private func resumePendingPrefilledAddServerIfNeeded() {
+        guard addServerPrefill != nil, canAddServer, !showingAddServer else { return }
         showingAddServer = true
     }
 }

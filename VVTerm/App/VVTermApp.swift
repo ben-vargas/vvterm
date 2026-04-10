@@ -106,9 +106,11 @@ struct VVTermApp: App {
                     .environment(\.privacyModeEnabled, privacyModeEnabled)
                     .onAppear {
                         AppLanguage.applySelection(appLanguage)
+                        ServerManager.shared.handleAppLanguageChange()
                     }
                     .onChange(of: appLanguage) { newValue in
                         AppLanguage.applySelection(newValue)
+                        ServerManager.shared.handleAppLanguageChange()
                     }
                 }
             }

@@ -169,6 +169,10 @@ struct iOSServerListView: View {
     @State private var queuedDiscoveryPrefill: ServerFormPrefill?
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
 
+    private var canAddServer: Bool {
+        !serverManager.workspaces.isEmpty
+    }
+
     private var preferredConnectViewId: String {
         viewTabConfig.isTabVisible(ConnectionViewTab.terminal.id)
             ? ConnectionViewTab.terminal.id
@@ -177,130 +181,19 @@ struct iOSServerListView: View {
 
     var body: some View {
         List {
-            // Workspace Picker Section
-            Section {
-                Button {
-                    showingWorkspacePicker = true
-                } label: {
-                    HStack {
-                        Circle()
-                            .fill(Color.fromHex(selectedWorkspace?.colorHex ?? "#007AFF"))
-                            .frame(width: 10, height: 10)
-
-                        Text(selectedWorkspace?.name ?? String(localized: "Select Workspace"))
-                            .foregroundStyle(.primary)
-
-                        Spacer()
-                        let serverCount = filteredServers.count
-                        Text(serverCount == 1
-                             ? String(format: String(localized: "%lld server"), Int64(serverCount))
-                             : String(format: String(localized: "%lld servers"), Int64(serverCount))
-                        )
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            } header: {
-                Text("Workspace")
-            }
-
-            // Servers Section
-            Section {
-                if filteredServers.isEmpty {
-                    Color.clear
-                        .frame(height: 1)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                } else {
-                    ForEach(filteredServers) { server in
-                        iOSServerRow(
-                            server: server,
-                            onTap: { onServerSelected(server) },
-                            onEdit: { serverToEdit = server },
-                            onMove: { serverToMove = server },
-                            onLockedTap: { lockedServerAlert = server }
-                        )
-                    }
-                }
-            } header: {
-                HStack {
-                    Text("Servers")
-
-                    Spacer()
-
-                    if selectedWorkspace != nil {
-                        iOSEnvironmentFilterMenu(
-                            selected: $selectedEnvironment,
-                            environments: environmentOptions,
-                            serverCounts: serverCountsByEnvironment,
-                            onCreateCustom: {
-                                if storeManager.isPro {
-                                    showingCreateEnvironment = true
-                                } else {
-                                    showingCustomEnvironmentAlert = true
-                                }
-                            },
-                            onEditCustom: { environment in
-                                if storeManager.isPro {
-                                    editingEnvironment = environment
-                                } else {
-                                    showingCustomEnvironmentAlert = true
-                                }
-                            },
-                            onDeleteCustom: { environment in
-                                if storeManager.isPro {
-                                    environmentToDelete = environment
-                                } else {
-                                    showingCustomEnvironmentAlert = true
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-
-            // Active Connections Section
-            if !activeConnections.isEmpty && !filteredServers.isEmpty {
-                Section {
-                    ForEach(activeConnections) { connection in
-                        iOSActiveConnectionRow(
-                            session: connection.session,
-                            tabCount: connection.tabCount,
-                            onOpen: {
-                                Task {
-                                    guard let server = serverManager.servers.first(where: { $0.id == connection.id }) else { return }
-                                    guard await AppLockManager.shared.ensureServerUnlocked(server) else { return }
-                                    let targetViewId = preferredConnectViewId
-                                    await MainActor.run {
-                                        sessionManager.selectSession(connection.session)
-                                        sessionManager.selectedViewByServer[server.id] = targetViewId
-                                        showingTerminal = true
-                                    }
-                                }
-                            },
-                            onDisconnect: {
-                                fileBrowser.disconnect(serverId: connection.id)
-                                sessionManager.disconnectServer(connection.id)
-                            }
-                        )
-                    }
-                } header: {
-                    Text("Active Connections")
-                }
-            }
+            workspaceSection
+            serversSection
+            activeConnectionsSection
         }
         .id(listRefreshIdentity)
         .overlay(alignment: .center) {
             if filteredServers.isEmpty {
-                NoServersEmptyState {
-                    presentAddServer()
-                } onDiscoverLocalDevices: {
-                    showingLocalDiscovery = true
-                }
+                NoServersEmptyState(
+                    onAddServer: { presentAddServer() },
+                    onAddWorkspace: { showingAddWorkspace = true },
+                    onDiscoverLocalDevices: { showingLocalDiscovery = true },
+                    requiresWorkspace: serverManager.workspaces.isEmpty
+                )
             }
         }
         .searchable(text: $searchText, prompt: "Search servers")
@@ -321,6 +214,7 @@ struct iOSServerListView: View {
                     } label: {
                         Label("Add Server", systemImage: "server.rack")
                     }
+                    .disabled(!canAddServer)
 
                     Button {
                         showingAddWorkspace = true
@@ -487,6 +381,10 @@ struct iOSServerListView: View {
             queuedDiscoveryPrefill = nil
             presentAddServer(prefill: queued)
         }
+        .onChange(of: showingAddWorkspace) { isPresented in
+            guard !isPresented else { return }
+            resumePendingPrefilledAddServerIfNeeded()
+        }
         .onChange(of: showingAddServer) { isPresented in
             if !isPresented {
                 addServerPrefill = nil
@@ -512,6 +410,127 @@ struct iOSServerListView: View {
 
     private var environmentOptions: [ServerEnvironment] {
         selectedWorkspace?.environments ?? ServerEnvironment.builtInEnvironments
+    }
+
+    private var selectedWorkspaceName: String {
+        selectedWorkspace?.name ?? String(localized: "Select Workspace")
+    }
+
+    private var selectedWorkspaceColorHex: String {
+        selectedWorkspace?.colorHex ?? "#007AFF"
+    }
+
+    private var filteredServerCountText: String {
+        let serverCount = filteredServers.count
+        if serverCount == 1 {
+            return String(format: String(localized: "%lld server"), Int64(serverCount))
+        }
+        return String(format: String(localized: "%lld servers"), Int64(serverCount))
+    }
+
+    @ViewBuilder
+    private var workspaceSection: some View {
+        Section {
+            Button {
+                showingWorkspacePicker = true
+            } label: {
+                HStack {
+                    Circle()
+                        .fill(Color.fromHex(selectedWorkspaceColorHex))
+                        .frame(width: 10, height: 10)
+
+                    Text(selectedWorkspaceName)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Text(filteredServerCountText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Workspace")
+        }
+    }
+
+    @ViewBuilder
+    private var serversSection: some View {
+        Section {
+            if filteredServers.isEmpty {
+                Color.clear
+                    .frame(height: 1)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(filteredServers) { server in
+                    iOSServerRow(
+                        server: server,
+                        onTap: { onServerSelected(server) },
+                        onEdit: { serverToEdit = server },
+                        onMove: { serverToMove = server },
+                        onLockedTap: { lockedServerAlert = server }
+                    )
+                }
+            }
+        } header: {
+            HStack {
+                Text("Servers")
+
+                Spacer()
+
+                if selectedWorkspace != nil {
+                    iOSEnvironmentFilterMenu(
+                        selected: $selectedEnvironment,
+                        environments: environmentOptions,
+                        serverCounts: serverCountsByEnvironment,
+                        onCreateCustom: {
+                            if storeManager.isPro {
+                                showingCreateEnvironment = true
+                            } else {
+                                showingCustomEnvironmentAlert = true
+                            }
+                        },
+                        onEditCustom: { environment in
+                            if storeManager.isPro {
+                                editingEnvironment = environment
+                            } else {
+                                showingCustomEnvironmentAlert = true
+                            }
+                        },
+                        onDeleteCustom: { environment in
+                            if storeManager.isPro {
+                                environmentToDelete = environment
+                            } else {
+                                showingCustomEnvironmentAlert = true
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var activeConnectionsSection: some View {
+        if !activeConnections.isEmpty && !filteredServers.isEmpty {
+            Section {
+                ForEach(activeConnections) { connection in
+                    iOSActiveConnectionRow(
+                        session: connection.session,
+                        tabCount: connection.tabCount,
+                        onOpen: { openActiveConnection(connection) },
+                        onDisconnect: { disconnectActiveConnection(connection) }
+                    )
+                }
+            } header: {
+                Text("Active Connections")
+            }
+        }
     }
 
     private struct ActiveConnection: Identifiable {
@@ -587,7 +606,39 @@ struct iOSServerListView: View {
 
     private func presentAddServer(prefill: ServerFormPrefill? = nil) {
         addServerPrefill = prefill
+        guard canAddServer else {
+            showingAddWorkspace = true
+            return
+        }
         showingAddServer = true
+    }
+
+    private func resumePendingPrefilledAddServerIfNeeded() {
+        guard addServerPrefill != nil, canAddServer, !showingAddServer else { return }
+        showingAddServer = true
+    }
+
+    private func openActiveConnection(_ connection: ActiveConnection) {
+        let targetViewId = preferredConnectViewId
+        Task {
+            guard let server = server(for: connection.id) else { return }
+            guard await AppLockManager.shared.ensureServerUnlocked(server) else { return }
+
+            await MainActor.run {
+                sessionManager.selectSession(connection.session)
+                sessionManager.selectedViewByServer[server.id] = targetViewId
+                showingTerminal = true
+            }
+        }
+    }
+
+    private func disconnectActiveConnection(_ connection: ActiveConnection) {
+        fileBrowser.disconnect(serverId: connection.id)
+        sessionManager.disconnectServer(connection.id)
+    }
+
+    private func server(for serverId: UUID) -> Server? {
+        serverManager.servers.first { $0.id == serverId }
     }
 }
 

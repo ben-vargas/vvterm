@@ -22,6 +22,9 @@ final class ServerManager: ObservableObject {
     // Local storage keys
     private let serversKey = CloudKitSyncConstants.serverStorageKey
     private let workspacesKey = CloudKitSyncConstants.workspaceStorageKey
+    private let didBootstrapDefaultWorkspaceKey = CloudKitSyncConstants.didBootstrapDefaultWorkspaceKey
+    private let pendingBootstrapWorkspaceIDKey = CloudKitSyncConstants.pendingBootstrapWorkspaceIDKey
+    private let hasSeenWelcomeKey = "hasSeenWelcome"
 
     private struct FullFetchBackfillResult {
         let changes: CloudKitChanges
@@ -38,6 +41,8 @@ final class ServerManager: ObservableObject {
     // MARK: - Local Storage
 
     private func loadLocalData() {
+        var shouldPersist = false
+
         if let decoded = loadStoredServers() {
             servers = decoded
             logger.info("Loaded \(decoded.count) servers from local storage")
@@ -48,9 +53,19 @@ final class ServerManager: ObservableObject {
             logger.info("Loaded \(decoded.count) workspaces from local storage")
         }
 
-        // Ensure at least one workspace exists
-        if workspaces.isEmpty {
-            workspaces = [createDefaultWorkspace()]
+        shouldPersist = reconcilePendingBootstrapWorkspaceState() || shouldPersist
+
+        if Self.shouldCreateBootstrapWorkspace(
+            didBootstrapDefaultWorkspace: didBootstrapDefaultWorkspace,
+            hasSeenWelcome: hasSeenWelcome,
+            hasLocalWorkspaces: !workspaces.isEmpty
+        ) {
+            createBootstrapWorkspace()
+            didBootstrapDefaultWorkspace = true
+            shouldPersist = true
+        }
+
+        if shouldPersist {
             saveLocalData()
         }
     }
@@ -86,6 +101,105 @@ final class ServerManager: ObservableObject {
             return
         }
         UserDefaults.standard.set(data, forKey: workspacesKey)
+    }
+
+    private var didBootstrapDefaultWorkspace: Bool {
+        get { UserDefaults.standard.bool(forKey: didBootstrapDefaultWorkspaceKey) }
+        set { UserDefaults.standard.set(newValue, forKey: didBootstrapDefaultWorkspaceKey) }
+    }
+
+    private var hasSeenWelcome: Bool {
+        UserDefaults.standard.bool(forKey: hasSeenWelcomeKey)
+    }
+
+    private var pendingBootstrapWorkspaceID: UUID? {
+        get {
+            guard let rawValue = UserDefaults.standard.string(forKey: pendingBootstrapWorkspaceIDKey) else {
+                return nil
+            }
+            return UUID(uuidString: rawValue)
+        }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(newValue.uuidString, forKey: pendingBootstrapWorkspaceIDKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: pendingBootstrapWorkspaceIDKey)
+            }
+        }
+    }
+
+    private var transientBootstrapWorkspaceID: UUID? {
+        pendingBootstrapWorkspaceID
+    }
+
+    private func createBootstrapWorkspace() {
+        let workspace = createDefaultWorkspace()
+        workspaces = [workspace]
+
+        if isSyncEnabled {
+            pendingBootstrapWorkspaceID = workspace.id
+            logger.info("Created pending default workspace: \(workspace.name)")
+        } else {
+            pendingBootstrapWorkspaceID = nil
+            logger.info("Created default workspace: \(workspace.name)")
+        }
+    }
+
+    @discardableResult
+    private func reconcilePendingBootstrapWorkspaceState() -> Bool {
+        guard let pendingBootstrapWorkspaceID else {
+            return false
+        }
+
+        guard workspaces.contains(where: { $0.id == pendingBootstrapWorkspaceID }) else {
+            self.pendingBootstrapWorkspaceID = nil
+            return true
+        }
+
+        if servers.contains(where: { $0.workspaceId == pendingBootstrapWorkspaceID }) || workspaces.count > 1 {
+            self.pendingBootstrapWorkspaceID = nil
+            logger.info("Promoted pending bootstrap workspace \(pendingBootstrapWorkspaceID.uuidString) into regular local state")
+            return true
+        }
+
+        return refreshPendingBootstrapWorkspaceLocalizationIfNeeded()
+    }
+
+    @discardableResult
+    private func refreshPendingBootstrapWorkspaceLocalizationIfNeeded() -> Bool {
+        guard let pendingBootstrapWorkspaceID,
+              let index = workspaces.firstIndex(where: { $0.id == pendingBootstrapWorkspaceID }) else {
+            return false
+        }
+
+        let localizedName = AppLanguage.localizedString("My Servers")
+        guard workspaces[index].name != localizedName,
+              Self.isCanonicalDefaultWorkspaceCandidate(workspaces[index]) else {
+            return false
+        }
+
+        workspaces[index].name = localizedName
+        logger.info("Updated pending bootstrap workspace name to match selected app language")
+        return true
+    }
+
+    private func promotePendingBootstrapWorkspaceIfNeeded(for workspaceID: UUID, reason: String) {
+        guard pendingBootstrapWorkspaceID == workspaceID else { return }
+        pendingBootstrapWorkspaceID = nil
+        logger.info("Promoted pending bootstrap workspace after \(reason)")
+    }
+
+    private func resolvePendingBootstrapWorkspaceAgainstAuthoritativeFetch(_ changes: CloudKitChanges) {
+        guard changes.isFullFetch,
+              changes.workspaces.isEmpty,
+              let pendingBootstrapWorkspaceID,
+              let workspace = workspaces.first(where: { $0.id == pendingBootstrapWorkspaceID }) else {
+            return
+        }
+
+        self.pendingBootstrapWorkspaceID = nil
+        enqueuePendingWorkspaceUpsert(workspace)
+        logger.info("Promoted pending bootstrap workspace after authoritative CloudKit fetch returned no workspaces")
     }
 
     // MARK: - Pending CloudKit Sync
@@ -280,6 +394,7 @@ final class ServerManager: ObservableObject {
         // Clear local storage
         UserDefaults.standard.removeObject(forKey: serversKey)
         UserDefaults.standard.removeObject(forKey: workspacesKey)
+        pendingBootstrapWorkspaceID = nil
         syncCoordinator.clearPendingMutations(for: [.server, .workspace])
 
         // Clear in-memory data
@@ -306,7 +421,9 @@ final class ServerManager: ObservableObject {
         }
 
         do {
-            let fetchedChanges = try await cloudKit.fetchChanges()
+            let shouldForceFullFetch = shouldForceCloudKitFullFetchForBootstrap
+            let fetchedChanges = try await cloudKit.fetchChanges(forceFullFetch: shouldForceFullFetch)
+            resolvePendingBootstrapWorkspaceAgainstAuthoritativeFetch(fetchedChanges)
             let backfillResult = await backfillMissingLocalRecordsIfNeeded(for: fetchedChanges)
             let changes = backfillResult.changes
 
@@ -318,13 +435,7 @@ final class ServerManager: ObservableObject {
             applyCloudKitChanges(changes, canReplaceLocalState: backfillResult.canReplaceLocalState)
             reconcilePendingServerAndWorkspaceUpsertsAgainstCloudKit(changes)
             applyPendingSyncOverlay()
-
-            // Ensure at least one workspace exists before checking orphans
-            if workspaces.isEmpty {
-                workspaces = [createDefaultWorkspace()]
-                enqueuePendingWorkspaceUpsert(workspaces[0])
-                logger.info("Created default workspace: \(self.workspaces[0].name)")
-            }
+            _ = reconcilePendingBootstrapWorkspaceState()
 
             // Check for and repair orphaned servers (workspaceId doesn't match any workspace)
             await repairOrphanedServers()
@@ -365,8 +476,15 @@ final class ServerManager: ObservableObject {
 
         let cloudWorkspaceIDs = Set(changes.workspaces.map(\.id))
         let cloudServerIDs = Set(changes.servers.map(\.id))
-        let missingWorkspaces = workspaces.filter { !cloudWorkspaceIDs.contains($0.id) }
-        let missingServers = servers.filter { !cloudServerIDs.contains($0.id) }
+        let missingCandidates = Self.backfillCandidates(
+            localWorkspaces: workspaces,
+            localServers: servers,
+            cloudWorkspaceIDs: cloudWorkspaceIDs,
+            cloudServerIDs: cloudServerIDs,
+            transientBootstrapWorkspaceID: transientBootstrapWorkspaceID
+        )
+        let missingWorkspaces = missingCandidates.workspaces
+        let missingServers = missingCandidates.servers
 
         guard !missingWorkspaces.isEmpty || !missingServers.isEmpty else {
             return FullFetchBackfillResult(changes: changes, canReplaceLocalState: true)
@@ -432,23 +550,49 @@ final class ServerManager: ObservableObject {
             return true
         }
 
-        guard !workspaces.isEmpty else {
+        let effectiveWorkspaces = workspaces.filter { $0.id != transientBootstrapWorkspaceID }
+
+        guard !effectiveWorkspaces.isEmpty else {
             return false
         }
 
-        if workspaces.count > 1 {
+        if effectiveWorkspaces.count > 1 {
             return true
         }
 
-        guard let workspace = workspaces.first else {
+        guard let workspace = effectiveWorkspaces.first else {
             return false
         }
 
         return !isCanonicalDefaultWorkspace(workspace)
     }
 
+    private var shouldForceCloudKitFullFetchForBootstrap: Bool {
+        pendingBootstrapWorkspaceID != nil
+    }
+
     private func isCanonicalDefaultWorkspace(_ workspace: Workspace) -> Bool {
-        workspace.name == String(localized: "My Servers") &&
+        Self.isCanonicalDefaultWorkspaceCandidate(workspace)
+    }
+
+    private func createDefaultWorkspace() -> Workspace {
+        Workspace(
+            name: AppLanguage.localizedString("My Servers"),
+            colorHex: "#007AFF",
+            order: 0
+        )
+    }
+
+    static func shouldCreateBootstrapWorkspace(
+        didBootstrapDefaultWorkspace: Bool,
+        hasSeenWelcome: Bool,
+        hasLocalWorkspaces: Bool
+    ) -> Bool {
+        !(didBootstrapDefaultWorkspace || hasSeenWelcome) && !hasLocalWorkspaces
+    }
+
+    static func isCanonicalDefaultWorkspaceCandidate(_ workspace: Workspace) -> Bool {
+        AppLanguage.localizedValues(for: "My Servers").contains(workspace.name) &&
             workspace.colorHex == "#007AFF" &&
             workspace.icon == nil &&
             workspace.order == 0 &&
@@ -457,12 +601,38 @@ final class ServerManager: ObservableObject {
             workspace.lastSelectedServerId == nil
     }
 
-    private func createDefaultWorkspace() -> Workspace {
-        Workspace(
-            name: String(localized: "My Servers"),
-            colorHex: "#007AFF",
-            order: 0
-        )
+    static func backfillCandidates(
+        localWorkspaces: [Workspace],
+        localServers: [Server],
+        cloudWorkspaceIDs: Set<UUID>,
+        cloudServerIDs: Set<UUID>,
+        transientBootstrapWorkspaceID: UUID?
+    ) -> (workspaces: [Workspace], servers: [Server]) {
+        let missingWorkspaces = localWorkspaces.filter {
+            !cloudWorkspaceIDs.contains($0.id) && $0.id != transientBootstrapWorkspaceID
+        }
+
+        let missingWorkspaceIDs = Set(missingWorkspaces.map(\.id))
+        let missingServers = localServers.filter {
+            !cloudServerIDs.contains($0.id) &&
+                $0.workspaceId != transientBootstrapWorkspaceID &&
+                (cloudWorkspaceIDs.contains($0.workspaceId) || missingWorkspaceIDs.contains($0.workspaceId))
+        }
+
+        return (missingWorkspaces, missingServers)
+    }
+
+    static func workspaceForOrphanRepair(
+        existingWorkspaces: [Workspace],
+        servers: [Server],
+        fallbackWorkspace: Workspace
+    ) -> Workspace? {
+        let workspaceIDs = Set(existingWorkspaces.map(\.id))
+        guard servers.contains(where: { !workspaceIDs.contains($0.workspaceId) }) else {
+            return nil
+        }
+
+        return existingWorkspaces.first ?? fallbackWorkspace
     }
 
     private func makeWorkspaceMap(from workspaces: [Workspace]) -> [UUID: Workspace] {
@@ -562,6 +732,21 @@ final class ServerManager: ObservableObject {
         let orphanedServers = servers.filter { !workspaceIds.contains($0.workspaceId) }
 
         guard !orphanedServers.isEmpty else { return }
+
+        if workspaces.isEmpty {
+            let repairWorkspace = Self.workspaceForOrphanRepair(
+                existingWorkspaces: workspaces,
+                servers: servers,
+                fallbackWorkspace: createDefaultWorkspace()
+            )
+            guard let repairWorkspace else { return }
+
+            workspaces = [repairWorkspace]
+            if isSyncEnabled {
+                enqueuePendingWorkspaceUpsert(repairWorkspace)
+            }
+            logger.warning("Created repair workspace '\(repairWorkspace.name)' to recover orphaned servers")
+        }
 
         logger.warning("Found \(orphanedServers.count) ORPHANED servers (workspaceId doesn't match any workspace):")
         for server in orphanedServers {
@@ -688,6 +873,7 @@ final class ServerManager: ObservableObject {
             )
         }
 
+        promotePendingBootstrapWorkspaceIfNeeded(for: newServer.workspaceId, reason: "adding a server")
         servers.append(newServer)
         enqueuePendingServerUpsert(newServer)
         await persistLocalMutations(logMessage: "Added server: \(newServer.name)")
@@ -781,6 +967,7 @@ final class ServerManager: ObservableObject {
             updatedAt: Date()
         )
 
+        pendingBootstrapWorkspaceID = nil
         workspaces.append(newWorkspace)
         enqueuePendingWorkspaceUpsert(newWorkspace)
         await persistLocalMutations(logMessage: "Added workspace: \(newWorkspace.name)")
@@ -804,6 +991,7 @@ final class ServerManager: ObservableObject {
         if let index = workspaces.firstIndex(where: { $0.id == workspace.id }) {
             workspaces[index] = updatedWorkspace
         }
+        promotePendingBootstrapWorkspaceIfNeeded(for: updatedWorkspace.id, reason: "updating workspace metadata")
         enqueuePendingWorkspaceUpsert(updatedWorkspace)
         await persistLocalMutations(logMessage: "Updated workspace: \(updatedWorkspace.name)")
     }
@@ -815,6 +1003,9 @@ final class ServerManager: ObservableObject {
             try await deleteServer(server)
         }
 
+        if pendingBootstrapWorkspaceID == workspace.id {
+            pendingBootstrapWorkspaceID = nil
+        }
         workspaces.removeAll { $0.id == workspace.id }
         enqueuePendingWorkspaceDelete(workspace)
         await persistLocalMutations(logMessage: "Deleted workspace: \(workspace.name)")
@@ -822,6 +1013,7 @@ final class ServerManager: ObservableObject {
 
     func reorderWorkspaces(from source: IndexSet, to destination: Int) async throws {
         workspaces.move(fromOffsets: source, toOffset: destination)
+        pendingBootstrapWorkspaceID = nil
 
         // Update order for all workspaces
         for (index, workspace) in workspaces.enumerated() {
@@ -1141,6 +1333,11 @@ final class ServerManager: ObservableObject {
         }
 
         return updatedWorkspace
+    }
+
+    func handleAppLanguageChange() {
+        guard refreshPendingBootstrapWorkspaceLocalizationIfNeeded() else { return }
+        saveLocalData()
     }
 }
 

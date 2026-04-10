@@ -251,24 +251,20 @@ struct ServerFormSheet: View {
         )
     }
 
-    private var workspaceAvailabilityNotice: String? {
-        if let workspaceEnvironmentNotice {
-            return workspaceEnvironmentNotice
-        }
-
+    private var workspaceAvailabilityHelpText: String? {
         guard assignmentWorkspaces.count <= 1 else {
             return nil
         }
 
         if serverManager.workspaces.count <= 1 {
             if isEditing {
-                return String(localized: "No other workspaces yet. Create one to move this server.")
+                return String(localized: "No additional workspaces yet. Create one to move this server.")
             }
 
-            return String(localized: "No other workspaces yet. Create one to organize servers separately.")
+            return String(localized: "No additional workspaces yet. Create one to organize servers separately.")
         }
 
-        return String(localized: "No other workspace is available for this server right now.")
+        return String(localized: "No additional workspace is available for this server right now.")
     }
 
     private struct ConnectionTestSnapshot: Equatable {
@@ -561,8 +557,8 @@ struct ServerFormSheet: View {
                 }
             }
 
-            if let workspaceAvailabilityNotice {
-                Text(workspaceAvailabilityNotice)
+            if let workspaceEnvironmentNotice {
+                Text(workspaceEnvironmentNotice)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -576,6 +572,10 @@ struct ServerFormSheet: View {
             }
         } header: {
             sectionHeader("Workspace")
+        } footer: {
+            if let workspaceAvailabilityHelpText {
+                Text(workspaceAvailabilityHelpText)
+            }
         }
     }
 
@@ -1298,13 +1298,13 @@ struct MoveServerSheet: View {
     private var destinationAvailabilityNotice: String {
         if serverManager.workspaces.count <= 1 {
             if storeManager.isPro {
-                return String(localized: "No other workspaces yet. Create one to move this server.")
+                return String(localized: "No additional workspaces yet. Create one to move this server.")
             }
 
-            return String(localized: "No other workspaces yet. Create another workspace to move this server. Multiple workspaces are available on Pro.")
+            return String(localized: "No additional workspaces yet. Create another workspace to move this server. Multiple workspaces are available on Pro.")
         }
 
-        return String(localized: "No other workspace is available for this server right now.")
+        return String(localized: "No additional workspace is available for this server right now.")
     }
 
     private var environmentNotice: String? {
@@ -1369,10 +1369,6 @@ struct MoveServerSheet: View {
                 }
 
                 if destinationWorkspaces.isEmpty {
-                    Text(destinationAvailabilityNotice)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
                     Button {
                         showingCreateWorkspace = true
                     } label: {
@@ -1411,6 +1407,10 @@ struct MoveServerSheet: View {
                 }
             } header: {
                 sectionHeader("Move")
+            } footer: {
+                if destinationWorkspaces.isEmpty {
+                    Text(destinationAvailabilityNotice)
+                }
             }
 
             if let error {

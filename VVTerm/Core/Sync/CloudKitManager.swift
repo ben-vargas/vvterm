@@ -153,7 +153,7 @@ final class CloudKitManager: ObservableObject {
 
     // MARK: - Change Fetching (Incremental, No Queries)
 
-    func fetchChanges() async throws -> CloudKitChanges {
+    func fetchChanges(forceFullFetch: Bool = false) async throws -> CloudKitChanges {
         await ensureAccountStatusChecked()
         guard isAvailable else {
             throw CloudKitError.notAvailable
@@ -161,27 +161,33 @@ final class CloudKitManager: ObservableObject {
 
         try await ensureCustomZone()
 
-        if let task = fetchChangesTask {
+        if !forceFullFetch, let task = fetchChangesTask {
             return try await task.value
         }
 
-        let task = Task { try await self.withZoneRetry { try await self.fetchChangesFromCloudKit() } }
-        fetchChangesTask = task
-        defer { fetchChangesTask = nil }
+        let task = Task { try await self.withZoneRetry { try await self.fetchChangesFromCloudKit(forceFullFetch: forceFullFetch) } }
+        if !forceFullFetch {
+            fetchChangesTask = task
+        }
+        defer {
+            if !forceFullFetch {
+                fetchChangesTask = nil
+            }
+        }
 
         return try await task.value
     }
 
-    private func fetchChangesFromCloudKit() async throws -> CloudKitChanges {
+    private func fetchChangesFromCloudKit(forceFullFetch: Bool) async throws -> CloudKitChanges {
         syncStatus = .syncing
         defer { syncStatus = .idle }
 
-        let previousToken = loadChangeToken()
+        let previousToken = forceFullFetch ? nil : loadChangeToken()
 
         do {
             let changes = try await fetchChangesFromCloudKit(
                 previousToken: previousToken,
-                isFullFetch: previousToken == nil
+                isFullFetch: forceFullFetch || previousToken == nil
             )
             lastSyncDate = Date()
             logger.info(
