@@ -25,6 +25,12 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
     private let scrollView: NSScrollView
     private let documentView: NSView
     let surfaceView: GhosttyTerminalView
+    var shouldOwnFirstResponder = false {
+        didSet {
+            guard oldValue != shouldOwnFirstResponder else { return }
+            reconcileFirstResponderOwnership()
+        }
+    }
     private var observers: [NSObjectProtocol] = []
     private var isLiveScrolling = false
 
@@ -143,13 +149,20 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
         return window.makeFirstResponder(surfaceView)
     }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        reconcileFirstResponderOwnership()
+    }
+
     override func keyDown(with event: NSEvent) {
         ensureSurfaceViewIsFirstResponder()
         surfaceView.keyDown(with: event)
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        ensureSurfaceViewIsFirstResponder()
+        guard surfaceViewOwnsFirstResponder else {
+            return super.performKeyEquivalent(with: event)
+        }
         if surfaceView.performKeyEquivalent(with: event) {
             return true
         }
@@ -157,12 +170,12 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
     }
 
     @objc func copy(_ sender: Any?) {
-        ensureSurfaceViewIsFirstResponder()
+        guard surfaceViewOwnsFirstResponder else { return }
         surfaceView.copy(sender)
     }
 
     @objc func paste(_ sender: Any?) {
-        ensureSurfaceViewIsFirstResponder()
+        guard surfaceViewOwnsFirstResponder else { return }
         surfaceView.paste(sender)
     }
 
@@ -199,6 +212,23 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
     private func ensureSurfaceViewIsFirstResponder() {
         guard let window, window.firstResponder !== surfaceView else { return }
         window.makeFirstResponder(surfaceView)
+    }
+
+    private func reconcileFirstResponderOwnership() {
+        guard let window else { return }
+
+        if shouldOwnFirstResponder {
+            guard window.firstResponder !== surfaceView else { return }
+            window.makeFirstResponder(surfaceView)
+            return
+        }
+
+        guard window.firstResponder === surfaceView else { return }
+        window.makeFirstResponder(nil)
+    }
+
+    private var surfaceViewOwnsFirstResponder: Bool {
+        window?.firstResponder === surfaceView
     }
 
     /// Positions the surface view to fill the currently visible rectangle.

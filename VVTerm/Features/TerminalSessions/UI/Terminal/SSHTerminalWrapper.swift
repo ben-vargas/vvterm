@@ -481,12 +481,8 @@ struct SSHTerminalWrapper: NSViewRepresentable {
             return
         }
 
-        // Ensure terminal has focus
         if let scrollView = nsView as? TerminalScrollView {
-            let terminalView = scrollView.surfaceView
-            if let window = nsView.window, window.firstResponder != terminalView {
-                window.makeFirstResponder(terminalView)
-            }
+            scrollView.shouldOwnFirstResponder = isActive
         }
     }
 

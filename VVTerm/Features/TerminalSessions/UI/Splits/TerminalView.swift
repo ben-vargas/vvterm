@@ -1033,34 +1033,8 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        // Ensure terminal has focus when active
         if let scrollView = nsView as? TerminalScrollView {
-            let terminalView = scrollView.surfaceView
-
-            // Track active state change
-            let wasActive = context.coordinator.wasActive
-            context.coordinator.wasActive = isActive
-
-            if isActive {
-                // Always try to set focus when active
-                if let window = nsView.window, window.firstResponder != terminalView {
-                    // Use async to ensure view hierarchy is ready
-                    DispatchQueue.main.async {
-                        if let window = terminalView.window {
-                            window.makeFirstResponder(terminalView)
-                        }
-                    }
-                }
-            }
-
-            // If just became active, force focus
-            if isActive && !wasActive {
-                DispatchQueue.main.async {
-                    if let window = terminalView.window {
-                        window.makeFirstResponder(terminalView)
-                    }
-                }
-            }
+            scrollView.shouldOwnFirstResponder = isActive
         }
     }
 
@@ -1088,7 +1062,6 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
         var shellId: UUID?
         var shellTask: Task<Void, Never>?
         var isReusingTerminal = false
-        var wasActive = false
         private let richPasteRuntime: TerminalRichPasteRuntime
         private var lastSize: (cols: Int, rows: Int) = (0, 0)
         private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "SSHPane")
