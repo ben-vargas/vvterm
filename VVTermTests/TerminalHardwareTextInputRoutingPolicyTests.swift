@@ -144,3 +144,57 @@ struct TerminalHardwareTextInputRoutingPolicyTests {
         )
     }
 }
+
+struct TerminalKeyboardFocusPolicyTests {
+    @Test
+    func startsAutomaticWithoutReconnectRestore() {
+        let policy = TerminalKeyboardFocusPolicy()
+
+        #expect(policy.allowsAutomaticFocus)
+        #expect(policy.shouldRestoreOnReconnect == false)
+    }
+
+    @Test
+    func userDismissalDisablesAutomaticFocusUntilExplicitRefocus() {
+        var policy = TerminalKeyboardFocusPolicy()
+
+        policy.requestFocus()
+        policy.dismissForUser()
+
+        #expect(policy.allowsAutomaticFocus == false)
+        #expect(policy.shouldRestoreOnReconnect == false)
+
+        policy.requestFocus()
+
+        #expect(policy.allowsAutomaticFocus)
+        #expect(policy.shouldRestoreOnReconnect)
+    }
+
+    @Test
+    func reconnectRestoreReEnablesAutomaticFocusAfterManualDismissal() {
+        var policy = TerminalKeyboardFocusPolicy()
+
+        policy.dismissForUser()
+        policy.markForReconnect()
+
+        #expect(policy.allowsAutomaticFocus)
+        #expect(policy.shouldRestoreOnReconnect)
+    }
+
+    @Test
+    func clearingReconnectIntentPreservesFocusMode() {
+        var policy = TerminalKeyboardFocusPolicy()
+
+        policy.requestFocus()
+        policy.clearReconnect()
+
+        #expect(policy.allowsAutomaticFocus)
+        #expect(policy.shouldRestoreOnReconnect == false)
+
+        policy.dismissForUser()
+        policy.clearReconnect()
+
+        #expect(policy.allowsAutomaticFocus == false)
+        #expect(policy.shouldRestoreOnReconnect == false)
+    }
+}

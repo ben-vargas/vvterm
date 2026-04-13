@@ -1240,8 +1240,7 @@ struct iOSTerminalView: View {
     private func dismissKeyboardForCurrentSession() {
         guard let selectedId = effectiveSelectedSessionId,
               let terminal = ConnectionSessionManager.shared.peekTerminal(for: selectedId) else { return }
-        terminal.clearKeyboardFocusForReconnect()
-        _ = terminal.resignFirstResponder()
+        terminal.dismissKeyboardForUser()
     }
 
     @ViewBuilder
@@ -1489,7 +1488,7 @@ struct iOSTerminalView: View {
         let attemptFocus = { [weak terminal] in
             guard let terminal = terminal else { return }
             if terminal.window != nil {
-                _ = terminal.becomeFirstResponder()
+                terminal.requestKeyboardFocus()
             }
         }
 

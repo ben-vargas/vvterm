@@ -20,6 +20,39 @@ private struct IMEProxySnapshot: Equatable {
     var markedRange: NSRange?
 }
 
+struct TerminalKeyboardFocusPolicy {
+    private enum Mode {
+        case automatic
+        case manual
+    }
+
+    private var mode: Mode = .automatic
+    private(set) var shouldRestoreOnReconnect = false
+
+    var allowsAutomaticFocus: Bool {
+        mode == .automatic
+    }
+
+    mutating func requestFocus() {
+        mode = .automatic
+        shouldRestoreOnReconnect = true
+    }
+
+    mutating func dismissForUser() {
+        mode = .manual
+        shouldRestoreOnReconnect = false
+    }
+
+    mutating func markForReconnect() {
+        mode = .automatic
+        shouldRestoreOnReconnect = true
+    }
+
+    mutating func clearReconnect() {
+        shouldRestoreOnReconnect = false
+    }
+}
+
 @MainActor
 private final class TerminalIMEProxyTextView: UITextView {
     weak var terminalOwner: GhosttyTerminalView?
@@ -873,7 +906,6 @@ class GhosttyTerminalView: UIView {
             ghostty_surface_set_focus(surface, isFocused)
         }
         if isFocused {
-            shouldRestoreKeyboardFocusOnReconnect = true
             updateHardwareKeyboardState(reloadInputViewsIfNeeded: true)
         } else {
             stopKeyRepeat()
@@ -978,24 +1010,43 @@ class GhosttyTerminalView: UIView {
     }
 
     var acceptsTerminalInput = true
-    private(set) var shouldRestoreKeyboardFocusOnReconnect = false
+    private var keyboardFocusPolicy = TerminalKeyboardFocusPolicy()
     private var suppressDirectTouchKeyboardFocusUntil = Date.distantPast
 
+    var shouldRestoreKeyboardFocusOnReconnect: Bool {
+        keyboardFocusPolicy.shouldRestoreOnReconnect
+    }
+
+    var allowsAutomaticKeyboardFocus: Bool {
+        keyboardFocusPolicy.allowsAutomaticFocus
+    }
+
     func markKeyboardFocusForReconnect() {
-        shouldRestoreKeyboardFocusOnReconnect = true
+        keyboardFocusPolicy.markForReconnect()
     }
 
     func clearKeyboardFocusForReconnect() {
-        shouldRestoreKeyboardFocusOnReconnect = false
+        keyboardFocusPolicy.clearReconnect()
+    }
+
+    func requestKeyboardFocus() {
+        keyboardFocusPolicy.requestFocus()
+        _ = becomeFirstResponder()
+    }
+
+    func dismissKeyboardForUser(suppressDirectTouchRefocus: Bool = false) {
+        keyboardFocusPolicy.dismissForUser()
+        if suppressDirectTouchRefocus {
+            // Tapping the dismiss button can leak one direct-touch event through to the
+            // terminal view underneath. Suppress immediate touch-driven refocus briefly
+            // so the software keyboard stays dismissed on handheld devices.
+            suppressDirectTouchKeyboardFocusUntil = Date().addingTimeInterval(0.35)
+        }
+        _ = resignFirstResponder()
     }
 
     func dismissKeyboardFromToolbar() {
-        clearKeyboardFocusForReconnect()
-        // Tapping the dismiss button can leak one direct-touch event through to the
-        // terminal view underneath. Suppress immediate touch-driven refocus briefly
-        // so the software keyboard stays dismissed on handheld devices.
-        suppressDirectTouchKeyboardFocusUntil = Date().addingTimeInterval(0.35)
-        _ = resignFirstResponder()
+        dismissKeyboardForUser(suppressDirectTouchRefocus: true)
     }
 
     func shouldAutoFocusKeyboard(for touches: Set<UITouch>) -> Bool {
@@ -1143,7 +1194,7 @@ class GhosttyTerminalView: UIView {
         super.touchesBegan(touches, with: event)
         // Tap just focuses keyboard - no mouse events (avoids accidental selection)
         guard shouldAutoFocusKeyboard(for: touches) else { return }
-        _ = becomeFirstResponder()
+        requestKeyboardFocus()
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -1295,7 +1346,7 @@ class GhosttyTerminalView: UIView {
         let location = recognizer.location(in: self)
         let pos = ghosttyPoint(location)
 
-        _ = becomeFirstResponder()
+        requestKeyboardFocus()
 
         // Double-click to select word (no modifiers)
         surface.sendMousePos(.init(x: pos.x, y: pos.y, mods: []))
@@ -1317,7 +1368,7 @@ class GhosttyTerminalView: UIView {
         let location = recognizer.location(in: self)
         let pos = ghosttyPoint(location)
 
-        _ = becomeFirstResponder()
+        requestKeyboardFocus()
 
         // Triple-click to select line
         surface.sendMousePos(.init(x: pos.x, y: pos.y, mods: []))
@@ -1342,7 +1393,7 @@ class GhosttyTerminalView: UIView {
         switch recognizer.state {
         case .began:
             isSelecting = true
-            _ = becomeFirstResponder()
+            requestKeyboardFocus()
             // Start selection with click (no shift for initial position)
             surface.sendMousePos(.init(x: pos.x, y: pos.y, mods: []))
             surface.sendMouseButton(.init(action: .press, button: .left, mods: []))

@@ -422,7 +422,7 @@ final class ConnectionSessionManager: ObservableObject {
             #if os(iOS)
             guard UIApplication.shared.applicationState == .active else { return }
             #endif
-            _ = replacementTerminal.becomeFirstResponder()
+            replacementTerminal.requestKeyboardFocus()
         }
     }
 
