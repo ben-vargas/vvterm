@@ -8,9 +8,9 @@ struct RemoteFileBrowserStoreTests {
     func displayedEntriesHideDotFilesAndKeepDirectoryOrdering() {
         let defaults = makeDefaults()
         let store = RemoteFileBrowserStore(defaults: defaults)
-        let serverId = UUID()
+        let tab = makeTab()
 
-        store.updateState(for: serverId) { state in
+        store.updateState(for: tab) { state in
             state.entries = [
                 makeEntry(name: ".secret", path: "/tmp/.secret", type: .file),
                 makeEntry(name: "docs", path: "/tmp/docs", type: .directory),
@@ -21,32 +21,75 @@ struct RemoteFileBrowserStoreTests {
             state.sortDirection = .ascending
         }
 
-        #expect(store.displayedEntries(for: serverId).map(\.name) == ["docs", "readme.md"])
+        #expect(store.displayedEntries(for: tab).map(\.name) == ["docs", "readme.md"])
     }
 
     @Test
     func persistedStateLoadsIntoFreshStoreInstance() {
         let defaults = makeDefaults()
-        let serverId = UUID()
+        let tab = makeTab()
 
         let store = RemoteFileBrowserStore(defaults: defaults)
-        store.updateState(for: serverId) { state in
+        store.updateState(for: tab) { state in
             state.currentPath = "/srv/releases"
             state.sort = .size
             state.sortDirection = .ascending
             state.showHiddenFiles = true
             state.hasCustomizedHiddenFiles = true
         }
-        store.persistState(for: serverId)
+        store.persistState(for: tab.id)
 
         let reloadedStore = RemoteFileBrowserStore(defaults: defaults)
-        let persisted = reloadedStore.persistedState(for: serverId)
+        let persisted = reloadedStore.persistedState(for: tab.id)
 
         #expect(persisted.lastVisitedPath == "/srv/releases")
         #expect(persisted.sort == .size)
         #expect(persisted.sortDirection == .ascending)
         #expect(persisted.showHiddenFiles)
         #expect(persisted.hasCustomizedHiddenFiles)
+    }
+
+    @Test
+    func legacyServerScopedSnapshotIsDiscardedOnLoad() throws {
+        let defaults = makeDefaults()
+        let legacyKey = "remoteFileBrowserState.v1"
+        let legacyPayload = try JSONEncoder().encode([
+            UUID().uuidString: RemoteFileBrowserPersistedState(lastVisitedPath: "/legacy")
+        ])
+        defaults.set(legacyPayload, forKey: legacyKey)
+
+        let store = RemoteFileBrowserStore(defaults: defaults)
+
+        #expect(defaults.object(forKey: legacyKey) == nil)
+        #expect(store.persistedStates.isEmpty)
+    }
+
+    @Test
+    func initialDirectoryCandidatesPreferPersistedPathOverSeedPath() {
+        let defaults = makeDefaults()
+        let server = makeServer()
+        let tab = RemoteFileTab(serverId: server.id, seedPath: "/etc")
+
+        let store = RemoteFileBrowserStore(
+            defaults: defaults,
+            workingDirectoryProvider: { _ in "/srv/app" }
+        )
+        store.updateState(for: tab) { state in
+            state.currentPath = "/etc/nginx"
+        }
+        store.persistState(for: tab.id)
+
+        let reloadedStore = RemoteFileBrowserStore(
+            defaults: defaults,
+            workingDirectoryProvider: { _ in "/srv/app" }
+        )
+        let candidates = reloadedStore.initialDirectoryCandidates(
+            for: server,
+            tab: tab,
+            initialPath: tab.seedPath
+        )
+
+        #expect(candidates == ["/etc/nginx", "/etc", "/srv/app"])
     }
 
     private func makeEntry(name: String, path: String, type: RemoteFileType) -> RemoteFileEntry {
@@ -58,6 +101,19 @@ struct RemoteFileBrowserStoreTests {
             modifiedAt: nil,
             permissions: nil,
             symlinkTarget: nil
+        )
+    }
+
+    private func makeTab() -> RemoteFileTab {
+        RemoteFileTab(serverId: UUID(), seedPath: "/tmp")
+    }
+
+    private func makeServer() -> Server {
+        Server(
+            workspaceId: UUID(),
+            name: "Production",
+            host: "example.com",
+            username: "root"
         )
     }
 

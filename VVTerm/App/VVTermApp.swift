@@ -27,6 +27,7 @@ struct VVTermApp: App {
     #endif
     @StateObject private var appLockManager = AppLockManager.shared
     @StateObject private var storeManager = StoreManager.shared
+    @StateObject private var remoteFileTabManager = RemoteFileTabManager()
     @StateObject private var remoteFileBrowserStore = VVTermApp.makeRemoteFileBrowserStore()
     @StateObject private var terminalThemeManager = TerminalThemeManager.shared
     @StateObject private var terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager.shared
@@ -71,7 +72,10 @@ struct VVTermApp: App {
                 NoticeAppHost {
                     Group {
                         #if os(iOS)
-                        iOSContentView(fileBrowser: remoteFileBrowserStore)
+                        iOSContentView(
+                            fileTabs: remoteFileTabManager,
+                            fileBrowser: remoteFileBrowserStore
+                        )
                             .environmentObject(ghosttyApp)
                             .environmentObject(terminalThemeManager)
                             .environmentObject(terminalAccessoryPreferencesManager)
@@ -86,7 +90,10 @@ struct VVTermApp: App {
                                 WelcomeView(hasSeenWelcome: $hasSeenWelcome)
                             }
                         #else
-                        ContentView(fileBrowser: remoteFileBrowserStore)
+                        ContentView(
+                            fileTabs: remoteFileTabManager,
+                            fileBrowser: remoteFileBrowserStore
+                        )
                             .environmentObject(ghosttyApp)
                             .environmentObject(terminalThemeManager)
                             .environmentObject(terminalAccessoryPreferencesManager)
@@ -171,7 +178,7 @@ private extension VVTermApp {
 #if os(macOS)
 struct VVTermCommands: Commands {
     @Environment(\.openWindow) private var openWindow
-    @FocusedValue(\.openTerminalTab) private var openTerminalTab
+    @FocusedValue(\.serverViewTabActions) private var serverViewTabActions
     @FocusedValue(\.openLocalSSHDiscovery) private var openLocalSSHDiscovery
     @FocusedValue(\.terminalSplitActions) private var terminalSplitActions
 
@@ -192,10 +199,10 @@ struct VVTermCommands: Commands {
             Divider()
 
             Button("New Tab") {
-                openTerminalTab?()
+                serverViewTabActions?.openNew()
             }
             .keyboardShortcut("t", modifiers: .command)
-            .disabled(openTerminalTab == nil)
+            .disabled(serverViewTabActions == nil)
 
             Button(String(localized: "Discover Local Devices...")) {
                 openLocalSSHDiscovery?()
@@ -204,10 +211,10 @@ struct VVTermCommands: Commands {
             .disabled(openLocalSSHDiscovery == nil)
 
             Button("Close Tab") {
-                terminalSplitActions?.closePane()
+                serverViewTabActions?.closeSelected()
             }
             .keyboardShortcut("w", modifiers: .command)
-            .disabled(terminalSplitActions == nil)
+            .disabled(serverViewTabActions == nil)
         }
 
         CommandGroup(replacing: .appSettings) {
@@ -219,14 +226,16 @@ struct VVTermCommands: Commands {
 
         CommandGroup(after: .windowArrangement) {
             Button("Previous Tab") {
-                ConnectionSessionManager.shared.selectPreviousSession()
+                serverViewTabActions?.selectPrevious()
             }
             .keyboardShortcut("[", modifiers: [.command, .shift])
+            .disabled(serverViewTabActions == nil)
 
             Button("Next Tab") {
-                ConnectionSessionManager.shared.selectNextSession()
+                serverViewTabActions?.selectNext()
             }
             .keyboardShortcut("]", modifiers: [.command, .shift])
+            .disabled(serverViewTabActions == nil)
         }
 
         // Split commands (Pro feature)

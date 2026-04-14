@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 import os.log
 
 @MainActor
@@ -15,6 +15,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     struct ToolbarCommand: Identifiable, Sendable {
         let id = UUID()
         let serverId: UUID
+        let tabId: UUID
         let action: ToolbarCommandAction
     }
 
@@ -49,6 +50,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     }
 
     struct BrowserState: Sendable {
+        let serverId: UUID
         var currentPath: String?
         var entries: [RemoteFileEntry]
         var sort: RemoteFileSort
@@ -65,7 +67,8 @@ final class RemoteFileBrowserStore: ObservableObject {
         var viewerPayload: RemoteFileViewerPayload?
         var selectedEntryPath: String?
 
-        init(persisted: RemoteFileBrowserPersistedState) {
+        init(serverId: UUID, persisted: RemoteFileBrowserPersistedState) {
+            self.serverId = serverId
             currentPath = persisted.lastVisitedPath.map { RemoteFilePath.normalize($0) }
             entries = []
             sort = persisted.sort
@@ -100,7 +103,8 @@ final class RemoteFileBrowserStore: ObservableObject {
     @Published var pendingToolbarCommand: ToolbarCommand?
 
     let defaults: UserDefaults
-    let persistenceKey = "remoteFileBrowserState.v1"
+    let persistenceKey = "remoteFileBrowserState.v2"
+    let legacyPersistenceKey = "remoteFileBrowserState.v1"
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "RemoteFiles")
     let remoteFileServiceAdapter: SSHSFTPAdapter
     let temporaryStorage: RemoteFileTemporaryStorage
@@ -162,150 +166,188 @@ final class RemoteFileBrowserStore: ObservableObject {
         loadPersistedStates()
     }
 
-    func state(for serverId: UUID) -> BrowserState {
-        states[serverId] ?? BrowserState(persisted: persistedState(for: serverId))
+    func prepareNewTab(_ tab: RemoteFileTab, duplicating sourceTab: RemoteFileTab?) {
+        if let sourceTab {
+            let sourceState = state(for: sourceTab)
+            let sourcePersistedState = persistedState(for: sourceTab.id)
+            let sourcePath = sourceState.currentPath
+                ?? sourcePersistedState.lastVisitedPath
+                ?? sourceTab.lastKnownPath
+                ?? sourceTab.seedPath
+
+            persistedStates[tab.id.uuidString] = RemoteFileBrowserPersistedState(
+                lastVisitedPath: sourcePath,
+                sort: sourceState.sort,
+                sortDirection: sourceState.sortDirection,
+                showHiddenFiles: sourceState.showHiddenFiles,
+                hasCustomizedHiddenFiles: sourceState.hasCustomizedHiddenFiles
+            )
+            states[tab.id] = BrowserState(serverId: tab.serverId, persisted: persistedState(for: tab.id))
+            persistStates()
+            return
+        }
+
+        guard persistedStates[tab.id.uuidString] == nil else { return }
+        persistedStates[tab.id.uuidString] = RemoteFileBrowserPersistedState(
+            lastVisitedPath: tab.seedPath ?? tab.lastKnownPath
+        )
+        persistStates()
     }
 
-    func currentPath(for serverId: UUID) -> String {
-        state(for: serverId).currentPath ?? "/"
+    func state(for tab: RemoteFileTab) -> BrowserState {
+        states[tab.id] ?? BrowserState(serverId: tab.serverId, persisted: persistedState(for: tab.id))
     }
 
-    func displayedEntries(for serverId: UUID) -> [RemoteFileEntry] {
-        let state = state(for: serverId)
+    func currentPathValue(for tab: RemoteFileTab) -> String? {
+        state(for: tab).currentPath
+    }
+
+    func lastVisitedPath(for tab: RemoteFileTab) -> String? {
+        state(for: tab).currentPath
+            ?? persistedState(for: tab.id).lastVisitedPath
+            ?? tab.lastKnownPath
+            ?? tab.seedPath
+    }
+
+    func currentPath(for tab: RemoteFileTab) -> String {
+        lastVisitedPath(for: tab) ?? "/"
+    }
+
+    func displayedEntries(for tab: RemoteFileTab) -> [RemoteFileEntry] {
+        let state = state(for: tab)
         let visibleEntries = state.showHiddenFiles
             ? state.entries
             : state.entries.filter { !$0.isHidden }
         return visibleEntries.sortedForBrowser(using: state.sort, direction: state.sortDirection)
     }
 
-    func entries(for serverId: UUID) -> [RemoteFileEntry] {
-        displayedEntries(for: serverId)
+    func entries(for tab: RemoteFileTab) -> [RemoteFileEntry] {
+        displayedEntries(for: tab)
     }
 
-    func selectedEntryPath(for serverId: UUID) -> String? {
-        state(for: serverId).selectedEntryPath
+    func selectedEntryPath(for tab: RemoteFileTab) -> String? {
+        state(for: tab).selectedEntryPath
     }
 
-    func viewerPayload(for serverId: UUID) -> RemoteFileViewerPayload? {
-        state(for: serverId).viewerPayload
+    func viewerPayload(for tab: RemoteFileTab) -> RemoteFileViewerPayload? {
+        state(for: tab).viewerPayload
     }
 
-    func error(for serverId: UUID) -> RemoteFileBrowserError? {
-        state(for: serverId).error
+    func error(for tab: RemoteFileTab) -> RemoteFileBrowserError? {
+        state(for: tab).error
     }
 
-    func viewerError(for serverId: UUID) -> RemoteFileBrowserError? {
-        state(for: serverId).viewerError
+    func viewerError(for tab: RemoteFileTab) -> RemoteFileBrowserError? {
+        state(for: tab).viewerError
     }
 
-    func isLoading(for serverId: UUID) -> Bool {
-        state(for: serverId).isLoadingDirectory
+    func isLoading(for tab: RemoteFileTab) -> Bool {
+        state(for: tab).isLoadingDirectory
     }
 
-    func isLoadingViewer(for serverId: UUID) -> Bool {
-        state(for: serverId).isLoadingViewer
+    func isLoadingViewer(for tab: RemoteFileTab) -> Bool {
+        state(for: tab).isLoadingViewer
     }
 
-    func isTruncated(for serverId: UUID) -> Bool {
-        state(for: serverId).isDirectoryTruncated
+    func isTruncated(for tab: RemoteFileTab) -> Bool {
+        state(for: tab).isDirectoryTruncated
     }
 
-    func filesystemStatus(for serverId: UUID) -> RemoteFileFilesystemStatus? {
-        state(for: serverId).filesystemStatus
+    func filesystemStatus(for tab: RemoteFileTab) -> RemoteFileFilesystemStatus? {
+        state(for: tab).filesystemStatus
     }
 
-    func sort(for serverId: UUID) -> RemoteFileSort {
-        state(for: serverId).sort
+    func sort(for tab: RemoteFileTab) -> RemoteFileSort {
+        state(for: tab).sort
     }
 
-    func sortDirection(for serverId: UUID) -> RemoteFileSortDirection {
-        state(for: serverId).sortDirection
+    func sortDirection(for tab: RemoteFileTab) -> RemoteFileSortDirection {
+        state(for: tab).sortDirection
     }
 
-    func showHiddenFiles(for serverId: UUID) -> Bool {
-        state(for: serverId).showHiddenFiles
+    func showHiddenFiles(for tab: RemoteFileTab) -> Bool {
+        state(for: tab).showHiddenFiles
     }
 
-    func breadcrumbs(for serverId: UUID) -> [RemoteFileBreadcrumb] {
-        state(for: serverId).breadcrumbs
+    func breadcrumbs(for tab: RemoteFileTab) -> [RemoteFileBreadcrumb] {
+        state(for: tab).breadcrumbs
     }
 
-    func loadInitialPath(for server: Server, initialPath: String? = nil) async {
-        let currentState = state(for: server.id)
+    func loadInitialPath(for server: Server, tab: RemoteFileTab, initialPath: String? = nil) async {
+        guard tab.serverId == server.id else { return }
+
+        let currentState = state(for: tab)
         guard !currentState.isLoadingDirectory else { return }
         guard !currentState.hasLoadedDirectory else { return }
 
         let requestID = UUID()
-        directoryRequestIDs[server.id] = requestID
+        directoryRequestIDs[tab.id] = requestID
 
-        updateState(for: server.id) { state in
+        updateState(for: tab) { state in
             state.isLoadingDirectory = true
             state.error = nil
         }
 
         do {
-            let snapshot = try await resolveInitialDirectorySnapshot(for: server, initialPath: initialPath)
-            guard directoryRequestIDs[server.id] == requestID else { return }
-            applyDirectorySnapshot(snapshot, for: server.id)
+            let snapshot = try await resolveInitialDirectorySnapshot(for: server, tab: tab, initialPath: initialPath)
+            guard directoryRequestIDs[tab.id] == requestID else { return }
+            applyDirectorySnapshot(snapshot, to: tab)
         } catch {
-            guard directoryRequestIDs[server.id] == requestID else { return }
+            guard directoryRequestIDs[tab.id] == requestID else { return }
             logger.error("Initial file browser load failed for \(server.name, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            updateState(for: server.id) { state in
+            updateState(for: tab) { state in
                 state.isLoadingDirectory = false
                 state.error = RemoteFileBrowserError.map(error)
             }
         }
     }
 
-    func refresh(serverId: UUID) async {
-        guard let server = server(for: serverId) else { return }
-        let targetPath = state(for: serverId).currentPath
-            ?? persistedState(for: serverId).lastVisitedPath
-            ?? bestWorkingDirectory(for: serverId)
+    func refresh(server: Server, tab: RemoteFileTab) async {
+        guard tab.serverId == server.id else { return }
+        let targetPath = lastVisitedPath(for: tab)
+            ?? bestWorkingDirectory(for: server.id)
             ?? "/"
-        await loadDirectory(path: targetPath, for: server)
+        await loadDirectory(path: targetPath, in: tab, server: server)
     }
 
-    func refresh(server: Server) async {
-        await refresh(serverId: server.id)
+    func openBreadcrumb(_ breadcrumb: RemoteFileBreadcrumb, in tab: RemoteFileTab, server: Server) async {
+        guard tab.serverId == server.id else { return }
+        await loadDirectory(path: breadcrumb.path, in: tab, server: server)
     }
 
-    func openBreadcrumb(_ breadcrumb: RemoteFileBreadcrumb, server: Server) async {
-        await loadDirectory(path: breadcrumb.path, for: server)
+    func openDirectory(_ entry: RemoteFileEntry, in tab: RemoteFileTab, server: Server) async {
+        guard tab.serverId == server.id else { return }
+        await loadDirectory(path: entry.path, in: tab, server: server)
     }
 
-    func openDirectory(_ entry: RemoteFileEntry, serverId: UUID) async {
-        guard let server = server(for: serverId) else { return }
-        await loadDirectory(path: entry.path, for: server)
-    }
+    func activate(_ entry: RemoteFileEntry, in tab: RemoteFileTab, server: Server) async {
+        guard tab.serverId == server.id else { return }
 
-    func activate(_ entry: RemoteFileEntry, serverId: UUID) async {
         switch entry.type {
         case .directory:
-            await openDirectory(entry, serverId: serverId)
+            await openDirectory(entry, in: tab, server: server)
         case .symlink:
-            guard let server = server(for: serverId) else { return }
             do {
                 let resolvedEntry = try await withRemoteFileService(for: server) { service in
                     try await service.stat(at: entry.path)
                 }
                 if resolvedEntry.type == .directory {
-                    await loadDirectory(path: entry.path, for: server)
+                    await loadDirectory(path: entry.path, in: tab, server: server)
                 } else {
-                    selectFile(entry, serverId: serverId)
+                    selectFile(entry, in: tab)
                 }
             } catch {
-                selectFile(entry, serverId: serverId)
+                selectFile(entry, in: tab)
             }
         case .file, .other:
-            selectFile(entry, serverId: serverId)
+            selectFile(entry, in: tab)
         }
     }
 
-    func focus(_ entry: RemoteFileEntry, serverId: UUID) {
-        viewerRequestIDs[serverId] = UUID()
-        cleanupPreviewArtifact(for: state(for: serverId).viewerPayload)
-        updateState(for: serverId) { state in
+    func focus(_ entry: RemoteFileEntry, in tab: RemoteFileTab) {
+        viewerRequestIDs[tab.id] = UUID()
+        cleanupPreviewArtifact(for: state(for: tab).viewerPayload)
+        updateState(for: tab) { state in
             state.selectedEntryPath = entry.path
             state.viewerPayload = nil
             state.viewerError = nil
@@ -313,92 +355,102 @@ final class RemoteFileBrowserStore: ObservableObject {
         }
     }
 
-    func select(entry: RemoteFileEntry, server: Server) async {
-        await activate(entry, serverId: server.id)
+    func updateSort(_ sort: RemoteFileSort, for tab: RemoteFileTab) {
+        updateSort(sort, direction: sort.defaultDirection, for: tab)
     }
 
-    func updateSort(_ sort: RemoteFileSort, serverId: UUID) {
-        updateSort(sort, direction: sort.defaultDirection, serverId: serverId)
-    }
-
-    func updateSort(_ sort: RemoteFileSort, direction: RemoteFileSortDirection, serverId: UUID) {
-        updateState(for: serverId) { state in
+    func updateSort(_ sort: RemoteFileSort, direction: RemoteFileSortDirection, for tab: RemoteFileTab) {
+        updateState(for: tab) { state in
             state.sort = sort
             state.sortDirection = direction
         }
-        persistState(for: serverId)
+        persistState(for: tab.id)
     }
 
-    func setShowHiddenFiles(_ showHiddenFiles: Bool, serverId: UUID) {
-        updateState(for: serverId) { state in
+    func setShowHiddenFiles(_ showHiddenFiles: Bool, for tab: RemoteFileTab) {
+        updateState(for: tab) { state in
             state.showHiddenFiles = showHiddenFiles
             state.hasCustomizedHiddenFiles = true
         }
-        persistState(for: serverId)
+        persistState(for: tab.id)
+    }
+
+    func removeState(for tabId: UUID) {
+        removeRuntimeState(for: tabId)
+        persistedStates.removeValue(forKey: tabId.uuidString)
+        persistStates()
+    }
+
+    func removeRuntimeState(for tabId: UUID) {
+        directoryRequestIDs.removeValue(forKey: tabId)
+        viewerRequestIDs.removeValue(forKey: tabId)
+        temporaryStorage.removePreviewArtifact(for: states[tabId]?.viewerPayload)
+        states.removeValue(forKey: tabId)
+
+        if pendingToolbarCommand?.tabId == tabId {
+            pendingToolbarCommand = nil
+        }
     }
 
     func disconnect(serverId: UUID) {
-        directoryRequestIDs.removeValue(forKey: serverId)
-        viewerRequestIDs.removeValue(forKey: serverId)
-        temporaryStorage.removePreviewArtifact(for: states[serverId]?.viewerPayload)
-        states.removeValue(forKey: serverId)
+        let affectedTabIDs = Set(
+            states.compactMap { tabId, state in
+                state.serverId == serverId ? tabId : nil
+            }
+        )
+
+        for tabId in affectedTabIDs {
+            removeRuntimeState(for: tabId)
+        }
+
         remoteFileServiceAdapter.disconnect(serverId: serverId)
     }
 
-    func goUp(serverId: UUID) async {
-        guard let server = server(for: serverId) else { return }
-        let currentPath = state(for: serverId).currentPath ?? "/"
+    func goUp(in tab: RemoteFileTab, server: Server) async {
+        guard tab.serverId == server.id else { return }
+        let currentPath = currentPath(for: tab)
         let parentPath = RemoteFilePath.parent(of: currentPath)
         guard parentPath != currentPath else { return }
-        await loadDirectory(path: parentPath, for: server)
+        await loadDirectory(path: parentPath, in: tab, server: server)
     }
 
-    func goUp(server: Server) async {
-        await goUp(serverId: server.id)
-    }
+    func loadDirectory(path: String, in tab: RemoteFileTab, server: Server) async {
+        guard tab.serverId == server.id else { return }
 
-    // MARK: - Private
-
-    func loadDirectory(path: String, for server: Server) async {
         let normalizedPath = RemoteFilePath.normalize(path)
         let requestID = UUID()
-        directoryRequestIDs[server.id] = requestID
-        cleanupPreviewArtifact(for: state(for: server.id).viewerPayload)
+        directoryRequestIDs[tab.id] = requestID
+        cleanupPreviewArtifact(for: state(for: tab).viewerPayload)
 
-        updateState(for: server.id) { state in
+        updateState(for: tab) { state in
             state.isLoadingDirectory = true
             state.error = nil
             state.viewerError = nil
             state.viewerPayload = nil
             state.selectedEntryPath = nil
         }
-        viewerRequestIDs.removeValue(forKey: server.id)
+        viewerRequestIDs.removeValue(forKey: tab.id)
 
         do {
             let snapshot = try await directorySnapshot(path: normalizedPath, for: server)
-            guard directoryRequestIDs[server.id] == requestID else { return }
-            applyDirectorySnapshot(snapshot, for: server.id)
+            guard directoryRequestIDs[tab.id] == requestID else { return }
+            applyDirectorySnapshot(snapshot, to: tab)
         } catch {
-            guard directoryRequestIDs[server.id] == requestID else { return }
+            guard directoryRequestIDs[tab.id] == requestID else { return }
             logger.error("Directory load failed for \(normalizedPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            updateState(for: server.id) { state in
+            updateState(for: tab) { state in
                 state.isLoadingDirectory = false
                 state.error = RemoteFileBrowserError.map(error)
             }
         }
     }
 
-    func resolveInitialDirectorySnapshot(for server: Server, initialPath: String?) async throws -> DirectorySnapshot {
-        let persistedPath = persistedState(for: server.id).lastVisitedPath
-        let workingDirectory = bestWorkingDirectory(for: server.id)
-
-        let candidates = [initialPath, persistedPath, workingDirectory]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .map { RemoteFilePath.normalize($0) }
-
-        for candidate in Array(NSOrderedSet(array: candidates)) {
-            guard let path = candidate as? String else { continue }
+    func resolveInitialDirectorySnapshot(
+        for server: Server,
+        tab: RemoteFileTab,
+        initialPath: String?
+    ) async throws -> DirectorySnapshot {
+        for path in initialDirectoryCandidates(for: server, tab: tab, initialPath: initialPath) {
             do {
                 return try await directorySnapshot(path: path, for: server)
             } catch {
@@ -410,6 +462,28 @@ final class RemoteFileBrowserStore: ObservableObject {
             try await service.resolveHomeDirectory()
         }
         return try await directorySnapshot(path: homePath, for: server)
+    }
+
+    func initialDirectoryCandidates(
+        for server: Server,
+        tab: RemoteFileTab,
+        initialPath: String?
+    ) -> [String] {
+        let persistedPath = persistedState(for: tab.id).lastVisitedPath
+        let workingDirectory = bestWorkingDirectory(for: server.id)
+        var seenPaths = Set<String>()
+
+        return [
+            persistedPath,
+            tab.lastKnownPath,
+            initialPath,
+            tab.seedPath,
+            workingDirectory
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .map { RemoteFilePath.normalize($0) }
+        .filter { seenPaths.insert($0).inserted }
     }
 
     private func directorySnapshot(path: String, for server: Server) async throws -> DirectorySnapshot {
@@ -428,8 +502,8 @@ final class RemoteFileBrowserStore: ObservableObject {
         )
     }
 
-    func applyDirectorySnapshot(_ snapshot: DirectorySnapshot, for serverId: UUID) {
-        updateState(for: serverId) { state in
+    func applyDirectorySnapshot(_ snapshot: DirectorySnapshot, to tab: RemoteFileTab) {
+        updateState(for: tab) { state in
             state.currentPath = snapshot.path
             state.entries = snapshot.entries
             state.hasLoadedDirectory = true
@@ -438,11 +512,11 @@ final class RemoteFileBrowserStore: ObservableObject {
             state.isLoadingDirectory = false
             state.error = nil
         }
-        persistState(for: serverId)
+        persistState(for: tab.id)
     }
 
-    func selectFile(_ entry: RemoteFileEntry, serverId: UUID) {
-        focus(entry, serverId: serverId)
+    func selectFile(_ entry: RemoteFileEntry, in tab: RemoteFileTab) {
+        focus(entry, in: tab)
     }
 
     func withRemoteFileService<T>(
@@ -456,10 +530,14 @@ final class RemoteFileBrowserStore: ObservableObject {
         workingDirectoryProvider(serverId)
     }
 
-    func updateState(for serverId: UUID, mutation: (inout BrowserState) -> Void) {
-        var state = states[serverId] ?? BrowserState(persisted: persistedState(for: serverId))
+    func updateState(for tab: RemoteFileTab, mutation: (inout BrowserState) -> Void) {
+        updateState(for: tab.id, serverId: tab.serverId, mutation: mutation)
+    }
+
+    func updateState(for tabId: UUID, serverId: UUID, mutation: (inout BrowserState) -> Void) {
+        var state = states[tabId] ?? BrowserState(serverId: serverId, persisted: persistedState(for: tabId))
         mutation(&state)
-        states[serverId] = state
+        states[tabId] = state
     }
 
     func server(for serverId: UUID) -> Server? {

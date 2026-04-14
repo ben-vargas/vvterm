@@ -10,7 +10,9 @@ import UIKit
 struct RemoteFileBrowserScreen: View {
     @ObservedObject var browser: RemoteFileBrowserStore
     let server: Server
+    let fileTab: RemoteFileTab
     let initialPath: String?
+    let onCurrentPathChange: @MainActor (String?) -> Void
 
     @Environment(\.colorScheme) var colorScheme
     @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) var terminalThemeName = "Aizen Dark"
@@ -112,33 +114,47 @@ struct RemoteFileBrowserScreen: View {
     }
     #endif
 
+    init(
+        browser: RemoteFileBrowserStore,
+        server: Server,
+        fileTab: RemoteFileTab,
+        initialPath: String? = nil,
+        onCurrentPathChange: @escaping @MainActor (String?) -> Void = { _ in }
+    ) {
+        self.browser = browser
+        self.server = server
+        self.fileTab = fileTab
+        self.initialPath = initialPath
+        self.onCurrentPathChange = onCurrentPathChange
+    }
+
     var snapshot: Snapshot {
-        let entries = browser.entries(for: server.id)
-        let viewerPayload = browser.viewerPayload(for: server.id)
-        let selectedPath = browser.selectedEntryPath(for: server.id) ?? viewerPayload?.entry.path
+        let entries = browser.entries(for: fileTab)
+        let viewerPayload = browser.viewerPayload(for: fileTab)
+        let selectedPath = browser.selectedEntryPath(for: fileTab) ?? viewerPayload?.entry.path
         let selectedEntry = entries.first(where: { $0.path == selectedPath }) ?? viewerPayload?.entry
 
         return Snapshot(
-            currentPath: browser.currentPath(for: server.id),
-            breadcrumbs: browser.breadcrumbs(for: server.id),
+            currentPath: browser.currentPath(for: fileTab),
+            breadcrumbs: browser.breadcrumbs(for: fileTab),
             entries: entries,
             selectedEntry: selectedEntry,
             viewerPayload: viewerPayload,
-            directoryError: browser.error(for: server.id),
-            viewerError: browser.viewerError(for: server.id),
-            isLoadingDirectory: browser.isLoading(for: server.id),
-            isLoadingViewer: browser.isLoadingViewer(for: server.id),
-            sort: browser.sort(for: server.id),
-            sortDirection: browser.sortDirection(for: server.id),
-            showHiddenFiles: browser.showHiddenFiles(for: server.id),
-            isTruncated: browser.isTruncated(for: server.id),
+            directoryError: browser.error(for: fileTab),
+            viewerError: browser.viewerError(for: fileTab),
+            isLoadingDirectory: browser.isLoading(for: fileTab),
+            isLoadingViewer: browser.isLoadingViewer(for: fileTab),
+            sort: browser.sort(for: fileTab),
+            sortDirection: browser.sortDirection(for: fileTab),
+            showHiddenFiles: browser.showHiddenFiles(for: fileTab),
+            isTruncated: browser.isTruncated(for: fileTab),
             selectedPath: selectedPath,
-            filesystemStatus: browser.filesystemStatus(for: server.id)
+            filesystemStatus: browser.filesystemStatus(for: fileTab)
         )
     }
 
     var initialLoadTaskID: String {
-        "\(server.id.uuidString):\(initialPath ?? "")"
+        "\(server.id.uuidString):\(fileTab.id.uuidString):\(initialPath ?? "")"
     }
 
     var remoteRowDropTypeIdentifiers: [String] {
@@ -218,13 +234,13 @@ struct RemoteFileBrowserScreen: View {
 
     func moveSheet(entry: RemoteFileEntry) -> some View {
         let fileBrowser = browser
-        let serverId = server.id
+        let fileServer = server
 
         return RemoteFileMoveSheet(
             entry: entry,
             destinationDirectory: $moveDestinationDirectory,
             onLoadDirectories: { path in
-                try await fileBrowser.listDirectories(at: path, serverId: serverId)
+                try await fileBrowser.listDirectories(at: path, server: fileServer)
             },
             isSubmitting: isMoveSubmitting,
             onCancel: resetMovePrompt,
@@ -299,7 +315,10 @@ struct RemoteFileBrowserScreen: View {
             }
         }
         .task(id: initialLoadTaskID) {
-            await browser.loadInitialPath(for: server, initialPath: initialPath)
+            await browser.loadInitialPath(for: server, tab: fileTab, initialPath: initialPath)
+        }
+        .onAppear {
+            onCurrentPathChange(browser.lastVisitedPath(for: fileTab))
         }
         #if os(macOS)
         .fileImporter(
@@ -386,6 +405,7 @@ struct RemoteFileBrowserScreen: View {
             permissionSheet(entry: entry)
         }
         .onChange(of: snapshot.currentPath) { newValue in
+            onCurrentPathChange(newValue)
             if let destination = newFolderDestinationPath, destination != newValue {
                 resetNewFolderPrompt()
             }
@@ -771,7 +791,11 @@ struct RemoteFileBrowserScreen: View {
     }
 
     func handlePendingToolbarCommand() {
-        guard let command = browser.pendingToolbarCommand, command.serverId == server.id else { return }
+        guard let command = browser.pendingToolbarCommand,
+              command.serverId == server.id,
+              command.tabId == fileTab.id else {
+            return
+        }
 
         switch command.action {
         case .upload(let destinationPath):
@@ -811,7 +835,7 @@ struct RemoteFileBrowserScreen: View {
         switch entry.type {
         case .directory:
             Button {
-                Task { await browser.openDirectory(entry, serverId: server.id) }
+                Task { await browser.openDirectory(entry, in: fileTab, server: server) }
             } label: {
                 Label(String(localized: "Open"), systemImage: "folder")
             }
@@ -978,7 +1002,7 @@ struct RemoteFileBrowserScreen: View {
             try await browser.downloadFile(
                 at: entry.path,
                 to: temporaryURL,
-                serverId: server.id
+                server: server
             )
 
             await MainActor.run {
@@ -1004,7 +1028,7 @@ struct RemoteFileBrowserScreen: View {
             try await browser.downloadFile(
                 at: entry.path,
                 to: temporaryURL,
-                serverId: server.id
+                server: server
             )
 
             await MainActor.run {
@@ -1029,7 +1053,7 @@ struct RemoteFileBrowserScreen: View {
     func beginRename(_ entry: RemoteFileEntry) {
         #if os(macOS)
         macOSSelectedPaths = [entry.id]
-        browser.focus(entry, serverId: server.id)
+        browser.focus(entry, in: fileTab)
         macOSInlineEditor = .rename(
             entryPath: entry.path,
             originalName: entry.name,
@@ -1072,9 +1096,9 @@ struct RemoteFileBrowserScreen: View {
 
     func previewEntry(_ entry: RemoteFileEntry) {
         Task {
-            await browser.activate(entry, serverId: server.id)
+            await browser.activate(entry, in: fileTab, server: server)
             #if os(iOS)
-            if browser.selectedEntryPath(for: server.id) == entry.path {
+            if browser.selectedEntryPath(for: fileTab) == entry.path {
                 await MainActor.run {
                     presentedPreviewPath = entry.path
                 }
@@ -1143,7 +1167,7 @@ struct RemoteFileBrowserScreen: View {
                 let candidates = try await browser.prepareLocalUploadPlan(
                     at: urls,
                     to: destinationPath,
-                    serverId: server.id
+                    server: server
                 )
                 let plans = candidates.map { candidate in
                     RemoteFileBrowserStore.LocalUploadPlanItem(
@@ -1160,7 +1184,8 @@ struct RemoteFileBrowserScreen: View {
                         try await browser.uploadFiles(
                             plans: plans,
                             to: destinationPath,
-                            serverId: server.id,
+                            in: fileTab,
+                            server: server,
                             onProgress: onProgress
                         )
                     }
@@ -1275,7 +1300,7 @@ struct RemoteFileBrowserScreen: View {
             Task {
                 do {
                     let temporaryURL = try preparedTemporaryURL.get()
-                    try await browser.downloadItem(entry, to: temporaryURL, serverId: server.id)
+                    try await browser.downloadItem(entry, to: temporaryURL, server: server)
                     guard !progress.isCancelled else {
                         completion(nil, false, CancellationError())
                         return
@@ -1455,7 +1480,8 @@ struct RemoteFileBrowserScreen: View {
             try await browser.renameItem(
                 at: sourceEntry.path,
                 to: destinationPath,
-                serverId: server.id
+                in: fileTab,
+                server: server
             )
             onProgress?(
                 RemoteFileBrowserStore.TransferProgress(
@@ -1498,7 +1524,8 @@ struct RemoteFileBrowserScreen: View {
             uniqueEntries,
             from: sourceServerId,
             to: destinationDirectoryPath,
-            destinationServerId: server.id,
+            destinationTab: fileTab,
+            destinationServer: server,
             onProgress: onProgress
         )
     }
@@ -1530,7 +1557,8 @@ struct RemoteFileBrowserScreen: View {
                 try await browser.createDirectory(
                     named: folderName,
                     in: destinationPath,
-                    serverId: server.id
+                    tab: fileTab,
+                    server: server
                 )
             },
             onSuccess: { _ in
@@ -1561,7 +1589,8 @@ struct RemoteFileBrowserScreen: View {
                 try await browser.renameItem(
                     at: entry.path,
                     to: destinationPath,
-                    serverId: server.id
+                    in: fileTab,
+                    server: server
                 )
                 return true
             },
@@ -1595,7 +1624,8 @@ struct RemoteFileBrowserScreen: View {
                 try await browser.renameItem(
                     at: entry.path,
                     to: destinationPath,
-                    serverId: server.id
+                    in: fileTab,
+                    server: server
                 )
                 return true
             },
@@ -1623,7 +1653,8 @@ struct RemoteFileBrowserScreen: View {
             for entry in entries {
                 try await browser.deleteItem(
                     at: entry.path,
-                    serverId: server.id,
+                    in: fileTab,
+                    server: server,
                     type: entry.type
                 )
             }
@@ -1667,12 +1698,13 @@ struct RemoteFileBrowserScreen: View {
             if snapshot.currentPath != destinationPath {
                 await browser.openBreadcrumb(
                     RemoteFileBreadcrumb(title: "", path: destinationPath),
+                    in: fileTab,
                     server: server
                 )
             }
 
             let folderName = await MainActor.run {
-                uniqueMacOSFolderName(in: browser.entries(for: server.id))
+                uniqueMacOSFolderName(in: browser.entries(for: fileTab))
             }
 
             let createdPath = RemoteFilePath.appending(folderName, to: destinationPath)
@@ -1681,12 +1713,13 @@ struct RemoteFileBrowserScreen: View {
                 try await browser.createDirectory(
                     named: folderName,
                     in: destinationPath,
-                    serverId: server.id
+                    tab: fileTab,
+                    server: server
                 )
 
                 await MainActor.run {
                     macOSSelectedPaths = [createdPath]
-                    browser.clearViewer(serverId: server.id)
+                    browser.clearViewer(for: fileTab)
                     macOSInlineEditor = .rename(
                         entryPath: createdPath,
                         originalName: folderName,
@@ -1731,7 +1764,8 @@ struct RemoteFileBrowserScreen: View {
                         try await browser.createDirectory(
                             named: validatedName,
                             in: parentPath,
-                            serverId: server.id
+                            tab: fileTab,
+                            server: server
                         )
                     },
                     onSuccess: { _ in
@@ -1781,7 +1815,8 @@ struct RemoteFileBrowserScreen: View {
                         try await browser.renameItem(
                             at: entryPath,
                             to: destinationPath,
-                            serverId: server.id
+                            in: fileTab,
+                            server: server
                         )
                     },
                     onSuccess: { _ in
@@ -1812,10 +1847,10 @@ struct RemoteFileBrowserScreen: View {
 
     func selectMacOSEntry(at path: String) {
         macOSSelectedPaths = [path]
-        if let entry = browser.entries(for: server.id).first(where: { $0.path == path }) {
-            browser.focus(entry, serverId: server.id)
+        if let entry = browser.entries(for: fileTab).first(where: { $0.path == path }) {
+            browser.focus(entry, in: fileTab)
         } else {
-            browser.clearViewer(serverId: server.id)
+            browser.clearViewer(for: fileTab)
         }
     }
 
@@ -1847,7 +1882,7 @@ struct RemoteFileBrowserScreen: View {
         performOperation(
             operation: {
                 let requestedPermissions = permissionFileTypeBits | permissionPreservedBits | permissionDraft.accessBits
-                try await browser.setPermissions(entry, permissions: requestedPermissions, serverId: server.id)
+                try await browser.setPermissions(entry, permissions: requestedPermissions, in: fileTab, server: server)
             },
             onSuccess: { _ in
                 resetPermissionEditor()
@@ -1972,7 +2007,7 @@ struct RemoteFileBrowserScreen: View {
             try await browser.downloadFile(
                 at: entry.path,
                 to: destinationURL,
-                serverId: server.id
+                server: server
             )
         }
     }

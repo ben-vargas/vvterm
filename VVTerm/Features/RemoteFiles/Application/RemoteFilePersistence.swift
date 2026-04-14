@@ -1,7 +1,12 @@
+import Combine
 import Foundation
 
 extension RemoteFileBrowserStore {
     func loadPersistedStates() {
+        if defaults.object(forKey: legacyPersistenceKey) != nil {
+            defaults.removeObject(forKey: legacyPersistenceKey)
+        }
+
         guard let data = defaults.data(forKey: persistenceKey),
               let decoded = try? JSONDecoder().decode([String: RemoteFileBrowserPersistedState].self, from: data) else {
             persistedStates = [:]
@@ -10,20 +15,24 @@ extension RemoteFileBrowserStore {
         persistedStates = decoded
     }
 
-    func persistedState(for serverId: UUID) -> RemoteFileBrowserPersistedState {
-        persistedStates[serverId.uuidString] ?? .init()
+    func persistedState(for tabId: UUID) -> RemoteFileBrowserPersistedState {
+        persistedStates[tabId.uuidString] ?? .init()
     }
 
-    func persistState(for serverId: UUID) {
-        let state = states[serverId] ?? BrowserState(persisted: persistedState(for: serverId))
-        persistedStates[serverId.uuidString] = RemoteFileBrowserPersistedState(
-            lastVisitedPath: state.currentPath,
-            sort: state.sort,
-            sortDirection: state.sortDirection,
-            showHiddenFiles: state.showHiddenFiles,
-            hasCustomizedHiddenFiles: state.hasCustomizedHiddenFiles
+    func persistState(for tabId: UUID) {
+        let fallback = persistedState(for: tabId)
+        let state = states[tabId]
+        persistedStates[tabId.uuidString] = RemoteFileBrowserPersistedState(
+            lastVisitedPath: state?.currentPath ?? fallback.lastVisitedPath,
+            sort: state?.sort ?? fallback.sort,
+            sortDirection: state?.sortDirection ?? fallback.sortDirection,
+            showHiddenFiles: state?.showHiddenFiles ?? fallback.showHiddenFiles,
+            hasCustomizedHiddenFiles: state?.hasCustomizedHiddenFiles ?? fallback.hasCustomizedHiddenFiles
         )
+        persistStates()
+    }
 
+    func persistStates() {
         guard let data = try? JSONEncoder().encode(persistedStates) else { return }
         defaults.set(data, forKey: persistenceKey)
     }

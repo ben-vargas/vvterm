@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 extension RemoteFileBrowserStore {
@@ -35,11 +36,11 @@ extension RemoteFileBrowserStore {
     func upload(
         data: Data,
         to remotePath: String,
-        serverId: UUID,
+        server: Server,
         permissions: Int32 = 0o600,
         strategy: SSHUploadStrategy = .automatic
     ) async throws {
-        try await performMutation(serverId: serverId) { service in
+        try await withRemoteFileService(for: server) { service in
             try await service.upload(
                 data,
                 to: remotePath,
@@ -52,7 +53,7 @@ extension RemoteFileBrowserStore {
     func upload(
         fileAt localURL: URL,
         to remoteDirectoryPath: String,
-        serverId: UUID,
+        server: Server,
         permissions: Int32 = 0o600,
         strategy: SSHUploadStrategy = .automatic
     ) async throws {
@@ -61,7 +62,7 @@ extension RemoteFileBrowserStore {
         try await upload(
             data: data,
             to: remotePath,
-            serverId: serverId,
+            server: server,
             permissions: permissions,
             strategy: strategy
         )
@@ -69,10 +70,11 @@ extension RemoteFileBrowserStore {
 
     func createDirectory(
         at remotePath: String,
-        serverId: UUID,
+        in tab: RemoteFileTab,
+        server: Server,
         permissions: Int32 = 0o755
     ) async throws {
-        try await performMutation(serverId: serverId) { service in
+        try await performMutation(in: tab, server: server) { service in
             try await service.createDirectory(at: remotePath, permissions: permissions)
         }
     }
@@ -80,53 +82,69 @@ extension RemoteFileBrowserStore {
     func createDirectory(
         named directoryName: String,
         in remoteDirectoryPath: String,
-        serverId: UUID,
+        tab: RemoteFileTab,
+        server: Server,
         permissions: Int32 = 0o755
     ) async throws {
         let remotePath = RemoteFilePath.appending(
             try validatedRemoteName(directoryName),
             to: remoteDirectoryPath
         )
-        try await createDirectory(at: remotePath, serverId: serverId, permissions: permissions)
+        try await createDirectory(at: remotePath, in: tab, server: server, permissions: permissions)
     }
 
     func renameItem(
         at sourcePath: String,
         to destinationPath: String,
-        serverId: UUID
+        in tab: RemoteFileTab,
+        server: Server
     ) async throws {
-        try await performMutation(serverId: serverId) { service in
+        try await performMutation(in: tab, server: server) { service in
             try await service.renameItem(at: sourcePath, to: destinationPath)
         }
     }
 
-    func deleteFile(at remotePath: String, serverId: UUID) async throws {
-        try await performMutation(serverId: serverId) { service in
+    func deleteFile(
+        at remotePath: String,
+        in tab: RemoteFileTab,
+        server: Server
+    ) async throws {
+        try await performMutation(in: tab, server: server) { service in
             try await service.deleteFile(at: remotePath)
         }
     }
 
-    func deleteDirectory(at remotePath: String, serverId: UUID) async throws {
-        try await performMutation(serverId: serverId) { [self] service in
+    func deleteDirectory(
+        at remotePath: String,
+        in tab: RemoteFileTab,
+        server: Server
+    ) async throws {
+        try await performMutation(in: tab, server: server) { [self] service in
             try await deleteDirectoryRecursively(at: remotePath, using: service)
         }
     }
 
     func deleteItem(
         at remotePath: String,
-        serverId: UUID,
+        in tab: RemoteFileTab,
+        server: Server,
         type: RemoteFileType? = nil
     ) async throws {
         switch type {
         case .directory:
-            try await deleteDirectory(at: remotePath, serverId: serverId)
+            try await deleteDirectory(at: remotePath, in: tab, server: server)
         case .file, .symlink, .other, nil:
-            try await deleteFile(at: remotePath, serverId: serverId)
+            try await deleteFile(at: remotePath, in: tab, server: server)
         }
     }
 
-    func setPermissions(_ entry: RemoteFileEntry, permissions: UInt32, serverId: UUID) async throws {
-        guard let server = server(for: serverId) else {
+    func setPermissions(
+        _ entry: RemoteFileEntry,
+        permissions: UInt32,
+        in tab: RemoteFileTab,
+        server: Server
+    ) async throws {
+        guard tab.serverId == server.id else {
             throw RemoteFileBrowserError.disconnected
         }
 
@@ -145,7 +163,7 @@ extension RemoteFileBrowserStore {
             )
         }
 
-        updateState(for: serverId) { state in
+        updateState(for: tab) { state in
             if let index = state.entries.firstIndex(where: { $0.path == entry.path }) {
                 state.entries[index] = updatedEntry
             }
@@ -170,14 +188,16 @@ extension RemoteFileBrowserStore {
     func uploadFiles(
         at urls: [URL],
         to directoryPath: String,
-        serverId: UUID,
+        in tab: RemoteFileTab,
+        server: Server,
         onProgress: (@MainActor @Sendable (TransferProgress) -> Void)? = nil
     ) async throws {
         let plans = urls.map { LocalUploadPlanItem(sourceURL: $0, remoteName: $0.lastPathComponent) }
         try await uploadFiles(
             plans: plans,
             to: directoryPath,
-            serverId: serverId,
+            in: tab,
+            server: server,
             onProgress: onProgress
         )
     }
@@ -185,10 +205,11 @@ extension RemoteFileBrowserStore {
     func uploadFiles(
         plans: [LocalUploadPlanItem],
         to directoryPath: String,
-        serverId: UUID,
+        in tab: RemoteFileTab,
+        server: Server,
         onProgress: (@MainActor @Sendable (TransferProgress) -> Void)? = nil
     ) async throws {
-        guard let server = server(for: serverId) else {
+        guard tab.serverId == server.id else {
             throw RemoteFileBrowserError.disconnected
         }
 
@@ -212,19 +233,15 @@ extension RemoteFileBrowserStore {
             }
         }
 
-        clearViewer(serverId: serverId)
-        await refresh(serverId: serverId)
+        clearViewer(for: tab)
+        await refresh(server: server, tab: tab)
     }
 
     func prepareLocalUploadPlan(
         at urls: [URL],
         to directoryPath: String,
-        serverId: UUID
+        server: Server
     ) async throws -> [LocalUploadPlanCandidate] {
-        guard let server = server(for: serverId) else {
-            throw RemoteFileBrowserError.disconnected
-        }
-
         let destinationDirectory = RemoteFilePath.normalize(directoryPath)
         return try await withSecurityScopedAccess(to: urls) {
             try await withRemoteFileService(for: server) { service in
@@ -260,11 +277,12 @@ extension RemoteFileBrowserStore {
         _ entries: [RemoteFileEntry],
         from sourceServerId: UUID,
         to destinationDirectoryPath: String,
-        destinationServerId: UUID,
+        destinationTab: RemoteFileTab,
+        destinationServer: Server,
         onProgress: (@MainActor @Sendable (TransferProgress) -> Void)? = nil
     ) async throws {
-        guard let sourceServer = server(for: sourceServerId),
-              let destinationServer = server(for: destinationServerId) else {
+        guard destinationTab.serverId == destinationServer.id,
+              let sourceServer = server(for: sourceServerId) else {
             throw RemoteFileBrowserError.disconnected
         }
 
@@ -294,19 +312,15 @@ extension RemoteFileBrowserStore {
             }
         }
 
-        clearViewer(serverId: destinationServerId)
-        await refresh(serverId: destinationServerId)
+        clearViewer(for: destinationTab)
+        await refresh(server: destinationServer, tab: destinationTab)
     }
 
     func downloadFile(
         at remotePath: String,
         to localURL: URL,
-        serverId: UUID
+        server: Server
     ) async throws {
-        guard let server = server(for: serverId) else {
-            throw RemoteFileBrowserError.disconnected
-        }
-
         try await withRemoteFileService(for: server) { service in
             try await service.downloadFile(at: remotePath, to: localURL)
         }
@@ -315,22 +329,17 @@ extension RemoteFileBrowserStore {
     func downloadItem(
         _ entry: RemoteFileEntry,
         to localURL: URL,
-        serverId: UUID
+        server: Server
     ) async throws {
-        guard let server = server(for: serverId) else {
-            throw RemoteFileBrowserError.disconnected
-        }
-
         try await withRemoteFileService(for: server) { service in
             try await self.downloadItem(entry, to: localURL, using: service)
         }
     }
 
-    func listDirectories(at path: String, serverId: UUID) async throws -> [RemoteFileEntry] {
-        guard let server = server(for: serverId) else {
-            throw RemoteFileBrowserError.disconnected
-        }
-
+    func listDirectories(
+        at path: String,
+        server: Server
+    ) async throws -> [RemoteFileEntry] {
         let normalizedPath = RemoteFilePath.normalize(path)
         let entries = try await withRemoteFileService(for: server) { service in
             try await service.listDirectory(at: normalizedPath, maxEntries: Self.directoryEntryLimit)
@@ -341,17 +350,18 @@ extension RemoteFileBrowserStore {
     }
 
     func performMutation(
-        serverId: UUID,
+        in tab: RemoteFileTab,
+        server: Server,
         operation: @escaping (any RemoteFileService) async throws -> Void
     ) async throws {
-        guard let server = server(for: serverId) else {
+        guard tab.serverId == server.id else {
             throw RemoteFileBrowserError.disconnected
         }
 
         try await withRemoteFileService(for: server) { service in
             try await operation(service)
         }
-        await refresh(serverId: serverId)
+        await refresh(server: server, tab: tab)
     }
 
     func deleteDirectoryRecursively(

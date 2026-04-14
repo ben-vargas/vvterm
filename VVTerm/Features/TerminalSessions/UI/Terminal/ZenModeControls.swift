@@ -300,13 +300,19 @@ struct MacOSZenModePanel: View {
     let selectedView: String
     let selectedViewBinding: Binding<String>
     let viewTabs: [ConnectionViewTab]
-    let tabs: [TerminalTab]
-    let selectedTabId: Binding<UUID?>
+    let terminalTabs: [TerminalTab]
+    let selectedTerminalTabId: Binding<UUID?>
     let paneState: (TerminalTab) -> TerminalPaneState?
+    let fileTabs: [RemoteFileTab]
+    let selectedFileTabId: Binding<UUID?>
+    let fileTabTitle: (RemoteFileTab) -> String
     let onPreviousTab: () -> Void
     let onNextTab: () -> Void
-    let onNewTab: () -> Void
-    let onCloseTab: (TerminalTab) -> Void
+    let onNewTerminalTab: () -> Void
+    let onCloseTerminalTab: (TerminalTab) -> Void
+    let onNewFileTab: () -> Void
+    let onCloseFileTab: (RemoteFileTab) -> Void
+    let onSelectFileTab: (RemoteFileTab) -> Void
     let onSplitRight: () -> Void
     let onSplitDown: () -> Void
     let onClosePane: () -> Void
@@ -362,27 +368,44 @@ struct MacOSZenModePanel: View {
                     onPreviousTab()
                 }
                 .frame(maxWidth: .infinity)
-                .disabled(tabs.count <= 1)
+                .disabled(activeTabCount <= 1)
 
                 ZenModeActionButton(title: "Next Tab", systemImage: "chevron.right") {
                     onNextTab()
                 }
                 .frame(maxWidth: .infinity)
-                .disabled(tabs.count <= 1)
+                .disabled(activeTabCount <= 1)
             }
 
             ZenModeActionButton(title: "New Tab", systemImage: "plus") {
-                onNewTab()
+                if selectedView == ConnectionViewTab.files.id {
+                    onNewFileTab()
+                } else {
+                    onNewTerminalTab()
+                }
             }
 
-            if tabs.isEmpty {
+            if selectedView == ConnectionViewTab.files.id {
+                if fileTabs.isEmpty {
+                    Text("No file tabs open.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(fileTabs) { tab in
+                            macOSFileTabRow(tab)
+                        }
+                    }
+                }
+            } else if terminalTabs.isEmpty {
                 Text("No terminals open.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(tabs) { tab in
+                    ForEach(terminalTabs) { tab in
                         macOSTabRow(tab)
                     }
                 }
@@ -480,12 +503,12 @@ struct MacOSZenModePanel: View {
     private func macOSTabRow(_ tab: TerminalTab) -> some View {
         let state = paneState(tab)
         let tint = state?.connectionState.statusTintColor ?? .secondary
-        let isSelected = selectedTabId.wrappedValue == tab.id
+        let isSelected = selectedTerminalTabId.wrappedValue == tab.id
 
         return HStack(spacing: 8) {
             Button {
                 selectedViewBinding.wrappedValue = "terminal"
-                selectedTabId.wrappedValue = tab.id
+                selectedTerminalTabId.wrappedValue = tab.id
             } label: {
                 HStack(spacing: 10) {
                     Circle()
@@ -516,7 +539,7 @@ struct MacOSZenModePanel: View {
             .buttonStyle(.plain)
 
             Button {
-                onCloseTab(tab)
+                onCloseTerminalTab(tab)
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
@@ -529,6 +552,54 @@ struct MacOSZenModePanel: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func macOSFileTabRow(_ tab: RemoteFileTab) -> some View {
+        let isSelected = selectedFileTabId.wrappedValue == tab.id
+
+        return HStack(spacing: 8) {
+            Button {
+                selectedViewBinding.wrappedValue = ConnectionViewTab.files.id
+                selectedFileTabId.wrappedValue = tab.id
+                onSelectFileTab(tab)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "folder")
+                        .foregroundStyle(.secondary)
+
+                    Text(fileTabTitle(tab))
+                        .font(.callout.weight(isSelected ? .semibold : .regular))
+                        .lineLimit(1)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.primary.opacity(isSelected ? 0.14 : 0.07))
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                onCloseFileTab(tab)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(Color.primary.opacity(0.08))
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var activeTabCount: Int {
+        selectedView == ConnectionViewTab.files.id ? fileTabs.count : terminalTabs.count
     }
 }
 #endif
@@ -543,7 +614,13 @@ struct IOSZenModePanel: View {
     let sessions: [ConnectionSession]
     let selectedSessionId: Binding<UUID?>
     let onCloseSession: (ConnectionSession) -> Void
-    let onNewTab: () -> Void
+    let fileTabs: [RemoteFileTab]
+    let selectedFileTabId: Binding<UUID?>
+    let fileTabTitle: (RemoteFileTab) -> String
+    let onSelectFileTab: (RemoteFileTab) -> Void
+    let onCloseFileTab: (RemoteFileTab) -> Void
+    let onNewTerminalTab: () -> Void
+    let onNewFileTab: () -> Void
     let onOpenSettings: () -> Void
     let onEditServer: (() -> Void)?
     let onDisconnect: () -> Void
@@ -554,9 +631,7 @@ struct IOSZenModePanel: View {
         ZenModePanelCard(width: width) {
             ZenModeStatusLine(
                 title: serverName,
-                subtitle: sessions.isEmpty
-                    ? String(localized: "No open terminals")
-                    : String(format: String(localized: "%lld open tabs"), Int64(sessions.count)),
+                subtitle: statusText,
                 indicatorColor: sessions.first?.connectionState.statusTintColor ?? .secondary
             )
 
@@ -576,10 +651,27 @@ struct IOSZenModePanel: View {
 
             ZenModeSection("Tabs") {
                 ZenModeActionButton(title: "New Tab", systemImage: "plus") {
-                    onNewTab()
+                    if selectedView == ConnectionViewTab.files.id {
+                        onNewFileTab()
+                    } else {
+                        onNewTerminalTab()
+                    }
                 }
 
-                if sessions.isEmpty {
+                if selectedView == ConnectionViewTab.files.id {
+                    if fileTabs.isEmpty {
+                        Text("No file tabs open.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(fileTabs) { tab in
+                                iosFileTabRow(tab)
+                            }
+                        }
+                    }
+                } else if sessions.isEmpty {
                     Text("No terminals open.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -676,6 +768,66 @@ struct IOSZenModePanel: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func iosFileTabRow(_ tab: RemoteFileTab) -> some View {
+        let isSelected = selectedFileTabId.wrappedValue == tab.id
+
+        return HStack(spacing: 8) {
+            Button {
+                selectedViewBinding.wrappedValue = ConnectionViewTab.files.id
+                selectedFileTabId.wrappedValue = tab.id
+                onSelectFileTab(tab)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "folder")
+                        .foregroundStyle(.secondary)
+
+                    Text(fileTabTitle(tab))
+                        .font(.callout.weight(isSelected ? .semibold : .regular))
+                        .lineLimit(1)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.primary.opacity(isSelected ? 0.14 : 0.07))
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                onCloseFileTab(tab)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.primary.opacity(0.92))
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(Color.primary.opacity(0.12))
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var statusText: String {
+        if selectedView == ConnectionViewTab.files.id {
+            return fileTabs.isEmpty
+                ? String(localized: "No open file tabs")
+                : String(format: String(localized: "%lld open file tabs"), Int64(fileTabs.count))
+        }
+
+        return sessions.isEmpty
+            ? String(localized: "No open terminals")
+            : String(format: String(localized: "%lld open tabs"), Int64(sessions.count))
     }
 }
 #endif

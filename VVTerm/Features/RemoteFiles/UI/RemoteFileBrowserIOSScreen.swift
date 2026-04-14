@@ -33,7 +33,7 @@ extension RemoteFileBrowserScreen {
                     }
                 }
                 .refreshable {
-                    await browser.refresh(server: server)
+                    await browser.refresh(server: server, tab: fileTab)
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -72,11 +72,11 @@ extension RemoteFileBrowserScreen {
                 previewBackgroundColor: Color(UIColor.secondarySystemGroupedBackground),
                 sectionBackgroundColor: Color(UIColor.secondarySystemGroupedBackground),
                 onLoadPreview: { entry in
-                    Task { await browser.loadPreview(for: entry, serverId: server.id) }
+                    Task { await browser.loadPreview(for: entry, in: fileTab, server: server) }
                 },
                 onDownloadPreview: { entry in
                     Task {
-                        await browser.loadPreview(for: entry, serverId: server.id, allowLargeDownloads: true)
+                        await browser.loadPreview(for: entry, in: fileTab, server: server, allowLargeDownloads: true)
                     }
                 },
                 onDownload: { entry in
@@ -100,7 +100,7 @@ extension RemoteFileBrowserScreen {
                 },
                 onClose: nil,
                 onSaveText: { entry, text in
-                    try await browser.saveTextPreview(text, for: entry, serverId: server.id)
+                    try await browser.saveTextPreview(text, for: entry, in: fileTab, server: server)
                 }
             )
             .navigationTitle(snapshot.selectedEntry?.name ?? snapshot.viewerPayload?.entry.name ?? String(localized: "Preview"))
@@ -124,7 +124,7 @@ extension RemoteFileBrowserScreen {
                         systemName: "arrow.turn.up.left",
                         isDisabled: snapshot.currentPath == "/"
                     ) {
-                        Task { await browser.goUp(server: server) }
+                        Task { await browser.goUp(in: fileTab, server: server) }
                     }
                 }
 
@@ -163,7 +163,7 @@ extension RemoteFileBrowserScreen {
                         systemName: "arrow.turn.up.left",
                         isDisabled: snapshot.currentPath == "/"
                     ) {
-                        Task { await browser.goUp(server: server) }
+                        Task { await browser.goUp(in: fileTab, server: server) }
                     }
                 }
 
@@ -208,8 +208,8 @@ extension RemoteFileBrowserScreen {
 
     func handleIOSEntryTap(_ entry: RemoteFileEntry) {
         Task {
-            await browser.activate(entry, serverId: server.id)
-            if browser.selectedEntryPath(for: server.id) == entry.path {
+            await browser.activate(entry, in: fileTab, server: server)
+            if browser.selectedEntryPath(for: fileTab) == entry.path {
                 await MainActor.run {
                     presentedPreviewPath = entry.path
                 }
@@ -277,16 +277,16 @@ extension RemoteFileBrowserScreen {
             Toggle(
                 String(localized: "Show Hidden Files"),
                 isOn: Binding(
-                    get: { browser.showHiddenFiles(for: server.id) },
-                    set: { browser.setShowHiddenFiles($0, serverId: server.id) }
+                    get: { browser.showHiddenFiles(for: fileTab) },
+                    set: { browser.setShowHiddenFiles($0, for: fileTab) }
                 )
             )
 
             Picker(
                 String(localized: "Sort"),
                 selection: Binding(
-                    get: { browser.sort(for: server.id) },
-                    set: { browser.updateSort($0, serverId: server.id) }
+                    get: { browser.sort(for: fileTab) },
+                    set: { browser.updateSort($0, for: fileTab) }
                 )
             ) {
                 ForEach(RemoteFileSort.allCases) { option in

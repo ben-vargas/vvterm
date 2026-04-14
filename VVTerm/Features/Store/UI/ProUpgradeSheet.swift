@@ -17,7 +17,7 @@ struct ProUpgradeSheet: View {
         [
             ("server.rack", String(localized: "Unlimited Servers"), String(localized: "Add as many servers as you need (free: 3)"), .pink),
             ("folder", String(localized: "Unlimited Workspaces"), String(localized: "Organize servers into multiple workspaces (free: 1)"), .pink),
-            ("square.on.square", String(localized: "Multiple Connections"), String(localized: "Open multiple terminal tabs at once (free: 1)"), .orange),
+            ("square.on.square", String(localized: "Multiple Connections"), String(localized: "Open multiple terminal or file tabs at once (free: 1)"), .orange),
             ("tag", String(localized: "Custom Environments"), String(localized: "Create custom environment labels beyond Prod/Staging/Dev"), .orange),
             ("star", String(localized: "All Future Features"), String(localized: "Get access to every new Pro feature"), .yellow)
         ]

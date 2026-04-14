@@ -5,6 +5,13 @@
 //  Split menu commands and focused values for terminal splits (macOS only)
 //
 
+struct ServerViewTabActions {
+    let openNew: () -> Void
+    let closeSelected: () -> Void
+    let selectPrevious: () -> Void
+    let selectNext: () -> Void
+}
+
 #if os(macOS)
 import SwiftUI
 import AppKit
@@ -88,6 +95,10 @@ struct OpenTerminalTabActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+struct ServerViewTabActionsKey: FocusedValueKey {
+    typealias Value = ServerViewTabActions
+}
+
 struct OpenLocalSSHDiscoveryActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -119,6 +130,11 @@ extension FocusedValues {
     var openTerminalTab: (() -> Void)? {
         get { self[OpenTerminalTabActionKey.self] }
         set { self[OpenTerminalTabActionKey.self] = newValue }
+    }
+
+    var serverViewTabActions: ServerViewTabActions? {
+        get { self[ServerViewTabActionsKey.self] }
+        set { self[ServerViewTabActionsKey.self] = newValue }
     }
 
     var openLocalSSHDiscovery: (() -> Void)? {

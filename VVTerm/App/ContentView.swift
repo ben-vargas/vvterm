@@ -9,6 +9,7 @@ import AppKit
 #endif
 
 struct ContentView: View {
+    let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     @StateObject private var serverManager = ServerManager.shared
     @StateObject private var tabManager = TerminalTabManager.shared
@@ -76,6 +77,7 @@ struct ContentView: View {
                 // Server is connected - show its terminal container
                 ConnectionTerminalContainer(
                     tabManager: tabManager,
+                    fileTabManager: fileTabs,
                     serverManager: serverManager,
                     fileBrowser: fileBrowser,
                     server: server,
@@ -230,7 +232,10 @@ struct ContentView: View {
 // MARK: - Preview
 
 #Preview {
-    ContentView(fileBrowser: RemoteFileBrowserStore())
+    ContentView(
+        fileTabs: RemoteFileTabManager(),
+        fileBrowser: RemoteFileBrowserStore()
+    )
 }
 
 #if os(macOS)

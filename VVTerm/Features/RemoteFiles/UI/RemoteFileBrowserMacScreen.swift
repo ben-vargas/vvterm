@@ -70,7 +70,7 @@ extension RemoteFileBrowserScreen {
                 previewEntry(entry)
             },
             onSortChange: { sort, direction in
-                browser.updateSort(sort, direction: direction, serverId: server.id)
+                browser.updateSort(sort, direction: direction, for: fileTab)
             },
             onUploadDroppedURLs: { urls, destinationPath in
                 handleMacOSDroppedURLs(urls, to: destinationPath)
@@ -85,7 +85,7 @@ extension RemoteFileBrowserScreen {
                 appKitBackgroundMenu(currentPath: snapshot.currentPath)
             },
             exportEntry: { entry, destinationURL in
-                try await browser.downloadItem(entry, to: destinationURL, serverId: server.id)
+                try await browser.downloadItem(entry, to: destinationURL, server: server)
             },
             fileTypeIdentifier: { entry in
                 dragFileTypeIdentifier(for: entry)
@@ -126,11 +126,11 @@ extension RemoteFileBrowserScreen {
             previewBackgroundColor: macOSRaisedSurfaceColor,
             sectionBackgroundColor: macOSRaisedSurfaceColor,
             onLoadPreview: { entry in
-                Task { await browser.loadPreview(for: entry, serverId: server.id) }
+                Task { await browser.loadPreview(for: entry, in: fileTab, server: server) }
             },
             onDownloadPreview: { entry in
                 Task {
-                    await browser.loadPreview(for: entry, serverId: server.id, allowLargeDownloads: true)
+                    await browser.loadPreview(for: entry, in: fileTab, server: server, allowLargeDownloads: true)
                 }
             },
             onDownload: { entry in
@@ -153,10 +153,10 @@ extension RemoteFileBrowserScreen {
                 requestDelete([entry])
             },
             onClose: {
-                browser.clearViewer(serverId: server.id)
+                browser.clearViewer(for: fileTab)
             },
             onSaveText: { entry, text in
-                try await browser.saveTextPreview(text, for: entry, serverId: server.id)
+                try await browser.saveTextPreview(text, for: entry, in: fileTab, server: server)
             }
         )
         .frame(maxHeight: .infinity, alignment: .top)
@@ -179,6 +179,7 @@ extension RemoteFileBrowserScreen {
                         Task {
                             await browser.openBreadcrumb(
                                 .init(title: server.name, path: "/"),
+                                in: fileTab,
                                 server: server
                             )
                         }
@@ -194,7 +195,7 @@ extension RemoteFileBrowserScreen {
                             systemImage: "folder.fill",
                             isCurrent: index == snapshot.breadcrumbs.dropFirst().count - 1
                         ) {
-                            Task { await browser.openBreadcrumb(breadcrumb, server: server) }
+                            Task { await browser.openBreadcrumb(breadcrumb, in: fileTab, server: server) }
                         }
                     }
                 }
@@ -251,17 +252,17 @@ extension RemoteFileBrowserScreen {
         guard selection.count == 1,
               let selectedPath = selection.first,
               let entry = entries.first(where: { $0.id == selectedPath }) else {
-            browser.clearViewer(serverId: server.id)
+            browser.clearViewer(for: fileTab)
             return
         }
 
         let selectionModifiers = modifierFlags.intersection([.command, .shift])
         guard selectionModifiers.isEmpty || selection.count == 1 else {
-            browser.clearViewer(serverId: server.id)
+            browser.clearViewer(for: fileTab)
             return
         }
 
-        browser.focus(entry, serverId: server.id)
+        browser.focus(entry, in: fileTab)
     }
 
     func handleMacOSDroppedURLs(_ urls: [URL], to destinationPath: String) {
@@ -325,7 +326,7 @@ extension RemoteFileBrowserScreen {
         case .directory:
             menu.addItem(
                 makeMacOSMenuItem(title: String(localized: "Open"), systemImage: "folder") {
-                    Task { await browser.openDirectory(entry, serverId: server.id) }
+                    Task { await browser.openDirectory(entry, in: fileTab, server: server) }
                 }
             )
             menu.addItem(

@@ -10,6 +10,7 @@ import UIKit
 
 #if os(iOS)
 struct iOSContentView: View {
+    let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     @StateObject private var serverManager = ServerManager.shared
     @StateObject private var sessionManager = ConnectionSessionManager.shared
@@ -90,6 +91,7 @@ struct iOSContentView: View {
                 iOSTerminalView(
                     sessionManager: sessionManager,
                     serverManager: serverManager,
+                    fileTabs: fileTabs,
                     fileBrowser: fileBrowser,
                     connectingServer: connectingServer,
                     isConnecting: isConnecting,
@@ -760,6 +762,7 @@ struct iOSEnvironmentFilterMenu: View {
 struct iOSTerminalView: View {
     @ObservedObject var sessionManager: ConnectionSessionManager
     @ObservedObject var serverManager: ServerManager
+    @ObservedObject var fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     let connectingServer: Server?
     let isConnecting: Bool
@@ -774,6 +777,7 @@ struct iOSTerminalView: View {
     /// Force terminal rebuilds to restart SSH on foreground reconnect
     @State private var reconnectTokenBySession: [UUID: UUID] = [:]
     @State private var showingTabLimitAlert = false
+    @State private var showingFileTabLimitAlert = false
     @State private var serverToEdit: Server?
     @State private var showingSettings = false
     @State private var terminalBackgroundColor: Color = .black
@@ -810,6 +814,33 @@ struct iOSTerminalView: View {
         return connectingServer
     }
 
+    private var fileTabServerId: UUID? {
+        currentServerId ?? selectedServer?.id ?? connectingServer?.id
+    }
+
+    private var serverFileTabs: [RemoteFileTab] {
+        guard let fileTabServerId else { return [] }
+        return fileTabs.tabs(for: fileTabServerId)
+    }
+
+    private var selectedFileTab: RemoteFileTab? {
+        guard let fileTabServerId else { return nil }
+        return fileTabs.selectedTab(for: fileTabServerId)
+    }
+
+    private var selectedFileTabIdBinding: Binding<UUID?> {
+        Binding(
+            get: { selectedFileTab?.id },
+            set: { newValue in
+                guard let newValue,
+                      let tab = serverFileTabs.first(where: { $0.id == newValue }) else {
+                    return
+                }
+                fileTabs.selectTab(tab)
+            }
+        )
+    }
+
     private var selectedSessionIdBinding: Binding<UUID?> {
         Binding(
             get: { effectiveSelectedSessionId },
@@ -837,7 +868,7 @@ struct iOSTerminalView: View {
     }
 
     private var selectedView: String {
-        guard let serverId = currentServerId ?? selectedSession?.serverId else {
+        guard let serverId = currentServerId ?? selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id else {
             return viewTabConfig.effectiveDefaultTab()
         }
         return viewTabConfig.effectiveView(for: sessionManager.selectedViewByServer[serverId])
@@ -852,7 +883,7 @@ struct iOSTerminalView: View {
     }
 
     private var zenSelectedViewBinding: Binding<String> {
-        guard let serverId = currentServerId ?? selectedSession?.serverId else {
+        guard let serverId = currentServerId ?? selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id else {
             return .constant(viewTabConfig.effectiveDefaultTab())
         }
         return selectedViewBinding(for: serverId)
@@ -869,6 +900,57 @@ struct iOSTerminalView: View {
                     : viewTabConfig.effectiveDefaultTab()
             }
         )
+    }
+
+    private func ensureInitialFileTabIfNeeded() {
+        guard selectedView == ConnectionViewTab.files.id,
+              let server = selectedServer else {
+            return
+        }
+
+        let seedPath = selectedSession?.workingDirectory
+        guard let fileTab = fileTabs.ensureInitialTab(for: server, seedPath: seedPath) else { return }
+        fileBrowser.prepareNewTab(fileTab, duplicating: nil)
+    }
+
+    private func baseFileTabTitle(for tab: RemoteFileTab) -> String {
+        let candidatePath = fileBrowser.lastVisitedPath(for: tab)
+            ?? tab.lastKnownPath
+            ?? tab.seedPath
+
+        guard let candidatePath else {
+            return selectedServer?.name.nonEmptyString ?? "/"
+        }
+
+        let normalizedPath = RemoteFilePath.normalize(candidatePath)
+        guard normalizedPath != "/" else {
+            return selectedServer?.name.nonEmptyString ?? "/"
+        }
+
+        return RemoteFilePath.breadcrumbs(for: normalizedPath).last?.title
+            ?? (selectedServer?.name.nonEmptyString ?? "/")
+    }
+
+    private func displayedFileTabTitle(for tab: RemoteFileTab) -> String {
+        let baseTitles = Dictionary(
+            uniqueKeysWithValues: serverFileTabs.map { ($0.id, baseFileTabTitle(for: $0)) }
+        )
+        let titleCounts = Dictionary(grouping: baseTitles.values, by: { $0 }).mapValues(\.count)
+        var seenCounts: [String: Int] = [:]
+        var resolvedTitles: [UUID: String] = [:]
+
+        for tab in serverFileTabs {
+            let baseTitle = baseTitles[tab.id] ?? (selectedServer?.name.nonEmptyString ?? "/")
+            guard (titleCounts[baseTitle] ?? 0) > 1 else {
+                resolvedTitles[tab.id] = baseTitle
+                continue
+            }
+
+            seenCounts[baseTitle, default: 0] += 1
+            resolvedTitles[tab.id] = "\(baseTitle) (\(seenCounts[baseTitle, default: 0]))"
+        }
+
+        return resolvedTitles[tab.id] ?? baseFileTabTitle(for: tab)
     }
 
     private var tmuxAttachPromptBinding: Binding<TmuxAttachPrompt?> {
@@ -937,6 +1019,7 @@ struct iOSTerminalView: View {
                     sessionManager.selectedSessionId = fallbackId
                 }
                 synchronizeRecoveredTerminalState()
+                ensureInitialFileTabIfNeeded()
                 attemptForegroundReconnectIfNeeded(refreshTerminal: true)
             }
             .onChange(of: terminalThemeName) { _ in updateTerminalBackgroundColor() }
@@ -954,6 +1037,7 @@ struct iOSTerminalView: View {
                     currentServerId = newValue
                 }
                 synchronizeRecoveredTerminalState()
+                ensureInitialFileTabIfNeeded()
             }
             .onChange(of: sessionManager.selectedSessionId) { newValue in
                 if let newValue,
@@ -962,6 +1046,7 @@ struct iOSTerminalView: View {
                     currentServerId = session.serverId
                 }
                 synchronizeRecoveredTerminalState()
+                ensureInitialFileTabIfNeeded()
                 attemptForegroundReconnectIfNeeded()
             }
             .onChange(of: isConnecting) { _ in
@@ -975,6 +1060,7 @@ struct iOSTerminalView: View {
                         attemptForegroundReconnectIfNeeded(refreshTerminal: true)
                     }
                 }
+                ensureInitialFileTabIfNeeded()
             }
             .onChange(of: sessionManager.isSuspendingForBackground) { isSuspending in
                 guard !isSuspending, scenePhase == .active else { return }
@@ -1011,6 +1097,7 @@ struct iOSTerminalView: View {
                     }
                 }
                 synchronizeRecoveredTerminalState()
+                ensureInitialFileTabIfNeeded()
             }
     }
 
@@ -1035,6 +1122,7 @@ struct iOSTerminalView: View {
     private var sheetContent: some View {
         baseContent
             .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
+            .limitReachedAlert(.fileTabs, isPresented: $showingFileTabLimitAlert)
             .sheet(isPresented: $showingSettings) {
                 SettingsView()
                     .modifier(AppearanceModifier())
@@ -1085,12 +1173,24 @@ struct iOSTerminalView: View {
 
     @ViewBuilder
     private var headerTabsBar: some View {
-        if !effectiveZenModeEnabled && selectedView == "terminal" && serverSessions.count > 1 {
-            iOSTerminalTabsBar(
-                sessions: serverSessions,
-                selectedSessionId: selectedSessionIdBinding,
-                onClose: { pendingCloseSession = $0 }
-            )
+        if !effectiveZenModeEnabled {
+            if selectedView == "terminal" && serverSessions.count > 1 {
+                iOSTerminalTabsBar(
+                    sessions: serverSessions,
+                    selectedSessionId: selectedSessionIdBinding,
+                    onClose: { pendingCloseSession = $0 }
+                )
+            }
+
+            if selectedView == "files" && serverFileTabs.count > 1 {
+                iOSRemoteFileTabsBar(
+                    tabs: serverFileTabs,
+                    selectedTabId: selectedFileTabIdBinding,
+                    titleForTab: displayedFileTabTitle(for:),
+                    onSelect: { fileTabs.selectTab($0) },
+                    onClose: closeFileTab
+                )
+            }
         }
     }
 
@@ -1112,7 +1212,21 @@ struct iOSTerminalView: View {
                 openNewTab()
             }
         } else if selectedView == "files", let server = selectedServer {
-            RemoteFileBrowserScreen(browser: fileBrowser, server: server, initialPath: nil)
+            if let selectedFileTab {
+                RemoteFileBrowserScreen(
+                    browser: fileBrowser,
+                    server: server,
+                    fileTab: selectedFileTab,
+                    initialPath: selectedFileTab.seedPath
+                ) { currentPath in
+                    fileTabs.updateLastKnownPath(currentPath, for: selectedFileTab.id)
+                }
+                .id(selectedFileTab.id)
+            } else {
+                RemoteFileTabsEmptyState {
+                    openNewFileTab()
+                }
+            }
         } else if let server = selectedServer {
             ServerStatsView(
                 server: server,
@@ -1139,12 +1253,23 @@ struct iOSTerminalView: View {
 
             if selectedView == "files" {
                 if let server = selectedServer {
-                    RemoteFileBrowserScreen(
-                        browser: fileBrowser,
-                        server: server,
-                        initialPath: selectedSession?.workingDirectory
-                    )
-                    .zIndex(1)
+                    if let selectedFileTab {
+                        RemoteFileBrowserScreen(
+                            browser: fileBrowser,
+                            server: server,
+                            fileTab: selectedFileTab,
+                            initialPath: selectedFileTab.seedPath
+                        ) { currentPath in
+                            fileTabs.updateLastKnownPath(currentPath, for: selectedFileTab.id)
+                        }
+                        .id(selectedFileTab.id)
+                        .zIndex(1)
+                    } else {
+                        RemoteFileTabsEmptyState {
+                            openNewFileTab()
+                        }
+                        .zIndex(1)
+                    }
                 }
             }
 
@@ -1156,6 +1281,7 @@ struct iOSTerminalView: View {
         .transaction { transaction in
             transaction.animation = nil
         }
+        .overlay(serverViewSwipeOverlay)
     }
 
     @ViewBuilder
@@ -1189,6 +1315,14 @@ struct iOSTerminalView: View {
             if selectedView == "terminal" {
                 Button {
                     openNewTab()
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+
+            if selectedView == "files" {
+                Button {
+                    openNewFileTab()
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -1281,12 +1415,16 @@ struct iOSTerminalView: View {
             }
 
             if effectiveViewSelection == "files" {
-                if let server {
+                if let server, let selectedFileTab {
                     RemoteFileBrowserScreen(
                         browser: fileBrowser,
                         server: server,
-                        initialPath: session.workingDirectory
-                    )
+                        fileTab: selectedFileTab,
+                        initialPath: selectedFileTab.seedPath
+                    ) { currentPath in
+                        fileTabs.updateLastKnownPath(currentPath, for: selectedFileTab.id)
+                    }
+                    .id(selectedFileTab.id)
                 }
             }
 
@@ -1313,8 +1451,10 @@ struct iOSTerminalView: View {
                 prepareTerminal(session: session, viewSelection: effectiveSelection, terminalAlreadyExists: terminalAlreadyExists)
                 focusTerminal(for: session)
             }
+            if effectiveSelection == ConnectionViewTab.files.id {
+                ensureInitialFileTabIfNeeded()
+            }
         }
-        .overlay(terminalSwipeOverlay(isEnabled: effectiveViewSelection == "terminal"))
     }
 
     private func prepareTerminal(session: ConnectionSession, viewSelection: String, terminalAlreadyExists: Bool) {
@@ -1358,12 +1498,39 @@ struct iOSTerminalView: View {
         }
     }
 
+    private func openNewFileTab() {
+        guard let server = selectedServer else { return }
+        guard fileTabs.canOpenNewTab(for: server.id) else {
+            showingFileTabLimitAlert = true
+            return
+        }
+
+        let sourceTab = selectedFileTab
+        let seedPath = sourceTab.flatMap { fileBrowser.lastVisitedPath(for: $0) }
+            ?? selectedSession?.workingDirectory
+        let newTab = sourceTab.flatMap { fileTabs.duplicateTab($0, seedPath: seedPath) }
+            ?? fileTabs.openTab(for: server, seedPath: seedPath)
+
+        guard let newTab else { return }
+        fileBrowser.prepareNewTab(newTab, duplicating: sourceTab)
+        sessionManager.selectedViewByServer[server.id] = viewTabConfig.isTabVisible(ConnectionViewTab.files.id)
+            ? ConnectionViewTab.files.id
+            : viewTabConfig.effectiveDefaultTab()
+    }
+
+    private func closeFileTab(_ tab: RemoteFileTab) {
+        if let removedTab = fileTabs.closeTab(tab) {
+            fileBrowser.removeState(for: removedTab.id)
+        }
+    }
+
     private func disconnectCurrentServerSessions() {
-        guard let serverId = currentServerId ?? selectedSession?.serverId ?? connectingServer?.id else {
+        guard let serverId = currentServerId ?? selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id else {
             onBack()
             return
         }
         fileBrowser.disconnect(serverId: serverId)
+        fileTabs.disconnect(serverId: serverId)
         sessionManager.disconnectServer(serverId)
         onBack()
     }
@@ -1402,9 +1569,22 @@ struct iOSTerminalView: View {
                 onCloseSession: { session in
                     pendingCloseSession = session
                 },
-                onNewTab: {
+                fileTabs: serverFileTabs,
+                selectedFileTabId: selectedFileTabIdBinding,
+                fileTabTitle: displayedFileTabTitle(for:),
+                onSelectFileTab: { tab in
+                    fileTabs.selectTab(tab)
+                },
+                onCloseFileTab: { tab in
+                    closeFileTab(tab)
+                },
+                onNewTerminalTab: {
                     showingZenPanel = false
                     openNewTab()
+                },
+                onNewFileTab: {
+                    showingZenPanel = false
+                    openNewFileTab()
                 },
                 onOpenSettings: {
                     showingZenPanel = false
@@ -1502,11 +1682,17 @@ struct iOSTerminalView: View {
 
 
     @ViewBuilder
-    private func terminalSwipeOverlay(isEnabled: Bool) -> some View {
-        if isEnabled && serverSessions.count > 1 {
-            GeometryReader { proxy in
+    private var serverViewSwipeOverlay: some View {
+        if (selectedView == ConnectionViewTab.terminal.id && serverSessions.count > 1)
+            || (selectedView == ConnectionViewTab.files.id && serverFileTabs.count > 1) {
+            GeometryReader { _ in
                 let edgeWidth: CGFloat = 32
+                let leadingGestureInset: CGFloat = selectedView == ConnectionViewTab.files.id ? 44 : 0
                 HStack(spacing: 0) {
+                    Color.clear
+                        .frame(width: leadingGestureInset)
+                        .allowsHitTesting(false)
+
                     Color.clear
                         .frame(width: edgeWidth)
                         .contentShape(Rectangle())
@@ -1533,9 +1719,17 @@ struct iOSTerminalView: View {
                 guard abs(horizontal) > abs(vertical),
                       abs(horizontal) > 60 else { return }
                 if horizontal < 0 {
-                    selectNextServerSession()
+                    if selectedView == ConnectionViewTab.files.id {
+                        selectNextFileTab()
+                    } else {
+                        selectNextServerSession()
+                    }
                 } else {
-                    selectPreviousServerSession()
+                    if selectedView == ConnectionViewTab.files.id {
+                        selectPreviousFileTab()
+                    } else {
+                        selectPreviousServerSession()
+                    }
                 }
             }
     }
@@ -1553,6 +1747,18 @@ struct iOSTerminalView: View {
               let index = serverSessions.firstIndex(where: { $0.id == currentId }),
               index > 0 else { return }
         sessionManager.selectedSessionId = serverSessions[index - 1].id
+        triggerTabSwitchFeedback()
+    }
+
+    private func selectNextFileTab() {
+        guard let serverId = fileTabServerId else { return }
+        fileTabs.selectNextTab(for: serverId)
+        triggerTabSwitchFeedback()
+    }
+
+    private func selectPreviousFileTab() {
+        guard let serverId = fileTabServerId else { return }
+        fileTabs.selectPreviousTab(for: serverId)
         triggerTabSwitchFeedback()
     }
 
@@ -1674,14 +1880,14 @@ struct iOSTerminalTabsBar: View {
     var body: some View {
         GeometryReader { proxy in
             let count = max(sessions.count, 1)
-            let availableWidth = max(proxy.size.width - TerminalTabBarMetrics.horizontalPadding * 2, 0)
-            let totalSpacing = TerminalTabBarMetrics.tabSpacing * CGFloat(max(count - 1, 0))
+            let availableWidth = max(proxy.size.width - ServerViewTopTabBarMetrics.horizontalPadding * 2, 0)
+            let totalSpacing = ServerViewTopTabBarMetrics.tabSpacing * CGFloat(max(count - 1, 0))
             let itemWidth = count > 0 ? (availableWidth - totalSpacing) / CGFloat(count) : 0
             let useEqualWidth = itemWidth >= minTabWidth
 
             Group {
                 if useEqualWidth {
-                    HStack(spacing: TerminalTabBarMetrics.tabSpacing) {
+                    HStack(spacing: ServerViewTopTabBarMetrics.tabSpacing) {
                         ForEach(sessions) { session in
                             iOSTerminalTabButton(
                                 session: session,
@@ -1693,11 +1899,11 @@ struct iOSTerminalTabsBar: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, TerminalTabBarMetrics.horizontalPadding)
-                    .padding(.vertical, TerminalTabBarMetrics.barVerticalInset)
+                    .padding(.horizontal, ServerViewTopTabBarMetrics.horizontalPadding)
+                    .padding(.vertical, ServerViewTopTabBarMetrics.barVerticalInset)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: TerminalTabBarMetrics.tabSpacing) {
+                        HStack(spacing: ServerViewTopTabBarMetrics.tabSpacing) {
                             ForEach(sessions) { session in
                                 iOSTerminalTabButton(
                                     session: session,
@@ -1709,8 +1915,8 @@ struct iOSTerminalTabsBar: View {
                                 .frame(minWidth: minTabWidth)
                             }
                         }
-                        .padding(.horizontal, TerminalTabBarMetrics.horizontalPadding)
-                        .padding(.vertical, TerminalTabBarMetrics.barVerticalInset)
+                        .padding(.horizontal, ServerViewTopTabBarMetrics.horizontalPadding)
+                        .padding(.vertical, ServerViewTopTabBarMetrics.barVerticalInset)
                         .animation(nil, value: sessions.map(\.id))
                     }
                 }
@@ -1719,7 +1925,7 @@ struct iOSTerminalTabsBar: View {
                 transaction.animation = nil
             }
         }
-        .frame(height: TerminalTabBarMetrics.barHeight)
+        .frame(height: ServerViewTopTabBarMetrics.barHeight)
         .background(
             Capsule(style: .continuous)
                 .fill(Color.primary.opacity(0.08))
@@ -1729,19 +1935,9 @@ struct iOSTerminalTabsBar: View {
                 )
         )
         .clipShape(Capsule(style: .continuous))
-        .padding(.horizontal, TerminalTabBarMetrics.outerHorizontalPadding)
+        .padding(.horizontal, ServerViewTopTabBarMetrics.outerHorizontalPadding)
         .padding(.vertical, 6)
     }
-}
-
-private enum TerminalTabBarMetrics {
-    static let tabHeight: CGFloat = 36
-    static let tabVerticalPadding: CGFloat = 7
-    static let barVerticalInset: CGFloat = 4
-    static let tabSpacing: CGFloat = 4
-    static let horizontalPadding: CGFloat = 4
-    static let outerHorizontalPadding: CGFloat = 12
-    static var barHeight: CGFloat { tabHeight + barVerticalInset * 2 }
 }
 
 private struct iOSTerminalTabButton: View {
@@ -1762,8 +1958,8 @@ private struct iOSTerminalTabButton: View {
         }
         .padding(.leading, 14)
         .padding(.trailing, 36)
-        .padding(.vertical, TerminalTabBarMetrics.tabVerticalPadding)
-        .frame(height: TerminalTabBarMetrics.tabHeight)
+        .padding(.vertical, ServerViewTopTabBarMetrics.tabVerticalPadding)
+        .frame(height: ServerViewTopTabBarMetrics.tabHeight)
         .frame(width: fixedWidth, alignment: .leading)
         .foregroundStyle(.primary)
         .background(

@@ -13,12 +13,12 @@ struct RemoteFilePreviewCoordinatorTests {
             defaults: makeDefaults(),
             temporaryStorage: temporaryStorage
         )
-        let serverId = UUID()
+        let tab = makeTab()
         let entry = makeEntry(name: "preview.txt", path: "/tmp/preview.txt")
         let previewURL = try temporaryStorage.makePreviewFileURL(for: entry)
         try Data("preview".utf8).write(to: previewURL)
 
-        store.updateState(for: serverId) { state in
+        store.updateState(for: tab) { state in
             state.selectedEntryPath = entry.path
             state.viewerPayload = RemoteFileViewerPayload(
                 previewKind: .text,
@@ -34,13 +34,13 @@ struct RemoteFilePreviewCoordinatorTests {
             state.isLoadingViewer = true
         }
 
-        store.clearViewer(serverId: serverId)
+        store.clearViewer(for: tab)
 
         #expect(!FileManager.default.fileExists(atPath: previewURL.path))
-        #expect(store.selectedEntryPath(for: serverId) == nil)
-        #expect(store.viewerPayload(for: serverId) == nil)
-        #expect(store.viewerError(for: serverId) == nil)
-        #expect(!store.isLoadingViewer(for: serverId))
+        #expect(store.selectedEntryPath(for: tab) == nil)
+        #expect(store.viewerPayload(for: tab) == nil)
+        #expect(store.viewerError(for: tab) == nil)
+        #expect(!store.isLoadingViewer(for: tab))
     }
 
     private func makeEntry(name: String, path: String) -> RemoteFileEntry {
@@ -53,6 +53,10 @@ struct RemoteFilePreviewCoordinatorTests {
             permissions: nil,
             symlinkTarget: nil
         )
+    }
+
+    private func makeTab() -> RemoteFileTab {
+        RemoteFileTab(serverId: UUID(), seedPath: "/tmp")
     }
 
     private func makeDefaults() -> UserDefaults {

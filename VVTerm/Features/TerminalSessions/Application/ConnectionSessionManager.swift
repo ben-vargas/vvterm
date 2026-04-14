@@ -421,8 +421,10 @@ final class ConnectionSessionManager: ObservableObject {
         DispatchQueue.main.async {
             #if os(iOS)
             guard UIApplication.shared.applicationState == .active else { return }
-            #endif
             replacementTerminal.requestKeyboardFocus()
+            #else
+            _ = replacementTerminal.window?.makeFirstResponder(replacementTerminal)
+            #endif
         }
     }
 

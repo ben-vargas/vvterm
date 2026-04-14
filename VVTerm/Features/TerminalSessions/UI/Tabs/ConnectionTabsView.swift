@@ -14,6 +14,7 @@ import UIKit
 
 struct ConnectionTerminalContainer: View {
     @ObservedObject var tabManager: TerminalTabManager
+    @ObservedObject var fileTabManager: RemoteFileTabManager
     let serverManager: ServerManager
     let fileBrowser: RemoteFileBrowserStore
     let server: Server
@@ -36,6 +37,7 @@ struct ConnectionTerminalContainer: View {
 
     /// Tab limit alert
     @State private var showingTabLimitAlert = false
+    @State private var showingFileTabLimitAlert = false
     @State private var showingSplitPaneUpgradeAlert = false
     @State private var showingZenPanel = false
     #if os(macOS)
@@ -100,6 +102,31 @@ struct ConnectionTerminalContainer: View {
         return serverTabs.first { $0.id == id } ?? serverTabs.first
     }
 
+    private var serverFileTabs: [RemoteFileTab] {
+        fileTabManager.tabs(for: server.id)
+    }
+
+    private var selectedFileTabId: UUID? {
+        fileTabManager.selectedTab(for: server.id)?.id
+    }
+
+    private var selectedFileTabIdBinding: Binding<UUID?> {
+        Binding(
+            get: { selectedFileTabId },
+            set: { newValue in
+                guard let newValue,
+                      let tab = serverFileTabs.first(where: { $0.id == newValue }) else {
+                    return
+                }
+                fileTabManager.selectTab(tab)
+            }
+        )
+    }
+
+    private var selectedFileTab: RemoteFileTab? {
+        fileTabManager.selectedTab(for: server.id)
+    }
+
     private var tmuxAttachPromptBinding: Binding<TmuxAttachPrompt?> {
         Binding(
             get: {
@@ -153,6 +180,7 @@ struct ConnectionTerminalContainer: View {
                 if selectedTabId == nil {
                     selectedTabIdBinding.wrappedValue = serverTabs.first?.id
                 }
+                ensureInitialFileTabIfNeeded()
             }
             .onChange(of: terminalThemeName) { _ in
                 updateTerminalBackgroundColor()
@@ -166,6 +194,9 @@ struct ConnectionTerminalContainer: View {
             .onChange(of: colorScheme) { _ in
                 updateTerminalBackgroundColor()
             }
+            .onChange(of: selectedView) { _ in
+                ensureInitialFileTabIfNeeded()
+            }
             .onChange(of: serverTabs.count) { _ in
                 // Auto-select if current selection is invalid
                 if let currentId = selectedTabId, !serverTabs.contains(where: { $0.id == currentId }) {
@@ -178,6 +209,7 @@ struct ConnectionTerminalContainer: View {
                 }
             }
             .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
+            .limitReachedAlert(.fileTabs, isPresented: $showingFileTabLimitAlert)
             .splitPaneProFeatureAlert(isPresented: $showingSplitPaneUpgradeAlert)
             .sheet(item: tmuxAttachPromptBinding) { prompt in
                 TmuxAttachPromptSheet(
@@ -206,12 +238,23 @@ struct ConnectionTerminalContainer: View {
                 .zIndex(selectedView == "stats" ? 1 : 0)
 
             if selectedView == "files" {
-                RemoteFileBrowserScreen(
-                    browser: fileBrowser,
-                    server: server,
-                    initialPath: selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
-                )
+                if let selectedFileTab {
+                    RemoteFileBrowserScreen(
+                        browser: fileBrowser,
+                        server: server,
+                        fileTab: selectedFileTab,
+                        initialPath: selectedFileTab.seedPath
+                    ) { currentPath in
+                        fileTabManager.updateLastKnownPath(currentPath, for: selectedFileTab.id)
+                    }
+                    .id(selectedFileTab.id)
                     .zIndex(1)
+                } else {
+                    RemoteFileTabsEmptyState {
+                        openNewFileTab(selectFilesViewOnSuccess: false)
+                    }
+                    .zIndex(1)
+                }
             }
 
             #if os(macOS)
@@ -256,7 +299,19 @@ struct ConnectionTerminalContainer: View {
     }
 
     private func handleNewTabCommand() {
-        openNewTab(selectTerminalViewOnSuccess: true)
+        if selectedView == ConnectionViewTab.files.id {
+            openNewFileTab(selectFilesViewOnSuccess: true)
+        } else {
+            openNewTab(selectTerminalViewOnSuccess: true)
+        }
+    }
+
+    private func ensureInitialFileTabIfNeeded() {
+        guard selectedView == ConnectionViewTab.files.id else { return }
+
+        let seedPath = selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
+        guard let fileTab = fileTabManager.ensureInitialTab(for: server, seedPath: seedPath) else { return }
+        fileBrowser.prepareNewTab(fileTab, duplicating: nil)
     }
 
     private func openNewTab(selectTerminalViewOnSuccess: Bool = false) {
@@ -282,6 +337,28 @@ struct ConnectionTerminalContainer: View {
         }
     }
 
+    private func openNewFileTab(selectFilesViewOnSuccess: Bool = false) {
+        guard fileTabManager.canOpenNewTab(for: server.id) else {
+            showingFileTabLimitAlert = true
+            return
+        }
+
+        let sourceTab = selectedFileTab
+        let seedPath = sourceTab.flatMap { fileBrowser.lastVisitedPath(for: $0) }
+            ?? selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
+        let newTab = sourceTab.flatMap { fileTabManager.duplicateTab($0, seedPath: seedPath) }
+            ?? fileTabManager.openTab(for: server, seedPath: seedPath)
+
+        guard let newTab else { return }
+        fileBrowser.prepareNewTab(newTab, duplicating: sourceTab)
+
+        if selectFilesViewOnSuccess {
+            tabManager.selectedViewByServer[server.id] = viewTabConfig.isTabVisible(ConnectionViewTab.files.id)
+                ? ConnectionViewTab.files.id
+                : viewTabConfig.effectiveDefaultTab()
+        }
+    }
+
     private func selectPreviousTab() {
         guard let currentId = selectedTabId,
               let currentIndex = serverTabs.firstIndex(where: { $0.id == currentId }),
@@ -294,6 +371,88 @@ struct ConnectionTerminalContainer: View {
               let currentIndex = serverTabs.firstIndex(where: { $0.id == currentId }),
               currentIndex < serverTabs.count - 1 else { return }
         selectedTabIdBinding.wrappedValue = serverTabs[currentIndex + 1].id
+    }
+
+    private func selectPreviousFileTab() {
+        fileTabManager.selectPreviousTab(for: server.id)
+    }
+
+    private func selectNextFileTab() {
+        fileTabManager.selectNextTab(for: server.id)
+    }
+
+    private func baseFileTabTitle(for tab: RemoteFileTab) -> String {
+        let candidatePath = fileBrowser.lastVisitedPath(for: tab)
+            ?? tab.lastKnownPath
+            ?? tab.seedPath
+
+        guard let candidatePath else {
+            return server.name.nonEmptyString ?? "/"
+        }
+
+        let normalizedPath = RemoteFilePath.normalize(candidatePath)
+        guard normalizedPath != "/" else {
+            return server.name.nonEmptyString ?? "/"
+        }
+
+        return RemoteFilePath.breadcrumbs(for: normalizedPath).last?.title ?? (server.name.nonEmptyString ?? "/")
+    }
+
+    private func displayedFileTabTitle(for tab: RemoteFileTab) -> String {
+        let baseTitles = Dictionary(
+            uniqueKeysWithValues: serverFileTabs.map { ($0.id, baseFileTabTitle(for: $0)) }
+        )
+        let titleCounts = Dictionary(grouping: baseTitles.values, by: { $0 }).mapValues(\.count)
+        var seenCounts: [String: Int] = [:]
+        var resolvedTitles: [UUID: String] = [:]
+
+        for tab in serverFileTabs {
+            let baseTitle = baseTitles[tab.id] ?? (server.name.nonEmptyString ?? "/")
+            guard (titleCounts[baseTitle] ?? 0) > 1 else {
+                resolvedTitles[tab.id] = baseTitle
+                continue
+            }
+
+            seenCounts[baseTitle, default: 0] += 1
+            resolvedTitles[tab.id] = "\(baseTitle) (\(seenCounts[baseTitle, default: 0]))"
+        }
+
+        return resolvedTitles[tab.id] ?? baseFileTabTitle(for: tab)
+    }
+
+    private func closeSelectedFileTab() {
+        guard let selectedFileTab,
+              let removedTab = fileTabManager.closeTab(selectedFileTab) else {
+            return
+        }
+        fileBrowser.removeState(for: removedTab.id)
+    }
+
+    private func serverViewTabActions() -> ServerViewTabActions {
+        ServerViewTabActions(
+            openNew: handleNewTabCommand,
+            closeSelected: {
+                if selectedView == ConnectionViewTab.files.id {
+                    closeSelectedFileTab()
+                } else if let selectedTab {
+                    tabManager.closeTab(selectedTab)
+                }
+            },
+            selectPrevious: {
+                if selectedView == ConnectionViewTab.files.id {
+                    selectPreviousFileTab()
+                } else {
+                    selectPreviousTab()
+                }
+            },
+            selectNext: {
+                if selectedView == ConnectionViewTab.files.id {
+                    selectNextFileTab()
+                } else {
+                    selectNextTab()
+                }
+            }
+        )
     }
 
     private func updateTerminalBackgroundColor() {
@@ -312,10 +471,11 @@ struct ConnectionTerminalContainer: View {
     private var macOSBody: some View {
         sharedBody
             .focusedValue(\.openTerminalTab, handleNewTabCommand)
+            .focusedValue(\.serverViewTabActions, serverViewTabActions())
             .toolbar {
                 if !isZenModeEnabled {
                     viewPickerToolbarItem
-                    if selectedView == "terminal" && !serverTabs.isEmpty {
+                    if (selectedView == "terminal" && !serverTabs.isEmpty) || selectedView == "files" {
                         tabsToolbarSpacer
                         tabsToolbarItem
                     }
@@ -391,13 +551,53 @@ struct ConnectionTerminalContainer: View {
     @ToolbarContentBuilder
     private var tabsToolbarItem: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            TerminalTabsScrollView(
-                tabs: serverTabs,
-                selectedTabId: selectedTabIdBinding,
-                onClose: { tab in tabManager.closeTab(tab) },
-                onNew: { openNewTab() },
-                tabManager: tabManager
-            )
+            if selectedView == ConnectionViewTab.files.id {
+                RemoteFileTabsScrollView(
+                    tabs: serverFileTabs,
+                    selectedTabId: selectedFileTabIdBinding,
+                    titleForTab: displayedFileTabTitle(for:),
+                    onSelect: { fileTabManager.selectTab($0) },
+                    onClose: { tab in
+                        if let removedTab = fileTabManager.closeTab(tab) {
+                            fileBrowser.removeState(for: removedTab.id)
+                        }
+                    },
+                    onCloseOtherTabs: { tab in
+                        for removedTab in fileTabManager.closeOtherTabs(except: tab) {
+                            fileBrowser.removeState(for: removedTab.id)
+                        }
+                    },
+                    onCloseTabsToLeft: { tab in
+                        for removedTab in fileTabManager.closeTabsToLeft(of: tab) {
+                            fileBrowser.removeState(for: removedTab.id)
+                        }
+                    },
+                    onCloseTabsToRight: { tab in
+                        for removedTab in fileTabManager.closeTabsToRight(of: tab) {
+                            fileBrowser.removeState(for: removedTab.id)
+                        }
+                    },
+                    onDuplicate: { tab in
+                        guard fileTabManager.canOpenNewTab(for: server.id) else {
+                            showingFileTabLimitAlert = true
+                            return
+                        }
+
+                        let seedPath = fileBrowser.lastVisitedPath(for: tab)
+                        guard let duplicate = fileTabManager.duplicateTab(tab, seedPath: seedPath) else { return }
+                        fileBrowser.prepareNewTab(duplicate, duplicating: tab)
+                    },
+                    onNew: { openNewFileTab(selectFilesViewOnSuccess: false) }
+                )
+            } else {
+                TerminalTabsScrollView(
+                    tabs: serverTabs,
+                    selectedTabId: selectedTabIdBinding,
+                    onClose: { tab in tabManager.closeTab(tab) },
+                    onNew: { openNewTab() },
+                    tabManager: tabManager
+                )
+            }
         }
     }
 
@@ -438,45 +638,54 @@ struct ConnectionTerminalContainer: View {
     }
 
     private var filesActionsToolbarButton: some View {
-        let currentPath = fileBrowser.currentPath(for: server.id)
-        let areHiddenFilesVisible = fileBrowser.showHiddenFiles(for: server.id)
+        let currentPath = selectedFileTab.map { fileBrowser.currentPath(for: $0) } ?? "/"
+        let areHiddenFilesVisible = selectedFileTab.map { fileBrowser.showHiddenFiles(for: $0) } ?? false
 
         return Menu {
             Button {
-                Task { await fileBrowser.goUp(server: server) }
+                guard let selectedFileTab else { return }
+                Task { await fileBrowser.goUp(in: selectedFileTab, server: server) }
             } label: {
                 Label("Parent", systemImage: "arrow.turn.up.left")
             }
-            .disabled(currentPath == "/")
+            .disabled(selectedFileTab == nil || currentPath == "/")
 
             Button {
-                Task { await fileBrowser.refresh(server: server) }
+                guard let selectedFileTab else { return }
+                Task { await fileBrowser.refresh(server: server, tab: selectedFileTab) }
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
+            .disabled(selectedFileTab == nil)
 
             Divider()
 
             Button {
-                fileBrowser.requestUploadPicker(for: server.id, destinationPath: currentPath)
+                guard let selectedFileTab else { return }
+                fileBrowser.requestUploadPicker(for: selectedFileTab, destinationPath: currentPath)
             } label: {
                 Label("Upload…", systemImage: "square.and.arrow.up")
             }
+            .disabled(selectedFileTab == nil)
 
             Button {
-                fileBrowser.requestCreateFolder(for: server.id, destinationPath: currentPath)
+                guard let selectedFileTab else { return }
+                fileBrowser.requestCreateFolder(for: selectedFileTab, destinationPath: currentPath)
             } label: {
                 Label("New Folder…", systemImage: "folder.badge.plus")
             }
+            .disabled(selectedFileTab == nil)
 
             Button {
-                fileBrowser.setShowHiddenFiles(!areHiddenFilesVisible, serverId: server.id)
+                guard let selectedFileTab else { return }
+                fileBrowser.setShowHiddenFiles(!areHiddenFilesVisible, for: selectedFileTab)
             } label: {
                 Label(
                     areHiddenFilesVisible ? "Hide Hidden Files" : "Show Hidden Files",
                     systemImage: areHiddenFilesVisible ? "eye.slash" : "eye"
                 )
             }
+            .disabled(selectedFileTab == nil)
 
             Divider()
 
@@ -537,19 +746,46 @@ struct ConnectionTerminalContainer: View {
                 selectedView: selectedView,
                 selectedViewBinding: selectedViewBinding,
                 viewTabs: visibleViewTabs,
-                tabs: serverTabs,
-                selectedTabId: selectedTabIdBinding,
+                terminalTabs: serverTabs,
+                selectedTerminalTabId: selectedTabIdBinding,
                 paneState: { tab in
                     tabManager.paneStates[tab.focusedPaneId]
                 },
-                onPreviousTab: { selectPreviousTab() },
-                onNextTab: { selectNextTab() },
-                onNewTab: {
+                fileTabs: serverFileTabs,
+                selectedFileTabId: selectedFileTabIdBinding,
+                fileTabTitle: displayedFileTabTitle(for:),
+                onPreviousTab: {
+                    if selectedView == ConnectionViewTab.files.id {
+                        selectPreviousFileTab()
+                    } else {
+                        selectPreviousTab()
+                    }
+                },
+                onNextTab: {
+                    if selectedView == ConnectionViewTab.files.id {
+                        selectNextFileTab()
+                    } else {
+                        selectNextTab()
+                    }
+                },
+                onNewTerminalTab: {
                     showingZenPanel = false
                     openNewTab(selectTerminalViewOnSuccess: true)
                 },
-                onCloseTab: { tab in
+                onCloseTerminalTab: { tab in
                     tabManager.closeTab(tab)
+                },
+                onNewFileTab: {
+                    showingZenPanel = false
+                    openNewFileTab(selectFilesViewOnSuccess: true)
+                },
+                onCloseFileTab: { tab in
+                    if let removedTab = fileTabManager.closeTab(tab) {
+                        fileBrowser.removeState(for: removedTab.id)
+                    }
+                },
+                onSelectFileTab: { tab in
+                    fileTabManager.selectTab(tab)
                 },
                 onSplitRight: {
                     splitFocusedPane(.horizontal)
@@ -572,16 +808,21 @@ struct ConnectionTerminalContainer: View {
                     showingZenPanel = false
                     showingDisconnectConfirmation = true
                 },
-                canFilesGoUp: fileBrowser.currentPath(for: server.id) != "/",
+                canFilesGoUp: selectedFileTab.map { fileBrowser.currentPath(for: $0) != "/" } ?? false,
                 filesShowHiddenBinding: Binding(
-                    get: { fileBrowser.showHiddenFiles(for: server.id) },
-                    set: { fileBrowser.setShowHiddenFiles($0, serverId: server.id) }
+                    get: { selectedFileTab.map { fileBrowser.showHiddenFiles(for: $0) } ?? false },
+                    set: { newValue in
+                        guard let selectedFileTab else { return }
+                        fileBrowser.setShowHiddenFiles(newValue, for: selectedFileTab)
+                    }
                 ),
                 onFilesGoUp: {
-                    Task { await fileBrowser.goUp(server: server) }
+                    guard let selectedFileTab else { return }
+                    Task { await fileBrowser.goUp(in: selectedFileTab, server: server) }
                 },
                 onFilesRefresh: {
-                    Task { await fileBrowser.refresh(server: server) }
+                    guard let selectedFileTab else { return }
+                    Task { await fileBrowser.refresh(server: server, tab: selectedFileTab) }
                 },
                 onExitZen: {
                     showingZenPanel = false
@@ -596,6 +837,7 @@ struct ConnectionTerminalContainer: View {
     private func disconnectFromServer() {
         tabManager.closeAllTabs(for: server.id)
         fileBrowser.disconnect(serverId: server.id)
+        fileTabManager.disconnect(serverId: server.id)
         tabManager.connectedServerIds.remove(server.id)
     }
 
@@ -764,6 +1006,9 @@ private struct MacOSToolbarBackdrop: View {
 private extension ConnectionTerminalContainer {
     var zenIndicatorColor: Color {
         guard let state = selectedTab.flatMap({ tabManager.paneStates[$0.focusedPaneId] }) else {
+            if selectedView == ConnectionViewTab.files.id {
+                return serverFileTabs.isEmpty ? .secondary : .green
+            }
             return serverTabs.isEmpty ? .secondary : .green
         }
 
@@ -780,20 +1025,39 @@ private extension ConnectionTerminalContainer {
     }
 
     var tabsStatusText: String {
-        if serverTabs.isEmpty {
+        let count = selectedView == ConnectionViewTab.files.id ? serverFileTabs.count : serverTabs.count
+
+        if selectedView == ConnectionViewTab.files.id {
+            if count == 0 {
+                return String(localized: "No file tabs")
+            }
+
+            return count == 1
+                ? String(localized: "1 file tab")
+                : String(format: String(localized: "%lld file tabs"), Int64(count))
+        }
+
+        if count == 0 {
             return String(localized: "No terminals")
         }
-        let count = serverTabs.count
+
         return count == 1
-            ? String(format: String(localized: "%lld tab"), count)
-            : String(format: String(localized: "%lld tabs"), count)
+            ? String(localized: "1 tab")
+            : String(format: String(localized: "%lld tabs"), Int64(count))
     }
 
     var compactTabsStatusText: String {
-        let count = serverTabs.count
+        let count = selectedView == ConnectionViewTab.files.id ? serverFileTabs.count : serverTabs.count
+
+        if selectedView == ConnectionViewTab.files.id {
+            return count == 1
+                ? String(localized: "1 file tab")
+                : String(format: String(localized: "%lld file tabs"), Int64(count))
+        }
+
         return count == 1
-            ? String(format: String(localized: "%lld tab"), count)
-            : String(format: String(localized: "%lld tabs"), count)
+            ? String(localized: "1 tab")
+            : String(format: String(localized: "%lld tabs"), Int64(count))
     }
 
     var disconnectAlertTitle: String {
@@ -805,9 +1069,22 @@ private extension ConnectionTerminalContainer {
     }
 
     var disconnectAlertMessage: String {
-        serverTabs.isEmpty
-            ? String(localized: "This will return to the server list.")
-            : String(localized: "All terminal tabs for this server will be closed.")
+        let terminalCount = serverTabs.count
+        let fileCount = serverFileTabs.count
+
+        if terminalCount == 0, fileCount == 0 {
+            return String(localized: "This will return to the server list.")
+        }
+
+        if terminalCount > 0, fileCount > 0 {
+            return String(localized: "All terminal and file tabs for this server will be closed.")
+        }
+
+        if fileCount > 0 {
+            return String(localized: "All file tabs for this server will be closed.")
+        }
+
+        return String(localized: "All terminal tabs for this server will be closed.")
     }
 }
 #endif
@@ -822,20 +1099,18 @@ struct TerminalTabsScrollView: View {
     let onNew: () -> Void
     @ObservedObject var tabManager: TerminalTabManager
 
-    @State private var isNewTabHovering = false
-
     var body: some View {
         HStack(spacing: 4) {
             // Navigation arrows
             HStack(spacing: 4) {
-                NavigationArrowButton(
+                ServerViewTabNavigationButton(
                     icon: "chevron.left",
                     action: { selectPrevious() },
                     help: String(localized: "Previous tab")
                 )
                 .disabled(tabs.count <= 1)
 
-                NavigationArrowButton(
+                ServerViewTabNavigationButton(
                     icon: "chevron.right",
                     action: { selectNext() },
                     help: String(localized: "Next tab")
@@ -862,18 +1137,10 @@ struct TerminalTabsScrollView: View {
             .frame(maxWidth: 600, maxHeight: 36)
 
             // New tab button
-            Button(action: onNew) {
-                Image(systemName: "plus")
-                    .font(.system(size: 11))
-                    .frame(width: 24, height: 24)
-                    .background(
-                        isNewTabHovering ? Color(nsColor: .separatorColor).opacity(0.5) : Color.clear,
-                        in: Circle()
-                    )
-            }
-            .buttonStyle(.plain)
-            .onHover { isNewTabHovering = $0 }
-            .help(Text("New terminal tab"))
+            ServerViewNewTabButton(
+                help: String(localized: "New terminal tab"),
+                action: onNew
+            )
             .padding(.trailing, 8)
         }
     }

@@ -1,19 +1,22 @@
+import Combine
 import Foundation
 
 extension RemoteFileBrowserStore {
-    func requestUploadPicker(for serverId: UUID, destinationPath: String) {
+    func requestUploadPicker(for tab: RemoteFileTab, destinationPath: String) {
         setPendingToolbarCommand(
             ToolbarCommand(
-                serverId: serverId,
+                serverId: tab.serverId,
+                tabId: tab.id,
                 action: .upload(destinationPath: RemoteFilePath.normalize(destinationPath))
             )
         )
     }
 
-    func requestCreateFolder(for serverId: UUID, destinationPath: String) {
+    func requestCreateFolder(for tab: RemoteFileTab, destinationPath: String) {
         setPendingToolbarCommand(
             ToolbarCommand(
-                serverId: serverId,
+                serverId: tab.serverId,
+                tabId: tab.id,
                 action: .createFolder(destinationPath: RemoteFilePath.normalize(destinationPath))
             )
         )

@@ -77,12 +77,14 @@ struct LimitReachedAlert: ViewModifier {
         case servers
         case workspaces
         case tabs
+        case fileTabs
 
         var title: String {
             switch self {
             case .servers: return String(localized: "Server Limit Reached")
             case .workspaces: return String(localized: "Workspace Limit Reached")
             case .tabs: return String(localized: "Tab Limit Reached")
+            case .fileTabs: return String(localized: "File Tab Limit Reached")
             }
         }
 
@@ -94,6 +96,8 @@ struct LimitReachedAlert: ViewModifier {
                 return String(format: String(localized: "You've reached the limit of %lld workspace on the free plan. Upgrade to Pro for unlimited workspaces."), Int64(FreeTierLimits.maxWorkspaces))
             case .tabs:
                 return String(format: String(localized: "You can only have %lld connection at a time on the free plan. Upgrade to Pro for multiple simultaneous connections."), Int64(FreeTierLimits.maxTabs))
+            case .fileTabs:
+                return String(localized: "You can only have 1 file tab at a time on the free plan. Upgrade to Pro for multiple file tabs.")
             }
         }
     }

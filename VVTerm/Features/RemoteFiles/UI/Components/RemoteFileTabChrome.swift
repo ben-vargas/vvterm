@@ -1,0 +1,313 @@
+import SwiftUI
+
+#if os(macOS)
+import AppKit
+#endif
+
+struct RemoteFileTabsEmptyState: View {
+    let onNewTab: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            RemoteFileEmptyState(
+                icon: "folder.badge.questionmark",
+                title: String(localized: "No File Tabs Open"),
+                message: String(localized: "Open a file tab to browse, preview, and transfer files for this server.")
+            )
+
+            Button(action: onNewTab) {
+                Label(String(localized: "New File Tab"), systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(24)
+    }
+}
+
+#if os(macOS)
+struct RemoteFileTabsScrollView: View {
+    let tabs: [RemoteFileTab]
+    @Binding var selectedTabId: UUID?
+    let titleForTab: (RemoteFileTab) -> String
+    let onSelect: (RemoteFileTab) -> Void
+    let onClose: (RemoteFileTab) -> Void
+    let onCloseOtherTabs: (RemoteFileTab) -> Void
+    let onCloseTabsToLeft: (RemoteFileTab) -> Void
+    let onCloseTabsToRight: (RemoteFileTab) -> Void
+    let onDuplicate: (RemoteFileTab) -> Void
+    let onNew: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            HStack(spacing: 4) {
+                ServerViewTabNavigationButton(
+                    icon: "chevron.left",
+                    action: selectPrevious,
+                    help: String(localized: "Previous file tab")
+                )
+                .disabled(tabs.count <= 1)
+
+                ServerViewTabNavigationButton(
+                    icon: "chevron.right",
+                    action: selectNext,
+                    help: String(localized: "Next file tab")
+                )
+                .disabled(tabs.count <= 1)
+            }
+            .padding(.leading, 8)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(tabs) { tab in
+                        RemoteFileTabButton(
+                            title: titleForTab(tab),
+                            isSelected: selectedTabId == tab.id,
+                            onSelect: {
+                                selectedTabId = tab.id
+                                onSelect(tab)
+                            },
+                            onClose: { onClose(tab) }
+                        )
+                        .contextMenu {
+                            Button(String(localized: "Close Tab")) {
+                                onClose(tab)
+                            }
+
+                            Divider()
+
+                            Button(String(localized: "Close Other Tabs")) {
+                                onCloseOtherTabs(tab)
+                            }
+
+                            Button(String(localized: "Close All to the Left")) {
+                                onCloseTabsToLeft(tab)
+                            }
+                            .disabled((tabs.firstIndex(where: { $0.id == tab.id }) ?? 0) == 0)
+
+                            Button(String(localized: "Close All to the Right")) {
+                                onCloseTabsToRight(tab)
+                            }
+                            .disabled((tabs.firstIndex(where: { $0.id == tab.id }) ?? (tabs.count - 1)) >= tabs.count - 1)
+
+                            Divider()
+
+                            Button(String(localized: "Duplicate Tab")) {
+                                onDuplicate(tab)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 6)
+            }
+            .frame(maxWidth: 600, maxHeight: 36)
+
+            ServerViewNewTabButton(
+                help: String(localized: "New file tab"),
+                action: onNew
+            )
+            .padding(.trailing, 8)
+        }
+    }
+
+    private func selectPrevious() {
+        guard let currentId = selectedTabId,
+              let currentIndex = tabs.firstIndex(where: { $0.id == currentId }),
+              currentIndex > 0 else { return }
+
+        let target = tabs[currentIndex - 1]
+        selectedTabId = target.id
+        onSelect(target)
+    }
+
+    private func selectNext() {
+        guard let currentId = selectedTabId,
+              let currentIndex = tabs.firstIndex(where: { $0.id == currentId }),
+              currentIndex < tabs.count - 1 else { return }
+
+        let target = tabs[currentIndex + 1]
+        selectedTabId = target.id
+        onSelect(target)
+    }
+}
+
+private struct RemoteFileTabButton: View {
+    let title: String
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onClose: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 6) {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 14, height: 14)
+                        .background(
+                            Circle()
+                                .fill(Color.primary.opacity(isHovering ? 0.1 : 0))
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Image(systemName: "folder")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                Text(title)
+                    .font(.callout)
+                    .lineLimit(1)
+            }
+            .padding(.leading, 6)
+            .padding(.trailing, 12)
+            .padding(.vertical, 6)
+            .background(
+                isSelected
+                    ? Color(nsColor: .separatorColor)
+                    : (isHovering ? Color(nsColor: .separatorColor).opacity(0.5) : Color.clear),
+                in: Capsule()
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+    }
+}
+#endif
+
+#if os(iOS)
+struct iOSRemoteFileTabsBar: View {
+    let tabs: [RemoteFileTab]
+    @Binding var selectedTabId: UUID?
+    let titleForTab: (RemoteFileTab) -> String
+    let onSelect: (RemoteFileTab) -> Void
+    let onClose: (RemoteFileTab) -> Void
+
+    private let minTabWidth: CGFloat = 120
+
+    var body: some View {
+        GeometryReader { proxy in
+            let count = max(tabs.count, 1)
+            let availableWidth = max(proxy.size.width - ServerViewTopTabBarMetrics.horizontalPadding * 2, 0)
+            let totalSpacing = ServerViewTopTabBarMetrics.tabSpacing * CGFloat(max(count - 1, 0))
+            let itemWidth = count > 0 ? (availableWidth - totalSpacing) / CGFloat(count) : 0
+            let useEqualWidth = itemWidth >= minTabWidth
+
+            Group {
+                if useEqualWidth {
+                    HStack(spacing: ServerViewTopTabBarMetrics.tabSpacing) {
+                        ForEach(tabs) { tab in
+                            iOSRemoteFileTabButton(
+                                title: titleForTab(tab),
+                                isSelected: selectedTabId == tab.id,
+                                fixedWidth: itemWidth,
+                                onSelect: {
+                                    selectedTabId = tab.id
+                                    onSelect(tab)
+                                },
+                                onClose: { onClose(tab) }
+                            )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, ServerViewTopTabBarMetrics.horizontalPadding)
+                    .padding(.vertical, ServerViewTopTabBarMetrics.barVerticalInset)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: ServerViewTopTabBarMetrics.tabSpacing) {
+                            ForEach(tabs) { tab in
+                                iOSRemoteFileTabButton(
+                                    title: titleForTab(tab),
+                                    isSelected: selectedTabId == tab.id,
+                                    fixedWidth: nil,
+                                    onSelect: {
+                                        selectedTabId = tab.id
+                                        onSelect(tab)
+                                    },
+                                    onClose: { onClose(tab) }
+                                )
+                                .frame(minWidth: minTabWidth)
+                            }
+                        }
+                        .padding(.horizontal, ServerViewTopTabBarMetrics.horizontalPadding)
+                        .padding(.vertical, ServerViewTopTabBarMetrics.barVerticalInset)
+                        .animation(nil, value: tabs.map(\.id))
+                    }
+                }
+            }
+            .transaction { transaction in
+                transaction.animation = nil
+            }
+        }
+        .frame(height: ServerViewTopTabBarMetrics.barHeight)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.primary.opacity(0.08))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                )
+        )
+        .clipShape(Capsule(style: .continuous))
+        .padding(.horizontal, ServerViewTopTabBarMetrics.outerHorizontalPadding)
+        .padding(.vertical, 6)
+    }
+}
+
+private struct iOSRemoteFileTabButton: View {
+    let title: String
+    let isSelected: Bool
+    let fixedWidth: CGFloat?
+    let onSelect: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "folder")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Text(title)
+                .font(.callout)
+                .lineLimit(1)
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 36)
+        .padding(.vertical, ServerViewTopTabBarMetrics.tabVerticalPadding)
+        .frame(height: ServerViewTopTabBarMetrics.tabHeight)
+        .frame(width: fixedWidth, alignment: .leading)
+        .foregroundStyle(.primary)
+        .background(
+            isSelected ? Color.primary.opacity(0.18) : Color.clear,
+            in: Capsule(style: .continuous)
+        )
+        .overlay(alignment: .trailing) {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.primary.opacity(0.92))
+                    .frame(width: 20, height: 20)
+                    .background(
+                        Circle()
+                            .fill(Color.primary.opacity(isSelected ? 0.16 : 0.12))
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 8)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelect()
+        }
+        .accessibilityAddTraits(.isButton)
+        .animation(.easeInOut(duration: 0.12), value: isSelected)
+    }
+}
+#endif

@@ -1,16 +1,18 @@
+import Combine
 import Foundation
 import os.log
 
 extension RemoteFileBrowserStore {
     func loadPreview(
         for entry: RemoteFileEntry,
-        serverId: UUID,
+        in tab: RemoteFileTab,
+        server: Server,
         allowLargeDownloads: Bool = false
     ) async {
+        guard tab.serverId == server.id else { return }
         guard entry.supportsPreview else { return }
-        guard let server = server(for: serverId) else { return }
 
-        let currentState = state(for: serverId)
+        let currentState = state(for: tab)
         if currentState.isLoadingViewer, currentState.selectedEntryPath == entry.path {
             return
         }
@@ -24,8 +26,8 @@ extension RemoteFileBrowserStore {
            fileSize > UInt64(Self.previewConfirmationBytes),
            !allowLargeDownloads {
             cleanupPreviewArtifact(for: currentState.viewerPayload)
-            viewerRequestIDs.removeValue(forKey: serverId)
-            updateState(for: serverId) { state in
+            viewerRequestIDs.removeValue(forKey: tab.id)
+            updateState(for: tab) { state in
                 state.selectedEntryPath = entry.path
                 state.isLoadingViewer = false
                 state.viewerError = nil
@@ -46,10 +48,10 @@ extension RemoteFileBrowserStore {
         }
 
         let requestID = UUID()
-        viewerRequestIDs[serverId] = requestID
+        viewerRequestIDs[tab.id] = requestID
         cleanupPreviewArtifact(for: currentState.viewerPayload)
 
-        updateState(for: serverId) { state in
+        updateState(for: tab) { state in
             state.selectedEntryPath = entry.path
             state.isLoadingViewer = true
             state.viewerError = nil
@@ -63,7 +65,7 @@ extension RemoteFileBrowserStore {
                 try await service.readFile(at: entry.path, maxBytes: effectiveReadLimit)
             }
 
-            guard viewerRequestIDs[serverId] == requestID else { return }
+            guard viewerRequestIDs[tab.id] == requestID else { return }
 
             let previewData = data.prefix(Self.defaultPreviewBytes)
             let isTruncated = (entry.size.map { $0 > UInt64(Self.defaultPreviewBytes) } ?? false)
@@ -137,15 +139,15 @@ extension RemoteFileBrowserStore {
                 )
             }
 
-            updateState(for: serverId) { state in
+            updateState(for: tab) { state in
                 state.isLoadingViewer = false
                 state.viewerError = nil
                 state.viewerPayload = payload
             }
         } catch {
-            guard viewerRequestIDs[serverId] == requestID else { return }
+            guard viewerRequestIDs[tab.id] == requestID else { return }
             logger.error("Remote file preview failed for \(entry.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            updateState(for: serverId) { state in
+            updateState(for: tab) { state in
                 state.isLoadingViewer = false
                 state.viewerPayload = nil
                 state.viewerError = RemoteFileBrowserError.map(error)
@@ -153,19 +155,24 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func clearViewer(serverId: UUID) {
-        cleanupPreviewArtifact(for: state(for: serverId).viewerPayload)
-        updateState(for: serverId) { state in
+    func clearViewer(for tab: RemoteFileTab) {
+        cleanupPreviewArtifact(for: state(for: tab).viewerPayload)
+        updateState(for: tab) { state in
             state.selectedEntryPath = nil
             state.viewerPayload = nil
             state.viewerError = nil
             state.isLoadingViewer = false
         }
-        viewerRequestIDs.removeValue(forKey: serverId)
+        viewerRequestIDs.removeValue(forKey: tab.id)
     }
 
-    func saveTextPreview(_ text: String, for entry: RemoteFileEntry, serverId: UUID) async throws {
-        guard let server = server(for: serverId) else {
+    func saveTextPreview(
+        _ text: String,
+        for entry: RemoteFileEntry,
+        in tab: RemoteFileTab,
+        server: Server
+    ) async throws {
+        guard tab.serverId == server.id else {
             throw RemoteFileBrowserError.disconnected
         }
 
@@ -179,7 +186,7 @@ extension RemoteFileBrowserStore {
             return try await service.lstat(at: entry.path)
         }
 
-        updateState(for: serverId) { state in
+        updateState(for: tab) { state in
             if let index = state.entries.firstIndex(where: { $0.path == entry.path }) {
                 state.entries[index] = updatedEntry
             }
