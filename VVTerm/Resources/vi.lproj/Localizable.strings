@@ -97,18 +97,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "Chào mừng đến với VVTerm";
-"Your secure SSH terminal" = "Terminal SSH an toàn của bạn";
+"Your secure SSH terminal" = "Terminal, tệp và thống kê máy chủ trực tiếp trong cùng một nơi.";
 "Continue" = "Tiếp tục";
 "SSH Terminal" = "Terminal SSH";
-"Connect to servers with GPU-accelerated terminal emulation." = "Kết nối máy chủ với mô phỏng terminal tăng tốc GPU.";
+"Connect to servers with GPU-accelerated terminal emulation." = "Mở terminal nhanh và vào bất kỳ máy chủ nào chỉ trong vài giây.";
+"SFTP Files" = "Tệp SFTP";
+"Browse folders, preview files, and move things around on your server." = "Duyệt thư mục, xem trước tệp và di chuyển mọi thứ trên máy chủ của bạn.";
+"Server Stats" = "Thống kê máy chủ";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "Theo dõi CPU, bộ nhớ, ổ đĩa và mạng chỉ trong một cái nhìn.";
 "iCloud Sync" = "Đồng bộ iCloud";
-"Servers and credentials sync across all your devices." = "Máy chủ và thông tin xác thực được đồng bộ trên tất cả thiết bị.";
+"Servers and credentials sync across all your devices." = "Máy chủ của bạn luôn theo cùng trên iPhone, iPad và Mac.";
 "Session Persistence" = "Duy trì phiên";
-"Keep sessions alive with tmux, even after disconnects." = "Giữ phiên hoạt động với tmux, ngay cả khi bị ngắt kết nối.";
+"Keep sessions alive with tmux, even after disconnects." = "Tiếp tục đúng chỗ đang làm dở, kể cả khi kết nối bị ngắt.";
 "Secure Storage" = "Lưu trữ an toàn";
-"Passwords and SSH keys protected by Keychain." = "Mật khẩu và khóa SSH được bảo vệ bởi Keychain.";
+"Passwords and SSH keys protected by Keychain." = "Mật khẩu và khóa được cất an toàn trong Keychain.";
 "Voice Commands" = "Lệnh giọng nói";
-"Speak commands with on-device speech recognition." = "Nói lệnh bằng nhận dạng giọng nói trên thiết bị.";
+"Speak commands with on-device speech recognition." = "Nói lệnh thành tiếng khi cách đó nhanh hơn gõ.";
 
 /* Settings Navigation */
 "Settings" = "Cài đặt";

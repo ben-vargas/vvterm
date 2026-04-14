@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "Welcome to VVTerm";
-"Your secure SSH terminal" = "Your secure SSH terminal";
+"Your secure SSH terminal" = "Terminal, files, and live server stats in one place.";
 "Continue" = "Continue";
 "SSH Terminal" = "SSH Terminal";
-"Connect to servers with GPU-accelerated terminal emulation." = "Connect to servers with GPU-accelerated terminal emulation.";
+"Connect to servers with GPU-accelerated terminal emulation." = "Open a fast terminal and jump into any server in seconds.";
+"SFTP Files" = "SFTP Files";
+"Browse folders, preview files, and move things around on your server." = "Browse folders, preview files, and move things around on your server.";
+"Server Stats" = "Server Stats";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "Keep an eye on CPU, memory, disk, and network activity at a glance.";
 "iCloud Sync" = "iCloud Sync";
-"Servers and credentials sync across all your devices." = "Servers and credentials sync across all your devices.";
+"Servers and credentials sync across all your devices." = "Your servers stay with you across iPhone, iPad, and Mac.";
 "Session Persistence" = "Session Persistence";
-"Keep sessions alive with tmux, even after disconnects." = "Keep sessions alive with tmux, even after disconnects.";
+"Keep sessions alive with tmux, even after disconnects." = "Pick up where you left off, even if the connection drops.";
 "Secure Storage" = "Secure Storage";
-"Passwords and SSH keys protected by Keychain." = "Passwords and SSH keys protected by Keychain.";
+"Passwords and SSH keys protected by Keychain." = "Passwords and keys stay safely tucked away in Keychain.";
 "Voice Commands" = "Voice Commands";
-"Speak commands with on-device speech recognition." = "Speak commands with on-device speech recognition.";
+"Speak commands with on-device speech recognition." = "Say a command out loud when typing is the slower option.";
 
 /* Settings Navigation */
 "Settings" = "Settings";

@@ -18,6 +18,18 @@ enum WelcomeFeatureCatalog {
             color: .blue
         ),
         WelcomeFeature(
+            icon: "folder.fill",
+            title: "SFTP Files",
+            description: "Browse folders, preview files, and move things around on your server.",
+            color: .indigo
+        ),
+        WelcomeFeature(
+            icon: "chart.xyaxis.line",
+            title: "Server Stats",
+            description: "Keep an eye on CPU, memory, disk, and network activity at a glance.",
+            color: .mint
+        ),
+        WelcomeFeature(
             icon: "icloud.fill",
             title: "iCloud Sync",
             description: "Servers and credentials sync across all your devices.",

@@ -90,18 +90,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "Ласкаво просимо до VVTerm";
-"Your secure SSH terminal" = "Ваш безпечний SSH‑термінал";
+"Your secure SSH terminal" = "Термінал, файли й жива статистика сервера в одному місці.";
 "Continue" = "Продовжити";
 "SSH Terminal" = "SSH‑термінал";
-"Connect to servers with GPU-accelerated terminal emulation." = "Підключайтеся до серверів із GPU‑прискореною емуляцією термінала.";
+"Connect to servers with GPU-accelerated terminal emulation." = "Відкрийте швидкий термінал і заходьте на будь-який сервер за лічені секунди.";
+"SFTP Files" = "SFTP‑файли";
+"Browse folders, preview files, and move things around on your server." = "Переглядайте папки, відкривайте файли в попередньому перегляді й переміщуйте їх на сервері.";
+"Server Stats" = "Статистика сервера";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "Стежте за CPU, пам’яттю, диском і мережею з першого погляду.";
 "iCloud Sync" = "Синхронізація iCloud";
-"Servers and credentials sync across all your devices." = "Сервери та облікові дані синхронізуються на всіх ваших пристроях.";
+"Servers and credentials sync across all your devices." = "Ваші сервери завжди поруч на iPhone, iPad і Mac.";
 "Session Persistence" = "Збереження сеансів";
-"Keep sessions alive with tmux, even after disconnects." = "Зберігайте сеанси з tmux навіть після розривів з’єднання.";
+"Keep sessions alive with tmux, even after disconnects." = "Продовжуйте з того місця, де зупинилися, навіть якщо зв’язок обірвався.";
 "Secure Storage" = "Безпечне сховище";
-"Passwords and SSH keys protected by Keychain." = "Паролі та SSH‑ключі захищені Зв’язкою ключів.";
+"Passwords and SSH keys protected by Keychain." = "Паролі й ключі надійно зберігаються в Зв’язці ключів.";
 "Voice Commands" = "Голосові команди";
-"Speak commands with on-device speech recognition." = "Вимовляйте команди з розпізнаванням мовлення на пристрої.";
+"Speak commands with on-device speech recognition." = "Скажіть команду вголос, коли це швидше, ніж друкувати.";
 
 /* Settings Navigation */
 "Settings" = "Налаштування";

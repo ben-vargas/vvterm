@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "Witamy w VVTerm";
-"Your secure SSH terminal" = "Twój bezpieczny terminal SSH";
+"Your secure SSH terminal" = "Terminal, pliki i statystyki serwera na żywo w jednym miejscu.";
 "Continue" = "Kontynuuj";
 "SSH Terminal" = "Terminal SSH";
-"Connect to servers with GPU-accelerated terminal emulation." = "Łącz się z serwerami dzięki akcelerowanej GPU emulacji terminala.";
+"Connect to servers with GPU-accelerated terminal emulation." = "Otwórz szybki terminal i połącz się z dowolnym serwerem w kilka sekund.";
+"SFTP Files" = "Pliki SFTP";
+"Browse folders, preview files, and move things around on your server." = "Przeglądaj foldery, podglądaj pliki i przenoś rzeczy na swoim serwerze.";
+"Server Stats" = "Statystyki serwera";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "Sprawdzaj na pierwszy rzut oka użycie CPU, pamięci, dysku i sieci.";
 "iCloud Sync" = "Synchronizacja iCloud";
-"Servers and credentials sync across all your devices." = "Serwery i poświadczenia synchronizują się na wszystkich urządzeniach.";
+"Servers and credentials sync across all your devices." = "Twoje serwery są zawsze pod ręką na iPhonie, iPadzie i Macu.";
 "Session Persistence" = "Trwałość sesji";
-"Keep sessions alive with tmux, even after disconnects." = "Zachowuj sesje dzięki tmux, nawet po rozłączeniach.";
+"Keep sessions alive with tmux, even after disconnects." = "Wznów dokładnie tam, gdzie skończyłeś, nawet jeśli połączenie się urwie.";
 "Secure Storage" = "Bezpieczne przechowywanie";
-"Passwords and SSH keys protected by Keychain." = "Hasła i klucze SSH chronione przez Pęk kluczy.";
+"Passwords and SSH keys protected by Keychain." = "Hasła i klucze są bezpiecznie przechowywane w Pęku kluczy.";
 "Voice Commands" = "Polecenia głosowe";
-"Speak commands with on-device speech recognition." = "Wydawaj polecenia dzięki rozpoznawaniu mowy na urządzeniu.";
+"Speak commands with on-device speech recognition." = "Powiedz polecenie na głos, gdy pisanie zajęłoby więcej czasu.";
 
 /* Settings Navigation */
 "Settings" = "Ustawienia";

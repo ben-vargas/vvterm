@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "Сардэчна запрашаем у VVTerm";
-"Your secure SSH terminal" = "Ваш бяспечны SSH‑тэрмінал";
+"Your secure SSH terminal" = "Тэрмінал, файлы і жывая статыстыка сервера ў адным месцы.";
 "Continue" = "Працягнуць";
 "SSH Terminal" = "SSH‑тэрмінал";
-"Connect to servers with GPU-accelerated terminal emulation." = "Падключайцеся да сервераў з GPU‑паскоранай эмуляцыяй тэрмінала.";
+"Connect to servers with GPU-accelerated terminal emulation." = "Адкрыйце хуткі тэрмінал і заходзьце на любы сервер за некалькі секунд.";
+"SFTP Files" = "SFTP‑файлы";
+"Browse folders, preview files, and move things around on your server." = "Праглядайце папкі, адкрывайце папярэдні прагляд файлаў і перамяшчайце іх на серверы.";
+"Server Stats" = "Статыстыка сервера";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "Сачыце за працэсарам, памяццю, дыскам і сеткай з першага погляду.";
 "iCloud Sync" = "Сінхранізацыя iCloud";
-"Servers and credentials sync across all your devices." = "Серверы і ўліковыя даныя сінхранізуюцца на ўсіх вашых прыладах.";
+"Servers and credentials sync across all your devices." = "Вашы серверы заўсёды побач на iPhone, iPad і Mac.";
 "Session Persistence" = "Захаванне сесій";
-"Keep sessions alive with tmux, even after disconnects." = "Захоўвайце сесіі з tmux нават пасля разрываў злучэння.";
+"Keep sessions alive with tmux, even after disconnects." = "Працягвайце з таго месца, дзе спыніліся, нават калі злучэнне абарвалася.";
 "Secure Storage" = "Бяспечнае сховішча";
-"Passwords and SSH keys protected by Keychain." = "Паролі і SSH‑ключы абаронены Звязкай ключоў.";
+"Passwords and SSH keys protected by Keychain." = "Паролі і ключы надзейна захоўваюцца ў Keychain.";
 "Voice Commands" = "Галасавыя каманды";
-"Speak commands with on-device speech recognition." = "Прамаўляйце каманды з распазнаваннем голасу на прыладзе.";
+"Speak commands with on-device speech recognition." = "Скажыце каманду ўголас, калі гэта хутчэй, чым друкаваць.";
 
 /* Settings Navigation */
 "Settings" = "Налады";

@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "Bienvenido a VVTerm";
-"Your secure SSH terminal" = "Tu terminal SSH seguro";
+"Your secure SSH terminal" = "Terminal, archivos y estadísticas del servidor en un solo lugar.";
 "Continue" = "Continuar";
 "SSH Terminal" = "Terminal SSH";
-"Connect to servers with GPU-accelerated terminal emulation." = "Conéctate a servidores con emulación de terminal acelerada por GPU.";
+"Connect to servers with GPU-accelerated terminal emulation." = "Abre un terminal rápido y entra en cualquier servidor en segundos.";
+"SFTP Files" = "Archivos SFTP";
+"Browse folders, preview files, and move things around on your server." = "Explora carpetas, previsualiza archivos y mueve cosas en tu servidor.";
+"Server Stats" = "Estadísticas del servidor";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "Consulta de un vistazo la actividad de CPU, memoria, disco y red.";
 "iCloud Sync" = "Sincronización iCloud";
-"Servers and credentials sync across all your devices." = "Servidores y credenciales se sincronizan en todos tus dispositivos.";
+"Servers and credentials sync across all your devices." = "Tus servidores te acompañan en iPhone, iPad y Mac.";
 "Session Persistence" = "Persistencia de sesiones";
-"Keep sessions alive with tmux, even after disconnects." = "Mantén las sesiones activas con tmux, incluso después de desconexiones.";
+"Keep sessions alive with tmux, even after disconnects." = "Retoma justo donde lo dejaste, incluso si la conexión se corta.";
 "Secure Storage" = "Almacenamiento seguro";
-"Passwords and SSH keys protected by Keychain." = "Contraseñas y claves SSH protegidas por Keychain.";
+"Passwords and SSH keys protected by Keychain." = "Las contraseñas y claves quedan bien guardadas en el Llavero.";
 "Voice Commands" = "Comandos de voz";
-"Speak commands with on-device speech recognition." = "Dicta comandos con reconocimiento de voz en el dispositivo.";
+"Speak commands with on-device speech recognition." = "Di un comando en voz alta cuando escribir sea más lento.";
 
 /* Settings Navigation */
 "Settings" = "Ajustes";

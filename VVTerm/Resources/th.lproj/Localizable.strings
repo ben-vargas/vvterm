@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "ยินดีต้อนรับสู่ VVTerm";
-"Your secure SSH terminal" = "เทอร์มินัล SSH ที่ปลอดภัยของคุณ";
+"Your secure SSH terminal" = "เทอร์มินัล ไฟล์ และสถิติเซิร์ฟเวอร์แบบสดในที่เดียว";
 "Continue" = "ดำเนินการต่อ";
 "SSH Terminal" = "เทอร์มินัล SSH";
-"Connect to servers with GPU-accelerated terminal emulation." = "เชื่อมต่อเซิร์ฟเวอร์ด้วยการจำลองเทอร์มินัลที่เร่งด้วย GPU";
+"Connect to servers with GPU-accelerated terminal emulation." = "เปิดเทอร์มินัลที่ลื่นไหล แล้วเข้าเซิร์ฟเวอร์ไหนก็ได้ในไม่กี่วินาที";
+"SFTP Files" = "ไฟล์ SFTP";
+"Browse folders, preview files, and move things around on your server." = "เรียกดูโฟลเดอร์ ดูตัวอย่างไฟล์ และย้ายสิ่งต่าง ๆ บนเซิร์ฟเวอร์ของคุณ";
+"Server Stats" = "สถิติเซิร์ฟเวอร์";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "ดูการใช้งาน CPU หน่วยความจำ ดิสก์ และเครือข่ายได้ในพริบตา";
 "iCloud Sync" = "ซิงค์ iCloud";
-"Servers and credentials sync across all your devices." = "ซิงค์เซิร์ฟเวอร์และข้อมูลรับรองบนอุปกรณ์ทั้งหมดของคุณ";
+"Servers and credentials sync across all your devices." = "เซิร์ฟเวอร์ของคุณจะติดตัวไปด้วยบน iPhone, iPad และ Mac";
 "Session Persistence" = "การคงอยู่ของเซสชัน";
-"Keep sessions alive with tmux, even after disconnects." = "ทำให้เซสชันคงอยู่ด้วย tmux แม้หลังการตัดการเชื่อมต่อ";
+"Keep sessions alive with tmux, even after disconnects." = "กลับมาทำต่อจากจุดเดิมได้ แม้การเชื่อมต่อจะหลุดไปแล้ว";
 "Secure Storage" = "ที่เก็บข้อมูลปลอดภัย";
-"Passwords and SSH keys protected by Keychain." = "รหัสผ่านและคีย์ SSH ได้รับการป้องกันโดย Keychain";
+"Passwords and SSH keys protected by Keychain." = "รหัสผ่านและกุญแจถูกเก็บไว้อย่างปลอดภัยในพวงกุญแจ";
 "Voice Commands" = "คำสั่งเสียง";
-"Speak commands with on-device speech recognition." = "สั่งงานด้วยการรู้จำเสียงบนอุปกรณ์";
+"Speak commands with on-device speech recognition." = "พูดคำสั่งออกมาได้เลยเมื่อเร็วกว่าการพิมพ์";
 
 /* Settings Navigation */
 "Settings" = "การตั้งค่า";

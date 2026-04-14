@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "欢迎使用 VVTerm";
-"Your secure SSH terminal" = "你的安全 SSH 终端";
+"Your secure SSH terminal" = "终端、文件和实时服务器统计，尽在一处。";
 "Continue" = "继续";
 "SSH Terminal" = "SSH 终端";
-"Connect to servers with GPU-accelerated terminal emulation." = "使用 GPU 加速的终端模拟连接服务器。";
+"Connect to servers with GPU-accelerated terminal emulation." = "打开一个够快的终端，几秒内就能连上任意服务器。";
+"SFTP Files" = "SFTP 文件";
+"Browse folders, preview files, and move things around on your server." = "浏览文件夹、预览文件，并在服务器上移动内容。";
+"Server Stats" = "服务器统计";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "一眼查看 CPU、内存、磁盘和网络活动。";
 "iCloud Sync" = "iCloud 同步";
-"Servers and credentials sync across all your devices." = "服务器和凭据在所有设备间同步。";
+"Servers and credentials sync across all your devices." = "你的服务器会一直跟着你，iPhone、iPad 和 Mac 都能接上。";
 "Session Persistence" = "会话持久化";
-"Keep sessions alive with tmux, even after disconnects." = "使用 tmux 即使断开连接也能保留会话。";
+"Keep sessions alive with tmux, even after disconnects." = "就算连接断开，也能接着刚才的进度继续。";
 "Secure Storage" = "安全存储";
-"Passwords and SSH keys protected by Keychain." = "密码与 SSH 密钥由钥匙串保护。";
+"Passwords and SSH keys protected by Keychain." = "密码和密钥都会安全存放在钥匙串中。";
 "Voice Commands" = "语音命令";
-"Speak commands with on-device speech recognition." = "通过设备端语音识别输入命令。";
+"Speak commands with on-device speech recognition." = "当开口比打字更快时，直接说出命令就行。";
 
 /* Settings Navigation */
 "Settings" = "设置";

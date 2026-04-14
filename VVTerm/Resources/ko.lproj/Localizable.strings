@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "VVTerm에 오신 것을 환영합니다";
-"Your secure SSH terminal" = "안전한 SSH 터미널";
+"Your secure SSH terminal" = "터미널, 파일, 실시간 서버 통계를 한곳에서.";
 "Continue" = "계속";
 "SSH Terminal" = "SSH 터미널";
-"Connect to servers with GPU-accelerated terminal emulation." = "GPU 가속 터미널 에뮬레이션으로 서버에 연결합니다.";
+"Connect to servers with GPU-accelerated terminal emulation." = "빠른 터미널을 열고 몇 초 만에 원하는 서버로 들어가세요.";
+"SFTP Files" = "SFTP 파일";
+"Browse folders, preview files, and move things around on your server." = "서버의 폴더를 둘러보고, 파일을 미리 보고, 원하는 곳으로 옮길 수 있습니다.";
+"Server Stats" = "서버 통계";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "CPU, 메모리, 디스크, 네트워크 상태를 한눈에 확인하세요.";
 "iCloud Sync" = "iCloud 동기화";
-"Servers and credentials sync across all your devices." = "모든 기기에서 서버와 자격 증명을 동기화합니다.";
+"Servers and credentials sync across all your devices." = "서버 설정은 iPhone, iPad, Mac 어디서나 그대로 따라옵니다.";
 "Session Persistence" = "세션 유지";
-"Keep sessions alive with tmux, even after disconnects." = "연결이 끊긴 후에도 tmux로 세션을 유지합니다.";
+"Keep sessions alive with tmux, even after disconnects." = "연결이 끊겨도 하던 곳에서 다시 이어서 시작할 수 있습니다.";
 "Secure Storage" = "안전한 저장소";
-"Passwords and SSH keys protected by Keychain." = "키체인으로 보호되는 비밀번호와 SSH 키.";
+"Passwords and SSH keys protected by Keychain." = "비밀번호와 키는 키체인에 안전하게 보관됩니다.";
 "Voice Commands" = "음성 명령";
-"Speak commands with on-device speech recognition." = "기기 내 음성 인식으로 명령을 말하세요.";
+"Speak commands with on-device speech recognition." = "타이핑보다 빠를 때는 말로 명령을 내리세요.";
 
 /* Settings Navigation */
 "Settings" = "설정";

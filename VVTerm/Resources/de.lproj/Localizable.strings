@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "Willkommen bei VVTerm";
-"Your secure SSH terminal" = "Dein sicheres SSH‑Terminal";
+"Your secure SSH terminal" = "Terminal, Dateien und Live‑Serverstatistiken an einem Ort.";
 "Continue" = "Weiter";
 "SSH Terminal" = "SSH‑Terminal";
-"Connect to servers with GPU-accelerated terminal emulation." = "Verbinde dich mit Servern über GPU‑beschleunigte Terminal‑Emulation.";
+"Connect to servers with GPU-accelerated terminal emulation." = "Öffne ein schnelles Terminal und spring in Sekunden auf jeden Server.";
+"SFTP Files" = "SFTP‑Dateien";
+"Browse folders, preview files, and move things around on your server." = "Durchsuche Ordner, sieh dir Dateien an und verschiebe Inhalte auf deinem Server.";
+"Server Stats" = "Serverstatistiken";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "Behalte CPU‑, Speicher‑, Festplatten‑ und Netzwerkaktivität auf einen Blick im Auge.";
 "iCloud Sync" = "iCloud‑Sync";
-"Servers and credentials sync across all your devices." = "Server und Zugangsdaten werden auf all deinen Geräten synchronisiert.";
+"Servers and credentials sync across all your devices." = "Deine Server sind auf iPhone, iPad und Mac immer dabei.";
 "Session Persistence" = "Sitzungserhalt";
-"Keep sessions alive with tmux, even after disconnects." = "Sitzungen bleiben mit tmux erhalten, selbst nach Verbindungsabbrüchen.";
+"Keep sessions alive with tmux, even after disconnects." = "Mach einfach dort weiter, wo du aufgehört hast, selbst wenn die Verbindung abbricht.";
 "Secure Storage" = "Sicherer Speicher";
-"Passwords and SSH keys protected by Keychain." = "Passwörter und SSH‑Schlüssel werden durch den Schlüsselbund geschützt.";
+"Passwords and SSH keys protected by Keychain." = "Passwörter und Schlüssel bleiben sicher im Schlüsselbund.";
 "Voice Commands" = "Sprachbefehle";
-"Speak commands with on-device speech recognition." = "Sprich Befehle mit der Spracherkennung auf dem Gerät.";
+"Speak commands with on-device speech recognition." = "Sag einen Befehl einfach laut, wenn Tippen gerade langsamer ist.";
 
 /* Settings Navigation */
 "Settings" = "Einstellungen";

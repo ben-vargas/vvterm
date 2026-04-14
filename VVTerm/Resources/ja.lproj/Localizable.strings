@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "VVTermへようこそ";
-"Your secure SSH terminal" = "安全なSSHターミナル";
+"Your secure SSH terminal" = "ターミナル、ファイル、ライブサーバー統計をひとつに。";
 "Continue" = "続ける";
 "SSH Terminal" = "SSHターミナル";
-"Connect to servers with GPU-accelerated terminal emulation." = "GPUアクセラレーションの端末エミュレーションでサーバーに接続。";
+"Connect to servers with GPU-accelerated terminal emulation." = "すばやくターミナルを開いて、数秒でどのサーバーにも入れます。";
+"SFTP Files" = "SFTPファイル";
+"Browse folders, preview files, and move things around on your server." = "サーバー上のフォルダを開き、ファイルをプレビューし、その場で移動できます。";
+"Server Stats" = "サーバー統計";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "CPU、メモリ、ディスク、ネットワークの状況をひと目で確認できます。";
 "iCloud Sync" = "iCloud同期";
-"Servers and credentials sync across all your devices." = "サーバーと資格情報をすべてのデバイスで同期。";
+"Servers and credentials sync across all your devices." = "サーバーは iPhone、iPad、Mac のあいだでそのまま使えます。";
 "Session Persistence" = "セッションの永続化";
-"Keep sessions alive with tmux, even after disconnects." = "tmux により切断後もセッションを維持します。";
+"Keep sessions alive with tmux, even after disconnects." = "接続が切れても、続きからすぐに再開できます。";
 "Secure Storage" = "安全なストレージ";
-"Passwords and SSH keys protected by Keychain." = "パスワードとSSHキーはキーチェーンで保護されます。";
+"Passwords and SSH keys protected by Keychain." = "パスワードと鍵はキーチェーンに安全に保管されます。";
 "Voice Commands" = "音声コマンド";
-"Speak commands with on-device speech recognition." = "デバイス上の音声認識でコマンドを話して入力。";
+"Speak commands with on-device speech recognition." = "入力するより早いときは、声でコマンドを伝えられます。";
 
 /* Settings Navigation */
 "Settings" = "設定";

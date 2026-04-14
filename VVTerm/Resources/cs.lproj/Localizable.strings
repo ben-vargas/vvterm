@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "Vítejte ve VVTerm";
-"Your secure SSH terminal" = "Váš bezpečný SSH terminál";
+"Your secure SSH terminal" = "Terminál, soubory a živé statistiky serveru na jednom místě.";
 "Continue" = "Pokračovat";
 "SSH Terminal" = "SSH terminál";
-"Connect to servers with GPU-accelerated terminal emulation." = "Připojte se k serverům s GPU‑akcelerovanou emulací terminálu.";
+"Connect to servers with GPU-accelerated terminal emulation." = "Otevřete rychlý terminál a připojte se k libovolnému serveru během pár sekund.";
+"SFTP Files" = "Soubory SFTP";
+"Browse folders, preview files, and move things around on your server." = "Procházejte složky, zobrazujte náhledy souborů a přesouvejte věci na svém serveru.";
+"Server Stats" = "Statistiky serveru";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "Mějte na první pohled přehled o aktivitě CPU, paměti, disku a sítě.";
 "iCloud Sync" = "Synchronizace iCloud";
-"Servers and credentials sync across all your devices." = "Servery a přihlašovací údaje se synchronizují na všech vašich zařízeních.";
+"Servers and credentials sync across all your devices." = "Své servery máte stále po ruce na iPhonu, iPadu i Macu.";
 "Session Persistence" = "Zachování relací";
-"Keep sessions alive with tmux, even after disconnects." = "Udržujte relace aktivní s tmux i po odpojení.";
+"Keep sessions alive with tmux, even after disconnects." = "Navážete tam, kde jste skončili, i když spojení vypadne.";
 "Secure Storage" = "Bezpečné úložiště";
-"Passwords and SSH keys protected by Keychain." = "Hesla a SSH klíče chráněny Klíčenkou.";
+"Passwords and SSH keys protected by Keychain." = "Hesla a klíče jsou bezpečně uložené v Klíčence.";
 "Voice Commands" = "Hlasové příkazy";
-"Speak commands with on-device speech recognition." = "Vydávejte příkazy pomocí rozpoznávání řeči na zařízení.";
+"Speak commands with on-device speech recognition." = "Řekněte příkaz nahlas, když je to rychlejší než psaní.";
 
 /* Settings Navigation */
 "Settings" = "Nastavení";

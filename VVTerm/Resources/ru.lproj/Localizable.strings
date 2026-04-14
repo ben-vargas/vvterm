@@ -88,18 +88,22 @@
 
 /* Welcome */
 "Welcome to VVTerm" = "Добро пожаловать в VVTerm";
-"Your secure SSH terminal" = "Ваш безопасный SSH‑терминал";
+"Your secure SSH terminal" = "Терминал, файлы и живая статистика сервера в одном месте.";
 "Continue" = "Продолжить";
 "SSH Terminal" = "SSH‑терминал";
-"Connect to servers with GPU-accelerated terminal emulation." = "Подключайтесь к серверам с GPU‑ускоренной эмуляцией терминала.";
+"Connect to servers with GPU-accelerated terminal emulation." = "Откройте быстрый терминал и заходите на любой сервер за секунды.";
+"SFTP Files" = "Файлы SFTP";
+"Browse folders, preview files, and move things around on your server." = "Просматривайте папки, открывайте предпросмотр файлов и перемещайте их на сервере.";
+"Server Stats" = "Статистика сервера";
+"Keep an eye on CPU, memory, disk, and network activity at a glance." = "Следите за загрузкой CPU, памяти, диска и сети с первого взгляда.";
 "iCloud Sync" = "Синхронизация iCloud";
-"Servers and credentials sync across all your devices." = "Серверы и учетные данные синхронизируются на всех ваших устройствах.";
+"Servers and credentials sync across all your devices." = "Ваши серверы всегда рядом на iPhone, iPad и Mac.";
 "Session Persistence" = "Сохранение сессий";
-"Keep sessions alive with tmux, even after disconnects." = "Сохраняйте сессии с tmux даже после разрывов соединения.";
+"Keep sessions alive with tmux, even after disconnects." = "Продолжайте с того же места, даже если соединение оборвалось.";
 "Secure Storage" = "Безопасное хранилище";
-"Passwords and SSH keys protected by Keychain." = "Пароли и SSH‑ключи защищены Связкой ключей.";
+"Passwords and SSH keys protected by Keychain." = "Пароли и ключи надёжно хранятся в Связке ключей.";
 "Voice Commands" = "Голосовые команды";
-"Speak commands with on-device speech recognition." = "Диктуйте команды с распознаванием речи на устройстве.";
+"Speak commands with on-device speech recognition." = "Произнесите команду вслух, когда так быстрее, чем печатать.";
 
 /* Settings Navigation */
 "Settings" = "Настройки";
