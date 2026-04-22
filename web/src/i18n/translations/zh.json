@@ -85,7 +85,7 @@
     "free": {
       "name": "免费版",
       "description": "个人使用永久免费",
-      "price": "¥0",
+      "price": "$0",
       "period": "/永久",
       "features": [
         "1 个工作区",
@@ -103,13 +103,13 @@
       "name": "专业版",
       "description": "当你的环境变大时再升级",
       "monthly": {
-        "price": "¥45",
+        "price": "$6.49",
         "period": "/月"
       },
       "yearly": {
-        "price": "¥138",
+        "price": "$24.99",
         "period": "/年",
-        "save": "省 74%"
+        "save": "省 68%"
       },
       "features": [
         "无限工作区",
@@ -125,7 +125,7 @@
     "lifetime": {
       "name": "终身版",
       "description": "一次购买，省事到底",
-      "price": "¥198",
+      "price": "$49.99",
       "badge": "提供终身版",
       "features": [
         "包含专业版全部功能",

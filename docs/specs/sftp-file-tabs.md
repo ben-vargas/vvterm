@@ -17,6 +17,7 @@ This feature should be guarded by the same Pro entitlement bucket as terminal mu
 Important architecture rule:
 - implement this as a direct-cutover internal refactor
 - do not add server-id keyed compatibility shims that pretend multiple file tabs exist while still sharing one browser state
+- do not migrate or preserve legacy `remoteFileBrowserState.v1` browser snapshots
 
 ## Problem
 Today the Files feature is effectively a single browser state per server:
@@ -279,7 +280,7 @@ But preserve server-scoped transport ownership:
 
 No transport model changes are needed beyond ensuring concurrent tab activity is safe.
 
-## Persistence and Migration
+## Persistence and Cutover
 
 ### New Persistence Model
 Keep file-tab persistence local-only.
@@ -298,16 +299,22 @@ Recommended per-tab persisted browser payload:
 - `showHiddenFiles`
 - `hasCustomizedHiddenFiles`
 
-### Migration
+### Cutover Policy
 Current persisted data is keyed by `serverId` in `remoteFileBrowserState.v1`.
 
-Migration rule:
-- for each existing persisted server entry
-  - create one `RemoteFileTab`
-  - carry forward the old browser state into that tab
-  - mark it as the selected tab for that server
+This feature uses a hard cutover, not a migration:
+- do not read `remoteFileBrowserState.v1` into the new file-tab model
+- do not create synthetic `RemoteFileTab` instances from legacy browser state
+- do not keep fallback read paths for the old format
 
-This preserves the current single-tab Files experience without data loss.
+On first launch after the refactor:
+- start with the new tab-aware persistence model only
+- create a fresh default file tab when `Files` is opened for a server
+- ignore or clear the old `remoteFileBrowserState.v1` payload
+
+Tradeoff:
+- existing users lose old local Files state such as last visited path, sort, and hidden-files preference
+- this is acceptable in exchange for a clean cutover and simpler implementation
 
 ### Persistence Rules
 - Persist tab list and selected tab after every structural change.
@@ -417,10 +424,10 @@ Recommended revised feature copy:
 - empty states
 - keyboard shortcuts and tab navigation commands
 
-### 5. Add migration
-- read `remoteFileBrowserState.v1`
-- write tab-aware snapshots
-- preserve current single-tab browser state
+### 5. Add cutover handling
+- do not import `remoteFileBrowserState.v1`
+- optionally clear the legacy local key during first-run cutover
+- initialize fresh tab-aware snapshots on demand
 
 ### 6. Add tests
 - unit, integration, and UI coverage for tab isolation and gating
@@ -434,7 +441,7 @@ Recommended revised feature copy:
   - close-left / close-right / close-others
   - free-tier gating
   - persistence round-trip
-  - migration from `remoteFileBrowserState.v1`
+  - hard-cutover behavior with legacy `remoteFileBrowserState.v1` ignored
 - `RemoteFileBrowserStoreTests`
   - state isolation between two file tabs on the same server
   - request ID isolation by tab

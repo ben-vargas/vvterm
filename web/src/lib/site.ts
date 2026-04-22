@@ -68,7 +68,7 @@ export const softwareSchema = {
     },
     {
       "@type": "Offer",
-      price: "29.99",
+      price: "49.99",
       priceCurrency: "USD",
       description: "Lifetime Pro - unlimited everything",
     },

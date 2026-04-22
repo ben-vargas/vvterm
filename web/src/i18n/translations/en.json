@@ -107,9 +107,9 @@
         "period": "/mo"
       },
       "yearly": {
-        "price": "$19.99",
+        "price": "$24.99",
         "period": "/yr",
-        "save": "Save 74%"
+        "save": "Save 68%"
       },
       "features": [
         "Unlimited workspaces",
@@ -125,7 +125,7 @@
     "lifetime": {
       "name": "Lifetime",
       "description": "Pay once and keep it simple",
-      "price": "$29.99",
+      "price": "$49.99",
       "badge": "Lifetime available",
       "features": [
         "Everything in Pro",
