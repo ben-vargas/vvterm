@@ -189,7 +189,7 @@ Safe refactor expectation:
 ### Pro Tier (StoreKit 2)
 - Free: 1 workspace, 3 servers, 1 tab
 - Pro: Unlimited everything
-- Products: Monthly ($6.49), Yearly ($19.99), Lifetime ($29.99)
+- Products: Monthly ($6.49), Yearly ($24.99), Lifetime ($49.99)
 
 ## Build Dependencies
 

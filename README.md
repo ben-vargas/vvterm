@@ -189,7 +189,7 @@ Swift package dependencies currently resolved by the Xcode project:
 | Tabs | 1 | Unlimited |
 | Split panes | No | Yes |
 
-**Pricing:** Monthly ($6.49), Yearly ($19.99), Lifetime ($29.99)
+**Pricing:** Monthly ($6.49), Yearly ($24.99), Lifetime ($49.99)
 
 ## Documentation
 

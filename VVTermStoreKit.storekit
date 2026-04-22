@@ -5,7 +5,7 @@
   ],
   "products" : [
     {
-      "displayPrice" : "29.99",
+      "displayPrice" : "49.99",
       "familyShareable" : false,
       "internalID" : "LIFETIME001",
       "localizations" : [
@@ -122,14 +122,14 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "19.99",
+          "displayPrice" : "24.99",
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "YEARLY001",
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "Unlimited servers, workspaces, and simultaneous connections. Save 74% compared to monthly.",
+              "description" : "Unlimited servers, workspaces, and simultaneous connections. Save 68% compared to monthly.",
               "displayName" : "Pro Yearly",
               "locale" : "en_US"
             }

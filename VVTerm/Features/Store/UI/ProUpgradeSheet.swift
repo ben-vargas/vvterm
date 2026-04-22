@@ -354,7 +354,7 @@ struct ProUpgradeSheet: View {
                         product: yearly,
                         title: String(localized: "Yearly"),
                         subtitle: String(localized: "Best value - billed yearly"),
-                        badge: PlanBadge(title: String(localized: "SAVE 74%"), style: .save),
+                        badge: PlanBadge(title: String(localized: "SAVE 68%"), style: .save),
                         isSelected: selectedProduct?.id == yearly.id
                     ) {
                         selectedProduct = yearly
