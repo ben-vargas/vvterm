@@ -1,6 +1,11 @@
 import SwiftUI
 import Combine
 
+enum NoticeTopInsetBehavior {
+    case contentTop
+    case safeAreaTop
+}
+
 @MainActor
 final class NoticeHostModel: ObservableObject {
     @Published var topBanner: NoticeItem?
@@ -95,6 +100,7 @@ final class NoticeHostModel: ObservableObject {
 struct NoticeHost<Content: View>: View {
     let topBanner: NoticeItem?
     let bottomOperation: NoticeItem?
+    var topInsetBehavior: NoticeTopInsetBehavior = .contentTop
     var bannerSurfaceStyle: NoticeSurfaceStyle = .standard
     var operationSurfaceStyle: NoticeSurfaceStyle = .standard
     let content: Content
@@ -102,12 +108,14 @@ struct NoticeHost<Content: View>: View {
     init(
         topBanner: NoticeItem? = nil,
         bottomOperation: NoticeItem? = nil,
+        topInsetBehavior: NoticeTopInsetBehavior = .contentTop,
         bannerSurfaceStyle: NoticeSurfaceStyle = .standard,
         operationSurfaceStyle: NoticeSurfaceStyle = .standard,
         @ViewBuilder content: () -> Content
     ) {
         self.topBanner = topBanner
         self.bottomOperation = bottomOperation
+        self.topInsetBehavior = topInsetBehavior
         self.bannerSurfaceStyle = bannerSurfaceStyle
         self.operationSurfaceStyle = operationSurfaceStyle
         self.content = content()
@@ -115,6 +123,7 @@ struct NoticeHost<Content: View>: View {
 
     var body: some View {
         content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
                 GeometryReader { proxy in
                     ZStack {
@@ -123,7 +132,7 @@ struct NoticeHost<Content: View>: View {
                                 NoticeBannerView(item: topBanner, surfaceStyle: bannerSurfaceStyle)
                                     .frame(maxWidth: .infinity)
                                     .padding(.horizontal, topHorizontalPadding)
-                                    .padding(.top, proxy.safeAreaInsets.top + topVerticalPadding)
+                                    .padding(.top, topPadding(for: proxy.safeAreaInsets))
                                     .transition(.move(edge: .top).combined(with: .opacity))
                                     .allowsHitTesting(true)
                             }
@@ -165,6 +174,15 @@ struct NoticeHost<Content: View>: View {
         #else
         return 10
         #endif
+    }
+
+    private func topPadding(for safeAreaInsets: EdgeInsets) -> CGFloat {
+        switch topInsetBehavior {
+        case .contentTop:
+            return topVerticalPadding
+        case .safeAreaTop:
+            return safeAreaInsets.top + topVerticalPadding
+        }
     }
 
     private var bottomHorizontalPadding: CGFloat {

@@ -22,7 +22,7 @@ struct NoticeAppHost<Content: View>: View {
     }
 
     var body: some View {
-        NoticeHost(topBanner: topBannerNotice) {
+        NoticeHost(topBanner: topBannerNotice, topInsetBehavior: .safeAreaTop) {
             content
         }
         .animation(.easeInOut(duration: 0.2), value: networkMonitor.isConnected)

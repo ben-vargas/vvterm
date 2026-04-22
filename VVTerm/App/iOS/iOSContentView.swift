@@ -183,7 +183,6 @@ struct iOSServerListView: View {
 
     var body: some View {
         List {
-            workspaceSection
             serversSection
             activeConnectionsSection
         }
@@ -203,6 +202,10 @@ struct iOSServerListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .id(navigationBarAppearanceToken)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                workspaceToolbarButton
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button {
@@ -430,34 +433,31 @@ struct iOSServerListView: View {
         return String(format: String(localized: "%lld servers"), Int64(serverCount))
     }
 
-    @ViewBuilder
-    private var workspaceSection: some View {
-        Section {
-            Button {
-                showingWorkspacePicker = true
-            } label: {
-                HStack {
-                    Circle()
-                        .fill(Color.fromHex(selectedWorkspaceColorHex))
-                        .frame(width: 10, height: 10)
+    private var workspaceToolbarButton: some View {
+        Button {
+            showingWorkspacePicker = true
+        } label: {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color.fromHex(selectedWorkspaceColorHex))
+                    .frame(width: 8, height: 8)
 
-                    Text(selectedWorkspaceName)
-                        .foregroundStyle(.primary)
+                Text(selectedWorkspaceName)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-                    Spacer()
-
-                    Text(filteredServerCountText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
-        } header: {
-            Text("Workspace")
+            .frame(maxWidth: 220)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(selectedWorkspaceName)
+        .accessibilityValue(filteredServerCountText)
+        .accessibilityHint(String(localized: "Opens the workspace picker"))
     }
 
     @ViewBuilder
