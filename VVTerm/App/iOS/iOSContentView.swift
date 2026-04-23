@@ -207,25 +207,8 @@ struct iOSServerListView: View {
             }
 
             ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button {
-                        showingLocalDiscovery = true
-                    } label: {
-                        Label(String(localized: "Discover Local Devices"), systemImage: "dot.radiowaves.left.and.right")
-                    }
-
-                    Button {
-                        presentAddServer()
-                    } label: {
-                        Label("Add Server", systemImage: "server.rack")
-                    }
-                    .disabled(!canAddServer)
-
-                    Button {
-                        showingAddWorkspace = true
-                    } label: {
-                        Label("Add Workspace", systemImage: "folder.badge.plus")
-                    }
+                Button {
+                    presentAddServer()
                 } label: {
                     Image(systemName: "plus")
                 }

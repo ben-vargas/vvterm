@@ -336,12 +336,11 @@ struct ServerFormSheet: View {
         Form {
             limitSection
             serverSection
-            workspaceSection
             authSection
             connectionSection
             sessionSection
             securitySection
-            environmentSection
+            assignmentSection
             notesSection
             errorSection
         }
@@ -514,7 +513,7 @@ struct ServerFormSheet: View {
     #endif
 
     @ViewBuilder
-    private var workspaceSection: some View {
+    private var assignmentSection: some View {
         Section {
             if assignmentWorkspaces.count > 1 {
                 Picker("Workspace", selection: $selectedWorkspaceId) {
@@ -554,6 +553,18 @@ struct ServerFormSheet: View {
                         Text("No Workspace")
                             .foregroundStyle(.secondary)
                     }
+                }
+            }
+
+            Picker("Environment", selection: $selectedEnvironment) {
+                ForEach(selectedWorkspace?.environments ?? ServerEnvironment.builtInEnvironments) { env in
+                    HStack {
+                        Circle()
+                            .fill(env.color)
+                            .frame(width: 8, height: 8)
+                        Text(env.displayName)
+                    }
+                    .tag(env)
                 }
             }
 
@@ -798,24 +809,6 @@ struct ServerFormSheet: View {
             }
         } header: {
             sectionHeader("Security")
-        }
-    }
-
-    private var environmentSection: some View {
-        Section {
-            Picker("Environment", selection: $selectedEnvironment) {
-                ForEach(selectedWorkspace?.environments ?? ServerEnvironment.builtInEnvironments) { env in
-                    HStack {
-                        Circle()
-                            .fill(env.color)
-                            .frame(width: 8, height: 8)
-                        Text(env.displayName)
-                    }
-                    .tag(env)
-                }
-            }
-        } header: {
-            sectionHeader("Environment")
         }
     }
 
