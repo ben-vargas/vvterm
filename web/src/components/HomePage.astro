@@ -12,6 +12,8 @@ const whyItems = [
 const featureItems = [
   { key: "rendering", icon: "lucide:square-terminal", color: "text-emerald-600", bg: "bg-emerald-500/10" },
   { key: "connect", icon: "lucide:plug-zap", color: "text-amber-500", bg: "bg-amber-500/10" },
+  { key: "files", icon: "lucide:folder-open-dot", color: "text-orange-500", bg: "bg-orange-500/10" },
+  { key: "preview", icon: "lucide:file-search-2", color: "text-violet-600", bg: "bg-violet-500/10" },
   { key: "pickup", icon: "lucide:smartphone", color: "text-orange-500", bg: "bg-orange-500/10" },
   { key: "organize", icon: "lucide:folders", color: "text-violet-600", bg: "bg-violet-500/10" }
 ];
@@ -23,7 +25,7 @@ const useCases = [
   { key: "ai", icon: "lucide:bot" }
 ];
 
-const faqs = ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9"];
+const faqs = ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10"];
 const currentYear = new Date().getFullYear();
 
 const highlightAnswer = (text: string) =>
@@ -109,7 +111,7 @@ const highlightAnswer = (text: string) =>
         <h2 class="text-3xl font-semibold tracking-[-0.05em] text-slate-950 dark:text-slate-100 sm:text-5xl" data-i18n="features.title">{translations.en.features.title}</h2>
         <p class="mt-4 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-300 sm:text-lg" data-i18n="features.subtitle">{translations.en.features.subtitle}</p>
       </div>
-      <div class="mt-8 grid gap-px overflow-hidden rounded-[1.5rem] border border-slate-900/8 bg-slate-900/8 dark:border-white/10 dark:bg-white/10 lg:grid-cols-2">
+      <div class="mt-8 grid gap-px overflow-hidden rounded-[1.5rem] border border-slate-900/8 bg-slate-900/8 dark:border-white/10 dark:bg-white/10 md:grid-cols-2 xl:grid-cols-3">
         {featureItems.map((feature) => (
           <article class="bg-white/90 dark:bg-[#121214] p-7">
             <div class:list={["mb-4 grid size-11 place-items-center rounded-xl", feature.bg, feature.color]}>

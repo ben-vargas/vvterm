@@ -4,9 +4,9 @@ import zh from "../i18n/translations/zh.json";
 export const SITE = {
   name: "VVTerm",
   siteUrl: "https://vvterm.com",
-  title: "VVTerm - SSH Terminal for iOS & macOS",
+  title: "VVTerm - SSH Terminal and SFTP Client for iPhone, iPad, and Mac",
   description:
-    "Your servers. Everywhere. The SSH terminal app for iOS and macOS with Mosh, Tailscale SSH, Cloudflare Tunnel SSH, iCloud sync, and Keychain security.",
+    "Your servers. Everywhere. Native SSH terminal and SFTP client for iPhone, iPad, and Mac with Mosh, Tailscale SSH, Cloudflare Tunnel SSH, iCloud sync, and Keychain security.",
   appStoreUrl: "https://apps.apple.com/app/vvterm/id6757482822",
   githubUrl: "https://github.com/vivy-company/vvterm",
   discordUrl: "https://discord.gg/zemMZtrkSb",
@@ -51,6 +51,14 @@ export const faqSchema = [
       text: "VVTerm requires iOS 16 or later on iPhone and iPad, or macOS 13 Ventura or later on Apple Silicon Macs.",
     },
   },
+  {
+    "@type": "Question",
+    name: "Does VVTerm include remote file browsing?",
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: "Yes. VVTerm includes a built-in SFTP file browser for browsing folders, previewing text, image, and video files, uploading and downloading, renaming or moving items, creating folders, and editing POSIX permissions on supported servers.",
+    },
+  },
 ];
 
 export const softwareSchema = {
@@ -74,7 +82,7 @@ export const softwareSchema = {
     },
   ],
   description:
-    "SSH terminal app for iOS and macOS with standard SSH, Mosh, Tailscale SSH, and Cloudflare Tunnel SSH.",
+    "SSH terminal and SFTP remote file browser for iPhone, iPad, and Mac with standard SSH, Mosh, Tailscale SSH, and Cloudflare Tunnel SSH.",
   url: "https://vvterm.com/",
   image: "https://vvterm.com/og.png",
   author: {
@@ -87,6 +95,10 @@ export const softwareSchema = {
     "Mosh transport with SSH fallback",
     "Tailscale SSH",
     "Cloudflare Tunnel SSH",
+    "SFTP remote file browser",
+    "Inline text, image, and video previews",
+    "Remote file upload, download, rename, move, and delete",
+    "POSIX permission editing on supported servers",
     "iCloud sync",
     "Keychain security",
     "GPU terminal (libghostty)",

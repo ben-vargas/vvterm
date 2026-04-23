@@ -7,6 +7,7 @@
     "eyebrowSequence": [
       "Built for everyday remote work",
       "SSH, Mosh, and Tailscale",
+      "Built-in SFTP remote files",
       "Cloudflare Tunnel SSH included",
       "Built on Ghostty terminal emulation",
       "iCloud-synced server metadata",
@@ -14,7 +15,7 @@
       "Across iPhone, iPad, and Mac"
     ],
     "title": "A better native SSH client for Apple devices",
-    "subtitle": "Connect to servers, keep them organized, and stay in sync with Keychain-secured credentials across your iPhone, iPad, and Mac.",
+    "subtitle": "Connect to servers, keep them organized, browse remote files, and stay in sync with Keychain-secured credentials across your iPhone, iPad, and Mac.",
     "primaryCta": "Try VVTerm free",
     "secondaryCta": "View on GitHub",
     "meta": "Requires iOS 16+ or macOS 13+ (Apple Silicon). Free forever, or <span class=\"text-orange-500 font-medium\">buy lifetime</span>."
@@ -49,6 +50,14 @@
     "connect": {
       "title": "Connect your way",
       "desc": "Standard SSH when you want it, modern transports when you need them, with less setup friction."
+    },
+    "files": {
+      "title": "Built-in SFTP file browser",
+      "desc": "Browse remote folders, upload and download files, create directories, and rename, move, or delete items without switching to a separate SFTP app."
+    },
+    "preview": {
+      "title": "Preview and edit in place",
+      "desc": "Preview text, image, and video files inline, edit supported text files, and inspect metadata and POSIX permissions."
     },
     "pickup": {
       "title": "Pick up on any device",
@@ -174,6 +183,10 @@
     "q9": {
       "question": "What are the system requirements?",
       "answer": "iOS 16+ on iPhone and iPad, or macOS 13+ Ventura on Apple Silicon Macs. Intel Macs are not supported."
+    },
+    "q10": {
+      "question": "Does VVTerm include remote file browsing?",
+      "answer": "Yes. VVTerm includes a built-in SFTP Files view for browsing folders, previewing text, image, and video files, uploading and downloading, renaming or moving items, creating folders, and editing POSIX permissions on supported servers."
     }
   },
   "closing": {

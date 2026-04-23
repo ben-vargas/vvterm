@@ -7,6 +7,7 @@
     "eyebrowSequence": [
       "为日常远程工作而打造",
       "支持 SSH、Mosh 与 Tailscale",
+      "内置 SFTP 远程文件",
       "支持 Cloudflare Tunnel SSH",
       "基于 Ghostty 的终端模拟",
       "通过 iCloud 同步服务器数据",
@@ -14,7 +15,7 @@
       "覆盖 iPhone、iPad 和 Mac"
     ],
     "title": "更适合 Apple 设备的原生 SSH 客户端",
-    "subtitle": "连接服务器、保持有序，并通过 Keychain 保护的凭据在你的 iPhone、iPad 和 Mac 之间保持同步。",
+    "subtitle": "连接服务器、浏览远程文件、保持有序，并通过 Keychain 保护的凭据在你的 iPhone、iPad 和 Mac 之间保持同步。",
     "primaryCta": "免费试用 VVTerm",
     "secondaryCta": "查看 GitHub",
     "meta": "需要 iOS 16+ 或 macOS 13+（Apple Silicon）。永久免费，也可<span class=\"text-orange-500 font-medium\">购买终身版</span>。"
@@ -49,6 +50,14 @@
     "connect": {
       "title": "按你的方式连接",
       "desc": "想用标准 SSH 就用标准 SSH，需要现代传输方式时也能直接切换，配置阻力更小。"
+    },
+    "files": {
+      "title": "内置 SFTP 文件浏览器",
+      "desc": "直接浏览远程文件夹、上传和下载文件、创建目录，并完成重命名、移动或删除，无需再切到单独的 SFTP 应用。"
+    },
+    "preview": {
+      "title": "原地预览与编辑",
+      "desc": "可直接预览文本、图片和视频文件，编辑受支持的文本文件，并查看元数据与 POSIX 权限。"
     },
     "pickup": {
       "title": "在任意设备上继续",
@@ -174,6 +183,10 @@
     "q9": {
       "question": "系统要求是什么？",
       "answer": "需要 iPhone 或 iPad 上的 iOS 16+，或 Apple Silicon Mac 上的 macOS 13+ Ventura。不支持 Intel Mac。"
+    },
+    "q10": {
+      "question": "VVTerm 支持远程文件浏览吗？",
+      "answer": "支持。VVTerm 内置基于 SFTP 的 Files 视图，可用于浏览文件夹、预览文本/图片/视频文件、上传和下载、重命名或移动项目、创建文件夹，并在服务器支持时编辑 POSIX 权限。"
     }
   },
   "closing": {
