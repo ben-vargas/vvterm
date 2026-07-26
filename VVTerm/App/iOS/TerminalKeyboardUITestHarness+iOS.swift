@@ -12,6 +12,14 @@ struct TerminalKeyboardUITestHarness: View {
         "\u{1B}[?1000h\u{1B}[?1006h".utf8
     )
 
+    init() {
+        if Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-clear-terminal-background-cache"
+        ) {
+            UserDefaults.standard.removeObject(forKey: "terminalBackgroundColor")
+        }
+    }
+
     private enum LifecycleStatus: String {
         case initial
         case connected

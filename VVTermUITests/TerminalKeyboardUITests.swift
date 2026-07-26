@@ -472,13 +472,19 @@ final class TerminalKeyboardUITests: XCTestCase {
     }
 
     @MainActor
-    func testTemporarySystemOverlayPreservesVisibleKeyboardAndTyping() throws {
-        let app = launchKeyboardHarness()
+    func testTemporarySystemOverlayDetachesAndRestoresAccessoryWithoutLosingTyping() throws {
+        let app = launchKeyboardHarness(simulatesKeyboardFrames: true)
         let terminal = waitForTerminal(in: app)
         terminal.tap()
-        assertKeyboardAndAccessoryVisible(in: app)
-
         let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
+        app.buttons["vvterm.keyboardTest.geometry.docked"].tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "accessorySuppressed=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+
         app.buttons["vvterm.keyboardTest.scene.inactive"].tap()
         wait(
             for: diagnostics,
@@ -486,7 +492,24 @@ final class TerminalKeyboardUITests: XCTestCase {
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
-        assertKeyboardAndAccessoryVisible(in: app)
+        wait(
+            for: diagnostics,
+            labelContaining: "softwareInputActive=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "accessorySuppressed=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "accessoryAttached=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
 
         app.buttons["vvterm.keyboardTest.scene.active"].tap()
         wait(
@@ -495,11 +518,15 @@ final class TerminalKeyboardUITests: XCTestCase {
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
-        assertKeyboardAndAccessoryVisible(in: app)
+        app.buttons["vvterm.keyboardTest.geometry.floating"].tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "accessorySuppressed=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
 
-        let key = app.keys["x"]
-        XCTAssertTrue(key.waitForExistence(timeout: 5), diagnosticsText(in: app))
-        key.tap()
+        terminal.typeText("x")
         wait(
             for: diagnostics,
             labelContaining: "inputHex=78",
@@ -510,13 +537,25 @@ final class TerminalKeyboardUITests: XCTestCase {
 
     @MainActor
     func testTemporarySystemOverlayPreservesUserHiddenKeyboardIntent() throws {
-        let app = launchKeyboardHarness()
+        let app = launchKeyboardHarness(simulatesKeyboardFrames: true)
         let terminal = waitForTerminal(in: app)
         terminal.tap()
-        assertKeyboardAndAccessoryVisible(in: app)
+        let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
+        wait(
+            for: diagnostics,
+            labelContaining: "softwareInputActive=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        app.buttons["vvterm.keyboardTest.geometry.docked"].tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "keyboardVisible=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
 
         app.buttons["vvterm.keyboardTest.hideViaToolbar"].tap()
-        let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
         wait(
             for: diagnostics,
             labelContaining: "softwareInputActive=true",
@@ -557,7 +596,7 @@ final class TerminalKeyboardUITests: XCTestCase {
     }
 
     @MainActor
-    func testCrossAppFocusTransferPreservesTerminalInputWithoutRebuild() throws {
+    func testCrossAppFocusTransferDetachesAccessoryWithoutRebuild() throws {
         let app = launchKeyboardHarness(
             preservesTerminalSize: true,
             simulatesKeyboardFrames: true
@@ -602,6 +641,18 @@ final class TerminalKeyboardUITests: XCTestCase {
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
+        wait(
+            for: diagnostics,
+            labelContaining: "accessorySuppressed=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "accessoryAttached=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
         let rebuildCount = try requiredDiagnosticMetric("inputRebuilds", in: app)
 
         let returnButton = app.buttons["vvterm.keyboardTest.window.key"]
@@ -610,6 +661,13 @@ final class TerminalKeyboardUITests: XCTestCase {
         wait(
             for: diagnostics,
             labelContaining: "softwareInputActive=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        app.buttons["vvterm.keyboardTest.geometry.floating"].tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "accessorySuppressed=false",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
@@ -681,6 +739,35 @@ final class TerminalKeyboardUITests: XCTestCase {
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
+    }
+
+    @MainActor
+    func testFloatingAccessoryUsesOwningTerminalDarkAppearance() throws {
+        let app = launchKeyboardHarness(
+            simulatesKeyboardFrames: true,
+            simulatesDetachedLightAccessoryHost: true
+        )
+        let terminal = waitForTerminal(in: app)
+        terminal.tap()
+
+        let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
+        let floatingButton = app.buttons["vvterm.keyboardTest.geometry.floating"]
+        XCTAssertTrue(floatingButton.waitForExistence(timeout: 5), diagnosticsText(in: app))
+        floatingButton.tap()
+
+        for expectedDiagnostic in [
+            "accessoryOwnerStyle=dark",
+            "accessoryHostStyle=light",
+            "accessoryResolvedStyle=dark",
+            "accessoryAppearance=dark",
+        ] {
+            wait(
+                for: diagnostics,
+                labelContaining: expectedDiagnostic,
+                timeout: 5,
+                diagnostics: diagnosticsText(in: app)
+            )
+        }
     }
 
     @MainActor
@@ -1673,7 +1760,8 @@ final class TerminalKeyboardUITests: XCTestCase {
         simulatesKeyboardFrames: Bool = false,
         simulatesCodexTUIResponse: Bool = false,
         simulatesTerminalMouseCapture: Bool = false,
-        usesNativeFindNavigator: Bool = false
+        usesNativeFindNavigator: Bool = false,
+        simulatesDetachedLightAccessoryHost: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -1697,6 +1785,16 @@ final class TerminalKeyboardUITests: XCTestCase {
         }
         if usesNativeFindNavigator {
             app.launchArguments.append("--vvterm-ui-test-native-find-navigator")
+        }
+        if simulatesDetachedLightAccessoryHost {
+            app.launchArguments += [
+                "--vvterm-ui-test-detached-light-accessory-host",
+                "--vvterm-ui-test-clear-terminal-background-cache",
+                "-appearanceMode", "dark",
+                "-terminalUsePerAppearanceTheme", "YES",
+                "-terminalThemeName", "Aizen Dark",
+                "-terminalThemeNameLight", "Aizen Light"
+            ]
         }
         app.launch()
 

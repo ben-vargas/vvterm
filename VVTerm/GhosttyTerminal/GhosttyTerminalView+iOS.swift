@@ -5838,7 +5838,7 @@ extension GhosttyTerminalView {
             return nil
         }
         if keyboardToolbar == nil {
-            let toolbar = TerminalInputAccessoryView(onKey: { [weak self] key in
+            let toolbar = TerminalInputAccessoryView(terminalOwner: self, onKey: { [weak self] key in
                 self?.handleToolbarKey(key)
             }, onCustomAction: { [weak self] action in
                 self?.handleToolbarCustomAction(action)
@@ -5869,6 +5869,9 @@ extension GhosttyTerminalView {
         let snapshot = keyboardCoordinatorDiagnosticSnapshot()
         let accessoryAttached = keyboardToolbar?.window != nil
         let accessoryAppearance = keyboardToolbar?.diagnosticBackgroundAppearance ?? "missing"
+        let accessoryOwnerStyle = keyboardToolbar?.diagnosticOwnerInterfaceStyle ?? "missing"
+        let accessoryHostStyle = keyboardToolbar?.diagnosticHostInterfaceStyle ?? "missing"
+        let accessoryResolvedStyle = keyboardToolbar?.diagnosticResolvedInterfaceStyle ?? "missing"
         let keyboardHeightText = String(format: "%.1f", Double(keyboardHeight))
         let size = terminalSize()
         let inputViewMode = keyboardUITestSoftwareKeyboardFailure == .untilSessionRebuild
@@ -5895,6 +5898,9 @@ extension GhosttyTerminalView {
             "sizePreserved=\(keyboardAvoidancePreservedSurfaceSize != nil)",
             "accessoryAttached=\(accessoryAttached)",
             "accessoryAppearance=\(accessoryAppearance)",
+            "accessoryOwnerStyle=\(accessoryOwnerStyle)",
+            "accessoryHostStyle=\(accessoryHostStyle)",
+            "accessoryResolvedStyle=\(accessoryResolvedStyle)",
             "accessorySuppressed=\(suppressAccessoryForMissingSoftwareKeyboard)",
             "accessoryHidden=\(shouldHideKeyboardAccessoryBar)",
             "hardware=\(hasHardwareKeyboardAttached)",
@@ -6222,6 +6228,7 @@ private extension TerminalAccessoryShortcutModifiers {
 // MARK: - Native UIKit Input Accessory View with Glass Effect
 
 private class TerminalInputAccessoryView: UIInputView {
+    private weak var terminalOwner: GhosttyTerminalView?
     private let onKey: (TerminalKey) -> Void
     private let onCustomAction: (TerminalAccessoryCustomAction) -> Void
     private let onDismissKeyboard: () -> Void
@@ -6257,14 +6264,28 @@ private class TerminalInputAccessoryView: UIInputView {
         let resolved = color.resolvedColor(with: traitCollection)
         return isDarkBackgroundColor(resolved) == true ? "dark" : "light"
     }
+
+    var diagnosticOwnerInterfaceStyle: String {
+        interfaceStyleDescription(terminalOwner?.traitCollection.userInterfaceStyle ?? .unspecified)
+    }
+
+    var diagnosticHostInterfaceStyle: String {
+        interfaceStyleDescription(hostInterfaceStyle)
+    }
+
+    var diagnosticResolvedInterfaceStyle: String {
+        interfaceStyleDescription(resolvedInterfaceStyle)
+    }
     #endif
 
     init(
+        terminalOwner: GhosttyTerminalView,
         onKey: @escaping (TerminalKey) -> Void,
         onCustomAction: @escaping (TerminalAccessoryCustomAction) -> Void,
         onVoice: (() -> Void)? = nil,
         onDismissKeyboard: @escaping () -> Void
     ) {
+        self.terminalOwner = terminalOwner
         self.onKey = onKey
         self.onCustomAction = onCustomAction
         self.onVoice = onVoice
@@ -6430,8 +6451,11 @@ private class TerminalInputAccessoryView: UIInputView {
 
     private func updateBackgroundEffect() {
         guard let backgroundEffectView else { return }
-        let backgroundColor = resolveThemeBackgroundColor()
+        let interfaceStyle = resolvedInterfaceStyle
+        let backgroundColor = resolveThemeBackgroundColor(for: interfaceStyle)
+            .resolvedColor(with: appearanceTraits(for: interfaceStyle))
         updateInterfaceStyle(for: backgroundColor)
+        self.backgroundColor = backgroundColor
         backgroundEffectView.effect = nil
         backgroundEffectView.backgroundColor = backgroundColor
     }
@@ -6613,7 +6637,72 @@ private class TerminalInputAccessoryView: UIInputView {
         }
     }
 
-    private func resolveThemeBackgroundColor() -> UIColor {
+    private var resolvedInterfaceStyle: UIUserInterfaceStyle {
+        let ownerStyle = terminalOwner?.traitCollection.userInterfaceStyle ?? .unspecified
+        let resolved = TerminalAccessoryAppearancePolicy.resolvedInterfaceStyle(
+            owner: policyInterfaceStyle(ownerStyle),
+            host: policyInterfaceStyle(hostInterfaceStyle)
+        )
+        switch resolved {
+        case .unspecified:
+            return .unspecified
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
+    }
+
+    private var hostInterfaceStyle: UIUserInterfaceStyle {
+        #if DEBUG
+        if Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-detached-light-accessory-host"
+        ) {
+            return .light
+        }
+        #endif
+        return traitCollection.userInterfaceStyle
+    }
+
+    private func policyInterfaceStyle(
+        _ style: UIUserInterfaceStyle
+    ) -> TerminalAccessoryAppearancePolicy.InterfaceStyle {
+        switch style {
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        default:
+            return .unspecified
+        }
+    }
+
+    #if DEBUG
+    private func interfaceStyleDescription(_ style: UIUserInterfaceStyle) -> String {
+        switch style {
+        case .light:
+            return "light"
+        case .dark:
+            return "dark"
+        default:
+            return "unspecified"
+        }
+    }
+    #endif
+
+    private func appearanceTraits(
+        for interfaceStyle: UIUserInterfaceStyle
+    ) -> UITraitCollection {
+        guard interfaceStyle != .unspecified else { return traitCollection }
+        return UITraitCollection(traitsFrom: [
+            traitCollection,
+            UITraitCollection(userInterfaceStyle: interfaceStyle)
+        ])
+    }
+
+    private func resolveThemeBackgroundColor(
+        for interfaceStyle: UIUserInterfaceStyle
+    ) -> UIColor {
         let defaults = UserDefaults.standard
 
         if let cachedHex = defaults.string(forKey: "terminalBackgroundColor") {
@@ -6625,7 +6714,7 @@ private class TerminalInputAccessoryView: UIInputView {
         let lightTheme = defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameLightKey) ?? "Aizen Light"
         let themeName: String
         if usePerAppearance {
-            themeName = traitCollection.userInterfaceStyle == .dark ? darkTheme : lightTheme
+            themeName = interfaceStyle == .dark ? darkTheme : lightTheme
         } else {
             themeName = darkTheme
         }
