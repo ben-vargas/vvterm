@@ -52,6 +52,8 @@ struct TerminalKeyboardCoordinatorDiagnosticSnapshot: Equatable {
     var isSoftwareInputActive: Bool
     var keyboardLayoutFrame: CGRect? = nil
     var screenFrame: CGRect? = nil
+    var screenIdentifier: ObjectIdentifier? = nil
+    var isSoftwareKeyboardSuppressed = false
 
     var lifecycleDescription: String {
         [
@@ -60,8 +62,35 @@ struct TerminalKeyboardCoordinatorDiagnosticSnapshot: Equatable {
             "scene=\(sceneActivationState)",
             "firstResponder=\(isFirstResponder)",
             "softwareInput=\(isSoftwareInputActive)",
+            "softwareSuppressed=\(isSoftwareKeyboardSuppressed)",
             "keyboardLayoutFrame=\(keyboardLayoutFrame?.debugDescription ?? "nil")",
         ].joined(separator: " ")
+    }
+}
+
+/// Replaces the software keyboard while the terminal keeps first-responder
+/// ownership for hardware input. Let UIKit negotiate the host height through
+/// UIInputView's self-sizing contract instead of installing a required
+/// zero-height constraint that conflicts with InputUI's own inputHeight
+/// constraint during iPad responder handoffs.
+final class TerminalSuppressedKeyboardInputView: UIInputView {
+    init() {
+        super.init(frame: .zero, inputViewStyle: .keyboard)
+        allowsSelfSizing = true
+        isUserInteractionEnabled = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: CGSize {
+        .zero
+    }
+
+    override func systemLayoutSizeFitting(_ targetSize: CGSize) -> CGSize {
+        .zero
     }
 }
 
@@ -1925,7 +1954,10 @@ class GhosttyTerminalView: UIView {
     fileprivate func imeProxyFocusDidChange(isFocused: Bool) {
         setSurfaceFocus(isFocused)
         if isFocused {
-            updateHardwareKeyboardState(reloadInputViewsIfNeeded: true)
+            // UIKit has just resolved this responder's input views. Refresh
+            // hardware state, but do not immediately invalidate the new
+            // InputUI session unless that state changes its configuration.
+            updateHardwareKeyboardState(reloadInputViewsIfNeeded: false)
         } else {
             imeProxyTextView.endDictationSession(commit: true)
             invalidateLocalTextInputSession()
@@ -2106,12 +2138,7 @@ class GhosttyTerminalView: UIView {
     private var keyboardFocusPolicy = TerminalKeyboardFocusPolicy()
     private var suppressDirectTouchKeyboardFocusUntil = Date.distantPast
     private var suppressAccessoryForMissingSoftwareKeyboard = false
-    private let hiddenKeyboardInputView: UIView = {
-        let view = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 0))
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.heightAnchor.constraint(equalToConstant: 0).isActive = true
-        return view
-    }()
+    private let hiddenKeyboardInputView = TerminalSuppressedKeyboardInputView()
     #if DEBUG
     private enum KeyboardUITestSoftwareKeyboardFailure: Equatable {
         case none
@@ -2120,6 +2147,7 @@ class GhosttyTerminalView: UIView {
 
     private var keyboardHideRequestCount = 0
     private var keyboardInputSessionRebuildCount = 0
+    private var keyboardInputViewReloadCount = 0
     private var keyboardUITestHardwareKeyboardOverride: Bool?
     private var keyboardUITestSoftwareKeyboardFailure = KeyboardUITestSoftwareKeyboardFailure.none
     #endif
@@ -2173,7 +2201,9 @@ class GhosttyTerminalView: UIView {
             isFirstResponder: isFirstResponder,
             isSoftwareInputActive: isKeyboardTextInputActive,
             keyboardLayoutFrame: keyboardLayoutFrame,
-            screenFrame: screenFrame
+            screenFrame: screenFrame,
+            screenIdentifier: window.map { ObjectIdentifier($0.screen) },
+            isSoftwareKeyboardSuppressed: shouldSuppressSoftwareKeyboard
         )
     }
 
@@ -2237,6 +2267,11 @@ class GhosttyTerminalView: UIView {
     }
 
     private func reloadTerminalInputViewsIfActive() {
+        #if DEBUG
+        if super.isFirstResponder || imeProxyTextView.isFirstResponder {
+            keyboardInputViewReloadCount += 1
+        }
+        #endif
         if super.isFirstResponder {
             reloadInputViews()
         }
@@ -2263,7 +2298,6 @@ class GhosttyTerminalView: UIView {
             logKeyboardLifecycle("focus.request.rejected", result: false, detail: "reason=\(reasonDescription)")
             return false
         }
-        notifyKeyboardBrowseModeChange()
         let result = becomeFirstResponder()
         logKeyboardLifecycle("focus.request.end", result: result, detail: "reason=\(reasonDescription)")
         return result
@@ -2274,21 +2308,26 @@ class GhosttyTerminalView: UIView {
         if reason != .hardwareKeyboard {
             refreshHardwareKeyboardAttachmentFromSystem()
         }
+        let previousInputConfiguration = terminalInputConfiguration
         guard keyboardFocusPolicy.requestFocus(for: reason) else { return false }
         clearNativeSelectionStateForTerminalInput()
+        notifyKeyboardBrowseModeChange(
+            previousInputConfiguration: previousInputConfiguration
+        )
         return true
     }
 
     func dismissKeyboardForUser(suppressDirectTouchRefocus: Bool = false) {
+        let previousInputConfiguration = terminalInputConfiguration
         keyboardFocusPolicy.dismissForUser()
-        notifyKeyboardBrowseModeChange()
+        notifyKeyboardBrowseModeChange(
+            previousInputConfiguration: previousInputConfiguration
+        )
         if suppressDirectTouchRefocus {
             suppressDirectTouchKeyboardFocusUntil = Date().addingTimeInterval(0.35)
         }
         if !isTerminalTextInputActive {
             _ = focusTerminalInputWithoutShowingSoftwareKeyboard()
-        } else {
-            reloadTerminalInputViewsIfActive()
         }
     }
 
@@ -2297,7 +2336,6 @@ class GhosttyTerminalView: UIView {
         guard !isFindNavigatorActive else { return false }
         refreshHardwareKeyboardAttachmentFromSystem()
         clearNativeSelectionStateForTerminalInput()
-        notifyKeyboardBrowseModeChange()
         return becomeFirstResponder()
     }
 
@@ -2362,14 +2400,21 @@ class GhosttyTerminalView: UIView {
 
     func setTerminalInputAccessorySuppressed(_ suppressed: Bool) {
         guard suppressAccessoryForMissingSoftwareKeyboard != suppressed else { return }
+        let previousInputConfiguration = terminalInputConfiguration
         suppressAccessoryForMissingSoftwareKeyboard = suppressed
-        reloadTerminalInputViewsIfActive()
+        if previousInputConfiguration != terminalInputConfiguration {
+            reloadTerminalInputViewsIfActive()
+        }
         logKeyboardLifecycle("accessory.suppression.changed", detail: "suppressed=\(suppressed)")
     }
 
-    private func notifyKeyboardBrowseModeChange() {
+    private func notifyKeyboardBrowseModeChange(
+        previousInputConfiguration: TerminalInputConfiguration
+    ) {
         onKeyboardBrowseModeChange?(keyboardFocusPolicy.isBrowsing)
-        reloadTerminalInputViewsIfActive()
+        if previousInputConfiguration != terminalInputConfiguration {
+            reloadTerminalInputViewsIfActive()
+        }
     }
 
     /// Tears the input session down and rebuilds it across runloop turns.
@@ -2542,11 +2587,17 @@ class GhosttyTerminalView: UIView {
 
     private func refreshHardwareKeyboardAttachmentFromSystem() {
         let hasHardwareKeyboard = detectedHardwareKeyboardAttached
-        _ = setHardwareKeyboardAttached(hasHardwareKeyboard)
+        let previousInputConfiguration = terminalInputConfiguration
+        if setHardwareKeyboardAttached(hasHardwareKeyboard) {
+            notifyKeyboardBrowseModeChange(
+                previousInputConfiguration: previousInputConfiguration
+            )
+        }
     }
 
     private func updateHardwareKeyboardState(reloadInputViewsIfNeeded: Bool) {
         let hasHardwareKeyboard = detectedHardwareKeyboardAttached
+        let previousInputConfiguration = terminalInputConfiguration
         let didChange = setHardwareKeyboardAttached(hasHardwareKeyboard)
         if didChange {
             logKeyboardLifecycle(
@@ -2555,18 +2606,21 @@ class GhosttyTerminalView: UIView {
             )
         }
         if didChange {
-            notifyKeyboardBrowseModeChange()
+            notifyKeyboardBrowseModeChange(
+                previousInputConfiguration: previousInputConfiguration
+            )
         }
         if hasHardwareKeyboard {
             focusForHardwareKeyboardIfNeeded()
         } else if didChange {
             if isTerminalTextInputActive, isTextInputSessionEligible, !isFindNavigatorActive {
                 _ = requestKeyboardFocus(for: .initialActivation)
-            } else {
-                reloadTerminalInputViewsIfActive()
             }
         }
-        if reloadInputViewsIfNeeded, isTerminalTextInputActive, isTextInputSessionEligible {
+        if reloadInputViewsIfNeeded,
+           previousInputConfiguration == terminalInputConfiguration,
+           isTerminalTextInputActive,
+           isTextInputSessionEligible {
             reloadTerminalInputViewsIfActive()
         }
     }
@@ -2586,15 +2640,21 @@ class GhosttyTerminalView: UIView {
         if keyboardUITestHardwareKeyboardOverride == false { return }
         #endif
         guard !hasHardwareKeyboardAttached else { return }
+        let previousInputConfiguration = terminalInputConfiguration
         hasHardwareKeyboardAttached = true
+        notifyKeyboardBrowseModeChange(
+            previousInputConfiguration: previousInputConfiguration
+        )
         focusForHardwareKeyboardIfNeeded()
-        if isTerminalTextInputActive, isTextInputSessionEligible {
-            reloadTerminalInputViewsIfActive()
-        }
     }
 
     private func focusForHardwareKeyboardIfNeeded() {
-        guard hasHardwareKeyboardAttached, isTextInputSessionEligible, !isFindNavigatorActive else { return }
+        guard hasHardwareKeyboardAttached,
+              canRouteTerminalInput,
+              isTextInputSessionEligible,
+              !isFindNavigatorActive else {
+            return
+        }
         guard keyboardFocusPolicy.isBrowsing || !isTerminalTextInputActive else {
             return
         }
@@ -5819,6 +5879,22 @@ extension GhosttyTerminalView {
         )
     }
 
+    private enum TerminalInputConfiguration: Equatable {
+        case systemWithAccessory
+        case systemWithoutAccessory
+        case suppressed
+    }
+
+    private var terminalInputConfiguration: TerminalInputConfiguration {
+        if shouldSuppressSoftwareKeyboard {
+            return .suppressed
+        }
+        if isFindNavigatorActive || suppressAccessoryForMissingSoftwareKeyboard {
+            return .systemWithoutAccessory
+        }
+        return .systemWithAccessory
+    }
+
     private var shouldHideKeyboardAccessoryBar: Bool {
         shouldSuppressSoftwareKeyboard
             || suppressAccessoryForMissingSoftwareKeyboard
@@ -5865,6 +5941,14 @@ extension GhosttyTerminalView {
     }
 
     #if DEBUG
+    var keyboardUITestInputViewReloadCount: Int {
+        keyboardInputViewReloadCount
+    }
+
+    var keyboardUITestInputSessionRebuildCount: Int {
+        keyboardInputSessionRebuildCount
+    }
+
     func keyboardUITestDiagnostics(keyboardVisible: Bool, keyboardHeight: CGFloat) -> String {
         let snapshot = keyboardCoordinatorDiagnosticSnapshot()
         let accessoryAttached = keyboardToolbar?.window != nil
@@ -5917,7 +6001,8 @@ extension GhosttyTerminalView {
             "hardwareRepeatPhase=\(keyboardUITestHardwareRepeatPhase)",
             "hardwarePresses=\(hardwarePressesSentToGhostty.count)",
             "hideRequests=\(keyboardHideRequestCount)",
-            "inputRebuilds=\(keyboardInputSessionRebuildCount)"
+            "inputRebuilds=\(keyboardInputSessionRebuildCount)",
+            "inputReloads=\(keyboardInputViewReloadCount)"
         ].joined(separator: " ")
     }
 
@@ -6011,15 +6096,20 @@ extension GhosttyTerminalView {
 
     func keyboardUITestSetHardwareKeyboardAttached(_ attached: Bool) {
         keyboardUITestHardwareKeyboardOverride = attached
-        _ = setHardwareKeyboardAttached(attached)
+        let previousInputConfiguration = terminalInputConfiguration
+        if setHardwareKeyboardAttached(attached) {
+            notifyKeyboardBrowseModeChange(
+                previousInputConfiguration: previousInputConfiguration
+            )
+        }
         if attached {
             focusForHardwareKeyboardIfNeeded()
         } else if isTerminalTextInputActive, isTextInputSessionEligible, !isFindNavigatorActive {
             _ = requestKeyboardFocus(for: .initialActivation)
-        } else {
-            notifyKeyboardBrowseModeChange()
         }
-        reloadTerminalInputViewsIfActive()
+        if previousInputConfiguration == terminalInputConfiguration {
+            reloadTerminalInputViewsIfActive()
+        }
     }
 
     func keyboardUITestBeginUnexpectedSoftwareKeyboardLoss() {

@@ -6,6 +6,113 @@ final class TerminalKeyboardUITests: XCTestCase {
     }
 
     @MainActor
+    func testRepeatedSplitPaneFocusKeepsOneInputUISessionWithoutReloadLoop() throws {
+        let app = launchKeyboardHarness(splitPaneFocus: true)
+        let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
+        let firstTerminal = app.descendants(matching: .any)[
+            "vvterm.keyboardTest.terminalSurface.first"
+        ]
+        let secondTerminal = app.descendants(matching: .any)[
+            "vvterm.keyboardTest.terminalSurface.second"
+        ]
+        XCTAssertTrue(firstTerminal.waitForExistence(timeout: 10), diagnosticsText(in: app))
+        XCTAssertTrue(secondTerminal.waitForExistence(timeout: 10), diagnosticsText(in: app))
+
+        app.buttons["vvterm.keyboardTest.focus.first"].tap()
+        firstTerminal.tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "softwareInputActive=true",
+            timeout: 8,
+            diagnostics: diagnosticsText(in: app)
+        )
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForExistence(timeout: 8),
+            diagnosticsText(in: app)
+        )
+        let baselineReloads = try diagnosticMetric("totalInputReloads", in: app)
+        let baselineRebuilds = try diagnosticMetric("totalInputRebuilds", in: app)
+
+        for index in 0..<20 {
+            let focusesSecond = index.isMultiple(of: 2)
+            app.buttons[
+                focusesSecond
+                    ? "vvterm.keyboardTest.focus.second"
+                    : "vvterm.keyboardTest.focus.first"
+            ].tap()
+            wait(
+                for: diagnostics,
+                labelContaining: focusesSecond
+                    ? "focusedPane=second"
+                    : "focusedPane=first",
+                timeout: 3,
+                diagnostics: diagnosticsText(in: app)
+            )
+            wait(
+                for: diagnostics,
+                labelContaining: "softwareInputActive=true",
+                timeout: 3,
+                diagnostics: diagnosticsText(in: app)
+            )
+        }
+
+        let finalReloads = try diagnosticMetric("totalInputReloads", in: app)
+        let finalRebuilds = try diagnosticMetric("totalInputRebuilds", in: app)
+        XCTAssertLessThanOrEqual(finalReloads, baselineReloads + 1, diagnosticsText(in: app))
+        XCTAssertEqual(finalRebuilds, baselineRebuilds, diagnosticsText(in: app))
+        XCTAssertTrue(app.keyboards.firstMatch.exists, diagnosticsText(in: app))
+
+        app.buttons["vvterm.keyboardTest.hardware.attach"].tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "hardware=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "softwareInputActive=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForNonExistence(timeout: 8),
+            diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "coordinatorKeyboardVisible=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        waitForDiagnosticMetrics(in: app) { metrics in
+            guard let gap = metrics["layoutBottomGap"] else { return false }
+            return gap < 100
+        }
+
+        let commands: [(key: String, modifiers: XCUIElement.KeyModifierFlags, action: String)] = [
+            ("d", [.command], "splitRight"),
+            (XCUIKeyboardKey.leftArrow.rawValue, [.command, .option], "selectLeft"),
+            (XCUIKeyboardKey.rightArrow.rawValue, [.command, .control], "moveDividerRight"),
+        ]
+        for (index, command) in commands.enumerated() {
+            app.typeKey(command.key, modifierFlags: command.modifiers)
+            wait(
+                for: diagnostics,
+                labelContaining: "paneShortcutActions=\(index + 1)",
+                timeout: 5,
+                diagnostics: diagnosticsText(in: app)
+            )
+            wait(
+                for: diagnostics,
+                labelContaining: "lastPaneShortcutAction=\(command.action)",
+                timeout: 5,
+                diagnostics: diagnosticsText(in: app)
+            )
+        }
+    }
+
+    @MainActor
     func testKeyboardButtonRestoresAfterUserHideButTerminalTapDoesNot() throws {
         let app = launchKeyboardHarness(simulatesKeyboardFrames: true)
         let terminal = waitForTerminal(in: app)
@@ -1761,7 +1868,8 @@ final class TerminalKeyboardUITests: XCTestCase {
         simulatesCodexTUIResponse: Bool = false,
         simulatesTerminalMouseCapture: Bool = false,
         usesNativeFindNavigator: Bool = false,
-        simulatesDetachedLightAccessoryHost: Bool = false
+        simulatesDetachedLightAccessoryHost: Bool = false,
+        splitPaneFocus: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -1771,6 +1879,9 @@ final class TerminalKeyboardUITests: XCTestCase {
             "-AppleLocale", "en_US",
             "-security.privacyModeEnabled", privacyModeEnabled ? "YES" : "NO"
         ]
+        if splitPaneFocus {
+            app.launchArguments.append("--vvterm-ui-test-terminal-split-keyboard-harness")
+        }
         if preservesTerminalSize {
             app.launchArguments.append("--vvterm-ui-test-preserve-terminal-size")
         }
@@ -2228,6 +2339,16 @@ final class TerminalKeyboardUITests: XCTestCase {
             guard parts.count == 2, let value = Double(parts[1]) else { return }
             result[String(parts[0])] = value
         }
+    }
+
+    private func diagnosticMetric(
+        _ name: String,
+        in app: XCUIApplication
+    ) throws -> Double {
+        guard let value = diagnosticMetrics(in: app)[name] else {
+            throw DiagnosticMetricError.missing(name)
+        }
+        return value
     }
 
     private enum DiagnosticMetricError: Error {
