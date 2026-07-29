@@ -564,6 +564,12 @@ final class TerminalKeyboardUITests: XCTestCase {
                 .waitForNonExistence(timeout: 5),
             diagnosticsText(in: app)
         )
+        wait(
+            for: app.staticTexts["vvterm.keyboardTest.diagnostics"],
+            labelContaining: "renderingPaused=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
         assertKeyboardAndAccessoryVisible(in: app)
 
         let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]

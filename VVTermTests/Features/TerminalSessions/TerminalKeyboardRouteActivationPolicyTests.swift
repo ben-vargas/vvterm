@@ -143,5 +143,28 @@ struct TerminalKeyboardRouteActivationPolicyTests {
 
         #expect(effect == .deactivate)
     }
+
+    @Test
+    func biometricUnlockTransitionsFromPreservedToActiveRoute() {
+        let unlockWhileFaceIDIsDismissing = TerminalKeyboardRouteActivationPolicy.effect(
+            routeVisible: true,
+            terminalSelected: true,
+            sceneActivation: .foregroundInactive,
+            windowOwnership: .key,
+            contentObscured: false
+        )
+
+        #expect(unlockWhileFaceIDIsDismissing == .preserve)
+
+        let fullyActive = TerminalKeyboardRouteActivationPolicy.effect(
+            routeVisible: true,
+            terminalSelected: true,
+            sceneActivation: .foregroundActive,
+            windowOwnership: .key,
+            contentObscured: false
+        )
+
+        #expect(fullyActive == .activate)
+    }
 }
 #endif

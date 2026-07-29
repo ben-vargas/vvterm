@@ -400,8 +400,18 @@ struct TerminalKeyboardUITestHarness: View {
 
                     Button("Resume") {
                         simulatesPrivacyShield = false
-                        lifecycleStatus = .connected
-                        applyRouteActivation(.foregroundActive)
+                        lifecycleStatus = .inactive
+                        applyRouteActivation(.foregroundInactive)
+                        // Face ID removes the lock gate before UIKit finishes
+                        // returning the terminal scene to foreground-active.
+                        // Reproduce that ordering before the final recovery.
+                        DispatchQueue.main.async {
+                            lifecycleStatus = .connected
+                            applyRouteActivation(.foregroundActive)
+                            terminalView?.resumeRendering()
+                            TerminalTabManager.shared.keyboardCoordinator
+                                .activeTerminalContentDidBecomeVisible(for: Self.paneId)
+                        }
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.privacy.resume")
                 }

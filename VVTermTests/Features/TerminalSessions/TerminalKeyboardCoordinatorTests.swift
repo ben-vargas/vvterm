@@ -997,6 +997,54 @@ struct TerminalKeyboardCoordinatorTests {
 
     @Test
     @MainActor
+    func contentProtectionRoundTripReplaysSceneActivationRecovery() async {
+        let paneId = UUID()
+        let session = TerminalKeyboardInputSessionSpy()
+        let coordinator = TerminalKeyboardCoordinator()
+        coordinator.terminalProvider = { requestedPaneId in
+            requestedPaneId == paneId ? session : nil
+        }
+        coordinator.setActivePane(paneId)
+        coordinator.setViewActive(true)
+        coordinator.setPaneInputEligible(true, for: paneId)
+        coordinator.setWindowAttached(true, for: paneId)
+        await drainMainQueue()
+
+        coordinator.deactivateInputImmediately()
+        await drainMainQueue()
+        session.resetCommands()
+
+        // This mirrors the route becoming visible after biometric unlock:
+        // first reacquire ownership, then replay the foreground scene
+        // recovery that reconciles UIKit's keyboard scene.
+        coordinator.setActivePane(paneId)
+        coordinator.setViewActive(true)
+        await drainMainQueue()
+        coordinator.activeTerminalContentDidBecomeVisible(for: paneId)
+        await drainMainQueue()
+
+        #expect(session.accessoryAppearanceRefreshCount == 1)
+        #expect(session.accessorySuppressionRequests.last == false)
+        #expect(coordinator.keyboardUITestPresentationVerificationPending)
+        #expect(session.rebuildCount == 1)
+
+        coordinator.activeTerminalContentDidBecomeVisible(for: paneId)
+        await drainMainQueue()
+        #expect(session.rebuildCount == 1)
+
+        coordinator.activeTerminalSceneWillDeactivate(for: paneId)
+        coordinator.activeTerminalContentDidBecomeVisible(for: paneId)
+        await drainMainQueue()
+        #expect(session.rebuildCount == 2)
+
+        try? await Task.sleep(nanoseconds: 1_100_000_000)
+        await drainMainQueue()
+
+        #expect(session.rebuildCount == 2)
+    }
+
+    @Test
+    @MainActor
     func newerExplicitRequestSupersedesDelayedAutomaticReacquisition() async {
         let paneId = UUID()
         let session = TerminalKeyboardInputSessionSpy()

@@ -411,8 +411,15 @@ struct ServerTerminalRoute: View {
     }
 
     private var isContentObscured: Bool {
-        AppContentProtectionPolicy.shouldObscureContent(
-            sceneIsActive: scenePhase == .active,
+        let terminalSceneIsActive: Bool
+        switch terminalSceneActivation {
+        case .foregroundActive:
+            terminalSceneIsActive = true
+        case .foregroundInactive, .background:
+            terminalSceneIsActive = false
+        }
+        return AppContentProtectionPolicy.shouldObscureContent(
+            sceneIsActive: terminalSceneIsActive,
             fullAppLockEnabled: appLockManager.fullAppLockEnabled,
             privacyModeEnabled: privacyModeEnabled,
             isAppLocked: appLockManager.isAppLocked
@@ -544,6 +551,11 @@ struct ServerTerminalRoute: View {
                 isFocusedTerminalFindNavigatorVisible,
                 for: activePaneId
             )
+            if keyboardCoordinator.contentProtectionRecoveryIsPending(for: activePaneId),
+               let terminal = focusedTerminal {
+                terminal.resumeRendering()
+                keyboardCoordinator.activeTerminalContentDidBecomeVisible(for: activePaneId)
+            }
         }
     }
 
