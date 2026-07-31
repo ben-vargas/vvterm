@@ -112,6 +112,12 @@ struct TerminalKeyboardUITestHarness: View {
         Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-mouse-capture")
     }
 
+    private var testsAppShortcutInputs: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-terminal-app-shortcut-inputs"
+        )
+    }
+
     private var simulatesStaleLightAccessoryCacheOnResume: Bool {
         Foundation.ProcessInfo.processInfo.arguments.contains(
             "--vvterm-ui-test-stale-light-accessory-cache-on-resume"
@@ -342,6 +348,58 @@ struct TerminalKeyboardUITestHarness: View {
                         terminalView?.keyboardUITestCancelHardwareKeyRepeat()
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.hardwareRepeat.cancel")
+                }
+
+                if testsAppShortcutInputs {
+                    HStack(spacing: 8) {
+                        Button("Software Cmd-D") {
+                            terminalView?.keyboardUITestSendSoftwareShortcut(
+                                "d",
+                                modifiers: .init(command: true)
+                            )
+                        }
+                        .accessibilityIdentifier("vvterm.keyboardTest.shortcut.software.cmdD")
+
+                        Button("Software Cmd-Shift-D") {
+                            terminalView?.keyboardUITestSendSoftwareShortcut(
+                                "D",
+                                modifiers: .init(command: true)
+                            )
+                        }
+                        .accessibilityIdentifier("vvterm.keyboardTest.shortcut.software.cmdShiftD")
+
+                        Button("Software Cmd-W") {
+                            terminalView?.keyboardUITestSendSoftwareShortcut(
+                                "w",
+                                modifiers: .init(command: true)
+                            )
+                        }
+                        .accessibilityIdentifier("vvterm.keyboardTest.shortcut.software.cmdW")
+
+                        Button("Toolbar Cmd-Alt-Left") {
+                            terminalView?.keyboardUITestSendToolbarShortcut(
+                                .arrowLeft,
+                                modifiers: .init(alternate: true, command: true)
+                            )
+                        }
+                        .accessibilityIdentifier("vvterm.keyboardTest.shortcut.toolbar.cmdAltLeft")
+
+                        Button("Custom Cmd-Ctrl-Right") {
+                            terminalView?.keyboardUITestSendCustomShortcut(
+                                .arrowRight,
+                                modifiers: .init(control: true, command: true)
+                            )
+                        }
+                        .accessibilityIdentifier("vvterm.keyboardTest.shortcut.custom.cmdCtrlRight")
+
+                        Button("Custom Ctrl-X") {
+                            terminalView?.keyboardUITestSendCustomShortcut(
+                                .x,
+                                modifiers: .init(control: true)
+                            )
+                        }
+                        .accessibilityIdentifier("vvterm.keyboardTest.shortcut.custom.ctrlX")
+                    }
                 }
 
                 Button("Cursor Bottom") {

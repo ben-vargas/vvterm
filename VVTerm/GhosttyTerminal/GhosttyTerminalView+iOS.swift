@@ -219,6 +219,47 @@ private extension UIKeyModifierFlags {
     }
 }
 
+private extension Ghostty.Input.Mods {
+    var terminalSplitShortcutModifiers: TerminalSplitShortcutModifiers {
+        var result: TerminalSplitShortcutModifiers = []
+        if contains(.super) { result.insert(.command) }
+        if contains(.shift) { result.insert(.shift) }
+        if contains(.ctrl) { result.insert(.control) }
+        if contains(.alt) { result.insert(.alternate) }
+        return result
+    }
+}
+
+private extension TerminalAccessoryShortcutModifiers {
+    var terminalSplitShortcutModifiers: TerminalSplitShortcutModifiers {
+        var result: TerminalSplitShortcutModifiers = []
+        if command { result.insert(.command) }
+        if shift { result.insert(.shift) }
+        if control { result.insert(.control) }
+        if alternate { result.insert(.alternate) }
+        return result
+    }
+}
+
+private extension TerminalAccessoryShortcutKey {
+    var terminalSplitShortcutKey: TerminalSplitShortcutKey? {
+        switch self {
+        case .enter:
+            return .character("\r")
+        case .arrowUp:
+            return .upArrow
+        case .arrowDown:
+            return .downArrow
+        case .arrowLeft:
+            return .leftArrow
+        case .arrowRight:
+            return .rightArrow
+        default:
+            return unshiftedText.map(TerminalSplitShortcutKey.character)
+        }
+    }
+}
+
 @MainActor
 private final class TerminalIMEProxyTextView: UIView, UITextInput {
     weak var terminalOwner: GhosttyTerminalView?
@@ -1077,7 +1118,7 @@ class GhosttyTerminalView: UIView {
     /// Callback invoked when a pinch gesture requests terminal pane zoom.
     var onZoomAction: ((TerminalZoomAction) -> TerminalZoomResult?)?
 
-    /// App-owned pane actions invoked by iPad hardware-keyboard shortcuts.
+    /// App-owned pane actions invoked by local iPad keyboard shortcuts.
     var onPaneKeyboardShortcut: ((TerminalSplitCommand) -> Void)?
 
     /// Per-surface presentation overrides used to preserve pane zoom across global config reloads.
@@ -4306,14 +4347,13 @@ class GhosttyTerminalView: UIView {
     @objc
     fileprivate func handleTerminalSplitCommand(_ command: UIKeyCommand) {
         guard canRouteTerminalInput,
-              let input = command.input,
-              let action = terminalSplitCommand(
-                  input: input,
-                  modifiers: command.modifierFlags
-              ) else {
+              let input = command.input else {
             return
         }
-        onPaneKeyboardShortcut?(action)
+        _ = performTerminalSplitShortcut(
+            input: input,
+            modifiers: command.modifierFlags.terminalSplitShortcutModifiers
+        )
     }
 
     private func handlePasteShortcut(_ key: UIKey) -> Bool {
@@ -4356,8 +4396,7 @@ class GhosttyTerminalView: UIView {
 
     private func handleCommandShortcut(_ key: UIKey) -> Bool {
         guard key.modifierFlags.contains(.command) else { return false }
-        if let action = terminalSplitCommand(for: key) {
-            onPaneKeyboardShortcut?(action)
+        if performTerminalSplitCommand(terminalSplitCommand(for: key)) {
             return true
         }
         if let action = terminalZoomShortcutAction(for: key) {
@@ -4421,6 +4460,33 @@ class GhosttyTerminalView: UIView {
             for: input,
             modifiers: modifiers.terminalSplitShortcutModifiers
         )
+    }
+
+    @discardableResult
+    private func performTerminalSplitShortcut(
+        input: String,
+        modifiers: TerminalSplitShortcutModifiers
+    ) -> Bool {
+        performTerminalSplitCommand(
+            TerminalSplitShortcutRouting.command(for: input, modifiers: modifiers)
+        )
+    }
+
+    @discardableResult
+    private func performTerminalSplitShortcut(
+        key: TerminalSplitShortcutKey,
+        modifiers: TerminalSplitShortcutModifiers
+    ) -> Bool {
+        performTerminalSplitCommand(
+            TerminalSplitShortcutRouting.command(for: key, modifiers: modifiers)
+        )
+    }
+
+    @discardableResult
+    private func performTerminalSplitCommand(_ command: TerminalSplitCommand?) -> Bool {
+        guard let command else { return false }
+        onPaneKeyboardShortcut?(command)
+        return true
     }
 
     private func performTerminalZoomAction(_ action: TerminalZoomAction) {
@@ -5163,6 +5229,19 @@ class GhosttyTerminalView: UIView {
         }
 
         let mods = keyboardToolbar?.consumeModifiers() ?? (ctrl: false, alt: false, command: false, shift: false)
+        if mods.command {
+            var splitModifiers: TerminalSplitShortcutModifiers = [.command]
+            if mods.ctrl { splitModifiers.insert(.control) }
+            if mods.alt { splitModifiers.insert(.alternate) }
+            if mods.shift { splitModifiers.insert(.shift) }
+            if let firstCharacter = normalized.first,
+               ghosttyKeyMapping(for: firstCharacter)?.requiresShift == true {
+                splitModifiers.insert(.shift)
+            }
+            if performTerminalSplitShortcut(input: normalized, modifiers: splitModifiers) {
+                return true
+            }
+        }
         if mods.ctrl, normalized.compare("v", options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame,
            interceptRichPasteIfNeeded() {
             invalidateLocalTextInputSession()
@@ -5896,6 +5975,25 @@ indirect enum TerminalKey {
     }
 }
 
+private extension TerminalKey {
+    var terminalSplitShortcutKey: TerminalSplitShortcutKey? {
+        switch self {
+        case .enter:
+            return .character("\r")
+        case .arrowUp:
+            return .upArrow
+        case .arrowDown:
+            return .downArrow
+        case .arrowLeft:
+            return .leftArrow
+        case .arrowRight:
+            return .rightArrow
+        default:
+            return nil
+        }
+    }
+}
+
 // MARK: - Keyboard Accessory View
 
 extension GhosttyTerminalView {
@@ -6134,6 +6232,36 @@ extension GhosttyTerminalView {
         imeProxyTextView.unmarkText()
     }
 
+    func keyboardUITestSendSoftwareShortcut(
+        _ text: String,
+        modifiers: TerminalAccessoryShortcutModifiers
+    ) {
+        _ = resolvedInputAccessoryView()
+        keyboardToolbar?.keyboardUITestSetModifiers(modifiers)
+        _ = handleIMEProxyInsertText(text)
+    }
+
+    func keyboardUITestSendToolbarShortcut(
+        _ key: TerminalKey,
+        modifiers: TerminalAccessoryShortcutModifiers
+    ) {
+        sendToolbarKey(.modified(key, mods: modifiers.ghosttyModifiers))
+    }
+
+    func keyboardUITestSendCustomShortcut(
+        _ key: TerminalAccessoryShortcutKey,
+        modifiers: TerminalAccessoryShortcutModifiers
+    ) {
+        handleToolbarCustomAction(
+            TerminalAccessoryCustomAction(
+                title: "Keyboard shortcut routing test",
+                kind: .shortcut,
+                shortcutKey: key,
+                shortcutModifiers: modifiers
+            )
+        )
+    }
+
     func keyboardUITestRequestHardwareKeyboardFocus() {
         _ = requestKeyboardFocus(for: .hardwareKeyboard)
     }
@@ -6184,9 +6312,22 @@ extension GhosttyTerminalView {
     }
 
     private func sendToolbarKey(_ key: TerminalKey, accumulatedMods: Ghostty.Input.Mods = []) {
-        switch key {
-        case .modified(let baseKey, let mods):
+        if case .modified(let baseKey, let mods) = key {
             sendToolbarKey(baseKey, accumulatedMods: accumulatedMods.union(mods))
+            return
+        }
+        if accumulatedMods.contains(.super),
+           let splitKey = key.terminalSplitShortcutKey,
+           performTerminalSplitShortcut(
+               key: splitKey,
+               modifiers: accumulatedMods.terminalSplitShortcutModifiers
+           ) {
+            return
+        }
+
+        switch key {
+        case .modified:
+            return
         case .escape:
             if accumulatedMods.isEmpty, hasLocalTextInputSession {
                 invalidateLocalTextInputSession()
@@ -6303,6 +6444,14 @@ extension GhosttyTerminalView {
                 sendKeyPress(.enter)
             }
         case .shortcut:
+            if action.shortcutModifiers.command,
+               let splitKey = action.shortcutKey.terminalSplitShortcutKey,
+               performTerminalSplitShortcut(
+                   key: splitKey,
+                   modifiers: action.shortcutModifiers.terminalSplitShortcutModifiers
+               ) {
+                return
+            }
             guard let key = Ghostty.Input.Key(rawValue: action.shortcutKey.rawValue) else { return }
             let mods = action.shortcutModifiers.ghosttyModifiers
             let text: String?
@@ -7176,6 +7325,16 @@ private class TerminalInputAccessoryView: UIInputView {
         }
         return (ctrl, alt, command, shift)
     }
+
+    #if DEBUG
+    func keyboardUITestSetModifiers(_ modifiers: TerminalAccessoryShortcutModifiers) {
+        ctrlActive = modifiers.control
+        altActive = modifiers.alternate
+        commandActive = modifiers.command
+        shiftActive = modifiers.shift
+        updateModifierState()
+    }
+    #endif
 
     private func updateModifierState() {
         UIView.animate(withDuration: 0.2) {

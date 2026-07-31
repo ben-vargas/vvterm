@@ -1544,6 +1544,87 @@ final class TerminalKeyboardUITests: XCTestCase {
     }
 
     @MainActor
+    func testSoftwareToolbarAndCustomShortcutCombinationsUseAppRouting() throws {
+        let app = launchKeyboardHarness(
+            simulatesKeyboardFrames: true,
+            testsAppShortcutInputs: true
+        )
+        let terminal = waitForTerminal(in: app)
+        let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
+
+        terminal.tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "imeProxyFirstResponder=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+
+        let localActions: [(button: String, action: String)] = [
+            ("vvterm.keyboardTest.shortcut.software.cmdD", "splitRight"),
+            ("vvterm.keyboardTest.shortcut.software.cmdShiftD", "splitDown"),
+            ("vvterm.keyboardTest.shortcut.toolbar.cmdAltLeft", "selectLeft"),
+            ("vvterm.keyboardTest.shortcut.custom.cmdCtrlRight", "moveDividerRight"),
+        ]
+
+        for (index, localAction) in localActions.enumerated() {
+            app.buttons[localAction.button].tap()
+            wait(
+                for: diagnostics,
+                labelContaining: "paneShortcutActions=\(index + 1)",
+                timeout: 5,
+                diagnostics: diagnosticsText(in: app)
+            )
+            wait(
+                for: diagnostics,
+                labelContaining: "lastPaneShortcutAction=\(localAction.action)",
+                timeout: 5,
+                diagnostics: diagnosticsText(in: app)
+            )
+            wait(
+                for: diagnostics,
+                labelContaining: "inputHex=none",
+                timeout: 5,
+                diagnostics: diagnosticsText(in: app)
+            )
+        }
+
+        app.buttons["vvterm.keyboardTest.shortcut.custom.ctrlX"].tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "inputHex=18",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "paneShortcutActions=4",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+
+        app.buttons["vvterm.keyboardTest.shortcut.software.cmdW"].tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "paneShortcutActions=5",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "lastPaneShortcutAction=closeFocusedPane",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        let confirmation = app.alerts["Close this terminal?"]
+        XCTAssertTrue(
+            confirmation.waitForExistence(timeout: 5),
+            "Software Cmd-W did not request close confirmation. \(diagnosticsText(in: app))"
+        )
+        confirmation.buttons["Cancel"].tap()
+    }
+
+    @MainActor
     func testPaneCloseAlertRestoresTerminalFocusAfterCancel() throws {
         let app = launchKeyboardHarness(simulatesKeyboardFrames: true)
         let terminal = waitForTerminal(in: app)
@@ -2274,7 +2355,8 @@ final class TerminalKeyboardUITests: XCTestCase {
         usesNativeFindNavigator: Bool = false,
         simulatesDetachedLightAccessoryHost: Bool = false,
         simulatesStaleLightAccessoryCacheOnResume: Bool = false,
-        splitPaneFocus: Bool = false
+        splitPaneFocus: Bool = false,
+        testsAppShortcutInputs: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -2286,6 +2368,9 @@ final class TerminalKeyboardUITests: XCTestCase {
         ]
         if splitPaneFocus {
             app.launchArguments.append("--vvterm-ui-test-terminal-split-keyboard-harness")
+        }
+        if testsAppShortcutInputs {
+            app.launchArguments.append("--vvterm-ui-test-terminal-app-shortcut-inputs")
         }
         if preservesTerminalSize {
             app.launchArguments.append("--vvterm-ui-test-preserve-terminal-size")
