@@ -1198,6 +1198,19 @@ final class TerminalKeyboardUITests: XCTestCase {
             screenFrame.width / 2,
             diagnosticsText(in: app)
         )
+        let floatingAccessoryFrame = accessory.frame
+        if floatingAccessoryFrame.maxY >= screenFrame.maxY - 1,
+           floatingAccessoryFrame.width >= screenFrame.width * 0.8 {
+            XCTAssertLessThanOrEqual(
+                terminal.frame.maxY,
+                floatingAccessoryFrame.minY + 1,
+                """
+                Terminal extends beneath the bottom-docked accessory while the keyboard is floating.
+                terminal=\(terminal.frame) accessory=\(floatingAccessoryFrame)
+                \(diagnosticsText(in: app))
+                """
+            )
+        }
         dragFloatingKeyboardToBottom(keyboard, in: app)
 
         wait(

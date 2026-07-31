@@ -83,6 +83,12 @@ private final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
                 self.cursorRect = cursorRect
                 self.recalculate(animation: .easeOut(duration: 0.12))
             }
+            newTerminal.onKeyboardAvoidanceAccessoryFrameChange = { [weak self, weak newTerminal] in
+                DispatchQueue.main.async {
+                    guard let self, let newTerminal, self.terminal === newTerminal else { return }
+                    self.recalculate(animation: .easeOut(duration: 0.12))
+                }
+            }
         }
 
         cursorRect = newTerminal.keyboardAvoidanceCursorRect()
@@ -97,6 +103,7 @@ private final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
     private func detachTerminal() {
         terminal?.disableKeyboardAvoidanceSizePreservation()
         terminal?.onKeyboardAvoidanceCursorRectChange = nil
+        terminal?.onKeyboardAvoidanceAccessoryFrameChange = nil
         terminal = nil
         cursorRect = .zero
     }
@@ -118,6 +125,9 @@ private final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
         // oscillate between stale and current geometry.
         baseBoundsFrame.size.height += layout.bottomInset
         let keyboardFrameInWindow = keyboardFrame.map {
+            window.convert($0, from: window.screen.coordinateSpace)
+        }
+        let accessoryFrameInWindow = terminal.keyboardAvoidanceAccessoryFrame().map {
             window.convert($0, from: window.screen.coordinateSpace)
         }
         let screenFrameInWindow = window.convert(
@@ -144,7 +154,8 @@ private final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
             preservesTerminalSize: preservesTerminalSize,
             geometry: geometry,
             terminalFrame: baseTerminalFrame,
-            cursorFrame: baseCursorFrame
+            cursorFrame: baseCursorFrame,
+            accessoryFrame: accessoryFrameInWindow
         )
         terminal.setKeyboardAvoidanceSizePreservationEnabled(
             newLayout.preservesTerminalSurfaceSize
@@ -215,6 +226,7 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
             .onDisappear {
                 for paneId in paneIds {
                     terminalProvider(paneId)?.onKeyboardAvoidanceCursorRectChange = nil
+                    terminalProvider(paneId)?.onKeyboardAvoidanceAccessoryFrameChange = nil
                 }
                 model.detach()
             }

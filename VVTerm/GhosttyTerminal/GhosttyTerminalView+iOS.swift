@@ -1065,6 +1065,11 @@ class GhosttyTerminalView: UIView {
     /// Optional UI-layer observer used by the opt-in keyboard viewport policy.
     /// It is called only when the rendered cursor rect changes.
     var onKeyboardAvoidanceCursorRectChange: ((CGRect) -> Void)?
+    /// Reports input-accessory host movement independently of software-keyboard
+    /// geometry. Floating iPad keyboards can leave this view docked at the
+    /// bottom of the screen.
+    var onKeyboardAvoidanceAccessoryFrameChange: (() -> Void)?
+    private var lastKeyboardAvoidanceAccessoryFrame: CGRect?
     private var keyboardAvoidancePreservedSurfaceSize: CGSize?
     private var keyboardAvoidanceReferenceSurfaceSize: CGSize?
     private var tracksKeyboardAvoidanceReferenceSize = false
@@ -2055,6 +2060,30 @@ class GhosttyTerminalView: UIView {
 
     func keyboardAvoidanceCursorRect() -> CGRect {
         textInputCaretRect(for: textInputModel.cursorIndex)
+    }
+
+    func keyboardAvoidanceAccessoryFrame() -> CGRect? {
+        guard let keyboardToolbar,
+              let accessoryWindow = keyboardToolbar.window,
+              let terminalWindow = window,
+              accessoryWindow.screen === terminalWindow.screen else {
+            return nil
+        }
+        let frameInAccessoryWindow = keyboardToolbar.convert(
+            keyboardToolbar.bounds,
+            to: accessoryWindow
+        )
+        return accessoryWindow.convert(
+            frameInAccessoryWindow,
+            to: accessoryWindow.screen.coordinateSpace
+        )
+    }
+
+    fileprivate func notifyKeyboardAvoidanceAccessoryFrameChange() {
+        let frame = keyboardAvoidanceAccessoryFrame()
+        guard frame != lastKeyboardAvoidanceAccessoryFrame else { return }
+        lastKeyboardAvoidanceAccessoryFrame = frame
+        onKeyboardAvoidanceAccessoryFrameChange?()
     }
 
     func setKeyboardAvoidanceSizePreservationEnabled(_ isEnabled: Bool) {
@@ -6428,6 +6457,11 @@ private class TerminalInputAccessoryView: UIInputView {
         CGSize(width: UIView.noIntrinsicMetric, height: Self.preferredHeight)
     }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        terminalOwner?.notifyKeyboardAvoidanceAccessoryFrameChange()
+    }
+
     override func systemLayoutSizeFitting(_ targetSize: CGSize) -> CGSize {
         systemLayoutSizeFitting(
             targetSize,
@@ -6602,6 +6636,7 @@ private class TerminalInputAccessoryView: UIInputView {
     override func didMoveToWindow() {
         super.didMoveToWindow()
         updateBackgroundEffect()
+        terminalOwner?.notifyKeyboardAvoidanceAccessoryFrameChange()
     }
 
     private func updateBackgroundEffect() {

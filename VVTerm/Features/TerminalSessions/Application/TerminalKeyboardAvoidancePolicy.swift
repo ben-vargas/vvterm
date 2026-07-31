@@ -85,11 +85,22 @@ enum TerminalKeyboardAvoidancePolicy {
         preservesTerminalSize: Bool,
         geometry: KeyboardGeometry,
         terminalFrame: CGRect,
-        cursorFrame: CGRect
+        cursorFrame: CGRect,
+        accessoryFrame: CGRect? = nil
     ) -> Layout {
+        let accessoryInset = bottomAccessoryInset(
+            terminalFrame: terminalFrame,
+            accessoryFrame: accessoryFrame
+        )
+
         switch geometry {
         case .hidden:
-            return .unobstructed
+            guard accessoryInset > 0 else { return .unobstructed }
+            return Layout(
+                bottomInset: accessoryInset,
+                verticalOffset: 0,
+                preservesTerminalSurfaceSize: false
+            )
         case let .docked(frame):
             if preservesTerminalSize {
                 return Layout(
@@ -107,21 +118,59 @@ enum TerminalKeyboardAvoidancePolicy {
                 max(terminalFrame.height, 0)
             )
             return Layout(
-                bottomInset: overlap,
+                bottomInset: max(overlap, accessoryInset),
                 verticalOffset: 0,
                 preservesTerminalSurfaceSize: false
             )
         case let .floating(frame):
-            guard preservesTerminalSize else { return .unobstructed }
+            guard preservesTerminalSize else {
+                guard accessoryInset > 0 else { return .unobstructed }
+                return Layout(
+                    bottomInset: accessoryInset,
+                    verticalOffset: 0,
+                    preservesTerminalSurfaceSize: false
+                )
+            }
+            let keyboardOffset = verticalOffset(
+                terminalFrame: terminalFrame,
+                cursorFrame: cursorFrame,
+                keyboardFrame: frame
+            )
+            let accessoryOffset = verticalOffset(
+                terminalFrame: terminalFrame,
+                cursorFrame: cursorFrame,
+                keyboardFrame: accessoryFrame
+            )
             return Layout(
                 bottomInset: 0,
-                verticalOffset: verticalOffset(
-                    terminalFrame: terminalFrame,
-                    cursorFrame: cursorFrame,
-                    keyboardFrame: frame
-                ),
+                verticalOffset: min(keyboardOffset, accessoryOffset),
                 preservesTerminalSurfaceSize: false
             )
         }
+    }
+
+    private nonisolated static func bottomAccessoryInset(
+        terminalFrame: CGRect,
+        accessoryFrame: CGRect?
+    ) -> CGFloat {
+        guard let accessoryFrame,
+              !terminalFrame.isNull,
+              !terminalFrame.isEmpty,
+              !terminalFrame.isInfinite,
+              !accessoryFrame.isNull,
+              !accessoryFrame.isEmpty,
+              !accessoryFrame.isInfinite,
+              accessoryFrame.maxY >= terminalFrame.maxY - 1 else {
+            return 0
+        }
+
+        let horizontalOverlap = min(terminalFrame.maxX, accessoryFrame.maxX)
+            - max(terminalFrame.minX, accessoryFrame.minX)
+        guard horizontalOverlap >= terminalFrame.width * 0.8 else { return 0 }
+
+        return min(
+            max(terminalFrame.maxY - max(accessoryFrame.minY, terminalFrame.minY), 0),
+            max(terminalFrame.height, 0)
+        )
     }
 }
