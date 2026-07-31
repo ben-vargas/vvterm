@@ -7,9 +7,11 @@ struct ZenModeFloatingOverlay<Panel: View>: View {
     #if os(macOS)
     private let chromeTopPadding: CGFloat = 6
     private let chromeTrailingPadding: CGFloat = 8
+    private let panelMaximumWidth: CGFloat = 360
     #else
     private let chromeTopPadding: CGFloat = 12
     private let chromeTrailingPadding: CGFloat = 12
+    private let panelMaximumWidth: CGFloat = 400
     #endif
 
     #if os(iOS)
@@ -29,7 +31,7 @@ struct ZenModeFloatingOverlay<Panel: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let panelWidth = max(250, min(proxy.size.width - 24, 360))
+            let panelWidth = max(250, min(proxy.size.width - 24, panelMaximumWidth))
 
             ZStack(alignment: .topTrailing) {
                 if isPanelPresented {
@@ -82,13 +84,8 @@ struct ZenModeFloatingOverlay<Panel: View>: View {
                 .font(.system(size: 15, weight: .semibold))
                 .frame(width: launcherSize, height: launcherSize)
                 .foregroundStyle(.primary)
-                .zenModeLauncherGlass()
-                .overlay(
-                    Circle()
-                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                )
         }
-        .buttonStyle(.plain)
+        .zenModeLauncherButtonStyle()
         .accessibilityLabel(String(localized: "Zen controls"))
         .accessibilityValue(isPanelPresented ? String(localized: "Expanded") : String(localized: "Collapsed"))
         .accessibilityIdentifier("vvterm.zen.controls")
@@ -103,11 +100,19 @@ struct ZenModeFloatingOverlay<Panel: View>: View {
 
 private extension View {
     @ViewBuilder
-    func zenModeLauncherGlass() -> some View {
+    func zenModeLauncherButtonStyle() -> some View {
         if #available(iOS 26, macOS 26, *) {
-            self.glassEffect(.regular.interactive(), in: Circle())
+            self
+                .buttonStyle(SwiftUI.GlassButtonStyle())
+                .buttonBorderShape(.circle)
         } else {
-            self.background(.ultraThinMaterial, in: Circle())
+            self
+                .buttonStyle(.plain)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                )
         }
     }
 }

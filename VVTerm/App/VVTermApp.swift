@@ -131,6 +131,7 @@ struct VVTermApp: App {
                 .modifier(AppearanceModifier())
         } else if usesTerminalZenModeUITestHarness {
             TerminalZenModeUITestHarness()
+                .environmentObject(ghosttyApp)
                 .modifier(AppearanceModifier())
         } else if usesStatsStorageUITestHarness {
             StatsStorageUITestHarness()
