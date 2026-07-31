@@ -39,6 +39,11 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         case awaitingDockedReattachment
     }
 
+    private enum KeyboardFrameObservationPhase {
+        case changing
+        case settled
+    }
+
     enum ImmediateDeactivationReason: String {
         case contentProtection
         case routeModal
@@ -241,12 +246,36 @@ final class TerminalKeyboardCoordinator: ObservableObject {
                             isLocal: isLocal,
                             sourceScreenIdentifier: sourceScreenIdentifier,
                             animationDuration: duration,
-                            animationCurveRawValue: curveRawValue
+                            animationCurveRawValue: curveRawValue,
+                            phase: .changing
                         )
                     }
                 }
             )
         }
+        keyboardObservers.append(
+            center.addObserver(
+                forName: UIResponder.keyboardDidChangeFrameNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] note in
+                let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?
+                    .cgRectValue
+                let isLocal = (note.userInfo?[UIResponder.keyboardIsLocalUserInfoKey] as? NSNumber)?
+                    .boolValue
+                let sourceScreenIdentifier = (note.object as? UIScreen).map(ObjectIdentifier.init)
+                DispatchQueue.main.async { [weak self] in
+                    self?.noteKeyboardEndFrame(
+                        frame,
+                        isLocal: isLocal,
+                        sourceScreenIdentifier: sourceScreenIdentifier,
+                        animationDuration: nil,
+                        animationCurveRawValue: nil,
+                        phase: .settled
+                    )
+                }
+            }
+        )
         for name in [
             UIResponder.keyboardWillHideNotification,
             UIResponder.keyboardDidHideNotification,
@@ -736,7 +765,8 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         isLocal: Bool?,
         sourceScreenIdentifier: ObjectIdentifier?,
         animationDuration: TimeInterval?,
-        animationCurveRawValue: Int?
+        animationCurveRawValue: Int?,
+        phase: KeyboardFrameObservationPhase
     ) {
         #if DEBUG
         guard !Self.usesUITestKeyboardFrameSimulation else { return }
@@ -772,6 +802,12 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             minimumHeight: softwareKeyboardMinimumHeight
         )
         setSoftwareKeyboardPresentation(presentation, terminal: terminal)
+        if case .settled = phase {
+            settleAccessoryHostTransition(
+                for: presentation,
+                terminal: terminal
+            )
+        }
     }
 
     private func noteSoftwareKeyboardHidden(
@@ -874,12 +910,21 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         case .floating:
             accessoryHostTransitionState = .awaitingDockedReattachment
         case .docked:
-            if case .awaitingDockedReattachment = accessoryHostTransitionState {
-                accessoryHostTransitionState = .settled
-                terminal?.reattachTerminalInputAccessory()
-            }
+            break
         }
         markDirty(reason: presentation.isVisible ? "keyboardShown" : "keyboardHidden")
+    }
+
+    private func settleAccessoryHostTransition(
+        for presentation: SoftwareKeyboardPresentation,
+        terminal: any TerminalKeyboardInputSession
+    ) {
+        guard case .docked = presentation,
+              case .awaitingDockedReattachment = accessoryHostTransitionState else {
+            return
+        }
+        accessoryHostTransitionState = .settled
+        terminal.reattachTerminalInputAccessory()
     }
 
     private func reconcileSoftwareKeyboardPresentation(
@@ -1560,14 +1605,16 @@ final class TerminalKeyboardCoordinator: ObservableObject {
 
     func keyboardUITestReceiveKeyboardEndFrame(
         _ frame: CGRect?,
-        isLocal: Bool
+        isLocal: Bool,
+        isSettled: Bool = true
     ) {
         noteKeyboardEndFrame(
             frame,
             isLocal: isLocal,
             sourceScreenIdentifier: nil,
             animationDuration: nil,
-            animationCurveRawValue: nil
+            animationCurveRawValue: nil,
+            phase: isSettled ? .settled : .changing
         )
     }
 
@@ -1591,6 +1638,12 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             presentation = .hidden
         }
         setSoftwareKeyboardPresentation(presentation)
+        if let terminal = activeTerminal {
+            settleAccessoryHostTransition(
+                for: presentation,
+                terminal: terminal
+            )
+        }
     }
     #endif
 }

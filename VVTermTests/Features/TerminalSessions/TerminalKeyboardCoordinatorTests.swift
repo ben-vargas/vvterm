@@ -562,6 +562,56 @@ struct TerminalKeyboardCoordinatorTests {
 
     @Test
     @MainActor
+    func transientDockedFrameDoesNotReattachAccessoryWhileFloatingKeyboardMoves() async {
+        let paneId = UUID()
+        let screen = CGRect(x: 0, y: 0, width: 1_366, height: 1_024)
+        let docked = CGRect(x: 0, y: 650, width: 1_366, height: 374)
+        let floatingStart = CGRect(x: 930, y: 620, width: 320, height: 280)
+        let floatingEnd = CGRect(x: 700, y: 500, width: 320, height: 280)
+        let session = TerminalKeyboardInputSessionSpy()
+        session.snapshot.screenFrame = screen
+        let coordinator = TerminalKeyboardCoordinator()
+        coordinator.terminalProvider = { requestedPaneId in
+            requestedPaneId == paneId ? session : nil
+        }
+        coordinator.setActivePane(paneId)
+        coordinator.setViewActive(true)
+        coordinator.setPaneInputEligible(true, for: paneId)
+        coordinator.setWindowAttached(true, for: paneId)
+        await drainMainQueue()
+
+        coordinator.keyboardUITestReceiveKeyboardEndFrame(docked, isLocal: true)
+        coordinator.keyboardUITestReceiveKeyboardEndFrame(floatingStart, isLocal: true)
+        session.resetCommands()
+
+        coordinator.keyboardUITestReceiveKeyboardEndFrame(
+            docked,
+            isLocal: true,
+            isSettled: false
+        )
+        coordinator.keyboardUITestReceiveKeyboardEndFrame(floatingEnd, isLocal: true)
+        await drainMainQueue()
+
+        #expect(
+            coordinator.softwareKeyboardPresentation
+                == .floating(frame: floatingEnd)
+        )
+        #expect(session.accessoryReloadCount == 0)
+        #expect(session.rebuildCount == 0)
+
+        coordinator.keyboardUITestReceiveKeyboardEndFrame(
+            docked,
+            isLocal: true,
+            isSettled: false
+        )
+        #expect(session.accessoryReloadCount == 0)
+
+        coordinator.keyboardUITestReceiveKeyboardEndFrame(docked, isLocal: true)
+        #expect(session.accessoryReloadCount == 1)
+    }
+
+    @Test
+    @MainActor
     func transientHiddenFramesDoNotPreventRedockingAccessoryReattachment() async {
         let paneId = UUID()
         let screen = CGRect(x: 0, y: 0, width: 1_366, height: 1_024)
