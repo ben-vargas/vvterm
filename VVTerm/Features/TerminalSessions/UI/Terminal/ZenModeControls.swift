@@ -82,10 +82,10 @@ struct ZenModeFloatingOverlay<Panel: View>: View {
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 15, weight: .semibold))
-                .frame(width: launcherSize, height: launcherSize)
+                .frame(width: 24, height: 24)
                 .foregroundStyle(.primary)
         }
-        .zenModeLauncherButtonStyle()
+        .zenModeLauncherButtonStyle(hitTargetSize: launcherSize)
         .accessibilityLabel(String(localized: "Zen controls"))
         .accessibilityValue(isPanelPresented ? String(localized: "Expanded") : String(localized: "Collapsed"))
         .accessibilityIdentifier("vvterm.zen.controls")
@@ -100,14 +100,17 @@ struct ZenModeFloatingOverlay<Panel: View>: View {
 
 private extension View {
     @ViewBuilder
-    func zenModeLauncherButtonStyle() -> some View {
+    func zenModeLauncherButtonStyle(hitTargetSize: CGFloat) -> some View {
         if #available(iOS 26, macOS 26, *) {
             self
                 .buttonStyle(SwiftUI.GlassButtonStyle())
                 .buttonBorderShape(.circle)
+                .frame(width: hitTargetSize, height: hitTargetSize)
+                .contentShape(Rectangle())
         } else {
             self
                 .buttonStyle(.plain)
+                .frame(width: hitTargetSize, height: hitTargetSize)
                 .background(.ultraThinMaterial, in: Circle())
                 .overlay(
                     Circle()
