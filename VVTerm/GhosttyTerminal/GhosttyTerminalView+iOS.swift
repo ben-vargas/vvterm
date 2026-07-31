@@ -2069,7 +2069,6 @@ class GhosttyTerminalView: UIView {
         } else {
             tracksKeyboardAvoidanceReferenceSize = true
             keyboardAvoidancePreservedSurfaceSize = nil
-            sizeDidChange(bounds.size)
         }
     }
 
@@ -2406,6 +2405,11 @@ class GhosttyTerminalView: UIView {
             reloadTerminalInputViewsIfActive()
         }
         logKeyboardLifecycle("accessory.suppression.changed", detail: "suppressed=\(suppressed)")
+    }
+
+    func reattachTerminalInputAccessory() {
+        reloadTerminalInputViewsIfActive()
+        logKeyboardLifecycle("accessory.reattached")
     }
 
     private func notifyKeyboardBrowseModeChange(
@@ -5956,7 +5960,15 @@ extension GhosttyTerminalView {
         let accessoryOwnerStyle = keyboardToolbar?.diagnosticOwnerInterfaceStyle ?? "missing"
         let accessoryHostStyle = keyboardToolbar?.diagnosticHostInterfaceStyle ?? "missing"
         let accessoryResolvedStyle = keyboardToolbar?.diagnosticResolvedInterfaceStyle ?? "missing"
+        let accessoryHeight = keyboardToolbar?.diagnosticHeight ?? 0
+        let accessoryFittingHeight = keyboardToolbar?.diagnosticFittingHeight ?? 0
+        let accessorySelfSizing = keyboardToolbar?.allowsSelfSizing == true
         let keyboardHeightText = String(format: "%.1f", Double(keyboardHeight))
+        let accessoryHeightText = String(format: "%.1f", Double(accessoryHeight))
+        let accessoryFittingHeightText = String(
+            format: "%.1f",
+            Double(accessoryFittingHeight)
+        )
         let size = terminalSize()
         let inputViewMode = keyboardUITestSoftwareKeyboardFailure == .untilSessionRebuild
             ? "testUnexpectedHidden"
@@ -5985,6 +5997,9 @@ extension GhosttyTerminalView {
             "accessoryOwnerStyle=\(accessoryOwnerStyle)",
             "accessoryHostStyle=\(accessoryHostStyle)",
             "accessoryResolvedStyle=\(accessoryResolvedStyle)",
+            "accessoryHeight=\(accessoryHeightText)",
+            "accessoryFittingHeight=\(accessoryFittingHeightText)",
+            "accessorySelfSizing=\(accessorySelfSizing)",
             "accessorySuppressed=\(suppressAccessoryForMissingSoftwareKeyboard)",
             "accessoryHidden=\(shouldHideKeyboardAccessoryBar)",
             "hardware=\(hasHardwareKeyboardAttached)",
@@ -6318,6 +6333,8 @@ private extension TerminalAccessoryShortcutModifiers {
 // MARK: - Native UIKit Input Accessory View with Glass Effect
 
 private class TerminalInputAccessoryView: UIInputView {
+    private static let preferredHeight: CGFloat = 48
+
     private weak var terminalOwner: GhosttyTerminalView?
     private let onKey: (TerminalKey) -> Void
     private let onCustomAction: (TerminalAccessoryCustomAction) -> Void
@@ -6366,6 +6383,16 @@ private class TerminalInputAccessoryView: UIInputView {
     var diagnosticResolvedInterfaceStyle: String {
         interfaceStyleDescription(resolvedInterfaceStyle)
     }
+
+    var diagnosticHeight: CGFloat {
+        bounds.height
+    }
+
+    var diagnosticFittingHeight: CGFloat {
+        systemLayoutSizeFitting(
+            CGSize(width: max(bounds.width, 1), height: 0)
+        ).height
+    }
     #endif
 
     init(
@@ -6382,7 +6409,11 @@ private class TerminalInputAccessoryView: UIInputView {
         self.onDismissKeyboard = onDismissKeyboard
         // The system sizes UIInputView to the active keyboard width; the
         // initial width is only a placeholder.
-        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 48), inputViewStyle: .keyboard)
+        super.init(
+            frame: CGRect(x: 0, y: 0, width: 320, height: Self.preferredHeight),
+            inputViewStyle: .keyboard
+        )
+        allowsSelfSizing = true
         accessibilityIdentifier = "vvterm.keyboard.accessory"
         setupView()
         observeThemeChanges()
@@ -6391,6 +6422,40 @@ private class TerminalInputAccessoryView: UIInputView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) not supported")
+    }
+
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: UIView.noIntrinsicMetric, height: Self.preferredHeight)
+    }
+
+    override func systemLayoutSizeFitting(_ targetSize: CGSize) -> CGSize {
+        systemLayoutSizeFitting(
+            targetSize,
+            withHorizontalFittingPriority: .fittingSizeLevel,
+            verticalFittingPriority: .fittingSizeLevel
+        )
+    }
+
+    // UIKit's constraint engine measures self-sizing views through the
+    // two-argument variant; the one-argument wrapper delegates here so both
+    // paths report the same stable size. A divergent measurement (constraint
+    // fallback vs. intrinsic size) lets the keyboard host reserve a slot
+    // that disagrees with the accessory's frame, which after a floating-to-
+    // docked re-attach leaves the accessory's bottom edge below the key top.
+    override func systemLayoutSizeFitting(
+        _ targetSize: CGSize,
+        withHorizontalFittingPriority _: UILayoutPriority,
+        verticalFittingPriority _: UILayoutPriority
+    ) -> CGSize {
+        let currentWidth = bounds.width.isFinite && bounds.width > 0
+            ? bounds.width
+            : 1
+        let width = targetSize.width.isFinite
+            && targetSize.width > 0
+            && targetSize.width < UIView.layoutFittingExpandedSize.width
+            ? targetSize.width
+            : currentWidth
+        return CGSize(width: width, height: Self.preferredHeight)
     }
 
     deinit {
@@ -6794,10 +6859,6 @@ private class TerminalInputAccessoryView: UIInputView {
         for interfaceStyle: UIUserInterfaceStyle
     ) -> UIColor {
         let defaults = UserDefaults.standard
-
-        if let cachedHex = defaults.string(forKey: "terminalBackgroundColor") {
-            return UIColor(Color.fromHex(cachedHex))
-        }
 
         let usePerAppearance = defaults.object(forKey: CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) as? Bool ?? true
         let darkTheme = defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameKey) ?? "Aizen Dark"

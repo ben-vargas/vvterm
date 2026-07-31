@@ -5,6 +5,14 @@ import UIKit
 
 struct TerminalKeyboardUITestHarness: View {
     private static let paneId = UUID(uuidString: "B54F29D8-7C3E-4DB8-B3D7-9D9F1604B755")!
+    private static let clearTerminalBackgroundCacheForUITest: Void = {
+        guard Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-clear-terminal-background-cache"
+        ) else {
+            return
+        }
+        UserDefaults.standard.removeObject(forKey: "terminalBackgroundColor")
+    }()
     private static let codexTUIResponse = Data(
         "\u{1B}[?1049h\u{1B}[?2004h\u{1B}[?1004h\u{1B}]0;Codex\u{07}\u{1B}[2J\u{1B}[HCodex response\r\n\u{1B}[?25h".utf8
     )
@@ -13,11 +21,7 @@ struct TerminalKeyboardUITestHarness: View {
     )
 
     init() {
-        if Foundation.ProcessInfo.processInfo.arguments.contains(
-            "--vvterm-ui-test-clear-terminal-background-cache"
-        ) {
-            UserDefaults.standard.removeObject(forKey: "terminalBackgroundColor")
-        }
+        _ = Self.clearTerminalBackgroundCacheForUITest
     }
 
     private enum LifecycleStatus: String {
@@ -75,6 +79,7 @@ struct TerminalKeyboardUITestHarness: View {
     @State private var keyboardFrame: CGRect?
     @State private var keyboardShowTransitionCount = 0
     @State private var keyboardHideTransitionCount = 0
+    @State private var foreignKeyboardFrameInjectionCount = 0
     @State private var keyboardAccessoryPairingObservation = KeyboardAccessoryPairingObservation.idle
     @State private var diagnostics = "notReady"
     @State private var lifecycleStatus = LifecycleStatus.initial
@@ -105,6 +110,12 @@ struct TerminalKeyboardUITestHarness: View {
 
     private var simulatesTerminalMouseCapture: Bool {
         Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-mouse-capture")
+    }
+
+    private var simulatesStaleLightAccessoryCacheOnResume: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-stale-light-accessory-cache-on-resume"
+        )
     }
 
     private let diagnosticTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
@@ -371,6 +382,11 @@ struct TerminalKeyboardUITestHarness: View {
                         applySimulatedKeyboardGeometry(.hidden)
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.geometry.hidden")
+
+                    Button("Foreign KB") {
+                        simulateSameScreenForeignKeyboardFrame()
+                    }
+                    .accessibilityIdentifier("vvterm.keyboardTest.geometry.foreignDocked")
                 }
 
                 HStack(spacing: 8) {
@@ -399,6 +415,12 @@ struct TerminalKeyboardUITestHarness: View {
                     .accessibilityIdentifier("vvterm.keyboardTest.privacy.shield")
 
                     Button("Resume") {
+                        if simulatesStaleLightAccessoryCacheOnResume {
+                            UserDefaults.standard.set(
+                                "#ffffff",
+                                forKey: "terminalBackgroundColor"
+                            )
+                        }
                         simulatesPrivacyShield = false
                         lifecycleStatus = .inactive
                         applyRouteActivation(.foregroundInactive)
@@ -567,8 +589,11 @@ struct TerminalKeyboardUITestHarness: View {
         let lowercaseHInputs = inputByteCount(0x68)
         let uppercaseHInputs = inputByteCount(0x48)
         diagnostics = terminalDiagnostics + " " + keyboardAvoidanceDiagnostics(for: terminalView)
+            + " keyboardPresentation=\(keyboardPresentationDescription)"
+            + " cachedTerminalBackground=\(UserDefaults.standard.string(forKey: "terminalBackgroundColor") ?? "none")"
             + " userHidden=\(keyboardCoordinator.isUserHidden)"
             + " keyboardShows=\(keyboardShowTransitionCount) keyboardHides=\(keyboardHideTransitionCount)"
+            + " foreignKeyboardFrames=\(foreignKeyboardFrameInjectionCount)"
             + " accessoryPairingObservation=\(keyboardAccessoryPairingObservation.status)"
             + " orphanAccessoryObserved=\(keyboardAccessoryPairingObservation.observedAccessoryOnly)"
             + " reconnect=\(lifecycleStatus.rawValue) inputHex=\(receivedInputHex)"
@@ -742,6 +767,21 @@ struct TerminalKeyboardUITestHarness: View {
         refreshDiagnostics()
     }
 
+    private func simulateSameScreenForeignKeyboardFrame() {
+        guard let screenBounds = terminalView?.window?.screen.bounds else { return }
+        let height = min(360, screenBounds.height * 0.38)
+        let frame = CGRect(
+            x: screenBounds.minX,
+            y: screenBounds.maxY - height,
+            width: screenBounds.width,
+            height: height
+        )
+        TerminalTabManager.shared.keyboardCoordinator
+            .keyboardUITestReceiveKeyboardEndFrame(frame, isLocal: true)
+        foreignKeyboardFrameInjectionCount += 1
+        refreshDiagnostics()
+    }
+
     private func handleSceneWillDeactivate(_ notification: Notification) {
         if let notifyingScene = notification.object as? UIScene,
            let terminalScene = terminalView?.window?.windowScene,
@@ -795,6 +835,17 @@ struct TerminalKeyboardUITestHarness: View {
             "cursorBottom=\(metricText(cursorFrame.maxY))",
             "keyboardTop=\(keyboardTop.map(metricText) ?? "none")"
         ].joined(separator: " ")
+    }
+
+    private var keyboardPresentationDescription: String {
+        switch keyboardCoordinator.softwareKeyboardPresentation {
+        case .hidden:
+            return "hidden"
+        case .docked:
+            return "docked"
+        case .floating:
+            return "floating"
+        }
     }
 
     private func metricText(_ value: CGFloat) -> String {
@@ -1025,7 +1076,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
     }
 }
 
-private struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
+struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
     @EnvironmentObject private var ghosttyApp: Ghostty.App
     @Binding var terminalView: GhosttyTerminalView?
     @Binding var terminalReady: Bool
@@ -1070,7 +1121,7 @@ private struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
     }
 }
 
-private final class TerminalKeyboardHarnessContainerView: UIView {
+final class TerminalKeyboardHarnessContainerView: UIView {
     private(set) weak var terminalView: GhosttyTerminalView?
     var paneId: UUID?
     var onInput: ((Data) -> Void)?
