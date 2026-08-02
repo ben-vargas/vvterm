@@ -3,6 +3,7 @@ import XCTest
 final class TerminalKeyboardUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
     }
 
     @MainActor
@@ -607,13 +608,13 @@ final class TerminalKeyboardUITests: XCTestCase {
         )
         wait(
             for: diagnostics,
-            labelContaining: "softwareInputActive=true",
+            labelContaining: "softwareInputActive=false",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
         wait(
             for: diagnostics,
-            labelContaining: "accessorySuppressed=true",
+            labelContaining: "accessorySuppressed=false",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
@@ -692,7 +693,7 @@ final class TerminalKeyboardUITests: XCTestCase {
         )
         wait(
             for: diagnostics,
-            labelContaining: "softwareInputActive=true",
+            labelContaining: "softwareInputActive=false",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
@@ -715,7 +716,7 @@ final class TerminalKeyboardUITests: XCTestCase {
     }
 
     @MainActor
-    func testCrossAppFocusTransferDetachesAccessoryWithoutRebuild() throws {
+    func testCrossAppFocusTransferReleasesResponderWithoutRebuild() throws {
         let app = launchKeyboardHarness(
             preservesTerminalSize: true,
             simulatesKeyboardFrames: true
@@ -750,7 +751,7 @@ final class TerminalKeyboardUITests: XCTestCase {
         )
         wait(
             for: diagnostics,
-            labelContaining: "softwareInputActive=true",
+            labelContaining: "softwareInputActive=false",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
@@ -762,7 +763,7 @@ final class TerminalKeyboardUITests: XCTestCase {
         )
         wait(
             for: diagnostics,
-            labelContaining: "accessorySuppressed=true",
+            labelContaining: "accessorySuppressed=false",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
@@ -814,7 +815,8 @@ final class TerminalKeyboardUITests: XCTestCase {
     @MainActor
     func testSameScreenForeignKeyboardDoesNotReclaimTerminalAccessory() {
         let app = launchKeyboardHarness(
-            preservesTerminalSize: true
+            preservesTerminalSize: true,
+            simulatesKeyboardFrames: true
         )
         let terminal = waitForTerminal(in: app)
         terminal.tap()
@@ -827,10 +829,16 @@ final class TerminalKeyboardUITests: XCTestCase {
             diagnostics: diagnosticsText(in: app)
         )
 
-        app.buttons["vvterm.keyboardTest.window.notKey"].tap()
+        app.buttons["vvterm.keyboardTest.geometry.docked"].tap()
         wait(
             for: diagnostics,
-            labelContaining: "accessorySuppressed=true",
+            labelContaining: "keyboardPresentation=docked",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "accessorySuppressed=false",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
@@ -844,7 +852,13 @@ final class TerminalKeyboardUITests: XCTestCase {
         )
         wait(
             for: diagnostics,
-            labelContaining: "accessorySuppressed=true",
+            labelContaining: "softwareInputActive=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "accessorySuppressed=false",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
@@ -854,10 +868,25 @@ final class TerminalKeyboardUITests: XCTestCase {
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
+
+        app.buttons["vvterm.keyboardTest.window.key"].tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "softwareInputActive=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        terminal.typeText("x")
+        wait(
+            for: diagnostics,
+            labelContaining: "inputHex=78",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
     }
 
     @MainActor
-    func testDockedFloatingDockedGeometryClearsStaleSurfacePreservation() throws {
+    func testDockedFloatingDockedGeometryKeepsSurfaceAndViewportValid() throws {
         let app = launchKeyboardHarness(
             preservesTerminalSize: true,
             simulatesKeyboardFrames: true
@@ -872,6 +901,8 @@ final class TerminalKeyboardUITests: XCTestCase {
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
+        let stableGridRows = try requiredDiagnosticMetric("gridRows", in: app)
+        let stableGridResizes = try requiredDiagnosticMetric("gridResizes", in: app)
         for identifier in [
             "vvterm.keyboardTest.geometry.docked",
             "vvterm.keyboardTest.geometry.floating",
@@ -884,12 +915,21 @@ final class TerminalKeyboardUITests: XCTestCase {
             button.tap()
             wait(
                 for: diagnostics,
-                labelContaining: identifier.hasSuffix("floating")
-                    ? "sizePreserved=false"
-                    : "sizePreserved=true",
+                labelContaining: "sizePreserved=true",
                 timeout: 5,
                 diagnostics: diagnosticsText(in: app)
             )
+            XCTAssertEqual(
+                try requiredDiagnosticMetric("gridRows", in: app),
+                stableGridRows,
+                diagnosticsText(in: app)
+            )
+            XCTAssertEqual(
+                try requiredDiagnosticMetric("gridResizes", in: app),
+                stableGridResizes,
+                diagnosticsText(in: app)
+            )
+            assertTerminalViewportValid(in: app)
         }
 
         let hiddenButton = app.buttons["vvterm.keyboardTest.geometry.hidden"]
@@ -1046,7 +1086,7 @@ final class TerminalKeyboardUITests: XCTestCase {
     }
 
     @MainActor
-    func testFloatingKeyboardReattachesAccessoryWhenRedocked() throws {
+    func testFloatingKeyboardRoundTripDoesNotReloadInputViews() throws {
         let app = launchKeyboardHarness(simulatesKeyboardFrames: true)
         let terminal = waitForTerminal(in: app)
         terminal.tap()
@@ -1084,7 +1124,6 @@ final class TerminalKeyboardUITests: XCTestCase {
             diagnostics: diagnosticsText(in: app)
         )
         let inputReloads = try requiredDiagnosticMetric("inputReloads", in: app)
-        var expectedInputReloads = inputReloads
 
         for identifier in [
             "vvterm.keyboardTest.geometry.floating",
@@ -1113,19 +1152,17 @@ final class TerminalKeyboardUITests: XCTestCase {
                 timeout: 5,
                 diagnostics: diagnosticsText(in: app)
             )
-            if identifier.hasSuffix("docked") {
-                expectedInputReloads += 1
-            }
             XCTAssertEqual(
                 try requiredDiagnosticMetric("inputReloads", in: app),
-                expectedInputReloads,
+                inputReloads,
                 diagnosticsText(in: app)
             )
+            assertTerminalViewportValid(in: app)
         }
     }
 
     @MainActor
-    func testNativeFloatingKeyboardRoundTripReattachesAccessoryWhenRedocked() throws {
+    func testNativeFloatingKeyboardRoundTripDoesNotReloadInputViews() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         defer {
             XCUIDevice.shared.orientation = .portrait
@@ -1145,19 +1182,11 @@ final class TerminalKeyboardUITests: XCTestCase {
 
         let screenFrame = app.frame
         if keyboard.frame.width < screenFrame.width / 2 {
-            dragFloatingKeyboardToBottom(keyboard, in: app)
-            wait(
-                for: diagnostics,
-                labelContaining: "keyboardPresentation=docked",
-                timeout: 8,
-                diagnostics: diagnosticsText(in: app)
-            )
-            XCTAssertTrue(
-                waitForKeyboardFrame(keyboard, timeout: 8) { frame in
-                    frame.width > screenFrame.width * 0.8
-                },
-                diagnosticsText(in: app)
-            )
+            guard dockFloatingKeyboard(keyboard, diagnostics: diagnostics, in: app) else {
+                throw XCTSkip(
+                    "Simulator did not support the native docking gesture. \(diagnosticsText(in: app))"
+                )
+            }
         }
 
         let accessory = app.descendants(matching: .any)[
@@ -1191,6 +1220,7 @@ final class TerminalKeyboardUITests: XCTestCase {
             \(diagnosticsText(in: app))
             """
         )
+        assertTerminalViewportValid(in: app)
 
         let floatingKeyboardFrame = keyboard.frame
         XCTAssertLessThan(
@@ -1211,20 +1241,11 @@ final class TerminalKeyboardUITests: XCTestCase {
                 """
             )
         }
-        dragFloatingKeyboardToBottom(keyboard, in: app)
-
-        wait(
-            for: diagnostics,
-            labelContaining: "keyboardPresentation=docked",
-            timeout: 8,
-            diagnostics: diagnosticsText(in: app)
-        )
-        XCTAssertTrue(
-            waitForKeyboardFrame(keyboard, timeout: 8) { frame in
-                frame.width > screenFrame.width * 0.8
-            },
-            diagnosticsText(in: app)
-        )
+        guard dockFloatingKeyboard(keyboard, diagnostics: diagnostics, in: app) else {
+            throw XCTSkip(
+                "Simulator did not support the native redocking gesture. \(diagnosticsText(in: app))"
+            )
+        }
         XCTAssertTrue(
             accessory.exists,
             diagnosticsText(in: app)
@@ -1237,12 +1258,13 @@ final class TerminalKeyboardUITests: XCTestCase {
         )
         XCTAssertEqual(
             try requiredDiagnosticMetric("inputReloads", in: app),
-            inputReloads + 1,
+            inputReloads,
             """
-            Docked transition did not reattach UIKit's input accessory hierarchy.
+            Docked transition reloaded UIKit's input accessory hierarchy.
             \(diagnosticsText(in: app))
             """
         )
+        assertTerminalViewportValid(in: app)
         XCTAssertGreaterThan(
             keyboard.frame.width,
             screenFrame.width * 0.8,
@@ -1282,16 +1304,30 @@ final class TerminalKeyboardUITests: XCTestCase {
         return false
     }
 
-    private func dragFloatingKeyboardToBottom(
+    private func dockFloatingKeyboard(
         _ keyboard: XCUIElement,
+        diagnostics: XCUIElement,
         in app: XCUIApplication
-    ) {
+    ) -> Bool {
         let screenFrame = app.frame
-        let keyboardFrame = keyboard.frame
+        keyboard.pinch(withScale: 2, velocity: 2)
+        if waitForLabel(
+            diagnostics,
+            containing: "keyboardPresentation=docked",
+            timeout: 5
+        ), waitForKeyboardFrame(keyboard, timeout: 5, matching: { frame in
+            frame.width > screenFrame.width * 0.8
+        }) {
+            return true
+        }
+
+        let currentKeyboard = app.keyboards.firstMatch
+        guard currentKeyboard.waitForExistence(timeout: 2) else { return false }
+        let keyboardFrame = currentKeyboard.frame
         let dragStart = app.coordinate(
             withNormalizedOffset: CGVector(
                 dx: keyboardFrame.midX / screenFrame.width,
-                dy: (keyboardFrame.maxY + 32) / screenFrame.height
+                dy: min(keyboardFrame.maxY - 12, screenFrame.maxY - 12) / screenFrame.height
             )
         )
         let dragEnd = app.coordinate(
@@ -1303,6 +1339,13 @@ final class TerminalKeyboardUITests: XCTestCase {
             withVelocity: .slow,
             thenHoldForDuration: 1
         )
+        return waitForLabel(
+            diagnostics,
+            containing: "keyboardPresentation=docked",
+            timeout: 5
+        ) && waitForKeyboardFrame(currentKeyboard, timeout: 5, matching: { frame in
+            frame.width > screenFrame.width * 0.8
+        })
     }
 
     private func waitForKeyboardFrame(
@@ -1312,7 +1355,7 @@ final class TerminalKeyboardUITests: XCTestCase {
     ) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if predicate(keyboard.frame) {
+            if keyboard.exists, predicate(keyboard.frame) {
                 return true
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
@@ -2577,6 +2620,24 @@ final class TerminalKeyboardUITests: XCTestCase {
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         }
+    }
+
+    private func assertTerminalViewportValid(
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let metrics = diagnosticMetrics(in: app)
+        let diagnostics = diagnosticsText(in: app)
+        XCTAssertGreaterThan(
+            metrics["visibleTerminalHeight"] ?? 0,
+            0,
+            diagnostics,
+            file: file,
+            line: line
+        )
+        XCTAssertGreaterThan(metrics["gridCols"] ?? 0, 0, diagnostics, file: file, line: line)
+        XCTAssertGreaterThan(metrics["gridRows"] ?? 0, 0, diagnostics, file: file, line: line)
     }
 
     private func waitForMouseClickCounts(

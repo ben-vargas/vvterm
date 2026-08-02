@@ -769,9 +769,9 @@ struct TerminalKeyboardUITestHarness: View {
         case .activate:
             manager.keyboardCoordinator.setActivePane(Self.paneId)
             manager.keyboardCoordinator.setViewActive(true)
-        case .preserve:
+            manager.keyboardCoordinator.activeTerminalSceneDidActivate(for: Self.paneId)
+        case .suspend:
             manager.keyboardCoordinator.activeTerminalSceneWillDeactivate(for: Self.paneId)
-            break
         case .deactivate:
             if contentObscured {
                 manager.keyboardCoordinator.deactivateInputImmediately()
@@ -835,7 +835,7 @@ struct TerminalKeyboardUITestHarness: View {
             height: height
         )
         TerminalTabManager.shared.keyboardCoordinator
-            .keyboardUITestReceiveKeyboardEndFrame(frame, isLocal: true)
+            .keyboardUITestReceiveKeyboardEndFrame(frame, isLocal: false)
         foreignKeyboardFrameInjectionCount += 1
         refreshDiagnostics()
     }
@@ -883,6 +883,7 @@ struct TerminalKeyboardUITestHarness: View {
         }
 
         let terminalFrame = terminal.convert(terminal.bounds, to: window)
+        let visibleTerminalFrame = terminalFrame.intersection(window.bounds)
         let cursorFrame = terminal.convert(terminal.keyboardAvoidanceCursorRect(), to: window)
         let keyboardTop = keyboardFrame.map {
             window.convert($0, from: window.screen.coordinateSpace).minY
@@ -890,6 +891,8 @@ struct TerminalKeyboardUITestHarness: View {
         return [
             "preserveSize=\(preservesTerminalSize)",
             "terminalTop=\(metricText(terminalFrame.minY))",
+            "terminalHeight=\(metricText(terminalFrame.height))",
+            "visibleTerminalHeight=\(metricText(visibleTerminalFrame.isNull ? 0 : visibleTerminalFrame.height))",
             "cursorBottom=\(metricText(cursorFrame.maxY))",
             "keyboardTop=\(keyboardTop.map(metricText) ?? "none")"
         ].joined(separator: " ")

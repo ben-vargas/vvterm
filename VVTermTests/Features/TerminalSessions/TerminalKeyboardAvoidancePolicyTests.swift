@@ -55,7 +55,7 @@ struct TerminalKeyboardAvoidancePolicyTests {
     }
 
     @Test
-    func liftNeverExceedsTerminalHeight() {
+    func liftAlwaysLeavesAVisibleTerminalViewport() {
         let offset = TerminalKeyboardAvoidancePolicy.verticalOffset(
             terminalFrame: terminalFrame,
             cursorFrame: CGRect(x: 8, y: 1_390, width: 8, height: 18),
@@ -63,7 +63,8 @@ struct TerminalKeyboardAvoidancePolicyTests {
             cursorClearance: 40
         )
 
-        #expect(offset == -800)
+        #expect(offset == -799)
+        #expect(terminalFrame.height + offset >= TerminalKeyboardAvoidancePolicy.minimumVisibleHeight)
     }
 
     @Test
@@ -183,7 +184,7 @@ struct TerminalKeyboardAvoidancePolicyTests {
         #expect(docked.preservesTerminalSurfaceSize)
         #expect(floating.bottomInset == 0)
         #expect(floating.verticalOffset == -160)
-        #expect(!floating.preservesTerminalSurfaceSize)
+        #expect(floating.preservesTerminalSurfaceSize)
     }
 
     @Test

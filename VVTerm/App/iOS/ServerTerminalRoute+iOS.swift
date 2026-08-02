@@ -524,7 +524,7 @@ struct ServerTerminalRoute: View {
             for: screenAwakeRequestID
         )
 
-        if effect == .preserve {
+        if effect == .suspend {
             if let focusedPaneId {
                 keyboardCoordinator.activeTerminalSceneWillDeactivate(for: focusedPaneId)
             }

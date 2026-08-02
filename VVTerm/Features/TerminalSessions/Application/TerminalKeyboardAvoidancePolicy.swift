@@ -20,6 +20,7 @@ enum TerminalKeyboardAvoidancePolicy {
     }
 
     nonisolated static let defaultCursorClearance: CGFloat = 12
+    nonisolated static let minimumVisibleHeight: CGFloat = 1
 
     nonisolated static func resolvedGeometry(
         screenFrame: CGRect,
@@ -75,7 +76,7 @@ enum TerminalKeyboardAvoidancePolicy {
         let requiredLift = cursorFrame.maxY + max(cursorClearance, 0) - keyboardFrame.minY
         guard requiredLift > 0 else { return 0 }
 
-        let maximumLift = max(terminalFrame.height, 0)
+        let maximumLift = max(terminalFrame.height - minimumVisibleHeight, 0)
         guard maximumLift > 0 else { return 0 }
 
         return -min(requiredLift, maximumLift)
@@ -144,7 +145,7 @@ enum TerminalKeyboardAvoidancePolicy {
             return Layout(
                 bottomInset: 0,
                 verticalOffset: min(keyboardOffset, accessoryOffset),
-                preservesTerminalSurfaceSize: false
+                preservesTerminalSurfaceSize: true
             )
         }
     }
