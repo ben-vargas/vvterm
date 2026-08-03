@@ -102,23 +102,26 @@ final class NoticePresentationUITests: XCTestCase {
     }
 
     @MainActor
-    func testInitialConnectionUsesBottomSheet() throws {
+    func testInitialConnectionUsesNonBlockingTopBanner() throws {
         let app = launchNoticeHarness(additionalArguments: ["--vvterm-ui-test-notice-connecting"])
         let title = app.staticTexts["Connecting to production..."]
         let close = app.buttons["vvterm.connectionStatus.close"]
+        let terminal = app.staticTexts["$ ssh production"]
+        let banner = app.descendants(matching: .any)
+            .matching(identifier: "vvterm.notice.banner")
+            .firstMatch
 
         XCTAssertTrue(title.waitForExistence(timeout: 10))
-        XCTAssertTrue(close.waitForExistence(timeout: 5))
-        XCTAssertGreaterThan(title.frame.minY, app.frame.midY)
-        close.tap()
-        XCTAssertTrue(close.waitForNonExistence(timeout: 5))
-        XCTAssertTrue(title.exists)
+        XCTAssertTrue(terminal.waitForExistence(timeout: 5))
+        XCTAssertTrue(banner.waitForExistence(timeout: 5))
+        XCTAssertFalse(close.waitForExistence(timeout: 1))
+        XCTAssertLessThan(banner.frame.maxY, app.frame.midY)
     }
 
     @MainActor
-    func testInitialConnectionSheetYieldsToTmuxSelectionSheet() throws {
+    func testInitialConnectionBannerYieldsToTmuxSelectionSheet() throws {
         let app = launchNoticeHarness(
-            additionalArguments: ["--vvterm-ui-test-connection-sheet-handoff"]
+            additionalArguments: ["--vvterm-ui-test-connection-banner-handoff"]
         )
         let connecting = app.staticTexts["Connecting to production..."]
         let tmuxTitle = app.navigationBars["Choose tmux session"]
@@ -129,9 +132,9 @@ final class NoticePresentationUITests: XCTestCase {
     }
 
     @MainActor
-    func testInactiveSplitPaneCannotPresentConnectionSheet() throws {
+    func testInactiveSplitPaneCannotPresentConnectionBanner() throws {
         let app = launchNoticeHarness(
-            additionalArguments: ["--vvterm-ui-test-inactive-connection-sheet"]
+            additionalArguments: ["--vvterm-ui-test-inactive-connection-banner"]
         )
         let terminal = app.staticTexts["$ ssh production"]
         let inactiveConnecting = app.staticTexts["Connecting to inactive split..."]
