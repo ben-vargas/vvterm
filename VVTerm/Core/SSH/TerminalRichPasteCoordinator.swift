@@ -3,20 +3,22 @@ import OSLog
 
 struct RemoteClipboardUpload: Sendable {
     let remotePath: String
+    let pastedPathToken: String
     let mimeType: String
     let sizeBytes: Int
 }
 
 struct RichPasteUploadResult: Sendable, Equatable {
     let remotePath: String
+    let pastedPathToken: String
     let seededRemoteClipboard: Bool
 }
 
 enum TerminalRichPasteError: LocalizedError {
     case imageTooLarge(maxBytes: Int)
-    case unsupportedRemotePlatform(RemotePlatform)
     case unsupportedRemoteShell
     case remoteTempFileCreationFailed
+    case unsafeRemotePath
     case remoteUploadFailed(String)
 
     var errorDescription: String? {
@@ -26,12 +28,12 @@ enum TerminalRichPasteError: LocalizedError {
             formatter.countStyle = .file
             let sizeLabel = formatter.string(fromByteCount: Int64(maxBytes))
             return String(format: String(localized: "Clipboard image is too large. The limit is %@."), sizeLabel)
-        case .unsupportedRemotePlatform(let platform):
-            return String(format: String(localized: "Rich clipboard paste is only supported for POSIX remotes in V1. Remote platform: %@."), platform.rawValue)
         case .unsupportedRemoteShell:
-            return String(localized: "Rich clipboard paste requires a POSIX-capable remote shell.")
+            return String(localized: "Rich clipboard paste requires a supported POSIX, PowerShell, or cmd shell.")
         case .remoteTempFileCreationFailed:
             return String(localized: "Remote upload failed: could not create temporary file")
+        case .unsafeRemotePath:
+            return String(localized: "Remote upload failed: the temporary path cannot be inserted safely in this shell")
         case .remoteUploadFailed(let message):
             return String(format: String(localized: "Remote upload failed: %@"), message)
         }
@@ -76,6 +78,7 @@ actor TerminalRichPasteCoordinator {
 
         return RichPasteUploadResult(
             remotePath: upload.remotePath,
+            pastedPathToken: upload.pastedPathToken,
             seededRemoteClipboard: seededRemoteClipboard
         )
     }

@@ -213,6 +213,18 @@ enum RemoteTerminalBootstrap {
         shellQuoted(path)
     }
 
+    nonisolated static func powerShellPastedPath(_ path: String) -> String {
+        powerShellQuoted(path)
+    }
+
+    nonisolated static func cmdPastedPath(_ path: String) throws -> String {
+        let forbiddenCharacters = CharacterSet(charactersIn: "\"%!\r\n\0")
+        guard path.rangeOfCharacter(from: forbiddenCharacters) == nil else {
+            throw TerminalRichPasteError.unsafeRemotePath
+        }
+        return "\"\(path)\""
+    }
+
     nonisolated static func directoryChangeCommand(
         for path: String,
         environment: RemoteEnvironment = .fallbackPOSIX
@@ -377,7 +389,7 @@ enum RemoteTerminalBootstrap {
         return result
     }
 
-    nonisolated private static func powerShellQuoted(_ value: String) -> String {
+    nonisolated static func powerShellQuoted(_ value: String) -> String {
         "'\(value.replacingOccurrences(of: "'", with: "''"))'"
     }
 

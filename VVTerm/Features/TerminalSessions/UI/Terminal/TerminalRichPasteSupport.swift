@@ -444,8 +444,7 @@ final class TerminalRichPasteController {
         logger.info(
             "Rich paste uploaded remote path [session: \(self.context.sessionId.uuidString, privacy: .public)] [path: \(result.remotePath, privacy: .public)] [seeded: \(result.seededRemoteClipboard)]"
         )
-        // Paste the remote file as one POSIX shell token so TMPDIR spaces do not break the command line.
-        self.context.sendText(RemoteTerminalBootstrap.posixPastedPath(result.remotePath))
+        self.context.sendText(result.pastedPathToken)
     }
 
     deinit {

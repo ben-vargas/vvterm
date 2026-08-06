@@ -459,6 +459,16 @@ actor SSHClient {
         }
     }
 
+    func writeFile(_ data: Data, to path: String, permissions: Int32 = 0o644) async throws {
+        guard !_isAborted, let session = session else {
+            throw RemoteFileBrowserError.disconnected
+        }
+        try await SSHClient.runWithTimeout(uploadTimeout) {
+            try Task.checkCancellation()
+            try await session.writeFile(data, to: path, permissions: permissions)
+        }
+    }
+
     func resolveHomeDirectory() async throws -> String {
         guard !_isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
