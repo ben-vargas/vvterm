@@ -181,6 +181,7 @@ struct TerminalTabView: View {
             TerminalPaneView(
                 paneId: paneId,
                 server: server,
+                tabManager: tabManager,
                 isFocused: tab.focusedPaneId == paneId,
                 isTabSelected: isSelected,
                 onFocus: { focusPane(paneId) },
@@ -493,17 +494,9 @@ struct TerminalTabView: View {
 
 /// Renders a single terminal pane (leaf in split tree)
 struct TerminalPaneView: View {
-    private enum ReconnectPreparation: Equatable {
-        case idle
-        case running(TerminalTabManager.ReconnectPreparationToken)
-
-        var isRunning: Bool {
-            if case .running = self { return true }
-            return false
-        }
-    }
     let paneId: UUID
     let server: Server
+    @ObservedObject var tabManager: TerminalTabManager
     let isFocused: Bool
     let isTabSelected: Bool
     let onFocus: () -> Void
@@ -520,13 +513,11 @@ struct TerminalPaneView: View {
     @State private var isReady = false
     @State private var credentials: ServerCredentials?
     @State private var credentialLoadErrorMessage: String?
-    @State private var reconnectToken = UUID()
     @State private var showingTmuxInstallPrompt = false
     @State private var showingMoshInstallPrompt = false
     @State private var isInstallingMosh = false
     @State private var operationNotice: NoticeItem?
     @State private var dismissFallbackBanner = false
-    @State private var reconnectPreparation = ReconnectPreparation.idle
     @State private var automaticReconnectRetryTask: Task<Void, Never>?
     @State private var terminalBackgroundColor: Color = Self.initialTerminalBackgroundColor()
     @State private var connectWatchdogToken = UUID()
@@ -540,7 +531,7 @@ struct TerminalPaneView: View {
     @AppStorage(TerminalDefaults.sshAutoReconnectKey) private var autoReconnectEnabled = true
 
     private var paneState: TerminalPaneState? {
-        TerminalTabManager.shared.paneStates[paneId]
+        tabManager.paneStates[paneId]
     }
 
     private var connectionState: ConnectionState {
@@ -548,7 +539,15 @@ struct TerminalPaneView: View {
     }
 
     private var reconnectInFlight: Bool {
-        reconnectPreparation.isRunning
+        reconnectAttempt != nil
+    }
+
+    private var reconnectAttempt: TerminalReconnectCoordinator.Attempt? {
+        tabManager.reconnectAttempt(for: paneId)
+    }
+
+    private var connectionGeneration: UUID {
+        tabManager.terminalConnectionGeneration(for: paneId)
     }
 
     private var isHostKeyVerificationFailure: Bool {
@@ -677,6 +676,10 @@ struct TerminalPaneView: View {
 
     private var reconnectBannerMessage: String? {
         guard shouldUseReconnectBannerPresentation else { return nil }
+
+        if reconnectAttempt?.phase == .waitingForNetwork {
+            return String(localized: "Waiting for network…")
+        }
 
         if case .reconnecting(let attempt) = connectionState {
             return String(format: String(localized: "Reconnecting (attempt %lld)…"), Int64(attempt))
@@ -831,6 +834,11 @@ struct TerminalPaneView: View {
                 scheduleAutomaticReconnectAfterFailure()
             }
         }
+        .onChange(of: connectionGeneration) { _ in
+            isReady = false
+            connectWatchdogToken = UUID()
+            startConnectWatchdog()
+        }
         .onChange(of: paneState?.tmuxStatus) { status in
             showingTmuxInstallPrompt = TmuxInstallPromptPolicy.shouldPresent(for: status)
         }
@@ -923,7 +931,7 @@ struct TerminalPaneView: View {
             onVoiceTrigger: voiceTriggerHandlerForTerminal,
             onSceneActivation: attemptAutoReconnectIfNeeded
         )
-        .id(reconnectToken)
+        .id(connectionGeneration)
         .allowsHitTesting(connectionState.isConnected)
         #else
         RemoteTerminalPaneWrapper(
@@ -936,7 +944,7 @@ struct TerminalPaneView: View {
             onProcessExit: onProcessExit,
             onReady: { isReady = true }
         )
-        .id(reconnectToken)
+        .id(connectionGeneration)
         .contentShape(Rectangle())
         .onTapGesture { onFocus() }
         #endif
@@ -989,7 +997,7 @@ struct TerminalPaneView: View {
     private func retryConnection(requiresReadyNetwork: Bool) {
         cancelScheduledAutomaticReconnect()
         guard !requiresReadyNetwork || networkMonitor.readiness == .ready else { return }
-        guard !reconnectPreparation.isRunning else { return }
+        guard reconnectAttempt == nil else { return }
         guard !connectionState.isConnecting else { return }
         connectWatchdogToken = UUID()
         credentialLoadErrorMessage = nil
@@ -1003,58 +1011,12 @@ struct TerminalPaneView: View {
                 return
             }
         }
-        let tabManager = TerminalTabManager.shared
-        guard let preparationToken = tabManager.beginReconnectPreparation(for: paneId) else { return }
         tabManager.clearMoshFallbackDiagnostics(for: paneId)
-        reconnectPreparation = .running(preparationToken)
         connectWatchdogToken = UUID()
-        Task {
-            defer {
-                tabManager.finishReconnectPreparation(preparationToken)
-                if reconnectPreparation == .running(preparationToken) {
-                    reconnectPreparation = .idle
-                }
-            }
-            guard tabManager.isCurrentReconnectPreparation(preparationToken) else { return }
-            guard !requiresReadyNetwork || networkMonitor.readiness == .ready else { return }
-            #if os(iOS)
-            guard UIApplication.shared.applicationState == .active,
-                  foregroundSceneIsActive else {
-                return
-            }
-            #endif
-            guard tabManager.isCurrentReconnectPreparation(preparationToken) else { return }
-            guard !requiresReadyNetwork || networkMonitor.readiness == .ready else { return }
-
-            if server.connectionMode == .eternalTerminal {
-                await tabManager.unregisterEternalTerminalRuntime(for: paneId)
-            } else {
-                await tabManager.unregisterSSHClient(for: paneId)
-            }
-            guard tabManager.isCurrentReconnectPreparation(preparationToken) else { return }
-            guard tabManager.paneStates[paneId] != nil else { return }
-            #if os(iOS)
-            guard UIApplication.shared.applicationState == .active,
-                  foregroundSceneIsActive else {
-                return
-            }
-            #endif
-            guard tabManager.isCurrentReconnectPreparation(preparationToken) else { return }
-            guard !requiresReadyNetwork || networkMonitor.readiness == .ready else { return }
-
-            isReady = false
-            let hasEstablishedConnection = paneState?.hasEstablishedConnection == true
-            tabManager.updatePaneState(
-                paneId,
-                connectionState: TerminalConnectionAttemptPolicy.state(
-                    attempt: 1,
-                    hasEstablishedConnection: hasEstablishedConnection
-                )
-            )
-            reconnectToken = UUID()
-            connectWatchdogToken = UUID()
-            startConnectWatchdog()
-        }
+        _ = tabManager.requestReconnect(
+            for: paneId,
+            requiresReadyNetwork: requiresReadyNetwork
+        )
     }
 
     private func scheduleAutomaticReconnectAfterFailure() {

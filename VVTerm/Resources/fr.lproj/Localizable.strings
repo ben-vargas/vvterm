@@ -1681,3 +1681,4 @@
 "Sector Size" = "Taille du secteur";
 "Rotation Rate" = "Vitesse de rotation";
 "Physical Disk Status" = "État du disque physique";
+"Waiting for network…" = "En attente du réseau…";

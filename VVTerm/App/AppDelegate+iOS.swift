@@ -57,7 +57,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private func sceneDidBecomeActive(_ notification: Notification) {
         guard notificationBelongsToConnectedApplicationScene(notification) else { return }
 
-        queueResumableTerminalResume()
+        handleSceneDidBecomeActive(
+            refreshNetwork: { NetworkMonitor.shared.refreshCurrentPath() },
+            resume: { queueResumableTerminalResume() }
+        )
 
         guard SyncSettings.isEnabled else { return }
 
@@ -68,6 +71,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         Task {
             await ServerManager.shared.loadData()
         }
+    }
+
+    func handleSceneDidBecomeActive(
+        refreshNetwork: () -> Void,
+        resume: () -> Void
+    ) {
+        refreshNetwork()
+        resume()
     }
 
     func application(

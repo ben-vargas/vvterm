@@ -5,6 +5,20 @@ import UIKit
 
 struct AppSceneLifecyclePolicyTests {
     @Test
+    @MainActor
+    func foregroundRefreshesNetworkBeforeResumingTerminals() {
+        let delegate = AppDelegate()
+        var events: [String] = []
+
+        delegate.handleSceneDidBecomeActive(
+            refreshNetwork: { events.append("network") },
+            resume: { events.append("terminals") }
+        )
+
+        #expect(events == ["network", "terminals"])
+    }
+
+    @Test
     func fullyBackgroundedScenesHandleBackgroundTransition() {
         #expect(AppSceneLifecyclePolicy.shouldHandleBackgroundTransition(
             connectedSceneStates: [.background, .unattached]

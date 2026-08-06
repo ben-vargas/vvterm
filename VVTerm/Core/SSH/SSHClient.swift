@@ -102,11 +102,15 @@ actor SSHClient {
     private var disconnectOperation: DisconnectOperation?
     private let cloudflareTransportManager = CloudflareTransportManager()
     private let moshStartupTimeout: Duration = .seconds(8)
-    private let connectTimeout: Duration = .seconds(30)
+    private let connectTimeout: Duration
     private let disconnectTimeout: Duration = .seconds(4)
     private let execTimeout: Duration = .seconds(20)
     private let downloadTimeout: Duration = .seconds(120)
     private let uploadTimeout: Duration = .seconds(60)
+
+    init(connectTimeout: Duration = .seconds(30)) {
+        self.connectTimeout = connectTimeout
+    }
 
     /// Prevents new client operations after disconnect begins.
     private var _isAborted = false
@@ -114,6 +118,40 @@ actor SSHClient {
     /// Check if the client has been aborted
     var isAborted: Bool {
         _isAborted
+    }
+
+    func probeLiveTransport(
+        shellId: UUID,
+        transport: ShellTransport
+    ) async -> Bool {
+        if transport == .mosh {
+            guard let runtime = moshShells[shellId] else { return false }
+            if case .running = await runtime.session.state {
+                return true
+            }
+            return false
+        }
+
+        guard let session else { return false }
+        let marker = "__VVTERM_WAKE_PROBE_\(UUID().uuidString)__"
+        do {
+            let output = try await HardOperationDeadline.run(
+                timeout: .seconds(3),
+                onTimeout: { session.abort() },
+                operation: { try await session.execute("echo \(marker)") }
+            )
+            return output.contains(marker)
+        } catch {
+            return false
+        }
+    }
+
+    /// Interrupts an active or pending transport before bounded cleanup starts.
+    func abortConnection() {
+        _isAborted = true
+        connectTask?.cancel()
+        pendingConnectSession?.abort()
+        session?.abort()
     }
 
     // MARK: - Connection
@@ -182,14 +220,28 @@ actor SSHClient {
         let task = Task { [connectTimeout] () -> SSHSession in
             try Task.checkCancellation()
             do {
-                try await SSHClient.runWithTimeout(connectTimeout) {
+                try await HardOperationDeadline.run(
+                    timeout: connectTimeout,
+                    onTimeout: {
+                        startupTrace.recordOnce(
+                            .connectionDeadline,
+                            outcome: "timeout"
+                        )
+                        pendingSession.abort()
+                    }
+                ) {
                     try await pendingSession.connect()
                 }
                 try Task.checkCancellation()
                 return pendingSession
             } catch {
                 pendingSession.abort()
-                await pendingSession.disconnect()
+                Task.detached(priority: .utility) {
+                    await pendingSession.disconnect()
+                }
+                if error is HardOperationDeadlineError {
+                    throw SSHError.timeout
+                }
                 throw error
             }
         }
@@ -3572,7 +3624,7 @@ enum SSHError: LocalizedError {
             return "Mosh UDP session timed out"
         case .moshClientSessionFailed(let msg):
             return "Mosh client session failed: \(msg)"
-        case .timeout: return "Connection timed out"
+        case .timeout: return String(localized: "Connection timed out")
         case .channelOpenFailed: return "Failed to open channel"
         case .shellRequestFailed: return "Failed to request shell"
         case .hostKeyVerificationFailed:

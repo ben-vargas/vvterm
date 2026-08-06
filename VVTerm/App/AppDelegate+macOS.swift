@@ -44,7 +44,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        logger.info("Application became active")
+        logger.info(
+            "Application became active monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
+        )
+        NetworkMonitor.shared.refreshCurrentPath()
+        TerminalTabManager.shared.handleMacRecoverySignal(.applicationActivated)
         guard SyncSettings.isEnabled else { return }
 
         let now = Date()
@@ -86,19 +90,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func workspaceWillSleep(_ notification: Notification) {
-        logger.info("Workspace will sleep")
+        logger.info(
+            "Workspace will sleep monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
+        )
+        TerminalTabManager.shared.handleMacRecoverySignal(.sleep)
     }
 
     @objc private func workspaceDidWake(_ notification: Notification) {
-        logger.info("Workspace did wake")
+        logger.info(
+            "Workspace did wake monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
+        )
+        refreshNetworkAndHandleWake()
     }
 
     @objc private func screensDidSleep(_ notification: Notification) {
-        logger.info("Screens did sleep")
+        logger.info(
+            "Screens did sleep monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
+        )
+        TerminalTabManager.shared.handleMacRecoverySignal(.sleep)
     }
 
     @objc private func screensDidWake(_ notification: Notification) {
-        logger.info("Screens did wake")
+        logger.info(
+            "Screens did wake monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
+        )
+        refreshNetworkAndHandleWake()
+    }
+
+    private func refreshNetworkAndHandleWake() {
+        NetworkMonitor.shared.refreshCurrentPath()
+        TerminalTabManager.shared.handleMacRecoverySignal(.wake)
     }
 }
 #endif

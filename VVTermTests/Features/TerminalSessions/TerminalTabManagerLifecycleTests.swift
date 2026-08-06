@@ -104,6 +104,256 @@ struct TerminalTabManagerLifecycleTests {
     }
 
     @Test
+    func reconnectGenerationCreatesExactlyOneManagerOwnedReplacement() async {
+        await withCleanManager { manager in
+            let tab = TerminalTab(serverId: UUID(), title: "Wake recovery")
+            installTab(tab, in: manager, connectionState: .connected)
+            manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
+            let originalTerminalGeneration = manager.terminalConnectionGeneration(
+                for: tab.rootPaneId
+            )
+            let recoveryGeneration = UUID()
+
+            #expect(manager.requestReconnect(
+                for: tab.rootPaneId,
+                requiresReadyNetwork: false,
+                generation: recoveryGeneration,
+                replacingCurrent: true
+            ))
+            #expect(!manager.requestReconnect(
+                for: tab.rootPaneId,
+                requiresReadyNetwork: false,
+                generation: recoveryGeneration,
+                replacingCurrent: true
+            ))
+            #expect(await waitUntil {
+                manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .connecting
+            })
+            #expect(manager.paneStates[tab.rootPaneId]?.connectionState.isConnecting == true)
+            #expect(
+                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                    != originalTerminalGeneration
+            )
+
+            manager.updatePaneState(tab.rootPaneId, connectionState: .connected)
+            #expect(manager.reconnectAttempt(for: tab.rootPaneId) == nil)
+        }
+    }
+
+    #if os(iOS)
+    @Test
+    func offlineReconnectWaitsWithoutStartingThenStartsExactlyOnceWhenReady() async {
+        await withCleanManager { manager in
+            let tab = TerminalTab(serverId: UUID(), title: "Offline recovery")
+            installTab(tab, in: manager, connectionState: .connected)
+            manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
+            let originalTerminalGeneration = manager.terminalConnectionGeneration(
+                for: tab.rootPaneId
+            )
+
+            #expect(manager.requestReconnect(
+                for: tab.rootPaneId,
+                requiresReadyNetwork: false,
+                generation: UUID(),
+                replacingCurrent: false,
+                networkReadiness: .unavailable
+            ))
+            #expect(!manager.requestReconnect(
+                for: tab.rootPaneId,
+                requiresReadyNetwork: false,
+                generation: UUID(),
+                replacingCurrent: false,
+                networkReadiness: .unavailable
+            ))
+            #expect(await waitUntil {
+                manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .waitingForNetwork
+            })
+            #expect(
+                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                    == originalTerminalGeneration
+            )
+            #expect(manager.paneStates[tab.rootPaneId]?.connectionState == .disconnected)
+
+            manager.handleIOSNetworkReadinessChange(.ready)
+            #expect(await waitUntil {
+                manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .connecting
+            })
+            let replacementGeneration = manager.terminalConnectionGeneration(
+                for: tab.rootPaneId
+            )
+            #expect(replacementGeneration != originalTerminalGeneration)
+
+            manager.handleIOSNetworkReadinessChange(.ready)
+            await Task.yield()
+            #expect(
+                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                    == replacementGeneration
+            )
+        }
+    }
+
+    @Test
+    func networkDropAfterReconnectIsQueuedWaitsForReady() async {
+        await withCleanManager { manager in
+            let tab = TerminalTab(serverId: UUID(), title: "Mid-cleanup network loss")
+            installTab(tab, in: manager, connectionState: .connected)
+            manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
+            let originalTerminalGeneration = manager.terminalConnectionGeneration(
+                for: tab.rootPaneId
+            )
+
+            #expect(manager.requestReconnect(
+                for: tab.rootPaneId,
+                requiresReadyNetwork: false,
+                generation: UUID(),
+                replacingCurrent: true,
+                networkReadiness: .ready
+            ))
+            manager.handleIOSNetworkReadinessChange(.unavailable)
+
+            #expect(await waitUntil {
+                manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .waitingForNetwork
+            })
+            #expect(
+                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                    == originalTerminalGeneration
+            )
+
+            manager.handleIOSNetworkReadinessChange(.ready)
+            #expect(await waitUntil {
+                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                    != originalTerminalGeneration
+            })
+            let replacementGeneration = manager.terminalConnectionGeneration(
+                for: tab.rootPaneId
+            )
+            manager.handleIOSNetworkReadinessChange(.ready)
+            await Task.yield()
+            #expect(
+                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                    == replacementGeneration
+            )
+        }
+    }
+    #endif
+
+    @Test
+    func reconnectDetachesEternalTerminalOwnerBeforeReplacementStarts() async {
+        await withCleanManager { manager in
+            let server = makeServer(connectionMode: .eternalTerminal)
+            let tab = TerminalTab(serverId: server.id, title: "ET recovery")
+            installTab(tab, in: manager, connectionState: .connected)
+            let credentials = ServerCredentials(serverId: server.id)
+            let oldRuntime = manager.eternalTerminalRuntime(
+                for: tab.rootPaneId,
+                server: server,
+                credentials: credentials
+            )
+
+            #expect(manager.requestReconnect(
+                for: tab.rootPaneId,
+                requiresReadyNetwork: false,
+                generation: UUID(),
+                replacingCurrent: true
+            ))
+            #expect(await waitUntil {
+                !manager.isCurrentEternalTerminalRuntime(oldRuntime, for: tab.rootPaneId)
+            })
+
+            let replacement = manager.eternalTerminalRuntime(
+                for: tab.rootPaneId,
+                server: server,
+                credentials: credentials
+            )
+            await manager.unregisterEternalTerminalRuntime(
+                for: tab.rootPaneId,
+                ifOwnedBy: oldRuntime
+            )
+            #expect(manager.isCurrentEternalTerminalRuntime(replacement, for: tab.rootPaneId))
+        }
+    }
+
+    #if os(macOS)
+    @Test
+    func macWakeSignalsCreateExactlyOneManagerOwnedReplacement() async {
+        await withCleanManager { manager in
+            let tab = TerminalTab(serverId: UUID(), title: "Mac wake recovery")
+            installTab(tab, in: manager, connectionState: .connected)
+            let originalTerminalGeneration = manager.terminalConnectionGeneration(
+                for: tab.rootPaneId
+            )
+            #expect(await waitUntil { NetworkMonitor.shared.readiness == .ready })
+
+            manager.handleMacRecoverySignal(.sleep)
+            manager.handleMacRecoverySignal(.wake)
+            manager.handleMacRecoverySignal(.applicationActivated)
+            manager.handleMacRecoverySignal(.networkChanged(.ready))
+
+            #expect(await waitUntil {
+                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                    != originalTerminalGeneration
+            })
+            let replacementGeneration = manager.terminalConnectionGeneration(
+                for: tab.rootPaneId
+            )
+
+            manager.handleMacRecoverySignal(.wake)
+            manager.handleMacRecoverySignal(.applicationActivated)
+            await Task.yield()
+            #expect(
+                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                    == replacementGeneration
+            )
+        }
+    }
+
+    @Test
+    func macNetworkDropAfterReconnectIsQueuedWaitsForReady() async {
+        await withCleanManager { manager in
+            let tab = TerminalTab(serverId: UUID(), title: "Mac mid-cleanup network loss")
+            installTab(tab, in: manager, connectionState: .connected)
+            manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
+            let originalTerminalGeneration = manager.terminalConnectionGeneration(
+                for: tab.rootPaneId
+            )
+
+            _ = manager.macRecoveryGate.receive(.sleep, networkReadiness: .ready)
+            guard case .recover(let recoveryGeneration) = manager.macRecoveryGate.receive(
+                .wake,
+                networkReadiness: .ready
+            ) else {
+                Issue.record("Expected a Mac recovery generation")
+                return
+            }
+            manager.activeMacRecoveryGeneration = recoveryGeneration
+
+            #expect(manager.requestReconnect(
+                for: tab.rootPaneId,
+                requiresReadyNetwork: false,
+                generation: recoveryGeneration,
+                replacingCurrent: true,
+                networkReadiness: .ready
+            ))
+            manager.handleMacRecoverySignal(.networkChanged(.unavailable))
+
+            #expect(await waitUntil {
+                manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .waitingForNetwork
+            })
+            #expect(
+                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                    == originalTerminalGeneration
+            )
+
+            manager.handleMacRecoverySignal(.networkChanged(.ready))
+            #expect(await waitUntil {
+                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                    != originalTerminalGeneration
+            })
+        }
+    }
+    #endif
+
+    @Test
     func terminalZoomOnlyChangesRequestedPaneOverride() async {
         let defaults = UserDefaults.standard
         let previousFontSize = defaults.object(forKey: TerminalDefaults.fontSizeKey)
@@ -211,25 +461,6 @@ struct TerminalTabManagerLifecycleTests {
             serverId: serverId,
             transport: transport
         )
-    }
-
-    @Test
-    func reconnectPreparationHasOnePaneGlobalOwner() async {
-        await withCleanManager { manager in
-            let tab = TerminalTab(serverId: UUID(), title: "Reconnect owner")
-            installTab(tab, in: manager, connectionState: .disconnected)
-
-            let first = manager.beginReconnectPreparation(for: tab.rootPaneId)
-            #expect(first != nil)
-            #expect(manager.beginReconnectPreparation(for: tab.rootPaneId) == nil)
-
-            guard let first else { return }
-            manager.finishReconnectPreparation(first)
-            let second = manager.beginReconnectPreparation(for: tab.rootPaneId)
-            #expect(second != nil)
-            guard let second else { return }
-            manager.finishReconnectPreparation(second)
-        }
     }
 
     @Test

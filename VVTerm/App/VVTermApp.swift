@@ -119,6 +119,48 @@ struct VVTermApp: App {
     }
     #endif
 
+    #if os(macOS)
+    @ViewBuilder
+    private var macOSRootContent: some View {
+        #if DEBUG
+        if Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-mac-terminal-recovery-harness"
+        ) {
+            MacTerminalRecoveryUITestHarness(
+                simulatesSuccess: !Foundation.ProcessInfo.processInfo.arguments.contains(
+                    "--vvterm-ui-test-mac-terminal-recovery-failure"
+                )
+            )
+        } else {
+            macOSAppContent
+        }
+        #else
+        macOSAppContent
+        #endif
+    }
+
+    private var macOSAppContent: some View {
+        ContentView(
+            fileTabs: remoteFileTabManager,
+            fileBrowser: remoteFileBrowserStore
+        )
+            .environmentObject(ghosttyApp)
+            .environmentObject(terminalThemeManager)
+            .environmentObject(terminalAccessoryPreferencesManager)
+            .modifier(AppearanceModifier())
+            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalCursorStyle)\(terminalCursorBlink)\(terminalOptionAsAltReloadToken)\(terminalThemeName)\(terminalThemeNameLight)\(usePerAppearanceTheme)\(activeCustomThemeVersionToken)") {
+                ghosttyApp.reloadConfig()
+            }
+            .sheet(isPresented: .init(
+                get: { !hasSeenWelcome },
+                set: { if !$0 { hasSeenWelcome = true } }
+            )) {
+                WelcomeView(hasSeenWelcome: $hasSeenWelcome)
+                    .adaptiveSoftScrollEdges()
+            }
+    }
+    #endif
+
     #if os(iOS)
     @ViewBuilder
     private var iOSRootContent: some View {
@@ -197,24 +239,7 @@ struct VVTermApp: App {
                         iOSRootContent
                             .environmentObject(screenAwakeCoordinator)
                         #else
-                        ContentView(
-                            fileTabs: remoteFileTabManager,
-                            fileBrowser: remoteFileBrowserStore
-                        )
-                            .environmentObject(ghosttyApp)
-                            .environmentObject(terminalThemeManager)
-                            .environmentObject(terminalAccessoryPreferencesManager)
-                            .modifier(AppearanceModifier())
-                            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalCursorStyle)\(terminalCursorBlink)\(terminalOptionAsAltReloadToken)\(terminalThemeName)\(terminalThemeNameLight)\(usePerAppearanceTheme)\(activeCustomThemeVersionToken)") {
-                                ghosttyApp.reloadConfig()
-                            }
-                            .sheet(isPresented: .init(
-                                get: { !hasSeenWelcome },
-                                set: { if !$0 { hasSeenWelcome = true } }
-                            )) {
-                                WelcomeView(hasSeenWelcome: $hasSeenWelcome)
-                                    .adaptiveSoftScrollEdges()
-                            }
+                        macOSRootContent
                         #endif
                     }
                     .adaptiveSoftScrollEdges()

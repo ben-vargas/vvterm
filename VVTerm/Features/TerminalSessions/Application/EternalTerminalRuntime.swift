@@ -174,6 +174,41 @@ private struct PreparedEternalTerminalSession {
     let origin: EternalTerminalSessionOrigin
 }
 
+nonisolated struct EternalTerminalRecoveryProbe {
+    private enum State: Equatable, Sendable {
+        case idle
+        case pending(UUID)
+        case completed(UUID)
+    }
+
+    private var state = State.idle
+
+    mutating func begin() -> UUID {
+        let id = UUID()
+        state = .pending(id)
+        return id
+    }
+
+    var pendingID: UUID? {
+        guard case .pending(let id) = state else { return nil }
+        return id
+    }
+
+    mutating func recordConnected(eventProbeID: UUID?) {
+        guard case .pending(let pendingID) = state,
+              eventProbeID == pendingID else { return }
+        state = .completed(pendingID)
+    }
+
+    func didComplete(_ id: UUID) -> Bool {
+        state == .completed(id)
+    }
+
+    mutating func reset() {
+        state = .idle
+    }
+}
+
 @MainActor
 final class EternalTerminalRuntime {
     let paneId: UUID
@@ -189,6 +224,7 @@ final class EternalTerminalRuntime {
     private var connectTask: Task<Void, Never>?
     private var reconnectEventActive = false
     private var failureReported = false
+    private var networkRecoveryProbe = EternalTerminalRecoveryProbe()
     private var startupApplied = false
     private var tmuxLifecycle: EternalTerminalTmuxResumeContext?
     private var tmuxLifecycleParser: TmuxLifecycleStreamParser?
@@ -225,6 +261,14 @@ final class EternalTerminalRuntime {
 
     var isStartInFlight: Bool { connectTask != nil }
 
+    func abortConnection() {
+        terminal = nil
+        networkRecoveryProbe.reset()
+        if let session = detachActiveSession() {
+            Task { await session.close() }
+        }
+    }
+
     func attach(to terminal: GhosttyTerminalView) {
         self.terminal = terminal
     }
@@ -242,7 +286,11 @@ final class EternalTerminalRuntime {
             do {
                 guard let self else { return }
                 let prepared = try await self.prepareSession()
-                guard !Task.isCancelled else {
+                guard !Task.isCancelled,
+                      TerminalTabManager.shared.isCurrentEternalTerminalRuntime(
+                        self,
+                        for: paneId
+                      ) else {
                     await prepared.session.close()
                     return
                 }
@@ -250,6 +298,13 @@ final class EternalTerminalRuntime {
                 self.configureLifecycle(for: prepared.origin)
                 self.observe(prepared.session, host: host, port: port)
                 try await prepared.session.connect()
+                guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(
+                    self,
+                    for: paneId
+                ) else {
+                    await prepared.session.close()
+                    return
+                }
                 await self.persistCheckpoint()
             } catch is CancellationError {
                 return
@@ -318,15 +373,35 @@ final class EternalTerminalRuntime {
         }
     }
 
-    func notifyNetworkPathChanged() {
-        guard let session else { return }
-        Task { await session.notifyNetworkPathChanged() }
+    func beginNetworkRecoveryProbe() async -> UUID? {
+        guard let session,
+              TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+            return nil
+        }
+        let probeID = networkRecoveryProbe.begin()
+        await session.notifyNetworkPathChanged()
+        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+            return nil
+        }
+        return probeID
+    }
+
+    func notifyNetworkPathChanged() async {
+        await session?.notifyNetworkPathChanged()
+    }
+
+    func completedNetworkRecoveryProbe(_ probeID: UUID) -> Bool {
+        TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId)
+            && networkRecoveryProbe.didComplete(probeID)
     }
 
     func persistCheckpoint() async {
         guard let session else { return }
         do {
             let checkpoint = try await session.checkpoint()
+            guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+                return
+            }
             try resumeStore.save(checkpoint, for: paneId)
         } catch ETClientError.connectionClosed {
             return
@@ -339,6 +414,9 @@ final class EternalTerminalRuntime {
         guard let session else { return }
         do {
             let checkpoint = try await session.prepareForApplicationBackground()
+            guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+                return
+            }
             try resumeStore.save(checkpoint, for: paneId)
         } catch ETClientError.connectionClosed {
             return
@@ -352,17 +430,22 @@ final class EternalTerminalRuntime {
     }
 
     func close() async {
+        let session = detachActiveSession()
+        terminal = nil
+        await session?.close()
+    }
+
+    private func detachActiveSession() -> ETTerminalSession? {
         connectTask?.cancel()
         outputTask?.cancel()
         stateTask?.cancel()
         connectTask = nil
         outputTask = nil
         stateTask = nil
-        terminal = nil
-        if let session {
-            await session.close()
-            self.session = nil
-        }
+        networkRecoveryProbe.reset()
+        let activeSession = session
+        session = nil
+        return activeSession
     }
 
     private func prepareSession() async throws -> PreparedEternalTerminalSession {
@@ -393,9 +476,15 @@ final class EternalTerminalRuntime {
         let credentials = try await ETBootstrap(
             options: SSHETBootstrapExecutor.bootstrapOptions
         ).run(using: bootstrapExecutor)
+        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+            throw CancellationError()
+        }
         let resumeCredentials = try EternalTerminalResumeCredentials(credentials)
         try resumeStore.save(resumeCredentials, for: paneId)
         let terminalType = await bootstrapExecutor.preparedTerminalType()
+        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+            throw CancellationError()
+        }
         let session = try ETTerminalSession(
             host: server.host,
             port: port,
@@ -441,6 +530,10 @@ final class EternalTerminalRuntime {
         host: String,
         port: Int
     ) async {
+        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+            return
+        }
+        let recoveryProbeIDAtEvent = networkRecoveryProbe.pendingID
         if state == .reconnecting || state == .disconnected {
             if !reconnectEventActive {
                 reconnectEventActive = true
@@ -458,6 +551,10 @@ final class EternalTerminalRuntime {
                         pixelWidth: lastTerminalSize.pixels?.width,
                         pixelHeight: lastTerminalSize.pixels?.height
                     )
+                    guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(
+                        self,
+                        for: paneId
+                    ) else { return }
                     applyStartupPlanIfNeeded()
                 } else {
                     logger.error("ET connected without a valid Ghostty terminal grid")
@@ -479,6 +576,12 @@ final class EternalTerminalRuntime {
             host: host,
             port: port
         ) else { return }
+        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+            return
+        }
+        if state == .connected {
+            networkRecoveryProbe.recordConnected(eventProbeID: recoveryProbeIDAtEvent)
+        }
         TerminalTabManager.shared.updatePaneState(paneId, connectionState: connectionState)
         TerminalTabManager.shared.markEternalTerminalTransport(for: paneId)
     }
@@ -490,7 +593,11 @@ final class EternalTerminalRuntime {
         guard let session else { return }
         Task { [weak self] in
             let plan = await executor.preparedStartupPlan()
-            guard let self else { return }
+            guard let self,
+                  TerminalTabManager.shared.isCurrentEternalTerminalRuntime(
+                    self,
+                    for: paneId
+                  ) else { return }
             let resumeContext = plan.tmuxLifecycle.map {
                 EternalTerminalTmuxResumeContext(
                     ownership: $0.ownership,
@@ -516,6 +623,9 @@ final class EternalTerminalRuntime {
     }
 
     private func consumeOutput(_ data: Data) {
+        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+            return
+        }
         guard var parser = tmuxLifecycleParser else {
             terminal?.feedData(data)
             return
@@ -536,10 +646,21 @@ final class EternalTerminalRuntime {
             reason = .tmuxCreationFailed
         }
         TerminalTabManager.shared.handleShellEnd(for: paneId, reason: reason)
-        Task { await TerminalTabManager.shared.unregisterEternalTerminalRuntime(for: paneId) }
+        Task {
+            await TerminalTabManager.shared.unregisterEternalTerminalRuntime(
+                for: paneId,
+                ifOwnedBy: self
+            )
+        }
     }
 
     private func publishFailure(_ error: Error, host: String, port: Int) {
+        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+            logger.info(
+                "Ignoring failure from stale ET runtime for pane \(self.paneId.uuidString, privacy: .public)"
+            )
+            return
+        }
         if EternalTerminalResumePolicy.shouldDiscardCredentials(after: error) {
             do {
                 try resumeStore.deleteResumeState(for: paneId)

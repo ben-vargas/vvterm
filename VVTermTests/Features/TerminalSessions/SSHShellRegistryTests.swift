@@ -47,7 +47,40 @@ struct SSHShellRegistryTests {
         )
         #expect(start.started)
         #expect(registry.client(for: paneId) == nil)
+        #expect(registry.connectionClient(for: paneId) === client)
         #expect(registry.connectionStartToken(for: paneId) == start.token)
+    }
+
+    @Test
+    func anotherPendingStartProtectsSharedClientFromAbort() {
+        let reconnectingPaneId = UUID()
+        let pendingPaneId = UUID()
+        let client = SSHClient()
+        var registry = SSHShellRegistry(staleThreshold: 120)
+
+        _ = registry.tryBeginStart(
+            for: reconnectingPaneId,
+            serverId: UUID(),
+            client: client
+        )
+        _ = registry.tryBeginStart(
+            for: pendingPaneId,
+            serverId: UUID(),
+            client: client
+        )
+
+        #expect(
+            registry.hasOtherClientReferences(
+                using: client,
+                excluding: reconnectingPaneId
+            )
+        )
+        #expect(
+            registry.hasOtherClientReferences(
+                using: client,
+                excluding: pendingPaneId
+            )
+        )
     }
 
     @Test
@@ -107,6 +140,7 @@ struct SSHShellRegistryTests {
 
         #expect(staleRegistration == .stale)
         #expect(replacementRegistration == .accepted)
+        #expect(registry.connectionClient(for: paneId) === client)
         #expect(registry.owns(client: client, shellId: shellId, for: paneId))
     }
 

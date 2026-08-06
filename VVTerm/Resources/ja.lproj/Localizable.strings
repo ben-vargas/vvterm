@@ -1679,3 +1679,4 @@
 "Sector Size" = "セクタサイズ";
 "Rotation Rate" = "回転速度";
 "Physical Disk Status" = "物理ディスクの状態";
+"Waiting for network…" = "ネットワークを待機中…";

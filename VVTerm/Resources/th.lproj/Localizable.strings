@@ -1679,3 +1679,4 @@
 "Sector Size" = "ขนาดเซกเตอร์";
 "Rotation Rate" = "ความเร็วรอบ";
 "Physical Disk Status" = "สถานะดิสก์จริง";
+"Waiting for network…" = "กำลังรอเครือข่าย…";

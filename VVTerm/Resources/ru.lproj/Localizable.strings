@@ -1679,3 +1679,4 @@
 "Sector Size" = "Размер сектора";
 "Rotation Rate" = "Скорость вращения";
 "Physical Disk Status" = "Состояние физического диска";
+"Waiting for network…" = "Ожидание сети…";

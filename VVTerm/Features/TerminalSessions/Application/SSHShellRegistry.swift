@@ -188,6 +188,10 @@ nonisolated struct SSHShellRegistry {
         registrations[entityId]?.client
     }
 
+    func connectionClient(for entityId: UUID) -> SSHClient? {
+        registrations[entityId]?.client ?? startsInFlight[entityId]?.client
+    }
+
     func connectionStartToken(for entityId: UUID) -> StartToken? {
         registrations[entityId]?.startToken ?? startsInFlight[entityId]?.token
     }
@@ -196,11 +200,15 @@ nonisolated struct SSHShellRegistry {
         connectionStartToken(for: entityId) == startToken
     }
 
-    func hasOtherRegistrations(using client: SSHClient, excluding entityId: UUID) -> Bool {
+    func hasOtherClientReferences(using client: SSHClient, excluding entityId: UUID) -> Bool {
         let identifier = ObjectIdentifier(client)
-        return registrations.contains { registration in
+        let hasRegistration = registrations.contains { registration in
             registration.key != entityId && ObjectIdentifier(registration.value.client) == identifier
         }
+        let hasPendingStart = startsInFlight.contains { start in
+            start.key != entityId && ObjectIdentifier(start.value.client) == identifier
+        }
+        return hasRegistration || hasPendingStart
     }
 
     func hasClientReferences(_ client: SSHClient) -> Bool {

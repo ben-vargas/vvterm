@@ -18,6 +18,7 @@ nonisolated enum SSHStartupStage: String, Sendable {
     case moshEndpoint
     case moshUDPSession
     case sshFallback
+    case connectionDeadline
 }
 
 nonisolated final class SSHStartupTrace: Sendable {
