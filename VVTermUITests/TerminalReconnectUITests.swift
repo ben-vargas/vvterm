@@ -389,7 +389,6 @@ final class TerminalReconnectUITests: XCTestCase {
             app.launchArguments += [
                 "--vvterm-ui-test-unexpected-keyboard-loss-control",
                 "--vvterm-ui-test-simulate-keyboard-frames",
-                "--vvterm-ui-test-native-find-navigator",
             ]
         }
         app.launch()

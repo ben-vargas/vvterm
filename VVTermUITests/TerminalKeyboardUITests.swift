@@ -420,7 +420,7 @@ final class TerminalKeyboardUITests: XCTestCase {
 
     @MainActor
     func testKeyboardMenuDismissesFindAndTransfersInputToTerminal() throws {
-        let app = launchKeyboardHarness(usesNativeFindNavigator: true)
+        let app = launchKeyboardHarness()
         let terminal = waitForTerminal(in: app)
         terminal.tap()
         assertKeyboardAndAccessoryVisible(in: app)
@@ -1996,10 +1996,11 @@ final class TerminalKeyboardUITests: XCTestCase {
     }
 
     @MainActor
-    func testNativeSelectionGesturesYieldToCapturedDirectTouch() throws {
+    func testCapturedLongPressUsesNativeSelectionAndPasteWithoutSendingClick() throws {
         let app = launchKeyboardHarness(
+            simulatesKeyboardFrames: true,
             simulatesTerminalMouseCapture: true,
-            usesNativeFindNavigator: true
+            seedsTerminalPasteboard: true
         )
         let terminal = waitForTerminal(in: app)
         let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
@@ -2012,6 +2013,9 @@ final class TerminalKeyboardUITests: XCTestCase {
 
         terminal.tap()
         waitForMouseClickCounts(presses: 1, releases: 1, in: app)
+        app.buttons["vvterm.keyboardTest.showKeyboard"].tap()
+        app.buttons["vvterm.keyboardTest.geometry.docked"].tap()
+        assertKeyboardSessionAndAccessoryVisible(in: app)
 
         let dragStart = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
         let dragEnd = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
@@ -2021,20 +2025,33 @@ final class TerminalKeyboardUITests: XCTestCase {
         }
         assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
 
-        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.4)
-        assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
-
-        terminal.pinch(withScale: 0.8, velocity: -1)
+        let selectionStart = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.5))
+        let selectionEnd = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.5))
+        selectionStart.press(forDuration: 1, thenDragTo: selectionEnd)
         waitForDiagnosticMetrics(in: app) { metrics in
-            (metrics["zoomActions"] ?? 0) > 0
+            (metrics["nativeSelectionLength"] ?? 0) > 0
         }
         assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
+        assertKeyboardSessionAndAccessoryVisible(in: app)
+
+        let paste = app.menuItems["Paste"]
+        XCTAssertTrue(paste.waitForExistence(timeout: 5), diagnosticsText(in: app))
+        paste.tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "inputHex=746f7563682d7061737465",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        assertKeyboardSessionAndAccessoryVisible(in: app)
+
+        terminal.tap()
+        waitForMouseClickCounts(presses: 2, releases: 2, in: app)
     }
 
     @MainActor
     func testDirectTouchDoesNotClickOutsideMouseCapture() throws {
-        let app = launchKeyboardHarness(usesNativeFindNavigator: true)
+        let app = launchKeyboardHarness()
         let terminal = waitForTerminal(in: app)
         let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
         wait(
@@ -2395,7 +2412,7 @@ final class TerminalKeyboardUITests: XCTestCase {
         simulatesKeyboardFrames: Bool = false,
         simulatesCodexTUIResponse: Bool = false,
         simulatesTerminalMouseCapture: Bool = false,
-        usesNativeFindNavigator: Bool = false,
+        seedsTerminalPasteboard: Bool = false,
         simulatesDetachedLightAccessoryHost: Bool = false,
         simulatesStaleLightAccessoryCacheOnResume: Bool = false,
         splitPaneFocus: Bool = false,
@@ -2427,8 +2444,8 @@ final class TerminalKeyboardUITests: XCTestCase {
         if simulatesTerminalMouseCapture {
             app.launchArguments.append("--vvterm-ui-test-terminal-mouse-capture")
         }
-        if usesNativeFindNavigator {
-            app.launchArguments.append("--vvterm-ui-test-native-find-navigator")
+        if seedsTerminalPasteboard {
+            app.launchArguments.append("--vvterm-ui-test-terminal-pasteboard")
         }
         if simulatesDetachedLightAccessoryHost {
             app.launchArguments += [
@@ -2573,6 +2590,18 @@ final class TerminalKeyboardUITests: XCTestCase {
             line: line
         )
         wait(for: diagnostics, labelContaining: "keyboardVisible=true", timeout: 5, diagnostics: diagnosticsText(in: app))
+        wait(for: diagnostics, labelContaining: "accessoryAttached=true", timeout: 5, diagnostics: diagnosticsText(in: app), file: file, line: line)
+    }
+
+    private func assertKeyboardSessionAndAccessoryVisible(
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
+        wait(for: diagnostics, labelContaining: "softwareInputActive=true", timeout: 5, diagnostics: diagnosticsText(in: app), file: file, line: line)
+        wait(for: diagnostics, labelContaining: "terminalFirstResponder=true", timeout: 5, diagnostics: diagnosticsText(in: app), file: file, line: line)
+        wait(for: diagnostics, labelContaining: "keyboardVisible=true", timeout: 5, diagnostics: diagnosticsText(in: app), file: file, line: line)
         wait(for: diagnostics, labelContaining: "accessoryAttached=true", timeout: 5, diagnostics: diagnosticsText(in: app), file: file, line: line)
     }
 

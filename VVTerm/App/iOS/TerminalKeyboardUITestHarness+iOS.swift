@@ -19,6 +19,13 @@ struct TerminalKeyboardUITestHarness: View {
     private static let mouseCaptureSequence = Data(
         "\u{1B}[?1000h\u{1B}[?1006h".utf8
     )
+    private static let touchSelectionFixture = Data(
+        (
+            (0..<40)
+                .map { "VVTerm local selection fixture \($0)" }
+                .joined(separator: "\r\n") + "\r\n"
+        ).utf8
+    )
 
     init() {
         _ = Self.clearTerminalBackgroundCacheForUITest
@@ -110,6 +117,10 @@ struct TerminalKeyboardUITestHarness: View {
 
     private var simulatesTerminalMouseCapture: Bool {
         Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-mouse-capture")
+    }
+
+    private var seedsTerminalPasteboard: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-pasteboard")
     }
 
     private var testsAppShortcutInputs: Bool {
@@ -721,7 +732,11 @@ struct TerminalKeyboardUITestHarness: View {
         manager.keyboardCoordinator.setActivePane(Self.paneId)
         manager.keyboardCoordinator.setViewActive(true)
         if simulatesTerminalMouseCapture {
+            terminalView.feedData(Self.touchSelectionFixture)
             terminalView.feedData(Self.mouseCaptureSequence)
+        }
+        if seedsTerminalPasteboard {
+            UIPasteboard.general.string = "touch-paste"
         }
         lifecycleStatus = .connected
     }

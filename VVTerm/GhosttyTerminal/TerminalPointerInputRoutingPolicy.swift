@@ -56,9 +56,24 @@ enum TerminalPointerInputRoutingPolicy {
     }
 }
 
+enum TerminalSelectionInteraction {
+    case none
+    case intentionalGesture
+    case activeSelection
+}
+
 enum TerminalSelectionRoutingPolicy {
-    static func shouldAllowHostSelection(terminalMouseCaptured: Bool) -> Bool {
-        !terminalMouseCaptured
+    static func shouldAllowHostSelection(
+        terminalMouseCaptured: Bool,
+        interaction: TerminalSelectionInteraction
+    ) -> Bool {
+        guard terminalMouseCaptured else { return true }
+        switch interaction {
+        case .none:
+            return false
+        case .intentionalGesture, .activeSelection:
+            return true
+        }
     }
 }
 

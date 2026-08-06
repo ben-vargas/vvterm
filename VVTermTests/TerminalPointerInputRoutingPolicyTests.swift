@@ -197,17 +197,39 @@ struct TerminalPointerInputRoutingPolicyTests {
     }
 
     @Test
-    func disablesHostSelectionWhileTerminalMouseIsCaptured() {
+    func allowsOrdinaryHostSelectionOnlyOutsideTerminalMouseCapture() {
         #expect(
             TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
-                terminalMouseCaptured: false
+                terminalMouseCaptured: false,
+                interaction: .none
             )
         )
 
         #expect(
             TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
-                terminalMouseCaptured: true
+                terminalMouseCaptured: true,
+                interaction: .none
             ) == false
+        )
+    }
+
+    @Test
+    func intentionalSelectionTemporarilyOverridesTerminalMouseCapture() {
+        #expect(
+            TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
+                terminalMouseCaptured: true,
+                interaction: .intentionalGesture
+            )
+        )
+    }
+
+    @Test
+    func activeSelectionKeepsHostSelectionAvailableDuringTerminalMouseCapture() {
+        #expect(
+            TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
+                terminalMouseCaptured: true,
+                interaction: .activeSelection
+            )
         )
     }
 

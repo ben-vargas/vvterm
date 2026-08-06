@@ -3298,6 +3298,25 @@ class GhosttyTerminalView: UIView {
             prefersNativeSelectionFirstResponder = false
         }
         nativeTextInputDelegate?.selectionDidChange(self)
+        restoreIMEProxyFocusAfterNativeSelectionIfNeeded()
+    }
+
+    private func restoreIMEProxyFocusAfterNativeSelectionIfNeeded() {
+        guard shouldRestoreIMEProxyFocusAfterNativeSelection,
+              !nativeSelectionInteractionActive,
+              nativeSelectedRange == nil else {
+            return
+        }
+        shouldRestoreIMEProxyFocusAfterNativeSelection = false
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  !self.isShuttingDown,
+                  self.isTextInputSessionEligible,
+                  !self.isFindNavigatorActive else {
+                return
+            }
+            _ = self.requestKeyboardFocus(for: .selectionGesture)
+        }
     }
 
     private func isPointOnNativeSelectionHandleHitArea(_ point: CGPoint) -> Bool {
@@ -3523,14 +3542,8 @@ class GhosttyTerminalView: UIView {
     }
 
     private var usesNativeTouchSelection: Bool {
-        #if DEBUG
-        if Foundation.ProcessInfo.processInfo.arguments.contains(
-            "--vvterm-ui-test-native-find-navigator"
-        ) {
-            return true
-        }
-        #endif
         return UIDevice.current.userInterfaceIdiom == .phone
+            || UIDevice.current.userInterfaceIdiom == .pad
     }
 
     private var usesAppOwnedTouchSelection: Bool {
@@ -5550,7 +5563,13 @@ class GhosttyTerminalView: UIView {
 
 extension GhosttyTerminalView: UITextInteractionDelegate {
     func interactionShouldBegin(_ interaction: UITextInteraction, at point: CGPoint) -> Bool {
-        guard usesNativeTouchSelection, allowsHostTextSelection else { return false }
+        guard usesNativeTouchSelection,
+              TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
+                  terminalMouseCaptured: surface?.mouseCaptured == true,
+                  interaction: nativeSelectionGestureInteraction
+              ) else {
+            return false
+        }
         prefersNativeSelectionFirstResponder = true
         shouldRestoreIMEProxyFocusAfterNativeSelection = isTerminalTextInputActive
         refreshNativeSelectionSnapshot()
@@ -5573,17 +5592,7 @@ extension GhosttyTerminalView: UITextInteractionDelegate {
             prefersNativeSelectionFirstResponder = false
         }
         refreshNativeSelectionSnapshot()
-        guard shouldRestoreIMEProxyFocusAfterNativeSelection else { return }
-        shouldRestoreIMEProxyFocusAfterNativeSelection = false
-        DispatchQueue.main.async { [weak self] in
-            guard let self,
-                  !self.isShuttingDown,
-                  self.isTextInputSessionEligible,
-                  !self.isFindNavigatorActive else {
-                return
-            }
-            _ = self.requestKeyboardFocus(for: .selectionGesture)
-        }
+        restoreIMEProxyFocusAfterNativeSelectionIfNeeded()
     }
 }
 
@@ -5764,25 +5773,35 @@ extension GhosttyTerminalView: UIGestureRecognizerDelegate {
 }
 
 private extension GhosttyTerminalView {
+    var nativeSelectionGestureInteraction: TerminalSelectionInteraction {
+        switch directTouchLongPressExclusionRecognizer.state {
+        case .began, .changed:
+            .intentionalGesture
+        default:
+            .none
+        }
+    }
+
     var allowsHostTextSelection: Bool {
         TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
-            terminalMouseCaptured: surface?.mouseCaptured == true
+            terminalMouseCaptured: surface?.mouseCaptured == true,
+            interaction: hasActiveSelectionInteraction ? .activeSelection : .none
         )
     }
 
-    func hasActiveSelectionInteraction(at point: CGPoint) -> Bool {
+    var hasActiveSelectionInteraction: Bool {
         if usesNativeTouchSelection {
             return nativeSelectionInteractionActive
                 || nativeSelectedRange != nil
                 || prefersNativeSelectionFirstResponder
-                || isPointOnNativeSelectionHandleHitArea(point)
         }
-        if usesAppOwnedTouchSelection {
-            return isSelecting
-                || touchSelection != nil
-                || isPointOnTouchSelectionHandle(point)
-        }
-        return false
+        return usesAppOwnedTouchSelection && (isSelecting || touchSelection != nil)
+    }
+
+    func hasActiveSelectionInteraction(at point: CGPoint) -> Bool {
+        hasActiveSelectionInteraction
+            || (usesNativeTouchSelection && isPointOnNativeSelectionHandleHitArea(point))
+            || (usesAppOwnedTouchSelection && isPointOnTouchSelectionHandle(point))
     }
 
     func shouldAllowScrollGesture(
@@ -6084,6 +6103,8 @@ extension GhosttyTerminalView {
             "inputViewMode=\(inputViewMode)",
             "browse=\(keyboardFocusPolicy.isBrowsing)",
             "find=\(isFindNavigatorActive)",
+            "nativeSelectionActive=\(hasActiveSelectionInteraction)",
+            "nativeSelectionLength=\(nativeSelectedRange?.length ?? 0)",
             "eligible=\(isTextInputSessionEligible)",
             "imeProxyCanBecome=\(imeProxyTextView.canBecomeFirstResponder)",
             "imeComposing=\(textInputModel.hasActiveIMEComposition)",
