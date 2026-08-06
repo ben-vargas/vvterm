@@ -1687,3 +1687,7 @@
 "Rotation Rate" = "Швидкість обертання";
 "Physical Disk Status" = "Стан фізичного диска";
 "Waiting for network…" = "Очікування мережі…";
+"7 days free" = "7 днів безкоштовно";
+"Then %@ per year." = "Потім %@ на рік.";
+"Start 7-Day Free Trial" = "Почати 7-денний безкоштовний пробний період";
+"7 days free, then %@ per year. Auto-renews until canceled." = "7 днів безкоштовно, потім %@ на рік. Автоматично поновлюється, доки не скасуєте.";

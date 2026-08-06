@@ -89,6 +89,21 @@ final class StoreManager: ObservableObject {
         )
     }
 
+    func introductoryOfferState(for product: Product) async -> ProPlanIntroductoryOfferState {
+        guard product.id == VVTermProducts.proYearly,
+              let subscription = product.subscription,
+              let offer = subscription.introductoryOffer,
+              offer.paymentMode == .freeTrial,
+              offer.periodCount == 1,
+              offer.period.isOneWeek else {
+            return .unavailable
+        }
+
+        return await subscription.isEligibleForIntroOffer
+            ? .eligibleForSevenDayFreeTrial
+            : .ineligible
+    }
+
     // MARK: - Purchase
 
     func purchase(_ product: Product) async {
@@ -339,5 +354,11 @@ final class StoreManager: ObservableObject {
         subscriptionStatus = status
         AnalyticsTracker.shared.trackAppLaunched(isPro: isPro)
         logger.info("Entitlements checked: isPro=\(hasAccess), isLifetime=\(hasLifetime), reviewMode=\(self.isReviewModeEnabled)")
+    }
+}
+
+private extension Product.SubscriptionPeriod {
+    var isOneWeek: Bool {
+        (unit == .week && value == 1) || (unit == .day && value == 7)
     }
 }

@@ -1682,3 +1682,7 @@
 "Rotation Rate" = "Vitesse de rotation";
 "Physical Disk Status" = "État du disque physique";
 "Waiting for network…" = "En attente du réseau…";
+"7 days free" = "7 jours gratuits";
+"Then %@ per year." = "Puis %@ par an.";
+"Start 7-Day Free Trial" = "Commencer l’essai gratuit de 7 jours";
+"7 days free, then %@ per year. Auto-renews until canceled." = "7 jours gratuits, puis %@ par an. Renouvellement automatique jusqu’à résiliation.";

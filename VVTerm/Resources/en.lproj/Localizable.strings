@@ -1732,3 +1732,7 @@
 "Rotation Rate" = "Rotation Rate";
 "Physical Disk Status" = "Physical Disk Status";
 "Waiting for network…" = "Waiting for network…";
+"7 days free" = "7 days free";
+"Then %@ per year." = "Then %@ per year.";
+"Start 7-Day Free Trial" = "Start 7-Day Free Trial";
+"7 days free, then %@ per year. Auto-renews until canceled." = "7 days free, then %@ per year. Auto-renews until canceled.";

@@ -1677,3 +1677,7 @@
 "Rotation Rate" = "转速";
 "Physical Disk Status" = "物理磁盘状态";
 "Waiting for network…" = "正在等待网络…";
+"7 days free" = "免费 7 天";
+"Then %@ per year." = "之后每年 %@。";
+"Start 7-Day Free Trial" = "开始 7 天免费试用";
+"7 days free, then %@ per year. Auto-renews until canceled." = "免费 7 天，之后每年 %@。自动续订，直至取消。";

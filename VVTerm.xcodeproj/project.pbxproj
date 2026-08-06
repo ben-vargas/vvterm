@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		4FB0ED9B3F04FE89CE2BD32E /* VVTermLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F3220D94C71F0D68A0DF623E /* VVTermLiveActivity.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5C9A7D8E31A1000100D32601 /* VVTermStoreKit.storekit in Resources */ = {isa = PBXBuildFile; fileRef = CC837B372F0E62F2006804BF /* VVTermStoreKit.storekit */; };
 		82B734D4923B7DD325984127 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 1853ABB6CF8195DF93B55895 /* ZIPFoundation */; };
 		8E5D7C9695EF4C72AD9AB276 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A089872E7F6345088D2FA637 /* AppIntents.framework */; };
 		CC83449F2F0D18CF006804BF /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = CC8312B12F0CD850006804BF /* MLX */; };
@@ -391,6 +392,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5C9A7D8E31A1000100D32601 /* VVTermStoreKit.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

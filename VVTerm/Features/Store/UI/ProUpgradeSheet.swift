@@ -11,6 +11,7 @@ struct ProUpgradeSheet: View {
     private let onDismiss: (() -> Void)?
 
     @State private var selectedPlan: ProPlanKind = .yearly
+    @State private var yearlyOfferState: ProPlanIntroductoryOfferState = .unavailable
     @State private var showSuccess = false
     @State private var alertInfo: AlertInfo?
     @State private var showCancelSubscriptionAlert = false
@@ -81,9 +82,7 @@ struct ProUpgradeSheet: View {
         }
         .background(sheetBackground.ignoresSafeArea())
         .task {
-            storeManager.notePaywallPresented(source: source)
-            await storeManager.loadProducts()
-            selectedPlan = defaultPlan
+            await preparePaywall()
         }
         .onChangeCompat(of: storeManager.purchaseState) { newState in
             handlePurchaseStateChange(newState)
@@ -161,9 +160,7 @@ struct ProUpgradeSheet: View {
         .background(sheetBackground)
         .background(ProUpgradeWindowConfigurator(source: source))
         .task {
-            storeManager.notePaywallPresented(source: source)
-            await storeManager.loadProducts()
-            selectedPlan = defaultPlan
+            await preparePaywall()
         }
         .onChangeCompat(of: storeManager.purchaseState) { newState in
             handlePurchaseStateChange(newState)
@@ -274,8 +271,7 @@ struct ProUpgradeSheet: View {
                     ForEach(availablePlans) { plan in
                         if let product = product(for: plan) {
                             PlanSelectionCard(
-                                product: product,
-                                plan: plan,
+                                presentation: presentation(for: plan, product: product),
                                 isSelected: selectedPlan == plan
                             ) {
                                 selectedPlan = plan
@@ -318,10 +314,11 @@ struct ProUpgradeSheet: View {
             .controlSize(.large)
             .disabled(selectedProduct == nil)
             .allowsHitTesting(storeManager.purchaseState != .purchasing)
+            .accessibilityLabel(selectedPresentation?.purchaseButtonAccessibilityLabel ?? subscribeButtonTitle)
 
             footerSupportRow
 
-            Text(selectedPlan == .lifetime ? String(localized: "One-time purchase. No subscription renewal.") : String(localized: "Auto-renews until canceled."))
+            Text(selectedPresentation?.renewalDisclosure ?? String(localized: "Auto-renews until canceled."))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -422,7 +419,11 @@ struct ProUpgradeSheet: View {
     }
 
     private var selectedProduct: Product? {
-        product(for: selectedPlan) ?? product(for: defaultPlan)
+        product(for: selectedPlan)
+    }
+
+    private var selectedPresentation: ProPlanPresentation? {
+        selectedProduct.map { presentation(for: selectedPlan, product: $0) }
     }
 
     private var defaultPlan: ProPlanKind {
@@ -443,6 +444,29 @@ struct ProUpgradeSheet: View {
         }
     }
 
+    private func presentation(for plan: ProPlanKind, product: Product) -> ProPlanPresentation {
+        ProPlanPresentation(
+            plan: plan,
+            displayPrice: product.displayPrice,
+            introductoryOfferState: yearlyOfferState
+        )
+    }
+
+    private func refreshYearlyOfferState() async {
+        guard let yearlyProduct = storeManager.yearlyProduct else {
+            yearlyOfferState = .unavailable
+            return
+        }
+        yearlyOfferState = await storeManager.introductoryOfferState(for: yearlyProduct)
+    }
+
+    private func preparePaywall() async {
+        storeManager.notePaywallPresented(source: source)
+        await storeManager.loadProducts()
+        selectedPlan = defaultPlan
+        await refreshYearlyOfferState()
+    }
+
     private var crossPlatformBenefitTitle: String {
         #if os(macOS)
         return String(localized: "Also on iPhone and iPad")
@@ -456,11 +480,7 @@ struct ProUpgradeSheet: View {
     }
 
     private var subscribeButtonTitle: String {
-        guard let product = selectedProduct else { return String(localized: "Select a Plan") }
-        if product.id == VVTermProducts.proLifetime {
-            return String(format: String(localized: "Buy %@"), product.displayPrice)
-        }
-        return String(format: String(localized: "Subscribe for %@"), product.displayPrice)
+        selectedPresentation?.purchaseButtonTitle ?? String(localized: "Select a Plan")
     }
 
     // MARK: - Comparison
@@ -696,63 +716,8 @@ extension PaywallSource {
 
 // MARK: - Plans
 
-private enum ProPlanKind: String, CaseIterable, Identifiable {
-    case monthly
-    case yearly
-    case lifetime
-
-    static let displayOrder: [ProPlanKind] = [.monthly, .yearly, .lifetime]
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .monthly:
-            return String(localized: "Monthly")
-        case .yearly:
-            return String(localized: "Yearly")
-        case .lifetime:
-            return String(localized: "Lifetime")
-        }
-    }
-
-    var billingCaption: String {
-        switch self {
-        case .monthly:
-            return String(localized: "Billed monthly")
-        case .yearly:
-            return String(localized: "Billed yearly")
-        case .lifetime:
-            return String(localized: "One-time purchase")
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .monthly:
-            return String(localized: "Flexible access to every Pro feature.")
-        case .yearly:
-            return String(localized: "Best value for ongoing terminal work.")
-        case .lifetime:
-            return String(localized: "Pay once and keep Pro access forever.")
-        }
-    }
-
-    var badge: String? {
-        switch self {
-        case .monthly:
-            return nil
-        case .yearly:
-            return String(localized: "Best value")
-        case .lifetime:
-            return nil
-        }
-    }
-}
-
 private struct PlanSelectionCard: View {
-    let product: Product
-    let plan: ProPlanKind
+    let presentation: ProPlanPresentation
     let isSelected: Bool
     let onSelect: () -> Void
 
@@ -761,11 +726,11 @@ private struct PlanSelectionCard: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(plan.title)
+                        Text(presentation.plan.title)
                             .font(.headline)
                             .fontWeight(.semibold)
 
-                        if let badge = plan.badge {
+                        if let badge = presentation.plan.badge {
                             Text(badge)
                                 .font(.caption2)
                                 .fontWeight(.medium)
@@ -776,11 +741,11 @@ private struct PlanSelectionCard: View {
                         }
                     }
 
-                    Text(priceLine)
+                    Text(presentation.priceLine)
                         .font(.body)
                         .foregroundStyle(.primary)
 
-                    Text(plan.detail)
+                    Text(presentation.detail)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -803,17 +768,9 @@ private struct PlanSelectionCard: View {
             }
         }
         .buttonStyle(.plain)
-    }
-
-    private var priceLine: String {
-        switch plan {
-        case .monthly:
-            return String(format: String(localized: "%@ per month"), product.displayPrice)
-        case .yearly:
-            return String(format: String(localized: "%@ per year"), product.displayPrice)
-        case .lifetime:
-            return String(format: String(localized: "%@ one time"), product.displayPrice)
-        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(presentation.planAccessibilityLabel)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var cardFill: Color {

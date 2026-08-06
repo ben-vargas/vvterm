@@ -1679,3 +1679,7 @@
 "Rotation Rate" = "회전 속도";
 "Physical Disk Status" = "물리 디스크 상태";
 "Waiting for network…" = "네트워크 대기 중…";
+"7 days free" = "7일 무료";
+"Then %@ per year." = "이후 연간 %@입니다.";
+"Start 7-Day Free Trial" = "7일 무료 체험 시작";
+"7 days free, then %@ per year. Auto-renews until canceled." = "7일 무료 후 연간 %@입니다. 취소할 때까지 자동 갱신됩니다.";

@@ -1680,3 +1680,7 @@
 "Rotation Rate" = "ความเร็วรอบ";
 "Physical Disk Status" = "สถานะดิสก์จริง";
 "Waiting for network…" = "กำลังรอเครือข่าย…";
+"7 days free" = "ทดลองใช้ฟรี 7 วัน";
+"Then %@ per year." = "จากนั้น %@ ต่อปี";
+"Start 7-Day Free Trial" = "เริ่มทดลองใช้ฟรี 7 วัน";
+"7 days free, then %@ per year. Auto-renews until canceled." = "ทดลองใช้ฟรี 7 วัน จากนั้น %@ ต่อปี ต่ออายุอัตโนมัติจนกว่าจะยกเลิก";

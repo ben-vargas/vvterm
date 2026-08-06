@@ -1681,3 +1681,7 @@
 "Rotation Rate" = "Rychlost otáčení";
 "Physical Disk Status" = "Stav fyzického disku";
 "Waiting for network…" = "Čekání na síť…";
+"7 days free" = "7 dní zdarma";
+"Then %@ per year." = "Poté %@ ročně.";
+"Start 7-Day Free Trial" = "Zahájit 7denní bezplatnou zkušební verzi";
+"7 days free, then %@ per year. Auto-renews until canceled." = "7 dní zdarma, poté %@ ročně. Automaticky se obnovuje, dokud předplatné nezrušíte.";
