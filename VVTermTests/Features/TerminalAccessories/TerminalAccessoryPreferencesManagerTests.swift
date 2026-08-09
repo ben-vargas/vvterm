@@ -40,7 +40,8 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
             commandContent: "ls -la",
             commandSendMode: .insertAndEnter,
             shortcutKey: .l,
-            shortcutModifiers: .init(control: true)
+            shortcutModifiers: .init(control: true),
+            hasProAccess: false
         )
 
         XCTAssertEqual(manager.customActions.map(\.id), [action.id])
@@ -59,6 +60,33 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
 
         XCTAssertEqual(manager.activeItems, TerminalAccessoryProfile.defaultActiveItems)
         XCTAssertEqual(manager.profile.lastWriterDeviceId, DeviceIdentity.id)
+    }
+
+    func testExplicitProAccessFactControlsCustomActionGate() throws {
+        let manager = TerminalAccessoryPreferencesManager(defaults: defaults)
+
+        for index in 0..<FreeTierLimits.maxCustomActions {
+            _ = try manager.createCustomAction(
+                title: "Action \(index)",
+                kind: .command,
+                commandContent: "echo \(index)",
+                commandSendMode: .insertAndEnter,
+                shortcutKey: .a,
+                shortcutModifiers: .init(),
+                hasProAccess: true
+            )
+        }
+
+        XCTAssertTrue(manager.isCustomActionCreationProGated(hasProAccess: false))
+        XCTAssertFalse(manager.isCustomActionCreationProGated(hasProAccess: true))
+        XCTAssertEqual(
+            manager.customActionLimit(hasProAccess: false),
+            FreeTierLimits.maxCustomActions
+        )
+        XCTAssertEqual(
+            manager.customActionLimit(hasProAccess: true),
+            TerminalAccessoryProfile.maxCustomActions
+        )
     }
 
     func testLegacyProfileWithoutWriterReceivesApplicationWriterIdentity() throws {

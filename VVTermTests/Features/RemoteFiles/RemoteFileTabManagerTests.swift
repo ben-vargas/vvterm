@@ -10,13 +10,21 @@ struct RemoteFileTabManagerTests {
         let manager = RemoteFileTabManager(defaults: defaults)
         let server = makeServer()
 
-        let initialTab = manager.ensureInitialTab(for: server, seedPath: "/srv")!
+        let initialTab = manager.ensureInitialTab(
+            for: server,
+            seedPath: "/srv",
+            hasProAccess: false
+        )!
         let removedTab = manager.closeTab(initialTab)
 
         #expect(removedTab == initialTab)
         #expect(manager.tabs(for: server.id).isEmpty)
         #expect(manager.hasInitializedTabs(for: server.id))
-        #expect(manager.ensureInitialTab(for: server, seedPath: "/srv") == nil)
+        #expect(manager.ensureInitialTab(
+            for: server,
+            seedPath: "/srv",
+            hasProAccess: false
+        ) == nil)
     }
 
     @Test
@@ -42,6 +50,25 @@ struct RemoteFileTabManagerTests {
 
         #expect(removedRightmost == thirdTab)
         #expect(manager.selectedTab(for: server.id)?.id == firstTab.id)
+    }
+
+    @Test
+    func proAccessFactControlsAdditionalFileTabs() {
+        let manager = RemoteFileTabManager(defaults: makeDefaults())
+        let server = makeServer()
+
+        #expect(manager.openTab(
+            for: server,
+            hasProAccess: false
+        ) != nil)
+        #expect(manager.openTab(
+            for: server,
+            hasProAccess: false
+        ) == nil)
+        #expect(manager.openTab(
+            for: server,
+            hasProAccess: true
+        ) != nil)
     }
 
     private func makeServer() -> Server {

@@ -239,6 +239,31 @@ final class StoreManagerLifecycleTests: XCTestCase {
         XCTAssertNil(weakManager)
     }
 
+    func testOwnerReleaseAfterStartupCompletesTerminatesTransactionStream() async {
+        let client = StoreClientFake()
+        client.loadedProducts = [monthlyProduct]
+        client.entitlementResult = entitlementResult(
+            productIds: [VVTermProducts.proMonthly]
+        )
+        let startupCompleted = expectation(description: "Startup completed")
+        let streamTerminated = expectation(description: "Transaction stream terminated")
+        client.onEntitlementRequest = { startupCompleted.fulfill() }
+        client.onTransactionStreamTermination = { streamTerminated.fulfill() }
+        var manager: StoreManager? = StoreManager(client: client)
+        weak var weakManager = manager
+
+        manager?.start()
+        await fulfillment(of: [startupCompleted], timeout: 1)
+        await Task.yield()
+        XCTAssertTrue(manager?.isPro == true)
+        manager = nil
+        await fulfillment(of: [streamTerminated], timeout: 1)
+
+        XCTAssertNil(weakManager)
+        XCTAssertEqual(client.entitlementRequestCount, 1)
+        XCTAssertEqual(client.transactionStreamTerminationCount, 1)
+    }
+
     private func entitlementResult(productIds: Set<String>) -> StoreEntitlementResult {
         StoreEntitlementResult(
             verifiedProductIds: productIds,

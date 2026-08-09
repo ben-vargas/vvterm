@@ -84,12 +84,12 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
 
     /// Free tier is limited to `FreeTierLimits.maxCustomActions` created actions.
     /// Existing actions beyond the limit keep working; only creation is gated.
-    var isCustomActionCreationProGated: Bool {
-        !StoreManager.shared.isPro && customActions.count >= FreeTierLimits.maxCustomActions
+    func isCustomActionCreationProGated(hasProAccess: Bool) -> Bool {
+        !hasProAccess && customActions.count >= FreeTierLimits.maxCustomActions
     }
 
-    var customActionLimit: Int {
-        StoreManager.shared.isPro ? TerminalAccessoryProfile.maxCustomActions : FreeTierLimits.maxCustomActions
+    func customActionLimit(hasProAccess: Bool) -> Int {
+        hasProAccess ? TerminalAccessoryProfile.maxCustomActions : FreeTierLimits.maxCustomActions
     }
 
     func customAction(for id: UUID) -> TerminalAccessoryCustomAction? {
@@ -102,12 +102,13 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         commandContent: String,
         commandSendMode: TerminalSnippetSendMode,
         shortcutKey: TerminalAccessoryShortcutKey,
-        shortcutModifiers: TerminalAccessoryShortcutModifiers
+        shortcutModifiers: TerminalAccessoryShortcutModifiers,
+        hasProAccess: Bool
     ) throws -> TerminalAccessoryCustomAction {
         guard canCreateCustomAction else {
             throw TerminalAccessoryValidationError.customActionLimitReached
         }
-        guard !isCustomActionCreationProGated else {
+        guard !isCustomActionCreationProGated(hasProAccess: hasProAccess) else {
             throw TerminalAccessoryValidationError.customActionProRequired
         }
 

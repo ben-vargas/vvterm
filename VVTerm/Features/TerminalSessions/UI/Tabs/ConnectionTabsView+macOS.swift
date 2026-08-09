@@ -325,7 +325,7 @@ extension ConnectionTerminalContainer {
     private func toolbarServerMenuEntries() -> [ToolbarMenuEntry] {
         [
             ToolbarMenuEntry(title: String(localized: "Settings"), systemImage: "gear") {
-                SettingsWindowManager.shared.show()
+                SettingsWindowManager.shared.show(storeManager: storeManager)
             },
             ToolbarMenuEntry(title: String(localized: "Edit Server"), systemImage: "pencil") {
                 serverToEdit = server
@@ -367,13 +367,20 @@ extension ConnectionTerminalContainer {
                     }
                 },
                 onDuplicate: { tab in
-                    guard fileTabManager.canOpenNewTab(for: server.id) else {
+                    guard fileTabManager.canOpenNewTab(
+                        for: server.id,
+                        hasProAccess: storeManager.isPro
+                    ) else {
                         showingFileTabLimitAlert = true
                         return
                     }
 
                     let seedPath = fileBrowser.lastVisitedPath(for: tab)
-                    guard let duplicate = fileTabManager.duplicateTab(tab, seedPath: seedPath) else { return }
+                    guard let duplicate = fileTabManager.duplicateTab(
+                        tab,
+                        seedPath: seedPath,
+                        hasProAccess: storeManager.isPro
+                    ) else { return }
                     fileBrowser.prepareNewTab(duplicate, duplicating: tab)
                 },
                 onNew: { openNewFileTab(selectFilesViewOnSuccess: false) }
@@ -496,7 +503,7 @@ extension ConnectionTerminalContainer {
 
     private func splitFocusedPane(_ placement: TerminalSplitPlacement) {
         guard let selectedTab else { return }
-        guard StoreManager.shared.isPro else {
+        guard storeManager.isPro else {
             showingZenPanel = false
             showingSplitPaneUpgradeAlert = true
             return
@@ -504,19 +511,39 @@ extension ConnectionTerminalContainer {
 
         switch placement {
         case .right:
-            _ = tabManager.splitRight(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+            _ = tabManager.splitRight(
+                tab: selectedTab,
+                paneId: selectedTab.focusedPaneId,
+                hasProAccess: storeManager.isPro
+            )
         case .left:
-            _ = tabManager.splitLeft(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+            _ = tabManager.splitLeft(
+                tab: selectedTab,
+                paneId: selectedTab.focusedPaneId,
+                hasProAccess: storeManager.isPro
+            )
         case .down:
-            _ = tabManager.splitDown(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+            _ = tabManager.splitDown(
+                tab: selectedTab,
+                paneId: selectedTab.focusedPaneId,
+                hasProAccess: storeManager.isPro
+            )
         case .up:
-            _ = tabManager.splitUp(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+            _ = tabManager.splitUp(
+                tab: selectedTab,
+                paneId: selectedTab.focusedPaneId,
+                hasProAccess: storeManager.isPro
+            )
         }
     }
 
     private func performSplitCommand(_ command: TerminalSplitCommand) {
         guard let selectedTab else { return }
-        switch tabManager.performSplitCommand(command, in: selectedTab) {
+        switch tabManager.performSplitCommand(
+            command,
+            in: selectedTab,
+            hasProAccess: storeManager.isPro
+        ) {
         case .performed, .unavailable:
             break
         case .requiresUpgrade:

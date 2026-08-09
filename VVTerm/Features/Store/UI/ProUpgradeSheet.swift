@@ -654,6 +654,7 @@ extension View {
 struct ProUpgradePresentationModifier: ViewModifier {
     @Binding var isPresented: Bool
     let source: PaywallSource
+    @EnvironmentObject var storeManager: StoreManager
 
     func body(content: Content) -> some View {
         platformBody(content: content)

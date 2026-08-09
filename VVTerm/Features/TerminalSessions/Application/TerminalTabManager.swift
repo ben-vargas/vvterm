@@ -265,8 +265,8 @@ final class TerminalTabManager: ObservableObject {
     }
 
     /// Check if can open new tab (Pro limit check)
-    var canOpenNewTab: Bool {
-        if StoreManager.shared.isPro { return true }
+    func canOpenNewTab(hasProAccess: Bool) -> Bool {
+        if hasProAccess { return true }
         let totalTabs = tabsByServer.values.flatMap { $0 }.count
         return totalTabs < FreeTierLimits.maxTabs
     }
@@ -707,33 +707,66 @@ final class TerminalTabManager: ObservableObject {
     // MARK: - Split Management
 
     /// Split a pane horizontally (left | right)
-    func splitHorizontal(tab: TerminalTab, paneId: UUID) -> UUID? {
-        splitRight(tab: tab, paneId: paneId)
+    func splitHorizontal(
+        tab: TerminalTab,
+        paneId: UUID,
+        hasProAccess: Bool
+    ) -> UUID? {
+        splitRight(tab: tab, paneId: paneId, hasProAccess: hasProAccess)
     }
 
     /// Split a pane vertically (top / bottom)
-    func splitVertical(tab: TerminalTab, paneId: UUID) -> UUID? {
-        splitDown(tab: tab, paneId: paneId)
+    func splitVertical(
+        tab: TerminalTab,
+        paneId: UUID,
+        hasProAccess: Bool
+    ) -> UUID? {
+        splitDown(tab: tab, paneId: paneId, hasProAccess: hasProAccess)
     }
 
-    func splitRight(tab: TerminalTab, paneId: UUID) -> UUID? {
-        splitPane(tab: tab, paneId: paneId, placement: .right)
+    func splitRight(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
+        splitPane(
+            tab: tab,
+            paneId: paneId,
+            placement: .right,
+            hasProAccess: hasProAccess
+        )
     }
 
-    func splitLeft(tab: TerminalTab, paneId: UUID) -> UUID? {
-        splitPane(tab: tab, paneId: paneId, placement: .left)
+    func splitLeft(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
+        splitPane(
+            tab: tab,
+            paneId: paneId,
+            placement: .left,
+            hasProAccess: hasProAccess
+        )
     }
 
-    func splitDown(tab: TerminalTab, paneId: UUID) -> UUID? {
-        splitPane(tab: tab, paneId: paneId, placement: .down)
+    func splitDown(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
+        splitPane(
+            tab: tab,
+            paneId: paneId,
+            placement: .down,
+            hasProAccess: hasProAccess
+        )
     }
 
-    func splitUp(tab: TerminalTab, paneId: UUID) -> UUID? {
-        splitPane(tab: tab, paneId: paneId, placement: .up)
+    func splitUp(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
+        splitPane(
+            tab: tab,
+            paneId: paneId,
+            placement: .up,
+            hasProAccess: hasProAccess
+        )
     }
 
-    private func splitPane(tab: TerminalTab, paneId: UUID, placement: TerminalSplitPlacement) -> UUID? {
-        guard StoreManager.shared.isPro else { return nil }
+    private func splitPane(
+        tab: TerminalTab,
+        paneId: UUID,
+        placement: TerminalSplitPlacement,
+        hasProAccess: Bool
+    ) -> UUID? {
+        guard hasProAccess else { return nil }
         let newPaneId = createSplitPane(tab: tab, paneId: paneId, placement: placement)
         if newPaneId != nil {
             AnalyticsTracker.shared.trackSplitPaneCreated()
@@ -979,7 +1012,8 @@ final class TerminalTabManager: ObservableObject {
     @discardableResult
     func performSplitCommand(
         _ command: TerminalSplitCommand,
-        in tab: TerminalTab
+        in tab: TerminalTab,
+        hasProAccess: Bool
     ) -> TerminalSplitCommandOutcome {
         guard canPerformSplitCommand(command, in: tab),
               var currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }) else {
@@ -988,13 +1022,21 @@ final class TerminalTabManager: ObservableObject {
 
         switch command {
         case .splitRight:
-            guard StoreManager.shared.isPro else { return .requiresUpgrade }
-            return splitRight(tab: currentTab, paneId: currentTab.focusedPaneId) == nil
+            guard hasProAccess else { return .requiresUpgrade }
+            return splitRight(
+                tab: currentTab,
+                paneId: currentTab.focusedPaneId,
+                hasProAccess: hasProAccess
+            ) == nil
                 ? .unavailable
                 : .performed
         case .splitDown:
-            guard StoreManager.shared.isPro else { return .requiresUpgrade }
-            return splitDown(tab: currentTab, paneId: currentTab.focusedPaneId) == nil
+            guard hasProAccess else { return .requiresUpgrade }
+            return splitDown(
+                tab: currentTab,
+                paneId: currentTab.focusedPaneId,
+                hasProAccess: hasProAccess
+            ) == nil
                 ? .unavailable
                 : .performed
         case .closeFocusedPane:

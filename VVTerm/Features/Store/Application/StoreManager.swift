@@ -18,12 +18,6 @@ struct StoreEntitlementSnapshot {
 
 @MainActor
 final class StoreManager: ObservableObject {
-    static let shared: StoreManager = {
-        let manager = StoreManager(client: AppStoreKitClient())
-        manager.start()
-        return manager
-    }()
-
     @Published private(set) var entitlementSnapshot = StoreEntitlementSnapshot.free
     @Published var products: [StoreProduct] = []
     @Published var purchaseState: PurchaseState = .idle
@@ -321,20 +315,6 @@ final class StoreManager: ObservableObject {
         AnalyticsTracker.shared.trackAppLaunched(isPro: isPro)
         logger.info("Entitlements checked: isPro=\(hasAccess), isLifetime=\(hasLifetime)")
     }
-
-    #if DEBUG
-    func setProAccessForTesting(_ enabled: Bool) {
-        entitlementSnapshot = StoreEntitlementSnapshot(
-            hasStoreAccess: enabled,
-            hasLifetimeAccess: false,
-            subscriptionStatus: nil
-        )
-    }
-
-    func setEntitlementSnapshotForTesting(_ snapshot: StoreEntitlementSnapshot) {
-        entitlementSnapshot = snapshot
-    }
-    #endif
 
     private static let subscriptionProductIds = [
         VVTermProducts.proMonthly,

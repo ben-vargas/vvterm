@@ -11,6 +11,10 @@ import WidgetKit
 @main
 struct VVTermApp: App {
     init() {
+        let storeManager = StoreManager(client: AppStoreKitClient())
+        _storeManager = StateObject(wrappedValue: storeManager)
+        storeManager.start()
+
         TerminalDefaults.applyIfNeeded()
         #if os(iOS)
         VVTermLauncherWidgetRefresh.refreshIfNeeded()
@@ -31,7 +35,7 @@ struct VVTermApp: App {
     @StateObject private var ghosttyApp = Ghostty.App()
     #endif
     @StateObject private var appLockManager = AppLockManager.shared
-    @StateObject private var storeManager = StoreManager.shared
+    @StateObject private var storeManager: StoreManager
     @StateObject private var remoteFileTabManager = RemoteFileTabManager()
     @StateObject private var remoteFileBrowserStore = VVTermApp.makeRemoteFileBrowserStore()
     @StateObject private var terminalThemeManager = TerminalThemeManager.shared
@@ -264,7 +268,7 @@ struct VVTermApp: App {
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1100, height: 700)
         .commands {
-            VVTermCommands()
+            VVTermCommands(storeManager: storeManager)
         }
         #endif
     }

@@ -18,6 +18,7 @@ private struct LocalizedSettingsView: View {
     @StateObject private var appLockManager = AppLockManager.shared
     @StateObject private var terminalThemeManager = TerminalThemeManager.shared
     @StateObject private var terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager.shared
+    @ObservedObject var storeManager: StoreManager
 
     var body: some View {
         let locale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
@@ -28,6 +29,7 @@ private struct LocalizedSettingsView: View {
                 .environment(\.locale, locale)
                 .environmentObject(terminalThemeManager)
                 .environmentObject(terminalAccessoryPreferencesManager)
+                .environmentObject(storeManager)
         }
         .environmentObject(appLockManager)
     }
@@ -41,13 +43,13 @@ final class SettingsWindowManager {
 
     private init() {}
 
-    func show() {
+    func show(storeManager: StoreManager) {
         if let existingWindow = settingsWindow, existingWindow.isVisible {
             existingWindow.makeKeyAndOrderFront(nil)
             return
         }
 
-        let settingsView = LocalizedSettingsView()
+        let settingsView = LocalizedSettingsView(storeManager: storeManager)
         let hostingController = NSHostingController(rootView: settingsView)
 
         let window = NSWindow(contentViewController: hostingController)

@@ -29,6 +29,7 @@ struct ServerTerminalRoute: View {
     @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
     @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var screenAwakeCoordinator: TerminalScreenAwakeCoordinator
+    @EnvironmentObject private var storeManager: StoreManager
 
     @State private var isRouteVisible = false
     @State private var screenAwakeRequestID = UUID()
@@ -709,7 +710,7 @@ struct ServerTerminalRoute: View {
     }
 
     private func openNewTab(for server: Server) {
-        guard tabManager.canOpenNewTab else {
+        guard tabManager.canOpenNewTab(hasProAccess: storeManager.isPro) else {
             showingTabLimitAlert = true
             return
         }
@@ -726,7 +727,10 @@ struct ServerTerminalRoute: View {
     }
 
     private func openNewFileTab(for server: Server) {
-        guard fileTabs.canOpenNewTab(for: server.id) else {
+        guard fileTabs.canOpenNewTab(
+            for: server.id,
+            hasProAccess: storeManager.isPro
+        ) else {
             showingFileTabLimitAlert = true
             return
         }
@@ -734,8 +738,17 @@ struct ServerTerminalRoute: View {
         let sourceTab = selectedFileTab
         let seedPath = sourceTab.flatMap { fileBrowser.lastVisitedPath(for: $0) }
             ?? selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
-        let newTab = sourceTab.flatMap { fileTabs.duplicateTab($0, seedPath: seedPath) }
-            ?? fileTabs.openTab(for: server, seedPath: seedPath)
+        let newTab = sourceTab.flatMap {
+            fileTabs.duplicateTab(
+                $0,
+                seedPath: seedPath,
+                hasProAccess: storeManager.isPro
+            )
+        } ?? fileTabs.openTab(
+            for: server,
+            seedPath: seedPath,
+            hasProAccess: storeManager.isPro
+        )
 
         guard let newTab else { return }
         fileBrowser.prepareNewTab(newTab, duplicating: sourceTab)

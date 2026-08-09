@@ -38,7 +38,7 @@ struct SettingsView: View {
     @AppStorage(TerminalDefaults.fontSizeKey) private var terminalFontSize = TerminalDefaults.defaultFontSize
 
     @State private var selection: SettingsSelection? = .pro
-    @StateObject private var storeManager = StoreManager.shared
+    @EnvironmentObject private var storeManager: StoreManager
 
     #if os(iOS)
     @Environment(\.dismiss) private var dismiss
@@ -309,4 +309,5 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView()
+        .environmentObject(StoreManager(client: AppStoreKitClient()))
 }

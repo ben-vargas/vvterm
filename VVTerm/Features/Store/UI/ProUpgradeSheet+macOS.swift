@@ -32,7 +32,7 @@ extension ProUpgradePresentationModifier {
     }
 
     private func presentWindow() {
-        ProUpgradeWindowPresenter.shared.show(storeManager: StoreManager.shared, source: source) {
+        ProUpgradeWindowPresenter.shared.show(storeManager: storeManager, source: source) {
             isPresented = false
         }
     }

@@ -16,10 +16,11 @@ struct ServerListRow: View {
     var onLockedTap: (() -> Void)? = nil
 
     @ObservedObject private var serverManager = ServerManager.shared
+    @EnvironmentObject private var storeManager: StoreManager
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
 
     private var isLocked: Bool {
-        serverManager.isServerLocked(server)
+        serverManager.isServerLocked(server, hasProAccess: storeManager.isPro)
     }
 
     var body: some View {
@@ -231,6 +232,7 @@ struct WorkspacePickerSheet: View {
     @ObservedObject var serverManager: ServerManager
     @Binding var selectedWorkspace: Workspace?
     let onDismiss: () -> Void
+    @EnvironmentObject private var storeManager: StoreManager
 
     @State private var lockedWorkspaceAlert: Workspace?
     @State private var showingCreateWorkspace = false
@@ -241,7 +243,10 @@ struct WorkspacePickerSheet: View {
     var body: some View {
         List {
             ForEach(serverManager.workspaces) { workspace in
-                let isLocked = serverManager.isWorkspaceLocked(workspace)
+                let isLocked = serverManager.isWorkspaceLocked(
+                    workspace,
+                    hasProAccess: storeManager.isPro
+                )
 
                 Button {
                     if isLocked {

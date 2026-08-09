@@ -30,6 +30,7 @@ struct TerminalTabView: View {
     @State private var showingSplitPaneUpgradeAlert = false
 
     @EnvironmentObject var ghosttyApp: Ghostty.App
+    @EnvironmentObject private var storeManager: StoreManager
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("terminalVoiceButtonEnabled") private var voiceButtonEnabled = true
 
@@ -237,7 +238,7 @@ struct TerminalTabView: View {
     // MARK: - Split Actions
 
     private func splitPane(_ paneId: UUID, placement: TerminalSplitPlacement) {
-        guard StoreManager.shared.isPro else {
+        guard storeManager.isPro else {
             showingSplitPaneUpgradeAlert = true
             return
         }
@@ -245,13 +246,29 @@ struct TerminalTabView: View {
         let newPaneId: UUID?
         switch placement {
         case .right:
-            newPaneId = tabManager.splitRight(tab: tab, paneId: paneId)
+            newPaneId = tabManager.splitRight(
+                tab: tab,
+                paneId: paneId,
+                hasProAccess: storeManager.isPro
+            )
         case .left:
-            newPaneId = tabManager.splitLeft(tab: tab, paneId: paneId)
+            newPaneId = tabManager.splitLeft(
+                tab: tab,
+                paneId: paneId,
+                hasProAccess: storeManager.isPro
+            )
         case .down:
-            newPaneId = tabManager.splitDown(tab: tab, paneId: paneId)
+            newPaneId = tabManager.splitDown(
+                tab: tab,
+                paneId: paneId,
+                hasProAccess: storeManager.isPro
+            )
         case .up:
-            newPaneId = tabManager.splitUp(tab: tab, paneId: paneId)
+            newPaneId = tabManager.splitUp(
+                tab: tab,
+                paneId: paneId,
+                hasProAccess: storeManager.isPro
+            )
         }
         guard newPaneId != nil else { return }
         layoutVersion += 1
@@ -278,7 +295,11 @@ struct TerminalTabView: View {
     }
 
     private func handleSplitCommand(_ command: TerminalSplitCommand) {
-        switch tabManager.performSplitCommand(command, in: tab) {
+        switch tabManager.performSplitCommand(
+            command,
+            in: tab,
+            hasProAccess: storeManager.isPro
+        ) {
         case .performed:
             if command.createsPane {
                 layoutVersion += 1

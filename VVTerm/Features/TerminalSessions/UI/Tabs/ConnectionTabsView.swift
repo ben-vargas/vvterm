@@ -21,6 +21,7 @@ struct ConnectionTerminalContainer: View {
     let onDisconnectRoute: (() -> Void)?
 
     @EnvironmentObject var ghosttyApp: Ghostty.App
+    @EnvironmentObject var storeManager: StoreManager
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     #if os(macOS)
     @EnvironmentObject var commandBridge: MacShellCommandBridge
@@ -321,7 +322,11 @@ struct ConnectionTerminalContainer: View {
         let seedPath = selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
         DispatchQueue.main.async {
             guard selectedView == .files else { return }
-            guard let fileTab = fileTabManager.ensureInitialTab(for: server, seedPath: seedPath) else { return }
+            guard let fileTab = fileTabManager.ensureInitialTab(
+                for: server,
+                seedPath: seedPath,
+                hasProAccess: storeManager.isPro
+            ) else { return }
             fileBrowser.prepareNewTab(fileTab, duplicating: nil)
         }
     }
@@ -345,7 +350,7 @@ struct ConnectionTerminalContainer: View {
     }
 
     func openNewTab(selectTerminalViewOnSuccess: Bool = false) {
-        guard tabManager.canOpenNewTab else {
+        guard tabManager.canOpenNewTab(hasProAccess: storeManager.isPro) else {
             showingTabLimitAlert = true
             return
         }
@@ -366,7 +371,10 @@ struct ConnectionTerminalContainer: View {
     }
 
     func openNewFileTab(selectFilesViewOnSuccess: Bool = false) {
-        guard fileTabManager.canOpenNewTab(for: server.id) else {
+        guard fileTabManager.canOpenNewTab(
+            for: server.id,
+            hasProAccess: storeManager.isPro
+        ) else {
             showingFileTabLimitAlert = true
             return
         }
@@ -374,8 +382,17 @@ struct ConnectionTerminalContainer: View {
         let sourceTab = selectedFileTab
         let seedPath = sourceTab.flatMap { fileBrowser.lastVisitedPath(for: $0) }
             ?? selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
-        let newTab = sourceTab.flatMap { fileTabManager.duplicateTab($0, seedPath: seedPath) }
-            ?? fileTabManager.openTab(for: server, seedPath: seedPath)
+        let newTab = sourceTab.flatMap {
+            fileTabManager.duplicateTab(
+                $0,
+                seedPath: seedPath,
+                hasProAccess: storeManager.isPro
+            )
+        } ?? fileTabManager.openTab(
+            for: server,
+            seedPath: seedPath,
+            hasProAccess: storeManager.isPro
+        )
 
         guard let newTab else { return }
         fileBrowser.prepareNewTab(newTab, duplicating: sourceTab)

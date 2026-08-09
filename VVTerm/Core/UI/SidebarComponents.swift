@@ -5,6 +5,7 @@ import SwiftUI
 struct ServerRow: View {
     let server: Server
     let isSelected: Bool
+    let isLocked: Bool
     let onSelect: () -> Void
     let onEdit: (Server) -> Void
     var onMove: ((Server) -> Void)? = nil
@@ -12,15 +13,10 @@ struct ServerRow: View {
     var onLockedTap: (() -> Void)? = nil
 
     @ObservedObject private var tabManager = TerminalTabManager.shared
-    @ObservedObject private var serverManager = ServerManager.shared
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
     #if os(macOS)
     @Environment(\.controlActiveState) private var controlActiveState
     #endif
-
-    private var isLocked: Bool {
-        serverManager.isServerLocked(server)
-    }
 
     private var tabCount: Int {
         tabManager.tabs(for: server.id).count

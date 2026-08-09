@@ -7,7 +7,7 @@ import SwiftUI
 import StoreKit
 
 struct ProSettingsView: View {
-    @ObservedObject private var storeManager = StoreManager.shared
+    @EnvironmentObject private var storeManager: StoreManager
     @ObservedObject private var serverManager = ServerManager.shared
     @State private var showingPlans = false
     @State private var showingManageSubscription = false
@@ -247,4 +247,5 @@ extension View {
 
 #Preview {
     ProSettingsView()
+        .environmentObject(StoreManager(client: AppStoreKitClient()))
 }

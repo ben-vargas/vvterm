@@ -14,7 +14,7 @@ struct ContentView: View {
     let fileBrowser: RemoteFileBrowserStore
     @StateObject private var serverManager = ServerManager.shared
     @StateObject private var tabManager = TerminalTabManager.shared
-    @StateObject private var storeManager = StoreManager.shared
+    @EnvironmentObject private var storeManager: StoreManager
     @StateObject private var engagementTracker = EngagementTracker.shared
     @Environment(\.requestReview) private var requestReview
     @Environment(\.colorScheme) private var colorScheme
@@ -345,6 +345,7 @@ struct ContentView: View {
         fileTabs: RemoteFileTabManager(),
         fileBrowser: RemoteFileBrowserStore()
     )
+    .environmentObject(StoreManager(client: AppStoreKitClient()))
 }
 
 #if os(macOS)

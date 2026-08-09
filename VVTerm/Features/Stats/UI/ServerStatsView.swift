@@ -13,7 +13,7 @@ struct ServerStatsView: View {
 
     @StateObject private var preferences = PreferencesStore.shared
     @StateObject private var volumeVisibilityStore = ServerVolumeVisibilityStore.shared
-    @StateObject private var storeManager = StoreManager.shared
+    @EnvironmentObject private var storeManager: StoreManager
     @State private var statsCollector: ServerStatsCollector
     @State private var isShowingAppearanceSettings = false
     @State private var isShowingDockerUpgrade = false

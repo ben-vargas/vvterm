@@ -270,17 +270,13 @@ struct TerminalReconnectUITestHarness: View {
                 serverManager.servers = [server]
             }
 
-            if usesColdRelaunchHarness {
-                #if DEBUG
-                StoreManager.shared.setProAccessForTesting(true)
-                #endif
-            }
             if !usesColdRelaunchHarness || seedsColdRelaunchHarness {
                 let firstTab = try await tabManager.openTab(for: server)
                 if usesColdRelaunchHarness {
                     guard tabManager.splitHorizontal(
                         tab: firstTab,
-                        paneId: firstTab.rootPaneId
+                        paneId: firstTab.rootPaneId,
+                        hasProAccess: true
                     ) != nil else {
                         throw VVTermError.connectionFailed("Unable to seed split layout")
                     }
