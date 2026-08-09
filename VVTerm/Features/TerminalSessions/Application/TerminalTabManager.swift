@@ -2180,14 +2180,18 @@ final class TerminalTabManager: ObservableObject {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
+        let normalized: String
         if let schemeRange = trimmed.range(of: "://") {
             let afterScheme = trimmed[schemeRange.upperBound...]
             guard let pathStart = afterScheme.firstIndex(of: "/") else { return nil }
             let path = String(afterScheme[pathStart...])
-            return path.removingPercentEncoding ?? path
+            normalized = path.removingPercentEncoding ?? path
+        } else {
+            normalized = trimmed
         }
 
-        return trimmed
+        guard normalized.rangeOfCharacter(from: .controlCharacters) == nil else { return nil }
+        return normalized
     }
 
     private func updateTmuxSelectionStatuses() {

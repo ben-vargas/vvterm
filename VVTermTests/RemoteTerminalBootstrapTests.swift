@@ -133,6 +133,20 @@ struct RemoteTerminalBootstrapTests {
     }
 
     @Test
+    func directoryChangeCommandRejectsCmdControlAndExpansionCharacters() {
+        let paths = [
+            "C:\\safe\r\nwhoami",
+            "C:\\safe%PATH%",
+            "C:\\safe!PATH!",
+            "C:\\safe&whoami",
+        ]
+
+        for path in paths {
+            #expect(RemoteTerminalBootstrap.directoryChangeCommand(for: path, environment: cmdEnvironment).isEmpty)
+        }
+    }
+
+    @Test
     func posixPastedPathQuotesShellSensitiveRemotePaths() {
         let pastedPath = RemoteTerminalBootstrap.posixPastedPath("/tmp/vv term/file's name.png")
 

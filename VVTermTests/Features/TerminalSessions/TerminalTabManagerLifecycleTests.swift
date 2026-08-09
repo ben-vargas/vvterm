@@ -1373,6 +1373,21 @@ struct TerminalTabManagerLifecycleTests {
     }
 
     @Test
+    func oscWorkingDirectoryRejectsPercentEncodedCommandControls() async {
+        await withCleanManager { manager in
+            let tab = TerminalTab(serverId: UUID(), title: "Unsafe PWD")
+            installTab(tab, in: manager)
+
+            manager.updatePaneWorkingDirectory(
+                tab.rootPaneId,
+                rawDirectory: "file://host/C:/safe%0D%0Awhoami"
+            )
+
+            #expect(manager.workingDirectory(for: tab.rootPaneId) == nil)
+        }
+    }
+
+    @Test
     func sharedStatsClientSkipsSelectedMoshTransport() async {
         await withCleanManager { manager in
             let server = makeServer(connectionMode: .mosh)

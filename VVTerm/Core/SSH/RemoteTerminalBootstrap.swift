@@ -218,11 +218,7 @@ enum RemoteTerminalBootstrap {
     }
 
     nonisolated static func cmdPastedPath(_ path: String) throws -> String {
-        let forbiddenCharacters = CharacterSet(charactersIn: "\"%!\r\n\0")
-        guard path.rangeOfCharacter(from: forbiddenCharacters) == nil else {
-            throw TerminalRichPasteError.unsafeRemotePath
-        }
-        return "\"\(path)\""
+        "\"\(try validatedCmdLiteralPath(path))\""
     }
 
     nonisolated static func directoryChangeCommand(
@@ -249,8 +245,16 @@ enum RemoteTerminalBootstrap {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "\n" }
         let resolved = normalizedWindowsPath(from: trimmed) ?? trimmed
-        let escaped = resolved.replacingOccurrences(of: "\"", with: "\"\"")
-        return "cd /d \"\(escaped)\"\r\n"
+        guard let literalPath = try? validatedCmdLiteralPath(resolved) else { return "" }
+        return "cd /d \"\(literalPath)\"\r\n"
+    }
+
+    private nonisolated static func validatedCmdLiteralPath(_ path: String) throws -> String {
+        let forbiddenCharacters = CharacterSet(charactersIn: "\"&|<>()^%!\r\n\0")
+        guard path.rangeOfCharacter(from: forbiddenCharacters) == nil else {
+            throw TerminalRichPasteError.unsafeRemotePath
+        }
+        return path
     }
 
     nonisolated static func shellPathExport() -> String {
