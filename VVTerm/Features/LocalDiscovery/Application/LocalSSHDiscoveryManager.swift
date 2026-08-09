@@ -176,36 +176,6 @@ final class LocalSSHDiscoveryManager: ObservableObject {
         }
     }
 
-    var statusText: String {
-        switch state.phase {
-        case .idle:
-            return String(localized: "Ready to scan your local network.")
-        case .unsupportedNetwork:
-            return String(localized: "Connect to Wi-Fi or ethernet to discover local SSH hosts.")
-        case .scanning:
-            if bonjourActive && probeActive {
-                return String(localized: "Scanning with Bonjour and SSH port probe...")
-            }
-            if bonjourActive {
-                return String(localized: "Scanning Bonjour services...")
-            }
-            if probeActive {
-                return String(localized: "Scanning local subnet for SSH port 22...")
-            }
-            return String(localized: "Scanning...")
-        case .completed:
-            if hosts.isEmpty {
-                return String(localized: "No SSH hosts found.")
-            }
-            return String(
-                format: String(localized: "%lld SSH host(s) found."),
-                Int64(hosts.count)
-            )
-        case .failed(_, let message):
-            return message
-        }
-    }
-
     private func handleEvent(_ event: LocalSSHDiscoveryEvent, scanID: UUID) {
         guard state.handle(event, scanID: scanID) else { return }
 
