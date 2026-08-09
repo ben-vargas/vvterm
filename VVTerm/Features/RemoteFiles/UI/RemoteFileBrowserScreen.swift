@@ -1760,7 +1760,7 @@ struct RemoteFileBrowserScreen: View {
 
     func sizeLabel(for entry: RemoteFileEntry) -> String {
         guard entry.type != .directory, let size = entry.size else { return "—" }
-        return ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+        return RemoteFileByteCountFormatter.string(from: size)
     }
 
     func kindLabel(for entry: RemoteFileEntry) -> String {

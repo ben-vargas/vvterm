@@ -942,7 +942,7 @@ extension RemoteFileBrowserScreen {
                 parts.append(
                     String(
                         format: String(localized: "%@ total"),
-                        ByteCountFormatter.string(fromByteCount: Int64(totalBytes), countStyle: .file)
+                        RemoteFileByteCountFormatter.string(from: totalBytes)
                     )
                 )
             }
@@ -952,7 +952,7 @@ extension RemoteFileBrowserScreen {
             parts.append(
                 String(
                     format: String(localized: "%@ available"),
-                    ByteCountFormatter.string(fromByteCount: Int64(availableBytes), countStyle: .file)
+                    RemoteFileByteCountFormatter.string(from: availableBytes)
                 )
             )
         }

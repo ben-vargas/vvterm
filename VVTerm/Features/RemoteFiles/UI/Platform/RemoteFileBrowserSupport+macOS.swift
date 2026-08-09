@@ -425,7 +425,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
                 let entry = parent.entries[index]
                 let sizeText = entry.type == .directory || entry.size == nil
                     ? "—"
-                    : ByteCountFormatter.string(fromByteCount: Int64(entry.size ?? 0), countStyle: .file)
+                    : RemoteFileByteCountFormatter.string(from: entry.size ?? 0)
                 return makeTextCell(
                     tableView: tableView,
                     identifier: tableColumn.identifier,
