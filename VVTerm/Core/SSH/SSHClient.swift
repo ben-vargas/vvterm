@@ -556,7 +556,6 @@ actor SSHClient {
             await SSHClient.disconnectCloudflareTransport(
                 cloudflareTransportManager,
                 reason: "client disconnect",
-                timeout: disconnectTimeout,
                 logger: logger
             )
             self.finishDisconnect(operationID: operationID)
@@ -580,7 +579,10 @@ actor SSHClient {
             throw SSHError.notConnected
         }
         let effectiveTimeout = timeout ?? execTimeout
-        return try await SSHClient.runWithTimeout(effectiveTimeout) {
+        return try await SSHClient.runWithDeadline(
+            effectiveTimeout,
+            onTimeout: { session.abort() }
+        ) {
             try Task.checkCancellation()
             return try await session.execute(command, maxOutputBytes: maxOutputBytes)
         }
@@ -602,7 +604,10 @@ actor SSHClient {
         logger.info(
             "Starting SSH upload [path: \(remotePath, privacy: .private(mask: .hash))] [bytes: \(data.count)] [strategy: \(String(describing: strategy), privacy: .public)]"
         )
-        try await SSHClient.runWithTimeout(uploadTimeout) {
+        try await SSHClient.runWithDeadline(
+            uploadTimeout,
+            onTimeout: { session.abort() }
+        ) {
             try Task.checkCancellation()
             try await session.upload(
                 data,
@@ -740,7 +745,10 @@ actor SSHClient {
         logger.info(
             "Starting SSH download [remote: \(path, privacy: .private(mask: .hash))] [local: \(localURL.path, privacy: .private(mask: .hash))]"
         )
-        try await SSHClient.runWithTimeout(Self.streamTransferTimeout(for: maxBytes)) {
+        try await SSHClient.runWithDeadline(
+            Self.streamTransferTimeout(for: maxBytes),
+            onTimeout: { session.abort() }
+        ) {
             try Task.checkCancellation()
             try await session.downloadFile(at: path, to: localURL, maxBytes: maxBytes)
         }
@@ -750,7 +758,10 @@ actor SSHClient {
         guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
-        try await SSHClient.runWithTimeout(uploadTimeout) {
+        try await SSHClient.runWithDeadline(
+            uploadTimeout,
+            onTimeout: { session.abort() }
+        ) {
             try Task.checkCancellation()
             try await session.writeFile(data, to: path, permissions: permissions)
         }
@@ -768,7 +779,10 @@ actor SSHClient {
         logger.info(
             "Starting streamed SSH upload [path: \(remotePath, privacy: .private(mask: .hash))] [bytes: \(expectedBytes)]"
         )
-        try await SSHClient.runWithTimeout(Self.streamTransferTimeout(for: expectedBytes)) {
+        try await SSHClient.runWithDeadline(
+            Self.streamTransferTimeout(for: expectedBytes),
+            onTimeout: { session.abort() }
+        ) {
             try Task.checkCancellation()
             try await session.writeFile(
                 from: localURL,
@@ -1098,7 +1112,7 @@ actor SSHClient {
         // cannot shorten the cleanup window before the remote PID is known.
         return await Task {
             do {
-                try await runWithTimeout(RemoteMoshManager.disconnectCleanupTimeout) {
+                try await runWithDeadline(RemoteMoshManager.disconnectCleanupTimeout) {
                     await withTaskGroup(of: Void.self) { group in
                         for lease in leases {
                             group.addTask {
@@ -1109,8 +1123,8 @@ actor SSHClient {
                 }
                 return true
             } catch {
-                // The timeout is cooperative. Once termination starts, its own
-                // five-second command bound remains authoritative.
+                // Cleanup continues in its unstructured operation task, but the
+                // disconnect path does not wait beyond this coordination bound.
                 return false
             }
         }.value
@@ -1123,25 +1137,27 @@ actor SSHClient {
     ) async {
         guard let activeSession else { return }
 
-        let abortWatchdog = Task {
-            do {
-                try await Task.sleep(for: timeout)
-            } catch {
-                return
+        do {
+            try await runWithDeadline(
+                timeout,
+                onTimeout: {
+                    logger.warning("Timed out while disconnecting SSH session; aborting socket")
+                    activeSession.abort()
+                }
+            ) {
+                await activeSession.disconnect()
             }
-            logger.warning("Timed out while disconnecting SSH session; aborting socket")
+        } catch SSHError.timeout {
+            // The deadline callback already aborted the socket.
+        } catch {
             activeSession.abort()
         }
-        defer { abortWatchdog.cancel() }
-
-        await activeSession.disconnect()
     }
 
     private func disconnectCloudflareTransport(reason: String) async {
         await SSHClient.disconnectCloudflareTransport(
             cloudflareTransportManager,
             reason: reason,
-            timeout: disconnectTimeout,
             logger: logger
         )
     }
@@ -1149,16 +1165,10 @@ actor SSHClient {
     private nonisolated static func disconnectCloudflareTransport(
         _ manager: CloudflareTransportManager,
         reason: String,
-        timeout: Duration,
         logger: Logger
     ) async {
-        do {
-            try await SSHClient.runWithTimeout(timeout) {
-                await manager.disconnect()
-            }
-        } catch {
-            logger.warning("Timed out while disconnecting Cloudflare transport (\(reason, privacy: .public))")
-        }
+        await manager.disconnect()
+        logger.debug("Cloudflare disconnect coordination completed (\(reason, privacy: .public))")
     }
 
     // MARK: - State
@@ -1220,7 +1230,10 @@ actor SSHClient {
             await RemoteMoshManager.shared.terminateMoshServer(
                 pid: pid,
                 execute: { command, timeout in
-                    try await SSHClient.runWithTimeout(timeout) {
+                    try await SSHClient.runWithDeadline(
+                        timeout,
+                        onTimeout: { expectedSession.abort() }
+                    ) {
                         try await expectedSession.execute(command)
                     }
                 }
@@ -1238,7 +1251,10 @@ actor SSHClient {
                 startCommand: startupCommand,
                 portRange: 60001...61000,
                 execute: { command, timeout in
-                    try await SSHClient.runWithTimeout(timeout) {
+                    try await SSHClient.runWithDeadline(
+                        timeout,
+                        onTimeout: { expectedSession.abort() }
+                    ) {
                         try await expectedSession.execute(command)
                     }
                 }
@@ -1326,7 +1342,12 @@ actor SSHClient {
             let candidateSession = MoshClientSession(endpoint: endpoint)
 
             do {
-                pendingOps = try await SSHClient.runWithTimeout(startupTimeout) {
+                pendingOps = try await SSHClient.runWithDeadline(
+                    startupTimeout,
+                    onTimeout: {
+                        Task { await candidateSession.stop() }
+                    }
+                ) {
                     try await candidateSession.start()
                     try await candidateSession.enqueue(
                         .resize(cols: wireSize.cols, rows: wireSize.rows)
@@ -1480,24 +1501,19 @@ actor SSHClient {
         }
     }
 
-    private nonisolated static func runWithTimeout<T: Sendable>(
+    nonisolated static func runWithDeadline<T: Sendable>(
         _ timeout: Duration,
+        onTimeout: @escaping @Sendable () -> Void = {},
         operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask {
-                try await operation()
-            }
-            group.addTask {
-                try await Task.sleep(for: timeout)
-                throw SSHError.timeout
-            }
-
-            guard let result = try await group.next() else {
-                throw SSHError.timeout
-            }
-            group.cancelAll()
-            return result
+        do {
+            return try await HardOperationDeadline.run(
+                timeout: timeout,
+                onTimeout: onTimeout,
+                operation: operation
+            )
+        } catch is HardOperationDeadlineError {
+            throw SSHError.timeout
         }
     }
 
