@@ -1125,7 +1125,6 @@
 "All terminal and file tabs for this server will be closed." = "Všechny karty terminálu a souborů pro tento server budou uzavřeny.";
 "Also on Mac" = "Také na Macu";
 "Also on iPhone and iPad" = "Také na iPhone a iPad";
-"App Review" = "Recenze aplikace";
 "Apply" = "Použít";
 "Archive" = "Archiv";
 "At least one server view must remain enabled." = "Musí zůstat povoleno alespoň jedno zobrazení serveru.";
@@ -1202,7 +1201,6 @@
 "Empty Folder" = "Prázdná složka";
 "Enable Review Mode" = "Povolit režim prohlížení";
 "Enter Zen Mode" = "Vstupte do režimu Zen";
-"Enter the review code to enable Pro access for App Review." = "Chcete-li povolit přístup Pro pro kontrolu aplikací, zadejte kód recenze.";
 "Environments" = "Prostředí";
 "Everyone" = "Všichni";
 "Exit Zen Mode" = "Ukončete režim Zen";
@@ -1246,7 +1244,6 @@
 "Install tmux?" = "Nainstalovat tmux?";
 "Installing mosh-server" = "Instalace mosh serveru";
 "Installing tmux" = "Instalace tmux";
-"Invalid review code." = "Neplatný kód recenze.";
 "Item" = "Položka";
 "JSON Document" = "Dokument JSON";
 "Keep every command one tap away." = "Udržujte každý příkaz jedním klepnutím.";
@@ -1474,7 +1471,6 @@
 "Unlock unlimited custom actions" = "Odemkněte neomezené vlastní akce";
 "Unlock unlimited servers" = "Odemkněte neomezený počet serverů";
 "Unlock unlimited workspaces" = "Odemkněte neomezené pracovní prostory";
-"Unlocks Pro features and loads demo servers for App Review." = "Odemkne funkce Pro a načte demo servery pro kontrolu aplikací.";
 "Untitled Folder" = "Složka bez názvu";
 "Up" = "Nahoru";
 "Upgrade to Pro to move servers into locked workspaces" = "Upgradujte na verzi Pro a přesuňte servery do uzamčených pracovních prostorů";

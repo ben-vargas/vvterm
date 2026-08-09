@@ -1126,7 +1126,6 @@
 "All terminal and file tabs for this server will be closed." = "Tous les onglets de terminal et de fichiers de ce serveur seront fermés.";
 "Also on Mac" = "Aussi sur Mac";
 "Also on iPhone and iPad" = "Également sur iPhone et iPad";
-"App Review" = "Examen de l'application";
 "Apply" = "Postuler";
 "Archive" = "Archiver";
 "At least one server view must remain enabled." = "Au moins une vue du serveur doit rester activée.";
@@ -1203,7 +1202,6 @@
 "Empty Folder" = "Dossier vide";
 "Enable Review Mode" = "Activer le mode révision";
 "Enter Zen Mode" = "Entrez en mode Zen";
-"Enter the review code to enable Pro access for App Review." = "Entrez le code de révision pour activer l'accès Pro pour App Review.";
 "Environments" = "Environnements";
 "Everyone" = "Tout le monde";
 "Exit Zen Mode" = "Quitter le mode Zen";
@@ -1247,7 +1245,6 @@
 "Install tmux?" = "Installer tmux ?";
 "Installing mosh-server" = "Installation du serveur Mosh";
 "Installing tmux" = "Installation de tmux";
-"Invalid review code." = "Code d'évaluation invalide.";
 "Item" = "Article";
 "JSON Document" = "Document JSON";
 "Keep every command one tap away." = "Gardez chaque commande à portée de main.";
@@ -1475,7 +1472,6 @@
 "Unlock unlimited custom actions" = "Débloquez des actions personnalisées illimitées";
 "Unlock unlimited servers" = "Débloquez des serveurs illimités";
 "Unlock unlimited workspaces" = "Débloquez des espaces de travail illimités";
-"Unlocks Pro features and loads demo servers for App Review." = "Débloque les fonctionnalités Pro et charge les serveurs de démonstration pour App Review.";
 "Untitled Folder" = "Dossier sans titre";
 "Up" = "Vers le haut";
 "Upgrade to Pro to move servers into locked workspaces" = "Passez à Pro pour déplacer les serveurs vers des espaces de travail verrouillés";

@@ -1125,7 +1125,6 @@
 "All terminal and file tabs for this server will be closed." = "Усе ўкладкі тэрміналаў і файлаў для гэтага сервера будуць зачыненыя.";
 "Also on Mac" = "Таксама на Mac";
 "Also on iPhone and iPad" = "Таксама на iPhone і iPad";
-"App Review" = "Агляд прыкладання";
 "Apply" = "Ужыць";
 "Archive" = "Архіў";
 "At least one server view must remain enabled." = "Прынамсі адзін выгляд сервера павінен заставацца ўключаным.";
@@ -1202,7 +1201,6 @@
 "Empty Folder" = "Пустая тэчка";
 "Enable Review Mode" = "Уключыць рэжым агляду";
 "Enter Zen Mode" = "Увайдзіце ў рэжым дзэн";
-"Enter the review code to enable Pro access for App Review." = "Увядзіце код агляду, каб уключыць доступ Pro для праверкі прыкладанняў.";
 "Environments" = "Асяроддзі";
 "Everyone" = "Усе";
 "Exit Zen Mode" = "Выйдзіце з рэжыму дзэн";
@@ -1246,7 +1244,6 @@
 "Install tmux?" = "Усталяваць tmux?";
 "Installing mosh-server" = "Ўстаноўка mosh сервера";
 "Installing tmux" = "Ўстаноўка tmux";
-"Invalid review code." = "Няправільны код агляду.";
 "Item" = "Пункт";
 "JSON Document" = "Дакумент JSON";
 "Keep every command one tap away." = "Трымайце кожную каманду адным націскам.";
@@ -1474,7 +1471,6 @@
 "Unlock unlimited custom actions" = "Адкрыйце неабмежаваную колькасць карыстальніцкіх дзеянняў";
 "Unlock unlimited servers" = "Адкрыйце неабмежаваную колькасць сервераў";
 "Unlock unlimited workspaces" = "Адкрыйце неабмежаваную колькасць працоўных прастор";
-"Unlocks Pro features and loads demo servers for App Review." = "Разблакуе функцыі Pro і загружае дэма-серверы для праверкі прыкладанняў.";
 "Untitled Folder" = "Папка без назвы";
 "Up" = "Уверх";
 "Upgrade to Pro to move servers into locked workspaces" = "Абнавіце да Pro, каб перамясціць серверы ў заблакіраваныя працоўныя прасторы";

@@ -1124,7 +1124,6 @@
 "All terminal and file tabs for this server will be closed." = "このサーバーのすべてのターミナルとファイルのタブが閉じられます。";
 "Also on Mac" = "Macでも";
 "Also on iPhone and iPad" = "iPhoneやiPadでも";
-"App Review" = "アプリレビュー";
 "Apply" = "申し込む";
 "Archive" = "アーカイブ";
 "At least one server view must remain enabled." = "少なくとも 1 つのサーバー ビューを有効にしておく必要があります。";
@@ -1201,7 +1200,6 @@
 "Empty Folder" = "空のフォルダー";
 "Enable Review Mode" = "レビューモードを有効にする";
 "Enter Zen Mode" = "禅モードに入る";
-"Enter the review code to enable Pro access for App Review." = "レビュー コードを入力して、アプリ レビューのプロ アクセスを有効にします。";
 "Environments" = "環境";
 "Everyone" = "みんな";
 "Exit Zen Mode" = "禅モードを終了する";
@@ -1245,7 +1243,6 @@
 "Install tmux?" = "tmuxをインストールしますか?";
 "Installing mosh-server" = "モッシュサーバーのインストール";
 "Installing tmux" = "tmux のインストール";
-"Invalid review code." = "レビューコードが無効です。";
 "Item" = "アイテム";
 "JSON Document" = "JSONドキュメント";
 "Keep every command one tap away." = "すべてのコマンドを 1 回タップするだけで済みます。";
@@ -1473,7 +1470,6 @@
 "Unlock unlimited custom actions" = "無制限のカスタム アクションのロックを解除する";
 "Unlock unlimited servers" = "無制限のサーバーのロックを解除する";
 "Unlock unlimited workspaces" = "無制限のワークスペースのロックを解除する";
-"Unlocks Pro features and loads demo servers for App Review." = "Pro 機能のロックを解除し、アプリ レビュー用のデモ サーバーをロードします。";
 "Untitled Folder" = "無題のフォルダー";
 "Up" = "上へ";
 "Upgrade to Pro to move servers into locked workspaces" = "Pro にアップグレードして、サーバーをロックされたワークスペースに移動します";

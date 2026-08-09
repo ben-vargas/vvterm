@@ -1121,7 +1121,6 @@
 "All terminal and file tabs for this server will be closed." = "该服务器的所有终端和文件选项卡都将关闭。";
 "Also on Mac" = "也可在 Mac 上使用";
 "Also on iPhone and iPad" = "也可在 iPhone 和 iPad 上使用";
-"App Review" = "应用程序审查";
 "Apply" = "申请";
 "Archive" = "存档";
 "At least one server view must remain enabled." = "至少一个服务器视图必须保持启用状态。";
@@ -1198,7 +1197,6 @@
 "Empty Folder" = "空文件夹";
 "Enable Review Mode" = "启用审阅模式";
 "Enter Zen Mode" = "进入禅宗模式";
-"Enter the review code to enable Pro access for App Review." = "输入审核代码以启用应用程序审核的专业访问权限。";
 "Environments" = "环境";
 "Everyone" = "大家";
 "Exit Zen Mode" = "退出禅宗模式";
@@ -1242,7 +1240,6 @@
 "Install tmux?" = "安装tmux？";
 "Installing mosh-server" = "安装 mosh-server";
 "Installing tmux" = "安装 tmux";
-"Invalid review code." = "审核代码无效。";
 "Item" = "项目";
 "JSON Document" = "JSON文档";
 "Keep every command one tap away." = "常用命令一触即达。";
@@ -1470,7 +1467,6 @@
 "Unlock unlimited custom actions" = "解锁无限自定义操作";
 "Unlock unlimited servers" = "解锁无限服务器";
 "Unlock unlimited workspaces" = "解锁无限工作区";
-"Unlocks Pro features and loads demo servers for App Review." = "解锁专业版功能并加载演示服务器以进行应用程序审核。";
 "Untitled Folder" = "无标题文件夹";
 "Up" = "向上";
 "Upgrade to Pro to move servers into locked workspaces" = "升级到专业版以将服务器移至锁定的工作区";

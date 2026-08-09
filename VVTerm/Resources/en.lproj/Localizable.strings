@@ -1123,7 +1123,6 @@
 "All terminal and file tabs for this server will be closed." = "All terminal and file tabs for this server will be closed.";
 "Also on Mac" = "Also on Mac";
 "Also on iPhone and iPad" = "Also on iPhone and iPad";
-"App Review" = "App Review";
 "Apply" = "Apply";
 "Archive" = "Archive";
 "At least one server view must remain enabled." = "At least one server view must remain enabled.";
@@ -1200,7 +1199,6 @@
 "Empty Folder" = "Empty Folder";
 "Enable Review Mode" = "Enable Review Mode";
 "Enter Zen Mode" = "Enter Zen Mode";
-"Enter the review code to enable Pro access for App Review." = "Enter the review code to enable Pro access for App Review.";
 "Environments" = "Environments";
 "Everyone" = "Everyone";
 "Exit Zen Mode" = "Exit Zen Mode";
@@ -1244,7 +1242,6 @@
 "Install tmux?" = "Install tmux?";
 "Installing mosh-server" = "Installing mosh-server";
 "Installing tmux" = "Installing tmux";
-"Invalid review code." = "Invalid review code.";
 "Item" = "Item";
 "JSON Document" = "JSON Document";
 "Keep every command one tap away." = "Keep every command one tap away.";
@@ -1472,7 +1469,6 @@
 "Unlock unlimited custom actions" = "Unlock unlimited custom actions";
 "Unlock unlimited servers" = "Unlock unlimited servers";
 "Unlock unlimited workspaces" = "Unlock unlimited workspaces";
-"Unlocks Pro features and loads demo servers for App Review." = "Unlocks Pro features and loads demo servers for App Review.";
 "Untitled Folder" = "Untitled Folder";
 "Up" = "Up";
 "Upgrade to Pro to move servers into locked workspaces" = "Upgrade to Pro to move servers into locked workspaces";

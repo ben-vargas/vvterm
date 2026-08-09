@@ -1169,7 +1169,6 @@
 "All terminal and file tabs for this server will be closed." = "Tất cả các tab thiết bị đầu cuối và tập tin cho máy chủ này sẽ bị đóng.";
 "Also on Mac" = "Ngoài ra trên Mac";
 "Also on iPhone and iPad" = "Còn trên iPhone và iPad";
-"App Review" = "Đánh giá ứng dụng";
 "Apply" = "Áp dụng";
 "Archive" = "Lưu trữ";
 "At least one server view must remain enabled." = "Ít nhất một chế độ xem máy chủ phải được bật.";
@@ -1246,7 +1245,6 @@
 "Empty Folder" = "Thư mục trống";
 "Enable Review Mode" = "Bật chế độ đánh giá";
 "Enter Zen Mode" = "Vào Chế độ Zen";
-"Enter the review code to enable Pro access for App Review." = "Nhập mã đánh giá để bật quyền truy cập Pro cho Đánh giá ứng dụng.";
 "Environments" = "Môi trường";
 "Everyone" = "mọi người";
 "Exit Zen Mode" = "Thoát Chế độ Zen";
@@ -1290,7 +1288,6 @@
 "Install tmux?" = "Cài đặt tmux?";
 "Installing mosh-server" = "Cài đặt máy chủ mosh";
 "Installing tmux" = "Cài đặt tmux";
-"Invalid review code." = "Mã đánh giá không hợp lệ.";
 "Item" = "Mục";
 "JSON Document" = "Tài liệu JSON";
 "Keep every command one tap away." = "Giữ mọi lệnh một lần nhấn.";
@@ -1518,7 +1515,6 @@
 "Unlock unlimited custom actions" = "Mở khóa các hành động tùy chỉnh không giới hạn";
 "Unlock unlimited servers" = "Mở khóa máy chủ không giới hạn";
 "Unlock unlimited workspaces" = "Mở khóa không gian làm việc không giới hạn";
-"Unlocks Pro features and loads demo servers for App Review." = "Mở khóa các tính năng Pro và tải máy chủ demo để đánh giá ứng dụng.";
 "Untitled Folder" = "Thư mục không có tiêu đề";
 "Up" = "Lên";
 "Upgrade to Pro to move servers into locked workspaces" = "Nâng cấp lên Pro để di chuyển máy chủ vào không gian làm việc bị khóa";

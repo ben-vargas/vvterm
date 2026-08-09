@@ -1124,7 +1124,6 @@
 "All terminal and file tabs for this server will be closed." = "เทอร์มินัลและแท็บไฟล์ทั้งหมดสำหรับเซิร์ฟเวอร์นี้จะถูกปิด";
 "Also on Mac" = "บน Mac ด้วย";
 "Also on iPhone and iPad" = "บน iPhone และ iPad ด้วย";
-"App Review" = "รีวิวแอพ";
 "Apply" = "สมัคร";
 "Archive" = "เก็บถาวร";
 "At least one server view must remain enabled." = "ต้องเปิดใช้งานมุมมองเซิร์ฟเวอร์อย่างน้อยหนึ่งรายการ";
@@ -1201,7 +1200,6 @@
 "Empty Folder" = "โฟลเดอร์ว่างเปล่า";
 "Enable Review Mode" = "เปิดใช้งานโหมดทบทวน";
 "Enter Zen Mode" = "เข้าสู่โหมดเซน";
-"Enter the review code to enable Pro access for App Review." = "ป้อนรหัสตรวจสอบเพื่อเปิดใช้งานการเข้าถึงระดับ Pro สำหรับการตรวจสอบแอป";
 "Environments" = "สภาพแวดล้อม";
 "Everyone" = "ทุกคน";
 "Exit Zen Mode" = "ออกจากโหมดเซน";
@@ -1245,7 +1243,6 @@
 "Install tmux?" = "ติดตั้ง tmux?";
 "Installing mosh-server" = "การติดตั้ง mosh-server";
 "Installing tmux" = "กำลังติดตั้ง tmux";
-"Invalid review code." = "รหัสตรวจสอบไม่ถูกต้อง";
 "Item" = "รายการ";
 "JSON Document" = "เอกสาร JSON";
 "Keep every command one tap away." = "เก็บทุกคำสั่งไว้ด้วยการแตะเพียงครั้งเดียว";
@@ -1473,7 +1470,6 @@
 "Unlock unlimited custom actions" = "ปลดล็อกการกระทำแบบกำหนดเองได้ไม่จำกัด";
 "Unlock unlimited servers" = "ปลดล็อคเซิร์ฟเวอร์ไม่จำกัด";
 "Unlock unlimited workspaces" = "ปลดล็อกพื้นที่ทำงานไม่จำกัด";
-"Unlocks Pro features and loads demo servers for App Review." = "ปลดล็อคคุณสมบัติ Pro และโหลดเซิร์ฟเวอร์สาธิตสำหรับการตรวจสอบแอพ";
 "Untitled Folder" = "โฟลเดอร์ที่ไม่มีชื่อ";
 "Up" = "ขึ้น";
 "Upgrade to Pro to move servers into locked workspaces" = "อัปเกรดเป็น Pro เพื่อย้ายเซิร์ฟเวอร์ไปยังพื้นที่ทำงานที่ถูกล็อค";
