@@ -86,6 +86,39 @@ struct ServerLocalStoreTests {
         #expect(defaults.data(forKey: firstIssue.quarantineKey) == firstData)
     }
 
+    @Test
+    func repositoryPersistsLoadsAndClearsOneCollectionSnapshot() throws {
+        let fixture = try makeDefaults()
+        let defaults = fixture.defaults
+        defer { defaults.removePersistentDomain(forName: fixture.suiteName) }
+        let store = ServerLocalStore(defaults: defaults)
+        let workspace = Workspace(name: "Workspace", order: 0)
+        let server = Server(
+            workspaceId: workspace.id,
+            name: "Server",
+            host: "server.example.test",
+            username: "root"
+        )
+
+        try store.persist(servers: [server], workspaces: [workspace])
+        let snapshot = store.loadSnapshot()
+
+        guard case .loaded(let loadedServers) = snapshot.servers,
+              case .loaded(let loadedWorkspaces) = snapshot.workspaces else {
+            Issue.record("Expected one complete local repository snapshot")
+            return
+        }
+        #expect(loadedServers == [server])
+        #expect(loadedWorkspaces == [workspace])
+
+        store.clearServerData()
+        guard case .missing = store.loadSnapshot().servers,
+              case .missing = store.loadSnapshot().workspaces else {
+            Issue.record("Expected cleared repository collections")
+            return
+        }
+    }
+
     private func makeDefaults() throws -> (defaults: UserDefaults, suiteName: String) {
         let suiteName = "ServerLocalStoreTests.\(UUID().uuidString)"
         return (try #require(UserDefaults(suiteName: suiteName)), suiteName)

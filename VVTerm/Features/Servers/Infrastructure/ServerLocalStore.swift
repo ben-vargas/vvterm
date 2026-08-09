@@ -1,23 +1,5 @@
 import Foundation
 
-nonisolated struct ServerLocalStorageIssue: Identifiable, Equatable, Sendable {
-    nonisolated enum Collection: String, Equatable, Sendable {
-        case servers
-        case workspaces
-    }
-
-    let collection: Collection
-    let quarantineKey: String
-
-    var id: Collection { collection }
-}
-
-nonisolated enum ServerLocalLoadResult<Value> {
-    case missing
-    case loaded(Value)
-    case unreadable(ServerLocalStorageIssue)
-}
-
 @MainActor
 struct ServerLocalStore {
     private static let workspaceDeletionJournalKey = "com.vivy.vvterm.workspaceDeletionJournal.v1"
@@ -92,6 +74,49 @@ struct ServerLocalStore {
     }
 }
 
+extension ServerLocalStore: ServerLocalRepository {
+    func loadSnapshot() -> ServerLocalRepositorySnapshot {
+        ServerLocalRepositorySnapshot(
+            servers: loadServers(),
+            workspaces: loadWorkspaces()
+        )
+    }
+
+    func persist(servers: [Server], workspaces: [Workspace]) throws {
+        let encoder = JSONEncoder()
+        let serverData = try encoder.encode(servers)
+        let workspaceData = try encoder.encode(workspaces)
+        let previousServerData = defaults.data(forKey: serversKey)
+        let previousWorkspaceData = defaults.data(forKey: workspacesKey)
+
+        defaults.set(serverData, forKey: serversKey)
+        defaults.set(workspaceData, forKey: workspacesKey)
+        guard defaults.data(forKey: serversKey) == serverData,
+              defaults.data(forKey: workspacesKey) == workspaceData else {
+            restore(previousServerData, forKey: serversKey)
+            restore(previousWorkspaceData, forKey: workspacesKey)
+            throw ServerLocalStoreError.persistenceFailed
+        }
+    }
+
+    func clearServerData() {
+        defaults.removeObject(forKey: serversKey)
+        defaults.removeObject(forKey: workspacesKey)
+    }
+
+    private func restore(_ data: Data?, forKey key: String) {
+        if let data {
+            defaults.set(data, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+}
+
+private enum ServerLocalStoreError: Error {
+    case persistenceFailed
+}
+
 extension ServerLocalStore: WorkspaceDeletionJournalStoring {
     func loadWorkspaceDeletionJournal() throws -> WorkspaceDeletionJournal? {
         guard let data = defaults.data(forKey: Self.workspaceDeletionJournalKey) else {
@@ -108,8 +133,10 @@ extension ServerLocalStore: WorkspaceDeletionJournalStoring {
     }
 
     func materializeWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) throws {
-        try storeServers(plan.remainingServers)
-        try storeWorkspaces(plan.remainingWorkspaces)
+        try persist(
+            servers: plan.remainingServers,
+            workspaces: plan.remainingWorkspaces
+        )
     }
 
     func clearWorkspaceDeletionJournal() throws {
