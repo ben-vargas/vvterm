@@ -114,6 +114,7 @@ struct GhosttyConfigBuilderTests {
         #expect(content.contains("cursor-style = block"))
         #expect(content.contains("cursor-style-blink = true"))
         #expect(content.contains("keybind = shift+enter=text:\\n"))
+        #expect(content.contains("clipboard-read = deny"))
     }
 
     @Test
@@ -129,5 +130,28 @@ struct GhosttyConfigBuilderTests {
 
         #expect(content.contains("cursor-style = bar"))
         #expect(content.contains("cursor-style-blink = false"))
+    }
+
+    @Test
+    func remoteClipboardRequestsCompleteWithoutClipboardData() {
+        #expect(
+            Ghostty.App.clipboardReadCompletionValue(
+                request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ
+            ).isEmpty
+        )
+        #expect(
+            Ghostty.App.clipboardReadCompletionValue(
+                request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE
+            ).isEmpty
+        )
+    }
+
+    @Test
+    func unapprovedPasteCompletesWithoutPasteData() {
+        #expect(
+            Ghostty.App.clipboardReadCompletionValue(
+                request: GHOSTTY_CLIPBOARD_REQUEST_PASTE
+            ).isEmpty
+        )
     }
 }

@@ -132,6 +132,9 @@ extension Ghostty {
             # Disable audible bell
             audible-bell = false
 
+            # Remote applications must not read the local clipboard.
+            clipboard-read = deny
+
             # Limit scrollback to prevent unbounded memory growth
             # 10000 lines is plenty for most use cases (~5-10MB)
             scrollback-limit = 10000
@@ -898,14 +901,34 @@ extension Ghostty {
 
         static func confirmReadClipboard(
             _ userdata: UnsafeMutableRawPointer?,
-            string: UnsafePointer<CChar>?,
+            string _: UnsafePointer<CChar>?,
             state: UnsafeMutableRawPointer?,
             request: ghostty_clipboard_request_e
         ) {
-            // Clipboard read confirmation
-            // For security, apps can confirm before allowing clipboard access
-            // For now, just log it
-            Ghostty.logger.debug("Clipboard read confirmation requested")
+            guard let userdata, let state else { return }
+            let terminalView = Unmanaged<GhosttyTerminalView>
+                .fromOpaque(userdata)
+                .takeUnretainedValue()
+            guard let surface = terminalView.surface?.unsafeCValue else { return }
+
+            let completedValue = clipboardReadCompletionValue(request: request)
+            completedValue.withCString { pointer in
+                ghostty_surface_complete_clipboard_request(surface, pointer, state, true)
+            }
+            Ghostty.logger.debug("Completed clipboard confirmation request: \(request.rawValue)")
+        }
+
+        nonisolated static func clipboardReadCompletionValue(
+            request: ghostty_clipboard_request_e
+        ) -> String {
+            switch request {
+            case GHOSTTY_CLIPBOARD_REQUEST_PASTE,
+                 GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ,
+                 GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE:
+                return ""
+            default:
+                return ""
+            }
         }
 
         static func writeClipboard(
