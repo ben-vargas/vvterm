@@ -522,7 +522,7 @@ struct TerminalPaneView: View {
     @State private var dismissFallbackBanner = false
     @State private var automaticReconnectRetryTask: Task<Void, Never>?
     @State private var terminalBackgroundColor: Color = Self.initialTerminalBackgroundColor()
-    @State private var connectWatchdogToken = UUID()
+    @StateObject private var connectWatchdog = TerminalConnectionWatchdog()
     @State private var showingHostKeyTrustConfirmation = false
     @State private var hostKeyTrustChallenge: KnownHostsManager.Challenge?
     @State private var showingCredentialEndpointApproval = false
@@ -768,7 +768,7 @@ struct TerminalPaneView: View {
 
                 TerminalConnectionStatusView(
                     presentation: connectionStatusPresentation,
-                    connectionAttemptID: connectWatchdogToken,
+                    connectionAttemptID: connectWatchdog.token,
                     surfaceStyle: noticeSurfaceStyle,
                     isActive: shouldFocus,
                     onRetry: retryConnection,
@@ -816,23 +816,22 @@ struct TerminalPaneView: View {
             }
         }
         .onChange(of: isReady) { _ in
-            connectWatchdogToken = UUID()
             startConnectWatchdog()
         }
         .onChange(of: connectionState) { state in
             if state.isConnecting || state.isConnected {
                 cancelScheduledAutomaticReconnect()
-                connectWatchdogToken = UUID()
                 startConnectWatchdog()
             } else if case .disconnected = state {
+                connectWatchdog.cancel()
                 attemptAutoReconnectIfNeeded()
             } else if case .failed = state {
+                connectWatchdog.cancel()
                 scheduleAutomaticReconnectAfterFailure()
             }
         }
         .onChange(of: connectionGeneration) { _ in
             isReady = false
-            connectWatchdogToken = UUID()
             startConnectWatchdog()
         }
         .onChange(of: credentialBinding) { _ in
@@ -843,9 +842,10 @@ struct TerminalPaneView: View {
             showingTmuxInstallPrompt = TmuxInstallPromptPolicy.shouldPresent(for: status)
         }
         .onChange(of: isAwaitingTmuxSelection) { isAwaitingSelection in
-            connectWatchdogToken = UUID()
             if !isAwaitingSelection {
                 startConnectWatchdog()
+            } else {
+                connectWatchdog.cancel()
             }
         }
         .onChange(of: paneState?.moshFallbackReason) { _ in
@@ -871,6 +871,7 @@ struct TerminalPaneView: View {
         }
         .onDisappear {
             cancelScheduledAutomaticReconnect()
+            connectWatchdog.cancel()
         }
         .alert("Install tmux?", isPresented: $showingTmuxInstallPrompt) {
             Button("Install") {
@@ -1079,7 +1080,7 @@ struct TerminalPaneView: View {
         guard !requiresReadyNetwork || networkMonitor.readiness == .ready else { return }
         guard reconnectAttempt == nil else { return }
         guard !connectionState.isConnecting else { return }
-        connectWatchdogToken = UUID()
+        connectWatchdog.cancel()
         credentialLoadErrorMessage = nil
         operationNotice = nil
         if credentials?.isAuthorized(for: server) != true {
@@ -1088,7 +1089,6 @@ struct TerminalPaneView: View {
             guard credentials != nil else { return }
         }
         tabManager.clearMoshFallbackDiagnostics(for: paneId)
-        connectWatchdogToken = UUID()
         _ = tabManager.requestReconnect(
             for: paneId,
             requiresReadyNetwork: requiresReadyNetwork
@@ -1141,45 +1141,42 @@ struct TerminalPaneView: View {
             isReady: isReady,
             terminalExists: terminalExists,
             isAwaitingUserSelection: isAwaitingTmuxSelection
-        ) else { return }
-        let token = connectWatchdogToken
-        Task {
-            try? await Task.sleep(for: .seconds(20))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                guard token == connectWatchdogToken else { return }
-                guard !isAwaitingTmuxSelection else { return }
-                let stillConnecting = connectionState.isConnecting
-                let stillConnectedWithoutTerminal = connectionState.isConnected && !isReady && !terminalExists
-                guard stillConnecting || stillConnectedWithoutTerminal else { return }
+        ) else {
+            connectWatchdog.cancel()
+            return
+        }
+        connectWatchdog.replace {
+            guard !isAwaitingTmuxSelection else { return }
+            let stillConnecting = connectionState.isConnecting
+            let stillConnectedWithoutTerminal = connectionState.isConnected && !isReady && !terminalExists
+            guard stillConnecting || stillConnectedWithoutTerminal else { return }
 
-                if stillConnectedWithoutTerminal {
-                    tabManager.updatePaneState(paneId, connectionState: .disconnected)
-                    retryConnection()
-                    return
-                }
-
-                if tabManager.shellId(for: paneId) != nil
-                    || tabManager.existingEternalTerminalRuntime(for: paneId) != nil,
-                   connectionState.isConnected {
-                    tabManager.updatePaneState(paneId, connectionState: .connected)
-                    return
-                }
-
-                let inFlight = tabManager.isShellStartInFlight(for: paneId)
-                    || tabManager.existingEternalTerminalRuntime(for: paneId)?.isStartInFlight == true
-                if inFlight {
-                    // Keep polling while a shell start is still in flight so stale locks
-                    // and hung attempts are eventually surfaced to the user.
-                    startConnectWatchdog()
-                    return
-                }
-
-                tabManager.updatePaneState(
-                    paneId,
-                    connectionState: .failed(String(localized: "Connection timed out. Please retry."))
-                )
+            if stillConnectedWithoutTerminal {
+                tabManager.updatePaneState(paneId, connectionState: .disconnected)
+                retryConnection()
+                return
             }
+
+            if tabManager.shellId(for: paneId) != nil
+                || tabManager.existingEternalTerminalRuntime(for: paneId) != nil,
+               connectionState.isConnected {
+                tabManager.updatePaneState(paneId, connectionState: .connected)
+                return
+            }
+
+            let inFlight = tabManager.isShellStartInFlight(for: paneId)
+                || tabManager.existingEternalTerminalRuntime(for: paneId)?.isStartInFlight == true
+            if inFlight {
+                // Keep polling while a shell start is still in flight so stale locks
+                // and hung attempts are eventually surfaced to the user.
+                startConnectWatchdog()
+                return
+            }
+
+            tabManager.updatePaneState(
+                paneId,
+                connectionState: .failed(String(localized: "Connection timed out. Please retry."))
+            )
         }
     }
 

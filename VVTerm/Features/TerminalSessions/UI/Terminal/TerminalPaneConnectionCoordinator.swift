@@ -119,8 +119,8 @@ final class TerminalPaneConnectionCoordinator {
 
     var isConnectionStartInFlight: Bool {
         switch backend {
-        case .ssh(let coordinator):
-            coordinator.shellTask != nil || tabManager.isShellStartInFlight(for: paneId)
+        case .ssh:
+            tabManager.isShellStartInFlight(for: paneId)
         case .eternalTerminal:
             tabManager.existingEternalTerminalRuntime(for: paneId)?.isStartInFlight == true
         }

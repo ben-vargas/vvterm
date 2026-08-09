@@ -114,6 +114,7 @@ final class TerminalTabManager: ObservableObject {
     /// Terminal views keyed by pane ID
     private var terminalViews: [UUID: GhosttyTerminalView] = [:]
     private var shellRegistry = SSHShellRegistry(staleThreshold: 120)
+    private let sshConnectionTasks = TerminalConnectionTaskStore()
     private var eternalTerminalRuntimes: [UUID: EternalTerminalRuntime] = [:]
     private var eternalTerminalResumeStore: any EternalTerminalResumeStoring = EternalTerminalResumeStore.shared
     private var moshResumeStore: any MoshResumeStoring = MoshResumeStore.shared
@@ -433,6 +434,7 @@ final class TerminalTabManager: ObservableObject {
             .union(shellRegistry.startsInFlight.keys)
             .union(eternalTerminalRuntimes.keys)
 
+        sshConnectionTasks.cancelAll()
         reconnectCoordinator.invalidateAll()
         #if os(macOS)
         macRecoveryTask?.cancel()
@@ -609,6 +611,7 @@ final class TerminalTabManager: ObservableObject {
         logger.info(
             "Reconnect abort stage pane=\(paneId.uuidString, privacy: .public) attempt=\(attempt.id.uuidString, privacy: .public) generation=\(attempt.generation.uuidString, privacy: .public) monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
         )
+        sshConnectionTasks.cancel(for: paneId)
         let client = shellRegistry.connectionClient(for: paneId)
         let shellId = shellRegistry.shellId(for: paneId)
         let startToken = shellRegistry.connectionStartToken(for: paneId)
@@ -1271,6 +1274,7 @@ final class TerminalTabManager: ObservableObject {
         killingManagedTmuxSessionNamed tmuxSessionName: String?,
         beforeCleanup: (@MainActor @Sendable () async -> Void)?
     ) async {
+        sshConnectionTasks.cancel(for: paneId)
         let unregisterResult = shellRegistry.unregister(for: paneId)
         if let pendingStart = unregisterResult.pendingStart {
             tmuxResolver.cancelPrompt(
@@ -1609,6 +1613,127 @@ final class TerminalTabManager: ObservableObject {
         return startResult.token
     }
 
+    @discardableResult
+    func startSSHConnectionTask(
+        for paneId: UUID,
+        server: Server,
+        client: SSHClient,
+        operation: @escaping @Sendable (TerminalSSHConnectionContext) async -> Void
+    ) -> Bool {
+        guard let startToken = beginShellStart(for: paneId, client: client) else {
+            return false
+        }
+
+        let taskId = sshConnectionTasks.start(for: paneId) { [weak self] taskId in
+            guard let context = await self?.makeSSHConnectionContext(
+                taskId: taskId,
+                startToken: startToken,
+                paneId: paneId,
+                server: server,
+                client: client
+            ) else { return }
+            await operation(context)
+            await self?.finishShellStart(
+                for: paneId,
+                client: client,
+                startToken: startToken
+            )
+        }
+        guard taskId != nil else {
+            finishShellStart(for: paneId, client: client, startToken: startToken)
+            return false
+        }
+        return true
+    }
+
+    private func makeSSHConnectionContext(
+        taskId: UUID,
+        startToken: SSHShellRegistry.StartToken,
+        paneId: UUID,
+        server: Server,
+        client: SSHClient
+    ) -> TerminalSSHConnectionContext {
+        let ownsConnection: @MainActor @Sendable () -> Bool = { [weak self] in
+            guard let self else { return false }
+            return self.sshConnectionTasks.isCurrent(taskId: taskId, for: paneId)
+                && self.isCurrentShellOwner(
+                    for: paneId,
+                    client: client,
+                    startToken: startToken
+                )
+        }
+
+        return TerminalSSHConnectionContext(
+            isCurrent: ownsConnection,
+            updateConnectionState: { [weak self] state in
+                guard ownsConnection() else { return }
+                self?.updatePaneState(paneId, connectionState: state)
+            },
+            startupPlan: { [weak self] in
+                guard let self, ownsConnection() else { throw CancellationError() }
+                return try await self.tmuxStartupPlan(
+                    for: paneId,
+                    serverId: server.id,
+                    client: client,
+                    startToken: startToken
+                )
+            },
+            restoreMoshShell: { [weak self] cols, rows in
+                guard let self, ownsConnection(), server.connectionMode == .mosh else {
+                    return nil
+                }
+                return await self.restoreMoshShell(
+                    for: paneId,
+                    using: client,
+                    cols: cols,
+                    rows: rows
+                )
+            },
+            registerShell: { [weak self] shell in
+                guard let self, ownsConnection() else { return false }
+                return await self.registerSSHClient(
+                    client,
+                    shellId: shell.id,
+                    startToken: startToken,
+                    for: paneId,
+                    serverId: server.id,
+                    transportState: shell.transportState
+                )
+            },
+            persistMoshSnapshot: { [weak self] shellId in
+                guard let self, ownsConnection() else { return }
+                await self.persistMoshSnapshot(for: paneId, client: client, shellId: shellId)
+            },
+            updateTitle: { [weak self] title in
+                guard ownsConnection() else { return }
+                self?.updatePaneTitle(paneId, rawTitle: title)
+            },
+            hasOtherRegistrations: { [weak self] in
+                guard let self, ownsConnection() else { return false }
+                return self.hasOtherRegistrations(using: client, excluding: paneId)
+            },
+            handleShellEnd: { [weak self] shellId, reason in
+                guard ownsConnection() else { return }
+                self?.handleShellEnd(
+                    for: paneId,
+                    client: client,
+                    shellId: shellId,
+                    reason: reason
+                )
+            },
+            handleFailure: { [weak self] error in
+                guard ownsConnection() else { return }
+                self?.handleConnectionFailure(for: paneId, error: error)
+            },
+            workingDirectory: { [weak self] in
+                guard let self, ownsConnection(), self.shouldApplyWorkingDirectory(for: paneId) else {
+                    return nil
+                }
+                return self.workingDirectory(for: paneId)
+            }
+        )
+    }
+
     func finishShellStart(
         for paneId: UUID,
         client: SSHClient,
@@ -1732,6 +1857,7 @@ final class TerminalTabManager: ObservableObject {
 
         clearTmuxRuntimeState(for: paneId)
         reconnectCoordinator.invalidate(for: paneId)
+        sshConnectionTasks.cancel(for: paneId)
         terminalConnectionGenerations.removeValue(forKey: paneId)
         detachTerminalRegistration(for: paneId)
         paneStates.removeValue(forKey: paneId)
@@ -2947,6 +3073,7 @@ extension TerminalTabManager {
     func resetForTesting() async {
         persistTask?.cancel()
         persistTask = nil
+        sshConnectionTasks.cancelAll()
 
         let allPaneIds = Set(paneStates.keys)
             .union(shellRegistry.startsInFlight.keys)

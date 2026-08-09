@@ -67,15 +67,9 @@ enum SSHConnectionRunner {
                     await sshClient.closeShell(shell.id)
                     return
                 }
-                guard await registerShell(shell) else {
-                    await sshClient.closeShell(shell.id)
-                    return
-                }
+                guard await registerShell(shell) else { return }
 
-                guard !Task.isCancelled else {
-                    await sshClient.closeShell(shell.id)
-                    return
-                }
+                guard !Task.isCancelled else { return }
                 var lifecycleParser = startup?.tmuxLifecycle.map {
                     TmuxLifecycleStreamParser(markerToken: $0.markerToken)
                 }
@@ -101,8 +95,6 @@ enum SSHConnectionRunner {
                     let shouldContinue = shouldContinueStreaming(visibleData, terminal)
                     if !shouldContinue { break }
                 }
-                await sshClient.closeShell(shell.id)
-
                 guard !Task.isCancelled else { return }
                 guard shouldContinueConnection() else { return }
                 if var lifecycleParser {
