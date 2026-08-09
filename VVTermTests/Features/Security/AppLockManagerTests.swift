@@ -8,7 +8,7 @@ final class AppLockManagerTests: XCTestCase {
     private final class StubBiometricAuthService: BiometricAuthServing {
         var availabilityResult: BiometricAvailability
         var authenticateError: Error?
-        private(set) var authenticateReasons: [String] = []
+        private(set) var authenticateReasons: [BiometricAuthenticationReason] = []
 
         init(availabilityResult: BiometricAvailability) {
             self.availabilityResult = availabilityResult
@@ -18,8 +18,11 @@ final class AppLockManagerTests: XCTestCase {
             availabilityResult
         }
 
-        func authenticate(localizedReason: String, allowPasscodeFallback: Bool) async throws {
-            authenticateReasons.append(localizedReason)
+        func authenticate(
+            reason: BiometricAuthenticationReason,
+            allowPasscodeFallback: Bool
+        ) async throws {
+            authenticateReasons.append(reason)
             if let authenticateError {
                 throw authenticateError
             }
@@ -28,7 +31,7 @@ final class AppLockManagerTests: XCTestCase {
 
     private final class DelayedBiometricAuthService: BiometricAuthServing {
         let availabilityResult: BiometricAvailability
-        private(set) var authenticateReasons: [String] = []
+        private(set) var authenticateReasons: [BiometricAuthenticationReason] = []
 
         private let startedStream: AsyncStream<Void>
         private let startedContinuation: AsyncStream<Void>.Continuation
@@ -45,8 +48,11 @@ final class AppLockManagerTests: XCTestCase {
             availabilityResult
         }
 
-        func authenticate(localizedReason: String, allowPasscodeFallback: Bool) async throws {
-            authenticateReasons.append(localizedReason)
+        func authenticate(
+            reason: BiometricAuthenticationReason,
+            allowPasscodeFallback: Bool
+        ) async throws {
+            authenticateReasons.append(reason)
             startedContinuation.yield()
             try await withCheckedThrowingContinuation { continuation in
                 authenticationContinuation = continuation
@@ -75,14 +81,18 @@ final class AppLockManagerTests: XCTestCase {
     func testEnableFullAppLockRequiresAvailableBiometry() async {
         let defaults = makeDefaults()
         let authService = StubBiometricAuthService(
-            availabilityResult: .unavailable("Biometry unavailable")
+            availabilityResult: .unavailable(.notAvailable)
         )
         let manager = AppLockManager(defaults: defaults, authService: authService)
 
         await manager.requestSetFullAppLockEnabled(true)
 
         XCTAssertFalse(manager.fullAppLockEnabled)
-        XCTAssertEqual(manager.lastErrorMessage, "Biometry unavailable")
+        XCTAssertEqual(manager.lastFailure, .biometryUnavailable(.notAvailable))
+        XCTAssertEqual(
+            manager.lastErrorMessage,
+            String(localized: "Biometric authentication is unavailable on this device.")
+        )
         XCTAssertTrue(authService.authenticateReasons.isEmpty)
     }
 
@@ -97,7 +107,7 @@ final class AppLockManagerTests: XCTestCase {
 
         XCTAssertTrue(manager.fullAppLockEnabled)
         XCTAssertFalse(manager.isAppLocked)
-        XCTAssertEqual(authService.authenticateReasons.count, 1)
+        XCTAssertEqual(authService.authenticateReasons, [.enableAppLock(biometry: .faceID)])
     }
 
     func testDisableFullAppLockRequiresFreshAuthentication() async {
@@ -111,7 +121,7 @@ final class AppLockManagerTests: XCTestCase {
         await manager.requestSetFullAppLockEnabled(false)
 
         XCTAssertFalse(manager.fullAppLockEnabled)
-        XCTAssertEqual(authService.authenticateReasons.count, 1)
+        XCTAssertEqual(authService.authenticateReasons, [.disableAppLock])
     }
 
     func testDisableFullAppLockDenialKeepsItEnabled() async {
@@ -120,13 +130,15 @@ final class AppLockManagerTests: XCTestCase {
         let authService = StubBiometricAuthService(
             availabilityResult: .available(.faceID)
         )
-        authService.authenticateError = BiometricAuthError.cancelled
+        authService.authenticateError = BiometricAuthenticationFailure.cancelled
         let manager = AppLockManager(defaults: defaults, authService: authService)
 
         await manager.requestSetFullAppLockEnabled(false)
 
         XCTAssertTrue(manager.fullAppLockEnabled)
-        XCTAssertEqual(authService.authenticateReasons.count, 1)
+        XCTAssertEqual(authService.authenticateReasons, [.disableAppLock])
+        XCTAssertNil(manager.lastFailure)
+        XCTAssertNil(manager.lastErrorMessage)
     }
 
     func testProtectedServerActionsAlwaysRequireFreshAuthentication() async {
@@ -148,7 +160,13 @@ final class AppLockManagerTests: XCTestCase {
 
         XCTAssertTrue(didAuthorizeEdit)
         XCTAssertTrue(didAuthorizeSave)
-        XCTAssertEqual(authService.authenticateReasons.count, 2)
+        XCTAssertEqual(
+            authService.authenticateReasons,
+            [
+                .protectedServerAction(action: .edit, serverName: "Protected"),
+                .protectedServerAction(action: .save, serverName: "Protected")
+            ]
+        )
     }
 
     func testProtectedServerActionDenialReturnsFalse() async {
@@ -156,7 +174,7 @@ final class AppLockManagerTests: XCTestCase {
         let authService = StubBiometricAuthService(
             availabilityResult: .available(.faceID)
         )
-        authService.authenticateError = BiometricAuthError.cancelled
+        authService.authenticateError = BiometricAuthenticationFailure.cancelled
         let manager = AppLockManager(defaults: defaults, authService: authService)
         let server = Server(
             workspaceId: UUID(),
@@ -169,7 +187,11 @@ final class AppLockManagerTests: XCTestCase {
         let didAuthorize = await manager.authorizeProtectedServerAction(server, action: .delete)
 
         XCTAssertFalse(didAuthorize)
-        XCTAssertEqual(authService.authenticateReasons.count, 1)
+        XCTAssertEqual(
+            authService.authenticateReasons,
+            [.protectedServerAction(action: .delete, serverName: "Protected")]
+        )
+        XCTAssertNil(manager.lastFailure)
     }
 
     func testNewBackgroundLockRejectsPendingAuthenticationSuccess() async {
@@ -235,12 +257,47 @@ final class AppLockManagerTests: XCTestCase {
         XCTAssertEqual(manager.biometryKind, .touchID)
         XCTAssertNil(manager.biometryAvailabilityMessage)
 
-        authService.availabilityResult = .unavailable("Biometry unavailable")
+        authService.availabilityResult = .unavailable(.notEnrolled)
         manager.refreshBiometryAvailability()
 
-        XCTAssertEqual(manager.biometricAvailability, .unavailable("Biometry unavailable"))
+        XCTAssertEqual(manager.biometricAvailability, .unavailable(.notEnrolled))
         XCTAssertFalse(manager.isBiometryAvailable)
         XCTAssertEqual(manager.biometryKind, .none)
-        XCTAssertEqual(manager.biometryAvailabilityMessage, "Biometry unavailable")
+        XCTAssertEqual(
+            manager.biometryAvailabilityMessage,
+            String(localized: "Biometric authentication is not set up on this device.")
+        )
+    }
+
+    func testTaskCancellationDoesNotPublishFailure() async {
+        let defaults = makeDefaults()
+        let authService = StubBiometricAuthService(
+            availabilityResult: .available(.touchID)
+        )
+        authService.authenticateError = CancellationError()
+        let manager = AppLockManager(defaults: defaults, authService: authService)
+
+        await manager.requestSetFullAppLockEnabled(true)
+
+        XCTAssertFalse(manager.fullAppLockEnabled)
+        XCTAssertNil(manager.lastFailure)
+        XCTAssertNil(manager.lastErrorMessage)
+    }
+
+    func testAuthenticationFailureIsExposedAsSemanticState() async {
+        let defaults = makeDefaults()
+        let authService = StubBiometricAuthService(
+            availabilityResult: .available(.faceID)
+        )
+        authService.authenticateError = BiometricAuthenticationFailure.locked
+        let manager = AppLockManager(defaults: defaults, authService: authService)
+
+        await manager.requestSetFullAppLockEnabled(true)
+
+        XCTAssertEqual(manager.lastFailure, .authentication(.locked))
+        XCTAssertEqual(
+            manager.lastErrorMessage,
+            String(localized: "Biometric authentication is locked. Unlock the device and try again.")
+        )
     }
 }

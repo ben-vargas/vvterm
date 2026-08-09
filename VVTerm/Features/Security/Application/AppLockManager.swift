@@ -1,55 +1,8 @@
 import Foundation
 import Combine
 
-nonisolated enum AppLockState: Equatable, Sendable {
-    case unlocked(at: Date?)
-    case locked(generation: UUID)
-
-    var isLocked: Bool {
-        if case .locked = self { return true }
-        return false
-    }
-
-    var lastUnlockAt: Date? {
-        guard case .unlocked(let date) = self else { return nil }
-        return date
-    }
-}
-
-nonisolated enum AppLockAuthenticationState: Equatable, Sendable {
-    nonisolated enum ProtectedServerAction: Equatable, Sendable {
-        case edit
-        case testConnection
-        case save
-        case delete
-        case approveCredentialEndpoint
-    }
-
-    enum Purpose: Equatable, Sendable {
-        case enableFullAppLock
-        case disableFullAppLock
-        case unlockApp(lockGeneration: UUID)
-        case unlockServer(serverID: UUID)
-        case protectedServerAction(serverID: UUID, action: ProtectedServerAction)
-    }
-
-    case idle
-    case authenticating(attemptID: UUID, purpose: Purpose)
-
-    var isAuthenticating: Bool {
-        if case .authenticating = self { return true }
-        return false
-    }
-
-    func accepts(attemptID: UUID, purpose: Purpose) -> Bool {
-        self == .authenticating(attemptID: attemptID, purpose: purpose)
-    }
-}
-
 @MainActor
 final class AppLockManager: ObservableObject {
-    static let shared = AppLockManager()
-
     private enum Keys {
         static let fullAppLockEnabled = "security.fullAppLockEnabled"
         static let lockOnBackground = "security.lockOnBackground"
@@ -58,7 +11,7 @@ final class AppLockManager: ObservableObject {
 
     @Published private(set) var lockState: AppLockState
     @Published private(set) var authenticationState: AppLockAuthenticationState = .idle
-    @Published private(set) var lastErrorMessage: String?
+    @Published private(set) var lastFailure: AppLockFailure?
     @Published private(set) var biometricAvailability: BiometricAvailability
 
     @Published private(set) var fullAppLockEnabled: Bool {
@@ -89,10 +42,6 @@ final class AppLockManager: ObservableObject {
         }
     }
 
-    var biometryDisplayName: String {
-        biometryKind.displayName
-    }
-
     var isAppLocked: Bool { lockState.isLocked }
     var isAuthenticating: Bool { authenticationState.isAuthenticating }
 
@@ -108,13 +57,6 @@ final class AppLockManager: ObservableObject {
             return kind
         }
         return .none
-    }
-
-    var biometryAvailabilityMessage: String? {
-        if case .unavailable(let message) = biometricAvailability {
-            return message
-        }
-        return nil
     }
 
     private let defaults: UserDefaults
@@ -136,10 +78,6 @@ final class AppLockManager: ObservableObject {
             : .unlocked(at: nil)
     }
 
-    convenience init() {
-        self.init(defaults: .standard, authService: BiometricAuthService.shared)
-    }
-
     func refreshBiometryAvailability() {
         let nextAvailability = authService.availability()
         if biometricAvailability != nextAvailability {
@@ -148,25 +86,31 @@ final class AppLockManager: ObservableObject {
     }
 
     func requestSetFullAppLockEnabled(_ enabled: Bool) async {
-        lastErrorMessage = nil
+        lastFailure = nil
 
         guard enabled != fullAppLockEnabled else { return }
 
         if !enabled {
-            let reason = String(localized: "Authenticate to disable the VVTerm app lock")
-            guard await authenticate(reason: reason, purpose: .disableFullAppLock) else { return }
+            guard await authenticate(
+                reason: .disableAppLock,
+                purpose: .disableFullAppLock
+            ) else { return }
             fullAppLockEnabled = false
             return
         }
 
         refreshBiometryAvailability()
-        guard isBiometryAvailable else {
-            lastErrorMessage = biometryAvailabilityMessage
+        guard case .available(let biometry) = biometricAvailability else {
+            if case .unavailable(let reason) = biometricAvailability {
+                lastFailure = .biometryUnavailable(reason)
+            }
             return
         }
 
-        let reason = String(format: String(localized: "Enable %@ for VVTerm"), biometryDisplayName)
-        guard await authenticate(reason: reason, purpose: .enableFullAppLock) else { return }
+        guard await authenticate(
+            reason: .enableAppLock(biometry: biometry),
+            purpose: .enableFullAppLock
+        ) else { return }
 
         fullAppLockEnabled = true
         lockState = .unlocked(at: Date())
@@ -176,15 +120,14 @@ final class AppLockManager: ObservableObject {
         guard fullAppLockEnabled else { return true }
         guard case .locked(let lockGeneration) = lockState else { return true }
 
-        let reason = String(format: String(localized: "Unlock VVTerm with %@"), biometryDisplayName)
         guard await authenticate(
-            reason: reason,
+            reason: .unlockApp(biometry: biometryKind),
             purpose: .unlockApp(lockGeneration: lockGeneration)
         ) else { return false }
         guard lockState == .locked(generation: lockGeneration) else { return false }
 
         lockState = .unlocked(at: Date())
-        lastErrorMessage = nil
+        lastFailure = nil
         return true
     }
 
@@ -194,31 +137,12 @@ final class AppLockManager: ObservableObject {
     ) async -> Bool {
         guard server.requiresBiometricUnlock else { return true }
 
-        let actionName: String
-        switch action {
-        case .edit:
-            actionName = String(localized: "edit")
-        case .testConnection:
-            actionName = String(localized: "test")
-        case .save:
-            actionName = String(localized: "save")
-        case .delete:
-            actionName = String(localized: "delete")
-        case .approveCredentialEndpoint:
-            actionName = String(localized: "approve credentials for")
-        }
-
-        let reason = String(
-            format: String(localized: "Authenticate to %@ server %@"),
-            actionName,
-            server.name
-        )
         guard await authenticate(
-            reason: reason,
+            reason: .protectedServerAction(action: action, serverName: server.name),
             purpose: .protectedServerAction(serverID: server.id, action: action)
         ) else { return false }
 
-        lastErrorMessage = nil
+        lastFailure = nil
         return true
     }
 
@@ -244,14 +168,13 @@ final class AppLockManager: ObservableObject {
             return true
         }
 
-        let reason = String(format: String(localized: "Unlock server %@"), server.name)
         guard await authenticate(
-            reason: reason,
+            reason: .unlockServer(name: server.name),
             purpose: .unlockServer(serverID: server.id)
         ) else { return false }
 
         unlockedServers[server.id] = Date()
-        lastErrorMessage = nil
+        lastFailure = nil
         return true
     }
 
@@ -288,7 +211,7 @@ final class AppLockManager: ObservableObject {
     }
 
     private func authenticate(
-        reason: String,
+        reason: BiometricAuthenticationReason,
         purpose: AppLockAuthenticationState.Purpose
     ) async -> Bool {
         guard authenticationState == .idle else { return false }
@@ -302,21 +225,23 @@ final class AppLockManager: ObservableObject {
         }
 
         do {
-            try await authService.authenticate(localizedReason: reason, allowPasscodeFallback: true)
+            try await authService.authenticate(reason: reason, allowPasscodeFallback: true)
             return authenticationState.accepts(attemptID: attemptID, purpose: purpose)
-        } catch let error as BiometricAuthError {
+        } catch let failure as BiometricAuthenticationFailure {
             guard authenticationState.accepts(attemptID: attemptID, purpose: purpose) else {
                 return false
             }
-            if !error.isCancellation {
-                lastErrorMessage = error.localizedDescription
+            if !failure.isCancellation {
+                lastFailure = .authentication(failure)
             }
+            return false
+        } catch is CancellationError {
             return false
         } catch {
             guard authenticationState.accepts(attemptID: attemptID, purpose: purpose) else {
                 return false
             }
-            lastErrorMessage = error.localizedDescription
+            lastFailure = .authentication(.system(message: error.localizedDescription))
             return false
         }
     }
