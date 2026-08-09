@@ -22,12 +22,14 @@ extension CloudKitSyncResolutionHub: TerminalAccessoryResolutionSource {
 extension TerminalAccessoryPreferencesDependencies {
     static var live: Self {
         TerminalAccessoryPreferencesDependencies(
-            defaults: .standard,
+            profileStore: UserDefaultsTerminalAccessoryProfileStore(
+                defaults: .standard,
+                key: CloudKitSyncConstants.terminalAccessoryProfileStorageKey
+            ),
             cloud: CloudKitManager.shared,
             mutationQueue: CloudKitSyncCoordinator.shared,
             syncLifecycle: CloudKitSyncLifecycleDriver.shared,
             resolutionSource: CloudKitSyncResolutionHub.shared,
-            persistenceKey: CloudKitSyncConstants.terminalAccessoryProfileStorageKey,
             writerID: DeviceIdentity.id,
             isSyncEnabled: { SyncSettings.isEnabled },
             now: Date.init,

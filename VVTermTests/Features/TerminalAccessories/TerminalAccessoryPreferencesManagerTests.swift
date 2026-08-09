@@ -155,6 +155,24 @@ private final class TerminalAccessoryAnalyticsSpy {
 }
 
 @MainActor
+private final class TerminalAccessoryProfileStoreSpy: TerminalAccessoryProfilePersisting {
+    private let initialProfile: TerminalAccessoryProfile
+    private(set) var savedProfiles: [TerminalAccessoryProfile] = []
+
+    init(initialProfile: TerminalAccessoryProfile) {
+        self.initialProfile = initialProfile
+    }
+
+    func loadProfile(defaultWriterID: String) -> TerminalAccessoryProfile {
+        initialProfile
+    }
+
+    func saveProfile(_ profile: TerminalAccessoryProfile) {
+        savedProfiles.append(profile)
+    }
+}
+
+@MainActor
 final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
     private var defaultsSuiteName: String!
     private var defaults: UserDefaults!
@@ -202,6 +220,22 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
         XCTAssertEqual(manager.profile.customActions.first?.commandContent, "ls -la")
         XCTAssertNotNil(defaults.data(forKey: persistenceKey))
         XCTAssertEqual(analytics.createdKinds, [.command])
+    }
+
+    func testManagerLoadsAndSavesOnlyThroughInjectedProfileStore() {
+        let initialProfile = TerminalAccessoryProfile.defaultValue(
+            lastWriterDeviceId: writerID
+        )
+        let profileStore = TerminalAccessoryProfileStoreSpy(
+            initialProfile: initialProfile
+        )
+        let manager = makeManager(profileStore: profileStore)
+
+        XCTAssertEqual(manager.profile, initialProfile)
+
+        manager.removeActiveItem(.system(.escape))
+
+        XCTAssertEqual(profileStore.savedProfiles, [manager.profile])
     }
 
     func testResetToDefaultLayoutRestoresActiveItems() {
@@ -479,6 +513,7 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
     }
 
     private func makeManager(
+        profileStore: (any TerminalAccessoryProfilePersisting)? = nil,
         cloud: TerminalAccessoryCloudStub? = nil,
         queue: TerminalAccessoryMutationQueueSpy? = nil,
         lifecycle: TerminalAccessorySyncLifecycleStub? = nil,
@@ -497,12 +532,14 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
         let analytics = analytics ?? TerminalAccessoryAnalyticsSpy()
         return TerminalAccessoryPreferencesManager(
             dependencies: TerminalAccessoryPreferencesDependencies(
-                defaults: defaults,
+                profileStore: profileStore ?? UserDefaultsTerminalAccessoryProfileStore(
+                    defaults: defaults,
+                    key: persistenceKey
+                ),
                 cloud: cloud,
                 mutationQueue: queue,
                 syncLifecycle: lifecycle,
                 resolutionSource: resolutionSource,
-                persistenceKey: persistenceKey,
                 writerID: writerID,
                 isSyncEnabled: isSyncEnabled,
                 now: now,

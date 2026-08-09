@@ -30,13 +30,18 @@ protocol TerminalAccessoryResolutionSource: AnyObject {
 }
 
 @MainActor
+protocol TerminalAccessoryProfilePersisting: AnyObject {
+    func loadProfile(defaultWriterID: String) -> TerminalAccessoryProfile
+    func saveProfile(_ profile: TerminalAccessoryProfile)
+}
+
+@MainActor
 struct TerminalAccessoryPreferencesDependencies {
-    let defaults: UserDefaults
+    let profileStore: any TerminalAccessoryProfilePersisting
     let cloud: any TerminalAccessoryCloudClient
     let mutationQueue: any TerminalAccessoryMutationQueue
     let syncLifecycle: any TerminalAccessorySyncLifecycle
     let resolutionSource: any TerminalAccessoryResolutionSource
-    let persistenceKey: String
     let writerID: String
     let isSyncEnabled: () -> Bool
     let now: () -> Date

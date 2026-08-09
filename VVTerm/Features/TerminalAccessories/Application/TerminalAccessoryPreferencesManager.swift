@@ -72,8 +72,6 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
     private var startupSyncTask: Task<Void, Never>?
     private var lifecycleSyncTask: Task<Void, Never>?
 
-    private var defaults: UserDefaults { dependencies.defaults }
-
     init(dependencies: TerminalAccessoryPreferencesDependencies) {
         self.dependencies = dependencies
         let observerCleanup = TerminalAccessoryObserverCleanup(
@@ -81,10 +79,8 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
             resolutionSource: dependencies.resolutionSource
         )
         self.observerCleanupRequest = observerCleanup.request
-        self.profile = TerminalAccessoryPreferencesManager.loadProfile(
-            from: dependencies.defaults,
-            key: dependencies.persistenceKey,
-            writerID: dependencies.writerID
+        self.profile = dependencies.profileStore.loadProfile(
+            defaultWriterID: dependencies.writerID
         )
 
         guard dependencies.startsSynchronization else { return }
@@ -342,48 +338,7 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
     }
 
     private func persistProfile() {
-        do {
-            let encoded = try JSONEncoder().encode(profile)
-            defaults.set(encoded, forKey: dependencies.persistenceKey)
-        } catch {
-            logger.error("Failed to encode terminal accessory profile: \(error.localizedDescription)")
-        }
-    }
-
-    private static func loadProfile(
-        from defaults: UserDefaults,
-        key: String,
-        writerID: String
-    ) -> TerminalAccessoryProfile {
-        guard let data = defaults.data(forKey: key) else {
-            let defaultProfile = TerminalAccessoryProfile
-                .defaultValue(lastWriterDeviceId: writerID)
-                .normalized()
-            if let encoded = try? JSONEncoder().encode(defaultProfile) {
-                defaults.set(encoded, forKey: key)
-            }
-            return defaultProfile
-        }
-
-        do {
-            var decoded = try JSONDecoder().decode(TerminalAccessoryProfile.self, from: data)
-            if decoded.lastWriterDeviceId.isEmpty {
-                decoded.lastWriterDeviceId = writerID
-            }
-            let normalized = decoded.normalized()
-            if normalized != decoded, let encoded = try? JSONEncoder().encode(normalized) {
-                defaults.set(encoded, forKey: key)
-            }
-            return normalized
-        } catch {
-            let defaultProfile = TerminalAccessoryProfile
-                .defaultValue(lastWriterDeviceId: writerID)
-                .normalized()
-            if let encoded = try? JSONEncoder().encode(defaultProfile) {
-                defaults.set(encoded, forKey: key)
-            }
-            return defaultProfile
-        }
+        dependencies.profileStore.saveProfile(profile)
     }
 
     private func scheduleSyncWithCloud() {
