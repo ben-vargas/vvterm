@@ -1,0 +1,55 @@
+import Foundation
+
+extension CloudKitManager: TerminalAccessoryCloudClient {}
+extension CloudKitSyncCoordinator: TerminalAccessoryMutationQueue {}
+extension CloudKitSyncLifecycleDriver: TerminalAccessorySyncLifecycle {}
+
+extension CloudKitSyncResolutionHub: TerminalAccessoryResolutionSource {
+    func observeTerminalAccessoryProfile(
+        _ observer: @escaping (TerminalAccessoryProfile) -> Void
+    ) -> UUID {
+        observe { resolution in
+            guard case .terminalAccessoryProfile(let profile) = resolution else { return }
+            observer(profile)
+        }
+    }
+
+    func removeTerminalAccessoryProfileObserver(_ id: UUID) {
+        removeObserver(id)
+    }
+}
+
+extension TerminalAccessoryPreferencesDependencies {
+    static var live: Self {
+        TerminalAccessoryPreferencesDependencies(
+            defaults: .standard,
+            cloud: CloudKitManager.shared,
+            mutationQueue: CloudKitSyncCoordinator.shared,
+            syncLifecycle: CloudKitSyncLifecycleDriver.shared,
+            resolutionSource: CloudKitSyncResolutionHub.shared,
+            persistenceKey: CloudKitSyncConstants.terminalAccessoryProfileStorageKey,
+            writerID: DeviceIdentity.id,
+            isSyncEnabled: { SyncSettings.isEnabled },
+            now: Date.init,
+            makeID: UUID.init,
+            trackCustomActionCreated: { kind in
+                AnalyticsTracker.shared.trackCustomActionCreated(kind: kind.rawValue)
+            },
+            publishProfileChange: { manager, profile in
+                NotificationCenter.default.post(
+                    name: .terminalAccessoryProfileDidChange,
+                    object: manager,
+                    userInfo: ["profile": profile]
+                )
+            },
+            waitForSyncDebounce: {
+                try await Task.sleep(nanoseconds: 650_000_000)
+            },
+            startsSynchronization: true
+        )
+    }
+}
+
+extension TerminalAccessoryPreferencesManager {
+    static let shared = TerminalAccessoryPreferencesManager(dependencies: .live)
+}
