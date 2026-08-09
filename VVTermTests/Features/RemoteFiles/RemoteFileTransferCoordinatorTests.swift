@@ -546,6 +546,132 @@ struct RemoteFileTransferCoordinatorTests {
         #expect(destination.fileUploadCount == 1)
     }
 
+    @Test
+    func remoteCopyRemovesTemporaryFileAfterSuccess() async throws {
+        let rootDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vvterm-remote-copy-success-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootDirectory) }
+        let store = RemoteFileBrowserStore(
+            defaults: makeDefaults(),
+            temporaryStorage: RemoteFileTemporaryStorage(rootDirectory: rootDirectory)
+        )
+        let source = RecordingRemoteFileService(
+            directoryContents: [:],
+            downloadData: Data("copy me".utf8)
+        )
+        let destination = RecordingRemoteFileService(directoryContents: [:])
+        let plan = RemoteFileTransferPlanNode(
+            entry: makeEntry(name: "success.txt", path: "/source/success.txt", size: 7),
+            children: []
+        )
+        var budget = RemoteFileTransferByteBudget()
+
+        try await store.copyRemoteTransferPlan(
+            plan,
+            to: "/destination",
+            operationRootPath: "/destination",
+            sourceService: source,
+            destinationService: destination,
+            progressTracker: nil,
+            destinationCapacity: .unavailable,
+            byteBudget: &budget
+        )
+
+        let temporaryURL = try #require(source.downloadedFileURLs.first)
+        #expect(source.downloadedFileURLs.count == 1)
+        #expect(destination.fileUploadCount == 1)
+        #expect(!FileManager.default.fileExists(atPath: temporaryURL.path))
+    }
+
+    @Test
+    func remoteCopyRemovesTemporaryFileAfterUploadFailure() async throws {
+        let rootDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vvterm-remote-copy-failure-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootDirectory) }
+        let store = RemoteFileBrowserStore(
+            defaults: makeDefaults(),
+            temporaryStorage: RemoteFileTemporaryStorage(rootDirectory: rootDirectory)
+        )
+        let source = RecordingRemoteFileService(
+            directoryContents: [:],
+            downloadData: Data("copy me".utf8)
+        )
+        let destination = RecordingRemoteFileService(
+            directoryContents: [:],
+            fileUploadError: RemoteFileBrowserError.disconnected
+        )
+        let plan = RemoteFileTransferPlanNode(
+            entry: makeEntry(name: "failure.txt", path: "/source/failure.txt", size: 7),
+            children: []
+        )
+        var budget = RemoteFileTransferByteBudget()
+
+        await #expect(throws: RemoteFileBrowserError.self) {
+            try await store.copyRemoteTransferPlan(
+                plan,
+                to: "/destination",
+                operationRootPath: "/destination",
+                sourceService: source,
+                destinationService: destination,
+                progressTracker: nil,
+                destinationCapacity: .unavailable,
+                byteBudget: &budget
+            )
+        }
+
+        let temporaryURL = try #require(source.downloadedFileURLs.first)
+        #expect(source.downloadedFileURLs.count == 1)
+        #expect(destination.fileUploadCount == 1)
+        #expect(!FileManager.default.fileExists(atPath: temporaryURL.path))
+    }
+
+    @Test
+    func remoteCopyRemovesTemporaryFileAfterCancellation() async throws {
+        let rootDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vvterm-remote-copy-cancel-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootDirectory) }
+        let downloadGate = RemoteCopyDownloadGate()
+        let store = RemoteFileBrowserStore(
+            defaults: makeDefaults(),
+            temporaryStorage: RemoteFileTemporaryStorage(rootDirectory: rootDirectory)
+        )
+        let source = RecordingRemoteFileService(
+            directoryContents: [:],
+            downloadData: Data("copy me".utf8),
+            downloadGate: downloadGate
+        )
+        let destination = RecordingRemoteFileService(directoryContents: [:])
+        let plan = RemoteFileTransferPlanNode(
+            entry: makeEntry(name: "cancel.txt", path: "/source/cancel.txt", size: 7),
+            children: []
+        )
+        let task = Task {
+            var budget = RemoteFileTransferByteBudget()
+            try await store.copyRemoteTransferPlan(
+                plan,
+                to: "/destination",
+                operationRootPath: "/destination",
+                sourceService: source,
+                destinationService: destination,
+                progressTracker: nil,
+                destinationCapacity: .unavailable,
+                byteBudget: &budget
+            )
+        }
+
+        await downloadGate.waitUntilStarted()
+        task.cancel()
+        downloadGate.open()
+
+        await #expect(throws: CancellationError.self) {
+            try await task.value
+        }
+        let temporaryURL = try #require(source.downloadedFileURLs.first)
+        #expect(source.downloadedFileURLs.count == 1)
+        #expect(destination.fileUploadCount == 0)
+        #expect(!FileManager.default.fileExists(atPath: temporaryURL.path))
+    }
+
     private func makeEntry(
         name: String,
         path: String,
@@ -582,8 +708,11 @@ private final class RecordingRemoteFileService: RemoteFileService {
     let statEntries: [String: RemoteFileEntry]
     let downloadData: Data
     let downloadError: RemoteFileBrowserError?
+    let fileUploadError: RemoteFileBrowserError?
+    let downloadGate: RemoteCopyDownloadGate?
     private(set) var operations: [Operation] = []
     private(set) var listedPaths: [String] = []
+    private(set) var downloadedFileURLs: [URL] = []
     private(set) var dataUploadCount = 0
     private(set) var fileUploadCount = 0
 
@@ -591,12 +720,16 @@ private final class RecordingRemoteFileService: RemoteFileService {
         directoryContents: [String: [RemoteFileEntry]],
         statEntries: [String: RemoteFileEntry] = [:],
         downloadData: Data = Data(),
-        downloadError: RemoteFileBrowserError? = nil
+        downloadError: RemoteFileBrowserError? = nil,
+        fileUploadError: RemoteFileBrowserError? = nil,
+        downloadGate: RemoteCopyDownloadGate? = nil
     ) {
         self.directoryContents = directoryContents
         self.statEntries = statEntries
         self.downloadData = downloadData
         self.downloadError = downloadError
+        self.fileUploadError = fileUploadError
+        self.downloadGate = downloadGate
     }
 
     func listDirectory(at path: String, maxEntries: Int?) async throws -> [RemoteFileEntry] {
@@ -626,6 +759,11 @@ private final class RecordingRemoteFileService: RemoteFileService {
             throw RemoteFileBrowserError.resourceLimitExceeded
         }
         try downloadData.write(to: localURL)
+        downloadedFileURLs.append(localURL)
+        if let downloadGate {
+            await downloadGate.wait()
+            try Task.checkCancellation()
+        }
         if let downloadError {
             throw downloadError
         }
@@ -653,6 +791,9 @@ private final class RecordingRemoteFileService: RemoteFileService {
         guard byteCount == expectedBytes else {
             throw RemoteFileBrowserError.resourceLimitExceeded
         }
+        if let fileUploadError {
+            throw fileUploadError
+        }
         operations.append(.upload(RemoteFilePath.normalize(remotePath)))
     }
 
@@ -676,5 +817,35 @@ private final class RecordingRemoteFileService: RemoteFileService {
 
     func fileSystemCapacity(at path: String) async throws -> RemoteFileFilesystemCapacity {
         throw RemoteFileBrowserError.failed("Unused in tests")
+    }
+}
+
+@MainActor
+private final class RemoteCopyDownloadGate {
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+    private var startContinuations: [CheckedContinuation<Void, Never>] = []
+    private var isStarted = false
+
+    func wait() async {
+        isStarted = true
+        let continuations = startContinuations
+        startContinuations.removeAll(keepingCapacity: false)
+        continuations.forEach { $0.resume() }
+
+        await withCheckedContinuation { continuation in
+            releaseContinuation = continuation
+        }
+    }
+
+    func waitUntilStarted() async {
+        if isStarted { return }
+        await withCheckedContinuation { continuation in
+            startContinuations.append(continuation)
+        }
+    }
+
+    func open() {
+        releaseContinuation?.resume()
+        releaseContinuation = nil
     }
 }
