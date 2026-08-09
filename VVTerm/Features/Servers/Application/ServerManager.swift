@@ -550,7 +550,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         switch mutation {
         case .create:
             guard stateStore.canAddServer(hasProAccess: hasProAccess) else {
-                throw VVTermError.proRequired(String(localized: "Upgrade to Pro for unlimited servers"))
+                throw VVTermError.proRequired(.unlimitedServers)
             }
         case .update(let server):
             guard stateStore.server(withID: server.id) != nil else {
@@ -627,7 +627,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
 
     func addWorkspace(_ workspace: Workspace, hasProAccess: Bool) async throws {
         guard stateStore.canAddWorkspace(hasProAccess: hasProAccess) else {
-            throw VVTermError.proRequired(String(localized: "Upgrade to Pro for unlimited workspaces"))
+            throw VVTermError.proRequired(.unlimitedWorkspaces)
         }
 
         let result = try stateStore.commitMutation(
@@ -743,7 +743,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         hasProAccess: Bool
     ) async throws -> Server {
         guard let refreshedDestination = stateStore.workspace(withID: destination.id) else {
-            throw VVTermError.moveNotAllowed(String(localized: "The destination workspace is no longer available."))
+            throw VVTermError.moveNotAllowed(.destinationUnavailable)
         }
 
         if let restriction = moveRestriction(
@@ -806,9 +806,9 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         case nil:
             return nil
         case .lockedWorkspace:
-            return VVTermError.proRequired(String(localized: "Upgrade to Pro to move servers into locked workspaces"))
+            return VVTermError.proRequired(.moveIntoLockedWorkspace)
         case .unavailable:
-            return VVTermError.moveNotAllowed(String(localized: "This server can't be moved to that workspace right now."))
+            return VVTermError.moveNotAllowed(.unavailable)
         }
     }
 

@@ -14,14 +14,26 @@ extension ServerConnectionTestFailure {
 extension VVTermError: LocalizedError {
     nonisolated var errorDescription: String? {
         switch self {
-        case .proRequired(let message):
-            return message
+        case .proRequired(let requirement):
+            switch requirement {
+            case .unlimitedServers:
+                return String(localized: "Upgrade to Pro for unlimited servers")
+            case .unlimitedWorkspaces:
+                return String(localized: "Upgrade to Pro for unlimited workspaces")
+            case .moveIntoLockedWorkspace:
+                return String(localized: "Upgrade to Pro to move servers into locked workspaces")
+            }
         case .serverLocked(let serverName):
             return String(format: String(localized: "Server '%@' is locked"), serverName)
         case .workspaceLocked(let workspaceName):
             return String(format: String(localized: "Workspace '%@' is locked"), workspaceName)
-        case .moveNotAllowed(let message):
-            return message
+        case .moveNotAllowed(let reason):
+            switch reason {
+            case .destinationUnavailable:
+                return String(localized: "The destination workspace is no longer available.")
+            case .unavailable:
+                return String(localized: "This server can't be moved to that workspace right now.")
+            }
         case .connectionFailed(let message):
             return String(format: String(localized: "Connection failed: %@"), message)
         case .authenticationFailed:

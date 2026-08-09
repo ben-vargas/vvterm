@@ -29,7 +29,18 @@ struct ServerApplicationErrorPresentationTests {
     @Test
     func mapsEveryVVTermErrorToItsExactDescription() {
         let mappings: [(VVTermError, String)] = [
-            (.proRequired("Upgrade required"), "Upgrade required"),
+            (
+                .proRequired(.unlimitedServers),
+                String(localized: "Upgrade to Pro for unlimited servers")
+            ),
+            (
+                .proRequired(.unlimitedWorkspaces),
+                String(localized: "Upgrade to Pro for unlimited workspaces")
+            ),
+            (
+                .proRequired(.moveIntoLockedWorkspace),
+                String(localized: "Upgrade to Pro to move servers into locked workspaces")
+            ),
             (
                 .serverLocked("Production"),
                 String(format: String(localized: "Server '%@' is locked"), "Production")
@@ -38,7 +49,14 @@ struct ServerApplicationErrorPresentationTests {
                 .workspaceLocked("Work"),
                 String(format: String(localized: "Workspace '%@' is locked"), "Work")
             ),
-            (.moveNotAllowed("Move denied"), "Move denied"),
+            (
+                .moveNotAllowed(.destinationUnavailable),
+                String(localized: "The destination workspace is no longer available.")
+            ),
+            (
+                .moveNotAllowed(.unavailable),
+                String(localized: "This server can't be moved to that workspace right now.")
+            ),
             (
                 .connectionFailed("Host unreachable"),
                 String(format: String(localized: "Connection failed: %@"), "Host unreachable")

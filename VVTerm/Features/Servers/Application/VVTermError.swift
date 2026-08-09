@@ -1,8 +1,19 @@
+nonisolated enum ServerProRequirement: Equatable, Sendable {
+    case unlimitedServers
+    case unlimitedWorkspaces
+    case moveIntoLockedWorkspace
+}
+
+nonisolated enum ServerMoveFailureReason: Equatable, Sendable {
+    case destinationUnavailable
+    case unavailable
+}
+
 nonisolated enum VVTermError: Error, Equatable, Sendable {
-    case proRequired(String)
+    case proRequired(ServerProRequirement)
     case serverLocked(String)
     case workspaceLocked(String)
-    case moveNotAllowed(String)
+    case moveNotAllowed(ServerMoveFailureReason)
     case connectionFailed(String)
     case authenticationFailed
     case authorizationRequired
