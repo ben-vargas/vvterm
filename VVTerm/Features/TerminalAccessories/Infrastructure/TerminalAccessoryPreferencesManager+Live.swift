@@ -44,7 +44,3 @@ extension TerminalAccessoryPreferencesDependencies {
         )
     }
 }
-
-extension TerminalAccessoryPreferencesManager {
-    static let shared = TerminalAccessoryPreferencesManager(dependencies: .live)
-}

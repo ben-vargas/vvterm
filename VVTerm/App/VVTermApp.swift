@@ -23,8 +23,10 @@ struct VVTermApp: App {
             client: AppStoreKitClient(),
             effects: .live
         )
-        let terminalThemeManager = TerminalThemeManager.shared
-        let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager.shared
+        let terminalThemeManager = TerminalThemeManager(dependencies: .live)
+        let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager(
+            dependencies: .live
+        )
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: .standard)
         _tabManager = StateObject(wrappedValue: tabManager)
         _storeManager = StateObject(wrappedValue: storeManager)

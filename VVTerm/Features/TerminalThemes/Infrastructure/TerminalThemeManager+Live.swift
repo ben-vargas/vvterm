@@ -69,7 +69,3 @@ extension TerminalThemeManagerDependencies {
         )
     }
 }
-
-extension TerminalThemeManager {
-    static let shared = TerminalThemeManager(dependencies: .live)
-}
