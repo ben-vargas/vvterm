@@ -2,68 +2,108 @@ import Foundation
 import Combine
 import os.log
 
+nonisolated struct StatsPreferencesObserverCleanupRequest: Sendable {
+    private let cleanup: @MainActor @Sendable () -> Void
+
+    init(cleanup: @escaping @MainActor @Sendable () -> Void) {
+        self.cleanup = cleanup
+    }
+
+    func perform() {
+        Task { @MainActor in
+            cleanup()
+        }
+    }
+}
+
 @MainActor
-final class PreferencesStore: ObservableObject {
-    static let shared = PreferencesStore()
-    static let defaultsKey = CloudKitSyncConstants.statsPreferencesStorageKey
-
-    @Published private(set) var preferences: StatsPreferences
-
-    private let defaults: UserDefaults
-    private let cloudKit: CloudKitManager
-    private let syncCoordinator = CloudKitSyncCoordinator.shared
-    private let syncLifecycle: CloudKitSyncLifecycleDriver
-    private let syncResolutionHub: CloudKitSyncResolutionHub
-    private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm",
-        category: "StatsPreferences"
-    )
-
-    private var syncLifecycleObserverID: UUID?
-    private var syncResolutionObserverID: UUID?
-    private var pendingSyncTask: Task<Void, Never>?
+private final class StatsPreferencesObserverCleanup {
+    private let syncLifecycle: any StatsPreferencesSyncLifecycle
+    private let resolutionSource: any StatsPreferencesResolutionSource
+    private var lifecycleObserverID: UUID?
+    private var resolutionObserverID: UUID?
 
     init(
-        defaults: UserDefaults = .standard,
-        cloudKit: CloudKitManager? = nil,
-        syncLifecycle: CloudKitSyncLifecycleDriver? = nil,
-        syncResolutionHub: CloudKitSyncResolutionHub? = nil
+        syncLifecycle: any StatsPreferencesSyncLifecycle,
+        resolutionSource: any StatsPreferencesResolutionSource
     ) {
-        self.defaults = defaults
-        self.cloudKit = cloudKit ?? CloudKitManager.shared
-        self.syncLifecycle = syncLifecycle ?? .shared
-        self.syncResolutionHub = syncResolutionHub ?? .shared
-        self.preferences = PreferencesStore.loadPreferences(from: defaults)
+        self.syncLifecycle = syncLifecycle
+        self.resolutionSource = resolutionSource
+    }
 
-        observeSyncEvents()
-
-        Task {
-            await syncWithCloud()
-            await syncCoordinator.drainPendingMutations()
+    var request: StatsPreferencesObserverCleanupRequest {
+        StatsPreferencesObserverCleanupRequest { [self] in
+            removeObservers()
         }
     }
 
+    func registerLifecycleObserver(_ id: UUID) {
+        lifecycleObserverID = id
+    }
+
+    func registerResolutionObserver(_ id: UUID) {
+        resolutionObserverID = id
+    }
+
+    private func removeObservers() {
+        if let lifecycleObserverID {
+            syncLifecycle.removeObserver(lifecycleObserverID)
+            self.lifecycleObserverID = nil
+        }
+        if let resolutionObserverID {
+            resolutionSource.removeStatsPreferencesObserver(resolutionObserverID)
+            self.resolutionObserverID = nil
+        }
+    }
+}
+
+@MainActor
+final class PreferencesStore: ObservableObject {
+    @Published private(set) var preferences: StatsPreferences
+
+    private let dependencies: PreferencesStoreDependencies
+    private let observerCleanupRequest: StatsPreferencesObserverCleanupRequest
+    private let logger = Logger(
+        subsystem: "app.vivy.vvterm",
+        category: "StatsPreferences"
+    )
+
+    private var pendingSyncTask: Task<Void, Never>?
+    private var startupSyncTask: Task<Void, Never>?
+    private var lifecycleSyncTask: Task<Void, Never>?
+
+    private var defaults: UserDefaults { dependencies.defaults }
+
+    init(dependencies: PreferencesStoreDependencies) {
+        self.dependencies = dependencies
+        let observerCleanup = StatsPreferencesObserverCleanup(
+            syncLifecycle: dependencies.syncLifecycle,
+            resolutionSource: dependencies.resolutionSource
+        )
+        self.observerCleanupRequest = observerCleanup.request
+        self.preferences = PreferencesStore.loadPreferences(
+            from: dependencies.defaults,
+            key: dependencies.persistenceKey,
+            writerID: dependencies.writerID
+        )
+
+        guard dependencies.startsSynchronization else { return }
+        observeSyncEvents(cleanup: observerCleanup)
+        startupSyncTask = makeCloudSyncTask()
+    }
+
     deinit {
-        if let syncLifecycleObserverID {
-            let syncLifecycle = syncLifecycle
-            Task { @MainActor in
-                syncLifecycle.removeObserver(syncLifecycleObserverID)
-            }
-        }
-        if let syncResolutionObserverID {
-            let syncResolutionHub = syncResolutionHub
-            Task { @MainActor in
-                syncResolutionHub.removeObserver(syncResolutionObserverID)
-            }
-        }
         pendingSyncTask?.cancel()
+        startupSyncTask?.cancel()
+        lifecycleSyncTask?.cancel()
+        observerCleanupRequest.perform()
     }
 
     func setStyle(_ style: StatsPreferences.Style) {
         applyMutation { preferences, now in
             preferences.style = style
             preferences.updatedAt = now
-            preferences.lastWriterDeviceId = DeviceIdentity.id
+            preferences.lastWriterDeviceId = dependencies.writerID
         }
     }
 
@@ -83,7 +123,7 @@ final class PreferencesStore: ObservableObject {
             normalized.blocks[blockIndex].isVisible = isVisible
             normalized.blocks[blockIndex].updatedAt = now
             normalized.updatedAt = now
-            normalized.lastWriterDeviceId = DeviceIdentity.id
+            normalized.lastWriterDeviceId = dependencies.writerID
             preferences = normalized
         }
     }
@@ -102,7 +142,7 @@ final class PreferencesStore: ObservableObject {
 
             normalized.blocks = blocks
             normalized.updatedAt = now
-            normalized.lastWriterDeviceId = DeviceIdentity.id
+            normalized.lastWriterDeviceId = dependencies.writerID
             preferences = normalized
         }
     }
@@ -131,14 +171,14 @@ final class PreferencesStore: ObservableObject {
 
             normalized.blocks = blocks
             normalized.updatedAt = now
-            normalized.lastWriterDeviceId = DeviceIdentity.id
+            normalized.lastWriterDeviceId = dependencies.writerID
             preferences = normalized
         }
     }
 
     private func applyMutation(_ mutate: (inout StatsPreferences, Date) -> Void) {
         var nextPreferences = preferences
-        mutate(&nextPreferences, Date())
+        mutate(&nextPreferences, dependencies.now())
         applyPreferences(nextPreferences)
     }
 
@@ -157,19 +197,23 @@ final class PreferencesStore: ObservableObject {
     private func persistPreferences() {
         do {
             let encoded = try JSONEncoder().encode(preferences)
-            defaults.set(encoded, forKey: Self.defaultsKey)
+            defaults.set(encoded, forKey: dependencies.persistenceKey)
         } catch {
             logger.error("Failed to encode stats preferences: \(error.localizedDescription)")
         }
     }
 
-    private static func loadPreferences(from defaults: UserDefaults) -> StatsPreferences {
-        guard let data = defaults.data(forKey: Self.defaultsKey) else {
+    private static func loadPreferences(
+        from defaults: UserDefaults,
+        key: String,
+        writerID: String
+    ) -> StatsPreferences {
+        guard let data = defaults.data(forKey: key) else {
             let defaultPreferences = StatsPreferences
-                .defaultValue(lastWriterDeviceId: DeviceIdentity.id)
+                .defaultValue(lastWriterDeviceId: writerID)
                 .normalized()
             if let encoded = try? JSONEncoder().encode(defaultPreferences) {
-                defaults.set(encoded, forKey: Self.defaultsKey)
+                defaults.set(encoded, forKey: key)
             }
             return defaultPreferences
         }
@@ -177,19 +221,19 @@ final class PreferencesStore: ObservableObject {
         do {
             var decoded = try JSONDecoder().decode(StatsPreferences.self, from: data)
             if decoded.lastWriterDeviceId.isEmpty {
-                decoded.lastWriterDeviceId = DeviceIdentity.id
+                decoded.lastWriterDeviceId = writerID
             }
             let normalized = decoded.normalized()
             if normalized != decoded, let encoded = try? JSONEncoder().encode(normalized) {
-                defaults.set(encoded, forKey: Self.defaultsKey)
+                defaults.set(encoded, forKey: key)
             }
             return normalized
         } catch {
             let defaultPreferences = StatsPreferences
-                .defaultValue(lastWriterDeviceId: DeviceIdentity.id)
+                .defaultValue(lastWriterDeviceId: writerID)
                 .normalized()
             if let encoded = try? JSONEncoder().encode(defaultPreferences) {
-                defaults.set(encoded, forKey: Self.defaultsKey)
+                defaults.set(encoded, forKey: key)
             }
             return defaultPreferences
         }
@@ -197,53 +241,79 @@ final class PreferencesStore: ObservableObject {
 
     private func scheduleSyncWithCloud() {
         pendingSyncTask?.cancel()
-        pendingSyncTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 650_000_000)
+        let waitForSyncDebounce = dependencies.waitForSyncDebounce
+        let isSyncEnabled = dependencies.isSyncEnabled
+        let mutationQueue = dependencies.mutationQueue
+        pendingSyncTask = Task { [weak self, waitForSyncDebounce, isSyncEnabled, mutationQueue] in
+            try? await waitForSyncDebounce()
             guard !Task.isCancelled else { return }
-            await self?.enqueuePreferencesSync()
+            guard isSyncEnabled(), let preferences = self?.preferences else { return }
+            mutationQueue.enqueueStatsPreferencesUpsert(preferences)
+            guard !Task.isCancelled, isSyncEnabled() else { return }
+            await mutationQueue.drainPendingMutations()
         }
     }
 
-    private func enqueuePreferencesSync() async {
-        guard SyncSettings.isEnabled else { return }
-        syncCoordinator.enqueueStatsPreferencesUpsert(preferences)
-        await syncCoordinator.drainPendingMutations()
-    }
+    private func makeCloudSyncTask() -> Task<Void, Never> {
+        let localSnapshot = preferences
+        let cloud = dependencies.cloud
+        let isSyncEnabled = dependencies.isSyncEnabled
+        let mutationQueue = dependencies.mutationQueue
+        let logger = logger
 
-    private func syncWithCloud() async {
-        guard SyncSettings.isEnabled else { return }
-
-        do {
-            let cloudResolved = try await cloudKit.syncStatsPreferences(preferences)
-            let mergedWithCurrent = StatsPreferences.merged(local: preferences, remote: cloudResolved).normalized()
-            applyPreferences(mergedWithCurrent, scheduleCloudSync: false)
-        } catch {
-            logger.warning("Stats preferences CloudKit sync failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func observeSyncEvents() {
-        syncLifecycleObserverID = syncLifecycle.observe { [weak self] event in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                switch event {
-                case .foreground, .syncEnabled:
-                    await self.syncWithCloud()
-                    await self.syncCoordinator.drainPendingMutations()
-                case .syncDisabled:
-                    self.pendingSyncTask?.cancel()
-                    self.pendingSyncTask = nil
-                }
-            }
-        }
-        syncResolutionObserverID = syncResolutionHub.observe { [weak self] resolution in
-            guard let self, case .statsPreferences(let resolvedPreferences) = resolution else {
+        return Task { [weak self, cloud, isSyncEnabled, mutationQueue, logger, localSnapshot] in
+            guard !Task.isCancelled, isSyncEnabled() else { return }
+            do {
+                let cloudResolved = try await cloud.syncStatsPreferences(localSnapshot)
+                guard !Task.isCancelled, isSyncEnabled() else { return }
+                self?.applyCloudResolution(cloudResolved)
+                guard !Task.isCancelled, isSyncEnabled() else { return }
+                await mutationQueue.drainPendingMutations()
+            } catch is CancellationError {
                 return
+            } catch {
+                guard !Task.isCancelled, isSyncEnabled() else { return }
+                logger.warning("Stats preferences CloudKit sync failed: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func applyCloudResolution(_ cloudResolved: StatsPreferences) {
+        let mergedWithCurrent = StatsPreferences
+            .merged(local: preferences, remote: cloudResolved)
+            .normalized()
+        applyPreferences(mergedWithCurrent, scheduleCloudSync: false)
+    }
+
+    private func observeSyncEvents(cleanup: StatsPreferencesObserverCleanup) {
+        let lifecycleObserverID = dependencies.syncLifecycle.observe { [weak self] event in
+            self?.handleSyncLifecycleEvent(event)
+        }
+        cleanup.registerLifecycleObserver(lifecycleObserverID)
+        let resolutionObserverID = dependencies.resolutionSource.observeStatsPreferences { [weak self] resolvedPreferences in
+            guard let self else { return }
             let mergedWithCurrent = StatsPreferences
                 .merged(local: self.preferences, remote: resolvedPreferences)
                 .normalized()
             self.applyPreferences(mergedWithCurrent, scheduleCloudSync: false)
+        }
+        cleanup.registerResolutionObserver(resolutionObserverID)
+    }
+
+    private func handleSyncLifecycleEvent(_ event: CloudKitSyncLifecycleEvent) {
+        switch event {
+        case .foreground, .syncEnabled:
+            startupSyncTask?.cancel()
+            startupSyncTask = nil
+            lifecycleSyncTask?.cancel()
+            lifecycleSyncTask = makeCloudSyncTask()
+        case .syncDisabled:
+            pendingSyncTask?.cancel()
+            pendingSyncTask = nil
+            startupSyncTask?.cancel()
+            startupSyncTask = nil
+            lifecycleSyncTask?.cancel()
+            lifecycleSyncTask = nil
         }
     }
 }

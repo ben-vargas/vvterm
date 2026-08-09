@@ -3,13 +3,11 @@ import Foundation
 
 @MainActor
 final class ServerVolumeVisibilityStore: ObservableObject {
-    static let shared = ServerVolumeVisibilityStore()
-
     @Published private(set) var preferences: ServerVolumeVisibilityPreferences
 
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults) {
         self.defaults = defaults
         preferences = Self.load(from: defaults)
         if preferences.requiresSchemaMigration {
