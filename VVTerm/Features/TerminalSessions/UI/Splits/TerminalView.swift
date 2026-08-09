@@ -23,7 +23,7 @@ struct TerminalTabView: View {
     let server: Server
     @ObservedObject var tabManager: TerminalTabManager
     let isSelected: Bool
-    let themeName: String
+    let appearance: TerminalAppearanceSnapshot
 
     @State private var layoutVersion: Int = 0
     @State private var showingCloseConfirmation = false
@@ -43,7 +43,18 @@ struct TerminalTabView: View {
     #endif
 
     private var dividerColor: Color {
-        ThemeColorParser.splitDividerColor(for: themeName)
+        guard let components = ThemeColorParser.splitDividerComponents(
+            for: appearance.activeTheme.palette.backgroundHex
+        ) else {
+            return Color(white: 0.3)
+        }
+        return Color(
+            .sRGB,
+            red: components.red,
+            green: components.green,
+            blue: components.blue,
+            opacity: components.alpha
+        )
     }
 
     private var focusedTerminal: GhosttyTerminalView? {
@@ -197,7 +208,7 @@ struct TerminalTabView: View {
                 onProcessExit: { handlePaneExit(paneId: paneId) },
                 terminalContextMenuActions: terminalContextMenuActions(for: paneId),
                 onPaneKeyboardShortcut: handleSplitCommand,
-                themeName: themeName,
+                appearance: appearance,
                 showsVoiceButton: isSelected
                     && voiceButtonEnabled
                     && !showingVoiceRecording
@@ -525,7 +536,7 @@ struct TerminalPaneView: View {
     let onProcessExit: () -> Void
     let terminalContextMenuActions: TerminalContextMenuActions
     let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
-    let themeName: String
+    let appearance: TerminalAppearanceSnapshot
     let showsVoiceButton: Bool
     let onVoiceTrigger: () -> Void
 
@@ -542,7 +553,6 @@ struct TerminalPaneView: View {
     @State private var operationNotice: NoticeItem?
     @State private var dismissFallbackBanner = false
     @State private var automaticReconnectRetryTask: Task<Void, Never>?
-    @State private var terminalBackgroundColor: Color = Self.initialTerminalBackgroundColor()
     @StateObject private var connectWatchdog = TerminalConnectionWatchdog()
     @State private var showingHostKeyTrustConfirmation = false
     @State private var hostKeyTrustChallenge: KnownHostsManager.Challenge?
@@ -662,8 +672,8 @@ struct TerminalPaneView: View {
 
     private var noticeSurfaceStyle: NoticeSurfaceStyle {
         .terminal(
-            backgroundColor: terminalBackgroundColor,
-            foregroundColor: ThemeColorParser.previewPalette(for: themeName).foreground
+            backgroundColor: Color.fromHex(appearance.activeTheme.palette.backgroundHex),
+            foregroundColor: Color.fromHex(appearance.activeTheme.palette.foregroundHex)
         )
     }
 
@@ -781,7 +791,7 @@ struct TerminalPaneView: View {
             operationSurfaceStyle: noticeSurfaceStyle
         ) {
             ZStack {
-                terminalBackgroundColor
+                Color.fromHex(appearance.activeTheme.palette.backgroundHex)
 
                 if ghosttyApp.readiness == .ready, let credentials = credentials {
                     terminalSurface(credentials: credentials)
@@ -807,8 +817,7 @@ struct TerminalPaneView: View {
         .opacity(isFocused ? 1.0 : 0.7)
         .clipped()
         .task {
-            ghosttyApp.startIfNeeded()
-            updateTerminalBackgroundColor()
+            ghosttyApp.startIfNeeded(appearance: appearance)
             // If terminal exists, mark ready immediately
             if terminalExists {
                 isReady = true
@@ -824,7 +833,6 @@ struct TerminalPaneView: View {
             startConnectWatchdog()
             attemptAutoReconnectIfNeeded()
         }
-        .onChange(of: themeName) { _ in updateTerminalBackgroundColor() }
         .onChange(of: scenePhase) { phase in
             if phase == .active {
                 attemptAutoReconnectIfNeeded()
@@ -1222,35 +1230,6 @@ struct TerminalPaneView: View {
                 dismissAction: { operationNotice = nil }
             )
         }
-    }
-
-    private func updateTerminalBackgroundColor() {
-        let resolvedThemeName = themeName
-        Task { @MainActor in
-            let resolved = ThemeColorParser.previewPalette(for: resolvedThemeName).background
-            terminalBackgroundColor = resolved
-            UserDefaults.standard.set(resolved.toHex(), forKey: "terminalBackgroundColor")
-        }
-    }
-
-    private static func initialTerminalBackgroundColor() -> Color {
-        let defaults = UserDefaults.standard
-
-        if let cachedHex = defaults.string(forKey: "terminalBackgroundColor") {
-            return Color.fromHex(cachedHex)
-        }
-
-        let usePerAppearanceTheme = defaults.object(forKey: CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) as? Bool ?? true
-        let darkThemeName = defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameKey) ?? "Aizen Dark"
-        let lightThemeName = defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameLightKey) ?? "Aizen Light"
-        #if os(macOS)
-        let isDarkAppearance = NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        #else
-        let isDarkAppearance = UITraitCollection.current.userInterfaceStyle == .dark
-        #endif
-        let themeName = usePerAppearanceTheme ? (isDarkAppearance ? darkThemeName : lightThemeName) : darkThemeName
-
-        return ThemeColorParser.previewPalette(for: themeName).background
     }
 
     private var voiceTriggerButton: some View {

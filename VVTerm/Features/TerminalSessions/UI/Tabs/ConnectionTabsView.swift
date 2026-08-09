@@ -29,10 +29,6 @@ struct ConnectionTerminalContainer: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
 
-    /// Theme name from settings
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     #if os(iOS)
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) var preservesTerminalSizeForKeyboard = false
     #endif
@@ -66,15 +62,12 @@ struct ConnectionTerminalContainer: View {
         visibleViewTabs.count > 1
     }
 
-    var effectiveThemeName: String {
-        let fallback = colorScheme == .dark ? "Aizen Dark" : "Aizen Light"
-        let preferred = usePerAppearanceTheme
-            ? (colorScheme == .dark ? terminalThemeName : terminalThemeNameLight)
-            : terminalThemeName
-        return terminalThemeManager.applicationThemeName(
-            preferred: preferred,
-            fallback: fallback
-        )
+    var terminalAppearance: TerminalColorAppearance {
+        colorScheme == .dark ? .dark : .light
+    }
+
+    var terminalAppearanceSnapshot: TerminalAppearanceSnapshot {
+        terminalThemeManager.appearanceSnapshot(for: terminalAppearance)
     }
 
     var selectedViewBinding: Binding<ConnectionViewTabID> {
@@ -166,7 +159,7 @@ struct ConnectionTerminalContainer: View {
     }
 
     private var liveTerminalBackgroundColor: Color {
-        ThemeColorParser.previewPalette(for: effectiveThemeName).background
+        Color.fromHex(terminalAppearanceSnapshot.activeTheme.palette.backgroundHex)
     }
 
     var sharedBody: some View {
@@ -179,22 +172,13 @@ struct ConnectionTerminalContainer: View {
             backgroundColor: backgroundColor
         )
             .onAppear {
-                updateTerminalBackgroundColor()
                 repairSelectedTabSelectionIfNeeded()
                 handleSelectedViewChange(selectedView)
                 ensureInitialFileTabIfNeeded()
             }
-            .onChange(of: terminalThemeName) { _ in
-                updateTerminalBackgroundColor()
-            }
-            .onChange(of: terminalThemeNameLight) { _ in
-                updateTerminalBackgroundColor()
-            }
-            .onChange(of: usePerAppearanceTheme) { _ in
-                updateTerminalBackgroundColor()
-            }
-            .onChange(of: colorScheme) { _ in
-                updateTerminalBackgroundColor()
+            .task(id: terminalAppearanceSnapshot) {
+                let snapshot = terminalThemeManager.activateAppearance(terminalAppearance)
+                ghosttyApp.applyAppearance(snapshot)
             }
             .onChange(of: selectedView) { newValue in
                 handleSelectedViewChange(newValue)
@@ -535,14 +519,6 @@ struct ConnectionTerminalContainer: View {
     func closeFocusedPaneConfirmed() {
         guard let selectedTab else { return }
         tabManager.closePane(tab: selectedTab, paneId: selectedTab.focusedPaneId)
-    }
-
-    private func updateTerminalBackgroundColor() {
-        let themeName = effectiveThemeName
-        Task { @MainActor in
-            let resolved = ThemeColorParser.previewPalette(for: themeName).background
-            UserDefaults.standard.set(resolved.toHex(), forKey: "terminalBackgroundColor")
-        }
     }
 
 }

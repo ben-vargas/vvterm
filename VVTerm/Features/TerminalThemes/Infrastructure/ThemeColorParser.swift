@@ -35,39 +35,36 @@ struct ThemeColorParser {
     }
 
     static func previewPalette(for themeName: String) -> TerminalThemePreviewPalette {
+        let palette = appearancePalette(for: themeName)
+
+        return TerminalThemePreviewPalette(
+            background: Color.fromHex(palette.backgroundHex),
+            foreground: Color.fromHex(palette.foregroundHex),
+            cursor: Color.fromHex(palette.cursorHex),
+            cursorText: Color.fromHex(palette.cursorTextHex)
+        )
+    }
+
+    nonisolated static func appearancePalette(for themeName: String) -> TerminalThemePalette {
         guard let content = themeContent(for: themeName) else {
             return .fallback
         }
 
-        let fallback = TerminalThemePreviewPalette.fallback
-        let background = color(for: "background", in: content) ?? fallback.background
-        let foreground = color(for: "foreground", in: content) ?? fallback.foreground
-        let cursor = color(for: "cursor-color", in: content) ?? foreground
-        let cursorText = color(for: "cursor-text", in: content) ?? background
-
-        return TerminalThemePreviewPalette(
-            background: background,
-            foreground: foreground,
-            cursor: cursor,
-            cursorText: cursorText
-        )
+        return appearancePalette(themeContent: content)
     }
 
-    /// Computes the split divider color based on the background color
-    /// Uses Ghostty's algorithm: darken by 8% for light backgrounds, 40% for dark
-    static func splitDividerColor(for themeName: String) -> Color {
-        guard let content = themeContent(for: themeName),
-              let backgroundHex = value(for: "background", in: content),
-              let components = splitDividerComponents(for: backgroundHex) else {
-            return Color(white: 0.3)
-        }
+    nonisolated static func appearancePalette(themeContent content: String) -> TerminalThemePalette {
+        let fallback = TerminalThemePalette.fallback
+        let background = normalizedHexValue(for: "background", in: content) ?? fallback.backgroundHex
+        let foreground = normalizedHexValue(for: "foreground", in: content) ?? fallback.foregroundHex
+        let cursor = normalizedHexValue(for: "cursor-color", in: content) ?? foreground
+        let cursorText = normalizedHexValue(for: "cursor-text", in: content) ?? background
 
-        return Color(
-            .sRGB,
-            red: components.red,
-            green: components.green,
-            blue: components.blue,
-            opacity: components.alpha
+        return TerminalThemePalette(
+            backgroundHex: background,
+            foregroundHex: foreground,
+            cursorHex: cursor,
+            cursorTextHex: cursorText
         )
     }
 
@@ -231,6 +228,14 @@ struct ThemeColorParser {
             return parts[1].trimmingCharacters(in: .whitespaces)
         }
         return nil
+    }
+
+    private nonisolated static func normalizedHexValue(
+        for key: String,
+        in content: String
+    ) -> String? {
+        value(for: key, in: content)
+            .flatMap(TerminalThemeValidator.normalizeHexColor(_:))
     }
 
     private static func color(for key: String, in content: String) -> Color? {

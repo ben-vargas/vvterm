@@ -12,12 +12,8 @@ final class TerminalThemeManager: ObservableObject {
     static let shared = TerminalThemeManager()
 
     @Published private(set) var customThemes: [TerminalTheme] = []
-
-    private struct PreferenceSnapshot: Equatable {
-        var darkThemeName: String
-        var lightThemeName: String
-        var usePerAppearanceTheme: Bool
-    }
+    @Published private(set) var themeSelection: TerminalThemeSelection
+    @Published private(set) var activeAppearanceSnapshot: TerminalAppearanceSnapshot = .fallback
 
     private let defaults: UserDefaults
     private let cloudKit: CloudKitManager
@@ -34,7 +30,7 @@ final class TerminalThemeManager: ObservableObject {
 
     private var defaultsObserver: NSObjectProtocol?
     private var syncLifecycleObserverID: UUID?
-    private var lastKnownPreferenceSnapshot: PreferenceSnapshot
+    private var lastKnownPreferenceSnapshot: TerminalThemeSelection
     private var isApplyingRemotePreference = false
     private var pendingPreferenceSyncTask: Task<Void, Never>?
 
@@ -49,15 +45,18 @@ final class TerminalThemeManager: ObservableObject {
         self.cloudKit = cloudKit ?? .shared
         self.fileStore = fileStore
         self.syncLifecycle = syncLifecycle ?? .shared
-        self.lastKnownPreferenceSnapshot = PreferenceSnapshot(
+        let initialSelection = TerminalThemeSelection(
             darkThemeName: defaults.string(forKey: darkThemeKey) ?? "Aizen Dark",
             lightThemeName: defaults.string(forKey: lightThemeKey) ?? "Aizen Light",
             usePerAppearanceTheme: defaults.object(forKey: perAppearanceThemeKey) as? Bool ?? true
         )
+        self.themeSelection = initialSelection
+        self.lastKnownPreferenceSnapshot = initialSelection
 
         loadThemes()
         syncCustomThemeFiles()
         ensureThemeSelectionIsValid()
+        refreshActiveAppearance()
         guard startsSynchronization else { return }
 
         observeThemePreferenceChanges()
@@ -95,6 +94,43 @@ final class TerminalThemeManager: ObservableObject {
             return preferred
         }
         return customTheme.canApply ? preferred : fallback
+    }
+
+    func appearanceSnapshot(
+        for activeAppearance: TerminalColorAppearance
+    ) -> TerminalAppearanceSnapshot {
+        let darkTheme = resolvedTheme(
+            preferred: themeSelection.darkThemeName,
+            fallback: "Aizen Dark"
+        )
+        let lightTheme = themeSelection.usePerAppearanceTheme
+            ? resolvedTheme(
+                preferred: themeSelection.lightThemeName,
+                fallback: "Aizen Light"
+            )
+            : darkTheme
+
+        return TerminalAppearanceSnapshot(
+            activeAppearance: activeAppearance,
+            lightTheme: lightTheme,
+            darkTheme: darkTheme
+        )
+    }
+
+    @discardableResult
+    func activateAppearance(
+        _ appearance: TerminalColorAppearance
+    ) -> TerminalAppearanceSnapshot {
+        let snapshot = appearanceSnapshot(for: appearance)
+        if activeAppearanceSnapshot != snapshot {
+            activeAppearanceSnapshot = snapshot
+        }
+
+        let backgroundHex = snapshot.activeTheme.palette.backgroundHex
+        if defaults.string(forKey: "terminalBackgroundColor") != backgroundHex {
+            defaults.set(backgroundHex, forKey: "terminalBackgroundColor")
+        }
+        return snapshot
     }
 
     nonisolated static func builtInThemeNames() -> [String] {
@@ -163,6 +199,7 @@ final class TerminalThemeManager: ObservableObject {
         saveThemes()
         syncCustomThemeFiles()
         ensureThemeSelectionIsValid()
+        refreshActiveAppearance()
         pushThemeToCloud(theme)
         return theme
     }
@@ -195,6 +232,7 @@ final class TerminalThemeManager: ObservableObject {
         saveThemes()
         syncCustomThemeFiles()
         ensureThemeSelectionIsValid()
+        refreshActiveAppearance()
         pushThemeToCloud(customThemes[index])
 
         return customThemes[index]
@@ -222,6 +260,7 @@ final class TerminalThemeManager: ObservableObject {
         saveThemes()
         syncCustomThemeFiles()
         ensureThemeSelectionIsValid()
+        refreshActiveAppearance()
         pushThemeToCloud(customThemes[index])
     }
 
@@ -374,6 +413,7 @@ final class TerminalThemeManager: ObservableObject {
         let snapshot = currentPreferenceSnapshot()
         guard snapshot != lastKnownPreferenceSnapshot else { return }
         lastKnownPreferenceSnapshot = snapshot
+        refreshActiveAppearance()
 
         let now = Date()
         defaults.set(now.timeIntervalSince1970, forKey: preferenceUpdatedAtKey)
@@ -387,8 +427,8 @@ final class TerminalThemeManager: ObservableObject {
         )
     }
 
-    private func currentPreferenceSnapshot() -> PreferenceSnapshot {
-        PreferenceSnapshot(
+    private func currentPreferenceSnapshot() -> TerminalThemeSelection {
+        TerminalThemeSelection(
             darkThemeName: defaults.string(forKey: darkThemeKey) ?? "Aizen Dark",
             lightThemeName: defaults.string(forKey: lightThemeKey) ?? "Aizen Light",
             usePerAppearanceTheme: defaults.object(forKey: perAppearanceThemeKey) as? Bool ?? true
@@ -483,6 +523,7 @@ final class TerminalThemeManager: ObservableObject {
         saveThemes()
         syncCustomThemeFiles()
         ensureThemeSelectionIsValid()
+        refreshActiveAppearance()
     }
 
     private func applyRemotePreferenceIfNewer(_ preference: TerminalThemePreference) {
@@ -498,5 +539,33 @@ final class TerminalThemeManager: ObservableObject {
 
         ensureThemeSelectionIsValid()
         lastKnownPreferenceSnapshot = currentPreferenceSnapshot()
+        refreshActiveAppearance()
+    }
+
+    private func resolvedTheme(
+        preferred: String,
+        fallback: String
+    ) -> ResolvedTerminalTheme {
+        let name = applicationThemeName(preferred: preferred, fallback: fallback)
+        let palette: TerminalThemePalette
+        if let customTheme = customThemes.first(where: {
+            !$0.isDeleted && $0.canApply && $0.name == name
+        }) {
+            palette = ThemeColorParser.appearancePalette(themeContent: customTheme.content)
+        } else {
+            palette = ThemeColorParser.appearancePalette(for: name)
+        }
+        return ResolvedTerminalTheme(
+            name: name,
+            palette: palette
+        )
+    }
+
+    private func refreshActiveAppearance() {
+        let selection = currentPreferenceSnapshot()
+        if themeSelection != selection {
+            themeSelection = selection
+        }
+        _ = activateAppearance(activeAppearanceSnapshot.activeAppearance)
     }
 }

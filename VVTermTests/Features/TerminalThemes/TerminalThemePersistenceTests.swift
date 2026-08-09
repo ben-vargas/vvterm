@@ -51,6 +51,10 @@ final class TerminalThemePersistenceTests: XCTestCase {
             manager.applicationThemeName(preferred: theme.name, fallback: "Aizen Dark"),
             "Aizen Dark"
         )
+        XCTAssertEqual(
+            manager.appearanceSnapshot(for: .dark).activeTheme.name,
+            "Aizen Dark"
+        )
     }
 
     func testValidThemeWriteDoesNotDeleteUnrelatedThemeFiles() throws {
@@ -117,5 +121,80 @@ final class TerminalThemePersistenceTests: XCTestCase {
         try store.synchronize([theme])
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    func testAppearanceSnapshotResolvesBothThemesFromOnePreferenceSnapshot() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let darkTheme = TerminalTheme(
+            name: "Test Dark",
+            content: "background = #102030\nforeground = #A0B0C0\ncursor-color = #D0E0F0\n"
+        )
+        let lightTheme = TerminalTheme(
+            name: "Test Light",
+            content: "background = #F1F2F3\nforeground = #112233\ncursor-text = #445566\n"
+        )
+        defaults.set(
+            try JSONEncoder().encode([darkTheme, lightTheme]),
+            forKey: CloudKitSyncConstants.terminalCustomThemesStorageKey
+        )
+        defaults.set(darkTheme.name, forKey: CloudKitSyncConstants.terminalThemeNameKey)
+        defaults.set(lightTheme.name, forKey: CloudKitSyncConstants.terminalThemeNameLightKey)
+        defaults.set(true, forKey: CloudKitSyncConstants.terminalUsePerAppearanceThemeKey)
+
+        let manager = TerminalThemeManager(
+            defaults: defaults,
+            fileStore: TerminalThemeFileStore(directoryURL: temporaryDirectory),
+            startsSynchronization: false
+        )
+        let snapshot = manager.appearanceSnapshot(for: .light)
+
+        XCTAssertEqual(snapshot.activeTheme.name, lightTheme.name)
+        XCTAssertEqual(snapshot.lightTheme.palette.backgroundHex, "#F1F2F3")
+        XCTAssertEqual(snapshot.lightTheme.palette.foregroundHex, "#112233")
+        XCTAssertEqual(snapshot.lightTheme.palette.cursorHex, "#112233")
+        XCTAssertEqual(snapshot.lightTheme.palette.cursorTextHex, "#445566")
+        XCTAssertEqual(snapshot.darkTheme.palette.backgroundHex, "#102030")
+        XCTAssertEqual(snapshot.darkTheme.palette.foregroundHex, "#A0B0C0")
+        XCTAssertEqual(snapshot.darkTheme.palette.cursorHex, "#D0E0F0")
+        XCTAssertEqual(snapshot.darkTheme.palette.cursorTextHex, "#102030")
+    }
+
+    func testAppearanceActivationIsOrderedAndOwnsLegacyBackgroundCache() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let darkTheme = TerminalTheme(
+            name: "Ordered Dark",
+            content: "background = #010203\nforeground = #FFFFFF\n"
+        )
+        let lightTheme = TerminalTheme(
+            name: "Ordered Light",
+            content: "background = #FDFCFB\nforeground = #000000\n"
+        )
+        defaults.set(
+            try JSONEncoder().encode([darkTheme, lightTheme]),
+            forKey: CloudKitSyncConstants.terminalCustomThemesStorageKey
+        )
+        defaults.set(darkTheme.name, forKey: CloudKitSyncConstants.terminalThemeNameKey)
+        defaults.set(lightTheme.name, forKey: CloudKitSyncConstants.terminalThemeNameLightKey)
+        defaults.set(true, forKey: CloudKitSyncConstants.terminalUsePerAppearanceThemeKey)
+
+        let manager = TerminalThemeManager(
+            defaults: defaults,
+            fileStore: TerminalThemeFileStore(directoryURL: temporaryDirectory),
+            startsSynchronization: false
+        )
+
+        let lightSnapshot = manager.activateAppearance(.light)
+        XCTAssertEqual(manager.activeAppearanceSnapshot, lightSnapshot)
+        XCTAssertEqual(defaults.string(forKey: "terminalBackgroundColor"), "#FDFCFB")
+
+        let darkSnapshot = manager.activateAppearance(.dark)
+        XCTAssertEqual(manager.activeAppearanceSnapshot, darkSnapshot)
+        XCTAssertEqual(defaults.string(forKey: "terminalBackgroundColor"), "#010203")
     }
 }

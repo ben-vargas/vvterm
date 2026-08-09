@@ -3,6 +3,34 @@ import Testing
 @testable import VVTerm
 
 struct GhosttyConfigBuilderTests {
+    @Test @MainActor
+    func appAcceptsResolvedAppearanceBeforeStartup() {
+        let lightTheme = ResolvedTerminalTheme(
+            name: "Injected Light",
+            palette: .fallback
+        )
+        let darkTheme = ResolvedTerminalTheme(
+            name: "Injected Dark",
+            palette: .fallback
+        )
+        let initial = TerminalAppearanceSnapshot(
+            activeAppearance: .dark,
+            lightTheme: lightTheme,
+            darkTheme: darkTheme
+        )
+        let updated = TerminalAppearanceSnapshot(
+            activeAppearance: .light,
+            lightTheme: lightTheme,
+            darkTheme: darkTheme
+        )
+        let app = Ghostty.App(appearance: initial, autoStart: false)
+
+        app.applyAppearance(updated)
+
+        #expect(app.readiness == .idle)
+        #expect(app.appearanceSnapshot == updated)
+    }
+
     #if os(macOS)
     @Test
     func macOSConfigContentMapsOptionAsAltModesToGhosttyValues() {

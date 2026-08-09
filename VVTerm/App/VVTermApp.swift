@@ -28,11 +28,9 @@ struct VVTermApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
 
-    #if os(iOS)
     @StateObject private var ghosttyApp = Ghostty.App(autoStart: false)
+    #if os(iOS)
     @StateObject private var screenAwakeCoordinator = TerminalScreenAwakeCoordinator()
-    #else
-    @StateObject private var ghosttyApp = Ghostty.App()
     #endif
     @StateObject private var appLockManager = AppLockManager.shared
     @StateObject private var storeManager: StoreManager
@@ -56,9 +54,6 @@ struct VVTermApp: App {
     #if os(macOS)
     @AppStorage(TerminalDefaults.optionAsAltModeKey) private var terminalOptionAsAltMode = TerminalOptionAsAltMode.none.rawValue
     #endif
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     @AppStorage(TerminalRemoteClipboardReadPolicy.userDefaultsKey)
     private var remoteClipboardReadPolicy = TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
 
@@ -68,25 +63,6 @@ struct VVTermApp: App {
         #else
         ""
         #endif
-    }
-
-    private var activeCustomThemeVersionToken: String {
-        let activeThemes = terminalThemeManager.customThemes.filter { !$0.isDeleted }
-        let byName = Dictionary(
-            activeThemes.map { ($0.name, $0) },
-            uniquingKeysWith: { current, candidate in
-                current.updatedAt >= candidate.updatedAt ? current : candidate
-            }
-        )
-
-        let darkVersion = byName[terminalThemeName]?.updatedAt.timeIntervalSince1970 ?? 0
-        let lightVersion = byName[terminalThemeNameLight]?.updatedAt.timeIntervalSince1970 ?? 0
-
-        if usePerAppearanceTheme {
-            return "\(darkVersion):\(lightVersion)"
-        }
-
-        return "\(darkVersion)"
     }
 
     #if os(iOS) && DEBUG
@@ -154,7 +130,7 @@ struct VVTermApp: App {
             .environmentObject(terminalThemeManager)
             .environmentObject(terminalAccessoryPreferencesManager)
             .modifier(AppearanceModifier())
-            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalCursorStyle)\(terminalCursorBlink)\(terminalOptionAsAltReloadToken)\(terminalThemeName)\(terminalThemeNameLight)\(usePerAppearanceTheme)\(remoteClipboardReadPolicy)\(activeCustomThemeVersionToken)") {
+            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalCursorStyle)\(terminalCursorBlink)\(terminalOptionAsAltReloadToken)\(remoteClipboardReadPolicy)") {
                 ghosttyApp.reloadConfig()
             }
             .sheet(isPresented: .init(
@@ -222,7 +198,7 @@ struct VVTermApp: App {
             .environmentObject(terminalThemeManager)
             .environmentObject(terminalAccessoryPreferencesManager)
             .modifier(AppearanceModifier())
-            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalCursorStyle)\(terminalCursorBlink)\(terminalOptionAsAltReloadToken)\(terminalThemeName)\(terminalThemeNameLight)\(usePerAppearanceTheme)\(remoteClipboardReadPolicy)\(activeCustomThemeVersionToken)") {
+            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalCursorStyle)\(terminalCursorBlink)\(terminalOptionAsAltReloadToken)\(remoteClipboardReadPolicy)") {
                 ghosttyApp.reloadConfig()
             }
             .sheet(isPresented: .init(

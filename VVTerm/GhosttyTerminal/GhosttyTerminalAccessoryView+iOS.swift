@@ -41,6 +41,7 @@ final class TerminalInputAccessoryView: UIInputView {
     private var scrollLeadingToLeadingButtonsConstraint: NSLayoutConstraint?
     private var scrollLeadingToEdgeConstraint: NSLayoutConstraint?
     private var defaultsObserver: NSObjectProtocol?
+    private var appearanceObserver: NSObjectProtocol?
     private var accessoryProfileObserver: NSObjectProtocol?
     private var keyRepeatTimer: DispatchSourceTimer?
     private var repeatingKey: TerminalKey?
@@ -97,6 +98,7 @@ final class TerminalInputAccessoryView: UIInputView {
         accessibilityIdentifier = "vvterm.keyboard.accessory"
         setupView()
         observeThemeChanges()
+        observeResolvedAppearanceChanges()
         observeAccessoryProfileChanges()
     }
 
@@ -145,6 +147,9 @@ final class TerminalInputAccessoryView: UIInputView {
 
     deinit {
         if let observer = defaultsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = appearanceObserver {
             NotificationCenter.default.removeObserver(observer)
         }
         if let observer = accessoryProfileObserver {
@@ -354,6 +359,16 @@ final class TerminalInputAccessoryView: UIInputView {
         }
     }
 
+    private func observeResolvedAppearanceChanges() {
+        appearanceObserver = NotificationCenter.default.addObserver(
+            forName: Ghostty.configDidReloadNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateBackgroundEffect()
+        }
+    }
+
     private func observeAccessoryProfileChanges() {
         accessoryProfileObserver = NotificationCenter.default.addObserver(
             forName: .terminalAccessoryProfileDidChange,
@@ -544,20 +559,10 @@ final class TerminalInputAccessoryView: UIInputView {
     private func resolveThemeBackgroundColor(
         for interfaceStyle: UIUserInterfaceStyle
     ) -> UIColor {
-        let defaults = UserDefaults.standard
-
-        let usePerAppearance = defaults.object(forKey: CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) as? Bool ?? true
-        let darkTheme = defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameKey) ?? "Aizen Dark"
-        let lightTheme = defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameLightKey) ?? "Aizen Light"
-        let themeName: String
-        if usePerAppearance {
-            themeName = interfaceStyle == .dark ? darkTheme : lightTheme
-        } else {
-            themeName = darkTheme
-        }
-
-        if let color = ThemeColorParser.backgroundColor(for: themeName) {
-            return UIColor(color)
+        if let snapshot = terminalOwner?.ghosttyAppWrapper?.appearanceSnapshot {
+            let appearance: TerminalColorAppearance = interfaceStyle == .dark ? .dark : .light
+            let backgroundHex = snapshot.theme(for: appearance).palette.backgroundHex
+            return UIColor(Color.fromHex(backgroundHex))
         }
         return UIColor { traits in
             traits.userInterfaceStyle == .dark ? .black : .systemBackground

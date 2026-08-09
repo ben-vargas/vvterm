@@ -670,7 +670,7 @@ extension ConnectionTerminalContainer {
                 server: server,
                 tabManager: tabManager,
                 isSelected: isVisible,
-                themeName: effectiveThemeName
+                appearance: terminalAppearanceSnapshot
             )
             .padding(terminalContentInsets)
             .opacity(isVisible ? 1 : 0)
