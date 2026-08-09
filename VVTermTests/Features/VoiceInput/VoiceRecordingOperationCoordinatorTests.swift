@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import VVTerm
 
@@ -25,15 +26,14 @@ struct VoiceRecordingOperationCoordinatorTests {
         var events: [Event] = []
         var deliveredText: [String] = []
 
-        let task = coordinator.start(
+        let task = coordinator.startRecording(
             operation: { _ in
                 events.append(.firstStarted)
                 await gate.wait()
                 events.append(.firstReleased)
-                return "stale transcription"
             },
-            onSuccess: {
-                deliveredText.append($0)
+            onStarted: {
+                deliveredText.append("stale transcription")
                 events.append(.firstSucceeded)
             },
             onFailure: { _ in events.append(.firstFailed) }
@@ -54,21 +54,21 @@ struct VoiceRecordingOperationCoordinatorTests {
         let firstGate = CancellationIgnoringGate()
         var events: [Event] = []
 
-        let firstTask = coordinator.start(
+        let firstTask = coordinator.startRecording(
             operation: { _ in
                 events.append(.firstStarted)
                 await firstGate.wait()
                 events.append(.firstReleased)
                 throw TestError.staleAttempt
             },
-            onSuccess: { _ in events.append(.firstSucceeded) },
+            onStarted: { events.append(.firstSucceeded) },
             onFailure: { _ in events.append(.firstFailed) }
         )
         await firstGate.waitUntilStarted()
 
-        let secondTask = coordinator.start(
+        let secondTask = coordinator.startRecording(
             operation: { _ in events.append(.secondStarted) },
-            onSuccess: { _ in events.append(.secondSucceeded) },
+            onStarted: { events.append(.secondSucceeded) },
             onFailure: { _ in events.append(.secondFailed) }
         )
         await secondTask.value
@@ -82,5 +82,43 @@ struct VoiceRecordingOperationCoordinatorTests {
             .secondSucceeded,
             .firstReleased,
         ])
+    }
+
+    @Test
+    func processingUsesTheRecordingOperationIdentity() async throws {
+        let coordinator = VoiceRecordingOperationCoordinator()
+        var recordingOperationID: UUID?
+        var processingOperationID: UUID?
+        var deliveredText: String?
+
+        let recordingTask = coordinator.startRecording(
+            operation: { operationID in
+                recordingOperationID = operationID
+            },
+            onFailure: { _ in }
+        )
+        await recordingTask.value
+
+        let expectedOperationID = try #require(recordingOperationID)
+        #expect(coordinator.phase == .recording(operationID: expectedOperationID))
+        #expect(coordinator.isActive)
+        #expect(!coordinator.isProcessing)
+
+        let pendingProcessingTask = coordinator.startProcessing(
+            operation: { operationID in
+                processingOperationID = operationID
+                return "transcription"
+            },
+            onSuccess: { deliveredText = $0 },
+            onFailure: { _ in }
+        )
+        let processingTask = try #require(pendingProcessingTask)
+        #expect(coordinator.phase == .processing(operationID: expectedOperationID))
+
+        await processingTask.value
+
+        #expect(processingOperationID == expectedOperationID)
+        #expect(deliveredText == "transcription")
+        #expect(coordinator.phase == .idle)
     }
 }

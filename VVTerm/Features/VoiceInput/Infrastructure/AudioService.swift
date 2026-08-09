@@ -177,7 +177,8 @@ class AudioService: NSObject, ObservableObject {
     }
 
     func stopRecording(operationID: UUID) async -> String {
-        let provider = recordingState.provider ?? .system
+        guard case .recording(let currentOperationID, let provider) = recordingState,
+              currentOperationID == operationID else { return "" }
         recordingState = .processing(operationID: operationID, provider: provider)
 
         let samples = audioCaptureService.stop()

@@ -38,8 +38,6 @@ struct TerminalTabView: View {
 
     @StateObject private var audioService = AudioService()
     @StateObject private var voiceRecordingOperation = VoiceRecordingOperationCoordinator()
-    @State private var showingVoiceRecording = false
-    @State private var voiceProcessing = false
     @State private var showingPermissionError = false
     @State private var permissionErrorMessage = ""
     #if os(macOS)
@@ -62,6 +60,9 @@ struct TerminalTabView: View {
     private var hasFocusedTerminal: Bool {
         focusedTerminal != nil
     }
+
+    private var showingVoiceRecording: Bool { voiceRecordingOperation.isActive }
+    private var voiceProcessing: Bool { voiceRecordingOperation.isProcessing }
 
     /// Split actions for menu commands - only active when this tab is selected
     private var splitActions: TerminalSplitActions? {
@@ -292,7 +293,7 @@ struct TerminalTabView: View {
             onCancel: {
                 cancelVoiceRecording()
             },
-            isProcessing: $voiceProcessing
+            isProcessing: voiceProcessing
         )
     }
 
@@ -385,11 +386,7 @@ struct TerminalTabView: View {
 
     private func startVoiceRecording() {
         clearPendingVoiceReturnForFocusedPane()
-        voiceRecordingOperation.cancel()
         audioService.cancelRecording()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            showingVoiceRecording = true
-        }
         #if os(iOS)
         let terminal = focusedTerminal
         let lifecycleState: @MainActor @Sendable () -> AudioCaptureLifecycleState = { [weak terminal] in
@@ -406,19 +403,23 @@ struct TerminalTabView: View {
             )
         }
         #endif
-        voiceRecordingOperation.start(
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            startVoiceRecordingOperation(lifecycleState: lifecycleState)
+        }
+    }
+
+    private func startVoiceRecordingOperation(
+        lifecycleState: @escaping @MainActor @Sendable () -> AudioCaptureLifecycleState
+    ) {
+        voiceRecordingOperation.startRecording(
             operation: { [audioService] operationID in
                 try await audioService.startRecording(
                     operationID: operationID,
                     lifecycleState: lifecycleState
                 )
             },
-            onSuccess: { _ in },
+            onStarted: {},
             onFailure: { error in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    showingVoiceRecording = false
-                }
-                voiceProcessing = false
                 if let recordingError = error as? AudioService.RecordingError {
                     permissionErrorMessage = recordingError.localizedDescription
                 } else {
@@ -432,27 +433,19 @@ struct TerminalTabView: View {
     private func cancelVoiceRecording() {
         voiceRecordingOperation.cancel()
         audioService.cancelRecording()
-        showingVoiceRecording = false
-        voiceProcessing = false
     }
 
     private func finishVoiceRecording() {
         guard !voiceProcessing else { return }
-        voiceProcessing = true
-        voiceRecordingOperation.start(
+        voiceRecordingOperation.startProcessing(
             operation: { [audioService] operationID in
                 await audioService.stopRecording(operationID: operationID)
             },
             onSuccess: { text in
                 let fallback = text.isEmpty ? audioService.partialTranscription : text
                 sendTranscriptionToTerminal(fallback)
-                showingVoiceRecording = false
-                voiceProcessing = false
             },
-            onFailure: { _ in
-                showingVoiceRecording = false
-                voiceProcessing = false
-            }
+            onFailure: { _ in }
         )
     }
 

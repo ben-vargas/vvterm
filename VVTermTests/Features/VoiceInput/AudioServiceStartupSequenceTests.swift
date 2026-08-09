@@ -151,6 +151,26 @@ struct AudioServiceStartupSequenceTests {
     }
 
     @Test
+    func wrongOperationCannotStopTheCurrentRecording() async throws {
+        let recordingID = UUID()
+        let service = AudioService(
+            audioCaptureService: AudioCaptureService(),
+            startupOperation: { _, _ in }
+        )
+
+        try await service.startRecording(
+            operationID: recordingID,
+            lifecycleState: { activeLifecycle }
+        )
+
+        let staleResult = await service.stopRecording(operationID: UUID())
+
+        #expect(staleResult.isEmpty)
+        #expect(service.isRecording)
+        service.cancelRecording()
+    }
+
+    @Test
     func staleProcessingSuccessCannotPublishOverAReplacement() async {
         let transcriptionGate = CancellationIgnoringGate()
         var operationIsCurrent = true
