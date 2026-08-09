@@ -116,7 +116,8 @@ struct RemoteTmuxManagerLocalIntegrationTests {
             environment: environment
         )
 
-        let externalAttach = RemoteTmuxManager.shared.attachExistingCommand(
+        let externalAttach = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: sessionName,
             ownership: .external,
             lifecycleMarkerToken: "integration"
@@ -267,7 +268,8 @@ struct RemoteTmuxManagerLocalIntegrationTests {
             environment: environment
         )
 
-        let managedCreate = RemoteTmuxManager.shared.attachCommand(
+        let managedCreate = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: managedSession,
             workingDirectory: "/tmp",
             lifecycleMarkerToken: "create"
@@ -378,7 +380,8 @@ struct RemoteTmuxManagerLocalIntegrationTests {
             environment: environment
         ))
 
-        let managedReattach = RemoteTmuxManager.shared.attachExistingCommand(
+        let managedReattach = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: managedSession,
             ownership: .managed,
             lifecycleMarkerToken: "reattach"

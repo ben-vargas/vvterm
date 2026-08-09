@@ -2223,7 +2223,12 @@ final class TerminalTabManager: ObservableObject {
     ) async {
         updatePaneTmuxStatus(paneId, status: currentTmuxStatus(for: paneId, serverId: serverId))
         let terminalType = await client.remoteTerminalType()
-        await RemoteTmuxManager.shared.prepareConfig(using: client, terminalType: terminalType, backend: backend)
+        await RemoteTmuxManager.shared.prepareConfig(
+            using: client,
+            terminalType: terminalType,
+            themeStyle: currentRemoteTmuxThemeStyle(),
+            backend: backend
+        )
     }
 
     private func tmuxStartupCommand(
@@ -2236,12 +2241,14 @@ final class TerminalTabManager: ObservableObject {
         reattachingManagedSession: Bool,
         transport: ShellTransport
     ) -> String? {
+        let themeStyle = currentRemoteTmuxThemeStyle()
         switch selection {
         case .skipTmux:
             return nil
         case .createManaged:
             if reattachingManagedSession {
-                return RemoteTmuxManager.shared.attachExistingCommand(
+                return RemoteTmuxCommandBuilder.attachExistingCommand(
+                    themeStyle: themeStyle,
                     sessionName: tmuxResolver.sessionName(for: paneId),
                     ownership: .managed,
                     backend: backend,
@@ -2249,7 +2256,8 @@ final class TerminalTabManager: ObservableObject {
                     transport: transport
                 )
             }
-            return RemoteTmuxManager.shared.attachCommand(
+            return RemoteTmuxCommandBuilder.attachCommand(
+                themeStyle: themeStyle,
                 sessionName: tmuxResolver.sessionName(for: paneId),
                 workingDirectory: workingDirectory,
                 backend: backend,
@@ -2257,7 +2265,8 @@ final class TerminalTabManager: ObservableObject {
                 transport: transport
             )
         case .attachExisting(let sessionName):
-            return RemoteTmuxManager.shared.attachExistingCommand(
+            return RemoteTmuxCommandBuilder.attachExistingCommand(
+                themeStyle: themeStyle,
                 sessionName: sessionName,
                 ownership: ownership,
                 backend: backend,
@@ -2265,6 +2274,25 @@ final class TerminalTabManager: ObservableObject {
                 transport: transport
             )
         }
+    }
+
+    private func currentRemoteTmuxThemeStyle() -> RemoteTmuxThemeStyle {
+        let storedName = UserDefaults.standard.string(
+            forKey: CloudKitSyncConstants.terminalThemeNameKey
+        )
+        return Self.remoteTmuxThemeStyle(for: storedName)
+    }
+
+    nonisolated static func remoteTmuxThemeStyle(
+        for storedName: String?
+    ) -> RemoteTmuxThemeStyle {
+        let name = (try? TerminalThemeValidator.validateAndNormalizeThemeName(
+            storedName ?? "Aizen Dark"
+        )) ?? "Aizen Dark"
+        return RemoteTmuxThemeStyle(
+            name: name,
+            modeStyle: ThemeColorParser.tmuxModeStyle(for: name)
+        )
     }
 
     func shouldReattachManagedTmuxSession(for paneId: UUID) -> Bool {
@@ -2553,7 +2581,7 @@ final class TerminalTabManager: ObservableObject {
                 ownership: ownership,
                 markerToken: lifecycleMarkerToken,
                 presenceProbe: TmuxSessionPresenceProbe(
-                    command: RemoteTmuxManager.shared.sessionPresenceProbeCommand(
+                    command: RemoteTmuxCommandBuilder.sessionPresenceProbeCommand(
                         sessionName: sessionName,
                         backend: backend,
                         existsMarker: existsMarker,
@@ -2715,7 +2743,8 @@ final class TerminalTabManager: ObservableObject {
         try Task.checkCancellation()
         guard validateOwner() else { throw CancellationError() }
 
-        let script = RemoteTmuxManager.shared.installAndAttachScript(
+        let script = RemoteTmuxCommandBuilder.installAndAttachScript(
+            themeStyle: currentRemoteTmuxThemeStyle(),
             sessionName: sessionName,
             workingDirectory: workingDirectory,
             terminalType: terminalType,

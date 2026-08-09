@@ -165,7 +165,8 @@ struct SSHStartupIntegrationTests {
 
         do {
             _ = try await client.connect(to: server, credentials: credentials)
-            let createCommand = RemoteTmuxManager.shared.attachCommand(
+            let createCommand = RemoteTmuxCommandBuilder.attachCommand(
+                themeStyle: deterministicRemoteTmuxThemeStyle,
                 sessionName: sessionName,
                 workingDirectory: "~",
                 lifecycleMarkerToken: UUID().uuidString
@@ -194,7 +195,8 @@ struct SSHStartupIntegrationTests {
             try #require(detachOutput.contains(detachMarker))
             await client.closeShell(created.id)
 
-            let reattachCommand = RemoteTmuxManager.shared.attachExistingCommand(
+            let reattachCommand = RemoteTmuxCommandBuilder.attachExistingCommand(
+                themeStyle: deterministicRemoteTmuxThemeStyle,
                 sessionName: sessionName,
                 ownership: .managed,
                 lifecycleMarkerToken: UUID().uuidString
@@ -237,7 +239,8 @@ struct SSHStartupIntegrationTests {
 
         do {
             _ = try await client.connect(to: server, credentials: credentials)
-            let createCommand = RemoteTmuxManager.shared.attachCommand(
+            let createCommand = RemoteTmuxCommandBuilder.attachCommand(
+                themeStyle: deterministicRemoteTmuxThemeStyle,
                 sessionName: sessionName,
                 workingDirectory: "~",
                 lifecycleMarkerToken: UUID().uuidString
@@ -268,7 +271,8 @@ struct SSHStartupIntegrationTests {
             try #require(detachOutput.contains(detachMarker))
             await client.closeShell(shell.id)
 
-            let reattachCommand = RemoteTmuxManager.shared.attachExistingCommand(
+            let reattachCommand = RemoteTmuxCommandBuilder.attachExistingCommand(
+                themeStyle: deterministicRemoteTmuxThemeStyle,
                 sessionName: sessionName,
                 ownership: .managed,
                 lifecycleMarkerToken: UUID().uuidString

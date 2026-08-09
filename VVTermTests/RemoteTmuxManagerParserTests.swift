@@ -58,9 +58,9 @@ enum InjectedTmuxProbeError: CaseIterable, Sendable {
 struct RemoteTmuxManagerParserTests {
 
     @Test
-    func invalidSyncedThemeNameFallsBackBeforeConfigGeneration() {
-        let theme = RemoteTmuxManager.shared.tmuxThemeConfiguration(
-            themeName: "safe\n'@\nrun-shell attacker"
+    func invalidSyncedThemeNameFallsBackAtFeatureBoundary() {
+        let theme = TerminalTabManager.remoteTmuxThemeStyle(
+            for: "safe\n'@\nrun-shell attacker"
         )
 
         #expect(theme.name == "Aizen Dark")
@@ -223,7 +223,7 @@ struct RemoteTmuxManagerParserTests {
         aizen-7922A0D1-DD37-4530-866F-30C60B0E9C26 0 1
         """
 
-        let sessions = RemoteTmuxManager.shared.parseSessionListOutput(output, allowLegacy: false)
+        let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: false)
         #expect(sessions.count == 2)
         #expect(sessions[0].name == "aizen-00F43729-7E11-4731-ADFE-603A766AFCF6")
         #expect(sessions[0].attachedClients == 1)
@@ -237,7 +237,7 @@ struct RemoteTmuxManagerParserTests {
     func parseLiteralEscapedTabsFormat() {
         let output = "prod\\t2\\t3\ndev\\t0\\t1\n"
 
-        let sessions = RemoteTmuxManager.shared.parseSessionListOutput(output, allowLegacy: false)
+        let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: false)
         #expect(sessions.count == 2)
         #expect(sessions[0] == RemoteTmuxSession(name: "prod", attachedClients: 2, windowCount: 3))
         #expect(sessions[1] == RemoteTmuxSession(name: "dev", attachedClients: 0, windowCount: 1))
@@ -250,7 +250,7 @@ struct RemoteTmuxManagerParserTests {
         local 0
         """
 
-        let sessions = RemoteTmuxManager.shared.parseSessionListOutput(output, allowLegacy: false)
+        let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: false)
         #expect(sessions.count == 2)
         #expect(sessions[0] == RemoteTmuxSession(name: "qa", attachedClients: 1, windowCount: 1))
         #expect(sessions[1] == RemoteTmuxSession(name: "local", attachedClients: 0, windowCount: 1))
@@ -263,7 +263,7 @@ struct RemoteTmuxManagerParserTests {
         detached false 2
         """
 
-        let sessions = RemoteTmuxManager.shared.parseSessionListOutput(output, allowLegacy: false)
+        let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: false)
         #expect(sessions.count == 2)
         #expect(sessions[0] == RemoteTmuxSession(name: "restored", attachedClients: 1, windowCount: 1))
         #expect(sessions[1] == RemoteTmuxSession(name: "detached", attachedClients: 0, windowCount: 2))
@@ -276,7 +276,7 @@ struct RemoteTmuxManagerParserTests {
         api: 1 windows (created Sat Feb 14 10:01:00 2026) [80x24]
         """
 
-        let sessions = RemoteTmuxManager.shared.parseSessionListOutput(output, allowLegacy: true)
+        let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: true)
         #expect(sessions.count == 2)
         #expect(sessions[0] == RemoteTmuxSession(name: "ops", attachedClients: 1, windowCount: 2))
         #expect(sessions[1] == RemoteTmuxSession(name: "api", attachedClients: 0, windowCount: 1))
@@ -291,13 +291,14 @@ struct RemoteTmuxManagerParserTests {
         gamma 0 9
         """
 
-        let sessions = RemoteTmuxManager.shared.parseSessionListOutput(output, allowLegacy: false)
+        let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: false)
         #expect(sessions.map { $0.name } == ["alpha", "beta", "zeta", "gamma"])
     }
 
     @Test
     func attachExistingCommandFallsBackToLoginShell() {
-        let command = RemoteTmuxManager.shared.attachExistingCommand(
+        let command = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "team session",
             ownership: .external
         )
@@ -308,7 +309,8 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func managedLifecycleCommandReportsDetachOrSessionEnd() {
-        let command = RemoteTmuxManager.shared.attachCommand(
+        let command = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_managed",
             workingDirectory: "/work",
             lifecycleMarkerToken: "marker-token"
@@ -333,7 +335,8 @@ struct RemoteTmuxManagerParserTests {
         "-leading-option"
     ])
     func unixWorkingDirectoryIsOneOpaqueShellArgument(_ workingDirectory: String) {
-        let command = RemoteTmuxManager.shared.attachCommand(
+        let command = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_secure",
             workingDirectory: workingDirectory
         )
@@ -345,7 +348,8 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func unixHomeWorkingDirectoryUsesQuotedExpansion() {
-        let command = RemoteTmuxManager.shared.attachCommand(
+        let command = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_secure",
             workingDirectory: "~"
         )
@@ -356,7 +360,7 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func unixSessionPresenceProbeUsesExactSessionAndPrivateMarkers() {
-        let command = RemoteTmuxManager.shared.sessionPresenceProbeCommand(
+        let command = RemoteTmuxCommandBuilder.sessionPresenceProbeCommand(
             sessionName: "vvterm_managed",
             backend: .unixTmux,
             existsMarker: "private-exists",
@@ -371,7 +375,8 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func managedReattachDoesNotRecreateMissingSession() {
-        let command = RemoteTmuxManager.shared.attachExistingCommand(
+        let command = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_managed",
             ownership: .managed,
             lifecycleMarkerToken: "marker-token"
@@ -387,7 +392,8 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func installAndAttachScriptIncludesScopedManagedConfiguration() {
-        let script = RemoteTmuxManager.shared.installAndAttachScript(
+        let script = RemoteTmuxCommandBuilder.installAndAttachScript(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_demo",
             workingDirectory: "/tmp/work dir",
             terminalType: .xtermGhostty
@@ -405,7 +411,8 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func installOnlyScriptDoesNotEnterUntrackedTmuxSession() {
-        let script = RemoteTmuxManager.shared.installAndAttachScript(
+        let script = RemoteTmuxCommandBuilder.installAndAttachScript(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_demo",
             workingDirectory: "/tmp/work",
             terminalType: .xtermGhostty,
@@ -421,15 +428,18 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func managedSessionClearBehaviorIsWindowScoped() {
-        let create = RemoteTmuxManager.shared.attachCommand(
+        let create = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_managed",
             workingDirectory: "/tmp"
         )
-        let reattach = RemoteTmuxManager.shared.attachExistingCommand(
+        let reattach = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_managed",
             ownership: .managed
         )
-        let external = RemoteTmuxManager.shared.attachExistingCommand(
+        let external = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "shared",
             ownership: .external
         )
@@ -444,15 +454,18 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func managedUnixSessionConfigurationIsScopedToItsSession() {
-        let create = RemoteTmuxManager.shared.attachCommand(
+        let create = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_managed",
             workingDirectory: "/tmp"
         )
-        let reattach = RemoteTmuxManager.shared.attachExistingCommand(
+        let reattach = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_managed",
             ownership: .managed
         )
-        let external = RemoteTmuxManager.shared.attachExistingCommand(
+        let external = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "shared",
             ownership: .external
         )
@@ -480,19 +493,22 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func managedETSessionPropagatesSnacksHintWithoutFabricatingSSHEnvironment() throws {
-        let create = RemoteTmuxManager.shared.attachCommand(
+        let create = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_et",
             workingDirectory: "/tmp",
             lifecycleMarkerToken: "create",
             transport: .eternalTerminal
         )
-        let reattach = RemoteTmuxManager.shared.attachExistingCommand(
+        let reattach = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_et",
             ownership: .managed,
             lifecycleMarkerToken: "reattach",
             transport: .eternalTerminal
         )
-        let external = RemoteTmuxManager.shared.attachExistingCommand(
+        let external = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "shared",
             ownership: .external,
             lifecycleMarkerToken: "external",
@@ -517,7 +533,8 @@ struct RemoteTmuxManagerParserTests {
     @Test
     func managedSSHAndMoshSessionsClearStaleETCompatibilityHint() {
         for transport in [ShellTransport.ssh, .sshFallback, .mosh] {
-            let command = RemoteTmuxManager.shared.attachCommand(
+            let command = RemoteTmuxCommandBuilder.attachCommand(
+                themeStyle: deterministicRemoteTmuxThemeStyle,
                 sessionName: "vvterm_transport",
                 workingDirectory: "/tmp",
                 transport: transport
@@ -535,7 +552,8 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func managedUnixCreationBootstrapsLegacyTmuxBeforeStartingTerminalShell() {
-        let command = RemoteTmuxManager.shared.attachCommand(
+        let command = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_managed",
             workingDirectory: "/tmp"
         )
@@ -561,7 +579,8 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func externalUnixSessionAttachDoesNotLoadVVTermConfiguration() {
-        let command = RemoteTmuxManager.shared.attachExistingCommand(
+        let command = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "external's; $session",
             ownership: .external
         )
@@ -580,7 +599,8 @@ struct RemoteTmuxManagerParserTests {
             shellFamily: .powershell,
             powerShellExecutable: "pwsh"
         )
-        let command = RemoteTmuxManager.shared.attachExistingCommand(
+        let command = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "external team; session",
             ownership: .external,
             backend: backend
@@ -598,7 +618,8 @@ struct RemoteTmuxManagerParserTests {
             shellFamily: .powershell,
             powerShellExecutable: "pwsh"
         )
-        let command = RemoteTmuxManager.shared.attachExistingCommand(
+        let command = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_managed",
             ownership: .managed,
             backend: backend
@@ -617,7 +638,8 @@ struct RemoteTmuxManagerParserTests {
 
         resolver.updateAttachmentState(for: paneId, selection: selection) { _ in }
         let ownership = try #require(resolver.sessionOwnership[paneId])
-        let command = RemoteTmuxManager.shared.attachExistingCommand(
+        let command = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: sessionName,
             ownership: ownership
         )
@@ -635,7 +657,8 @@ struct RemoteTmuxManagerParserTests {
 
         resolver.updateAttachmentState(for: paneId, selection: selection) { _ in }
         let ownership = try #require(resolver.sessionOwnership[paneId])
-        let command = RemoteTmuxManager.shared.attachExistingCommand(
+        let command = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "shared",
             ownership: ownership
         )
@@ -674,7 +697,9 @@ struct RemoteTmuxManagerParserTests {
 
     @Test
     func availabilityProbeUsesFallbackPathsAndNonLoginShell() {
-        let probe = RemoteTmuxManager.shared.tmuxAvailabilityProbeCommand(okMarker: "__VVTERM_TMUX_OK__")
+        let probe = RemoteTmuxCommandBuilder.tmuxAvailabilityProbeCommand(
+            okMarker: "__VVTERM_TMUX_OK__"
+        )
         #expect(probe.hasPrefix("sh -c "))
         #expect(!probe.contains("sh -lc "))
         #expect(probe.contains("command -v tmux"))
@@ -694,7 +719,8 @@ struct RemoteTmuxManagerParserTests {
             powerShellExecutable: "pwsh"
         )
 
-        let command = RemoteTmuxManager.shared.attachCommand(
+        let command = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_demo",
             workingDirectory: "C:/Users/me/project",
             backend: backend
@@ -730,7 +756,8 @@ struct RemoteTmuxManagerParserTests {
             shellFamily: .powershell,
             powerShellExecutable: "pwsh"
         )
-        let command = RemoteTmuxManager.shared.attachCommand(
+        let command = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_secure",
             workingDirectory: workingDirectory,
             backend: backend
@@ -751,7 +778,8 @@ struct RemoteTmuxManagerParserTests {
             powerShellExecutable: nil
         )
 
-        let command = RemoteTmuxManager.shared.attachCommand(
+        let command = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_secure",
             workingDirectory: "C:/work",
             backend: backend
@@ -768,7 +796,8 @@ struct RemoteTmuxManagerParserTests {
             powerShellExecutable: "pwsh"
         )
 
-        let command = RemoteTmuxManager.shared.attachCommand(
+        let command = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_demo",
             workingDirectory: "C:/work",
             backend: backend,
@@ -792,7 +821,8 @@ struct RemoteTmuxManagerParserTests {
             powerShellExecutable: "powershell"
         )
 
-        let command = RemoteTmuxManager.shared.attachExistingCommand(
+        let command = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "shared",
             ownership: .external,
             backend: backend
@@ -809,7 +839,8 @@ struct RemoteTmuxManagerParserTests {
             powerShellExecutable: "pwsh"
         )
 
-        let command = RemoteTmuxManager.shared.attachExistingCommand(
+        let command = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "shared",
             ownership: .external,
             backend: backend
@@ -827,7 +858,7 @@ struct RemoteTmuxManagerParserTests {
             powerShellExecutable: "powershell"
         )
 
-        let probe = RemoteTmuxManager.shared.windowsPsmuxAvailabilityProbeCommand(
+        let probe = RemoteTmuxCommandBuilder.windowsPsmuxAvailabilityProbeCommand(
             commandName: "tmux",
             backend: backend,
             requirePsmuxExtension: true
@@ -849,7 +880,8 @@ struct RemoteTmuxManagerParserTests {
             powerShellExecutable: "pwsh"
         )
 
-        let script = RemoteTmuxManager.shared.installAndAttachScript(
+        let script = RemoteTmuxCommandBuilder.installAndAttachScript(
+            themeStyle: deterministicRemoteTmuxThemeStyle,
             sessionName: "vvterm_demo",
             workingDirectory: "C:/work",
             terminalType: .xtermGhostty,
