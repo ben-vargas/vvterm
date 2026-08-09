@@ -4,21 +4,76 @@ import Combine
 import SwiftUI
 import os.log
 
+nonisolated struct ServerDataLoadState: Equatable, Sendable {
+    nonisolated enum Phase: Equatable, Sendable {
+        case idle
+        case loading(operationID: UUID)
+        case failed(message: String)
+    }
+
+    private(set) var phase: Phase = .idle
+
+    var isLoading: Bool {
+        if case .loading = phase {
+            return true
+        }
+        return false
+    }
+
+    var errorMessage: String? {
+        if case .failed(let message) = phase {
+            return message
+        }
+        return nil
+    }
+
+    mutating func start() -> UUID {
+        let operationID = UUID()
+        phase = .loading(operationID: operationID)
+        return operationID
+    }
+
+    @discardableResult
+    mutating func finish(operationID: UUID) -> Bool {
+        guard case .loading(operationID) = phase else {
+            return false
+        }
+        phase = .idle
+        return true
+    }
+
+    @discardableResult
+    mutating func fail(operationID: UUID, message: String) -> Bool {
+        guard case .loading(operationID) = phase else {
+            return false
+        }
+        phase = .failed(message: message)
+        return true
+    }
+
+    mutating func reset() {
+        phase = .idle
+    }
+}
+
 @MainActor
 final class ServerManager: ObservableObject {
     static let shared = ServerManager()
 
     @Published var servers: [Server] = []
     @Published var workspaces: [Workspace] = []
-    @Published var isLoading = false
-    @Published var error: String?
+    @Published private(set) var loadState = ServerDataLoadState()
     @Published private(set) var freePlanGeneration: FreePlanGeneration = ServerManager.loadStoredFreePlanGeneration() ?? .currentOneServer
+
+    var isLoading: Bool { loadState.isLoading }
+    var error: String? { loadState.errorMessage }
 
     private let cloudKit = CloudKitManager.shared
     private let syncCoordinator = CloudKitSyncCoordinator.shared
     private let keychain = KeychainManager.shared
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "ServerManager")
     private var isSyncEnabled: Bool { SyncSettings.isEnabled }
+    private var activeLoad: (id: UUID, task: Task<Void, Never>)?
 
     // Local storage keys
     private let serversKey = CloudKitSyncConstants.serverStorageKey
@@ -429,6 +484,13 @@ final class ServerManager: ObservableObject {
     func clearLocalDataAndResync() async {
         logger.info("Clearing local data and re-syncing from CloudKit...")
 
+        if let activeLoad {
+            await activeLoad.task.value
+            if self.activeLoad?.id == activeLoad.id {
+                self.activeLoad = nil
+            }
+        }
+
         // Clear local storage
         UserDefaults.standard.removeObject(forKey: serversKey)
         UserDefaults.standard.removeObject(forKey: workspacesKey)
@@ -438,7 +500,7 @@ final class ServerManager: ObservableObject {
         // Clear in-memory data
         servers = []
         workspaces = []
-        error = nil
+        loadState.reset()
 
         // Re-fetch from CloudKit
         await loadData()
@@ -449,13 +511,30 @@ final class ServerManager: ObservableObject {
     // MARK: - Data Loading
 
     func loadData() async {
-        isLoading = true
-        error = nil
-        defer { isLoading = false }
+        if let activeLoad {
+            await activeLoad.task.value
+            return
+        }
+
+        let operationID = loadState.start()
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await performLoad(operationID: operationID)
+        }
+        activeLoad = (operationID, task)
+        await task.value
+
+        if activeLoad?.id == operationID {
+            activeLoad = nil
+        }
+    }
+
+    private func performLoad(operationID: UUID) async {
 
         guard isSyncEnabled else {
             logger.info("iCloud sync disabled; using local data only")
             refreshFreePlanGeneration(persistCurrentIfNeeded: true, reason: "local_only")
+            loadState.finish(operationID: operationID)
             return
         }
 
@@ -485,9 +564,9 @@ final class ServerManager: ObservableObject {
             refreshFreePlanGeneration(persistCurrentIfNeeded: true, reason: "cloudkit_load")
 
             logger.info("Loaded \(self.workspaces.count) workspaces and \(self.servers.count) servers from CloudKit")
+            loadState.finish(operationID: operationID)
         } catch {
             logger.error("Failed to load from CloudKit: \(error.localizedDescription)")
-            self.error = error.localizedDescription
             // Local data is already loaded in init, so nothing to do here
             logger.info("Using local data: \(self.workspaces.count) workspaces and \(self.servers.count) servers")
 
@@ -497,6 +576,7 @@ final class ServerManager: ObservableObject {
                 logger.info("Schema error detected, attempting to initialize schema...")
                 await initializeCloudKitSchema()
             }
+            loadState.fail(operationID: operationID, message: error.localizedDescription)
         }
     }
 
