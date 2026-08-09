@@ -279,7 +279,7 @@ final class LocalSSHDiscoveryService: NSObject {
         return enumerateHosts(address: address, netmask: mask)
     }
 
-    nonisolated private static func enumerateHosts(address: UInt32, netmask: UInt32) -> [String] {
+    nonisolated static func enumerateHosts(address: UInt32, netmask: UInt32) -> [String] {
         let prefixLength = netmask.nonzeroBitCount
 
         if prefixLength < 24 {
@@ -293,22 +293,39 @@ final class LocalSSHDiscoveryService: NSObject {
         return hosts(in: network, broadcast: broadcast, excluding: address)
     }
 
-    nonisolated private static func hosts(
+    nonisolated static func hosts(
         in network: UInt32,
         broadcast: UInt32,
         excluding currentAddress: UInt32
     ) -> [String] {
-        guard broadcast > network + 1 else { return [] }
+        guard network < broadcast else { return [] }
 
-        let start = network + 1
-        let end = broadcast - 1
-        guard end >= start else { return [] }
+        let (start, startOverflow) = network.addingReportingOverflow(1)
+        let (end, endOverflow) = broadcast.subtractingReportingOverflow(1)
+        guard !startOverflow, !endOverflow, start <= end else { return [] }
+
+        let (distance, distanceOverflow) = end.subtractingReportingOverflow(start)
+        let (candidateCount, countOverflow) = distance.addingReportingOverflow(1)
+        let maximumCandidateCount: UInt32 = 254
+        guard !distanceOverflow,
+              !countOverflow,
+              candidateCount <= maximumCandidateCount,
+              let capacity = Int(exactly: candidateCount) else {
+            return []
+        }
 
         var result: [String] = []
-        result.reserveCapacity(Int(end - start + 1))
+        result.reserveCapacity(capacity)
 
-        for ip in start...end where ip != currentAddress {
-            result.append(ipv4String(fromHostOrderAddress: ip))
+        var address = start
+        while true {
+            if address != currentAddress {
+                result.append(ipv4String(fromHostOrderAddress: address))
+            }
+            guard address != end else { break }
+            let (nextAddress, overflow) = address.addingReportingOverflow(1)
+            guard !overflow else { return [] }
+            address = nextAddress
         }
         return result
     }
