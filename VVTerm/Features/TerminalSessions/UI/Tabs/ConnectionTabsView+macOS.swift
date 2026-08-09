@@ -327,7 +327,7 @@ extension ConnectionTerminalContainer {
     private func toolbarServerMenuEntries() -> [ToolbarMenuEntry] {
         [
             ToolbarMenuEntry(title: String(localized: "Settings"), systemImage: "gear") {
-                SettingsWindowManager.shared.show(storeManager: storeManager)
+                onOpenSettings?()
             },
             ToolbarMenuEntry(title: String(localized: "Edit Server"), systemImage: "pencil") {
                 serverToEdit = server

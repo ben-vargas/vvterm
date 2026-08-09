@@ -3,7 +3,7 @@ import AppKit
 import SwiftUI
 
 struct VVTermCommands: Commands {
-    let storeManager: StoreManager
+    let settingsWindowPresenter: SettingsWindowPresenter
     @Environment(\.openWindow) private var openWindow
     @FocusedValue(\.serverViewTabActions) private var serverViewTabActions
     @FocusedValue(\.openLocalSSHDiscovery) private var openLocalSSHDiscovery
@@ -45,7 +45,7 @@ struct VVTermCommands: Commands {
 
         CommandGroup(replacing: .appSettings) {
             Button("Settings...") {
-                SettingsWindowManager.shared.show(storeManager: storeManager)
+                settingsWindowPresenter.show()
             }
             .keyboardShortcut(",", modifiers: .command)
         }

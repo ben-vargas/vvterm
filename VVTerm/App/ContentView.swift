@@ -12,6 +12,7 @@ import AppKit
 struct ContentView: View {
     let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
+    let onOpenSettings: () -> Void
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
         LocalSSHDiscoveryManager()
     }
@@ -48,11 +49,13 @@ struct ContentView: View {
     init(
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
-        fileBrowser: RemoteFileBrowserStore
+        fileBrowser: RemoteFileBrowserStore,
+        onOpenSettings: @escaping () -> Void
     ) {
         _tabManager = ObservedObject(wrappedValue: tabManager)
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
+        self.onOpenSettings = onOpenSettings
     }
 
     /// Whether the selected server has an open terminal/file surface.
@@ -124,7 +127,7 @@ struct ContentView: View {
                     isZenModeEnabled: $isZenModeEnabled,
                     isSidebarVisible: isSidebarVisible,
                     onToggleSidebar: toggleSidebarInZenMode,
-                    onOpenSettings: nil,
+                    onOpenSettings: onOpenSettings,
                     onLeaveRoute: nil,
                     onDisconnectRoute: nil
                 )
@@ -264,6 +267,7 @@ struct ContentView: View {
                     serverManager: serverManager,
                     tabManager: tabManager,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
+                    onOpenSettings: onOpenSettings,
                     selectedWorkspace: $selectedWorkspace,
                     selectedServer: $selectedServer
                 )
@@ -299,6 +303,7 @@ struct ContentView: View {
                             serverManager: serverManager,
                             tabManager: tabManager,
                             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
+                            onOpenSettings: onOpenSettings,
                             selectedWorkspace: $selectedWorkspace,
                             selectedServer: $selectedServer
                         )
@@ -366,7 +371,8 @@ struct ContentView: View {
     ContentView(
         tabManager: tabManager,
         fileTabs: RemoteFileTabManager(),
-        fileBrowser: VVTermApp.makeRemoteFileBrowserStore(tabManager: tabManager)
+        fileBrowser: VVTermApp.makeRemoteFileBrowserStore(tabManager: tabManager),
+        onOpenSettings: {}
     )
     .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
 }

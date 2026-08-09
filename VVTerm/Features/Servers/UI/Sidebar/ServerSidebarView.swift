@@ -5,6 +5,7 @@ import SwiftUI
 struct ServerSidebarView: View {
     let serverManager: ServerManager
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    let onOpenSettings: () -> Void
     @ObservedObject private var stateStore: ServerStateStore
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedServer: Server?
@@ -40,11 +41,13 @@ struct ServerSidebarView: View {
         serverManager: ServerManager,
         tabManager: TerminalTabManager,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
+        onOpenSettings: @escaping () -> Void,
         selectedWorkspace: Binding<Workspace?>,
         selectedServer: Binding<Server?>
     ) {
         self.serverManager = serverManager
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
+        self.onOpenSettings = onOpenSettings
         _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
         _tabManager = ObservedObject(wrappedValue: tabManager)
         _selectedWorkspace = selectedWorkspace
@@ -866,7 +869,7 @@ struct ServerSidebarView: View {
 
             Button {
                 #if os(macOS)
-                SettingsWindowManager.shared.show(storeManager: storeManager)
+                onOpenSettings()
                 #endif
             } label: {
                 Image(systemName: "gear")

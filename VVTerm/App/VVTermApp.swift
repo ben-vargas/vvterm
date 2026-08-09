@@ -16,11 +16,27 @@ struct VVTermApp: App {
             client: AppStoreKitClient(),
             effects: .live
         )
+        let appLockManager = AppLockManager.shared
+        let terminalThemeManager = TerminalThemeManager.shared
+        let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager.shared
         _tabManager = StateObject(wrappedValue: tabManager)
         _storeManager = StateObject(wrappedValue: storeManager)
+        _appLockManager = StateObject(wrappedValue: appLockManager)
+        _terminalThemeManager = StateObject(wrappedValue: terminalThemeManager)
+        _terminalAccessoryPreferencesManager = StateObject(
+            wrappedValue: terminalAccessoryPreferencesManager
+        )
         _remoteFileBrowserStore = StateObject(
             wrappedValue: Self.makeRemoteFileBrowserStore(tabManager: tabManager)
         )
+        #if os(macOS)
+        settingsWindowPresenter = SettingsWindowPresenter(
+            appLockManager: appLockManager,
+            terminalThemeManager: terminalThemeManager,
+            terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
+            storeManager: storeManager
+        )
+        #endif
         appDelegate.configure(tabManager: tabManager)
         #if os(macOS)
         MacConnectionToolbarController.shared.configure(tabManager: tabManager)
@@ -44,13 +60,16 @@ struct VVTermApp: App {
     #if os(iOS)
     @StateObject private var screenAwakeCoordinator = TerminalScreenAwakeCoordinator()
     #endif
-    @StateObject private var appLockManager = AppLockManager.shared
+    @StateObject private var appLockManager: AppLockManager
     @StateObject private var tabManager: TerminalTabManager
     @StateObject private var storeManager: StoreManager
     @StateObject private var remoteFileTabManager = RemoteFileTabManager()
     @StateObject private var remoteFileBrowserStore: RemoteFileBrowserStore
-    @StateObject private var terminalThemeManager = TerminalThemeManager.shared
-    @StateObject private var terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager.shared
+    @StateObject private var terminalThemeManager: TerminalThemeManager
+    @StateObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
+    #if os(macOS)
+    private let settingsWindowPresenter: SettingsWindowPresenter
+    #endif
 
     // Welcome screen flag
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
@@ -138,7 +157,8 @@ struct VVTermApp: App {
         ContentView(
             tabManager: tabManager,
             fileTabs: remoteFileTabManager,
-            fileBrowser: remoteFileBrowserStore
+            fileBrowser: remoteFileBrowserStore,
+            onOpenSettings: { settingsWindowPresenter.show() }
         )
             .environmentObject(ghosttyApp)
             .environmentObject(terminalThemeManager)
@@ -259,7 +279,7 @@ struct VVTermApp: App {
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1100, height: 700)
         .commands {
-            VVTermCommands(storeManager: storeManager)
+            VVTermCommands(settingsWindowPresenter: settingsWindowPresenter)
         }
         #endif
     }
