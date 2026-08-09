@@ -182,7 +182,7 @@ extension RemoteFileBrowserStore {
             if state.selectedEntryPath == entry.path,
                let payload = state.viewerPayload,
                payload.entry.path == entry.path {
-                state.viewerPayload = RemoteFileViewerPayload(
+                state.viewerPhase = .loaded(RemoteFileViewerPayload(
                     previewKind: payload.previewKind,
                     entry: updatedEntry,
                     textPreview: payload.textPreview,
@@ -191,7 +191,7 @@ extension RemoteFileBrowserStore {
                     unavailableMessage: payload.unavailableMessage,
                     requiresExplicitDownload: payload.requiresExplicitDownload,
                     previewByteCount: payload.previewByteCount
-                )
+                ))
             }
         }
     }

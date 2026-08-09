@@ -19,47 +19,121 @@ struct RemoteFileFilesystemStatus: Hashable, Sendable {
     }
 }
 
-struct RemoteFileBrowserState: Sendable {
-    var currentPath: String?
-    var entries: [RemoteFileEntry]
-    var sort: RemoteFileSort
-    var sortDirection: RemoteFileSortDirection
-    var showHiddenFiles: Bool
-    var hasCustomizedHiddenFiles: Bool
-    var isLoadingDirectory: Bool
-    var isLoadingViewer: Bool
-    var isDirectoryTruncated: Bool
-    var filesystemStatus: RemoteFileFilesystemStatus?
-    var error: RemoteFileBrowserError?
-    var viewerError: RemoteFileBrowserError?
-    var viewerPayload: RemoteFileViewerPayload?
-    var selectedEntryPath: String?
+enum RemoteFileDirectoryPhase: Equatable, Sendable {
+    case notLoaded
+    case loading(requestID: UUID, hasLoadedDirectory: Bool)
+    case loaded
+    case failed(RemoteFileBrowserError, hasLoadedDirectory: Bool)
 
-    init(persisted: RemoteFileBrowserPersistedState = .init()) {
-        currentPath = persisted.lastVisitedPath.map { RemoteFilePath.normalize($0) }
-        entries = []
-        sort = persisted.sort
-        sortDirection = persisted.sortDirection
-        showHiddenFiles = persisted.showHiddenFiles
-        hasCustomizedHiddenFiles = persisted.hasCustomizedHiddenFiles
-        isLoadingDirectory = false
-        isLoadingViewer = false
-        isDirectoryTruncated = false
-        filesystemStatus = nil
-        error = nil
-        viewerError = nil
-        viewerPayload = nil
-        selectedEntryPath = nil
+    var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
     }
 
-    var breadcrumbs: [RemoteFileBreadcrumb] {
-        guard let currentPath else { return [] }
-        return RemoteFilePath.breadcrumbs(for: currentPath)
+    var hasLoadedDirectory: Bool {
+        switch self {
+        case .notLoaded:
+            return false
+        case .loading(_, let hasLoadedDirectory), .failed(_, let hasLoadedDirectory):
+            return hasLoadedDirectory
+        case .loaded:
+            return true
+        }
+    }
+
+    var error: RemoteFileBrowserError? {
+        guard case .failed(let error, _) = self else { return nil }
+        return error
+    }
+
+    mutating func begin(requestID: UUID) {
+        self = .loading(requestID: requestID, hasLoadedDirectory: hasLoadedDirectory)
+    }
+
+    @discardableResult
+    mutating func complete(requestID: UUID) -> Bool {
+        guard case .loading(let currentRequestID, _) = self,
+              currentRequestID == requestID else { return false }
+        self = .loaded
+        return true
+    }
+
+    @discardableResult
+    mutating func fail(requestID: UUID, error: RemoteFileBrowserError) -> Bool {
+        guard case .loading(let currentRequestID, let hasLoadedDirectory) = self,
+              currentRequestID == requestID else { return false }
+        self = .failed(error, hasLoadedDirectory: hasLoadedDirectory)
+        return true
+    }
+}
+
+enum RemoteFileViewerPhase: Equatable, Sendable {
+    case idle
+    case selected(path: String)
+    case loading(path: String, requestID: UUID)
+    case loaded(RemoteFileViewerPayload)
+    case failed(path: String, RemoteFileBrowserError)
+
+    var selectedEntryPath: String? {
+        switch self {
+        case .idle:
+            return nil
+        case .selected(let path), .loading(let path, _), .failed(let path, _):
+            return path
+        case .loaded(let payload):
+            return payload.entry.path
+        }
+    }
+
+    var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
+
+    var payload: RemoteFileViewerPayload? {
+        guard case .loaded(let payload) = self else { return nil }
+        return payload
+    }
+
+    var error: RemoteFileBrowserError? {
+        guard case .failed(_, let error) = self else { return nil }
+        return error
+    }
+
+    func isLoading(requestID: UUID) -> Bool {
+        guard case .loading(_, let currentRequestID) = self else { return false }
+        return currentRequestID == requestID
+    }
+
+    mutating func select(path: String) {
+        self = .selected(path: path)
+    }
+
+    mutating func beginLoading(path: String, requestID: UUID) {
+        self = .loading(path: path, requestID: requestID)
+    }
+
+    @discardableResult
+    mutating func complete(requestID: UUID, payload: RemoteFileViewerPayload) -> Bool {
+        guard case .loading(let path, let currentRequestID) = self,
+              path == payload.entry.path,
+              currentRequestID == requestID else { return false }
+        self = .loaded(payload)
+        return true
+    }
+
+    @discardableResult
+    mutating func fail(requestID: UUID, error: RemoteFileBrowserError) -> Bool {
+        guard case .loading(let path, let currentRequestID) = self,
+              currentRequestID == requestID else { return false }
+        self = .failed(path: path, error)
+        return true
     }
 }
 
 private extension UInt64 {
     func saturatingMultiply(_ other: UInt64) -> UInt64 {
-        multipliedReportingOverflow(by: other).partialValue
+        let result = multipliedReportingOverflow(by: other)
+        return result.overflow ? .max : result.partialValue
     }
 }

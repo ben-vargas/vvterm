@@ -92,6 +92,31 @@ struct RemoteFileBrowserStoreTests {
         #expect(candidates == ["/etc/nginx", "/etc", "/srv/app"])
     }
 
+    @Test
+    func staleDirectoryCompletionCannotRecreateRemovedTabState() {
+        let store = RemoteFileBrowserStore(defaults: makeDefaults())
+        let tab = makeTab()
+        let requestID = UUID()
+
+        store.updateState(for: tab) { state in
+            state.directoryPhase.begin(requestID: requestID)
+        }
+        store.removeRuntimeState(for: tab.id)
+
+        store.applyDirectorySnapshot(
+            .init(
+                path: "/tmp",
+                entries: [],
+                isTruncated: false,
+                filesystemStatus: nil
+            ),
+            to: tab,
+            requestID: requestID
+        )
+
+        #expect(store.states[tab.id] == nil)
+    }
+
     private func makeEntry(name: String, path: String, type: RemoteFileType) -> RemoteFileEntry {
         RemoteFileEntry(
             name: name,

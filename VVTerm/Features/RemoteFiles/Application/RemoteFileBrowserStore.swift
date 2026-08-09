@@ -57,15 +57,10 @@ final class RemoteFileBrowserStore: ObservableObject {
         var sortDirection: RemoteFileSortDirection
         var showHiddenFiles: Bool
         var hasCustomizedHiddenFiles: Bool
-        var hasLoadedDirectory: Bool
-        var isLoadingDirectory: Bool
-        var isLoadingViewer: Bool
+        var directoryPhase: RemoteFileDirectoryPhase
+        var viewerPhase: RemoteFileViewerPhase
         var isDirectoryTruncated: Bool
         var filesystemStatus: RemoteFileFilesystemStatus?
-        var error: RemoteFileBrowserError?
-        var viewerError: RemoteFileBrowserError?
-        var viewerPayload: RemoteFileViewerPayload?
-        var selectedEntryPath: String?
 
         init(serverId: UUID, persisted: RemoteFileBrowserPersistedState) {
             self.serverId = serverId
@@ -75,21 +70,24 @@ final class RemoteFileBrowserStore: ObservableObject {
             sortDirection = persisted.sortDirection
             showHiddenFiles = persisted.showHiddenFiles
             hasCustomizedHiddenFiles = persisted.hasCustomizedHiddenFiles
-            hasLoadedDirectory = false
-            isLoadingDirectory = false
-            isLoadingViewer = false
+            directoryPhase = .notLoaded
+            viewerPhase = .idle
             isDirectoryTruncated = false
             filesystemStatus = nil
-            error = nil
-            viewerError = nil
-            viewerPayload = nil
-            selectedEntryPath = nil
         }
 
         var breadcrumbs: [RemoteFileBreadcrumb] {
             guard let currentPath else { return [] }
             return RemoteFilePath.breadcrumbs(for: currentPath)
         }
+
+        var hasLoadedDirectory: Bool { directoryPhase.hasLoadedDirectory }
+        var isLoadingDirectory: Bool { directoryPhase.isLoading }
+        var isLoadingViewer: Bool { viewerPhase.isLoading }
+        var error: RemoteFileBrowserError? { directoryPhase.error }
+        var viewerError: RemoteFileBrowserError? { viewerPhase.error }
+        var viewerPayload: RemoteFileViewerPayload? { viewerPhase.payload }
+        var selectedEntryPath: String? { viewerPhase.selectedEntryPath }
     }
 
     struct DirectorySnapshot: Sendable {
@@ -114,9 +112,6 @@ final class RemoteFileBrowserStore: ObservableObject {
     let workingDirectoryProvider: WorkingDirectoryProvider
 
     var persistedStates: [String: RemoteFileBrowserPersistedState] = [:]
-    var directoryRequestIDs: [UUID: UUID] = [:]
-    var viewerRequestIDs: [UUID: UUID] = [:]
-
     static let directoryEntryLimit = 2_000
     static let defaultPreviewBytes = 512 * 1_024
     static let hardPreviewBytes = 2 * 1_024 * 1_024
@@ -271,24 +266,17 @@ final class RemoteFileBrowserStore: ObservableObject {
         guard !currentState.hasLoadedDirectory else { return }
 
         let requestID = UUID()
-        directoryRequestIDs[tab.id] = requestID
 
         updateState(for: tab) { state in
-            state.isLoadingDirectory = true
-            state.error = nil
+            state.directoryPhase.begin(requestID: requestID)
         }
 
         do {
             let snapshot = try await resolveInitialDirectorySnapshot(for: server, tab: tab, initialPath: initialPath)
-            guard directoryRequestIDs[tab.id] == requestID else { return }
-            applyDirectorySnapshot(snapshot, to: tab)
+            applyDirectorySnapshot(snapshot, to: tab, requestID: requestID)
         } catch {
-            guard directoryRequestIDs[tab.id] == requestID else { return }
+            guard failDirectoryRequest(requestID, for: tab, error: error) else { return }
             logger.error("Initial file browser load failed for \(server.name, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            updateState(for: tab) { state in
-                state.isLoadingDirectory = false
-                state.error = RemoteFileBrowserError.map(error)
-            }
         }
     }
 
@@ -335,13 +323,9 @@ final class RemoteFileBrowserStore: ObservableObject {
     }
 
     func focus(_ entry: RemoteFileEntry, in tab: RemoteFileTab) {
-        viewerRequestIDs[tab.id] = UUID()
         cleanupPreviewArtifact(for: state(for: tab).viewerPayload)
         updateState(for: tab) { state in
-            state.selectedEntryPath = entry.path
-            state.viewerPayload = nil
-            state.viewerError = nil
-            state.isLoadingViewer = false
+            state.viewerPhase.select(path: entry.path)
         }
     }
 
@@ -372,8 +356,6 @@ final class RemoteFileBrowserStore: ObservableObject {
     }
 
     func removeRuntimeState(for tabId: UUID) {
-        directoryRequestIDs.removeValue(forKey: tabId)
-        viewerRequestIDs.removeValue(forKey: tabId)
         temporaryStorage.removePreviewArtifact(for: states[tabId]?.viewerPayload)
         states.removeValue(forKey: tabId)
 
@@ -409,29 +391,19 @@ final class RemoteFileBrowserStore: ObservableObject {
 
         let normalizedPath = RemoteFilePath.normalize(path)
         let requestID = UUID()
-        directoryRequestIDs[tab.id] = requestID
         cleanupPreviewArtifact(for: state(for: tab).viewerPayload)
 
         updateState(for: tab) { state in
-            state.isLoadingDirectory = true
-            state.error = nil
-            state.viewerError = nil
-            state.viewerPayload = nil
-            state.selectedEntryPath = nil
+            state.directoryPhase.begin(requestID: requestID)
+            state.viewerPhase = .idle
         }
-        viewerRequestIDs.removeValue(forKey: tab.id)
 
         do {
             let snapshot = try await directorySnapshot(path: normalizedPath, for: server)
-            guard directoryRequestIDs[tab.id] == requestID else { return }
-            applyDirectorySnapshot(snapshot, to: tab)
+            applyDirectorySnapshot(snapshot, to: tab, requestID: requestID)
         } catch {
-            guard directoryRequestIDs[tab.id] == requestID else { return }
+            guard failDirectoryRequest(requestID, for: tab, error: error) else { return }
             logger.error("Directory load failed for \(normalizedPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            updateState(for: tab) { state in
-                state.isLoadingDirectory = false
-                state.error = RemoteFileBrowserError.map(error)
-            }
         }
     }
 
@@ -492,17 +464,31 @@ final class RemoteFileBrowserStore: ObservableObject {
         )
     }
 
-    func applyDirectorySnapshot(_ snapshot: DirectorySnapshot, to tab: RemoteFileTab) {
-        updateState(for: tab) { state in
+    func applyDirectorySnapshot(_ snapshot: DirectorySnapshot, to tab: RemoteFileTab, requestID: UUID) {
+        var didApply = false
+        guard updateExistingState(for: tab, mutation: { state in
+            guard state.directoryPhase.complete(requestID: requestID) else { return }
             state.currentPath = snapshot.path
             state.entries = snapshot.entries
-            state.hasLoadedDirectory = true
             state.isDirectoryTruncated = snapshot.isTruncated
             state.filesystemStatus = snapshot.filesystemStatus
-            state.isLoadingDirectory = false
-            state.error = nil
+            didApply = true
+        }) else { return }
+        if didApply {
+            persistState(for: tab.id)
         }
-        persistState(for: tab.id)
+    }
+
+    @discardableResult
+    private func failDirectoryRequest(_ requestID: UUID, for tab: RemoteFileTab, error: Error) -> Bool {
+        var didFail = false
+        guard updateExistingState(for: tab, mutation: { state in
+            didFail = state.directoryPhase.fail(
+                requestID: requestID,
+                error: RemoteFileBrowserError.map(error)
+            )
+        }) else { return false }
+        return didFail
     }
 
     func selectFile(_ entry: RemoteFileEntry, in tab: RemoteFileTab) {
@@ -528,6 +514,14 @@ final class RemoteFileBrowserStore: ObservableObject {
         var state = states[tabId] ?? BrowserState(serverId: serverId, persisted: persistedState(for: tabId))
         mutation(&state)
         states[tabId] = state
+    }
+
+    @discardableResult
+    func updateExistingState(for tab: RemoteFileTab, mutation: (inout BrowserState) -> Void) -> Bool {
+        guard var state = states[tab.id], state.serverId == tab.serverId else { return false }
+        mutation(&state)
+        states[tab.id] = state
+        return true
     }
 
     func server(for serverId: UUID) -> Server? {

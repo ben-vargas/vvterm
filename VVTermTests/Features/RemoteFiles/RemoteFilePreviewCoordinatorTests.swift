@@ -19,8 +19,7 @@ struct RemoteFilePreviewCoordinatorTests {
         try Data("preview".utf8).write(to: previewURL)
 
         store.updateState(for: tab) { state in
-            state.selectedEntryPath = entry.path
-            state.viewerPayload = RemoteFileViewerPayload(
+            state.viewerPhase = .loaded(RemoteFileViewerPayload(
                 previewKind: .text,
                 entry: entry,
                 textPreview: "preview",
@@ -29,9 +28,7 @@ struct RemoteFilePreviewCoordinatorTests {
                 unavailableMessage: nil,
                 requiresExplicitDownload: false,
                 previewByteCount: 7
-            )
-            state.viewerError = .failed("stale")
-            state.isLoadingViewer = true
+            ))
         }
 
         store.clearViewer(for: tab)

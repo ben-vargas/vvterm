@@ -26,36 +26,29 @@ extension RemoteFileBrowserStore {
            fileSize > UInt64(Self.previewConfirmationBytes),
            !allowLargeDownloads {
             cleanupPreviewArtifact(for: currentState.viewerPayload)
-            viewerRequestIDs.removeValue(forKey: tab.id)
+            let payload = RemoteFileViewerPayload(
+                previewKind: .unavailable,
+                entry: entry,
+                textPreview: nil,
+                previewFileURL: nil,
+                isTruncated: false,
+                unavailableMessage: String(
+                    localized: "This file is larger than 1 MB. Download it first if you want to preview it."
+                ),
+                requiresExplicitDownload: true,
+                previewByteCount: fileSize
+            )
             updateState(for: tab) { state in
-                state.selectedEntryPath = entry.path
-                state.isLoadingViewer = false
-                state.viewerError = nil
-                state.viewerPayload = RemoteFileViewerPayload(
-                    previewKind: .unavailable,
-                    entry: entry,
-                    textPreview: nil,
-                    previewFileURL: nil,
-                    isTruncated: false,
-                    unavailableMessage: String(
-                        localized: "This file is larger than 1 MB. Download it first if you want to preview it."
-                    ),
-                    requiresExplicitDownload: true,
-                    previewByteCount: fileSize
-                )
+                state.viewerPhase = .loaded(payload)
             }
             return
         }
 
         let requestID = UUID()
-        viewerRequestIDs[tab.id] = requestID
         cleanupPreviewArtifact(for: currentState.viewerPayload)
 
         updateState(for: tab) { state in
-            state.selectedEntryPath = entry.path
-            state.isLoadingViewer = true
-            state.viewerError = nil
-            state.viewerPayload = nil
+            state.viewerPhase.beginLoading(path: entry.path, requestID: requestID)
         }
 
         do {
@@ -65,7 +58,7 @@ extension RemoteFileBrowserStore {
                 try await service.readFile(at: entry.path, maxBytes: effectiveReadLimit)
             }
 
-            guard viewerRequestIDs[tab.id] == requestID else { return }
+            guard state(for: tab).viewerPhase.isLoading(requestID: requestID) else { return }
 
             let previewData = data.prefix(Self.defaultPreviewBytes)
             let isTruncated = (entry.size.map { $0 > UInt64(Self.defaultPreviewBytes) } ?? false)
@@ -139,31 +132,31 @@ extension RemoteFileBrowserStore {
                 )
             }
 
-            updateState(for: tab) { state in
-                state.isLoadingViewer = false
-                state.viewerError = nil
-                state.viewerPayload = payload
+            var didComplete = false
+            let stateStillExists = updateExistingState(for: tab) { state in
+                didComplete = state.viewerPhase.complete(requestID: requestID, payload: payload)
+            }
+            if !stateStillExists || !didComplete {
+                cleanupPreviewArtifact(for: payload)
             }
         } catch {
-            guard viewerRequestIDs[tab.id] == requestID else { return }
+            var didFail = false
+            guard updateExistingState(for: tab, mutation: { state in
+                didFail = state.viewerPhase.fail(
+                    requestID: requestID,
+                    error: RemoteFileBrowserError.map(error)
+                )
+            }) else { return }
+            guard didFail else { return }
             logger.error("Remote file preview failed for \(entry.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            updateState(for: tab) { state in
-                state.isLoadingViewer = false
-                state.viewerPayload = nil
-                state.viewerError = RemoteFileBrowserError.map(error)
-            }
         }
     }
 
     func clearViewer(for tab: RemoteFileTab) {
         cleanupPreviewArtifact(for: state(for: tab).viewerPayload)
         updateState(for: tab) { state in
-            state.selectedEntryPath = nil
-            state.viewerPayload = nil
-            state.viewerError = nil
-            state.isLoadingViewer = false
+            state.viewerPhase = .idle
         }
-        viewerRequestIDs.removeValue(forKey: tab.id)
     }
 
     func saveTextPreview(
@@ -192,7 +185,7 @@ extension RemoteFileBrowserStore {
             }
 
             if state.selectedEntryPath == entry.path {
-                state.viewerPayload = RemoteFileViewerPayload(
+                state.viewerPhase = .loaded(RemoteFileViewerPayload(
                     previewKind: .text,
                     entry: updatedEntry,
                     textPreview: text,
@@ -201,8 +194,7 @@ extension RemoteFileBrowserStore {
                     unavailableMessage: nil,
                     requiresExplicitDownload: false,
                     previewByteCount: UInt64(data.count)
-                )
-                state.viewerError = nil
+                ))
             }
         }
     }
