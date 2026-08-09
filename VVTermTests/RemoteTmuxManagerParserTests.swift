@@ -57,6 +57,16 @@ enum InjectedTmuxProbeError: CaseIterable, Sendable {
 
 struct RemoteTmuxManagerParserTests {
 
+    @Test
+    func invalidSyncedThemeNameFallsBackBeforeConfigGeneration() {
+        let theme = RemoteTmuxManager.shared.tmuxThemeConfiguration(
+            themeName: "safe\n'@\nrun-shell attacker"
+        )
+
+        #expect(theme.name == "Aizen Dark")
+        #expect(!theme.modeStyle.contains("run-shell"))
+    }
+
     private func resolveAvailability(
         environment: RemoteEnvironment = .fallbackPOSIX,
         outputs: [Result<String, Error>]

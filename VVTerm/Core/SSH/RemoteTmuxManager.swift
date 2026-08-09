@@ -1335,10 +1335,14 @@ actor RemoteTmuxManager {
         return lines
     }
 
-    nonisolated private func tmuxThemeConfiguration() -> (name: String, modeStyle: String) {
-        let name = UserDefaults.standard.string(
+    nonisolated func tmuxThemeConfiguration(
+        themeName: String? = UserDefaults.standard.string(
             forKey: CloudKitSyncConstants.terminalThemeNameKey
-        ) ?? "Aizen Dark"
+        )
+    ) -> (name: String, modeStyle: String) {
+        let name = (try? TerminalThemeValidator.validateAndNormalizeThemeName(
+            themeName ?? "Aizen Dark"
+        )) ?? "Aizen Dark"
         return (name, ThemeColorParser.tmuxModeStyle(for: name))
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-enum CloudKitSyncConstants {
+nonisolated enum CloudKitSyncConstants {
     static let appPrefix = "com.vivy.vvterm"
     static let cloudKitContainerIdentifier = "iCloud.app.vivy.VivyTerm"
     static let recordZoneName = "VVTermZone"

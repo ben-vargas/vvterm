@@ -1,6 +1,6 @@
 import Foundation
 
-enum TerminalThemeStoragePaths {
+nonisolated enum TerminalThemeStoragePaths {
     nonisolated static func customThemesDirectoryURL() -> URL {
         let fm = FileManager.default
         let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -15,7 +15,20 @@ enum TerminalThemeStoragePaths {
         customThemesDirectoryURL().path
     }
 
-    nonisolated static func customThemeFilePath(for themeName: String) -> String {
-        customThemesDirectoryURL().appendingPathComponent(themeName).path
+    nonisolated static func customThemeFileURL(for themeName: String) -> URL? {
+        guard let name = try? TerminalThemeValidator.validateAndNormalizeThemeName(themeName) else {
+            return nil
+        }
+        let directoryURL = customThemesDirectoryURL().standardizedFileURL.resolvingSymlinksInPath()
+        let fileURL = directoryURL
+            .appendingPathComponent(name, isDirectory: false)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        guard fileURL.deletingLastPathComponent() == directoryURL else { return nil }
+        return fileURL
+    }
+
+    nonisolated static func customThemeFilePath(for themeName: String) -> String? {
+        customThemeFileURL(for: themeName)?.path
     }
 }

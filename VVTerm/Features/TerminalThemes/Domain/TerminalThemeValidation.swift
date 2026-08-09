@@ -1,10 +1,11 @@
 import Foundation
 
-enum TerminalThemeValidationError: LocalizedError {
+nonisolated enum TerminalThemeValidationError: LocalizedError {
     case emptyContent
     case invalidLine(line: Int)
     case invalidHex(line: Int)
     case invalidPalette(line: Int)
+    case unsupportedKey(line: Int, key: String)
     case missingRequiredKey(String)
     case invalidName
     case themeNotFound
@@ -28,6 +29,12 @@ enum TerminalThemeValidationError: LocalizedError {
                 format: String(localized: "Invalid palette value at line %lld. Expected N=#RRGGBB where N is 0...15."),
                 Int64(line)
             )
+        case .unsupportedKey(let line, let key):
+            return String(
+                format: String(localized: "Unsupported theme key at line %1$lld: %2$@."),
+                Int64(line),
+                key
+            )
         case .missingRequiredKey(let key):
             return String(
                 format: String(localized: "Theme is missing required key: %@."),
@@ -41,7 +48,9 @@ enum TerminalThemeValidationError: LocalizedError {
     }
 }
 
-enum TerminalThemeValidator {
+nonisolated enum TerminalThemeValidator {
+    static let maximumNameLength = 80
+
     private static let colorKeys = Set([
         "background",
         "foreground",
@@ -50,6 +59,32 @@ enum TerminalThemeValidator {
         "selection-background",
         "selection-foreground"
     ])
+
+    nonisolated static func validateAndNormalizeThemeName(_ rawName: String) throws -> String {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty,
+              name == rawName,
+              name.count <= maximumNameLength,
+              name != ".",
+              name != "..",
+              !name.contains("/"),
+              !name.contains("\\"),
+              !name.contains(":"),
+              !name.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            throw TerminalThemeValidationError.invalidName
+        }
+        return name
+    }
+
+    nonisolated static func validateAndNormalizeTheme(_ theme: TerminalTheme) throws -> TerminalTheme {
+        TerminalTheme(
+            id: theme.id,
+            name: try validateAndNormalizeThemeName(theme.name),
+            content: try validateAndNormalizeThemeContent(theme.content),
+            updatedAt: theme.updatedAt,
+            deletedAt: theme.deletedAt
+        )
+    }
 
     nonisolated static func isValidHexColor(_ value: String) -> Bool {
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -115,7 +150,7 @@ enum TerminalThemeValidator {
                 continue
             }
 
-            normalizedLines.append("\(key) = \(value)")
+            throw TerminalThemeValidationError.unsupportedKey(line: lineNumber, key: key)
         }
 
         guard seenBackground else {

@@ -129,8 +129,11 @@ struct ThemeColorParser {
         }
 
         let selectionForeground = value(for: "selection-foreground", in: content)
+            .flatMap(TerminalThemeValidator.normalizeHexColor(_:))
         let foreground = value(for: "foreground", in: content)
+            .flatMap(TerminalThemeValidator.normalizeHexColor(_:))
         let selectionBackground = value(for: "selection-background", in: content)
+            .flatMap(TerminalThemeValidator.normalizeHexColor(_:))
 
         let fg = normalizeHex(selectionForeground ?? foreground ?? fallbackForegroundHex)
         let bg = normalizeHex(selectionBackground ?? fallbackSelectionBackgroundHex)
@@ -176,9 +179,13 @@ struct ThemeColorParser {
     }
 
     private nonisolated static func themeFilePath(for themeName: String) -> String? {
+        guard let themeName = try? TerminalThemeValidator.validateAndNormalizeThemeName(themeName) else {
+            return nil
+        }
+
         // Try custom themes first.
-        let customThemeFile = TerminalThemeStoragePaths.customThemeFilePath(for: themeName)
-        if FileManager.default.fileExists(atPath: customThemeFile) {
+        if let customThemeFile = TerminalThemeStoragePaths.customThemeFilePath(for: themeName),
+           FileManager.default.fileExists(atPath: customThemeFile) {
             return customThemeFile
         }
 

@@ -132,7 +132,9 @@ final class TerminalThemeManager: ObservableObject {
         guard !trimmed.isEmpty else { throw TerminalThemeValidationError.invalidName }
         let sanitized = sanitizeThemeName(trimmed)
         guard !sanitized.isEmpty else { throw TerminalThemeValidationError.invalidName }
-        let finalName = uniqueThemeName(from: sanitized)
+        let finalName = try TerminalThemeValidator.validateAndNormalizeThemeName(
+            uniqueThemeName(from: sanitized)
+        )
 
         let theme = TerminalTheme(
             name: finalName,
@@ -163,7 +165,9 @@ final class TerminalThemeManager: ObservableObject {
         guard !sanitized.isEmpty else { throw TerminalThemeValidationError.invalidName }
 
         let previousName = customThemes[index].name
-        let finalName = uniqueThemeName(from: sanitized, excludingThemeID: id)
+        let finalName = try TerminalThemeValidator.validateAndNormalizeThemeName(
+            uniqueThemeName(from: sanitized, excludingThemeID: id)
+        )
         let now = Date()
 
         customThemes[index].name = finalName
@@ -211,7 +215,9 @@ final class TerminalThemeManager: ObservableObject {
             return
         }
         do {
-            customThemes = try JSONDecoder().decode([TerminalTheme].self, from: data)
+            customThemes = try JSONDecoder()
+                .decode([TerminalTheme].self, from: data)
+                .compactMap { try? TerminalThemeValidator.validateAndNormalizeTheme($0) }
         } catch {
             customThemes = []
             logger.error("Failed to decode custom themes: \(error.localizedDescription)")
@@ -246,7 +252,9 @@ final class TerminalThemeManager: ObservableObject {
             }
 
             for theme in visibleThemes {
-                let fileURL = directoryURL.appendingPathComponent(theme.name)
+                guard let fileURL = TerminalThemeStoragePaths.customThemeFileURL(for: theme.name) else {
+                    continue
+                }
                 try theme.content.write(to: fileURL, atomically: true, encoding: .utf8)
             }
         } catch {
@@ -279,11 +287,13 @@ final class TerminalThemeManager: ObservableObject {
 
     private func sanitizeThemeName(_ name: String) -> String {
         var sanitized = name.replacingOccurrences(of: "/", with: "-")
+        sanitized = sanitized.replacingOccurrences(of: "\\", with: "-")
         sanitized = sanitized.replacingOccurrences(of: ":", with: "-")
-        sanitized = sanitized.replacingOccurrences(of: "\n", with: " ")
-        sanitized = sanitized.replacingOccurrences(of: "\r", with: " ")
-        sanitized = sanitized.replacingOccurrences(of: "\t", with: " ")
-        return sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
+        sanitized = String(sanitized.unicodeScalars.map {
+            CharacterSet.controlCharacters.contains($0) ? " " : Character($0)
+        })
+        let trimmed = sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed == "." || trimmed == ".." ? "" : trimmed
     }
 
     private func uniqueThemeName(from baseName: String, excludingThemeID: UUID? = nil) -> String {
@@ -480,7 +490,12 @@ final class TerminalThemeManager: ObservableObject {
     private func mergeRemoteThemes(_ remoteThemes: [TerminalTheme]) {
         var localByID = Dictionary(uniqueKeysWithValues: customThemes.map { ($0.id, $0) })
 
-        for remoteTheme in remoteThemes {
+        for untrustedRemoteTheme in remoteThemes {
+            guard let remoteTheme = try? TerminalThemeValidator.validateAndNormalizeTheme(
+                untrustedRemoteTheme
+            ) else {
+                continue
+            }
             if let localTheme = localByID[remoteTheme.id] {
                 if remoteTheme.updatedAt > localTheme.updatedAt {
                     localByID[remoteTheme.id] = remoteTheme

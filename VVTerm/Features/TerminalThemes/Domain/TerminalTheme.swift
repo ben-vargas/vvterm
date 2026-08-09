@@ -6,7 +6,7 @@
 import Foundation
 import CloudKit
 
-struct TerminalTheme: Identifiable, Codable, Equatable {
+nonisolated struct TerminalTheme: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var name: String
     var content: String
@@ -32,7 +32,7 @@ struct TerminalTheme: Identifiable, Codable, Equatable {
     }
 }
 
-struct TerminalThemePreference: Codable, Equatable {
+nonisolated struct TerminalThemePreference: Codable, Equatable, Sendable {
     static let recordName = "terminal-theme-preference.v1"
 
     var darkThemeName: String
@@ -48,14 +48,16 @@ extension TerminalTheme {
         guard
             let id = UUID(uuidString: record.recordID.recordName),
             let name = record["name"] as? String,
-            let content = record["content"] as? String
+            let content = record["content"] as? String,
+            let validatedName = try? TerminalThemeValidator.validateAndNormalizeThemeName(name),
+            let normalizedContent = try? TerminalThemeValidator.validateAndNormalizeThemeContent(content)
         else {
             return nil
         }
 
         self.id = id
-        self.name = name
-        self.content = content
+        self.name = validatedName
+        self.content = normalizedContent
         self.updatedAt = record["updatedAt"] as? Date ?? Date.distantPast
         self.deletedAt = record["deletedAt"] as? Date
     }
@@ -76,13 +78,15 @@ extension TerminalThemePreference {
         guard
             let darkThemeName = record["darkThemeName"] as? String,
             let lightThemeName = record["lightThemeName"] as? String,
-            let usePerAppearanceTheme = record["usePerAppearanceTheme"] as? Int
+            let usePerAppearanceTheme = record["usePerAppearanceTheme"] as? Int,
+            let validatedDarkThemeName = try? TerminalThemeValidator.validateAndNormalizeThemeName(darkThemeName),
+            let validatedLightThemeName = try? TerminalThemeValidator.validateAndNormalizeThemeName(lightThemeName)
         else {
             return nil
         }
 
-        self.darkThemeName = darkThemeName
-        self.lightThemeName = lightThemeName
+        self.darkThemeName = validatedDarkThemeName
+        self.lightThemeName = validatedLightThemeName
         self.usePerAppearanceTheme = usePerAppearanceTheme != 0
         self.updatedAt = record["updatedAt"] as? Date ?? Date.distantPast
     }
