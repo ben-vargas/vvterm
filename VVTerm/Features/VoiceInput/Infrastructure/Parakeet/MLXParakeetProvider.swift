@@ -65,6 +65,7 @@ nonisolated final class ParakeetModelLoader {
         let configURL = modelDirectory.appendingPathComponent("config.json")
         let configData = try Data(contentsOf: configURL)
         let config = try JSONDecoder().decode(ParakeetTDTConfig.self, from: configData)
+        try MLXModelConfigurationValidator.validateParakeet(config)
 
         let weightURLs = Self.weightFileURLs(in: modelDirectory)
         guard !weightURLs.isEmpty else {

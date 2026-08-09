@@ -132,6 +132,7 @@ nonisolated final class WhisperModelLoader {
         let configURL = modelDirectory.appendingPathComponent("config.json")
         let configData = try Data(contentsOf: configURL)
         let config = try JSONDecoder().decode(WhisperModelDimensions.self, from: configData)
+        try MLXModelConfigurationValidator.validateWhisper(config)
 
         let weightURLs = Self.weightFileURLs(in: modelDirectory)
         guard !weightURLs.isEmpty else {
@@ -151,7 +152,7 @@ nonisolated final class WhisperModelLoader {
             let arrays = try NPZLoader.loadArrays(from: npzURL)
             weights.merge(arrays) { _, new in new }
         }
-        let model = WhisperModel(dims: config, dtype: .float16)
+        let model = try WhisperModel(dims: config, dtype: .float16)
 
         let nested = Self.nestedDictionary(from: weights)
         try model.update(parameters: nested, verify: .none)
