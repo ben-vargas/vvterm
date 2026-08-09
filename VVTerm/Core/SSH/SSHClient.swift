@@ -66,9 +66,51 @@ enum SSHUploadStrategy: Sendable {
 }
 
 actor SSHClient {
+    enum LifecyclePhase: Equatable, Sendable {
+        case disconnected
+        case connecting
+        case connected
+        case disconnecting
+        case failed
+        case aborted
+    }
+
+    private struct ConnectingState {
+        let id: UUID
+        let key: String
+        let task: Task<SSHSession, Error>
+        var pendingSession: SSHSession?
+        let startupTrace: SSHStartupTrace
+    }
+
+    private struct ConnectedState {
+        let id: UUID
+        let key: String
+        var server: Server
+        let session: SSHSession
+        var remoteEnvironment: RemoteEnvironment?
+        var remoteTerminalType: RemoteTerminalType?
+        let startupTrace: SSHStartupTrace
+    }
+
+    private struct AbortedState {
+        let operationID: UUID?
+        let session: SSHSession?
+        let connectTask: Task<SSHSession, Error>?
+    }
+
     private struct DisconnectOperation {
         let id: UUID
         let task: Task<Void, Never>
+    }
+
+    private enum Lifecycle {
+        case disconnected
+        case connecting(ConnectingState)
+        case connected(ConnectedState)
+        case disconnecting(DisconnectOperation)
+        case failed
+        case aborted(AbortedState)
     }
 
     private struct MoshShellRuntime {
@@ -87,19 +129,11 @@ actor SSHClient {
         let lease: RemoteMoshServerLease
     }
 
-    private var session: SSHSession?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "SSH")
     private var keepAliveTask: Task<Void, Never>?
-    private var connectTask: Task<SSHSession, Error>?
-    private var pendingConnectSession: SSHSession?
-    private var connectionKey: String?
-    private var connectedServer: Server?
-    private var resolvedRemoteEnvironment: RemoteEnvironment?
-    private var resolvedRemoteTerminalType: RemoteTerminalType?
-    private var startupTrace: SSHStartupTrace?
+    private var lifecycle: Lifecycle = .disconnected
     private var moshShells: [UUID: MoshShellRuntime] = [:]
     private var pendingMoshServerLeases: [UUID: RemoteMoshServerLease] = [:]
-    private var disconnectOperation: DisconnectOperation?
     private let cloudflareTransportManager = CloudflareTransportManager()
     private let moshStartupTimeout: Duration = .seconds(8)
     private let connectTimeout: Duration
@@ -112,12 +146,52 @@ actor SSHClient {
         self.connectTimeout = connectTimeout
     }
 
-    /// Prevents new client operations after disconnect begins.
-    private var _isAborted = false
-
     /// Check if the client has been aborted
     var isAborted: Bool {
-        _isAborted
+        switch lifecycle {
+        case .aborted, .disconnecting:
+            return true
+        case .disconnected, .connecting, .connected, .failed:
+            return false
+        }
+    }
+
+    var lifecyclePhase: LifecyclePhase {
+        switch lifecycle {
+        case .disconnected:
+            return .disconnected
+        case .connecting:
+            return .connecting
+        case .connected:
+            return .connected
+        case .disconnecting:
+            return .disconnecting
+        case .failed:
+            return .failed
+        case .aborted:
+            return .aborted
+        }
+    }
+
+    private var session: SSHSession? {
+        guard case .connected(let state) = lifecycle else { return nil }
+        return state.session
+    }
+
+    private var connectedServer: Server? {
+        guard case .connected(let state) = lifecycle else { return nil }
+        return state.server
+    }
+
+    private var startupTrace: SSHStartupTrace? {
+        switch lifecycle {
+        case .connecting(let state):
+            return state.startupTrace
+        case .connected(let state):
+            return state.startupTrace
+        case .disconnected, .disconnecting, .failed, .aborted:
+            return nil
+        }
     }
 
     func probeLiveTransport(
@@ -148,56 +222,131 @@ actor SSHClient {
 
     /// Interrupts an active or pending transport before bounded cleanup starts.
     func abortConnection() {
-        _isAborted = true
-        connectTask?.cancel()
-        pendingConnectSession?.abort()
-        session?.abort()
+        switch lifecycle {
+        case .connecting(let state):
+            state.task.cancel()
+            state.pendingSession?.abort()
+            lifecycle = .aborted(
+                AbortedState(
+                    operationID: state.id,
+                    session: state.pendingSession,
+                    connectTask: state.task
+                )
+            )
+        case .connected(let state):
+            state.session.abort()
+            lifecycle = .aborted(
+                AbortedState(operationID: state.id, session: state.session, connectTask: nil)
+            )
+        case .disconnecting:
+            break
+        case .disconnected, .failed, .aborted:
+            lifecycle = .aborted(
+                AbortedState(operationID: nil, session: nil, connectTask: nil)
+            )
+        }
     }
 
     // MARK: - Connection
 
     func connect(to server: Server, credentials: ServerCredentials) async throws -> SSHSession {
-        while let disconnectOperation {
-            await disconnectOperation.task.value
+        if case .disconnecting(let operation) = lifecycle {
+            await operation.task.value
         }
-        _isAborted = false
+        if case .aborted(let state) = lifecycle,
+           state.session != nil || state.connectTask != nil {
+            await disconnect()
+        }
         try Task.checkCancellation()
 
-        let key = "\(server.host):\(server.port):\(server.username):\(server.connectionMode):\(server.authMethod):\(server.cloudflareAccessMode?.rawValue ?? "none"):\(server.cloudflareTeamDomainOverride ?? "")"
+        let key = connectionKey(for: server)
 
-        if let session = session, await session.isConnected, connectionKey == key {
-            connectedServer = server
-            return session
-        }
-
-        if let task = connectTask, connectionKey == key {
-            let connected = try await task.value
-            connectedServer = server
-            return connected
-        }
-
-        if let session = session, await session.isConnected, connectionKey != key {
+        switch lifecycle {
+        case .connected(var state):
+            if state.key == key, await state.session.isConnected {
+                state.server = server
+                lifecycle = .connected(state)
+                return state.session
+            }
             throw SSHError.connectionFailed("SSH client already connected")
+        case .connecting(let state) where state.key == key:
+            return try await resolveConnection(
+                operationID: state.id,
+                key: key,
+                server: server,
+                task: state.task
+            )
+        case .connecting:
+            throw SSHError.connectionFailed("SSH client already connected")
+        case .disconnected, .failed, .aborted, .disconnecting:
+            break
         }
 
+        let startupTrace = SSHStartupTrace(logger: logger)
+        let operationID = UUID()
+        let task = Task {
+            try await performConnectionAttempt(
+                operationID: operationID,
+                server: server,
+                credentials: credentials,
+                startupTrace: startupTrace
+            )
+        }
+        lifecycle = .connecting(
+            ConnectingState(
+                id: operationID,
+                key: key,
+                task: task,
+                pendingSession: nil,
+                startupTrace: startupTrace
+            )
+        )
+        return try await resolveConnection(
+            operationID: operationID,
+            key: key,
+            server: server,
+            task: task
+        )
+    }
+
+    private func connectionKey(for server: Server) -> String {
+        "\(server.host):\(server.port):\(server.username):\(server.connectionMode):\(server.authMethod):\(server.cloudflareAccessMode?.rawValue ?? "none"):\(server.cloudflareTeamDomainOverride ?? "")"
+    }
+
+    private func performConnectionAttempt(
+        operationID: UUID,
+        server: Server,
+        credentials: ServerCredentials,
+        startupTrace: SSHStartupTrace
+    ) async throws -> SSHSession {
         logger.info(
             "Connecting to \(server.host, privacy: .private(mask: .hash)):\(server.port) [mode: \(server.connectionMode.rawValue, privacy: .public)]"
         )
         logger.info("Auth method: \(String(describing: server.authMethod)), password present: \(credentials.password != nil)")
-        let startupTrace = SSHStartupTrace(logger: logger)
-        self.startupTrace = startupTrace
         let transportToken = startupTrace.begin(.transportPreparation)
 
         var dialHost = server.host
         var dialPort = server.port
 
         if server.connectionMode == .cloudflare {
-            let localPort = try await cloudflareTransportManager.connect(server: server, credentials: credentials)
+            let localPort = try await cloudflareTransportManager.connect(
+                server: server,
+                credentials: credentials
+            )
             dialHost = "127.0.0.1"
             dialPort = Int(localPort)
             logger.info("Using Cloudflare local tunnel endpoint \(dialHost):\(dialPort)")
         } else {
             await disconnectCloudflareTransport(reason: "pre-connect cleanup")
+        }
+
+        guard case .connecting(let currentState) = lifecycle,
+              currentState.id == operationID,
+              !Task.isCancelled else {
+            if shouldCleanupConnectionTransport(for: operationID) {
+                await disconnectCloudflareTransport(reason: "cancelled transport preparation")
+            }
+            throw CancellationError()
         }
         startupTrace.end(transportToken, detail: server.connectionMode.rawValue)
 
@@ -213,73 +362,111 @@ actor SSHClient {
             authMethod: server.authMethod,
             credentials: credentials
         )
-
         let pendingSession = SSHSession(config: config, startupTrace: startupTrace)
-        pendingConnectSession = pendingSession
 
-        let task = Task { [connectTimeout] () -> SSHSession in
-            try Task.checkCancellation()
-            do {
-                try await HardOperationDeadline.run(
-                    timeout: connectTimeout,
-                    onTimeout: {
-                        startupTrace.recordOnce(
-                            .connectionDeadline,
-                            outcome: "timeout"
-                        )
-                        pendingSession.abort()
-                    }
-                ) {
-                    try await pendingSession.connect()
-                }
-                try Task.checkCancellation()
-                return pendingSession
-            } catch {
-                pendingSession.abort()
-                Task.detached(priority: .utility) {
-                    await pendingSession.disconnect()
-                }
-                if error is HardOperationDeadlineError {
-                    throw SSHError.timeout
-                }
-                throw error
-            }
+        guard case .connecting(var connectingState) = lifecycle,
+              connectingState.id == operationID else {
+            pendingSession.abort()
+            throw CancellationError()
         }
-
-        connectTask = task
-        connectionKey = key
+        connectingState.pendingSession = pendingSession
+        lifecycle = .connecting(connectingState)
 
         do {
-            let session = try await task.value
-            pendingConnectSession = nil
-            if _isAborted || Task.isCancelled || task.isCancelled {
-                session.abort()
-                await session.disconnect()
-                connectTask = nil
-                connectionKey = nil
-                self.session = nil
-                self.connectedServer = nil
-                await disconnectCloudflareTransport(reason: "connect cancellation")
+            try await HardOperationDeadline.run(
+                timeout: connectTimeout,
+                onTimeout: {
+                    startupTrace.recordOnce(
+                        .connectionDeadline,
+                        outcome: "timeout"
+                    )
+                    pendingSession.abort()
+                }
+            ) {
+                try await pendingSession.connect()
+            }
+            try Task.checkCancellation()
+            return pendingSession
+        } catch {
+            pendingSession.abort()
+            Task.detached(priority: .utility) {
+                await pendingSession.disconnect()
+            }
+            if error is HardOperationDeadlineError {
+                throw SSHError.timeout
+            }
+            throw error
+        }
+    }
+
+    private func resolveConnection(
+        operationID: UUID,
+        key: String,
+        server: Server,
+        task: Task<SSHSession, Error>
+    ) async throws -> SSHSession {
+        do {
+            let connectedSession = try await task.value
+            guard !Task.isCancelled, !task.isCancelled else {
+                connectedSession.abort()
+                await connectedSession.disconnect()
+                if case .connecting(let state) = lifecycle, state.id == operationID {
+                    lifecycle = .aborted(AbortedState(
+                        operationID: operationID,
+                        session: connectedSession,
+                        connectTask: nil
+                    ))
+                }
+                if shouldCleanupConnectionTransport(for: operationID) {
+                    await disconnectCloudflareTransport(reason: "connect cancellation")
+                }
                 throw CancellationError()
             }
-            self.session = session
-            self.connectedServer = server
-            self.resolvedRemoteEnvironment = nil
-            self.resolvedRemoteTerminalType = nil
-            startKeepAlive()
-            connectTask = nil
-            logger.info("Connected to \(server.host, privacy: .private(mask: .hash))")
-            return session
+
+            switch lifecycle {
+            case .connecting(let state) where state.id == operationID:
+                lifecycle = .connected(
+                    ConnectedState(
+                        id: operationID,
+                        key: key,
+                        server: server,
+                        session: connectedSession,
+                        remoteEnvironment: nil,
+                        remoteTerminalType: nil,
+                        startupTrace: state.startupTrace
+                    )
+                )
+                startKeepAlive()
+                logger.info("Connected to \(server.host, privacy: .private(mask: .hash))")
+                return connectedSession
+            case .connected(var state)
+                where state.id == operationID && state.session === connectedSession:
+                state.server = server
+                lifecycle = .connected(state)
+                return connectedSession
+            default:
+                connectedSession.abort()
+                await connectedSession.disconnect()
+                if shouldCleanupConnectionTransport(for: operationID) {
+                    await disconnectCloudflareTransport(reason: "stale connect completion")
+                }
+                throw CancellationError()
+            }
         } catch {
-            pendingConnectSession = nil
-            connectTask = nil
-            connectionKey = nil
-            self.session = nil
-            self.connectedServer = nil
-            self.resolvedRemoteEnvironment = nil
-            self.resolvedRemoteTerminalType = nil
-            self.startupTrace = nil
-            await disconnectCloudflareTransport(reason: "connect failure")
+            let ownsFailure: Bool
+            if case .connecting(let state) = lifecycle, state.id == operationID {
+                ownsFailure = true
+            } else {
+                ownsFailure = false
+            }
+            if shouldCleanupConnectionTransport(for: operationID) {
+                await disconnectCloudflareTransport(reason: "connect failure")
+            }
+            if ownsFailure,
+               case .connecting(let state) = lifecycle,
+               state.id == operationID {
+                lifecycle = .failed
+            }
             if server.connectionMode == .cloudflare,
                case SSHError.connectionFailed(let message) = error,
                message.contains("SSH handshake failed: -13") {
@@ -293,13 +480,40 @@ actor SSHClient {
         }
     }
 
+    private func shouldCleanupConnectionTransport(for operationID: UUID) -> Bool {
+        switch lifecycle {
+        case .connecting(let state):
+            return state.id == operationID
+        case .connected(let state):
+            return state.id == operationID
+        case .aborted(let state):
+            return state.operationID == operationID
+        case .disconnected, .disconnecting, .failed:
+            return true
+        }
+    }
+
     func disconnect() async {
-        if let disconnectOperation {
-            await disconnectOperation.task.value
+        if case .disconnecting(let operation) = lifecycle {
+            await operation.task.value
             return
         }
 
-        _isAborted = true
+        let activeSession: SSHSession?
+        switch lifecycle {
+        case .connecting(let state):
+            state.task.cancel()
+            state.pendingSession?.abort()
+            activeSession = state.pendingSession
+        case .connected(let state):
+            activeSession = state.session
+        case .aborted(let state):
+            state.connectTask?.cancel()
+            state.session?.abort()
+            activeSession = state.session
+        case .disconnected, .disconnecting, .failed:
+            activeSession = nil
+        }
 
         let pendingMoshServerLeases = Array(self.pendingMoshServerLeases.values)
         self.pendingMoshServerLeases.removeAll()
@@ -308,18 +522,6 @@ actor SSHClient {
 
         keepAliveTask?.cancel()
         keepAliveTask = nil
-        connectTask?.cancel()
-        connectTask = nil
-        pendingConnectSession?.abort()
-        pendingConnectSession = nil
-        connectionKey = nil
-
-        let activeSession = session
-        session = nil
-        connectedServer = nil
-        resolvedRemoteEnvironment = nil
-        resolvedRemoteTerminalType = nil
-        startupTrace = nil
 
         let operationID = UUID()
         let disconnectTimeout = self.disconnectTimeout
@@ -353,14 +555,14 @@ actor SSHClient {
             self.finishDisconnect(operationID: operationID)
             logger.info("Disconnected")
         }
-        disconnectOperation = DisconnectOperation(id: operationID, task: task)
+        lifecycle = .disconnecting(DisconnectOperation(id: operationID, task: task))
         await task.value
     }
 
     // MARK: - Command Execution
 
     func execute(_ command: String, timeout: Duration? = nil) async throws -> String {
-        guard !_isAborted else {
+        guard !isAborted else {
             throw SSHError.notConnected
         }
         guard let session = session else {
@@ -379,7 +581,7 @@ actor SSHClient {
         permissions: Int32 = 0o600,
         strategy: SSHUploadStrategy = .automatic
     ) async throws {
-        guard !_isAborted else {
+        guard !isAborted else {
             throw SSHError.notConnected
         }
         guard let session = session else {
@@ -401,16 +603,27 @@ actor SSHClient {
     }
 
     func remoteEnvironment(forceRefresh: Bool = false) async -> RemoteEnvironment {
-        if !forceRefresh, let resolvedRemoteEnvironment {
-            return resolvedRemoteEnvironment
+        if !forceRefresh,
+           case .connected(let state) = lifecycle,
+           let remoteEnvironment = state.remoteEnvironment {
+            return remoteEnvironment
         }
 
+        let connectionID: UUID?
+        if case .connected(let state) = lifecycle {
+            connectionID = state.id
+        } else {
+            connectionID = nil
+        }
         let token = startupTrace?.begin(.remoteEnvironment)
         let environment = await RemoteEnvironmentResolver.resolve(using: self)
         if let token {
             startupTrace?.end(token, detail: environment.platform.rawValue)
         }
-        resolvedRemoteEnvironment = environment
+        if case .connected(var state) = lifecycle, state.id == connectionID {
+            state.remoteEnvironment = environment
+            lifecycle = .connected(state)
+        }
         logger.info(
             "Resolved remote environment [platform: \(environment.platform.rawValue, privacy: .public), shell: \(environment.shellProfile.family.rawValue, privacy: .public), active: \(environment.activeShellName ?? "unknown", privacy: .public)]"
         )
@@ -418,11 +631,19 @@ actor SSHClient {
     }
 
     func remoteTerminalType(forceRefresh: Bool = false) async -> RemoteTerminalType {
-        if !forceRefresh, let resolvedRemoteTerminalType {
-            return resolvedRemoteTerminalType
+        if !forceRefresh,
+           case .connected(let state) = lifecycle,
+           let remoteTerminalType = state.remoteTerminalType {
+            return remoteTerminalType
         }
 
         let environment = await remoteEnvironment(forceRefresh: forceRefresh)
+        let connectionID: UUID?
+        if case .connected(let state) = lifecycle {
+            connectionID = state.id
+        } else {
+            connectionID = nil
+        }
         let token = startupTrace?.begin(.terminalType)
         let terminalType = await RemoteTerminalTypeResolver.resolve(
             environment: environment,
@@ -434,7 +655,10 @@ actor SSHClient {
         if let token {
             startupTrace?.end(token, detail: terminalType.rawValue)
         }
-        resolvedRemoteTerminalType = terminalType
+        if case .connected(var state) = lifecycle, state.id == connectionID {
+            state.remoteTerminalType = terminalType
+            lifecycle = .connected(state)
+        }
         logger.info("Resolved remote terminal type: \(terminalType.rawValue, privacy: .public)")
         return terminalType
     }
@@ -456,49 +680,49 @@ actor SSHClient {
     // MARK: - Remote Files
 
     func listDirectory(at path: String, maxEntries: Int? = nil) async throws -> [RemoteFileEntry] {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         return try await session.listDirectory(at: path, maxEntries: maxEntries)
     }
 
     func stat(at path: String) async throws -> RemoteFileEntry {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         return try await session.stat(at: path)
     }
 
     func lstat(at path: String) async throws -> RemoteFileEntry {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         return try await session.lstat(at: path)
     }
 
     func readlink(at path: String) async throws -> String {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         return try await session.readlink(at: path)
     }
 
     func readFile(at path: String, maxBytes: Int, offset: UInt64 = 0) async throws -> Data {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         return try await session.readFile(at: path, maxBytes: maxBytes, offset: offset)
     }
 
     func fileSystemStatus(at path: String) async throws -> RemoteFileFilesystemStatus {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         return try await session.fileSystemStatus(at: path)
     }
 
     func downloadFile(at path: String, to localURL: URL) async throws {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
 
@@ -512,7 +736,7 @@ actor SSHClient {
     }
 
     func writeFile(_ data: Data, to path: String, permissions: Int32 = 0o644) async throws {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         try await SSHClient.runWithTimeout(uploadTimeout) {
@@ -522,42 +746,42 @@ actor SSHClient {
     }
 
     func resolveHomeDirectory() async throws -> String {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         return try await session.resolveHomeDirectory()
     }
 
     func createDirectory(at path: String, permissions: Int32 = 0o755) async throws {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         try await session.createDirectory(at: path, permissions: permissions)
     }
 
     func setPermissions(at path: String, permissions: UInt32) async throws {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         try await session.setPermissions(at: path, permissions: permissions)
     }
 
     func renameItem(at sourcePath: String, to destinationPath: String) async throws {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         try await session.renameItem(at: sourcePath, to: destinationPath)
     }
 
     func deleteFile(at path: String) async throws {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         try await session.deleteFile(at: path)
     }
 
     func deleteDirectory(at path: String) async throws {
-        guard !_isAborted, let session = session else {
+        guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
         try await session.deleteDirectory(at: path)
@@ -572,7 +796,7 @@ actor SSHClient {
         startupCommand: String? = nil
     ) async throws -> ShellHandle {
         try Task.checkCancellation()
-        guard !_isAborted, let sshSession = session else {
+        guard !isAborted, let sshSession = session else {
             throw SSHError.notConnected
         }
 
@@ -717,7 +941,7 @@ actor SSHClient {
 
     private func validateShellStartupSession(_ expectedSession: SSHSession) throws {
         try Task.checkCancellation()
-        guard !_isAborted,
+        guard !isAborted,
               let currentSession = session,
               currentSession === expectedSession else {
             throw SSHError.notConnected
@@ -725,7 +949,7 @@ actor SSHClient {
     }
 
     func write(_ data: Data, to shellId: UUID) async throws {
-        guard !_isAborted else {
+        guard !isAborted else {
             throw SSHError.notConnected
         }
 
@@ -814,8 +1038,13 @@ actor SSHClient {
     }
 
     private func finishDisconnect(operationID: UUID) {
-        guard disconnectOperation?.id == operationID else { return }
-        disconnectOperation = nil
+        guard case .disconnecting(let operation) = lifecycle,
+              operation.id == operationID else {
+            return
+        }
+        lifecycle = .aborted(
+            AbortedState(operationID: nil, session: nil, connectTask: nil)
+        )
     }
 
     nonisolated static func cleanupPendingMoshServerLeases(
@@ -905,7 +1134,7 @@ actor SSHClient {
         cols: Int,
         rows: Int
     ) async throws -> ShellHandle {
-        guard !_isAborted else { throw SSHError.notConnected }
+        guard !isAborted else { throw SSHError.notConnected }
 
         let restoredSession = try await MoshClientSession.restore(from: snapshot)
         do {

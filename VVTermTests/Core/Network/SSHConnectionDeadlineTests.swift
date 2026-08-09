@@ -34,8 +34,58 @@ struct SSHConnectionDeadlineTests {
         }
 
         #expect(startedAt.duration(to: .now) < .seconds(2))
+        #expect(await client.lifecyclePhase == .failed)
         listener.close()
         await client.disconnect()
+        #expect(await client.lifecyclePhase == .aborted)
+    }
+
+    @Test
+    func abortDuringHandshakeRejectsStaleCompletionAndAllowsCleanup() async throws {
+        let listener = try LoopbackListener()
+        let client = SSHClient(connectTimeout: .seconds(10))
+        let server = Server(
+            workspaceId: UUID(),
+            name: "Aborted handshake",
+            host: "127.0.0.1",
+            port: listener.port,
+            username: "test",
+            authMethod: .password
+        )
+        let credentials = ServerCredentials(serverId: server.id, password: "unused")
+        let connection = Task {
+            try await client.connect(to: server, credentials: credentials)
+        }
+
+        for _ in 0..<1_000 {
+            if await client.lifecyclePhase == .connecting { break }
+            await Task.yield()
+        }
+        #expect(await client.lifecyclePhase == .connecting)
+
+        await client.abortConnection()
+        #expect(await client.lifecyclePhase == .aborted)
+        #expect(await client.isAborted)
+
+        do {
+            _ = try await connection.value
+            Issue.record("Expected the aborted handshake to fail")
+        } catch is CancellationError {
+            // Expected.
+        } catch let error as SSHError {
+            if case .notConnected = error {
+                // Expected if the socket observes the abort first.
+            } else {
+                Issue.record("Expected cancellation or notConnected, received \(error)")
+            }
+        } catch {
+            Issue.record("Expected cancellation or notConnected, received \(error)")
+        }
+
+        #expect(await client.lifecyclePhase == .aborted)
+        listener.close()
+        await client.disconnect()
+        #expect(await client.lifecyclePhase == .aborted)
     }
 }
 #endif
