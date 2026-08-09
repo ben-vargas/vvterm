@@ -29,6 +29,28 @@ struct RemoteFileTransferPlanNode: Sendable {
     }
 }
 
+struct LocalFileIdentity: Hashable, Sendable {
+    let device: UInt64
+    let inode: UInt64
+}
+
+struct LocalUploadPlanNode: Sendable {
+    enum Kind: Sendable {
+        case regularFile(byteCount: UInt64)
+        case directory
+    }
+
+    let sourceURL: URL
+    let name: String
+    let identity: LocalFileIdentity
+    let kind: Kind
+    let children: [LocalUploadPlanNode]
+
+    var unitCount: Int {
+        children.reduce(1) { $0 + $1.unitCount }
+    }
+}
+
 struct RemoteFileTraversalBudget {
     private(set) var admittedEntries = 0
     let limits: RemoteFileTransferLimits
@@ -101,5 +123,14 @@ struct RemoteFileTransferByteBudget {
             throw RemoteFileBrowserError.resourceLimitExceeded
         }
         consumedBytes += byteCount
+    }
+
+    func validateUploadCapacity(availableBytes: UInt64) throws {
+        let usableBytes = availableBytes > limits.minimumFreeBytes
+            ? availableBytes - limits.minimumFreeBytes
+            : 0
+        guard consumedBytes <= usableBytes else {
+            throw RemoteFileBrowserError.resourceLimitExceeded
+        }
     }
 }

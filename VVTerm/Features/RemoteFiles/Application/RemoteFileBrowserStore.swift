@@ -25,30 +25,6 @@ final class RemoteFileBrowserStore: ObservableObject {
         let currentItemName: String
     }
 
-    struct LocalUploadPlanItem: Identifiable, Sendable {
-        let sourceURL: URL
-        let remoteName: String
-
-        var id: String {
-            "\(sourceURL.absoluteString)->\(remoteName)"
-        }
-    }
-
-    struct LocalUploadPlanCandidate: Identifiable, Sendable {
-        let sourceURL: URL
-        let originalName: String
-        let existingEntry: RemoteFileEntry?
-        let suggestedName: String?
-
-        var id: String {
-            "\(sourceURL.absoluteString)->\(originalName)"
-        }
-
-        var hasConflict: Bool {
-            existingEntry != nil
-        }
-    }
-
     struct BrowserState: Sendable {
         let serverId: UUID
         var currentPath: String?

@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import os.log
 import MoshCore
 import MoshBootstrap
@@ -744,6 +745,29 @@ actor SSHClient {
         try await SSHClient.runWithTimeout(uploadTimeout) {
             try Task.checkCancellation()
             try await session.writeFile(data, to: path, permissions: permissions)
+        }
+    }
+
+    func upload(
+        fileAt localURL: URL,
+        to remotePath: String,
+        expectedBytes: UInt64,
+        permissions: Int32 = 0o644
+    ) async throws {
+        guard !isAborted, let session else {
+            throw SSHError.notConnected
+        }
+        logger.info(
+            "Starting streamed SSH upload [path: \(remotePath, privacy: .private(mask: .hash))] [bytes: \(expectedBytes)]"
+        )
+        try await SSHClient.runWithTimeout(uploadTimeout) {
+            try Task.checkCancellation()
+            try await session.writeFile(
+                from: localURL,
+                to: remotePath,
+                expectedBytes: expectedBytes,
+                permissions: permissions
+            )
         }
     }
 
@@ -2273,6 +2297,102 @@ actor SSHSession {
             }
 
             throw Self.remoteFileError(from: sftp, operation: "write file", path: normalizedPath)
+        }
+    }
+
+    func writeFile(
+        from localURL: URL,
+        to path: String,
+        expectedBytes: UInt64,
+        permissions: Int32 = 0o644
+    ) async throws {
+        let descriptor = Darwin.open(localURL.path, O_RDONLY | O_NOFOLLOW)
+        guard descriptor >= 0 else {
+            throw RemoteFileBrowserError.resourceLimitExceeded
+        }
+        let localFile = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        defer { try? localFile.close() }
+
+        var localStatus = Darwin.stat()
+        guard fstat(descriptor, &localStatus) == 0,
+              localStatus.st_mode & S_IFMT == S_IFREG,
+              localStatus.st_size >= 0,
+              UInt64(localStatus.st_size) == expectedBytes else {
+            throw RemoteFileBrowserError.resourceLimitExceeded
+        }
+
+        let sftp = try await ensureSFTPSession()
+        let normalizedPath = RemoteFilePath.normalize(path)
+        let remoteHandle = try await openFileHandle(
+            at: normalizedPath,
+            sftp: sftp,
+            flags: UInt32(LIBSSH2_FXF_WRITE | LIBSSH2_FXF_TRUNC | LIBSSH2_FXF_CREAT),
+            mode: permissions,
+            operation: "write file"
+        )
+        do {
+            var totalBytesWritten: UInt64 = 0
+            while let chunk = try localFile.read(upToCount: 64 * 1_024), !chunk.isEmpty {
+                try Task.checkCancellation()
+                let chunkBytes = UInt64(chunk.count)
+                guard chunkBytes <= expectedBytes - min(totalBytesWritten, expectedBytes) else {
+                    throw RemoteFileBrowserError.resourceLimitExceeded
+                }
+
+                var chunkOffset = 0
+                while chunkOffset < chunk.count {
+                    try Task.checkCancellation()
+                    let bytesWritten = chunk.withUnsafeBytes { rawBuffer -> Int in
+                        guard let baseAddress = rawBuffer.baseAddress else { return 0 }
+                        let writeAddress = baseAddress
+                            .advanced(by: chunkOffset)
+                            .assumingMemoryBound(to: CChar.self)
+                        return Int(
+                            libssh2_sftp_write(
+                                remoteHandle,
+                                writeAddress,
+                                chunk.count - chunkOffset
+                            )
+                        )
+                    }
+
+                    if bytesWritten > 0 {
+                        chunkOffset += bytesWritten
+                        totalBytesWritten += UInt64(bytesWritten)
+                        continue
+                    }
+                    if bytesWritten == Int(LIBSSH2_ERROR_EAGAIN) {
+                        await waitForSocket()
+                        continue
+                    }
+                    throw Self.remoteFileError(
+                        from: sftp,
+                        operation: "write file",
+                        path: normalizedPath
+                    )
+                }
+            }
+
+            guard totalBytesWritten == expectedBytes else {
+                throw RemoteFileBrowserError.resourceLimitExceeded
+            }
+            libssh2_sftp_close_handle(remoteHandle)
+        } catch {
+            libssh2_sftp_close_handle(remoteHandle)
+            await removePartialFile(at: normalizedPath, sftp: sftp)
+            throw error
+        }
+    }
+
+    private func removePartialFile(at path: String, sftp: OpaquePointer) async {
+        let pathLength = UInt32(path.utf8.count)
+        for _ in 0..<32 {
+            let result = path.withCString { pathPointer in
+                libssh2_sftp_unlink_ex(sftp, pathPointer, pathLength)
+            }
+            if result == 0 { return }
+            guard result == Int32(LIBSSH2_ERROR_EAGAIN) else { return }
+            await waitForSocket()
         }
     }
 

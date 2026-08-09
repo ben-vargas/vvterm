@@ -12,6 +12,12 @@ protocol RemoteFileService {
         permissions: Int32,
         strategy: SSHUploadStrategy
     ) async throws
+    func upload(
+        fileAt localURL: URL,
+        to remotePath: String,
+        expectedBytes: UInt64,
+        permissions: Int32
+    ) async throws
     func createDirectory(at path: String, permissions: Int32) async throws
     func renameItem(at sourcePath: String, to destinationPath: String) async throws
     func deleteFile(at path: String) async throws

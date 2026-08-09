@@ -37,6 +37,20 @@ struct SFTPRemoteFileService: RemoteFileService {
         )
     }
 
+    func upload(
+        fileAt localURL: URL,
+        to remotePath: String,
+        expectedBytes: UInt64,
+        permissions: Int32
+    ) async throws {
+        try await client.upload(
+            fileAt: localURL,
+            to: remotePath,
+            expectedBytes: expectedBytes,
+            permissions: permissions
+        )
+    }
+
     func createDirectory(at path: String, permissions: Int32) async throws {
         try await client.createDirectory(at: path, permissions: permissions)
     }
