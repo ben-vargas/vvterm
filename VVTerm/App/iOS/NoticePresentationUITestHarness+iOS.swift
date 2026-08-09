@@ -151,7 +151,6 @@ private struct ConnectionBannerHandoffHarness: View {
                 id: UUID(),
                 paneId: paneId,
                 serverId: UUID(),
-                serverName: "production",
                 existingSessions: []
             )
         }

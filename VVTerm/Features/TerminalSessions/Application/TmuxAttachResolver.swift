@@ -232,13 +232,10 @@ final class TmuxAttachResolver {
         availableSessions: [TmuxAttachSessionInfo],
         setPrompt: @MainActor @Sendable @escaping (TmuxAttachPrompt?) -> Void
     ) async -> TmuxAttachSelection {
-        let serverName = configuration.serverSettings(serverId)?.name
-            ?? String(localized: "Server")
         let prompt = TmuxAttachPrompt(
             id: requestId,
             paneId: entityId,
             serverId: serverId,
-            serverName: serverName,
             existingSessions: availableSessions
         )
 
