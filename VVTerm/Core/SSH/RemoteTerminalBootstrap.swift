@@ -51,6 +51,36 @@ enum RemoteShellLaunchPlan: Hashable, Sendable {
     case exec(String)
 }
 
+enum RemoteWorkingDirectoryRestoreFailure: String, LocalizedError, Sendable {
+    case emptyPath
+    case unsupportedShell
+    case invalidWindowsPath
+    case literalCmdPathRequiresPowerShell
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyPath:
+            return String(localized: "The saved working directory is empty.")
+        case .unsupportedShell:
+            return String(localized: "The remote shell does not support working-directory restoration.")
+        case .invalidWindowsPath:
+            return String(localized: "The saved Windows working directory contains invalid characters.")
+        case .literalCmdPathRequiresPowerShell:
+            return String(localized: "This literal cmd.exe path requires PowerShell, but PowerShell is unavailable.")
+        }
+    }
+}
+
+enum RemoteWorkingDirectoryRestorePlan: Equatable, Sendable {
+    case command(String)
+    case keepDefault(RemoteWorkingDirectoryRestoreFailure)
+
+    var command: String? {
+        guard case .command(let command) = self else { return nil }
+        return command
+    }
+}
+
 enum RemoteTerminalBootstrap {
     nonisolated static let defaultTerminalType: RemoteTerminalType = .xterm256Color
     nonisolated static let termProgram = "ghostty"
@@ -221,11 +251,14 @@ enum RemoteTerminalBootstrap {
         "\"\(try validatedCmdLiteralPath(path))\""
     }
 
-    nonisolated static func directoryChangeCommand(
+    nonisolated static func workingDirectoryRestorePlan(
         for path: String,
         environment: RemoteEnvironment = .fallbackPOSIX
-    ) -> String {
-        environment.shellProfile.directoryChangeCommand(for: path)
+    ) -> RemoteWorkingDirectoryRestorePlan {
+        environment.shellProfile.workingDirectoryRestorePlan(
+            for: path,
+            powerShellExecutable: environment.powerShellExecutable
+        )
     }
 
     nonisolated static func posixDirectoryChangeCommand(for path: String) -> String {
@@ -241,12 +274,37 @@ enum RemoteTerminalBootstrap {
         return "Set-Location -LiteralPath \(powerShellQuoted(resolved))\r\n"
     }
 
-    nonisolated static func cmdDirectoryChangeCommand(for path: String) -> String {
+    nonisolated static func cmdWorkingDirectoryRestorePlan(
+        for path: String,
+        powerShellExecutable: String?
+    ) -> RemoteWorkingDirectoryRestorePlan {
+        guard path.rangeOfCharacter(from: .controlCharacters) == nil else {
+            return .keepDefault(.invalidWindowsPath)
+        }
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "\n" }
+        guard !trimmed.isEmpty else { return .keepDefault(.emptyPath) }
         let resolved = normalizedWindowsPath(from: trimmed) ?? trimmed
-        guard let literalPath = try? validatedCmdLiteralPath(resolved) else { return "" }
-        return "cd /d \"\(literalPath)\"\r\n"
+        let invalidCharacters = CharacterSet(charactersIn: "\"|<>")
+        guard resolved.rangeOfCharacter(from: invalidCharacters) == nil else {
+            return .keepDefault(.invalidWindowsPath)
+        }
+
+        let changeCommand = resolved.hasPrefix(#"\\"#) ? "pushd" : "cd /d"
+        guard resolved.contains("%") || resolved.contains("!") else {
+            return .command("\(changeCommand) \"\(resolved)\"\r\n")
+        }
+        guard let powerShellExecutable else {
+            return .keepDefault(.literalCmdPathRequiresPowerShell)
+        }
+
+        // cmd.exe expands %NAME% inside quotes, and !NAME! when delayed expansion is on.
+        // PowerShell passes the path through one environment-variable expansion. cmd.exe
+        // does not recursively expand percent tokens inside the resulting value.
+        let nestedCommand = "\(changeCommand) \"%VVTERM_CWD%\""
+        let script = """
+        $env:VVTERM_CWD = \(powerShellQuoted(resolved)); & $env:ComSpec /d /v:off /k \(powerShellQuoted(nestedCommand))
+        """
+        return .command(wrapPowerShellCommand(script, executableName: powerShellExecutable) + "\r\n")
     }
 
     private nonisolated static func validatedCmdLiteralPath(_ path: String) throws -> String {

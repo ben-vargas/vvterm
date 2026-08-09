@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import VVTerm
 
@@ -27,7 +28,7 @@ struct RemoteTerminalBootstrapTests {
         platform: .windows,
         shellProfile: .cmd,
         activeShellName: "cmd.exe",
-        powerShellExecutable: nil
+        powerShellExecutable: "powershell"
     )
 
     @Test
@@ -106,44 +107,115 @@ struct RemoteTerminalBootstrapTests {
 
     @Test
     func directoryChangeCommandUsesPOSIXCdForUnixPaths() {
-        let command = RemoteTerminalBootstrap.directoryChangeCommand(for: "/var/www/app's", environment: posixEnvironment)
+        let plan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+            for: "/var/www/app's",
+            environment: posixEnvironment
+        )
 
-        #expect(command == "cd -- '/var/www/app'\\''s'\n")
+        #expect(plan == .command("cd -- '/var/www/app'\\''s'\n"))
     }
 
     @Test
     func directoryChangeCommandUsesPowerShellForWindowsPaths() {
-        let command = RemoteTerminalBootstrap.directoryChangeCommand(for: #"C:\Users\O'Hara\repo"#, environment: powerShellEnvironment)
+        let plan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+            for: #"C:\Users\O'Hara\repo"#,
+            environment: powerShellEnvironment
+        )
 
-        #expect(command == "Set-Location -LiteralPath 'C:\\Users\\O''Hara\\repo'\r\n")
+        #expect(plan == .command("Set-Location -LiteralPath 'C:\\Users\\O''Hara\\repo'\r\n"))
     }
 
     @Test
     func directoryChangeCommandNormalizesOSCStyleWindowsPaths() {
-        let command = RemoteTerminalBootstrap.directoryChangeCommand(for: "/C:/Users/test/project", environment: powerShellEnvironment)
+        let plan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+            for: "/C:/Users/test/project",
+            environment: powerShellEnvironment
+        )
 
-        #expect(command == "Set-Location -LiteralPath 'C:\\Users\\test\\project'\r\n")
+        #expect(plan == .command("Set-Location -LiteralPath 'C:\\Users\\test\\project'\r\n"))
     }
 
     @Test
     func directoryChangeCommandUsesCmdSyntaxForCmdProfile() {
-        let command = RemoteTerminalBootstrap.directoryChangeCommand(for: #"C:\Users\test\project"#, environment: cmdEnvironment)
+        let plan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+            for: #"C:\Users\test\project"#,
+            environment: cmdEnvironment
+        )
 
-        #expect(command == "cd /d \"C:\\Users\\test\\project\"\r\n")
+        #expect(plan == .command("cd /d \"C:\\Users\\test\\project\"\r\n"))
     }
 
     @Test
-    func directoryChangeCommandRejectsCmdControlAndExpansionCharacters() {
+    func cmdWorkingDirectorySupportsSpacesParenthesesUnicodeAndCaret() {
         let paths = [
-            "C:\\safe\r\nwhoami",
-            "C:\\safe%PATH%",
-            "C:\\safe!PATH!",
-            "C:\\safe&whoami",
+            #"C:\Program Files (x86)"#,
+            #"C:\Users\Wiedy Mi\项目"#,
+            #"C:\safe^name"#,
+            #"C:\safe&name"#
         ]
 
         for path in paths {
-            #expect(RemoteTerminalBootstrap.directoryChangeCommand(for: path, environment: cmdEnvironment).isEmpty)
+            #expect(
+                RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+                    for: path,
+                    environment: cmdEnvironment
+                ) == .command("cd /d \"\(path)\"\r\n")
+            )
         }
+    }
+
+    @Test
+    func cmdWorkingDirectoryUsesPushdForUNCPath() {
+        let path = #"\\server\share\Program Files (x86)"#
+
+        let plan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+            for: path,
+            environment: cmdEnvironment
+        )
+
+        #expect(plan == .command("pushd \"\(path)\"\r\n"))
+    }
+
+    @Test(arguments: [#"C:\literal\%USERPROFILE%"#, #"C:\literal\!name!"#])
+    func cmdWorkingDirectoryPreservesExpansionCharactersAsLiteral(path: String) throws {
+        let plan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+            for: path,
+            environment: cmdEnvironment
+        )
+        let command = try #require(plan.command)
+        let script = try #require(decodedPowerShellScript(from: command))
+
+        #expect(!command.contains(path))
+        #expect(script.contains("$env:VVTERM_CWD = \(RemoteTerminalBootstrap.powerShellQuoted(path))"))
+        #expect(script.contains("$env:ComSpec /d /v:off /k"))
+        #expect(script.contains(#"cd /d "%VVTERM_CWD%""#))
+    }
+
+    @Test(arguments: ["|", "<", ">", "\"", "\r", "\n", "\0"])
+    func cmdWorkingDirectoryRejectsInjectionCharacters(character: String) {
+        let plan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+            for: "C:\\safe\(character)whoami",
+            environment: cmdEnvironment
+        )
+
+        #expect(plan == .keepDefault(.invalidWindowsPath))
+    }
+
+    @Test
+    func cmdWorkingDirectoryReturnsTypedFailureWhenLiteralTransportIsUnavailable() {
+        let environment = RemoteEnvironment(
+            platform: .windows,
+            shellProfile: .cmd,
+            activeShellName: "cmd.exe",
+            powerShellExecutable: nil
+        )
+
+        let plan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+            for: #"C:\literal\%USERPROFILE%"#,
+            environment: environment
+        )
+
+        #expect(plan == .keepDefault(.literalCmdPathRequiresPowerShell))
     }
 
     @Test
@@ -213,5 +285,16 @@ struct RemoteTerminalBootstrapTests {
             #expect(environment["SSH_CLIENT"] == nil)
             #expect(environment["SSH_TTY"] == nil)
         }
+    }
+
+    private func decodedPowerShellScript(from command: String) -> String? {
+        guard let encodedCommand = command
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: " ")
+            .last,
+              let data = Data(base64Encoded: String(encodedCommand)) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf16LittleEndian)
     }
 }

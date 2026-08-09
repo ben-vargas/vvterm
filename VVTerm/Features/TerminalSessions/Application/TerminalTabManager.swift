@@ -2308,11 +2308,20 @@ final class TerminalTabManager: ObservableObject {
         }
 
         let environment = await client.remoteEnvironment()
+        let restorePlan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+            for: workingDirectory,
+            environment: environment
+        )
+        guard case .command(let command) = restorePlan else {
+            if case .keepDefault(let reason) = restorePlan {
+                logger.warning(
+                    "Keeping the default ET directory [reason: \(reason.rawValue, privacy: .public)]"
+                )
+            }
+            return plan
+        }
         return TerminalShellStartupPlan(
-            command: RemoteTerminalBootstrap.directoryChangeCommand(
-                for: workingDirectory,
-                environment: environment
-            ),
+            command: command,
             tmuxLifecycle: nil
         )
     }

@@ -305,8 +305,19 @@ final class TerminalPaneSSHCoordinator {
         guard let cwd = await MainActor.run(body: { TerminalTabManager.shared.workingDirectory(for: paneId) }) else { return }
         let environment = await sshClient.remoteEnvironment()
         guard environment.shellProfile.family != .unknown else { return }
-        let command = RemoteTerminalBootstrap.directoryChangeCommand(for: cwd, environment: environment)
-        guard !command.isEmpty, let payload = command.data(using: .utf8) else { return }
+        let restorePlan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+            for: cwd,
+            environment: environment
+        )
+        guard case .command(let command) = restorePlan else {
+            if case .keepDefault(let reason) = restorePlan {
+                logger.warning(
+                    "Keeping the default remote directory [reason: \(reason.rawValue, privacy: .public)]"
+                )
+            }
+            return
+        }
+        guard let payload = command.data(using: .utf8) else { return }
         try? await sshClient.write(payload, to: shellId)
     }
 

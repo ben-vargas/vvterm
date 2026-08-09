@@ -62,16 +62,25 @@ struct RemoteShellProfile: Hashable, Sendable {
         }
     }
 
-    nonisolated func directoryChangeCommand(for path: String) -> String {
+    nonisolated func workingDirectoryRestorePlan(
+        for path: String,
+        powerShellExecutable: String?
+    ) -> RemoteWorkingDirectoryRestorePlan {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .keepDefault(.emptyPath) }
+
         switch family {
         case .posix:
-            return RemoteTerminalBootstrap.posixDirectoryChangeCommand(for: path)
+            return .command(RemoteTerminalBootstrap.posixDirectoryChangeCommand(for: path))
         case .powershell:
-            return RemoteTerminalBootstrap.powerShellDirectoryChangeCommand(for: path)
+            return .command(RemoteTerminalBootstrap.powerShellDirectoryChangeCommand(for: path))
         case .cmd:
-            return RemoteTerminalBootstrap.cmdDirectoryChangeCommand(for: path)
+            return RemoteTerminalBootstrap.cmdWorkingDirectoryRestorePlan(
+                for: path,
+                powerShellExecutable: powerShellExecutable
+            )
         case .unknown:
-            return "\n"
+            return .keepDefault(.unsupportedShell)
         }
     }
 
