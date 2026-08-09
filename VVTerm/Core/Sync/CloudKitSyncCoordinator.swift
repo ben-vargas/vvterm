@@ -75,6 +75,10 @@ final class CloudKitSyncCoordinator {
         queue.enqueue(.statsPreferencesUpsert(preferences))
     }
 
+    func enqueueMutationsAtomically(_ mutations: [PendingCloudKitMutation]) throws {
+        try queue.enqueueAtomically(mutations)
+    }
+
     func drainPendingMutations() async {
         guard SyncSettings.isEnabled else { return }
         guard !isDraining else {

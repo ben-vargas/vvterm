@@ -197,6 +197,34 @@ struct PendingCloudKitSyncTests {
     }
 
     @Test
+    func atomicBatchCoalescesAllMutationsBeforeOnePersistedSnapshot() throws {
+        let fixtures = PendingSyncFixtures()
+        let storage = makeStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suiteName) }
+        let queue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults
+        )
+        queue.enqueue(.serverUpsert(fixtures.server))
+        queue.enqueue(.workspaceUpsert(fixtures.workspaceWithServerID))
+
+        try queue.enqueueAtomically([
+            .serverDelete(fixtures.deletedServer),
+            .workspaceDelete(fixtures.deletedWorkspaceWithServerID)
+        ])
+
+        #expect(queue.snapshot().map(\.payload) == [
+            .serverDelete(fixtures.deletedServer),
+            .workspaceDelete(fixtures.deletedWorkspaceWithServerID)
+        ])
+        let reloadedQueue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults
+        )
+        #expect(reloadedQueue.snapshot() == queue.snapshot())
+    }
+
+    @Test
     func drainOrderPreservesDependenciesAndDefersDeletes() {
         let fixtures = PendingSyncFixtures()
         let mutations = fixtures.supportedPayloads.reversed().enumerated().map { index, payload in

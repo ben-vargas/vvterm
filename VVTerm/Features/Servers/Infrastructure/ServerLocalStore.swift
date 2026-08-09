@@ -20,6 +20,8 @@ nonisolated enum ServerLocalLoadResult<Value> {
 
 @MainActor
 struct ServerLocalStore {
+    private static let workspaceDeletionJournalKey = "com.vivy.vvterm.workspaceDeletionJournal.v1"
+
     private let defaults: UserDefaults
     private let serversKey: String
     private let workspacesKey: String
@@ -35,11 +37,17 @@ struct ServerLocalStore {
     }
 
     func loadServers() -> ServerLocalLoadResult<[Server]> {
-        load([Server].self, forKey: serversKey, collection: .servers)
+        if let plan = try? loadWorkspaceDeletionJournal()?.plan {
+            return .loaded(plan.remainingServers)
+        }
+        return load([Server].self, forKey: serversKey, collection: .servers)
     }
 
     func loadWorkspaces() -> ServerLocalLoadResult<[Workspace]> {
-        load([Workspace].self, forKey: workspacesKey, collection: .workspaces)
+        if let plan = try? loadWorkspaceDeletionJournal()?.plan {
+            return .loaded(plan.remainingWorkspaces)
+        }
+        return load([Workspace].self, forKey: workspacesKey, collection: .workspaces)
     }
 
     func storeServers(_ servers: [Server]) throws {
@@ -81,5 +89,30 @@ struct ServerLocalStore {
 
     private func quarantineKey(for storageKey: String) -> String {
         "\(storageKey).unreadable-backup.v1"
+    }
+}
+
+extension ServerLocalStore: WorkspaceDeletionJournalStoring {
+    func loadWorkspaceDeletionJournal() throws -> WorkspaceDeletionJournal? {
+        guard let data = defaults.data(forKey: Self.workspaceDeletionJournalKey) else {
+            return nil
+        }
+        return try JSONDecoder().decode(WorkspaceDeletionJournal.self, from: data)
+    }
+
+    func storeWorkspaceDeletionJournal(_ journal: WorkspaceDeletionJournal) throws {
+        defaults.set(
+            try JSONEncoder().encode(journal),
+            forKey: Self.workspaceDeletionJournalKey
+        )
+    }
+
+    func materializeWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) throws {
+        try storeServers(plan.remainingServers)
+        try storeWorkspaces(plan.remainingWorkspaces)
+    }
+
+    func clearWorkspaceDeletionJournal() throws {
+        defaults.removeObject(forKey: Self.workspaceDeletionJournalKey)
     }
 }

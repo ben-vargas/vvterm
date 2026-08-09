@@ -352,9 +352,24 @@ final class PendingCloudKitSyncQueue {
     }
 
     func enqueue(_ mutation: PendingCloudKitMutation) {
-        items.removeAll { $0.payload.coalescingKey == mutation.payload.coalescingKey }
-        items.append(mutation)
-        persist()
+        try? enqueueAtomically([mutation])
+    }
+
+    func enqueueAtomically(_ mutations: [PendingCloudKitMutation]) throws {
+        var updatedItems = items
+        for mutation in mutations {
+            updatedItems.removeAll {
+                $0.payload.coalescingKey == mutation.payload.coalescingKey
+            }
+            updatedItems.append(mutation)
+        }
+
+        let data = try JSONEncoder().encode(updatedItems)
+        defaults.set(data, forKey: storageKey)
+        guard defaults.data(forKey: storageKey) == data else {
+            throw PendingCloudKitSyncQueueError.persistenceFailed
+        }
+        items = updatedItems
     }
 
     func remove(_ mutationID: UUID) {
@@ -488,6 +503,14 @@ final class PendingCloudKitSyncQueue {
             return
         }
         defaults.set(data, forKey: quarantineStorageKey)
+    }
+}
+
+enum PendingCloudKitSyncQueueError: LocalizedError {
+    case persistenceFailed
+
+    var errorDescription: String? {
+        "The pending CloudKit mutation queue could not be saved."
     }
 }
 

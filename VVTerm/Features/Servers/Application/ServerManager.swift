@@ -94,7 +94,10 @@ final class ServerManager: ObservableObject {
         loadLocalData()
         refreshFreePlanGeneration(persistCurrentIfNeeded: !isSyncEnabled, reason: "local_load")
         // Then sync with CloudKit in background
-        Task { await loadData() }
+        Task {
+            await resumePendingWorkspaceDeletion()
+            await loadData()
+        }
     }
 
     // MARK: - Local Storage
@@ -421,6 +424,27 @@ final class ServerManager: ObservableObject {
         await drainPendingCloudKitMutations()
         if let logMessage {
             logger.info("\(logMessage)")
+        }
+    }
+
+    private var workspaceDeletionTransaction: WorkspaceDeletionTransaction {
+        WorkspaceDeletionTransaction(
+            store: localStore,
+            mutationQueue: syncCoordinator,
+            credentialCleaner: keychain
+        )
+    }
+
+    private func resumePendingWorkspaceDeletion() async {
+        do {
+            guard let journal = try workspaceDeletionTransaction.resumePending() else { return }
+            applyCommittedWorkspaceDeletion(journal.plan)
+            if journal.phase != .complete {
+                logger.error("Workspace deletion recovery remains pending")
+            }
+            await drainPendingCloudKitMutations()
+        } catch {
+            logger.error("Could not resume workspace deletion: \(error.localizedDescription)")
         }
     }
 
@@ -1062,8 +1086,15 @@ final class ServerManager: ObservableObject {
     }
 
     func deleteWorkspace(_ workspace: Workspace) async throws {
-        let workspaceServers = servers.filter { $0.workspaceId == workspace.id }
-        for server in workspaceServers where server.requiresBiometricUnlock {
+        guard let plan = WorkspaceDeletionPlan(
+            workspaceID: workspace.id,
+            servers: servers,
+            workspaces: workspaces
+        ) else {
+            return
+        }
+
+        for server in plan.deletedServers where server.requiresBiometricUnlock {
             guard await AppLockManager.shared.authorizeProtectedServerAction(
                 server,
                 action: .delete
@@ -1072,16 +1103,35 @@ final class ServerManager: ObservableObject {
             }
         }
 
-        for server in workspaceServers {
-            try await deleteServerData(server)
+        guard let currentPlan = WorkspaceDeletionPlan(
+            workspaceID: workspace.id,
+            servers: servers,
+            workspaces: workspaces
+        ), plan.hasSameDeletionSnapshot(as: currentPlan) else {
+            throw VVTermError.workspaceDeletionChanged
         }
 
-        if pendingBootstrapWorkspaceID == workspace.id {
+        let journal = try workspaceDeletionTransaction.commit(currentPlan)
+        applyCommittedWorkspaceDeletion(currentPlan)
+        await drainPendingCloudKitMutations()
+
+        guard journal.phase == .complete else {
+            logger.error("Workspace deletion committed with pending recovery work")
+            throw VVTermError.workspaceDeletionRecoveryPending
+        }
+        logger.info("Deleted workspace: \(plan.workspace.name)")
+    }
+
+    private func applyCommittedWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) {
+        let deletedServerIDs = Set(plan.deletedServers.map(\.id))
+        for server in plan.deletedServers {
+            removeKnownHostIfUnused(for: server, excluding: deletedServerIDs)
+        }
+        servers = plan.remainingServers
+        workspaces = plan.remainingWorkspaces
+        if pendingBootstrapWorkspaceID == plan.workspace.id {
             pendingBootstrapWorkspaceID = nil
         }
-        workspaces.removeAll { $0.id == workspace.id }
-        enqueuePendingWorkspaceDelete(workspace)
-        await persistLocalMutations(logMessage: "Deleted workspace: \(workspace.name)")
     }
 
     func reorderWorkspaces(from source: IndexSet, to destination: Int) async throws {
@@ -1473,6 +1523,8 @@ enum VVTermError: LocalizedError {
     case authorizationRequired
     case serverNotFound
     case workspaceNotFound
+    case workspaceDeletionChanged
+    case workspaceDeletionRecoveryPending
     case timeout
 
     var errorDescription: String? {
@@ -1494,6 +1546,10 @@ enum VVTermError: LocalizedError {
             return String(localized: "Server no longer exists.")
         case .workspaceNotFound:
             return String(localized: "Workspace no longer exists.")
+        case .workspaceDeletionChanged:
+            return String(localized: "The workspace changed while deletion was authorized. Review it and try again.")
+        case .workspaceDeletionRecoveryPending:
+            return String(localized: "The workspace was deleted, but cleanup is still pending and will retry.")
         case .timeout:
             return String(localized: "Connection timed out")
         }
