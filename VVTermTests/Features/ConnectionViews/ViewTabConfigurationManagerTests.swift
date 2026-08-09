@@ -106,6 +106,14 @@ final class ViewTabConfigurationManagerTests: XCTestCase {
         XCTAssertEqual(storedConfiguration.defaultTab, .files)
     }
 
+    func testMovingMultipleTabsPreservesSourceOrderAtAdjustedDestination() {
+        let manager = ViewTabConfigurationManager(defaults: makeDefaults())
+
+        manager.moveTab(from: IndexSet([0, 2]), to: 3)
+
+        XCTAssertEqual(manager.tabOrder, [.terminal, .stats, .files])
+    }
+
     func testResetPersistsOnlyTheDefaultConfigurationSnapshot() throws {
         let defaults = makeDefaults()
         let manager = ViewTabConfigurationManager(defaults: defaults)

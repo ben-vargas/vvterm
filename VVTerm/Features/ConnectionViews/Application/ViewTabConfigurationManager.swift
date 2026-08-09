@@ -5,7 +5,6 @@
 
 import Combine
 import Foundation
-import SwiftUI
 import os.log
 
 @MainActor
@@ -53,7 +52,15 @@ final class ViewTabConfigurationManager: ObservableObject {
         }
 
         var order = configuration.order
-        order.move(fromOffsets: source, toOffset: destination)
+        let movingTabs = source.map { order[$0] }
+        for index in source.sorted(by: >) {
+            order.remove(at: index)
+        }
+        let removedBeforeDestination = source.count(in: ..<destination)
+        order.insert(
+            contentsOf: movingTabs,
+            at: destination - removedBeforeDestination
+        )
         updateConfiguration(
             ConnectionViewTabConfiguration(
                 order: order,
@@ -106,28 +113,6 @@ final class ViewTabConfigurationManager: ObservableObject {
 
     func effectiveView(for storedView: ConnectionViewTabID?) -> ConnectionViewTabID {
         configuration.effectiveView(for: storedView)
-    }
-
-    func visibilityBinding(for tabID: ConnectionViewTabID) -> Binding<Bool> {
-        Binding(
-            get: { [weak self] in
-                self?.isTabVisible(tabID) ?? false
-            },
-            set: { [weak self] newValue in
-                self?.setVisibility(for: tabID, isVisible: newValue)
-            }
-        )
-    }
-
-    func defaultTabBinding() -> Binding<ConnectionViewTabID> {
-        Binding(
-            get: { [weak self] in
-                self?.effectiveDefaultTab() ?? .stats
-            },
-            set: { [weak self] newValue in
-                self?.setDefaultTab(newValue)
-            }
-        )
     }
 
     private func loadConfiguration() {

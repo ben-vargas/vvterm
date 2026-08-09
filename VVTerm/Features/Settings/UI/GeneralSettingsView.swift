@@ -311,7 +311,7 @@ struct GeneralSettingsView: View {
 
                             Toggle(
                                 "",
-                                isOn: viewTabConfig.visibilityBinding(for: tab.id)
+                                isOn: visibilityBinding(for: tab.id)
                             )
                             .labelsHidden()
                         }
@@ -336,7 +336,7 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Picker("Default View", selection: viewTabConfig.defaultTabBinding()) {
+                Picker("Default View", selection: defaultTabBinding) {
                     ForEach(viewTabConfig.currentVisibleTabs) { tab in
                         Label(tab.localizedKey, systemImage: tab.icon)
                             .tag(tab.id)
@@ -449,6 +449,28 @@ struct GeneralSettingsView: View {
         .onChange(of: appLanguage) { newValue in
             AppLanguage.applySelection(newValue)
         }
+    }
+
+    private func visibilityBinding(for tabID: ConnectionViewTabID) -> Binding<Bool> {
+        Binding(
+            get: {
+                viewTabConfig.isTabVisible(tabID)
+            },
+            set: { isVisible in
+                viewTabConfig.setVisibility(for: tabID, isVisible: isVisible)
+            }
+        )
+    }
+
+    private var defaultTabBinding: Binding<ConnectionViewTabID> {
+        Binding(
+            get: {
+                viewTabConfig.effectiveDefaultTab()
+            },
+            set: { tabID in
+                viewTabConfig.setDefaultTab(tabID)
+            }
+        )
     }
 }
 
