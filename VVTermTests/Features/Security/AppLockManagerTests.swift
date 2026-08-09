@@ -1,4 +1,5 @@
 import Combine
+import Foundation
 import XCTest
 @testable import VVTerm
 
@@ -22,6 +23,45 @@ final class AppLockManagerTests: XCTestCase {
             if let authenticateError {
                 throw authenticateError
             }
+        }
+    }
+
+    private final class DelayedBiometricAuthService: BiometricAuthServing {
+        let availabilityResult: BiometricAvailability
+        private(set) var authenticateReasons: [String] = []
+
+        private let startedStream: AsyncStream<Void>
+        private let startedContinuation: AsyncStream<Void>.Continuation
+        private var authenticationContinuation: CheckedContinuation<Void, Error>?
+
+        init(availabilityResult: BiometricAvailability) {
+            self.availabilityResult = availabilityResult
+            let started = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+            self.startedStream = started.stream
+            self.startedContinuation = started.continuation
+        }
+
+        func availability() -> BiometricAvailability {
+            availabilityResult
+        }
+
+        func authenticate(localizedReason: String, allowPasscodeFallback: Bool) async throws {
+            authenticateReasons.append(localizedReason)
+            startedContinuation.yield()
+            try await withCheckedThrowingContinuation { continuation in
+                authenticationContinuation = continuation
+            }
+        }
+
+        func waitUntilAuthenticationStarts() async {
+            for await _ in startedStream {
+                return
+            }
+        }
+
+        func succeed() {
+            authenticationContinuation?.resume()
+            authenticationContinuation = nil
         }
     }
 
@@ -58,6 +98,28 @@ final class AppLockManagerTests: XCTestCase {
         XCTAssertTrue(manager.fullAppLockEnabled)
         XCTAssertFalse(manager.isAppLocked)
         XCTAssertEqual(authService.authenticateReasons.count, 1)
+    }
+
+    func testNewBackgroundLockRejectsPendingAuthenticationSuccess() async {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: "security.fullAppLockEnabled")
+        let authService = DelayedBiometricAuthService(
+            availabilityResult: .available(.faceID)
+        )
+        let manager = AppLockManager(defaults: defaults, authService: authService)
+
+        let unlockTask = Task { await manager.ensureAppUnlocked() }
+        await authService.waitUntilAuthenticationStarts()
+        XCTAssertTrue(manager.isAuthenticating)
+
+        manager.lockAppNow()
+        authService.succeed()
+
+        let didUnlock = await unlockTask.value
+        XCTAssertFalse(didUnlock)
+        XCTAssertTrue(manager.isAppLocked)
+        XCTAssertFalse(manager.isAuthenticating)
+        XCTAssertEqual(manager.authenticationState, .idle)
     }
 
     func testGraceSecondsClampToUpperBound() {
