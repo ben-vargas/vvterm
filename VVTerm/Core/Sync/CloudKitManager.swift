@@ -17,10 +17,14 @@ struct CloudKitChanges {
 final class CloudKitManager: ObservableObject {
     static let shared = CloudKitManager()
 
-    @Published var syncStatus: SyncStatus = .idle
+    typealias SyncStatus = CloudKitSyncState.Status
+
+    @Published private(set) var syncState = CloudKitSyncState()
     @Published var lastSyncDate: Date?
-    @Published var isAvailable: Bool = false
     @Published var accountStatusDetail: String = String(localized: "Checking...")
+
+    var syncStatus: SyncStatus { syncState.status }
+    var isAvailable: Bool { syncState.isAvailable }
 
     private let container: CKContainer
     private let database: CKDatabase
@@ -38,24 +42,6 @@ final class CloudKitManager: ObservableObject {
         static let terminalTheme = "TerminalTheme"
         static let terminalThemePreference = "TerminalThemePreference"
         static let userPreference = "UserPreference"
-    }
-
-    enum SyncStatus: Equatable {
-        case idle
-        case syncing
-        case error(String)
-        case offline
-        case disabled
-
-        var description: String {
-            switch self {
-            case .idle: return String(localized: "Synced")
-            case .syncing: return String(localized: "Syncing...")
-            case .error(let message): return String(format: String(localized: "Error: %@"), message)
-            case .offline: return String(localized: "Offline")
-            case .disabled: return String(localized: "Disabled")
-            }
-        }
     }
 
     private var accountStatusChecked = false
@@ -113,29 +99,24 @@ final class CloudKitManager: ObservableObject {
             logger.info("CloudKit account status: \(statusDescription)")
             logger.info("Container identifier: \(self.container.containerIdentifier ?? "nil")")
 
-            isAvailable = status == .available
             accountStatusDetail = statusDescription
             accountStatusChecked = true
-            if isAvailable {
-                if case .offline = syncStatus {
-                    syncStatus = .idle
-                }
+            if status == .available {
+                syncState.markAvailable()
             } else {
-                syncStatus = .offline
+                syncState.markOffline()
                 logger.warning("CloudKit not available. Status: \(statusDescription)")
             }
         } catch {
             logger.error("CloudKit account status check failed: \(error.localizedDescription)")
-            isAvailable = false
             accountStatusDetail = String(format: String(localized: "Error: %@"), error.localizedDescription)
-            syncStatus = .error(error.localizedDescription)
+            syncState.markAccountFailure(error.localizedDescription)
             accountStatusChecked = true
         }
     }
 
     private func applySyncDisabledState() {
-        isAvailable = false
-        syncStatus = .disabled
+        syncState.markDisabled()
         accountStatusDetail = String(localized: "Disabled")
     }
 
@@ -179,9 +160,12 @@ final class CloudKitManager: ObservableObject {
     }
 
     private func fetchChangesFromCloudKit(forceFullFetch: Bool) async throws -> CloudKitChanges {
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
+        try await performSyncOperation {
+            try await fetchTrackedChangesFromCloudKit(forceFullFetch: forceFullFetch)
+        }
+    }
 
+    private func fetchTrackedChangesFromCloudKit(forceFullFetch: Bool) async throws -> CloudKitChanges {
         let previousToken = forceFullFetch ? nil : loadChangeToken()
 
         do {
@@ -204,7 +188,6 @@ final class CloudKitManager: ObservableObject {
             }
 
             logger.error("Failed to fetch changes: \(error.localizedDescription)")
-            syncStatus = .error(error.localizedDescription)
             throw error
         }
     }
@@ -433,9 +416,14 @@ final class CloudKitManager: ObservableObject {
 
     func syncTerminalAccessoryProfile(_ localProfile: TerminalAccessoryProfile) async throws -> TerminalAccessoryProfile {
         try await prepareSyncMutation()
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
+        return try await performSyncOperation {
+            try await syncTrackedTerminalAccessoryProfile(localProfile)
+        }
+    }
 
+    private func syncTrackedTerminalAccessoryProfile(
+        _ localProfile: TerminalAccessoryProfile
+    ) async throws -> TerminalAccessoryProfile {
         let recordID = terminalAccessoryRecordID()
         let normalizedLocal = localProfile.normalized()
 
@@ -500,7 +488,6 @@ final class CloudKitManager: ObservableObject {
                 }
 
                 logger.error("Failed to sync terminal accessory profile: \(error.localizedDescription)")
-                syncStatus = .error(error.localizedDescription)
                 throw error
             }
         }
@@ -552,9 +539,14 @@ final class CloudKitManager: ObservableObject {
 
     func syncStatsPreferences(_ localPreferences: StatsPreferences) async throws -> StatsPreferences {
         try await prepareSyncMutation()
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
+        return try await performSyncOperation {
+            try await syncTrackedStatsPreferences(localPreferences)
+        }
+    }
 
+    private func syncTrackedStatsPreferences(
+        _ localPreferences: StatsPreferences
+    ) async throws -> StatsPreferences {
         let recordID = statsPreferencesRecordID()
         let normalizedLocal = localPreferences.normalized()
 
@@ -619,7 +611,6 @@ final class CloudKitManager: ObservableObject {
                 }
 
                 logger.error("Failed to sync stats preferences: \(error.localizedDescription)")
-                syncStatus = .error(error.localizedDescription)
                 throw error
             }
         }
@@ -641,17 +632,34 @@ final class CloudKitManager: ObservableObject {
         failureLog: String,
         _ operation: () async throws -> T
     ) async throws -> T {
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
+        try await performSyncOperation {
+            do {
+                let result = try await operation()
+                lastSyncDate = Date()
+                logger.info("\(successLog)")
+                return result
+            } catch {
+                logger.error("\(failureLog): \(error.localizedDescription)")
+                throw error
+            }
+        }
+    }
+
+    private func performSyncOperation<T>(
+        _ operation: () async throws -> T
+    ) async throws -> T {
+        let operationID = UUID()
+        guard syncState.beginOperation(operationID) else {
+            throw CloudKitError.notAvailable
+        }
 
         do {
             let result = try await operation()
-            lastSyncDate = Date()
-            logger.info("\(successLog)")
+            syncState.completeOperation(operationID, with: .success)
             return result
         } catch {
-            logger.error("\(failureLog): \(error.localizedDescription)")
-            syncStatus = .error(error.localizedDescription)
+            logger.error("CloudKit sync operation failed: \(error.localizedDescription)")
+            syncState.completeOperation(operationID, with: .failure(error.localizedDescription))
             throw error
         }
     }
@@ -1002,9 +1010,12 @@ final class CloudKitManager: ObservableObject {
 
         try await ensureCustomZone()
 
-        syncStatus = .syncing
-        defer { syncStatus = .idle }
+        try await performSyncOperation {
+            try await deleteAllTrackedRecords()
+        }
+    }
 
+    private func deleteAllTrackedRecords() async throws {
         let records = try await withZoneRetry {
             try await fetchAllRecordsFromCloudKit()
         }
