@@ -1,5 +1,5 @@
-nonisolated struct TerminalLiveActivitySnapshot: Equatable {
-    nonisolated enum Status: Equatable {
+nonisolated struct TerminalLiveActivitySnapshot: Equatable, Sendable {
+    nonisolated enum Status: Equatable, Sendable {
         case connected
         case connecting
         case reconnecting
