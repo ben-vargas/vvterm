@@ -16,8 +16,8 @@ final class TerminalThemeCloudKitRecordTests: XCTestCase {
             deletedAt: Date(timeIntervalSince1970: 1_700_000_100)
         )
 
-        let record = theme.toRecord(in: zoneID)
-        let decoded = try XCTUnwrap(TerminalTheme(from: record))
+        let record = TerminalThemeCloudKitRecordCodec.record(for: theme, in: zoneID)
+        let decoded = try XCTUnwrap(TerminalThemeCloudKitRecordCodec.theme(from: record))
 
         XCTAssertEqual(record.recordType, "TerminalTheme")
         XCTAssertEqual(record.recordID.recordName, theme.id.uuidString)
@@ -34,7 +34,7 @@ final class TerminalThemeCloudKitRecordTests: XCTestCase {
         record["name"] = "Legacy Theme" as CKRecordValue
         record["content"] = "background = #000000\nforeground = #FFFFFF\n" as CKRecordValue
 
-        let decoded = try XCTUnwrap(TerminalTheme(from: record))
+        let decoded = try XCTUnwrap(TerminalThemeCloudKitRecordCodec.theme(from: record))
 
         XCTAssertEqual(decoded.id, id)
         XCTAssertEqual(decoded.updatedAt, .distantPast)
@@ -53,8 +53,13 @@ final class TerminalThemeCloudKitRecordTests: XCTestCase {
             updatedAt: Date(timeIntervalSince1970: 1_700_000_200)
         )
 
-        let record = preference.toRecord(in: zoneID)
-        let decoded = try XCTUnwrap(TerminalThemePreference(from: record))
+        let record = TerminalThemePreferenceCloudKitRecordCodec.record(
+            for: preference,
+            in: zoneID
+        )
+        let decoded = try XCTUnwrap(
+            TerminalThemePreferenceCloudKitRecordCodec.preference(from: record)
+        )
 
         XCTAssertEqual(record.recordType, "TerminalThemePreference")
         XCTAssertEqual(record.recordID.recordName, "terminal-theme-preference.v1")
@@ -65,12 +70,14 @@ final class TerminalThemeCloudKitRecordTests: XCTestCase {
     func testPreferenceRecordRejectsUnsafeThemeName() {
         let record = CKRecord(
             recordType: "TerminalThemePreference",
-            recordID: CKRecord.ID(recordName: TerminalThemePreference.recordName)
+            recordID: CKRecord.ID(
+                recordName: TerminalThemePreferenceCloudKitRecordCodec.recordName
+            )
         )
         record["darkThemeName"] = "../Outside" as CKRecordValue
         record["lightThemeName"] = "Aizen Light" as CKRecordValue
         record["usePerAppearanceTheme"] = 1 as CKRecordValue
 
-        XCTAssertNil(TerminalThemePreference(from: record))
+        XCTAssertNil(TerminalThemePreferenceCloudKitRecordCodec.preference(from: record))
     }
 }

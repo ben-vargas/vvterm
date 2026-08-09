@@ -1,8 +1,11 @@
 import CloudKit
 import Foundation
 
-extension TerminalTheme {
-    init?(from record: CKRecord) {
+enum TerminalThemeCloudKitRecordCodec {
+    static let recordType = "TerminalTheme"
+    static let recordKeys = ["name", "content", "updatedAt", "deletedAt"]
+
+    static func theme(from record: CKRecord) -> TerminalTheme? {
         guard
             let id = UUID(uuidString: record.recordID.recordName),
             let name = record["name"] as? String,
@@ -12,31 +15,37 @@ extension TerminalTheme {
             return nil
         }
 
-        self.id = id
-        self.name = validatedName
-        self.content = content
-        self.updatedAt = record["updatedAt"] as? Date ?? Date.distantPast
-        self.deletedAt = record["deletedAt"] as? Date
+        return TerminalTheme(
+            id: id,
+            name: validatedName,
+            content: content,
+            updatedAt: record["updatedAt"] as? Date ?? Date.distantPast,
+            deletedAt: record["deletedAt"] as? Date
+        )
     }
 
-    func toRecord(in zoneID: CKRecordZone.ID? = nil) -> CKRecord {
+    static func record(for theme: TerminalTheme, in zoneID: CKRecordZone.ID) -> CKRecord {
         let recordID = CKRecord.ID(
-            recordName: id.uuidString,
-            zoneID: zoneID ?? CKRecordZone.default().zoneID
+            recordName: theme.id.uuidString,
+            zoneID: zoneID
         )
-        let record = CKRecord(recordType: "TerminalTheme", recordID: recordID)
-        record["name"] = name
-        record["content"] = content
-        record["updatedAt"] = updatedAt
-        record["deletedAt"] = deletedAt
+        let record = CKRecord(recordType: recordType, recordID: recordID)
+        record["name"] = theme.name
+        record["content"] = theme.content
+        record["updatedAt"] = theme.updatedAt
+        record["deletedAt"] = theme.deletedAt
         return record
     }
 }
 
-extension TerminalThemePreference {
-    static let recordName = "terminal-theme-preference.v1"
+enum TerminalThemePreferenceCloudKitRecordCodec {
+    static let recordType = "TerminalThemePreference"
+    static let recordName = TerminalThemePreference.recordName
+    static let recordKeys = [
+        "darkThemeName", "lightThemeName", "usePerAppearanceTheme", "updatedAt"
+    ]
 
-    init?(from record: CKRecord) {
+    static func preference(from record: CKRecord) -> TerminalThemePreference? {
         guard
             let darkThemeName = record["darkThemeName"] as? String,
             let lightThemeName = record["lightThemeName"] as? String,
@@ -51,22 +60,35 @@ extension TerminalThemePreference {
             return nil
         }
 
-        self.darkThemeName = validatedDarkThemeName
-        self.lightThemeName = validatedLightThemeName
-        self.usePerAppearanceTheme = usePerAppearanceTheme != 0
-        self.updatedAt = record["updatedAt"] as? Date ?? Date.distantPast
+        return TerminalThemePreference(
+            darkThemeName: validatedDarkThemeName,
+            lightThemeName: validatedLightThemeName,
+            usePerAppearanceTheme: usePerAppearanceTheme != 0,
+            updatedAt: record["updatedAt"] as? Date ?? Date.distantPast
+        )
     }
 
-    func toRecord(in zoneID: CKRecordZone.ID? = nil) -> CKRecord {
+    static func recordID(in zoneID: CKRecordZone.ID) -> CKRecord.ID {
+        CKRecord.ID(recordName: recordName, zoneID: zoneID)
+    }
+
+    static func record(
+        for preference: TerminalThemePreference,
+        in zoneID: CKRecordZone.ID
+    ) -> CKRecord {
         let recordID = CKRecord.ID(
-            recordName: Self.recordName,
-            zoneID: zoneID ?? CKRecordZone.default().zoneID
+            recordName: recordName,
+            zoneID: zoneID
         )
-        let record = CKRecord(recordType: "TerminalThemePreference", recordID: recordID)
-        record["darkThemeName"] = darkThemeName
-        record["lightThemeName"] = lightThemeName
-        record["usePerAppearanceTheme"] = usePerAppearanceTheme ? 1 : 0
-        record["updatedAt"] = updatedAt
+        let record = CKRecord(recordType: recordType, recordID: recordID)
+        record["darkThemeName"] = preference.darkThemeName
+        record["lightThemeName"] = preference.lightThemeName
+        record["usePerAppearanceTheme"] = preference.usePerAppearanceTheme ? 1 : 0
+        record["updatedAt"] = preference.updatedAt
         return record
     }
+}
+
+extension TerminalThemePreference {
+    static let recordName = "terminal-theme-preference.v1"
 }

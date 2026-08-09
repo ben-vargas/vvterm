@@ -39,21 +39,29 @@ final class CloudKitManager: ObservableObject {
     private enum RecordType {
         static let server = "Server"
         static let workspace = "Workspace"
-        static let terminalTheme = "TerminalTheme"
-        static let terminalThemePreference = "TerminalThemePreference"
-        static let userPreference = "UserPreference"
     }
 
-    private static let fetchedRecordKeys = [
+    private static let serverAndWorkspaceRecordKeys = [
         "workspaceId", "name", "host", "port", "eternalTerminalPort", "username",
         "connectionMode", "authMethod", "cloudflareAccessMode",
         "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
         "lastConnected", "isFavorite", "requiresBiometricUnlock", "tmuxEnabledOverride",
         "tmuxStartupBehaviorOverride", "createdAt", "updatedAt", "environment",
         "colorHex", "icon", "order", "lastSelectedEnvironmentId", "lastSelectedServerId",
-        "environments", "content", "deletedAt", "darkThemeName", "lightThemeName",
-        "usePerAppearanceTheme", "schemaVersion", "payload", "lastWriterDeviceId"
+        "environments"
     ]
+
+    private static let fetchedRecordKeys = (
+        serverAndWorkspaceRecordKeys
+            + TerminalThemeCloudKitRecordCodec.recordKeys
+            + TerminalThemePreferenceCloudKitRecordCodec.recordKeys
+            + TerminalAccessoryCloudKitRecordCodec.recordKeys
+            + StatsPreferencesCloudKitRecordCodec.recordKeys
+    ).reduce(into: [String]()) { keys, key in
+        if !keys.contains(key) {
+            keys.append(key)
+        }
+    }
 
     private var accountStatusChecked = false
     private var isSyncEnabled: Bool { SyncSettings.isEnabled }
@@ -347,14 +355,16 @@ final class CloudKitManager: ObservableObject {
 
         try await ensureCustomZone()
         let records = try await withZoneRetry {
-            try await fetchAllRecordsFromCloudKit(matchingRecordTypes: [RecordType.terminalTheme])
+            try await fetchAllRecordsFromCloudKit(
+                matchingRecordTypes: [TerminalThemeCloudKitRecordCodec.recordType]
+            )
         }
-        return records.compactMap(TerminalTheme.init(from:))
+        return records.compactMap(TerminalThemeCloudKitRecordCodec.theme(from:))
     }
 
     func saveTerminalTheme(_ theme: TerminalTheme) async throws {
         try await prepareSyncMutation()
-        let record = theme.toRecord(in: recordZoneID)
+        let record = TerminalThemeCloudKitRecordCodec.record(for: theme, in: recordZoneID)
         try await performSyncMutation(
             successLog: "Saved terminal theme \(theme.name) to CloudKit",
             failureLog: "Failed to save terminal theme"
@@ -372,13 +382,13 @@ final class CloudKitManager: ObservableObject {
         }
 
         try await ensureCustomZone()
-        let recordID = CKRecord.ID(recordName: TerminalThemePreference.recordName, zoneID: recordZoneID)
+        let recordID = TerminalThemePreferenceCloudKitRecordCodec.recordID(in: recordZoneID)
 
         do {
             let record = try await withZoneRetry {
                 try await database.record(for: recordID)
             }
-            return TerminalThemePreference(from: record)
+            return TerminalThemePreferenceCloudKitRecordCodec.preference(from: record)
         } catch let ckError as CKError where ckError.code == .unknownItem || ckError.code == .zoneNotFound {
             return nil
         } catch {
@@ -388,7 +398,10 @@ final class CloudKitManager: ObservableObject {
 
     func saveTerminalThemePreference(_ preference: TerminalThemePreference) async throws {
         try await prepareSyncMutation()
-        let record = preference.toRecord(in: recordZoneID)
+        let record = TerminalThemePreferenceCloudKitRecordCodec.record(
+            for: preference,
+            in: recordZoneID
+        )
         try await performSyncMutation(
             successLog: "Saved terminal theme preference to CloudKit",
             failureLog: "Failed to save terminal theme preference"
@@ -408,13 +421,13 @@ final class CloudKitManager: ObservableObject {
         }
 
         try await ensureCustomZone()
-        let recordID = terminalAccessoryRecordID()
+        let recordID = TerminalAccessoryCloudKitRecordCodec.recordID(in: recordZoneID)
 
         do {
             let record = try await withZoneRetry {
                 try await database.record(for: recordID)
             }
-            guard let profile = decodeTerminalAccessoryProfile(from: record) else {
+            guard let profile = TerminalAccessoryCloudKitRecordCodec.profile(from: record) else {
                 logger.warning("Terminal accessory profile payload was invalid; ignoring remote value")
                 return nil
             }
@@ -428,8 +441,11 @@ final class CloudKitManager: ObservableObject {
 
     func saveTerminalAccessoryProfile(_ profile: TerminalAccessoryProfile) async throws {
         try await prepareSyncMutation()
-        let recordID = terminalAccessoryRecordID()
-        let record = try makeTerminalAccessoryRecord(from: profile.normalized(), recordID: recordID)
+        let recordID = TerminalAccessoryCloudKitRecordCodec.recordID(in: recordZoneID)
+        let record = try TerminalAccessoryCloudKitRecordCodec.record(
+            for: profile,
+            recordID: recordID
+        )
         try await performSyncMutation(
             successLog: "Saved terminal accessory profile to CloudKit",
             failureLog: "Failed to save terminal accessory profile"
@@ -450,7 +466,7 @@ final class CloudKitManager: ObservableObject {
     private func syncTrackedTerminalAccessoryProfile(
         _ localProfile: TerminalAccessoryProfile
     ) async throws -> TerminalAccessoryProfile {
-        let recordID = terminalAccessoryRecordID()
+        let recordID = TerminalAccessoryCloudKitRecordCodec.recordID(in: recordZoneID)
         let normalizedLocal = localProfile.normalized()
 
         var baseRecord: CKRecord?
@@ -461,9 +477,12 @@ final class CloudKitManager: ObservableObject {
                 try await database.record(for: recordID)
             }
             baseRecord = remoteRecord
-            if let remoteProfile = decodeTerminalAccessoryProfile(from: remoteRecord) {
+            if let remoteProfile = TerminalAccessoryCloudKitRecordCodec.profile(from: remoteRecord) {
                 let normalizedRemote = remoteProfile.normalized()
-                mergedProfile = TerminalAccessoryProfile.merged(local: normalizedLocal, remote: normalizedRemote).normalized()
+                mergedProfile = TerminalAccessoryCloudKitRecordCodec.merge(
+                    local: normalizedLocal,
+                    remote: normalizedRemote
+                )
                 if mergedProfile == normalizedRemote {
                     lastSyncDate = Date()
                     return normalizedRemote
@@ -480,8 +499,8 @@ final class CloudKitManager: ObservableObject {
         while attempts < 4 {
             attempts += 1
 
-            let candidateRecord = try makeTerminalAccessoryRecord(
-                from: mergedProfile,
+            let candidateRecord = try TerminalAccessoryCloudKitRecordCodec.record(
+                for: mergedProfile,
                 recordID: recordID,
                 existingRecord: baseRecord
             )
@@ -494,9 +513,12 @@ final class CloudKitManager: ObservableObject {
                 return mergedProfile
             } catch {
                 if let serverRecord = extractServerRecord(from: error),
-                   let serverProfile = decodeTerminalAccessoryProfile(from: serverRecord) {
+                   let serverProfile = TerminalAccessoryCloudKitRecordCodec.profile(from: serverRecord) {
                     let normalizedRemote = serverProfile.normalized()
-                    let conflictResolved = TerminalAccessoryProfile.merged(local: mergedProfile, remote: normalizedRemote).normalized()
+                    let conflictResolved = TerminalAccessoryCloudKitRecordCodec.merge(
+                        local: mergedProfile,
+                        remote: normalizedRemote
+                    )
 
                     if conflictResolved == normalizedRemote {
                         lastSyncDate = Date()
@@ -531,13 +553,13 @@ final class CloudKitManager: ObservableObject {
         }
 
         try await ensureCustomZone()
-        let recordID = statsPreferencesRecordID()
+        let recordID = StatsPreferencesCloudKitRecordCodec.recordID(in: recordZoneID)
 
         do {
             let record = try await withZoneRetry {
                 try await database.record(for: recordID)
             }
-            guard let preferences = decodeStatsPreferences(from: record) else {
+            guard let preferences = StatsPreferencesCloudKitRecordCodec.preferences(from: record) else {
                 logger.warning("Stats preferences payload was invalid; ignoring remote value")
                 return nil
             }
@@ -551,8 +573,11 @@ final class CloudKitManager: ObservableObject {
 
     func saveStatsPreferences(_ preferences: StatsPreferences) async throws {
         try await prepareSyncMutation()
-        let recordID = statsPreferencesRecordID()
-        let record = try makeStatsPreferencesRecord(from: preferences.normalized(), recordID: recordID)
+        let recordID = StatsPreferencesCloudKitRecordCodec.recordID(in: recordZoneID)
+        let record = try StatsPreferencesCloudKitRecordCodec.record(
+            for: preferences,
+            recordID: recordID
+        )
         try await performSyncMutation(
             successLog: "Saved stats preferences to CloudKit",
             failureLog: "Failed to save stats preferences"
@@ -573,7 +598,7 @@ final class CloudKitManager: ObservableObject {
     private func syncTrackedStatsPreferences(
         _ localPreferences: StatsPreferences
     ) async throws -> StatsPreferences {
-        let recordID = statsPreferencesRecordID()
+        let recordID = StatsPreferencesCloudKitRecordCodec.recordID(in: recordZoneID)
         let normalizedLocal = localPreferences.normalized()
 
         var baseRecord: CKRecord?
@@ -584,9 +609,12 @@ final class CloudKitManager: ObservableObject {
                 try await database.record(for: recordID)
             }
             baseRecord = remoteRecord
-            if let remotePreferences = decodeStatsPreferences(from: remoteRecord) {
+            if let remotePreferences = StatsPreferencesCloudKitRecordCodec.preferences(from: remoteRecord) {
                 let normalizedRemote = remotePreferences.normalized()
-                mergedPreferences = StatsPreferences.merged(local: normalizedLocal, remote: normalizedRemote).normalized()
+                mergedPreferences = StatsPreferencesCloudKitRecordCodec.merge(
+                    local: normalizedLocal,
+                    remote: normalizedRemote
+                )
                 if mergedPreferences == normalizedRemote {
                     lastSyncDate = Date()
                     return normalizedRemote
@@ -603,8 +631,8 @@ final class CloudKitManager: ObservableObject {
         while attempts < 4 {
             attempts += 1
 
-            let candidateRecord = try makeStatsPreferencesRecord(
-                from: mergedPreferences,
+            let candidateRecord = try StatsPreferencesCloudKitRecordCodec.record(
+                for: mergedPreferences,
                 recordID: recordID,
                 existingRecord: baseRecord
             )
@@ -617,9 +645,14 @@ final class CloudKitManager: ObservableObject {
                 return mergedPreferences
             } catch {
                 if let serverRecord = extractServerRecord(from: error),
-                   let serverPreferences = decodeStatsPreferences(from: serverRecord) {
+                   let serverPreferences = StatsPreferencesCloudKitRecordCodec.preferences(
+                       from: serverRecord
+                   ) {
                     let normalizedRemote = serverPreferences.normalized()
-                    let conflictResolved = StatsPreferences.merged(local: mergedPreferences, remote: normalizedRemote).normalized()
+                    let conflictResolved = StatsPreferencesCloudKitRecordCodec.merge(
+                        local: mergedPreferences,
+                        remote: normalizedRemote
+                    )
 
                     if conflictResolved == normalizedRemote {
                         lastSyncDate = Date()
@@ -899,104 +932,6 @@ final class CloudKitManager: ObservableObject {
         }
     }
 
-    private func terminalAccessoryRecordID() -> CKRecord.ID {
-        CKRecord.ID(recordName: TerminalAccessoryProfile.recordName, zoneID: recordZoneID)
-    }
-
-    private func statsPreferencesRecordID() -> CKRecord.ID {
-        CKRecord.ID(recordName: StatsPreferences.recordName, zoneID: recordZoneID)
-    }
-
-    private func decodeTerminalAccessoryProfile(from record: CKRecord) -> TerminalAccessoryProfile? {
-        guard let payload = record["payload"] as? Data else {
-            return nil
-        }
-
-        guard var profile = try? JSONDecoder().decode(TerminalAccessoryProfile.self, from: payload) else {
-            return nil
-        }
-
-        if let schemaVersion = record["schemaVersion"] as? Int, schemaVersion > 0 {
-            profile.schemaVersion = schemaVersion
-        }
-
-        if let updatedAt = record["updatedAt"] as? Date, updatedAt > profile.updatedAt {
-            profile.updatedAt = updatedAt
-        }
-
-        if let writerDeviceID = record["lastWriterDeviceId"] as? String, !writerDeviceID.isEmpty {
-            profile.lastWriterDeviceId = writerDeviceID
-        }
-
-        return profile.normalized()
-    }
-
-    private func makeTerminalAccessoryRecord(
-        from profile: TerminalAccessoryProfile,
-        recordID: CKRecord.ID,
-        existingRecord: CKRecord? = nil
-    ) throws -> CKRecord {
-        let normalizedProfile = profile.normalized()
-        let payload: Data
-        do {
-            payload = try JSONEncoder().encode(normalizedProfile)
-        } catch {
-            throw CloudKitError.encodingFailed
-        }
-
-        let record = existingRecord ?? CKRecord(recordType: RecordType.userPreference, recordID: recordID)
-        record["schemaVersion"] = normalizedProfile.schemaVersion
-        record["payload"] = payload
-        record["updatedAt"] = normalizedProfile.updatedAt
-        record["lastWriterDeviceId"] = normalizedProfile.lastWriterDeviceId
-        return record
-    }
-
-    private func decodeStatsPreferences(from record: CKRecord) -> StatsPreferences? {
-        guard let payload = record["payload"] as? Data else {
-            return nil
-        }
-
-        guard var preferences = try? JSONDecoder().decode(StatsPreferences.self, from: payload) else {
-            return nil
-        }
-
-        if let schemaVersion = record["schemaVersion"] as? Int, schemaVersion > 0 {
-            preferences.schemaVersion = schemaVersion
-        }
-
-        if let updatedAt = record["updatedAt"] as? Date, updatedAt > preferences.updatedAt {
-            preferences.updatedAt = updatedAt
-        }
-
-        if let writerDeviceID = record["lastWriterDeviceId"] as? String, !writerDeviceID.isEmpty {
-            preferences.lastWriterDeviceId = writerDeviceID
-        }
-
-        return preferences.normalized()
-    }
-
-    private func makeStatsPreferencesRecord(
-        from preferences: StatsPreferences,
-        recordID: CKRecord.ID,
-        existingRecord: CKRecord? = nil
-    ) throws -> CKRecord {
-        let normalizedPreferences = preferences.normalized()
-        let payload: Data
-        do {
-            payload = try JSONEncoder().encode(normalizedPreferences)
-        } catch {
-            throw CloudKitError.encodingFailed
-        }
-
-        let record = existingRecord ?? CKRecord(recordType: RecordType.userPreference, recordID: recordID)
-        record["schemaVersion"] = normalizedPreferences.schemaVersion
-        record["payload"] = payload
-        record["updatedAt"] = normalizedPreferences.updatedAt
-        record["lastWriterDeviceId"] = normalizedPreferences.lastWriterDeviceId
-        return record
-    }
-
     private func extractServerRecord(from error: Error) -> CKRecord? {
         guard let ckError = error as? CKError else { return nil }
 
@@ -1096,14 +1031,16 @@ final class CloudKitManager: ObservableObject {
         let records = try await withZoneRetry {
             try await fetchAllRecordsFromCloudKit()
         }
+        let trackedRecordTypes: Set<String> = [
+            RecordType.server,
+            RecordType.workspace,
+            TerminalThemeCloudKitRecordCodec.recordType,
+            TerminalThemePreferenceCloudKitRecordCodec.recordType,
+            TerminalAccessoryCloudKitRecordCodec.recordType,
+            StatsPreferencesCloudKitRecordCodec.recordType
+        ]
         let recordIDs = records
-            .filter {
-                $0.recordType == RecordType.server ||
-                $0.recordType == RecordType.workspace ||
-                $0.recordType == RecordType.terminalTheme ||
-                $0.recordType == RecordType.terminalThemePreference ||
-                $0.recordType == RecordType.userPreference
-            }
+            .filter { trackedRecordTypes.contains($0.recordType) }
             .map(\.recordID)
 
         // Batch delete
@@ -1127,9 +1064,15 @@ final class CloudKitManager: ObservableObject {
 
         let deletedServers = records.filter { $0.recordType == RecordType.server }.count
         let deletedWorkspaces = records.filter { $0.recordType == RecordType.workspace }.count
-        let deletedThemes = records.filter { $0.recordType == RecordType.terminalTheme }.count
-        let deletedThemePreferences = records.filter { $0.recordType == RecordType.terminalThemePreference }.count
-        let deletedUserPreferences = records.filter { $0.recordType == RecordType.userPreference }.count
+        let deletedThemes = records.filter {
+            $0.recordType == TerminalThemeCloudKitRecordCodec.recordType
+        }.count
+        let deletedThemePreferences = records.filter {
+            $0.recordType == TerminalThemePreferenceCloudKitRecordCodec.recordType
+        }.count
+        let deletedUserPreferences = records.filter {
+            $0.recordType == TerminalAccessoryCloudKitRecordCodec.recordType
+        }.count
         logger.info(
             "Deleted \(deletedServers) servers, \(deletedWorkspaces) workspaces, \(deletedThemes) themes, \(deletedThemePreferences) theme preferences, \(deletedUserPreferences) user preferences from CloudKit"
         )

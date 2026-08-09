@@ -96,7 +96,7 @@ final class TerminalThemeValidationTests: XCTestCase {
         record["name"] = "../../Outside" as CKRecordValue
         record["content"] = "background = #000000\nforeground = #ffffff\n" as CKRecordValue
 
-        XCTAssertNil(TerminalTheme(from: record))
+        XCTAssertNil(TerminalThemeCloudKitRecordCodec.theme(from: record))
     }
 
     func testCloudThemePreservesInvalidContentForSafeMergeRejection() throws {
@@ -106,7 +106,7 @@ final class TerminalThemeValidationTests: XCTestCase {
         record["name"] = "Existing Theme" as CKRecordValue
         record["content"] = original as CKRecordValue
 
-        let theme = try XCTUnwrap(TerminalTheme(from: record))
+        let theme = try XCTUnwrap(TerminalThemeCloudKitRecordCodec.theme(from: record))
 
         XCTAssertEqual(theme.content, original)
         XCTAssertFalse(theme.canApply)
