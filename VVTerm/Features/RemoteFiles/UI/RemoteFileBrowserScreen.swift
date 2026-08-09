@@ -1294,7 +1294,12 @@ struct RemoteFileBrowserScreen: View {
         let exportDirectory = try temporaryDragExportDirectory()
         let fallbackName = entry.type == .directory ? "Folder" : "download"
         let filename = entry.name.isEmpty ? fallbackName : entry.name
-        return exportDirectory.appendingPathComponent(filename, isDirectory: entry.type == .directory)
+        return try RemoteFileLocalPath.descendant(
+            named: RemoteFileLeaf(validating: filename),
+            in: exportDirectory,
+            operationRootURL: exportDirectory,
+            isDirectory: entry.type == .directory
+        )
     }
 
     func temporaryDragExportDirectory(named folderName: String? = nil) throws -> URL {
@@ -1429,7 +1434,8 @@ struct RemoteFileBrowserScreen: View {
 
         for (index, sourceEntry) in uniqueEntries.enumerated() {
             let destinationDirectory = RemoteFilePath.normalize(destinationDirectoryPath)
-            let destinationPath = RemoteFilePath.appending(sourceEntry.name, to: destinationDirectory)
+            let sourceLeaf = try RemoteFileLeaf(validating: sourceEntry.name)
+            let destinationPath = RemoteFilePath.appending(sourceLeaf, to: destinationDirectory)
 
             guard destinationPath != sourceEntry.path else { continue }
 
@@ -1548,7 +1554,7 @@ struct RemoteFileBrowserScreen: View {
                 }
 
                 let destinationPath = RemoteFilePath.appending(
-                    newName,
+                    try RemoteFileLeaf(validating: newName),
                     to: RemoteFilePath.parent(of: entry.path)
                 )
                 try await browser.renameItem(
@@ -1580,7 +1586,8 @@ struct RemoteFileBrowserScreen: View {
                     moveDestinationDirectory,
                     relativeTo: sourceDirectory
                 )
-                let destinationPath = RemoteFilePath.appending(entry.name, to: destinationDirectory)
+                let entryLeaf = try RemoteFileLeaf(validating: entry.name)
+                let destinationPath = RemoteFilePath.appending(entryLeaf, to: destinationDirectory)
 
                 guard destinationPath != entry.path else {
                     return false
@@ -1709,7 +1716,12 @@ struct RemoteFileBrowserScreen: View {
 
         let uniquePrefix = UUID().uuidString
         let filename = entry.name.isEmpty ? "download" : entry.name
-        return downloadDirectory.appendingPathComponent("\(uniquePrefix)-\(filename)")
+        return try RemoteFileLocalPath.descendant(
+            named: RemoteFileLeaf(validating: "\(uniquePrefix)-\(filename)"),
+            in: downloadDirectory,
+            operationRootURL: downloadDirectory,
+            isDirectory: false
+        )
     }
 
     func cleanupDownloadExport() {

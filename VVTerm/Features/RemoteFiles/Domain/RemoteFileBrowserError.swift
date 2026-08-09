@@ -5,6 +5,9 @@ enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
     case pathNotFound
     case disconnected
     case unsupportedEncoding
+    case invalidEntryName
+    case destinationEscapedRoot
+    case resourceLimitExceeded
     case failed(String)
 
     var id: String {
@@ -17,6 +20,12 @@ enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
             return "disconnected"
         case .unsupportedEncoding:
             return "unsupportedEncoding"
+        case .invalidEntryName:
+            return "invalidEntryName"
+        case .destinationEscapedRoot:
+            return "destinationEscapedRoot"
+        case .resourceLimitExceeded:
+            return "resourceLimitExceeded"
         case .failed(let message):
             return "failed:\(message)"
         }
@@ -32,6 +41,12 @@ enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
             return String(localized: "The remote connection was interrupted.")
         case .unsupportedEncoding:
             return String(localized: "Inline preview is unavailable for this file.")
+        case .invalidEntryName:
+            return String(localized: "The server returned an unsafe file name.")
+        case .destinationEscapedRoot:
+            return String(localized: "The file destination is outside the selected folder.")
+        case .resourceLimitExceeded:
+            return String(localized: "The remote file operation exceeded its safety limit.")
         case .failed(let message):
             return message
         }

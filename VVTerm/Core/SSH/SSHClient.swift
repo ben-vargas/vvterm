@@ -720,6 +720,14 @@ actor SSHClient {
     }
 
     func downloadFile(at path: String, to localURL: URL) async throws {
+        try await downloadFile(at: path, to: localURL, maxBytes: nil)
+    }
+
+    func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
+        try await downloadFile(at: path, to: localURL, maxBytes: maxBytes as UInt64?)
+    }
+
+    private func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64?) async throws {
         guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
@@ -729,7 +737,7 @@ actor SSHClient {
         )
         try await SSHClient.runWithTimeout(downloadTimeout) {
             try Task.checkCancellation()
-            try await session.downloadFile(at: path, to: localURL)
+            try await session.downloadFile(at: path, to: localURL, maxBytes: maxBytes)
         }
     }
 
@@ -2041,7 +2049,8 @@ actor SSHSession {
                 let name = Self.string(from: nameBuffer, length: bytesRead)
                 guard name != "." && name != ".." else { continue }
 
-                let entryPath = RemoteFilePath.appending(name, to: normalizedPath)
+                let leaf = try RemoteFileLeaf(validating: name)
+                let entryPath = RemoteFilePath.appending(leaf, to: normalizedPath)
                 let baseEntry = RemoteFileEntry.from(
                     name: name,
                     path: entryPath,
@@ -2143,7 +2152,7 @@ actor SSHSession {
         return data
     }
 
-    func downloadFile(at path: String, to localURL: URL) async throws {
+    func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64? = nil) async throws {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = RemoteFilePath.normalize(path)
         let handle = try await openFileHandle(
@@ -2165,6 +2174,7 @@ actor SSHSession {
         }
 
         let localFileHandle = try FileHandle(forWritingTo: localURL)
+        var totalBytesWritten: UInt64 = 0
         do {
             while true {
                 try Task.checkCancellation()
@@ -2184,7 +2194,13 @@ actor SSHSession {
                 }
 
                 if bytesRead > 0 {
+                    let chunkBytes = UInt64(bytesRead)
+                    if let maxBytes,
+                       chunkBytes > maxBytes - min(totalBytesWritten, maxBytes) {
+                        throw RemoteFileBrowserError.resourceLimitExceeded
+                    }
                     try localFileHandle.write(contentsOf: Data(buffer.prefix(bytesRead)))
+                    totalBytesWritten += chunkBytes
                     continue
                 }
 

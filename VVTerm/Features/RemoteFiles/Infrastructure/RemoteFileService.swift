@@ -6,6 +6,7 @@ protocol RemoteFileService {
     func lstat(at path: String) async throws -> RemoteFileEntry
     func readFile(at path: String, maxBytes: Int) async throws -> Data
     func downloadFile(at path: String, to localURL: URL) async throws
+    func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws
     func upload(
         _ data: Data,
         to remotePath: String,
@@ -19,4 +20,17 @@ protocol RemoteFileService {
     func setPermissions(at path: String, permissions: UInt32) async throws
     func resolveHomeDirectory() async throws -> String
     func fileSystemStatus(at path: String) async throws -> RemoteFileFilesystemStatus
+}
+
+extension RemoteFileService {
+    func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
+        try await downloadFile(at: path, to: localURL)
+        let fileManager = FileManager.default
+        let attributes = try fileManager.attributesOfItem(atPath: localURL.path)
+        let downloadedBytes = (attributes[.size] as? NSNumber)?.uint64Value ?? 0
+        guard downloadedBytes <= maxBytes else {
+            try? fileManager.removeItem(at: localURL)
+            throw RemoteFileBrowserError.resourceLimitExceeded
+        }
+    }
 }

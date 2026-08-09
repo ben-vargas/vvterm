@@ -52,7 +52,10 @@ extension RemoteFileBrowserStore {
         }
 
         do {
-            let readLimit = min(Int(entry.size ?? UInt64(Self.defaultPreviewBytes)), Self.hardPreviewBytes)
+            let readLimit = Int(min(
+                entry.size ?? UInt64(Self.defaultPreviewBytes),
+                UInt64(Self.hardPreviewBytes)
+            ))
             let effectiveReadLimit = max(Self.defaultPreviewBytes, readLimit)
             let data = try await withRemoteFileService(for: server) { service in
                 try await service.readFile(at: entry.path, maxBytes: effectiveReadLimit)
@@ -82,6 +85,7 @@ extension RemoteFileBrowserStore {
             case .image, .video:
                 let previewFileURL: URL?
                 let unavailableMessage: String?
+                var previewByteCount = entry.size
 
                 if let fileSize = entry.size, fileSize > UInt64(Self.maxMediaPreviewBytes) {
                     previewFileURL = nil
@@ -92,8 +96,13 @@ extension RemoteFileBrowserStore {
                     let tempURL = try makePreviewFileURL(for: entry)
                     do {
                         try await withRemoteFileService(for: server) { service in
-                            try await service.downloadFile(at: entry.path, to: tempURL)
+                            try await service.downloadFile(
+                                at: entry.path,
+                                to: tempURL,
+                                maxBytes: UInt64(Self.maxMediaPreviewBytes)
+                            )
                         }
+                        previewByteCount = try downloadedFileSize(at: tempURL)
                         if await validateDownloadedPreview(at: tempURL, kind: previewKind) {
                             previewFileURL = tempURL
                             unavailableMessage = nil
@@ -117,7 +126,7 @@ extension RemoteFileBrowserStore {
                     isTruncated: false,
                     unavailableMessage: unavailableMessage,
                     requiresExplicitDownload: false,
-                    previewByteCount: entry.size
+                    previewByteCount: previewByteCount
                 )
             case .unavailable:
                 payload = RemoteFileViewerPayload(

@@ -7,7 +7,7 @@ struct RemoteFileBreadcrumb: Identifiable, Hashable, Sendable {
     var id: String { path }
 }
 
-enum RemoteFilePath {
+nonisolated enum RemoteFilePath {
     static func normalize(_ path: String, relativeTo currentPath: String? = nil) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -60,6 +60,20 @@ enum RemoteFilePath {
         return normalize(directoryPath + separator + name)
     }
 
+    static func appending(_ leaf: RemoteFileLeaf, to directoryPath: String) -> String {
+        let root = normalize(directoryPath)
+        let candidate = appending(leaf.value, to: root)
+        precondition(isStrictDescendant(candidate, of: root))
+        return candidate
+    }
+
+    static func isStrictDescendant(_ candidatePath: String, of rootPath: String) -> Bool {
+        let candidate = normalize(candidatePath)
+        let root = normalize(rootPath)
+        guard candidate != root else { return false }
+        return root == "/" ? candidate.hasPrefix("/") : candidate.hasPrefix(root + "/")
+    }
+
     static func breadcrumbs(for path: String) -> [RemoteFileBreadcrumb] {
         let normalized = normalize(path)
         guard normalized != "/" else {
@@ -76,5 +90,39 @@ enum RemoteFilePath {
             )
         }
         return breadcrumbs
+    }
+}
+
+nonisolated enum RemoteFileLocalPath {
+    static func descendant(
+        named leaf: RemoteFileLeaf,
+        in parentURL: URL,
+        operationRootURL: URL,
+        isDirectory: Bool
+    ) throws -> URL {
+        let root = canonical(operationRootURL)
+        let parent = canonical(parentURL)
+        guard parent == root || isStrictDescendant(parent, of: root) else {
+            throw RemoteFileBrowserError.destinationEscapedRoot
+        }
+
+        let candidate = canonical(
+            parent.appendingPathComponent(leaf.value, isDirectory: isDirectory)
+        )
+        guard isStrictDescendant(candidate, of: root) else {
+            throw RemoteFileBrowserError.destinationEscapedRoot
+        }
+        return candidate
+    }
+
+    private static func canonical(_ url: URL) -> URL {
+        url.standardizedFileURL.resolvingSymlinksInPath()
+    }
+
+    private static func isStrictDescendant(_ candidate: URL, of root: URL) -> Bool {
+        let candidateComponents = candidate.pathComponents
+        let rootComponents = root.pathComponents
+        guard candidateComponents.count > rootComponents.count else { return false }
+        return Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
     }
 }

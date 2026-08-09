@@ -68,7 +68,8 @@ extension RemoteFileBrowserStore {
         permissions: Int32 = 0o600,
         strategy: SSHUploadStrategy = .automatic
     ) async throws {
-        let remotePath = RemoteFilePath.appending(localURL.lastPathComponent, to: remoteDirectoryPath)
+        let leaf = try RemoteFileLeaf(validating: localURL.lastPathComponent)
+        let remotePath = RemoteFilePath.appending(leaf, to: remoteDirectoryPath)
         let data = try await loadLocalFileData(from: localURL)
         try await upload(
             data: data,
@@ -97,10 +98,8 @@ extension RemoteFileBrowserStore {
         server: Server,
         permissions: Int32 = 0o755
     ) async throws {
-        let remotePath = RemoteFilePath.appending(
-            try validatedRemoteName(directoryName),
-            to: remoteDirectoryPath
-        )
+        let leaf = try RemoteFileLeaf(validating: validatedRemoteName(directoryName))
+        let remotePath = RemoteFilePath.appending(leaf, to: remoteDirectoryPath)
         try await createDirectory(at: remotePath, in: tab, server: server, permissions: permissions)
     }
 
@@ -359,23 +358,37 @@ extension RemoteFileBrowserStore {
         guard !uniqueEntries.isEmpty else { return }
 
         let destinationDirectory = RemoteFilePath.normalize(destinationDirectoryPath)
-        let totalUnitCount = try await withRemoteFileService(for: sourceServer) { service in
-            try await self.countRemoteTransferUnits(for: uniqueEntries, using: service)
+        let plans = try await withRemoteFileService(for: sourceServer) { service in
+            var traversalBudget = RemoteFileTraversalBudget()
+            var plans: [RemoteFileTransferPlanNode] = []
+            for entry in uniqueEntries {
+                plans.append(try await self.makeRemoteTransferPlan(
+                    for: entry,
+                    using: service,
+                    symlinkPolicy: .resolveFiles,
+                    depth: 0,
+                    budget: &traversalBudget
+                ))
+            }
+            return plans
         }
         let progressTracker = TransferProgressTracker(
-            totalUnitCount: totalUnitCount,
+            totalUnitCount: plans.reduce(0) { $0 + $1.unitCount },
             onProgress: onProgress
         )
 
         try await withRemoteFileService(for: sourceServer) { sourceService in
             try await self.withRemoteFileService(for: destinationServer) { destinationService in
-                for entry in uniqueEntries {
-                    try await self.copyRemoteEntry(
-                        entry,
+                var byteBudget = RemoteFileTransferByteBudget()
+                for plan in plans {
+                    try await self.copyRemoteTransferPlan(
+                        plan,
                         to: destinationDirectory,
+                        operationRootPath: destinationDirectory,
                         sourceService: sourceService,
                         destinationService: destinationService,
-                        progressTracker: progressTracker
+                        progressTracker: progressTracker,
+                        byteBudget: &byteBudget
                     )
                 }
             }
@@ -401,7 +414,22 @@ extension RemoteFileBrowserStore {
         server: Server
     ) async throws {
         try await withRemoteFileService(for: server) { service in
-            try await self.downloadItem(entry, to: localURL, using: service)
+            var traversalBudget = RemoteFileTraversalBudget()
+            let plan = try await self.makeRemoteTransferPlan(
+                for: entry,
+                using: service,
+                symlinkPolicy: .resolveFiles,
+                depth: 0,
+                budget: &traversalBudget
+            )
+            var byteBudget = RemoteFileTransferByteBudget()
+            try await self.downloadRemoteTransferPlan(
+                plan,
+                to: localURL,
+                operationRootURL: localURL,
+                using: service,
+                byteBudget: &byteBudget
+            )
         }
     }
 
@@ -438,20 +466,28 @@ extension RemoteFileBrowserStore {
         using service: any RemoteFileService
     ) async throws {
         let normalizedPath = RemoteFilePath.normalize(remotePath)
-        let entries = try await service.listDirectory(at: normalizedPath, maxEntries: nil)
-
-        for entry in entries {
-            try Task.checkCancellation()
-
-            switch entry.type {
-            case .directory:
-                try await deleteDirectoryRecursively(at: entry.path, using: service)
-            case .file, .symlink, .other:
-                try await service.deleteFile(at: entry.path)
-            }
+        guard normalizedPath != "/",
+              let rootName = normalizedPath.split(separator: "/").last.map(String.init) else {
+            throw RemoteFileBrowserError.resourceLimitExceeded
         }
-
-        try await service.deleteDirectory(at: normalizedPath)
+        let root = RemoteFileEntry(
+            name: rootName,
+            path: normalizedPath,
+            type: .directory,
+            size: nil,
+            modifiedAt: nil,
+            permissions: nil,
+            symlinkTarget: nil
+        )
+        var budget = RemoteFileTraversalBudget()
+        let plan = try await makeRemoteTransferPlan(
+            for: root,
+            using: service,
+            symlinkPolicy: .preserve,
+            depth: 0,
+            budget: &budget
+        )
+        try await deleteRemoteTransferPlan(plan, using: service)
     }
 
     func loadLocalFileData(from url: URL) async throws -> Data {
@@ -494,7 +530,8 @@ extension RemoteFileBrowserStore {
         try Task.checkCancellation()
         let itemInfo = try await localItemInfo(at: localURL)
         let targetName = remoteName ?? itemInfo.name
-        let remotePath = RemoteFilePath.appending(targetName, to: remoteDirectoryPath)
+        let targetLeaf = try RemoteFileLeaf(validating: targetName)
+        let remotePath = RemoteFilePath.appending(targetLeaf, to: remoteDirectoryPath)
         progressTracker?.reportCurrentItem(targetName)
 
         if itemInfo.isDirectory {
@@ -524,71 +561,168 @@ extension RemoteFileBrowserStore {
         progressTracker?.advance(currentItemName: targetName)
     }
 
-    func downloadItem(
-        _ entry: RemoteFileEntry,
-        to localURL: URL,
-        using service: any RemoteFileService
-    ) async throws {
-        let effectiveEntry = try await resolvedTransferEntry(for: entry, using: service)
-
-        if effectiveEntry.type == .directory {
-            try await createLocalDirectory(at: localURL)
-            let children = try await service.listDirectory(at: entry.path, maxEntries: nil)
-            for child in children {
-                let childURL = localURL.appendingPathComponent(
-                    child.name,
-                    isDirectory: child.type == .directory
-                )
-                try await downloadItem(child, to: childURL, using: service)
-            }
-            return
-        }
-
-        try await service.downloadFile(at: entry.path, to: localURL)
+    enum TransferSymlinkPolicy: Equatable {
+        case preserve
+        case resolveFiles
     }
 
-    func copyRemoteEntry(
-        _ entry: RemoteFileEntry,
-        to remoteDirectoryPath: String,
-        sourceService: any RemoteFileService,
-        destinationService: any RemoteFileService,
-        progressTracker: TransferProgressTracker?
-    ) async throws {
-        let effectiveEntry = try await resolvedTransferEntry(for: entry, using: sourceService)
-        let remotePath = RemoteFilePath.appending(entry.name, to: remoteDirectoryPath)
+    func makeRemoteTransferPlan(
+        for entry: RemoteFileEntry,
+        using service: any RemoteFileService,
+        symlinkPolicy: TransferSymlinkPolicy,
+        depth: Int,
+        budget: inout RemoteFileTraversalBudget
+    ) async throws -> RemoteFileTransferPlanNode {
+        try Task.checkCancellation()
+        try budget.admit(depth: depth)
+        let safeEntry = try validatedTransferEntry(entry)
+        let effectiveEntry: RemoteFileEntry
 
-        if effectiveEntry.type == .directory {
-            try await ensureRemoteDirectoryExists(
-                at: remotePath,
-                permissions: Int32(effectiveEntry.permissions ?? 0o755),
-                using: destinationService
+        if safeEntry.type == .symlink, symlinkPolicy == .resolveFiles {
+            let resolved = try await service.stat(at: safeEntry.path)
+            guard resolved.type != .directory else {
+                throw RemoteFileBrowserError.resourceLimitExceeded
+            }
+            effectiveEntry = RemoteFileEntry(
+                name: safeEntry.name,
+                path: safeEntry.path,
+                type: resolved.type,
+                size: resolved.size,
+                modifiedAt: resolved.modifiedAt,
+                permissions: resolved.permissions,
+                symlinkTarget: safeEntry.symlinkTarget ?? resolved.symlinkTarget
             )
-            progressTracker?.advance(currentItemName: entry.name)
-            let children = try await sourceService.listDirectory(at: entry.path, maxEntries: nil)
-            for child in children {
-                try await copyRemoteEntry(
+        } else {
+            effectiveEntry = safeEntry
+        }
+
+        guard effectiveEntry.type == .directory else {
+            return RemoteFileTransferPlanNode(entry: effectiveEntry, children: [])
+        }
+
+        let allowedChildren = try budget.directoryReadLimit()
+        let listedChildren = try await service.listDirectory(
+            at: effectiveEntry.path,
+            maxEntries: allowedChildren + 1
+        )
+        guard listedChildren.count <= allowedChildren else {
+            throw RemoteFileBrowserError.resourceLimitExceeded
+        }
+
+        var children: [RemoteFileTransferPlanNode] = []
+        children.reserveCapacity(listedChildren.count)
+        for child in listedChildren {
+            let safeChild = try validatedTransferEntry(child, parentPath: effectiveEntry.path)
+            children.append(try await makeRemoteTransferPlan(
+                for: safeChild,
+                using: service,
+                symlinkPolicy: symlinkPolicy,
+                depth: depth + 1,
+                budget: &budget
+            ))
+        }
+        return RemoteFileTransferPlanNode(entry: effectiveEntry, children: children)
+    }
+
+    func downloadRemoteTransferPlan(
+        _ plan: RemoteFileTransferPlanNode,
+        to localURL: URL,
+        operationRootURL: URL,
+        using service: any RemoteFileService,
+        byteBudget: inout RemoteFileTransferByteBudget
+    ) async throws {
+        try Task.checkCancellation()
+        if plan.entry.type == .directory {
+            try await createLocalDirectory(at: localURL)
+            for child in plan.children {
+                let leaf = try RemoteFileLeaf(validating: child.entry.name)
+                let childURL = try RemoteFileLocalPath.descendant(
+                    named: leaf,
+                    in: localURL,
+                    operationRootURL: operationRootURL,
+                    isDirectory: child.entry.type == .directory
+                )
+                try await downloadRemoteTransferPlan(
                     child,
-                    to: remotePath,
-                    sourceService: sourceService,
-                    destinationService: destinationService,
-                    progressTracker: progressTracker
+                    to: childURL,
+                    operationRootURL: operationRootURL,
+                    using: service,
+                    byteBudget: &byteBudget
                 )
             }
             return
         }
 
-        let temporaryURL = try temporaryStorage.makeTransferFileURL(for: entry)
-        defer { temporaryStorage.removeItem(at: temporaryURL) }
+        let limit = try byteBudget.downloadLimit(reportedBytes: plan.entry.size)
+        try await service.downloadFile(at: plan.entry.path, to: localURL, maxBytes: limit)
+        try byteBudget.record(try downloadedFileSize(at: localURL))
+    }
 
-        try await sourceService.downloadFile(at: entry.path, to: temporaryURL)
+    func copyRemoteTransferPlan(
+        _ plan: RemoteFileTransferPlanNode,
+        to remoteDirectoryPath: String,
+        operationRootPath: String,
+        sourceService: any RemoteFileService,
+        destinationService: any RemoteFileService,
+        progressTracker: TransferProgressTracker?,
+        byteBudget: inout RemoteFileTransferByteBudget
+    ) async throws {
+        try Task.checkCancellation()
+        let leaf = try RemoteFileLeaf(validating: plan.entry.name)
+        let remotePath = RemoteFilePath.appending(leaf, to: remoteDirectoryPath)
+        guard RemoteFilePath.isStrictDescendant(remotePath, of: operationRootPath) else {
+            throw RemoteFileBrowserError.destinationEscapedRoot
+        }
+
+        if plan.entry.type == .directory {
+            try await ensureRemoteDirectoryExists(
+                at: remotePath,
+                permissions: Int32(plan.entry.permissions ?? 0o755),
+                using: destinationService
+            )
+            progressTracker?.advance(currentItemName: plan.entry.name)
+            for child in plan.children {
+                try await copyRemoteTransferPlan(
+                    child,
+                    to: remotePath,
+                    operationRootPath: operationRootPath,
+                    sourceService: sourceService,
+                    destinationService: destinationService,
+                    progressTracker: progressTracker,
+                    byteBudget: &byteBudget
+                )
+            }
+            return
+        }
+
+        let temporaryURL = try temporaryStorage.makeTransferFileURL(for: plan.entry)
+        defer { temporaryStorage.removeItem(at: temporaryURL) }
+        let limit = try byteBudget.downloadLimit(reportedBytes: plan.entry.size)
+        try await sourceService.downloadFile(at: plan.entry.path, to: temporaryURL, maxBytes: limit)
+        let downloadedBytes = try downloadedFileSize(at: temporaryURL)
+        try byteBudget.record(downloadedBytes)
         let data = try await loadLocalFileData(from: temporaryURL)
         try await destinationService.upload(
             data,
             to: remotePath,
-            permissions: Int32(effectiveEntry.permissions ?? 0o644),
+            permissions: Int32(plan.entry.permissions ?? 0o644),
             strategy: .automatic
         )
-        progressTracker?.advance(currentItemName: entry.name)
+        progressTracker?.advance(currentItemName: plan.entry.name)
+    }
+
+    func deleteRemoteTransferPlan(
+        _ plan: RemoteFileTransferPlanNode,
+        using service: any RemoteFileService
+    ) async throws {
+        for child in plan.children {
+            try await deleteRemoteTransferPlan(child, using: service)
+        }
+        if plan.entry.type == .directory {
+            try await service.deleteDirectory(at: plan.entry.path)
+        } else {
+            try await service.deleteFile(at: plan.entry.path)
+        }
     }
 
     func countLocalTransferUnits(at urls: [URL]) async throws -> Int {
@@ -619,12 +753,18 @@ extension RemoteFileBrowserStore {
         for entries: [RemoteFileEntry],
         using client: any RemoteFileService
     ) async throws -> Int {
+        var budget = RemoteFileTraversalBudget()
         var totalUnitCount = 0
-
         for entry in entries {
-            totalUnitCount += try await countRemoteTransferUnits(for: entry, using: client)
+            let plan = try await makeRemoteTransferPlan(
+                for: entry,
+                using: client,
+                symlinkPolicy: .resolveFiles,
+                depth: 0,
+                budget: &budget
+            )
+            totalUnitCount += plan.unitCount
         }
-
         return max(1, totalUnitCount)
     }
 
@@ -632,35 +772,36 @@ extension RemoteFileBrowserStore {
         for entry: RemoteFileEntry,
         using client: any RemoteFileService
     ) async throws -> Int {
-        let effectiveEntry = try await resolvedTransferEntry(for: entry, using: client)
-        guard effectiveEntry.type == .directory else { return 1 }
-
-        let children = try await client.listDirectory(at: entry.path, maxEntries: nil)
-        var totalUnitCount = 1
-
-        for child in children {
-            totalUnitCount += try await countRemoteTransferUnits(for: child, using: client)
-        }
-
-        return totalUnitCount
+        try await countRemoteTransferUnits(for: [entry], using: client)
     }
 
-    func resolvedTransferEntry(
-        for entry: RemoteFileEntry,
-        using client: any RemoteFileService
-    ) async throws -> RemoteFileEntry {
-        guard entry.type == .symlink else { return entry }
-
-        let resolvedEntry = try await client.stat(at: entry.path)
-        return RemoteFileEntry(
-            name: entry.name,
-            path: entry.path,
-            type: resolvedEntry.type,
-            size: resolvedEntry.size,
-            modifiedAt: resolvedEntry.modifiedAt,
-            permissions: resolvedEntry.permissions,
-            symlinkTarget: entry.symlinkTarget ?? resolvedEntry.symlinkTarget
+    func validatedTransferEntry(
+        _ entry: RemoteFileEntry,
+        parentPath: String? = nil
+    ) throws -> RemoteFileEntry {
+        let leaf = try RemoteFileLeaf(validating: entry.name)
+        let normalizedPath = RemoteFilePath.normalize(entry.path)
+        let expectedPath = RemoteFilePath.appending(
+            leaf,
+            to: parentPath ?? RemoteFilePath.parent(of: normalizedPath)
         )
+        guard normalizedPath == expectedPath else {
+            throw RemoteFileBrowserError.invalidEntryName
+        }
+        return RemoteFileEntry(
+            name: leaf.value,
+            path: normalizedPath,
+            type: entry.type,
+            size: entry.size,
+            modifiedAt: entry.modifiedAt,
+            permissions: entry.permissions,
+            symlinkTarget: entry.symlinkTarget
+        )
+    }
+
+    func downloadedFileSize(at url: URL) throws -> UInt64 {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return (attributes[.size] as? NSNumber)?.uint64Value ?? 0
     }
 
     func ensureRemoteDirectoryExists(
@@ -717,12 +858,6 @@ extension RemoteFileBrowserStore {
         guard !trimmed.isEmpty else {
             throw RemoteFileBrowserError.failed(String(localized: "A name is required."))
         }
-        guard trimmed != "." && trimmed != ".." else {
-            throw RemoteFileBrowserError.failed(String(localized: "This name is not allowed."))
-        }
-        guard !trimmed.contains("/") else {
-            throw RemoteFileBrowserError.failed(String(localized: "Names cannot contain '/'."))
-        }
-        return trimmed
+        return try RemoteFileLeaf(validating: trimmed).value
     }
 }
