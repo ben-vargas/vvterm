@@ -40,6 +40,28 @@ struct RemoteFilePreviewCoordinatorTests {
         #expect(!store.isLoadingViewer(for: tab))
     }
 
+    @Test
+    func failedMediaValidationRemovesArtifactAndReturnsNoDecoderURL() throws {
+        let rootDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let temporaryStorage = RemoteFileTemporaryStorage(rootDirectory: rootDirectory)
+        let store = RemoteFileBrowserStore(
+            defaults: makeDefaults(),
+            temporaryStorage: temporaryStorage
+        )
+        let entry = makeEntry(name: "oversized.png", path: "/tmp/oversized.png")
+        let previewURL = try temporaryStorage.makePreviewFileURL(for: entry)
+        try Data("rejected media".utf8).write(to: previewURL)
+
+        let decoderURL = store.validatedPreviewURL(
+            at: previewURL,
+            passedValidation: false
+        )
+
+        #expect(decoderURL == nil)
+        #expect(!FileManager.default.fileExists(atPath: previewURL.path))
+    }
+
     private func makeEntry(name: String, path: String) -> RemoteFileEntry {
         RemoteFileEntry(
             name: name,

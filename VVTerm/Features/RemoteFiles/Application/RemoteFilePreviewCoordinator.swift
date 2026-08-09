@@ -103,11 +103,17 @@ extension RemoteFileBrowserStore {
                             )
                         }
                         previewByteCount = try downloadedFileSize(at: tempURL)
-                        if await validateDownloadedPreview(at: tempURL, kind: previewKind) {
-                            previewFileURL = tempURL
+                        let passedValidation = await validateDownloadedPreview(
+                            at: tempURL,
+                            kind: previewKind
+                        )
+                        previewFileURL = validatedPreviewURL(
+                            at: tempURL,
+                            passedValidation: passedValidation
+                        )
+                        if previewFileURL != nil {
                             unavailableMessage = nil
                         } else {
-                            previewFileURL = tempURL
                             unavailableMessage = String(
                                 localized: "This file downloaded successfully, but macOS could not open it for inline preview."
                             )
@@ -218,5 +224,13 @@ extension RemoteFileBrowserStore {
 
     func validateDownloadedPreview(at url: URL, kind: RemoteFilePreviewKind) async -> Bool {
         await previewLoader.validateDownloadedPreview(at: url, kind: kind, logger: logger)
+    }
+
+    func validatedPreviewURL(at url: URL, passedValidation: Bool) -> URL? {
+        guard passedValidation else {
+            temporaryStorage.removeItem(at: url)
+            return nil
+        }
+        return url
     }
 }
