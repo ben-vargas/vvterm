@@ -11,19 +11,23 @@ final class TerminalPaneConnectionCoordinator {
         case eternalTerminal(EternalTerminalPaneCoordinator)
     }
 
+    let tabManager: TerminalTabManager
     private let backend: Backend
 
     init(
         paneId: UUID,
         server: Server,
         credentials: ServerCredentials,
+        tabManager: TerminalTabManager,
         richPasteUIModel: TerminalRichPasteUIModel
     ) {
+        self.tabManager = tabManager
         if server.connectionMode == .eternalTerminal {
             backend = .eternalTerminal(EternalTerminalPaneCoordinator(
                 paneId: paneId,
                 server: server,
-                credentials: credentials
+                credentials: credentials,
+                tabManager: tabManager
             ))
         } else {
             backend = .ssh(TerminalPaneSSHCoordinator(
@@ -31,6 +35,7 @@ final class TerminalPaneConnectionCoordinator {
                 server: server,
                 credentials: credentials,
                 sshClient: SSHClient(),
+                tabManager: tabManager,
                 richPasteUIModel: richPasteUIModel
             ))
         }
@@ -106,18 +111,18 @@ final class TerminalPaneConnectionCoordinator {
     var hasLiveConnection: Bool {
         switch backend {
         case .ssh:
-            TerminalTabManager.shared.shellId(for: paneId) != nil
+            tabManager.shellId(for: paneId) != nil
         case .eternalTerminal:
-            TerminalTabManager.shared.existingEternalTerminalRuntime(for: paneId) != nil
+            tabManager.existingEternalTerminalRuntime(for: paneId) != nil
         }
     }
 
     var isConnectionStartInFlight: Bool {
         switch backend {
         case .ssh(let coordinator):
-            coordinator.shellTask != nil || TerminalTabManager.shared.isShellStartInFlight(for: paneId)
+            coordinator.shellTask != nil || tabManager.isShellStartInFlight(for: paneId)
         case .eternalTerminal:
-            TerminalTabManager.shared.existingEternalTerminalRuntime(for: paneId)?.isStartInFlight == true
+            tabManager.existingEternalTerminalRuntime(for: paneId)?.isStartInFlight == true
         }
     }
 
@@ -163,20 +168,27 @@ private final class EternalTerminalPaneCoordinator {
     let paneId: UUID
     let server: Server
     let credentials: ServerCredentials
+    let tabManager: TerminalTabManager
     weak var terminal: GhosttyTerminalView?
     var isTerminalReady = false
     var preservePane = false
     var lastReportedSize: CGSize = .zero
 
-    init(paneId: UUID, server: Server, credentials: ServerCredentials) {
+    init(
+        paneId: UUID,
+        server: Server,
+        credentials: ServerCredentials,
+        tabManager: TerminalTabManager
+    ) {
         self.paneId = paneId
         self.server = server
         self.credentials = credentials
+        self.tabManager = tabManager
     }
 
     func start(terminal: GhosttyTerminalView) {
         self.terminal = terminal
-        let runtime = TerminalTabManager.shared.eternalTerminalRuntime(
+        let runtime = tabManager.eternalTerminalRuntime(
             for: paneId,
             server: server,
             credentials: credentials
@@ -192,11 +204,11 @@ private final class EternalTerminalPaneCoordinator {
     }
 
     func send(_ data: Data) {
-        TerminalTabManager.shared.existingEternalTerminalRuntime(for: paneId)?.send(data)
+        tabManager.existingEternalTerminalRuntime(for: paneId)?.send(data)
     }
 
     func handleResize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
-        guard let runtime = TerminalTabManager.shared.existingEternalTerminalRuntime(for: paneId) else {
+        guard let runtime = tabManager.existingEternalTerminalRuntime(for: paneId) else {
             return
         }
         runtime.resize(cols: cols, rows: rows, pixelSize: pixelSize)
@@ -204,7 +216,7 @@ private final class EternalTerminalPaneCoordinator {
     }
 
     func cancel() {
-        guard TerminalTabManager.shared.paneStates[paneId] == nil else { return }
-        Task { await TerminalTabManager.shared.unregisterEternalTerminalRuntime(for: paneId) }
+        guard tabManager.paneStates[paneId] == nil else { return }
+        Task { await tabManager.unregisterEternalTerminalRuntime(for: paneId) }
     }
 }

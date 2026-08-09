@@ -37,6 +37,7 @@ extension View {
         paneIds: [UUID],
         terminalRegistryVersion: Int,
         terminalProvider: @escaping (UUID) -> GhosttyTerminalView?,
+        keyboardCoordinator: TerminalKeyboardCoordinator,
         enabledOverride: Bool? = nil
     ) -> some View {
         modifier(
@@ -45,6 +46,7 @@ extension View {
                 paneIds: paneIds,
                 terminalRegistryVersion: terminalRegistryVersion,
                 terminalProvider: terminalProvider,
+                keyboardCoordinator: keyboardCoordinator,
                 enabledOverride: enabledOverride
             )
         )
@@ -225,6 +227,7 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
         paneIds: [UUID],
         terminalRegistryVersion: Int,
         terminalProvider: @escaping (UUID) -> GhosttyTerminalView?,
+        keyboardCoordinator: TerminalKeyboardCoordinator,
         enabledOverride: Bool?
     ) {
         self.focusedPaneId = focusedPaneId
@@ -232,9 +235,7 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
         self.terminalRegistryVersion = terminalRegistryVersion
         self.terminalProvider = terminalProvider
         self.enabledOverride = enabledOverride
-        _keyboardCoordinator = ObservedObject(
-            wrappedValue: TerminalTabManager.shared.keyboardCoordinator
-        )
+        _keyboardCoordinator = ObservedObject(wrappedValue: keyboardCoordinator)
     }
 
     private var isEnabled: Bool {
@@ -303,6 +304,7 @@ struct RemoteTerminalPaneWrapper: View {
     let paneId: UUID
     let server: Server
     let credentials: ServerCredentials
+    let tabManager: TerminalTabManager
     let richPasteUIModel: TerminalRichPasteUIModel
     let isActive: Bool
     let terminalContextMenuActions: TerminalContextMenuActions
@@ -318,6 +320,7 @@ struct RemoteTerminalPaneWrapper: View {
                 paneId: paneId,
                 server: server,
                 credentials: credentials,
+                tabManager: tabManager,
                 richPasteUIModel: richPasteUIModel,
                 size: geometry.size,
                 isActive: isActive,
@@ -340,7 +343,7 @@ struct RemoteTerminalPaneWrapper: View {
         // A SwiftUI wrapper can briefly outlive registry ownership. Never let
         // that stale wrapper resume or reconnect a terminal now hosted by
         // another scene.
-        guard let terminal = TerminalTabManager.shared.getTerminal(for: paneId),
+        guard let terminal = tabManager.getTerminal(for: paneId),
               let terminalScene = terminal.window?.windowScene,
               terminalScene === activatedScene else { return }
 
@@ -407,6 +410,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     let paneId: UUID
     let server: Server
     let credentials: ServerCredentials
+    let tabManager: TerminalTabManager
     let richPasteUIModel: TerminalRichPasteUIModel
     let size: CGSize
     let isActive: Bool
@@ -424,6 +428,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             paneId: paneId,
             server: server,
             credentials: credentials,
+            tabManager: tabManager,
             richPasteUIModel: richPasteUIModel
         )
     }
@@ -435,7 +440,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
 
         let coordinator = context.coordinator
 
-        if let existingTerminal = TerminalTabManager.shared.getTerminal(for: paneId) {
+        if let existingTerminal = tabManager.getTerminal(for: paneId) {
             coordinator.terminal = existingTerminal
             coordinator.isTerminalReady = true
             coordinator.preservePane = true
@@ -455,7 +460,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
                 startConnectionIfNeeded(
                     terminal: existingTerminal,
                     coordinator: coordinator,
-                    state: TerminalTabManager.shared.paneStates[paneId]?.connectionState ?? .idle
+                    state: tabManager.paneStates[paneId]?.connectionState ?? .idle
                 )
             }
             return existingTerminal
@@ -480,7 +485,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
                     startConnectionIfNeeded(
                         terminal: terminalView,
                         coordinator: coordinator,
-                        state: TerminalTabManager.shared.paneStates[paneId]?.connectionState ?? .idle
+                        state: tabManager.paneStates[paneId]?.connectionState ?? .idle
                     )
                 }
             }
@@ -489,22 +494,22 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         terminalView.onVoiceButtonTapped = onVoiceTrigger
         terminalView.onPwdChange = { [paneId] rawDirectory in
             DispatchQueue.main.async {
-                TerminalTabManager.shared.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
+                tabManager.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
             }
         }
         terminalView.onTitleChange = { [paneId] title in
-            TerminalTabManager.shared.updatePaneTitle(paneId, rawTitle: title)
+            tabManager.updatePaneTitle(paneId, rawTitle: title)
         }
         terminalView.onZoomAction = { [paneId] action in
-            TerminalTabManager.shared.handleTerminalZoom(action, for: paneId)
+            tabManager.handleTerminalZoom(action, for: paneId)
         }
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminalView.terminalContextMenuActions = terminalContextMenuActions
-        terminalView.applyPresentationOverrides(TerminalTabManager.shared.presentationOverrides(for: paneId))
+        terminalView.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
 
         coordinator.terminal = terminalView
         coordinator.installRichPasteInterception(on: terminalView)
-        TerminalTabManager.shared.registerTerminal(terminalView, for: paneId)
+        tabManager.registerTerminal(terminalView, for: paneId)
 
         terminalView.writeCallback = { [weak coordinator] data in
             coordinator?.sendToTransport(data)
@@ -530,7 +535,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             return
         }
 
-        guard TerminalTabManager.shared.paneStates[paneId] != nil else {
+        guard tabManager.paneStates[paneId] != nil else {
             terminalView.acceptsTerminalInput = false
             terminalView.writeCallback = nil
             terminalView.onReady = nil
@@ -554,8 +559,8 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             renderingIsPaused: terminalView.isRenderingPaused
         )
 
-        if terminalView.surfacePresentationOverrides != TerminalTabManager.shared.presentationOverrides(for: paneId) {
-            terminalView.applyPresentationOverrides(TerminalTabManager.shared.presentationOverrides(for: paneId))
+        if terminalView.surfacePresentationOverrides != tabManager.presentationOverrides(for: paneId) {
+            terminalView.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
         }
         terminalView.onVoiceButtonTapped = onVoiceTrigger
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
@@ -576,7 +581,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             }
         }
 
-        let state = TerminalTabManager.shared.paneStates[paneId]?.connectionState ?? .idle
+        let state = tabManager.paneStates[paneId]?.connectionState ?? .idle
         let shouldStartConnection = TerminalConnectionStartPolicy.shouldStart(
             connectionState: state
         )
@@ -593,7 +598,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
         guard let terminalView = uiView as? GhosttyTerminalView else { return }
 
-        let paneStillExists = TerminalTabManager.shared.paneStates[coordinator.paneId] != nil
+        let paneStillExists = coordinator.tabManager.paneStates[coordinator.paneId] != nil
         if paneStillExists {
             coordinator.preservePane = true
             return
@@ -602,7 +607,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         coordinator.terminal = nil
         let paneId = coordinator.paneId
         Task { @MainActor in
-            TerminalTabManager.shared.unregisterTerminal(terminalView, for: paneId)
+            coordinator.tabManager.unregisterTerminal(terminalView, for: paneId)
             coordinator.cancelConnection()
         }
     }
@@ -612,18 +617,18 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         terminal.onVoiceButtonTapped = onVoiceTrigger
         terminal.onPwdChange = { [paneId] rawDirectory in
             DispatchQueue.main.async {
-                TerminalTabManager.shared.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
+                tabManager.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
             }
         }
         terminal.onTitleChange = { [paneId] title in
-            TerminalTabManager.shared.updatePaneTitle(paneId, rawTitle: title)
+            tabManager.updatePaneTitle(paneId, rawTitle: title)
         }
         terminal.onZoomAction = { [paneId] action in
-            TerminalTabManager.shared.handleTerminalZoom(action, for: paneId)
+            tabManager.handleTerminalZoom(action, for: paneId)
         }
         terminal.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminal.terminalContextMenuActions = terminalContextMenuActions
-        terminal.applyPresentationOverrides(TerminalTabManager.shared.presentationOverrides(for: paneId))
+        terminal.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
         terminal.writeCallback = { [weak coordinator] data in
             coordinator?.sendToTransport(data)
         }
@@ -636,7 +641,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     private func processExitHandler(for terminal: GhosttyTerminalView) -> () -> Void {
         { [weak terminal] in
             guard let terminal,
-                  TerminalTabManager.shared.getTerminal(for: paneId) === terminal else { return }
+                  tabManager.getTerminal(for: paneId) === terminal else { return }
             onProcessExit()
         }
     }
@@ -646,7 +651,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         coordinator: TerminalPaneConnectionCoordinator,
         state: ConnectionState
     ) {
-        guard TerminalTabManager.shared.paneStates[paneId] != nil else { return }
+        guard tabManager.paneStates[paneId] != nil else { return }
         guard !coordinator.hasLiveConnection else { return }
         guard !coordinator.isConnectionStartInFlight else { return }
         guard UIApplication.shared.applicationState == .active else { return }

@@ -32,6 +32,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     let paneId: UUID
     let server: Server
     let credentials: ServerCredentials
+    let tabManager: TerminalTabManager
     let richPasteUIModel: TerminalRichPasteUIModel
     let isActive: Bool
     let terminalContextMenuActions: TerminalContextMenuActions
@@ -49,7 +50,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
         let coordinator = context.coordinator
 
         // Check if terminal already exists for this pane (reuse to save memory)
-        if let existingTerminal = TerminalTabManager.shared.getTerminal(for: paneId) {
+        if let existingTerminal = tabManager.getTerminal(for: paneId) {
             coordinator.preservePane = true
             coordinator.terminal = existingTerminal
             existingTerminal.onProcessExit = processExitHandler(for: existingTerminal)
@@ -59,16 +60,16 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
                 coordinator?.handleResize(cols: cols, rows: rows)
             }
             existingTerminal.onPwdChange = { [paneId] rawDirectory in
-                TerminalTabManager.shared.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
+                tabManager.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
             }
             existingTerminal.onTitleChange = { [paneId] title in
-                TerminalTabManager.shared.updatePaneTitle(paneId, rawTitle: title)
+                tabManager.updatePaneTitle(paneId, rawTitle: title)
             }
             existingTerminal.onZoomAction = { [paneId] action in
-                TerminalTabManager.shared.handleTerminalZoom(action, for: paneId)
+                tabManager.handleTerminalZoom(action, for: paneId)
             }
             existingTerminal.terminalContextMenuActions = terminalContextMenuActions
-            existingTerminal.applyPresentationOverrides(TerminalTabManager.shared.presentationOverrides(for: paneId))
+            existingTerminal.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
             existingTerminal.writeCallback = { [weak coordinator] data in
                 coordinator?.sendToTransport(data)
             }
@@ -82,7 +83,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
 
             DispatchQueue.main.async {
                 onReady()
-                if TerminalTabManager.shared.shellId(for: paneId) == nil {
+                if tabManager.shellId(for: paneId) == nil {
                     coordinator.startConnection(terminal: existingTerminal)
                 }
             }
@@ -108,21 +109,21 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
         }
         terminalView.onProcessExit = processExitHandler(for: terminalView)
         terminalView.onPwdChange = { [paneId] rawDirectory in
-            TerminalTabManager.shared.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
+            tabManager.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
         }
         terminalView.onTitleChange = { [paneId] title in
-            TerminalTabManager.shared.updatePaneTitle(paneId, rawTitle: title)
+            tabManager.updatePaneTitle(paneId, rawTitle: title)
         }
         terminalView.onZoomAction = { [paneId] action in
-            TerminalTabManager.shared.handleTerminalZoom(action, for: paneId)
+            tabManager.handleTerminalZoom(action, for: paneId)
         }
         terminalView.terminalContextMenuActions = terminalContextMenuActions
-        terminalView.applyPresentationOverrides(TerminalTabManager.shared.presentationOverrides(for: paneId))
+        terminalView.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
 
         // Store terminal reference
         coordinator.terminal = terminalView
         coordinator.installRichPasteInterception(on: terminalView)
-        TerminalTabManager.shared.registerTerminal(terminalView, for: paneId)
+        tabManager.registerTerminal(terminalView, for: paneId)
 
         // Route terminal input to the selected remote transport.
         terminalView.writeCallback = { [weak coordinator] data in
@@ -147,7 +148,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     private func processExitHandler(for terminal: GhosttyTerminalView) -> () -> Void {
         { [weak terminal] in
             guard let terminal,
-                  TerminalTabManager.shared.getTerminal(for: paneId) === terminal else { return }
+                  tabManager.getTerminal(for: paneId) === terminal else { return }
             onProcessExit()
         }
     }
@@ -157,8 +158,8 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
             scrollView.shouldOwnFirstResponder = isActive
             let terminalView = scrollView.surfaceView
             terminalView.terminalContextMenuActions = terminalContextMenuActions
-            if terminalView.surfacePresentationOverrides != TerminalTabManager.shared.presentationOverrides(for: paneId) {
-                terminalView.applyPresentationOverrides(TerminalTabManager.shared.presentationOverrides(for: paneId))
+            if terminalView.surfacePresentationOverrides != tabManager.presentationOverrides(for: paneId) {
+                terminalView.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
             }
         }
     }
@@ -166,7 +167,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     static func dismantleNSView(_ nsView: NSView, coordinator: TerminalPaneConnectionCoordinator) {
         guard let scrollView = nsView as? TerminalScrollView else { return }
         let terminal = scrollView.surfaceView
-        let paneStillExists = TerminalTabManager.shared.paneStates[coordinator.paneId] != nil
+        let paneStillExists = coordinator.tabManager.paneStates[coordinator.paneId] != nil
         if paneStillExists {
             coordinator.preservePane = true
             return
@@ -175,7 +176,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
         coordinator.terminal = nil
         let paneId = coordinator.paneId
         DispatchQueue.main.async {
-            TerminalTabManager.shared.unregisterTerminal(terminal, for: paneId)
+            coordinator.tabManager.unregisterTerminal(terminal, for: paneId)
             coordinator.cancelConnection()
         }
     }
@@ -185,6 +186,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
             paneId: paneId,
             server: server,
             credentials: credentials,
+            tabManager: tabManager,
             richPasteUIModel: richPasteUIModel
         )
     }

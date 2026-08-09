@@ -46,7 +46,7 @@ struct TerminalTabView: View {
     }
 
     private var focusedTerminal: GhosttyTerminalView? {
-        TerminalTabManager.shared.getTerminal(for: tab.focusedPaneId)
+        tabManager.getTerminal(for: tab.focusedPaneId)
     }
 
     private var hasFocusedTerminal: Bool {
@@ -66,8 +66,28 @@ struct TerminalTabView: View {
         )
     }
 
+    @ViewBuilder
+    private func withTerminalKeyboardAvoidance<Content: View>(_ content: Content) -> some View {
+        #if os(iOS)
+        content.terminalKeyboardAvoidance(
+            focusedPaneId: isSelected ? tab.focusedPaneId : nil,
+            paneIds: tab.allPaneIds,
+            terminalRegistryVersion: tabManager.terminalRegistryVersion,
+            terminalProvider: { tabManager.getTerminal(for: $0) },
+            keyboardCoordinator: tabManager.keyboardCoordinator
+        )
+        #else
+        content.terminalKeyboardAvoidance(
+            focusedPaneId: isSelected ? tab.focusedPaneId : nil,
+            paneIds: tab.allPaneIds,
+            terminalRegistryVersion: tabManager.terminalRegistryVersion,
+            terminalProvider: { tabManager.getTerminal(for: $0) }
+        )
+        #endif
+    }
+
     var body: some View {
-        ZStack {
+        withTerminalKeyboardAvoidance(ZStack {
             // Refresh when terminals register/unregister so overlays can update immediately.
             let _ = tabManager.terminalRegistryVersion
             if tabManager.isSplitZoomed(in: tab), tab.hasSplits {
@@ -87,11 +107,6 @@ struct TerminalTabView: View {
             activePaneId: isSelected ? tab.focusedPaneId : nil,
             splitActions: splitActions
         )
-        .terminalKeyboardAvoidance(
-            focusedPaneId: isSelected ? tab.focusedPaneId : nil,
-            paneIds: tab.allPaneIds,
-            terminalRegistryVersion: tabManager.terminalRegistryVersion,
-            terminalProvider: { tabManager.getTerminal(for: $0) }
         )
         .terminalCloseConfirmationAlert(
             isPresented: $showingCloseConfirmation,
@@ -565,7 +580,7 @@ struct TerminalPaneView: View {
 
     /// Check if terminal already exists (reuse case)
     private var terminalExists: Bool {
-        TerminalTabManager.shared.getTerminal(for: paneId) != nil
+        tabManager.getTerminal(for: paneId) != nil
     }
 
     private var fallbackBannerMessage: String? {
@@ -621,7 +636,7 @@ struct TerminalPaneView: View {
     }
 
     private var isAwaitingTmuxSelection: Bool {
-        TerminalTabManager.shared.tmuxAttachPrompt?.paneId == paneId
+        tabManager.tmuxAttachPrompt?.paneId == paneId
     }
 
     private var noticeSurfaceStyle: NoticeSurfaceStyle {
@@ -796,7 +811,7 @@ struct TerminalPaneView: View {
         }
         .onChange(of: networkMonitor.readiness) { readiness in
             if readiness == .ready {
-                TerminalTabManager.shared.notifyEternalTerminalNetworkPathChanged(for: paneId)
+                tabManager.notifyEternalTerminalNetworkPathChanged(for: paneId)
                 attemptAutoReconnectIfNeeded()
             }
         }
@@ -860,7 +875,7 @@ struct TerminalPaneView: View {
         .alert("Install tmux?", isPresented: $showingTmuxInstallPrompt) {
             Button("Install") {
                 Task {
-                    await TerminalTabManager.shared.startTmuxInstall(for: paneId) {
+                    await tabManager.startTmuxInstall(for: paneId) {
                         retryConnection()
                     }
                 }
@@ -926,6 +941,7 @@ struct TerminalPaneView: View {
             paneId: paneId,
             server: server,
             credentials: credentials,
+            tabManager: tabManager,
             richPasteUIModel: richPasteUI,
             isActive: shouldFocus,
             terminalContextMenuActions: terminalContextMenuActions,
@@ -942,6 +958,7 @@ struct TerminalPaneView: View {
             paneId: paneId,
             server: server,
             credentials: credentials,
+            tabManager: tabManager,
             richPasteUIModel: richPasteUI,
             isActive: shouldFocus,
             terminalContextMenuActions: terminalContextMenuActions,
@@ -968,7 +985,7 @@ struct TerminalPaneView: View {
     }
 
     private func disableTmuxForServer() {
-        TerminalTabManager.shared.disableTmux(for: server.id)
+        tabManager.disableTmux(for: server.id)
     }
 
     private func presentHostKeyTrustConfirmation() {
@@ -1102,7 +1119,7 @@ struct TerminalPaneView: View {
 
     private var foregroundSceneIsActive: Bool {
         #if os(iOS)
-        let windowScene = TerminalTabManager.shared
+        let windowScene = tabManager
             .getTerminal(for: paneId)?
             .window?
             .windowScene
@@ -1137,20 +1154,20 @@ struct TerminalPaneView: View {
                 guard stillConnecting || stillConnectedWithoutTerminal else { return }
 
                 if stillConnectedWithoutTerminal {
-                    TerminalTabManager.shared.updatePaneState(paneId, connectionState: .disconnected)
+                    tabManager.updatePaneState(paneId, connectionState: .disconnected)
                     retryConnection()
                     return
                 }
 
-                if TerminalTabManager.shared.shellId(for: paneId) != nil
-                    || TerminalTabManager.shared.existingEternalTerminalRuntime(for: paneId) != nil,
+                if tabManager.shellId(for: paneId) != nil
+                    || tabManager.existingEternalTerminalRuntime(for: paneId) != nil,
                    connectionState.isConnected {
-                    TerminalTabManager.shared.updatePaneState(paneId, connectionState: .connected)
+                    tabManager.updatePaneState(paneId, connectionState: .connected)
                     return
                 }
 
-                let inFlight = TerminalTabManager.shared.isShellStartInFlight(for: paneId)
-                    || TerminalTabManager.shared.existingEternalTerminalRuntime(for: paneId)?.isStartInFlight == true
+                let inFlight = tabManager.isShellStartInFlight(for: paneId)
+                    || tabManager.existingEternalTerminalRuntime(for: paneId)?.isStartInFlight == true
                 if inFlight {
                     // Keep polling while a shell start is still in flight so stale locks
                     // and hung attempts are eventually surfaced to the user.
@@ -1158,7 +1175,7 @@ struct TerminalPaneView: View {
                     return
                 }
 
-                TerminalTabManager.shared.updatePaneState(
+                tabManager.updatePaneState(
                     paneId,
                     connectionState: .failed(String(localized: "Connection timed out. Please retry."))
                 )
@@ -1173,7 +1190,7 @@ struct TerminalPaneView: View {
         defer { isInstallingMosh = false }
 
         do {
-            try await TerminalTabManager.shared.installMoshServer(for: paneId)
+            try await tabManager.installMoshServer(for: paneId)
             operationNotice = nil
             retryConnection()
         } catch {

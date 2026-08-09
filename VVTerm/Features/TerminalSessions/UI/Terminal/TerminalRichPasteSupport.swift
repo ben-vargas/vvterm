@@ -242,13 +242,14 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
     static func terminalPane(
         paneId: UUID,
         sshClient: SSHClient,
+        tabManager: TerminalTabManager,
         uiModel: TerminalRichPasteUIModel
     ) -> TerminalRichPasteRuntime {
         TerminalRichPasteRuntime(
             sessionId: paneId,
             uiModel: uiModel,
             resolveConnectedSSHClient: {
-                if let registeredClient = TerminalTabManager.shared.getSSHClient(for: paneId) {
+                if let registeredClient = tabManager.getSSHClient(for: paneId) {
                     return registeredClient
                 }
 
@@ -259,10 +260,10 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
                 return nil
             },
             pasteTextFromClipboard: {
-                TerminalTabManager.shared.getTerminal(for: paneId)?.pasteTextFromClipboard()
+                tabManager.getTerminal(for: paneId)?.pasteTextFromClipboard()
             },
             sendText: { text in
-                TerminalTabManager.shared.getTerminal(for: paneId)?.sendText(text)
+                tabManager.getTerminal(for: paneId)?.sendText(text)
             }
         )
     }

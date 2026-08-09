@@ -185,6 +185,7 @@ struct TerminalKeyboardUITestHarness: View {
                     paneIds: [Self.paneId],
                     terminalRegistryVersion: terminalView == nil ? 0 : 1,
                     terminalProvider: { _ in terminalView },
+                    keyboardCoordinator: keyboardCoordinator,
                     enabledOverride: preservesTerminalSize
                 )
                 .ignoresSafeArea(.container)
@@ -980,6 +981,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
                 paneIds: [Self.firstPaneId, Self.secondPaneId],
                 terminalRegistryVersion: isReady ? 2 : 0,
                 terminalProvider: terminal(for:),
+                keyboardCoordinator: keyboardCoordinator,
                 enabledOverride: false
             )
 
