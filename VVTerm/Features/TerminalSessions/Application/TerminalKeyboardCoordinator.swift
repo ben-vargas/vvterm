@@ -1,6 +1,60 @@
+import Foundation
+
+struct TerminalKeyboardSyncScheduler: Equatable {
+    enum Phase: Equatable {
+        case idle(lastReason: String)
+        case scheduled(reason: String)
+        case syncing(reason: String, pendingReason: String?)
+    }
+
+    private(set) var phase = Phase.idle(lastReason: "initial")
+
+    var reason: String {
+        switch phase {
+        case .idle(let reason), .scheduled(let reason):
+            reason
+        case .syncing(let reason, let pendingReason):
+            pendingReason ?? reason
+        }
+    }
+
+    mutating func request(reason: String) -> Bool {
+        switch phase {
+        case .idle:
+            phase = .scheduled(reason: reason)
+            return true
+        case .scheduled:
+            phase = .scheduled(reason: reason)
+            return false
+        case .syncing(let activeReason, _):
+            phase = .syncing(reason: activeReason, pendingReason: reason)
+            return false
+        }
+    }
+
+    mutating func beginSync() -> String? {
+        guard case .scheduled(let reason) = phase else { return nil }
+        phase = .syncing(reason: reason, pendingReason: nil)
+        return reason
+    }
+
+    mutating func finishSync() -> Bool {
+        guard case .syncing(let reason, let pendingReason) = phase else { return false }
+        if pendingReason != nil {
+            phase = .scheduled(reason: "coalescedResync")
+            return true
+        }
+        phase = .idle(lastReason: reason)
+        return false
+    }
+
+    mutating func cancel(reason: String) {
+        phase = .idle(lastReason: reason)
+    }
+}
+
 #if os(iOS)
 import Combine
-import Foundation
 import UIKit
 import os.log
 
@@ -187,10 +241,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     private var paneInputEligibleById: [UUID: Bool] = [:]
     private var paneWindowAttachedById: [UUID: Bool] = [:]
     private var findNavigatorState = FindNavigatorState.inactive
-    private var syncScheduled = false
-    private var isSyncing = false
-    private var pendingSyncAfterCurrent = false
-    private var pendingReason = "initial"
+    private var syncScheduler = TerminalKeyboardSyncScheduler()
     private var lastManagedPaneId: UUID?
     private var pendingPresentationRequest = PresentationRequest.none
     private var contentProtectionRecoveryState = ContentProtectionRecoveryState.idle
@@ -695,9 +746,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         viewActive = false
         findNavigatorState = .inactive
         cancelPresentationVerify()
-        pendingReason = reason.rawValue
-        syncScheduled = false
-        sync()
+        syncImmediately(reason: reason.rawValue)
     }
 
     /// Navigation must not synchronously ask UIKit/InputUI to tear down its
@@ -715,9 +764,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         makeLocalInputOwnershipAvailable()
         cancelPresentationVerify()
         softwareKeyboardPresentation = .hidden
-        pendingReason = "routeNavigation"
-        pendingSyncAfterCurrent = false
-        syncScheduled = false
+        syncScheduler.cancel(reason: "routeNavigation")
     }
 
     func contentProtectionRecoveryIsPending(for paneId: UUID) -> Bool {
@@ -1018,38 +1065,32 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     }
 
     private func markDirty(reason: String) {
-        pendingReason = reason
-        if isSyncing {
-            pendingSyncAfterCurrent = true
-            return
-        }
-        guard !syncScheduled else { return }
-        syncScheduled = true
+        guard syncScheduler.request(reason: reason) else { return }
+        scheduleSync()
+    }
+
+    private func scheduleSync() {
         DispatchQueue.main.async { [weak self] in
             self?.sync()
         }
     }
 
+    private func syncImmediately(reason: String) {
+        _ = syncScheduler.request(reason: reason)
+        sync()
+    }
+
     private func sync() {
-        syncScheduled = false
-        guard !isSyncing else {
-            pendingSyncAfterCurrent = true
-            return
-        }
-        isSyncing = true
+        guard let reason = syncScheduler.beginSync() else { return }
         defer {
-            isSyncing = false
-            if pendingSyncAfterCurrent {
-                pendingSyncAfterCurrent = false
-                markDirty(reason: "coalescedResync")
+            if syncScheduler.finishSync() {
+                scheduleSync()
             }
         }
 
         let inputs = currentInputs
         let inputSessionDesired = Self.desiredInputSessionActive(inputs: inputs)
         let keyboardPresentationDesired = Self.desiredKeyboardVisible(inputs: inputs)
-        let reason = pendingReason
-
         if !keyboardPresentationDesired {
             cancelPresentationVerify()
         }
@@ -1623,7 +1664,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
 
     private func logNoActiveTerminal(inputSessionDesired: Bool, inputs: StateInputs) {
         guard lifecycleLoggingEnabled else { return }
-        logger.info("command=none reason=\(self.pendingReason, privacy: .public) inputDesired=\(inputSessionDesired) noActiveTerminal=true viewActive=\(inputs.viewActive) inputEligible=\(inputs.activePaneInputEligible) windowAttached=\(inputs.activePaneWindowAttached) userHidden=\(inputs.userHidKeyboard) find=\(inputs.findNavigatorActive)")
+        logger.info("command=none reason=\(self.syncScheduler.reason, privacy: .public) inputDesired=\(inputSessionDesired) noActiveTerminal=true viewActive=\(inputs.viewActive) inputEligible=\(inputs.activePaneInputEligible) windowAttached=\(inputs.activePaneWindowAttached) userHidden=\(inputs.userHidKeyboard) find=\(inputs.findNavigatorActive)")
     }
 
     private func logAsyncRebuild(
@@ -1631,7 +1672,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         after: TerminalKeyboardCoordinatorDiagnosticSnapshot
     ) {
         guard lifecycleLoggingEnabled else { return }
-        logger.info("command=refresh repair=asyncRebuild reason=\(self.pendingReason, privacy: .public) viewActive=\(inputs.viewActive) inputEligible=\(inputs.activePaneInputEligible) windowAttached=\(inputs.activePaneWindowAttached) userHidden=\(inputs.userHidKeyboard) find=\(inputs.findNavigatorActive) kbVisible=\(self.isSoftwareKeyboardVisible) \(after.lifecycleDescription, privacy: .public)")
+        logger.info("command=refresh repair=asyncRebuild reason=\(self.syncScheduler.reason, privacy: .public) viewActive=\(inputs.viewActive) inputEligible=\(inputs.activePaneInputEligible) windowAttached=\(inputs.activePaneWindowAttached) userHidden=\(inputs.userHidKeyboard) find=\(inputs.findNavigatorActive) kbVisible=\(self.isSoftwareKeyboardVisible) \(after.lifecycleDescription, privacy: .public)")
     }
 
     private func logDeferredRefresh(
@@ -1639,7 +1680,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         before: TerminalKeyboardCoordinatorDiagnosticSnapshot
     ) {
         guard lifecycleLoggingEnabled else { return }
-        logger.info("command=refresh repair=deferred reason=\(self.pendingReason, privacy: .public) viewActive=\(inputs.viewActive) inputEligible=\(inputs.activePaneInputEligible) windowAttached=\(inputs.activePaneWindowAttached) userHidden=\(inputs.userHidKeyboard) find=\(inputs.findNavigatorActive) kbVisible=\(self.isSoftwareKeyboardVisible) \(before.lifecycleDescription, privacy: .public)")
+        logger.info("command=refresh repair=deferred reason=\(self.syncScheduler.reason, privacy: .public) viewActive=\(inputs.viewActive) inputEligible=\(inputs.activePaneInputEligible) windowAttached=\(inputs.activePaneWindowAttached) userHidden=\(inputs.userHidKeyboard) find=\(inputs.findNavigatorActive) kbVisible=\(self.isSoftwareKeyboardVisible) \(before.lifecycleDescription, privacy: .public)")
     }
 
     private func logSteady(
@@ -1649,7 +1690,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         before: TerminalKeyboardCoordinatorDiagnosticSnapshot
     ) {
         guard lifecycleLoggingEnabled else { return }
-        logger.info("command=steady reason=\(self.pendingReason, privacy: .public) inputDesired=\(inputSessionDesired) keyboardDesired=\(keyboardPresentationDesired) viewActive=\(inputs.viewActive) inputEligible=\(inputs.activePaneInputEligible) windowAttached=\(inputs.activePaneWindowAttached) userHidden=\(inputs.userHidKeyboard) find=\(inputs.findNavigatorActive) kbVisible=\(self.isSoftwareKeyboardVisible) \(before.lifecycleDescription, privacy: .public)")
+        logger.info("command=steady reason=\(self.syncScheduler.reason, privacy: .public) inputDesired=\(inputSessionDesired) keyboardDesired=\(keyboardPresentationDesired) viewActive=\(inputs.viewActive) inputEligible=\(inputs.activePaneInputEligible) windowAttached=\(inputs.activePaneWindowAttached) userHidden=\(inputs.userHidKeyboard) find=\(inputs.findNavigatorActive) kbVisible=\(self.isSoftwareKeyboardVisible) \(before.lifecycleDescription, privacy: .public)")
     }
 
     private func logVerifySuppressed(
