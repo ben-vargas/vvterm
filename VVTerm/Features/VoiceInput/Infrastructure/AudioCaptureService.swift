@@ -1,8 +1,9 @@
 import Foundation
 import Combine
 import AVFoundation
+import os.log
 
-private struct AudioPCMBufferSnapshot {
+struct AudioPCMBufferSnapshot {
     let format: AVAudioFormat
     let frameLength: AVAudioFrameCount
     let buffers: [Data]
@@ -22,6 +23,7 @@ private struct AudioPCMBufferSnapshot {
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameLength) else {
             return nil
         }
+        buffer.frameLength = frameLength
         let destinations = UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList)
         guard destinations.count == buffers.count else { return nil }
 
@@ -37,7 +39,6 @@ private struct AudioPCMBufferSnapshot {
             }
             destinations[index].mDataByteSize = UInt32(data.count)
         }
-        buffer.frameLength = frameLength
         return buffer
     }
 }
@@ -78,6 +79,7 @@ final class AudioCaptureResources {
 
 @MainActor
 private final class SystemAudioCaptureHardware: AudioCaptureHardware {
+    private let logger = Logger.audio
     private let engine = AVAudioEngine()
 
     var inputFormat: AVAudioFormat {
@@ -89,6 +91,12 @@ private final class SystemAudioCaptureHardware: AudioCaptureHardware {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
         try session.setActive(true, options: [])
+        let route = session.currentRoute.inputs
+            .map { $0.portType.rawValue }
+            .joined(separator: ",")
+        logger.info(
+            "Audio session active [route: \(route, privacy: .public), sampleRate: \(session.sampleRate), inputChannels: \(session.inputNumberOfChannels)]"
+        )
         #endif
     }
 
@@ -105,6 +113,9 @@ private final class SystemAudioCaptureHardware: AudioCaptureHardware {
         handler: @escaping @MainActor (AVAudioPCMBuffer) -> Void
     ) throws {
         let inputNode = engine.inputNode
+        logger.info(
+            "Installing audio tap [sampleRate: \(format.sampleRate), channels: \(format.channelCount), bufferSize: \(bufferSize)]"
+        )
         #if compiler(>=6.4)
         if #available(iOS 27.0, macOS 27.0, *) {
             try inputNode.installAudioTap(
@@ -138,6 +149,7 @@ private final class SystemAudioCaptureHardware: AudioCaptureHardware {
 
     func start() throws {
         try engine.start()
+        logger.info("Audio engine started")
     }
 
     func stop() {
@@ -173,6 +185,7 @@ final class AudioCaptureService: ObservableObject {
     var bufferHandler: ((AVAudioPCMBuffer) -> Void)?
 
     private let targetSampleRate: Double = 16_000
+    private let logger = Logger.audio
     private let captureResources: AudioCaptureResources
     private let makeHardware: () -> any AudioCaptureHardware
     private var converter: AVAudioConverter?
@@ -327,6 +340,11 @@ final class AudioCaptureService: ObservableObject {
         let samples = Array(UnsafeBufferPointer(start: channelData[0], count: frameLength))
 
         guard captureState.generation == generation else { return }
+        if recordedSamples.isEmpty {
+            logger.info(
+                "Received first audio buffer [frames: \(buffer.frameLength), sampleRate: \(inputFormat.sampleRate)]"
+            )
+        }
         updateMetrics(with: samples)
         bufferHandler?(convertedBuffer)
     }

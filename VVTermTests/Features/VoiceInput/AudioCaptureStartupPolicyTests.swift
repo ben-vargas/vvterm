@@ -69,6 +69,32 @@ struct AudioCaptureStartupPolicyTests {
     }
 
     @Test
+    func audioBufferSnapshotReconstructsCapturedFrames() throws {
+        let format = try #require(
+            AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: 48_000,
+                channels: 1,
+                interleaved: false
+            )
+        )
+        let source = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4))
+        source.frameLength = 4
+        let sourceSamples = try #require(source.floatChannelData?[0])
+        sourceSamples[0] = 0.25
+        sourceSamples[1] = -0.5
+        sourceSamples[2] = 0.75
+        sourceSamples[3] = -1
+
+        let copiedBuffer = try #require(AudioPCMBufferSnapshot(source).makeBuffer())
+        let copiedSamples = try #require(copiedBuffer.floatChannelData?[0])
+
+        #expect(copiedBuffer.frameLength == source.frameLength)
+        let samples = Array(UnsafeBufferPointer(start: copiedSamples, count: 4))
+        #expect(samples == [0.25, -0.5, 0.75, -1])
+    }
+
+    @Test
     func partialStartupCleanupReleasesEveryOwnedResourceExactlyOnce() {
         var releases: [String] = []
         let resources = AudioCaptureResources()
