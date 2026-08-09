@@ -27,6 +27,72 @@ enum MLXModelKind: String, CaseIterable, Identifiable {
     }
 }
 
+nonisolated struct MLXDownloadOperationState: Equatable, Sendable {
+    nonisolated enum Phase: Equatable, Sendable {
+        case idle
+        case resolving(operationID: UUID)
+        case downloading(operationID: UUID, taskIdentifier: Int)
+    }
+
+    private(set) var phase: Phase = .idle
+
+    mutating func start() -> UUID? {
+        guard phase == .idle else { return nil }
+        let operationID = UUID()
+        phase = .resolving(operationID: operationID)
+        return operationID
+    }
+
+    mutating func beginTask(operationID: UUID, taskIdentifier: Int) -> Bool {
+        guard phase == .resolving(operationID: operationID) else { return false }
+        phase = .downloading(operationID: operationID, taskIdentifier: taskIdentifier)
+        return true
+    }
+
+    func accepts(taskIdentifier: Int) -> Bool {
+        guard case .downloading(_, let activeTaskIdentifier) = phase else { return false }
+        return activeTaskIdentifier == taskIdentifier
+    }
+
+    @discardableResult
+    mutating func finishTask(taskIdentifier: Int) -> Bool {
+        guard case .downloading(let operationID, let activeTaskIdentifier) = phase,
+              activeTaskIdentifier == taskIdentifier else { return false }
+        phase = .resolving(operationID: operationID)
+        return true
+    }
+
+    @discardableResult
+    mutating func finish(operationID: UUID) -> Bool {
+        guard phase == .resolving(operationID: operationID) else { return false }
+        phase = .idle
+        return true
+    }
+
+    @discardableResult
+    mutating func cancel(operationID: UUID) -> Bool {
+        let activeOperationID: UUID
+        switch phase {
+        case .idle:
+            return false
+        case .resolving(let operationID), .downloading(let operationID, _):
+            activeOperationID = operationID
+        }
+        guard activeOperationID == operationID else { return false }
+        phase = .idle
+        return true
+    }
+
+    func isActive(operationID: UUID) -> Bool {
+        switch phase {
+        case .idle:
+            return false
+        case .resolving(let activeOperationID), .downloading(let activeOperationID, _):
+            return activeOperationID == operationID
+        }
+    }
+}
+
 @MainActor
 final class MLXModelManager: NSObject, ObservableObject {
     struct DownloadProgress: Equatable {
@@ -49,6 +115,9 @@ final class MLXModelManager: NSObject, ObservableObject {
     @Published private(set) var repoSizeBytes: Int64?
     @Published var modelId: String {
         didSet {
+            if let activeContext, activeContext.modelID != normalizedModelId {
+                cancelActiveDownload()
+            }
             refreshStatus()
         }
     }
@@ -57,14 +126,15 @@ final class MLXModelManager: NSObject, ObservableObject {
 
     private let logger = Logger.settings
     private var session: URLSession!
-    private var activeTask: URLSessionDownloadTask?
-    private var activeItem: DownloadItem?
-    private var activeContinuation: CheckedContinuation<URL, Error>?
+    private var operationState = MLXDownloadOperationState()
+    private var activeContext: DownloadContext?
+    private var activeFile: ActiveFileDownload?
     private var completedBytes: Int64 = 0
     private var currentFileBytes: Int64 = 0
     private var expectedTotalBytes: Int64 = 0
     private var downloadStartTime: Date?
     private var storageTask: Task<Void, Never>?
+    private var storageOperationID: UUID?
     private var repoSizeTask: Task<Void, Never>?
     private var lastRepoSizeModelId: String?
 
@@ -95,6 +165,17 @@ final class MLXModelManager: NSObject, ObservableObject {
     struct DownloadItem {
         let url: URL
         let destination: URL
+    }
+
+    private struct DownloadContext {
+        let modelID: String
+        let directory: URL
+    }
+
+    private struct ActiveFileDownload {
+        let task: URLSessionDownloadTask
+        let item: DownloadItem
+        let continuation: CheckedContinuation<URL, Error>
     }
 
     var modelDirectory: URL {
@@ -134,6 +215,7 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     func removeModel() {
+        cancelActiveDownload()
         do {
             if FileManager.default.fileExists(atPath: modelDirectory.path) {
                 try FileManager.default.removeItem(at: modelDirectory)
@@ -153,34 +235,48 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     func downloadModel() async {
-        if case .downloading = state { return }
-
         let modelId = normalizedModelId
         guard !modelId.isEmpty else {
             state = .failed(String(localized: "Model ID is required"))
             return
         }
+        guard let operationID = operationState.start() else { return }
+
+        let context = DownloadContext(
+            modelID: modelId,
+            directory: Self.modelDirectory(for: kind, modelId: modelId)
+        )
+        activeContext = context
+        completedBytes = 0
+        currentFileBytes = 0
+        expectedTotalBytes = repoSizeBytes ?? 0
+        downloadStartTime = Date()
+        state = .downloading(DownloadProgress(
+            fraction: 0,
+            bytesDownloaded: 0,
+            totalBytes: expectedTotalBytes,
+            estimatedSecondsRemaining: nil
+        ))
 
         do {
-            try FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: context.directory, withIntermediateDirectories: true)
 
-            let items = try await resolveDownloadItems()
-
-            completedBytes = 0
-            currentFileBytes = 0
-            expectedTotalBytes = repoSizeBytes ?? 0
-            downloadStartTime = Date()
-            state = .downloading(DownloadProgress(fraction: 0, bytesDownloaded: 0, totalBytes: expectedTotalBytes, estimatedSecondsRemaining: nil))
+            let items = try await resolveDownloadItems(context: context)
+            guard operationState.isActive(operationID: operationID) else { return }
 
             for item in items {
                 currentFileBytes = 0
-                try await download(item)
-                completedBytes += currentFileBytes
+                try await download(item, operationID: operationID)
+                completedBytes = Self.addingBytes(completedBytes, currentFileBytes)
             }
 
+            guard operationState.finish(operationID: operationID) else { return }
+            activeContext = nil
             state = .ready
             refreshStorageUsage()
         } catch {
+            guard operationState.finish(operationID: operationID) else { return }
+            activeContext = nil
             logger.error("Failed to download MLX model: \(error.localizedDescription)")
             state = .failed(error.localizedDescription)
         }
@@ -237,13 +333,15 @@ final class MLXModelManager: NSObject, ObservableObject {
         for case let fileURL as URL in enumerator {
             let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
             guard values?.isRegularFile == true, let size = values?.fileSize else { continue }
-            total += Int64(size)
+            total = addingBytes(total, Int64(size))
         }
         return total
     }
 
     func refreshStorageUsage() {
         storageTask?.cancel()
+        let operationID = UUID()
+        storageOperationID = operationID
         let modelDir = modelDirectory
         let rootDir = Self.modelsRoot
         storageTask = Task.detached { [weak self] in
@@ -251,6 +349,8 @@ final class MLXModelManager: NSObject, ObservableObject {
             let rootBytes = Self.directorySizeBytes(rootDir)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
+                guard self.storageOperationID == operationID,
+                      self.modelDirectory == modelDir else { return }
                 self.localStorageBytes = modelBytes
                 self.totalStorageBytes = rootBytes
             }
@@ -273,19 +373,20 @@ final class MLXModelManager: NSObject, ObservableObject {
             let size = await MLXModelSizeCache.shared.size(for: modelId)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
+                guard self.lastRepoSizeModelId == modelId,
+                      self.normalizedModelId == modelId else { return }
                 self.repoSizeBytes = size
             }
         }
     }
 
-    private func resolveDownloadItems() async throws -> [DownloadItem] {
-        let modelId = normalizedModelId
-        let base = "https://huggingface.co/\(modelId)/resolve/main"
+    private func resolveDownloadItems(context: DownloadContext) async throws -> [DownloadItem] {
+        let base = "https://huggingface.co/\(context.modelID)/resolve/main"
         var configPath: String?
         var weightPaths: [String] = []
         let allowedExtensions = Self.allowedWeightExtensions(for: kind)
 
-        if let files = try? await fetchModelFiles() {
+        if let files = try? await fetchModelFiles(modelID: context.modelID) {
             configPath = files.first { $0.hasSuffix("config.json") }
 
             if let indexPath = files.first(where: { $0.hasSuffix(".safetensors.index.json") }) {
@@ -334,12 +435,12 @@ final class MLXModelManager: NSObject, ObservableObject {
 
         let configURL = URL(string: "\(base)/\(configPath!)")!
         var items: [DownloadItem] = [
-            DownloadItem(url: configURL, destination: modelDirectory.appendingPathComponent("config.json"))
+            DownloadItem(url: configURL, destination: context.directory.appendingPathComponent("config.json"))
         ]
 
         for path in weightPaths {
             let url = URL(string: "\(base)/\(path)")!
-            items.append(DownloadItem(url: url, destination: modelDirectory.appendingPathComponent((path as NSString).lastPathComponent)))
+            items.append(DownloadItem(url: url, destination: context.directory.appendingPathComponent((path as NSString).lastPathComponent)))
         }
 
         if kind == .whisper {
@@ -347,7 +448,7 @@ final class MLXModelManager: NSObject, ObservableObject {
             let tokenizerFiles = ["gpt2.tiktoken", "multilingual.tiktoken"]
             for name in tokenizerFiles {
                 if let url = URL(string: "\(tokenizerBase)/\(name)") {
-                    items.append(DownloadItem(url: url, destination: modelDirectory.appendingPathComponent(name)))
+                    items.append(DownloadItem(url: url, destination: context.directory.appendingPathComponent(name)))
                 }
             }
         }
@@ -355,8 +456,8 @@ final class MLXModelManager: NSObject, ObservableObject {
         return items
     }
 
-    private func fetchModelFiles() async throws -> [String] {
-        let url = URL(string: "https://huggingface.co/api/models/\(normalizedModelId)")!
+    private func fetchModelFiles(modelID: String) async throws -> [String] {
+        let url = URL(string: "https://huggingface.co/api/models/\(modelID)")!
         let (data, _) = try await session.data(from: url)
         let info = try JSONDecoder().decode(HFModelInfo.self, from: data)
         return info.siblings.map(\.rfilename)
@@ -400,20 +501,64 @@ final class MLXModelManager: NSObject, ObservableObject {
         return nil
     }
 
-    private func download(_ item: DownloadItem) async throws {
-        activeItem = item
+    private func download(_ item: DownloadItem, operationID: UUID) async throws {
         let task = session.downloadTask(with: item.url)
-        activeTask = task
 
         _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
-            activeContinuation = continuation
+            guard operationState.beginTask(
+                operationID: operationID,
+                taskIdentifier: task.taskIdentifier
+            ) else {
+                continuation.resume(throwing: CancellationError())
+                return
+            }
+            activeFile = ActiveFileDownload(task: task, item: item, continuation: continuation)
             task.resume()
         }
     }
 
+    private func cancelActiveDownload() {
+        guard let context = activeContext else { return }
+        let operationID: UUID
+        switch operationState.phase {
+        case .idle:
+            activeContext = nil
+            return
+        case .resolving(let id), .downloading(let id, _):
+            operationID = id
+        }
+
+        guard operationState.cancel(operationID: operationID) else { return }
+        activeContext = nil
+        if let activeFile {
+            self.activeFile = nil
+            activeFile.continuation.resume(throwing: CancellationError())
+            activeFile.task.cancel()
+        }
+        logger.info("Cancelled MLX model download for \(context.modelID)")
+    }
+
+    private func completeActiveFile(
+        taskIdentifier: Int,
+        result: Result<URL, Error>
+    ) {
+        guard operationState.accepts(taskIdentifier: taskIdentifier),
+              let activeFile,
+              activeFile.task.taskIdentifier == taskIdentifier else { return }
+
+        self.activeFile = nil
+        operationState.finishTask(taskIdentifier: taskIdentifier)
+        activeFile.continuation.resume(with: result)
+    }
+
+    nonisolated static func addingBytes(_ lhs: Int64, _ rhs: Int64) -> Int64 {
+        let (sum, overflow) = lhs.addingReportingOverflow(rhs)
+        return overflow ? Int64.max : sum
+    }
+
     private func updateProgress(currentBytes: Int64, currentTotalBytes: Int64) {
         currentFileBytes = currentBytes
-        let totalDownloaded = completedBytes + currentBytes
+        let totalDownloaded = Self.addingBytes(completedBytes, currentBytes)
 
         let fraction: Double
         let totalBytes: Int64
@@ -433,8 +578,11 @@ final class MLXModelManager: NSObject, ObservableObject {
             let elapsed = Date().timeIntervalSince(startTime)
             let bytesPerSecond = Double(totalDownloaded) / elapsed
             if bytesPerSecond > 0 {
-                let remainingBytes = totalBytes - totalDownloaded
-                eta = Int(Double(remainingBytes) / bytesPerSecond)
+                let remainingBytes = max(totalBytes - min(totalDownloaded, totalBytes), 0)
+                let seconds = Double(remainingBytes) / bytesPerSecond
+                if seconds.isFinite {
+                    eta = seconds >= Double(Int.max) ? Int.max : Int(seconds)
+                }
             }
         }
 
@@ -454,18 +602,18 @@ extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        guard let item = activeItem else { return }
+        guard operationState.accepts(taskIdentifier: downloadTask.taskIdentifier),
+              let activeFile,
+              activeFile.task.taskIdentifier == downloadTask.taskIdentifier else { return }
+        let item = activeFile.item
         if let response = downloadTask.response as? HTTPURLResponse,
            !(200..<300).contains(response.statusCode) {
             let status = response.statusCode
-            activeContinuation?.resume(throwing: NSError(
+            completeActiveFile(taskIdentifier: downloadTask.taskIdentifier, result: .failure(NSError(
                 domain: "MLXModelManager",
                 code: status,
                 userInfo: [NSLocalizedDescriptionKey: "Download failed with status \(status)"]
-            ))
-            activeContinuation = nil
-            activeTask = nil
-            activeItem = nil
+            )))
             return
         }
         do {
@@ -473,13 +621,10 @@ extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
                 try FileManager.default.removeItem(at: item.destination)
             }
             try FileManager.default.moveItem(at: location, to: item.destination)
-            activeContinuation?.resume(returning: item.destination)
+            completeActiveFile(taskIdentifier: downloadTask.taskIdentifier, result: .success(item.destination))
         } catch {
-            activeContinuation?.resume(throwing: error)
+            completeActiveFile(taskIdentifier: downloadTask.taskIdentifier, result: .failure(error))
         }
-        activeContinuation = nil
-        activeTask = nil
-        activeItem = nil
     }
 
     @MainActor
@@ -490,9 +635,8 @@ extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
         totalBytesWritten: Int64,
         totalBytesExpectedToWrite: Int64
     ) {
-        Task { @MainActor in
-            self.updateProgress(currentBytes: totalBytesWritten, currentTotalBytes: totalBytesExpectedToWrite)
-        }
+        guard operationState.accepts(taskIdentifier: downloadTask.taskIdentifier) else { return }
+        updateProgress(currentBytes: totalBytesWritten, currentTotalBytes: totalBytesExpectedToWrite)
     }
 
     @MainActor
@@ -501,11 +645,7 @@ extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
         task: URLSessionTask,
         didCompleteWithError error: Error?
     ) {
-        if let error {
-            activeContinuation?.resume(throwing: error)
-            activeContinuation = nil
-            activeTask = nil
-            activeItem = nil
-        }
+        guard let error else { return }
+        completeActiveFile(taskIdentifier: task.taskIdentifier, result: .failure(error))
     }
 }
