@@ -1,6 +1,6 @@
 import Foundation
 
-enum ServerMoveSupport {
+nonisolated enum ServerMoveSupport {
     static func allowedDestinationIDs(
         isPro: Bool,
         sourceWorkspaceId: UUID,
