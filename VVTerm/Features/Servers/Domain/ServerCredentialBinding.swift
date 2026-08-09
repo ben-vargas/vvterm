@@ -68,17 +68,8 @@ enum ServerCredentialBindingStatus: Equatable, Sendable {
     }
 }
 
-nonisolated enum ServerCredentialAccessError: LocalizedError, Equatable {
+nonisolated enum ServerCredentialAccessError: Error, Equatable, Sendable {
     case approvalRequired
-
-    var errorDescription: String? {
-        switch self {
-        case .approvalRequired:
-            return String(
-                localized: "Stored credentials are linked to another server endpoint. Approve this endpoint before using them."
-            )
-        }
-    }
 }
 
 extension ServerCredentials {
