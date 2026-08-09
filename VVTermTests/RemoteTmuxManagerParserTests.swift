@@ -123,6 +123,23 @@ struct RemoteTmuxManagerParserTests {
     }
 
     @Test
+    func cmdWithoutDetectedPowerShellDoesNotRunTmuxProbe() async {
+        let environment = RemoteEnvironment(
+            platform: .windows,
+            shellProfile: .cmd,
+            activeShellName: "cmd.exe",
+            powerShellExecutable: nil
+        )
+        let (availability, commands) = await resolveAvailability(
+            environment: environment,
+            outputs: []
+        )
+
+        #expect(availability == .unsupported)
+        #expect(commands.isEmpty)
+    }
+
+    @Test
     func windowsConfirmsMissingOnlyAfterEveryCandidateReportsMissing() async {
         let environment = RemoteEnvironment(
             platform: .windows,
@@ -294,6 +311,37 @@ struct RemoteTmuxManagerParserTests {
         #expect(command.contains(TmuxLifecycleMarker.sequence(token: "marker-token", event: .creationFailed)))
         #expect(command.contains("vvtermTmuxCreateStatus=$?"))
         #expect(!command.contains("exec tmux"))
+    }
+
+    @Test(arguments: [
+        "/tmp/$(touch /tmp/vvterm-injected)",
+        "/tmp/`touch /tmp/vvterm-injected`",
+        "/tmp/$HOME/project",
+        "/tmp/quote'and\"backslash\\",
+        "/tmp/line\nbreak",
+        "/tmp/ユニコード",
+        "-leading-option"
+    ])
+    func unixWorkingDirectoryIsOneOpaqueShellArgument(_ workingDirectory: String) {
+        let command = RemoteTmuxManager.shared.attachCommand(
+            sessionName: "vvterm_secure",
+            workingDirectory: workingDirectory
+        )
+        let quoted = RemoteTerminalBootstrap.shellQuoted(workingDirectory)
+
+        #expect(command.contains("-c \(quoted)"))
+        #expect(!command.contains("-c \"\(workingDirectory)\""))
+    }
+
+    @Test
+    func unixHomeWorkingDirectoryUsesQuotedExpansion() {
+        let command = RemoteTmuxManager.shared.attachCommand(
+            sessionName: "vvterm_secure",
+            workingDirectory: "~"
+        )
+
+        #expect(command.contains("-c \"${HOME}\""))
+        #expect(!command.contains("-c $HOME"))
     }
 
     @Test
@@ -489,7 +537,7 @@ struct RemoteTmuxManagerParserTests {
         #expect(!command.contains("-e 'COLORTERM=truecolor'"))
         #expect(command.contains("__vvterm_bootstrap__"))
         #expect(command.contains("new-window -d -t '=vvterm_managed:'"))
-        #expect(command.contains("new-window -d -t '=vvterm_managed:' -c \"/tmp\" /bin/sh -lc"))
+        #expect(command.contains("new-window -d -t '=vvterm_managed:' -c '/tmp' /bin/sh -lc"))
         #expect(command.contains("if [ -n \\\"\\$SHELL\\\" ]; then exec \\\"\\$SHELL\\\" -l; fi;"))
         #expect(command.contains("kill-window -t '=vvterm_managed:__vvterm_bootstrap__'"))
         #expect(command.contains("move-window -r -t '=vvterm_managed:'"))
@@ -646,7 +694,7 @@ struct RemoteTmuxManagerParserTests {
         #expect(command.contains("has-session -t $vvtermSession"))
         #expect(command.contains("attach-session -d -t $vvtermSession"))
         #expect(command.contains("new-session -A -s $vvtermSession -c $vvtermWorkingDirectory"))
-        #expect(command.contains("'C:\\Users\\me\\project'"))
+        #expect(command.contains("[Convert]::FromBase64String('QzpcVXNlcnNcbWVccHJvamVjdA==')"))
         #expect(command.contains("$HOME + '\\.vvterm\\psmux.conf'"))
         #expect(!command.contains("$vvtermExactSession"))
         #expect(!command.contains("sh -lc"))
@@ -655,6 +703,51 @@ struct RemoteTmuxManagerParserTests {
         #expect(!command.contains("printf"))
         #expect(!command.contains("uname"))
         #expect(!command.contains("exec tmux"))
+    }
+
+    @Test(arguments: [
+        "C:/work/$(Get-Process)",
+        "C:/work/`Get-Process`",
+        "C:/work/$env:USERPROFILE",
+        "C:/work/O'Hara",
+        "C:/work/line\nbreak",
+        "C:/work/ユニコード",
+        "-leading-option"
+    ])
+    func windowsWorkingDirectoryIsOneOpaquePowerShellArgument(_ workingDirectory: String) {
+        let backend = RemoteTmuxBackend.windowsPsmux(
+            commandName: "psmux",
+            shellFamily: .powershell,
+            powerShellExecutable: "pwsh"
+        )
+        let command = RemoteTmuxManager.shared.attachCommand(
+            sessionName: "vvterm_secure",
+            workingDirectory: workingDirectory,
+            backend: backend
+        )
+        let normalized = workingDirectory.replacingOccurrences(of: "/", with: "\\")
+        let encoded = Data(normalized.utf8).base64EncodedString()
+        let expression = "[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('\(encoded)'))"
+
+        #expect(command.contains("$vvtermWorkingDirectory = \(expression)"))
+        #expect(command.contains("-c $vvtermWorkingDirectory"))
+    }
+
+    @Test
+    func unsupportedWindowsShellProfileDoesNotGeneratePsmuxCommand() {
+        let backend = RemoteTmuxBackend.windowsPsmux(
+            commandName: "psmux",
+            shellFamily: .unknown,
+            powerShellExecutable: nil
+        )
+
+        let command = RemoteTmuxManager.shared.attachCommand(
+            sessionName: "vvterm_secure",
+            workingDirectory: "C:/work",
+            backend: backend
+        )
+
+        #expect(command.isEmpty)
     }
 
     @Test

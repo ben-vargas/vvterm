@@ -193,10 +193,14 @@ actor RemoteTmuxManager {
         guard environment.supportsTmuxRuntime else { return nil }
 
         if environment.platform == .windows {
+            let powerShellExecutable = windowsPowerShellExecutable(for: environment)
+            if environment.shellProfile.family == .cmd, powerShellExecutable == nil {
+                return nil
+            }
             return .windowsPsmux(
                 commandName: "psmux",
                 shellFamily: environment.shellProfile.family,
-                powerShellExecutable: environment.powerShellExecutable ?? environment.shellProfile.executableName
+                powerShellExecutable: powerShellExecutable
             )
         }
 
@@ -465,10 +469,9 @@ actor RemoteTmuxManager {
 
     nonisolated private func shellDirectoryArgument(_ value: String) -> String {
         if value == "~" {
-            return "$HOME"
+            return "\"${HOME}\""
         }
-        let escaped = value.replacingOccurrences(of: "\"", with: "\\\"")
-        return "\"\(escaped)\""
+        return RemoteTerminalBootstrap.shellQuoted(value)
     }
 
     nonisolated private func missingSessionCommand(backend: RemoteTmuxBackend) -> String {
@@ -786,7 +789,11 @@ actor RemoteTmuxManager {
         execute: RemoteEnvironmentResolver.CommandExecutor
     ) async -> RemoteTmuxAvailability {
         let shellFamily = environment.shellProfile.family
-        let powerShellExecutable = environment.powerShellExecutable ?? environment.shellProfile.executableName
+        let powerShellExecutable = windowsPowerShellExecutable(for: environment)
+        guard shellFamily == .powershell
+                || (shellFamily == .cmd && powerShellExecutable != nil) else {
+            return .unsupported
+        }
         var firstIndeterminateFailure: RemoteTmuxProbeFailure?
 
         for (commandName, requirePsmuxExtension) in [
@@ -834,6 +841,20 @@ actor RemoteTmuxManager {
             return .indeterminate(firstIndeterminateFailure)
         }
         return .confirmedMissing
+    }
+
+    nonisolated private func windowsPowerShellExecutable(
+        for environment: RemoteEnvironment
+    ) -> String? {
+        if let executable = environment.powerShellExecutable, !executable.isEmpty {
+            return executable
+        }
+        guard environment.shellProfile.family == .powershell,
+              let executable = environment.shellProfile.executableName,
+              !executable.isEmpty else {
+            return nil
+        }
+        return executable
     }
 
     nonisolated func windowsPsmuxAvailabilityProbeCommand(
@@ -1421,7 +1442,9 @@ actor RemoteTmuxManager {
         case .powershell:
             return powerShellScript
         case .cmd, .unknown, .posix:
-            let executable = powerShellExecutable ?? "powershell"
+            guard let executable = powerShellExecutable, !executable.isEmpty else {
+                return ""
+            }
             return RemoteTerminalBootstrap.wrapPowerShellCommand(
                 powerShellScript,
                 executableName: executable
@@ -1438,12 +1461,12 @@ actor RemoteTmuxManager {
     }
 
     nonisolated private func windowsWorkingDirectoryExpression(_ value: String) -> String {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "$HOME" }
-        if trimmed == "~" || trimmed == "$HOME" || trimmed == "%USERPROFILE%" {
+        guard !value.isEmpty else { return "$HOME" }
+        if value == "~" || value == "$HOME" || value == "%USERPROFILE%" {
             return "$HOME"
         }
-        return powerShellQuoted(normalizedWindowsPath(trimmed))
+        let encoded = Data(normalizedWindowsPath(value).utf8).base64EncodedString()
+        return "[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('\(encoded)'))"
     }
 
     nonisolated private func normalizedWindowsPath(_ value: String) -> String {
