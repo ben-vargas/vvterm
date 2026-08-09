@@ -104,8 +104,8 @@ final class TerminalTabManager: ObservableObject {
     /// Servers with at least one live terminal shell.
     @Published var connectedServerIds: Set<UUID> = []
 
-    /// Selected view type per server (stats/terminal)
-    @Published var selectedViewByServer: [UUID: String] = [:] {
+    /// Selected view type per server.
+    @Published var selectedViewByServer: [UUID: ConnectionViewTabID] = [:] {
         didSet { schedulePersist() }
     }
 
@@ -2702,7 +2702,7 @@ final class TerminalTabManager: ObservableObject {
                     )
                 },
                 selectedTabId: selectedTabByServer[serverId],
-                selectedView: selectedViewByServer[serverId]
+                selectedView: selectedViewByServer[serverId]?.rawValue
             )
         }
     }
@@ -2744,7 +2744,7 @@ final class TerminalTabManager: ObservableObject {
     private func applyRestoredSnapshot(_ snapshot: TerminalTabsSnapshot) {
         var restoredTabsByServer: [UUID: [TerminalTab]] = [:]
         var restoredSelectedTabs: [UUID: UUID] = [:]
-        var restoredSelectedViews: [UUID: String] = [:]
+        var restoredSelectedViews: [UUID: ConnectionViewTabID] = [:]
         var snapshotsByTabId: [UUID: TerminalTabsSnapshot.TabSnapshot] = [:]
 
         for server in snapshot.servers {
@@ -2757,7 +2757,7 @@ final class TerminalTabManager: ObservableObject {
             if let selected = server.selectedTabId {
                 restoredSelectedTabs[server.serverId] = selected
             }
-            if let view = server.selectedView {
+            if let view = server.selectedView.flatMap(ConnectionViewTabID.init(rawValue:)) {
                 restoredSelectedViews[server.serverId] = view
             }
         }

@@ -66,7 +66,7 @@ struct ActiveServerSummary: Identifiable {
     let status: ActiveConnectionPresentationStatus
     let tmuxStatus: TmuxStatus
     let tabCount: Int
-    let targetViewId: String
+    let targetView: ConnectionViewTabID
 
     static func makeAll(
         tabManager: TerminalTabManager,
@@ -112,7 +112,7 @@ struct ActiveServerSummary: Identifiable {
                 } ?? .disconnected,
                 tmuxStatus: state?.tmuxStatus ?? .off,
                 tabCount: terminalTabs.count + remoteFileTabs.count,
-                targetViewId: targetViewId(
+                targetView: targetView(
                     serverId: serverId,
                     hasTerminalTabs: !terminalTabs.isEmpty,
                     hasFileTabs: !remoteFileTabs.isEmpty,
@@ -176,24 +176,24 @@ struct ActiveServerSummary: Identifiable {
         }
     }
 
-    private static func targetViewId(
+    private static func targetView(
         serverId: UUID,
         hasTerminalTabs: Bool,
         hasFileTabs: Bool,
-        selectedViewByServer: [UUID: String],
+        selectedViewByServer: [UUID: ConnectionViewTabID],
         viewTabConfig: ViewTabConfigurationManager
-    ) -> String {
+    ) -> ConnectionViewTabID {
         let selected = viewTabConfig.effectiveView(for: selectedViewByServer[serverId])
-        if selected == ConnectionViewTab.stats.id {
-            return ConnectionViewTab.stats.id
+        switch selected {
+        case .stats:
+            return .stats
+        case .files where hasFileTabs:
+            return .files
+        case .terminal where hasTerminalTabs:
+            return .terminal
+        case .files, .terminal:
+            return hasTerminalTabs ? .terminal : .files
         }
-        if selected == ConnectionViewTab.files.id, hasFileTabs {
-            return ConnectionViewTab.files.id
-        }
-        if selected == ConnectionViewTab.terminal.id, hasTerminalTabs {
-            return ConnectionViewTab.terminal.id
-        }
-        return hasTerminalTabs ? ConnectionViewTab.terminal.id : ConnectionViewTab.files.id
     }
 }
 #endif

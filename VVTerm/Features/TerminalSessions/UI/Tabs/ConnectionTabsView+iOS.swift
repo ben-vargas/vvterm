@@ -57,7 +57,7 @@ extension ConnectionTerminalContainer {
         .modifier(
             TerminalKeyboardSafeAreaModifier(
                 isEnabled: preservesTerminalSizeForKeyboard
-                    && selectedView == ConnectionViewTab.terminal.id
+                    && selectedView == .terminal
             )
         )
     }
@@ -65,20 +65,18 @@ extension ConnectionTerminalContainer {
     @ViewBuilder
     var platformContentStack: some View {
         switch selectedView {
-        case ConnectionViewTab.stats.id:
+        case .stats:
             statsLayer
-        case ConnectionViewTab.files.id:
+        case .files:
             filesLayer
-        case ConnectionViewTab.terminal.id:
-            terminalLayer
-        default:
+        case .terminal:
             terminalLayer
         }
     }
 
     @ViewBuilder
     var terminalLayer: some View {
-        if selectedView == ConnectionViewTab.terminal.id, let tab = selectedTab {
+        if selectedView == .terminal, let tab = selectedTab {
             TerminalTabView(
                 tab: tab,
                 server: server,
@@ -92,7 +90,7 @@ extension ConnectionTerminalContainer {
             .id(tab.id)
         }
 
-        if selectedView == ConnectionViewTab.terminal.id && serverTabs.isEmpty {
+        if selectedView == .terminal && serverTabs.isEmpty {
             TerminalEmptyStateView(server: server) {
                 openNewTab()
             }
@@ -101,7 +99,7 @@ extension ConnectionTerminalContainer {
 
     @ViewBuilder
     private var headerTabsBar: some View {
-        if selectedView == ConnectionViewTab.terminal.id && serverTabs.count > 1 {
+        if selectedView == .terminal && serverTabs.count > 1 {
             SharedTerminalTabsBar(
                 tabs: serverTabs,
                 selectedTabId: selectedTabIdBinding,
@@ -111,7 +109,7 @@ extension ConnectionTerminalContainer {
             )
         }
 
-        if selectedView == ConnectionViewTab.files.id && serverFileTabs.count > 1 {
+        if selectedView == .files && serverFileTabs.count > 1 {
             RemoteFileTabsBar(
                 tabs: serverFileTabs,
                 selectedTabId: selectedFileTabIdBinding,

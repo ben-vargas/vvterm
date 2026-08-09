@@ -53,11 +53,11 @@ struct ConnectionTerminalContainer: View {
     #endif
 
     /// Selected view type - persisted per server
-    var selectedView: String {
+    var selectedView: ConnectionViewTabID {
         viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id])
     }
 
-    var visibleViewTabs: [ConnectionViewTab] {
+    var visibleViewTabs: [ConnectionViewTabID] {
         viewTabConfig.currentVisibleTabs
     }
 
@@ -76,7 +76,7 @@ struct ConnectionTerminalContainer: View {
         )
     }
 
-    var selectedViewBinding: Binding<String> {
+    var selectedViewBinding: Binding<ConnectionViewTabID> {
         Binding(
             get: { viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id]) },
             set: { newValue in
@@ -232,7 +232,7 @@ struct ConnectionTerminalContainer: View {
         ZStack {
             statsLayer
 
-            if selectedView == "files" {
+            if selectedView == .files {
                 filesLayer
             }
 
@@ -268,7 +268,7 @@ struct ConnectionTerminalContainer: View {
         // Grid, and lazy stacks; keeping it in the ZStack at opacity 0 makes
         // every layout pass of the other views re-measure it, which explodes
         // combinatorially and hangs the main thread when the terminal mounts.
-        if selectedView == "stats" {
+        if selectedView == .stats {
             ServerStatsView(
                 server: server,
                 isVisible: true,
@@ -283,14 +283,14 @@ struct ConnectionTerminalContainer: View {
         // Pass isVisible to pause/resume collection when hidden
         ServerStatsView(
             server: server,
-            isVisible: selectedView == "stats",
+            isVisible: selectedView == .stats,
             backgroundColor: liveTerminalBackgroundColor,
             sharedClientProvider: { tabManager.sharedStatsClient(for: server.id) },
             statsCollector: ServerStatsCollector()
         )
-            .opacity(selectedView == "stats" ? 1 : 0)
-            .allowsHitTesting(selectedView == "stats")
-            .zIndex(selectedView == "stats" ? 1 : 0)
+            .opacity(selectedView == .stats ? 1 : 0)
+            .allowsHitTesting(selectedView == .stats)
+            .zIndex(selectedView == .stats ? 1 : 0)
         #endif
     }
 
@@ -308,7 +308,7 @@ struct ConnectionTerminalContainer: View {
     }
 
     func handleNewTabCommand() {
-        if selectedView == ConnectionViewTab.files.id {
+        if selectedView == .files {
             openNewFileTab(selectFilesViewOnSuccess: true)
         } else {
             openNewTab(selectTerminalViewOnSuccess: true)
@@ -316,11 +316,11 @@ struct ConnectionTerminalContainer: View {
     }
 
     private func ensureInitialFileTabIfNeeded() {
-        guard selectedView == ConnectionViewTab.files.id else { return }
+        guard selectedView == .files else { return }
 
         let seedPath = selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
         DispatchQueue.main.async {
-            guard selectedView == ConnectionViewTab.files.id else { return }
+            guard selectedView == .files else { return }
             guard let fileTab = fileTabManager.ensureInitialTab(for: server, seedPath: seedPath) else { return }
             fileBrowser.prepareNewTab(fileTab, duplicating: nil)
         }
@@ -333,9 +333,9 @@ struct ConnectionTerminalContainer: View {
         tabManager.selectedTabByServer[server.id] = repairedId
     }
 
-    private func handleSelectedViewChange(_ selectedView: String) {
+    private func handleSelectedViewChange(_ selectedView: ConnectionViewTabID) {
         #if os(iOS)
-        guard selectedView != ConnectionViewTab.terminal.id else { return }
+        guard selectedView != .terminal else { return }
         for tab in serverTabs {
             for paneId in tab.allPaneIds {
                 tabManager.applyTerminalVoiceEvent(.pendingReturnDismissed, for: paneId)
@@ -355,7 +355,7 @@ struct ConnectionTerminalContainer: View {
                 let tab = try await tabManager.openTab(for: server)
                 await MainActor.run {
                     if selectTerminalViewOnSuccess {
-                        tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: ConnectionViewTab.terminal.id)
+                        tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: .terminal)
                     }
                     selectedTabIdBinding.wrappedValue = tab.id
                 }
@@ -381,7 +381,7 @@ struct ConnectionTerminalContainer: View {
         fileBrowser.prepareNewTab(newTab, duplicating: sourceTab)
 
         if selectFilesViewOnSuccess {
-            tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: ConnectionViewTab.files.id)
+            tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: .files)
         }
     }
 
@@ -458,7 +458,7 @@ struct ConnectionTerminalContainer: View {
         ServerViewTabActions(
             openNew: handleNewTabCommand,
             closeSelected: {
-                if selectedView == ConnectionViewTab.files.id {
+                if selectedView == .files {
                     closeSelectedFileTab()
                 } else if let selectedTab {
                     // Close the focused split pane first (with confirmation,
@@ -472,21 +472,21 @@ struct ConnectionTerminalContainer: View {
                 }
             },
             selectPrevious: {
-                if selectedView == ConnectionViewTab.files.id {
+                if selectedView == .files {
                     selectPreviousFileTab()
                 } else {
                     selectPreviousTab()
                 }
             },
             selectNext: {
-                if selectedView == ConnectionViewTab.files.id {
+                if selectedView == .files {
                     selectNextFileTab()
                 } else {
                     selectNextTab()
                 }
             },
             selectIndex: { index in
-                if selectedView == ConnectionViewTab.files.id {
+                if selectedView == .files {
                     selectFileTab(at: index)
                 } else {
                     selectTab(at: index)

@@ -28,7 +28,7 @@ struct iOSContentView: View {
     @State private var showingTabLimitAlert = false
     @State private var lockedServerName: String?
 
-    private var preferredConnectViewId: String {
+    private var preferredConnectView: ConnectionViewTabID {
         viewTabConfig.effectiveDefaultTab()
     }
 
@@ -114,7 +114,7 @@ struct iOSContentView: View {
 
         let attemptID = UUID()
         terminalRoute = .connecting(server: server, attemptID: attemptID)
-        tabManager.selectedViewByServer[server.id] = preferredConnectViewId
+        tabManager.selectedViewByServer[server.id] = preferredConnectView
         let pendingConnection = pendingConnection(for: server)
 
         Task {
@@ -127,7 +127,7 @@ struct iOSContentView: View {
                 guard resolveConnection(for: attemptID, as: .succeeded) else {
                     return
                 }
-                tabManager.selectedViewByServer[server.id] = preferredConnectViewId
+                tabManager.selectedViewByServer[server.id] = preferredConnectView
                 tabManager.selectedTabByServer[server.id] = tab.id
             } catch {
                 guard resolveConnection(for: attemptID, as: .failed) else { return }

@@ -448,7 +448,7 @@ struct ServerListScreen: View {
             if let tab = currentConnection.terminalTab {
                 tabManager.selectedTabByServer[currentServer.id] = tab.id
             }
-            tabManager.selectedViewByServer[currentServer.id] = currentConnection.targetViewId
+            tabManager.selectedViewByServer[currentServer.id] = currentConnection.targetView
             onActiveConnectionSelected(currentServer)
         }
     }

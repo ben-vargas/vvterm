@@ -201,9 +201,9 @@ extension ConnectionTerminalContainer {
         MacToolbarBridge.shared.activate(
             ownerId: server.id.uuidString,
             showsViewPicker: shouldShowViewPicker,
-            showsTabStrip: (selectedView == ConnectionViewTab.terminal.id && !serverTabs.isEmpty)
-                || (selectedView == ConnectionViewTab.files.id && !serverFileTabs.isEmpty),
-            showsFilesMenu: selectedView == ConnectionViewTab.files.id,
+            showsTabStrip: (selectedView == .terminal && !serverTabs.isEmpty)
+                || (selectedView == .files && !serverFileTabs.isEmpty),
+            showsFilesMenu: selectedView == .files,
             isZenMode: isZenModeEnabled,
             zenTitle: server.name,
             zenIcon: "server.rack",
@@ -226,25 +226,22 @@ extension ConnectionTerminalContainer {
     /// runtime title for terminal, the current directory for files, otherwise
     /// the view's own name (e.g. Stats).
     private var zenSubtitleText: String {
-        if selectedView == ConnectionViewTab.files.id {
+        if selectedView == .files {
             guard let tab = selectedFileTab else { return "" }
             return fileBrowser.currentPath(for: tab)
         }
-        if selectedView == ConnectionViewTab.terminal.id {
+        if selectedView == .terminal {
             guard let selectedTab else { return "" }
             return tabManager.displayTitle(for: selectedTab)
         }
-        if let tab = ConnectionViewTab.from(id: selectedView) {
-            return String(localized: String.LocalizationValue(tab.localizedKey))
-        }
-        return ""
+        return String(localized: String.LocalizationValue(selectedView.localizedKey))
     }
 
     /// Publishes this server's keyboard-command actions to the command bridge,
     /// which ContentView republishes as scene focus values for the menu commands.
     private func updateCommandBridge() {
         let splitActions: TerminalSplitActions?
-        if selectedView == ConnectionViewTab.terminal.id {
+        if selectedView == .terminal {
             splitActions = TerminalSplitActions(
                 perform: performSplitCommand,
                 isEnabled: { command in
@@ -273,14 +270,15 @@ extension ConnectionTerminalContainer {
         ToolbarViewPickerData(
             segments: visibleViewTabs.map { tab in
                 ToolbarViewPickerData.Segment(
-                    id: tab.id,
+                    id: tab.rawValue,
                     systemImage: tab.icon,
-                    help: tab.id.capitalized
+                    help: tab.rawValue.capitalized
                 )
             },
-            selectedId: selectedView,
+            selectedId: selectedView.rawValue,
             onSelect: { newValue in
-                selectedViewBinding.wrappedValue = newValue
+                guard let selectedTab = ConnectionViewTabID(rawValue: newValue) else { return }
+                selectedViewBinding.wrappedValue = selectedTab
             }
         )
     }
@@ -341,7 +339,7 @@ extension ConnectionTerminalContainer {
 
     @ViewBuilder
     private var tabsToolbarView: some View {
-        if selectedView == ConnectionViewTab.files.id {
+        if selectedView == .files {
             RemoteFileTabsScrollView(
                 tabs: serverFileTabs,
                 selectedTabId: selectedFileTabIdBinding,
@@ -413,14 +411,14 @@ extension ConnectionTerminalContainer {
             selectedFileTabId: selectedFileTabIdBinding,
             fileTabTitle: displayedFileTabTitle(for:),
             onPreviousTab: {
-                if selectedView == ConnectionViewTab.files.id {
+                if selectedView == .files {
                     selectPreviousFileTab()
                 } else {
                     selectPreviousTab()
                 }
             },
             onNextTab: {
-                if selectedView == ConnectionViewTab.files.id {
+                if selectedView == .files {
                     selectNextFileTab()
                 } else {
                     selectNextTab()
@@ -531,7 +529,7 @@ extension ConnectionTerminalContainer {
 
     private var zenIndicatorColor: Color {
         guard let state = selectedTab.flatMap({ tabManager.paneStates[$0.focusedPaneId] }) else {
-            if selectedView == ConnectionViewTab.files.id {
+            if selectedView == .files {
                 return serverFileTabs.isEmpty ? .secondary : .green
             }
             return serverTabs.isEmpty ? .secondary : .green
@@ -550,9 +548,9 @@ extension ConnectionTerminalContainer {
     }
 
     private var tabsStatusText: String {
-        let count = selectedView == ConnectionViewTab.files.id ? serverFileTabs.count : serverTabs.count
+        let count = selectedView == .files ? serverFileTabs.count : serverTabs.count
 
-        if selectedView == ConnectionViewTab.files.id {
+        if selectedView == .files {
             if count == 0 {
                 return String(localized: "No file tabs")
             }
@@ -572,9 +570,9 @@ extension ConnectionTerminalContainer {
     }
 
     private var compactTabsStatusText: String {
-        let count = selectedView == ConnectionViewTab.files.id ? serverFileTabs.count : serverTabs.count
+        let count = selectedView == .files ? serverFileTabs.count : serverTabs.count
 
-        if selectedView == ConnectionViewTab.files.id {
+        if selectedView == .files {
             return count == 1
                 ? String(localized: "1 file tab")
                 : String(format: String(localized: "%lld file tabs"), Int64(count))
@@ -628,7 +626,7 @@ extension ConnectionTerminalContainer {
                         .frame(width: 0, height: 0)
                 }
             }
-            .zenExpandedTopSafeArea(isZenModeEnabled && selectedView == "terminal")
+            .zenExpandedTopSafeArea(isZenModeEnabled && selectedView == .terminal)
     }
 
     private var terminalContentInsets: EdgeInsets {
@@ -638,7 +636,7 @@ extension ConnectionTerminalContainer {
     @ViewBuilder
     var terminalLayer: some View {
         ForEach(serverTabs, id: \.id) { tab in
-            let isVisible = selectedView == "terminal" && selectedTabId == tab.id
+            let isVisible = selectedView == .terminal && selectedTabId == tab.id
             TerminalTabView(
                 tab: tab,
                 server: server,
@@ -652,7 +650,7 @@ extension ConnectionTerminalContainer {
             .zIndex(isVisible ? 1 : 0)
         }
 
-        if selectedView == "terminal" && serverTabs.isEmpty {
+        if selectedView == .terminal && serverTabs.isEmpty {
             TerminalEmptyStateView(server: server) {
                 openNewTab()
             }

@@ -3,267 +3,201 @@
 //  VVTerm
 //
 
+import Combine
 import Foundation
 import SwiftUI
-import Combine
 import os.log
-
-extension Notification.Name {
-    static let viewTabConfigurationDidChange = Notification.Name("viewTabConfigurationDidChange")
-}
 
 @MainActor
 final class ViewTabConfigurationManager: ObservableObject {
     static let shared = ViewTabConfigurationManager()
 
-    private let defaults: UserDefaults
-    private let orderKey = "connectionViewTabOrder"
-    private let defaultTabKey = "connectionDefaultViewTab"
-    private let showStatsKey = "showStatsTab"
-    private let showTerminalKey = "showTerminalTab"
-    private let showFilesKey = "showFilesTab"
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.vivy.vvterm", category: "ViewTabConfigurationManager")
+    static let configurationKey = "connectionViewTabConfiguration"
 
-    @Published private(set) var tabOrder: [ConnectionViewTab] = ConnectionViewTab.defaultOrder
-    @Published private(set) var defaultTab: String = "stats"
-    @Published private(set) var showStatsTab: Bool = true
-    @Published private(set) var showTerminalTab: Bool = true
-    @Published private(set) var showFilesTab: Bool = true
+    private enum LegacyKey {
+        static let order = "connectionViewTabOrder"
+        static let defaultTab = "connectionDefaultViewTab"
+        static let showStats = "showStatsTab"
+        static let showTerminal = "showTerminalTab"
+        static let showFiles = "showFilesTab"
+
+        static let all = [order, defaultTab, showStats, showTerminal, showFiles]
+    }
+
+    private let defaults: UserDefaults
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.vivy.vvterm",
+        category: "ViewTabConfigurationManager"
+    )
+
+    @Published private(set) var configuration: ConnectionViewTabConfiguration = .default
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         loadConfiguration()
     }
 
-    // MARK: - Load/Save
-
-    private func loadConfiguration() {
-        loadTabOrder()
-        loadDefaultTab()
-        loadVisibility()
+    var tabOrder: [ConnectionViewTabID] {
+        configuration.order
     }
 
-    private func loadTabOrder() {
-        guard let data = defaults.data(forKey: orderKey),
-              let decoded = try? JSONDecoder().decode([String].self, from: data) else {
-            tabOrder = ConnectionViewTab.defaultOrder
-            return
-        }
-
-        // Rebuild order from stored IDs, validating each exists
-        var order: [ConnectionViewTab] = []
-        for id in decoded {
-            if let tab = ConnectionViewTab.from(id: id) {
-                order.append(tab)
-            }
-        }
-
-        // Add any missing tabs at the end (future-proofing)
-        for defaultTab in ConnectionViewTab.defaultOrder {
-            if !order.contains(defaultTab) {
-                order.append(defaultTab)
-            }
-        }
-
-        tabOrder = order
+    var currentVisibleTabs: [ConnectionViewTabID] {
+        configuration.orderedVisibleTabs
     }
-
-    private func loadDefaultTab() {
-        if let stored = defaults.string(forKey: defaultTabKey),
-           ConnectionViewTab.from(id: stored) != nil {
-            defaultTab = stored
-        } else {
-            defaultTab = "stats"
-        }
-    }
-
-    private func loadVisibility() {
-        showStatsTab = defaults.object(forKey: showStatsKey) as? Bool ?? true
-        showTerminalTab = defaults.object(forKey: showTerminalKey) as? Bool ?? true
-        showFilesTab = defaults.object(forKey: showFilesKey) as? Bool ?? true
-
-        if currentVisibleTabs.isEmpty {
-            showStatsTab = true
-            showTerminalTab = true
-            showFilesTab = true
-        }
-    }
-
-    private func saveTabOrder() {
-        do {
-            let ids = tabOrder.map { $0.id }
-            let data = try JSONEncoder().encode(ids)
-            defaults.set(data, forKey: orderKey)
-            NotificationCenter.default.post(name: .viewTabConfigurationDidChange, object: nil)
-        } catch {
-            logger.error("Failed to encode tab order: \(error.localizedDescription)")
-        }
-    }
-
-    private func saveDefaultTab() {
-        defaults.set(defaultTab, forKey: defaultTabKey)
-        NotificationCenter.default.post(name: .viewTabConfigurationDidChange, object: nil)
-    }
-
-    private func saveVisibility() {
-        defaults.set(showStatsTab, forKey: showStatsKey)
-        defaults.set(showTerminalTab, forKey: showTerminalKey)
-        defaults.set(showFilesTab, forKey: showFilesKey)
-        NotificationCenter.default.post(name: .viewTabConfigurationDidChange, object: nil)
-    }
-
-    // MARK: - Public API
 
     func moveTab(from source: IndexSet, to destination: Int) {
-        tabOrder.move(fromOffsets: source, toOffset: destination)
-        saveTabOrder()
-    }
-
-    func setDefaultTab(_ tabId: String) {
-        guard ConnectionViewTab.from(id: tabId) != nil else { return }
-        defaultTab = tabId
-        saveDefaultTab()
-    }
-
-    func setVisibility(for tabId: String, isVisible: Bool) {
-        guard ConnectionViewTab.from(id: tabId) != nil else { return }
-
-        if !isVisible, isTabVisible(tabId) {
-            guard currentVisibleTabs.count > 1 else { return }
-        }
-
-        switch tabId {
-        case ConnectionViewTab.stats.id:
-            showStatsTab = isVisible
-        case ConnectionViewTab.terminal.id:
-            showTerminalTab = isVisible
-        case ConnectionViewTab.files.id:
-            showFilesTab = isVisible
-        default:
+        guard source.allSatisfy(configuration.order.indices.contains),
+              destination >= 0,
+              destination <= configuration.order.count else {
             return
         }
 
-        if currentVisibleTabs.isEmpty {
-            showStatsTab = true
-            showTerminalTab = true
-            showFilesTab = true
+        var order = configuration.order
+        order.move(fromOffsets: source, toOffset: destination)
+        updateConfiguration(
+            ConnectionViewTabConfiguration(
+                order: order,
+                visibleTabs: configuration.visibleTabs,
+                defaultTab: configuration.defaultTab
+            )
+        )
+    }
+
+    func setDefaultTab(_ tabID: ConnectionViewTabID) {
+        updateConfiguration(
+            ConnectionViewTabConfiguration(
+                order: configuration.order,
+                visibleTabs: configuration.visibleTabs,
+                defaultTab: tabID
+            )
+        )
+    }
+
+    func setVisibility(for tabID: ConnectionViewTabID, isVisible: Bool) {
+        var visibleTabs = configuration.visibleTabs
+
+        if isVisible {
+            visibleTabs.insert(tabID)
+        } else {
+            guard visibleTabs.contains(tabID), visibleTabs.count > 1 else { return }
+            visibleTabs.remove(tabID)
         }
 
-        saveVisibility()
+        updateConfiguration(
+            ConnectionViewTabConfiguration(
+                order: configuration.order,
+                visibleTabs: visibleTabs,
+                defaultTab: configuration.defaultTab
+            )
+        )
     }
 
     func resetToDefaults() {
-        tabOrder = ConnectionViewTab.defaultOrder
-        defaultTab = "stats"
-        showStatsTab = true
-        showTerminalTab = true
-        showFilesTab = true
-        saveTabOrder()
-        saveDefaultTab()
-        saveVisibility()
+        updateConfiguration(.default)
     }
 
-    /// Returns the first tab from the configured order
-    func firstTab() -> String {
-        tabOrder.first?.id ?? "stats"
+    func effectiveDefaultTab() -> ConnectionViewTabID {
+        configuration.effectiveDefaultTab
     }
 
-    /// Returns the effective default tab
-    func effectiveDefaultTab() -> String {
-        effectiveDefaultTab(showStats: showStatsTab, showTerminal: showTerminalTab, showFiles: showFilesTab)
+    func isTabVisible(_ tabID: ConnectionViewTabID) -> Bool {
+        configuration.visibleTabs.contains(tabID)
     }
 
-    /// Returns the effective default tab, accounting for visibility
-    func effectiveDefaultTab(showStats: Bool, showTerminal: Bool, showFiles: Bool = true) -> String {
-        let isVisible: Bool
-        switch defaultTab {
-        case "stats": isVisible = showStats
-        case "terminal": isVisible = showTerminal
-        case "files": isVisible = showFiles
-        default: isVisible = false
-        }
-
-        if isVisible {
-            return defaultTab
-        }
-
-        // Default tab is hidden, fall back to first visible
-        return firstVisibleTab(showStats: showStats, showTerminal: showTerminal, showFiles: showFiles)
+    func effectiveView(for storedView: ConnectionViewTabID?) -> ConnectionViewTabID {
+        configuration.effectiveView(for: storedView)
     }
 
-    /// Returns the first visible tab from the configured order
-    func firstVisibleTab(showStats: Bool, showTerminal: Bool, showFiles: Bool = true) -> String {
-        for tab in tabOrder {
-            switch tab.id {
-            case "stats" where showStats: return "stats"
-            case "terminal" where showTerminal: return "terminal"
-            case "files" where showFiles: return "files"
-            default: continue
-            }
-        }
-        return currentVisibleTabs.first?.id ?? "stats"
-    }
-
-    /// Returns only visible tabs in order
-    func visibleTabs(showStats: Bool, showTerminal: Bool, showFiles: Bool = true) -> [ConnectionViewTab] {
-        tabOrder.filter { tab in
-            switch tab.id {
-            case "stats": return showStats
-            case "terminal": return showTerminal
-            case "files": return showFiles
-            default: return false
-            }
-        }
-    }
-
-    var currentVisibleTabs: [ConnectionViewTab] {
-        visibleTabs(showStats: showStatsTab, showTerminal: showTerminalTab, showFiles: showFilesTab)
-    }
-
-    func isTabVisible(_ tabId: String) -> Bool {
-        switch tabId {
-        case ConnectionViewTab.stats.id:
-            return showStatsTab
-        case ConnectionViewTab.terminal.id:
-            return showTerminalTab
-        case ConnectionViewTab.files.id:
-            return showFilesTab
-        default:
-            return false
-        }
-    }
-
-    func effectiveView(for storedView: String?) -> String {
-        guard let storedView, ConnectionViewTab.from(id: storedView) != nil else {
-            return effectiveDefaultTab()
-        }
-
-        guard isTabVisible(storedView) else {
-            return effectiveDefaultTab()
-        }
-
-        return storedView
-    }
-
-    func visibilityBinding(for tabId: String) -> Binding<Bool> {
+    func visibilityBinding(for tabID: ConnectionViewTabID) -> Binding<Bool> {
         Binding(
             get: { [weak self] in
-                self?.isTabVisible(tabId) ?? false
+                self?.isTabVisible(tabID) ?? false
             },
             set: { [weak self] newValue in
-                self?.setVisibility(for: tabId, isVisible: newValue)
+                self?.setVisibility(for: tabID, isVisible: newValue)
             }
         )
     }
 
-    func defaultTabBinding() -> Binding<String> {
+    func defaultTabBinding() -> Binding<ConnectionViewTabID> {
         Binding(
             get: { [weak self] in
-                self?.effectiveDefaultTab() ?? "stats"
+                self?.effectiveDefaultTab() ?? .stats
             },
             set: { [weak self] newValue in
                 self?.setDefaultTab(newValue)
             }
         )
+    }
+
+    private func loadConfiguration() {
+        if let data = defaults.data(forKey: Self.configurationKey) {
+            do {
+                configuration = try JSONDecoder().decode(ConnectionViewTabConfiguration.self, from: data)
+                removeLegacyConfiguration()
+                return
+            } catch {
+                logger.error("Failed to decode view tab configuration: \(error.localizedDescription)")
+            }
+        }
+
+        guard LegacyKey.all.contains(where: { defaults.object(forKey: $0) != nil }) else {
+            return
+        }
+
+        configuration = migratedLegacyConfiguration()
+        if saveConfiguration() {
+            removeLegacyConfiguration()
+        }
+    }
+
+    private func migratedLegacyConfiguration() -> ConnectionViewTabConfiguration {
+        let order: [ConnectionViewTabID]
+        if let data = defaults.data(forKey: LegacyKey.order),
+           let storedOrder = try? JSONDecoder().decode([String].self, from: data) {
+            order = storedOrder.compactMap(ConnectionViewTabID.init(rawValue:))
+        } else {
+            order = ConnectionViewTabID.allCases
+        }
+
+        let defaultTab = defaults.string(forKey: LegacyKey.defaultTab)
+            .flatMap(ConnectionViewTabID.init(rawValue:))
+            ?? .stats
+
+        let visibleTabs = Set(ConnectionViewTabID.allCases.filter { tab in
+            let key = switch tab {
+            case .stats: LegacyKey.showStats
+            case .terminal: LegacyKey.showTerminal
+            case .files: LegacyKey.showFiles
+            }
+            return defaults.object(forKey: key) as? Bool ?? true
+        })
+
+        return ConnectionViewTabConfiguration(
+            order: order,
+            visibleTabs: visibleTabs,
+            defaultTab: defaultTab
+        )
+    }
+
+    private func updateConfiguration(_ newConfiguration: ConnectionViewTabConfiguration) {
+        guard newConfiguration != configuration else { return }
+        configuration = newConfiguration
+        saveConfiguration()
+    }
+
+    @discardableResult
+    private func saveConfiguration() -> Bool {
+        do {
+            defaults.set(try JSONEncoder().encode(configuration), forKey: Self.configurationKey)
+            return true
+        } catch {
+            logger.error("Failed to encode view tab configuration: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func removeLegacyConfiguration() {
+        LegacyKey.all.forEach(defaults.removeObject(forKey:))
     }
 }

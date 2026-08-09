@@ -7,7 +7,7 @@ struct TerminalZenModeUITestHarness: View {
     @EnvironmentObject private var ghosttyApp: Ghostty.App
     @State private var isZenModeEnabled = false
     @State private var showingZenPanel = false
-    @State private var selectedView = ConnectionViewTab.terminal.id
+    @State private var selectedView = ConnectionViewTabID.terminal
     @State private var selectedTerminalTabId: UUID?
     @State private var selectedFileTabId: UUID?
     @State private var terminalView: GhosttyTerminalView?

@@ -292,7 +292,7 @@ struct TerminalReconnectUITestHarness: View {
             } else if tabManager.tabs(for: server.id).isEmpty {
                 throw VVTermError.connectionFailed("Cold relaunch snapshot was not restored")
             }
-            tabManager.selectedViewByServer[server.id] = ConnectionViewTab.terminal.id
+            tabManager.selectedViewByServer[server.id] = .terminal
             fixtureState = .ready(server)
         } catch {
             fixtureState = .failed(error.localizedDescription)

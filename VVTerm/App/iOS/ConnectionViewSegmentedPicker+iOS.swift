@@ -9,8 +9,8 @@ import SwiftUI
 import UIKit
 
 struct ConnectionViewSegmentedPicker: UIViewRepresentable {
-    @Binding var selection: String
-    let tabs: [ConnectionViewTab]
+    @Binding var selection: ConnectionViewTabID
+    let tabs: [ConnectionViewTabID]
 
     func makeUIView(context: Context) -> UISegmentedControl {
         let control = UISegmentedControl()
@@ -31,7 +31,7 @@ struct ConnectionViewSegmentedPicker: UIViewRepresentable {
             context.coordinator.renderedTabs = tabs
         }
 
-        let resolvedSelection = tabs.contains(where: { $0.id == selection }) ? selection : tabs.first?.id ?? selection
+        let resolvedSelection = tabs.contains(selection) ? selection : tabs.first ?? selection
         if resolvedSelection != selection {
             DispatchQueue.main.async {
                 selection = resolvedSelection
@@ -56,10 +56,10 @@ struct ConnectionViewSegmentedPicker: UIViewRepresentable {
     }
 
     private var selectedIndex: Int {
-        tabs.firstIndex(where: { $0.id == selection }) ?? 0
+        tabs.firstIndex(of: selection) ?? 0
     }
 
-    private func configure(_ control: UISegmentedControl, tabs: [ConnectionViewTab]) {
+    private func configure(_ control: UISegmentedControl, tabs: [ConnectionViewTabID]) {
         control.removeAllSegments()
         for (index, tab) in tabs.enumerated() {
             control.insertSegment(with: UIImage(systemName: tab.icon), at: index, animated: false)
@@ -68,11 +68,11 @@ struct ConnectionViewSegmentedPicker: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject {
-        var selection: Binding<String>
-        var tabs: [ConnectionViewTab]
-        var renderedTabs: [ConnectionViewTab]
+        var selection: Binding<ConnectionViewTabID>
+        var tabs: [ConnectionViewTabID]
+        var renderedTabs: [ConnectionViewTabID]
 
-        init(selection: Binding<String>, tabs: [ConnectionViewTab]) {
+        init(selection: Binding<ConnectionViewTabID>, tabs: [ConnectionViewTabID]) {
             self.selection = selection
             self.tabs = tabs
             self.renderedTabs = tabs
@@ -81,7 +81,7 @@ struct ConnectionViewSegmentedPicker: UIViewRepresentable {
         @objc func valueChanged(_ sender: UISegmentedControl) {
             let index = sender.selectedSegmentIndex
             guard tabs.indices.contains(index) else { return }
-            let selectedTabID = tabs[index].id
+            let selectedTabID = tabs[index]
             guard selection.wrappedValue != selectedTabID else { return }
             DispatchQueue.main.async { [selection] in
                 selection.wrappedValue = selectedTabID

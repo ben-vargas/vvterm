@@ -67,7 +67,7 @@ struct ServerTerminalRoute: View {
         return route.connectingServer
     }
 
-    private var selectedView: String {
+    private var selectedView: ConnectionViewTabID {
         guard let server = selectedServer else {
             return viewTabConfig.effectiveDefaultTab()
         }
@@ -95,7 +95,7 @@ struct ServerTerminalRoute: View {
 
     private var canEnterZenMode: Bool {
         TerminalZenModePolicy.canEnter(
-            isTerminalSelected: selectedView == ConnectionViewTab.terminal.id,
+            isTerminalSelected: selectedView == .terminal,
             hasActiveTerminal: selectedTab != nil
         )
     }
@@ -123,7 +123,7 @@ struct ServerTerminalRoute: View {
 
     private var shouldShowFloatingTerminalControls: Bool {
         return UIDevice.current.userInterfaceIdiom == .phone
-            && selectedView == ConnectionViewTab.terminal.id
+            && selectedView == .terminal
             && focusedPaneId != nil
             && keyboardCoordinator.isUserHidden
             && !isFocusedTerminalFindNavigatorVisible
@@ -185,7 +185,7 @@ struct ServerTerminalRoute: View {
                 screenAwakeCoordinator.update(isRequested: false, for: screenAwakeRequestID)
             }
             .onChange(of: selectedView) { newValue in
-                if newValue != ConnectionViewTab.terminal.id {
+                if newValue != .terminal {
                     clearPendingVoiceReturnForFocusedPane()
                 }
                 reconcileZenMode()
@@ -291,7 +291,7 @@ struct ServerTerminalRoute: View {
         }
 
         ToolbarItemGroup(placement: .navigationBarTrailing) {
-            if let server = selectedServer, selectedView == ConnectionViewTab.terminal.id {
+            if let server = selectedServer, selectedView == .terminal {
                 Button {
                     openNewTab(for: server)
                 } label: {
@@ -299,7 +299,7 @@ struct ServerTerminalRoute: View {
                 }
             }
 
-            if let server = selectedServer, selectedView == ConnectionViewTab.files.id {
+            if let server = selectedServer, selectedView == .files {
                 Button {
                     openNewFileTab(for: server)
                 } label: {
@@ -309,7 +309,7 @@ struct ServerTerminalRoute: View {
 
             Menu {
                 if let server = selectedServer {
-                    if selectedView == ConnectionViewTab.terminal.id {
+                    if selectedView == .terminal {
                         Button {
                             focusedTerminal?.showFindNavigator()
                         } label: {
@@ -372,7 +372,7 @@ struct ServerTerminalRoute: View {
         }
     }
 
-    private func selectedViewBinding(for serverId: UUID) -> Binding<String> {
+    private func selectedViewBinding(for serverId: UUID) -> Binding<ConnectionViewTabID> {
         Binding(
             get: { viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[serverId]) },
             set: { newValue in
@@ -505,7 +505,7 @@ struct ServerTerminalRoute: View {
         let presentationOwnership = keyboardPresentationOwnership
         let effect = TerminalKeyboardRouteActivationPolicy.effect(
             routeVisible: isRouteVisible,
-            terminalSelected: selectedView == ConnectionViewTab.terminal.id,
+            terminalSelected: selectedView == .terminal,
             sceneActivation: terminalSceneActivation,
             windowOwnership: focusedTerminal?.window.map {
                 $0.isKeyWindow ? .key : .notKey
@@ -518,7 +518,7 @@ struct ServerTerminalRoute: View {
             isRequested: TerminalScreenAwakeCoordinator.shouldRequest(
                 preferenceEnabled: keepScreenAwakeEnabled,
                 routeVisible: isRouteVisible,
-                terminalSelected: selectedView == ConnectionViewTab.terminal.id,
+                terminalSelected: selectedView == .terminal,
                 sceneIsInBackground: screenAwakeSceneIsInBackground
             ),
             for: screenAwakeRequestID
@@ -585,14 +585,14 @@ struct ServerTerminalRoute: View {
     }
 
     private func showKeyboardForFocusedTerminal() {
-        guard selectedView == ConnectionViewTab.terminal.id else { return }
+        guard selectedView == .terminal else { return }
         clearPendingVoiceReturnForFocusedPane()
         keyboardCoordinator.userRequestedShow()
         focusedTerminal?.dismissFindNavigator()
     }
 
     private func startVoiceInputForFocusedTerminal() {
-        guard selectedView == ConnectionViewTab.terminal.id else { return }
+        guard selectedView == .terminal else { return }
         guard terminalVoiceButtonEnabled else { return }
         guard let focusedPaneId,
               tabManager.paneStates[focusedPaneId]?.connectionState.isConnected == true else { return }
@@ -603,7 +603,7 @@ struct ServerTerminalRoute: View {
     }
 
     private func sendReturnForFocusedTerminal() {
-        guard selectedView == ConnectionViewTab.terminal.id else { return }
+        guard selectedView == .terminal else { return }
         if focusedTerminal?.sendReturnKey() == true {
             clearPendingVoiceReturnForFocusedPane()
         }
@@ -717,7 +717,7 @@ struct ServerTerminalRoute: View {
         Task {
             do {
                 let tab = try await tabManager.openTab(for: server)
-                tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: ConnectionViewTab.terminal.id)
+                tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: .terminal)
                 tabManager.selectedTabByServer[server.id] = tab.id
             } catch {
                 // No-op: user cancelled biometric auth or open failed.
@@ -739,7 +739,7 @@ struct ServerTerminalRoute: View {
 
         guard let newTab else { return }
         fileBrowser.prepareNewTab(newTab, duplicating: sourceTab)
-        tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: ConnectionViewTab.files.id)
+        tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: .files)
     }
 
     private func disconnect(_ server: Server) {
