@@ -10,7 +10,22 @@ struct GhosttyScrollbackSemanticsTests {
     func csiTwoJPreservesHistoryAndCsiThreeJErasesIt() throws {
         let app = Ghostty.App()
         let appHandle = try #require(app.app)
-        let terminal = GhosttyTerminalView(
+        let terminal: GhosttyTerminalView
+        #if os(iOS)
+        terminal = GhosttyTerminalView(
+            frame: CGRect(x: 0, y: 0, width: 800, height: 600),
+            worktreePath: NSTemporaryDirectory(),
+            ghosttyApp: appHandle,
+            appWrapper: app,
+            paneId: "scrollback-semantics",
+            terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
+                profile: .defaultValue(lastWriterDeviceId: "scrollback-test"),
+                showsDismissKeyboardButton: true
+            ),
+            useCustomIO: true
+        )
+        #else
+        terminal = GhosttyTerminalView(
             frame: CGRect(x: 0, y: 0, width: 800, height: 600),
             worktreePath: NSTemporaryDirectory(),
             ghosttyApp: appHandle,
@@ -18,6 +33,7 @@ struct GhosttyScrollbackSemanticsTests {
             paneId: "scrollback-semantics",
             useCustomIO: true
         )
+        #endif
         defer {
             terminal.cleanup()
             app.cleanup()

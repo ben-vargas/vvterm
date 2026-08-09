@@ -1262,6 +1262,10 @@ final class TerminalKeyboardHarnessContainerView: UIView {
             ghosttyApp: app,
             appWrapper: appWrapper,
             paneId: "keyboard-ui-test",
+            terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
+                profile: .defaultValue(lastWriterDeviceId: "keyboard-ui-test"),
+                showsDismissKeyboardButton: true
+            ),
             useCustomIO: true
         )
         terminal.accessibilityIdentifier = surfaceIdentifier

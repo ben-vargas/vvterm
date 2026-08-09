@@ -326,15 +326,10 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
 
         profile = normalizedProfile
         persistProfile()
-        publishProfileChange()
 
         if scheduleCloudSync {
             scheduleSyncWithCloud()
         }
-    }
-
-    private func publishProfileChange() {
-        dependencies.publishProfileChange(self, profile)
     }
 
     private func persistProfile() {

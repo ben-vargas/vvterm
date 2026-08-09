@@ -314,6 +314,16 @@ struct RemoteTerminalPaneWrapper: View {
     let onVoiceTrigger: (() -> Void)?
     let onSceneActivation: () -> Void
 
+    @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
+    @AppStorage("terminalKeyboardDismissButtonEnabled") private var keyboardDismissButtonEnabled = true
+
+    private var terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot {
+        TerminalAccessoryInputSnapshot(
+            profile: terminalAccessoryPreferencesManager.profile,
+            showsDismissKeyboardButton: keyboardDismissButtonEnabled
+        )
+    }
+
     var body: some View {
         GeometryReader { geometry in
             RemoteTerminalPaneRepresentable(
@@ -328,6 +338,7 @@ struct RemoteTerminalPaneWrapper: View {
                 onPaneKeyboardShortcut: onPaneKeyboardShortcut,
                 onProcessExit: onProcessExit,
                 onReady: onReady,
+                terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
                 onVoiceTrigger: onVoiceTrigger
             )
             .background {
@@ -418,6 +429,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
     let onProcessExit: () -> Void
     let onReady: () -> Void
+    let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
     let onVoiceTrigger: (() -> Void)?
 
     @EnvironmentObject var ghosttyApp: Ghostty.App
@@ -473,6 +485,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             ghosttyApp: app,
             appWrapper: ghosttyApp,
             paneId: paneId.uuidString,
+            terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
             useCustomIO: true
         )
 
@@ -563,6 +576,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             terminalView.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
         }
         terminalView.onVoiceButtonTapped = onVoiceTrigger
+        terminalView.applyTerminalAccessoryInputSnapshot(terminalAccessoryInputSnapshot)
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminalView.terminalContextMenuActions = terminalContextMenuActions
         if size.width > 0, size.height > 0, size != context.coordinator.lastReportedSize {
@@ -615,6 +629,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     private func configureExistingTerminal(_ terminal: GhosttyTerminalView, coordinator: TerminalPaneConnectionCoordinator) {
         terminal.onProcessExit = processExitHandler(for: terminal)
         terminal.onVoiceButtonTapped = onVoiceTrigger
+        terminal.applyTerminalAccessoryInputSnapshot(terminalAccessoryInputSnapshot)
         terminal.onPwdChange = { [paneId] rawDirectory in
             DispatchQueue.main.async {
                 tabManager.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)

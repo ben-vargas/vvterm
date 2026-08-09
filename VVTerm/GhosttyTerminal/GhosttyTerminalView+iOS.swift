@@ -58,6 +58,7 @@ class GhosttyTerminalView: UIView {
     let paneId: String?
     let initialCommand: String?
     let useCustomIO: Bool
+    private(set) var terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
 
     /// Callback invoked when the terminal process exits
     var onProcessExit: (() -> Void)?
@@ -382,13 +383,24 @@ class GhosttyTerminalView: UIView {
     ///   - appWrapper: The Ghostty.App wrapper for surface tracking (optional)
     ///   - paneId: Unique identifier for this pane
     ///   - command: Optional command to run instead of default shell
+    ///   - terminalAccessoryInputSnapshot: App-owned keyboard accessory configuration
     ///   - useCustomIO: If true, uses callback backend for custom I/O (SSH clients)
-    init(frame: CGRect, worktreePath: String, ghosttyApp: ghostty_app_t, appWrapper: Ghostty.App? = nil, paneId: String? = nil, command: String? = nil, useCustomIO: Bool = false) {
+    init(
+        frame: CGRect,
+        worktreePath: String,
+        ghosttyApp: ghostty_app_t,
+        appWrapper: Ghostty.App? = nil,
+        paneId: String? = nil,
+        command: String? = nil,
+        terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot,
+        useCustomIO: Bool = false
+    ) {
         self.worktreePath = worktreePath
         self.ghosttyApp = ghosttyApp
         self.ghosttyAppWrapper = appWrapper
         self.paneId = paneId
         self.initialCommand = command
+        self.terminalAccessoryInputSnapshot = terminalAccessoryInputSnapshot
         self.useCustomIO = useCustomIO
 
         // Use a reasonable default size if frame is zero
@@ -2800,18 +2812,31 @@ extension GhosttyTerminalView {
             return nil
         }
         if keyboardToolbar == nil {
-            let toolbar = TerminalInputAccessoryView(terminalOwner: self, onKey: { [weak self] key in
-                self?.handleToolbarKey(key)
-            }, onCustomAction: { [weak self] action in
-                self?.handleToolbarCustomAction(action)
-            }, onVoice: onVoiceButtonTapped, onDismissKeyboard: { [weak self] in
-                self?.dismissKeyboardFromToolbar()
-            })
+            let toolbar = TerminalInputAccessoryView(
+                terminalOwner: self,
+                inputSnapshot: terminalAccessoryInputSnapshot,
+                onKey: { [weak self] key in
+                    self?.handleToolbarKey(key)
+                },
+                onCustomAction: { [weak self] action in
+                    self?.handleToolbarCustomAction(action)
+                },
+                onVoice: onVoiceButtonTapped,
+                onDismissKeyboard: { [weak self] in
+                    self?.dismissKeyboardFromToolbar()
+                }
+            )
             keyboardToolbar = toolbar
         } else {
             keyboardToolbar?.onVoice = onVoiceButtonTapped
         }
         return keyboardToolbar
+    }
+
+    func applyTerminalAccessoryInputSnapshot(_ snapshot: TerminalAccessoryInputSnapshot) {
+        guard snapshot != terminalAccessoryInputSnapshot else { return }
+        terminalAccessoryInputSnapshot = snapshot
+        keyboardToolbar?.apply(snapshot)
     }
 
     func refreshTerminalInputAccessoryAppearance() {

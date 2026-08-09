@@ -51,7 +51,22 @@ struct TerminalTabManagerIndependenceTests {
 
         let ghosttyApp = Ghostty.App()
         let appHandle = try #require(ghosttyApp.app)
-        let terminal = GhosttyTerminalView(
+        let terminal: GhosttyTerminalView
+        #if os(iOS)
+        terminal = GhosttyTerminalView(
+            frame: CGRect(x: 0, y: 0, width: 800, height: 600),
+            worktreePath: FileManager.default.currentDirectoryPath,
+            ghosttyApp: appHandle,
+            appWrapper: ghosttyApp,
+            paneId: tab.rootPaneId.uuidString,
+            terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
+                profile: .defaultValue(lastWriterDeviceId: "independence-test"),
+                showsDismissKeyboardButton: true
+            ),
+            useCustomIO: true
+        )
+        #else
+        terminal = GhosttyTerminalView(
             frame: CGRect(x: 0, y: 0, width: 800, height: 600),
             worktreePath: FileManager.default.currentDirectoryPath,
             ghosttyApp: appHandle,
@@ -59,6 +74,7 @@ struct TerminalTabManagerIndependenceTests {
             paneId: tab.rootPaneId.uuidString,
             useCustomIO: true
         )
+        #endif
         defer {
             first.unregisterTerminal(terminal, for: tab.rootPaneId)
             ghosttyApp.cleanup()

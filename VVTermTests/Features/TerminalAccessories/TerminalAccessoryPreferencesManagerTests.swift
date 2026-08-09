@@ -545,7 +545,6 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
                 now: now,
                 makeID: makeID,
                 trackCustomActionCreated: analytics.record,
-                publishProfileChange: { _, _ in },
                 waitForSyncDebounce: waitForSyncDebounce,
                 startsSynchronization: startsSynchronization
             )

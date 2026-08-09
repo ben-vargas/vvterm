@@ -47,7 +47,6 @@ struct TerminalAccessoryPreferencesDependencies {
     let now: () -> Date
     let makeID: () -> UUID
     let trackCustomActionCreated: (TerminalAccessoryCustomActionKind) -> Void
-    let publishProfileChange: (AnyObject, TerminalAccessoryProfile) -> Void
     let waitForSyncDebounce: () async throws -> Void
     let startsSynchronization: Bool
 }

@@ -19,6 +19,7 @@ final class TerminalInputAccessoryView: UIInputView {
     private let onKey: (TerminalKey) -> Void
     private let onCustomAction: (TerminalAccessoryCustomAction) -> Void
     private let onDismissKeyboard: () -> Void
+    private var inputSnapshot: TerminalAccessoryInputSnapshot
     var onVoice: (() -> Void)? {
         didSet {
             updateLeadingButtonsState()
@@ -40,9 +41,7 @@ final class TerminalInputAccessoryView: UIInputView {
     private weak var dynamicItemsStack: UIStackView?
     private var scrollLeadingToLeadingButtonsConstraint: NSLayoutConstraint?
     private var scrollLeadingToEdgeConstraint: NSLayoutConstraint?
-    private var defaultsObserver: NSObjectProtocol?
     private var appearanceObserver: NSObjectProtocol?
-    private var accessoryProfileObserver: NSObjectProtocol?
     private var keyRepeatTimer: DispatchSourceTimer?
     private var repeatingKey: TerminalKey?
 
@@ -78,12 +77,14 @@ final class TerminalInputAccessoryView: UIInputView {
 
     init(
         terminalOwner: GhosttyTerminalView,
+        inputSnapshot: TerminalAccessoryInputSnapshot,
         onKey: @escaping (TerminalKey) -> Void,
         onCustomAction: @escaping (TerminalAccessoryCustomAction) -> Void,
         onVoice: (() -> Void)? = nil,
         onDismissKeyboard: @escaping () -> Void
     ) {
         self.terminalOwner = terminalOwner
+        self.inputSnapshot = inputSnapshot
         self.onKey = onKey
         self.onCustomAction = onCustomAction
         self.onVoice = onVoice
@@ -97,9 +98,7 @@ final class TerminalInputAccessoryView: UIInputView {
         allowsSelfSizing = true
         accessibilityIdentifier = "vvterm.keyboard.accessory"
         setupView()
-        observeThemeChanges()
         observeResolvedAppearanceChanges()
-        observeAccessoryProfileChanges()
     }
 
     required init?(coder: NSCoder) {
@@ -146,13 +145,7 @@ final class TerminalInputAccessoryView: UIInputView {
     }
 
     deinit {
-        if let observer = defaultsObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
         if let observer = appearanceObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = accessoryProfileObserver {
             NotificationCenter.default.removeObserver(observer)
         }
         stopKeyRepeat()
@@ -311,6 +304,16 @@ final class TerminalInputAccessoryView: UIInputView {
         updateLeadingButtonsState()
     }
 
+    func apply(_ snapshot: TerminalAccessoryInputSnapshot) {
+        let change = snapshot.change(from: inputSnapshot)
+        guard change != .none else { return }
+        inputSnapshot = snapshot
+        if change == .itemsAndLeadingButtons {
+            rebuildAccessoryItems()
+        }
+        updateLeadingButtonsState()
+    }
+
     private func updateInterfaceStyle(for backgroundColor: UIColor) {
         if #available(iOS 13.0, *) {
             let resolved = backgroundColor.resolvedColor(with: traitCollection)
@@ -348,17 +351,6 @@ final class TerminalInputAccessoryView: UIInputView {
         return nil
     }
 
-    private func observeThemeChanges() {
-        defaultsObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.updateBackgroundEffect()
-            self?.updateLeadingButtonsState()
-        }
-    }
-
     private func observeResolvedAppearanceChanges() {
         appearanceObserver = NotificationCenter.default.addObserver(
             forName: Ghostty.configDidReloadNotification,
@@ -366,16 +358,6 @@ final class TerminalInputAccessoryView: UIInputView {
             queue: .main
         ) { [weak self] _ in
             self?.updateBackgroundEffect()
-        }
-    }
-
-    private func observeAccessoryProfileChanges() {
-        accessoryProfileObserver = NotificationCenter.default.addObserver(
-            forName: .terminalAccessoryProfileDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.rebuildAccessoryItems()
         }
     }
 
@@ -387,16 +369,12 @@ final class TerminalInputAccessoryView: UIInputView {
             arrangedSubview.removeFromSuperview()
         }
 
-        let profile = TerminalAccessoryPreferencesManager.shared.profile
-        let customActionsByID = Dictionary(uniqueKeysWithValues: profile.customActions.filter { !$0.isDeleted }.map { ($0.id, $0) })
-
-        for item in profile.layout.activeItems {
+        for item in inputSnapshot.resolvedItems {
             switch item {
             case .system(let actionID):
                 guard let button = makeSystemActionButton(for: actionID) else { continue }
                 dynamicItemsStack.addArrangedSubview(button)
-            case .custom(let actionID):
-                guard let action = customActionsByID[actionID] else { continue }
+            case .custom(let action):
                 let button = makeCustomActionButton(for: action)
                 dynamicItemsStack.addArrangedSubview(button)
             }
@@ -880,9 +858,8 @@ final class TerminalInputAccessoryView: UIInputView {
     }
 
     private func updateLeadingButtonsState() {
-        let defaults = UserDefaults.standard
-        let voiceEnabled = (defaults.object(forKey: "terminalVoiceButtonEnabled") as? Bool ?? true) && onVoice != nil
-        let dismissEnabled = defaults.object(forKey: "terminalKeyboardDismissButtonEnabled") as? Bool ?? true
+        let voiceEnabled = onVoice != nil
+        let dismissEnabled = inputSnapshot.showsDismissKeyboardButton
         let hasVisibleLeadingButton = voiceEnabled || dismissEnabled
 
         voiceButton?.isHidden = !voiceEnabled

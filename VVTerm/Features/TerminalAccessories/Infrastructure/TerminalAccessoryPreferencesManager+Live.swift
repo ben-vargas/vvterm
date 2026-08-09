@@ -37,13 +37,6 @@ extension TerminalAccessoryPreferencesDependencies {
             trackCustomActionCreated: { kind in
                 AnalyticsTracker.shared.trackCustomActionCreated(kind: kind.rawValue)
             },
-            publishProfileChange: { manager, profile in
-                NotificationCenter.default.post(
-                    name: .terminalAccessoryProfileDidChange,
-                    object: manager,
-                    userInfo: ["profile": profile]
-                )
-            },
             waitForSyncDebounce: {
                 try await Task.sleep(nanoseconds: 650_000_000)
             },
