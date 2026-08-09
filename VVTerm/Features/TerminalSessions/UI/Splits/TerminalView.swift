@@ -23,17 +23,14 @@ struct TerminalTabView: View {
     let server: Server
     @ObservedObject var tabManager: TerminalTabManager
     let isSelected: Bool
+    let themeName: String
 
     @State private var layoutVersion: Int = 0
     @State private var showingCloseConfirmation = false
     @State private var showingSplitPaneUpgradeAlert = false
 
     @EnvironmentObject var ghosttyApp: Ghostty.App
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     @AppStorage("terminalVoiceButtonEnabled") private var voiceButtonEnabled = true
 
     @StateObject private var audioService = AudioService()
@@ -45,12 +42,7 @@ struct TerminalTabView: View {
     #endif
 
     private var dividerColor: Color {
-        ThemeColorParser.splitDividerColor(for: effectiveThemeName)
-    }
-
-    private var effectiveThemeName: String {
-        guard usePerAppearanceTheme else { return terminalThemeName }
-        return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight
+        ThemeColorParser.splitDividerColor(for: themeName)
     }
 
     private var focusedTerminal: GhosttyTerminalView? {
@@ -189,6 +181,7 @@ struct TerminalTabView: View {
                 onProcessExit: { handlePaneExit(paneId: paneId) },
                 terminalContextMenuActions: terminalContextMenuActions(for: paneId),
                 onPaneKeyboardShortcut: handleSplitCommand,
+                themeName: themeName,
                 showsVoiceButton: isSelected
                     && voiceButtonEnabled
                     && !showingVoiceRecording
@@ -496,12 +489,12 @@ struct TerminalPaneView: View {
     let onProcessExit: () -> Void
     let terminalContextMenuActions: TerminalContextMenuActions
     let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
+    let themeName: String
     let showsVoiceButton: Bool
     let onVoiceTrigger: () -> Void
 
     @EnvironmentObject var ghosttyApp: Ghostty.App
     @EnvironmentObject private var appLockManager: AppLockManager
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isReady = false
@@ -521,9 +514,6 @@ struct TerminalPaneView: View {
     @StateObject private var richPasteUI = TerminalRichPasteUIModel()
     @ObservedObject private var networkMonitor: NetworkMonitor = .shared
 
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     @AppStorage(TerminalDefaults.sshAutoReconnectKey) private var autoReconnectEnabled = true
 
     private var paneState: TerminalPaneState? {
@@ -576,11 +566,6 @@ struct TerminalPaneView: View {
     /// Check if terminal already exists (reuse case)
     private var terminalExists: Bool {
         TerminalTabManager.shared.getTerminal(for: paneId) != nil
-    }
-
-    private var effectiveThemeName: String {
-        guard usePerAppearanceTheme else { return terminalThemeName }
-        return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight
     }
 
     private var fallbackBannerMessage: String? {
@@ -642,7 +627,7 @@ struct TerminalPaneView: View {
     private var noticeSurfaceStyle: NoticeSurfaceStyle {
         .terminal(
             backgroundColor: terminalBackgroundColor,
-            foregroundColor: ThemeColorParser.previewPalette(for: effectiveThemeName).foreground
+            foregroundColor: ThemeColorParser.previewPalette(for: themeName).foreground
         )
     }
 
@@ -803,10 +788,7 @@ struct TerminalPaneView: View {
             startConnectWatchdog()
             attemptAutoReconnectIfNeeded()
         }
-        .onChange(of: terminalThemeName) { _ in updateTerminalBackgroundColor() }
-        .onChange(of: terminalThemeNameLight) { _ in updateTerminalBackgroundColor() }
-        .onChange(of: usePerAppearanceTheme) { _ in updateTerminalBackgroundColor() }
-        .onChange(of: colorScheme) { _ in updateTerminalBackgroundColor() }
+        .onChange(of: themeName) { _ in updateTerminalBackgroundColor() }
         .onChange(of: scenePhase) { phase in
             if phase == .active {
                 attemptAutoReconnectIfNeeded()
@@ -1208,9 +1190,9 @@ struct TerminalPaneView: View {
     }
 
     private func updateTerminalBackgroundColor() {
-        let themeName = effectiveThemeName
+        let resolvedThemeName = themeName
         Task.detached(priority: .utility) {
-            let resolved = ThemeColorParser.backgroundColor(for: themeName)!
+            let resolved = ThemeColorParser.previewPalette(for: resolvedThemeName).background
             await MainActor.run {
                 terminalBackgroundColor = resolved
                 UserDefaults.standard.set(resolved.toHex(), forKey: "terminalBackgroundColor")
@@ -1235,7 +1217,7 @@ struct TerminalPaneView: View {
         #endif
         let themeName = usePerAppearanceTheme ? (isDarkAppearance ? darkThemeName : lightThemeName) : darkThemeName
 
-        return ThemeColorParser.backgroundColor(for: themeName)!
+        return ThemeColorParser.previewPalette(for: themeName).background
     }
 
     private var voiceTriggerButton: some View {

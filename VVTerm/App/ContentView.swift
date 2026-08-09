@@ -64,16 +64,22 @@ struct ContentView: View {
         canUseZenMode && isZenModeEnabled
     }
 
+    #if os(macOS)
     private var effectiveTerminalThemeName: String {
-        guard usePerAppearanceTheme else { return terminalThemeName }
-        return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight
+        let fallback = colorScheme == .dark ? "Aizen Dark" : "Aizen Light"
+        let preferred = usePerAppearanceTheme
+            ? (colorScheme == .dark ? terminalThemeName : terminalThemeNameLight)
+            : terminalThemeName
+        return terminalThemeManager.applicationThemeName(
+            preferred: preferred,
+            fallback: fallback
+        )
     }
 
     private var macOSWindowBackgroundColor: Color {
-        ThemeColorParser.backgroundColor(for: effectiveTerminalThemeName)!
+        ThemeColorParser.previewPalette(for: effectiveTerminalThemeName).background
     }
 
-    #if os(macOS)
     private var zenWindowTitle: String {
         guard effectiveZenModeEnabled, let selectedServer else { return "" }
         return selectedServer.name

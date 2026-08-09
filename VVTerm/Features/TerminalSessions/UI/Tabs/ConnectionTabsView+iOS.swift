@@ -83,7 +83,8 @@ extension ConnectionTerminalContainer {
                 tab: tab,
                 server: server,
                 tabManager: tabManager,
-                isSelected: true
+                isSelected: true,
+                themeName: effectiveThemeName
             )
             // Per-tab identity: without it SwiftUI reuses the previous tab's
             // representable (and its Ghostty view + SSH coordinator) when the

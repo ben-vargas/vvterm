@@ -643,7 +643,8 @@ extension ConnectionTerminalContainer {
                 tab: tab,
                 server: server,
                 tabManager: tabManager,
-                isSelected: isVisible
+                isSelected: isVisible,
+                themeName: effectiveThemeName
             )
             .padding(terminalContentInsets)
             .opacity(isVisible ? 1 : 0)

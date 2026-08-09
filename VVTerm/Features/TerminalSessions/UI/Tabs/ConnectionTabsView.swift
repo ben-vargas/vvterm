@@ -21,6 +21,7 @@ struct ConnectionTerminalContainer: View {
     let onDisconnectRoute: (() -> Void)?
 
     @EnvironmentObject var ghosttyApp: Ghostty.App
+    @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     #if os(macOS)
     @EnvironmentObject var commandBridge: MacShellCommandBridge
     #endif
@@ -64,9 +65,15 @@ struct ConnectionTerminalContainer: View {
         visibleViewTabs.count > 1
     }
 
-    private var effectiveThemeName: String {
-        guard usePerAppearanceTheme else { return terminalThemeName }
-        return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight
+    var effectiveThemeName: String {
+        let fallback = colorScheme == .dark ? "Aizen Dark" : "Aizen Light"
+        let preferred = usePerAppearanceTheme
+            ? (colorScheme == .dark ? terminalThemeName : terminalThemeNameLight)
+            : terminalThemeName
+        return terminalThemeManager.applicationThemeName(
+            preferred: preferred,
+            fallback: fallback
+        )
     }
 
     var selectedViewBinding: Binding<String> {
@@ -158,7 +165,7 @@ struct ConnectionTerminalContainer: View {
     }
 
     private var liveTerminalBackgroundColor: Color {
-        ThemeColorParser.backgroundColor(for: effectiveThemeName)!
+        ThemeColorParser.previewPalette(for: effectiveThemeName).background
     }
 
     var sharedBody: some View {
@@ -516,7 +523,7 @@ struct ConnectionTerminalContainer: View {
     private func updateTerminalBackgroundColor() {
         let themeName = effectiveThemeName
         Task.detached(priority: .utility) {
-            let resolved = ThemeColorParser.backgroundColor(for: themeName)!
+            let resolved = ThemeColorParser.previewPalette(for: themeName).background
             await MainActor.run {
                 UserDefaults.standard.set(resolved.toHex(), forKey: "terminalBackgroundColor")
             }
