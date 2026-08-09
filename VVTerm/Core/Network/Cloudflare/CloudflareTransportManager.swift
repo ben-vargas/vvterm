@@ -231,7 +231,7 @@ actor CloudflareTransportManager {
             appDomain: metadata.appDomain
         )
         if let encoded = try? JSONEncoder().encode(persistedMap) {
-            try? metadataKeychain.set(encoded, forKey: metadataStorageKey, iCloudSync: SyncSettings.isEnabled)
+            try? metadataKeychain.set(encoded, forKey: metadataStorageKey)
         }
     }
 
@@ -251,7 +251,7 @@ actor CloudflareTransportManager {
         }
 
         if let encoded = try? JSONEncoder().encode(persistedMap) {
-            try? metadataKeychain.set(encoded, forKey: metadataStorageKey, iCloudSync: SyncSettings.isEnabled)
+            try? metadataKeychain.set(encoded, forKey: metadataStorageKey)
         }
     }
 

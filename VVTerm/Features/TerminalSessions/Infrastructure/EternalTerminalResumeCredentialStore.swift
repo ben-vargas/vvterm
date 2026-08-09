@@ -123,7 +123,7 @@ final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked
     func save(_ credentials: EternalTerminalResumeCredentials, for paneId: UUID) throws {
         do {
             let data = try JSONEncoder().encode(credentials)
-            try keychain.set(data, forKey: Self.key(for: paneId), iCloudSync: false)
+            try keychain.set(data, forKey: Self.key(for: paneId))
         } catch {
             throw EternalTerminalResumeCredentialError.secureStorageUnavailable
         }

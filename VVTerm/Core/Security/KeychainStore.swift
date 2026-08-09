@@ -2,7 +2,7 @@
 //  KeychainStore.swift
 //  VVTerm
 //
-//  Keychain wrapper for storing credentials with optional iCloud sync
+//  Device-only Keychain storage for credentials and other secrets.
 //
 
 import Foundation
@@ -17,7 +17,7 @@ final class KeychainStore: @unchecked Sendable {
 
     // MARK: - Data Operations
 
-    nonisolated func set(_ data: Data, forKey key: String, iCloudSync: Bool = false) throws {
+    nonisolated func set(_ data: Data, forKey key: String) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -31,13 +31,8 @@ final class KeychainStore: @unchecked Sendable {
 
         var attributes = query
         attributes[kSecValueData as String] = data
-        attributes[kSecAttrAccessible as String] = iCloudSync
-            ? kSecAttrAccessibleAfterFirstUnlock
-            : kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-
-        if iCloudSync {
-            attributes[kSecAttrSynchronizable as String] = kCFBooleanTrue
-        }
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        attributes[kSecAttrSynchronizable as String] = kCFBooleanFalse
 
         let status = SecItemAdd(attributes as CFDictionary, nil)
         guard status == errSecSuccess else {
@@ -46,14 +41,28 @@ final class KeychainStore: @unchecked Sendable {
     }
 
     nonisolated func get(_ key: String) throws -> Data? {
-        // First try with iCloud sync (kSecAttrSynchronizable = true)
+        if let data = try get(key, synchronizable: false) {
+            try delete(key, synchronizable: true)
+            return data
+        }
+
+        guard let synchronizedData = try get(key, synchronizable: true) else {
+            return nil
+        }
+
+        // Move legacy synchronized items into device-only storage.
+        try set(synchronizedData, forKey: key)
+        return synchronizedData
+    }
+
+    private nonisolated func get(_ key: String, synchronizable: Bool) throws -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
             kSecReturnData as String: kCFBooleanTrue as Any,
             kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny  // Search both synced and non-synced
+            kSecAttrSynchronizable as String: synchronizable ? kCFBooleanTrue : kCFBooleanFalse
         ]
 
         var item: CFTypeRef?
@@ -71,22 +80,7 @@ final class KeychainStore: @unchecked Sendable {
     }
 
     nonisolated func contains(_ key: String) throws -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
-        ]
-
-        let status = SecItemCopyMatching(query as CFDictionary, nil)
-        if status == errSecItemNotFound {
-            return false
-        }
-        guard status == errSecSuccess else {
-            throw KeychainError.unhandled(status)
-        }
-        return true
+        try get(key) != nil
     }
 
     nonisolated func delete(_ key: String) throws {
@@ -102,13 +96,26 @@ final class KeychainStore: @unchecked Sendable {
         }
     }
 
+    private nonisolated func delete(_ key: String, synchronizable: Bool) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+            kSecAttrSynchronizable as String: synchronizable ? kCFBooleanTrue : kCFBooleanFalse
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.unhandled(status)
+        }
+    }
+
     // MARK: - String Convenience
 
-    nonisolated func setString(_ value: String, forKey key: String, iCloudSync: Bool = false) throws {
+    nonisolated func setString(_ value: String, forKey key: String) throws {
         guard let data = value.data(using: .utf8) else {
             throw KeychainError.encodingFailed
         }
-        try set(data, forKey: key, iCloudSync: iCloudSync)
+        try set(data, forKey: key)
     }
 
     nonisolated func getString(_ key: String) throws -> String? {

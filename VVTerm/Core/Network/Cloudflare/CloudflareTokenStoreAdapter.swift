@@ -9,11 +9,7 @@ actor CloudflareTokenStoreAdapter: TokenStore {
     }
 
     func writeToken(_ token: String, for key: String) async throws {
-        try store.setString(
-            token,
-            forKey: namespacedKey(for: key),
-            iCloudSync: SyncSettings.isEnabled
-        )
+        try store.setString(token, forKey: namespacedKey(for: key))
     }
 
     func removeToken(for key: String) async throws {

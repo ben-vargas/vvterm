@@ -6,7 +6,7 @@ import Testing
 private final class InMemoryMoshResumeSecretStore: MoshResumeSecretStoring {
     private var values: [String: Data] = [:]
 
-    func set(_ data: Data, forKey key: String, iCloudSync: Bool) throws {
+    func set(_ data: Data, forKey key: String) throws {
         values[key] = data
     }
 

@@ -91,7 +91,7 @@ protocol MoshResumeStoring {
 }
 
 protocol MoshResumeSecretStoring {
-    func set(_ data: Data, forKey key: String, iCloudSync: Bool) throws
+    func set(_ data: Data, forKey key: String) throws
     func get(_ key: String) throws -> Data?
     func delete(_ key: String) throws
 }
@@ -185,11 +185,7 @@ final class MoshResumeStore: MoshResumeStoring {
             let secret = MoshResumeSecret(
                 keyBase64: snapshot.endpoint.keyBase64_22
             )
-            try keychain.set(
-                JSONEncoder().encode(secret),
-                forKey: Self.key(for: paneId),
-                iCloudSync: false
-            )
+            try keychain.set(JSONEncoder().encode(secret), forKey: Self.key(for: paneId))
         } catch {
             throw MoshResumeStoreError.secureStorageUnavailable
         }
