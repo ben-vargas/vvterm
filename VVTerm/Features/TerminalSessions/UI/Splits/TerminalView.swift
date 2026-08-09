@@ -84,7 +84,7 @@ struct TerminalTabView: View {
         content.terminalKeyboardAvoidance(
             focusedPaneId: isSelected ? tab.focusedPaneId : nil,
             paneIds: tab.allPaneIds,
-            terminalRegistryVersion: tabManager.terminalRegistryVersion,
+            terminalSurfaceChange: tabManager.terminalSurfaceRegistryChange,
             terminalProvider: { tabManager.getTerminal(for: $0) },
             keyboardCoordinator: tabManager.keyboardCoordinator
         )
@@ -92,7 +92,7 @@ struct TerminalTabView: View {
         content.terminalKeyboardAvoidance(
             focusedPaneId: isSelected ? tab.focusedPaneId : nil,
             paneIds: tab.allPaneIds,
-            terminalRegistryVersion: tabManager.terminalRegistryVersion,
+            terminalSurfaceChange: tabManager.terminalSurfaceRegistryChange,
             terminalProvider: { tabManager.getTerminal(for: $0) }
         )
         #endif
@@ -101,7 +101,7 @@ struct TerminalTabView: View {
     var body: some View {
         withTerminalKeyboardAvoidance(ZStack {
             // Refresh when terminals register/unregister so overlays can update immediately.
-            let _ = tabManager.terminalRegistryVersion
+            let _ = tabManager.terminalSurfaceRegistryChange
             if tabManager.isSplitZoomed(in: tab), tab.hasSplits {
                 renderPane(tab.focusedPaneId)
             } else if let layout = tab.layout {

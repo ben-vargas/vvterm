@@ -200,7 +200,7 @@ struct ServerTerminalRoute: View {
             .onChange(of: focusedPaneId) { _ in
                 updateTerminalRouteActivation()
             }
-            .onChange(of: tabManager.terminalRegistryVersion) { _ in
+            .onChange(of: tabManager.terminalSurfaceRegistryChange) { _ in
                 updateTerminalRouteActivation()
             }
             .onChangeCompat(of: tabManager.tabs(for: route.serverId)) { _ in

@@ -189,7 +189,12 @@ struct TerminalKeyboardUITestHarness: View {
                 .terminalKeyboardAvoidance(
                     focusedPaneId: Self.paneId,
                     paneIds: [Self.paneId],
-                    terminalRegistryVersion: terminalView == nil ? 0 : 1,
+                    terminalSurfaceChange: terminalView.map {
+                        .registered(
+                            paneId: Self.paneId,
+                            surfaceIdentity: ObjectIdentifier($0)
+                        )
+                    },
                     terminalProvider: { _ in terminalView },
                     keyboardCoordinator: keyboardCoordinator,
                     enabledOverride: preservesTerminalSize
@@ -993,7 +998,12 @@ struct TerminalSplitKeyboardUITestHarness: View {
             .terminalKeyboardAvoidance(
                 focusedPaneId: focusedPaneId,
                 paneIds: [Self.firstPaneId, Self.secondPaneId],
-                terminalRegistryVersion: isReady ? 2 : 0,
+                terminalSurfaceChange: terminal(for: focusedPaneId).map {
+                    .registered(
+                        paneId: focusedPaneId,
+                        surfaceIdentity: ObjectIdentifier($0)
+                    )
+                },
                 terminalProvider: terminal(for:),
                 keyboardCoordinator: keyboardCoordinator,
                 enabledOverride: false

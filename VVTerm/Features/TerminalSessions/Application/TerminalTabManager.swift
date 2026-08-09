@@ -20,24 +20,6 @@ import AppKit
 import UIKit
 #endif
 
-enum TerminalRegistryPolicy {
-    static func shouldRemove(
-        registered: ObjectIdentifier,
-        dismantled: ObjectIdentifier
-    ) -> Bool {
-        registered == dismantled
-    }
-
-    static func attachmentToPublish(
-        registered: ObjectIdentifier?,
-        reporting: ObjectIdentifier,
-        currentAttachment: Bool
-    ) -> Bool? {
-        guard registered == reporting else { return nil }
-        return currentAttachment
-    }
-}
-
 nonisolated enum TerminalVoicePresentationState: Equatable, Sendable {
     nonisolated enum Event: Equatable, Sendable {
         case recordingStarted
@@ -105,8 +87,7 @@ final class TerminalTabManager: ObservableObject {
 
     // MARK: - Terminal Registry
 
-    /// Terminal views keyed by pane ID
-    private var terminalViews: [UUID: GhosttyTerminalView] = [:]
+    private let terminalSurfaces = TerminalSurfaceRegistry<GhosttyTerminalView>()
     private var shellRegistry = SSHShellRegistry(staleThreshold: 120)
     private let sshConnectionTasks = TerminalConnectionTaskStore()
     private var eternalTerminalRuntimes: [UUID: EternalTerminalRuntime] = [:]
@@ -148,9 +129,6 @@ final class TerminalTabManager: ObservableObject {
 
     let tmuxResolver: TmuxAttachResolver
 
-    /// Bumps when a terminal view is registered/unregistered so views refresh.
-    @Published private(set) var terminalRegistryVersion: Int = 0
-
     /// Servers that already ran tmux cleanup (per app launch)
     private var tmuxCleanupServers: Set<UUID> = []
 
@@ -186,9 +164,16 @@ final class TerminalTabManager: ObservableObject {
         self.defaultMoshResumeStore = moshResumeStore
         #if os(iOS)
         keyboardCoordinator.terminalProvider = { [weak self] paneId in
-            self?.terminalViews[paneId]
+            self?.terminalSurfaces.surface(for: paneId)
         }
         #endif
+        terminalSurfaces.objectWillChange
+            .sink { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.objectWillChange.send()
+                }
+            }
+            .store(in: &stateCancellables)
         sessionState.objectWillChange
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &stateCancellables)
@@ -667,7 +652,7 @@ final class TerminalTabManager: ObservableObject {
             queueIOSReconnectUntilNetworkReady(for: attempt.paneId)
             return
         }
-        let windowScene = terminalViews[attempt.paneId]?
+        let windowScene = terminalSurfaces.surface(for: attempt.paneId)?
             .window?
             .windowScene
         let windowSceneIsActive = windowScene.map {
@@ -1036,23 +1021,23 @@ final class TerminalTabManager: ObservableObject {
 
     // MARK: - Terminal Registry
 
+    var terminalSurfaceRegistryChange: TerminalSurfaceRegistryChange? {
+        terminalSurfaces.latestChange
+    }
+
     /// Register a terminal view for a pane
     func registerTerminal(_ terminal: GhosttyTerminalView, for paneId: UUID) {
-        let replacesRegisteredTerminal = terminalViews[paneId].map { $0 !== terminal } ?? false
         #if os(iOS)
         terminal.onWindowAttachmentChange = { [weak self, weak terminal] _ in
             Task { @MainActor [weak self, weak terminal] in
                 guard let self, let terminal,
-                      let attachment = TerminalRegistryPolicy.attachmentToPublish(
-                          registered: self.terminalViews[paneId].map { ObjectIdentifier($0) },
-                          reporting: ObjectIdentifier(terminal),
-                          currentAttachment: terminal.window != nil
-                      ) else { return }
-                self.keyboardCoordinator.setWindowAttached(attachment, for: paneId)
+                      self.terminalSurfaces.isRegistered(terminal, for: paneId) else { return }
+                self.keyboardCoordinator.setWindowAttached(terminal.window != nil, for: paneId)
             }
         }
         terminal.onTerminalDirectTouch = { [weak self, weak terminal] isFocusTap in
-            guard let self, let terminal, self.terminalViews[paneId] === terminal else { return }
+            guard let self, let terminal,
+                  self.terminalSurfaces.isRegistered(terminal, for: paneId) else { return }
             self.keyboardCoordinator.setActivePane(paneId)
             self.keyboardCoordinator.directTouchOnTerminal(isFocusTap: isFocusTap)
         }
@@ -1060,12 +1045,13 @@ final class TerminalTabManager: ObservableObject {
             self?.keyboardCoordinator.userRequestedHide()
         }
         terminal.onFindNavigatorVisibilityChange = { [weak self, weak terminal] isVisible in
-            guard let self, let terminal, self.terminalViews[paneId] === terminal else { return }
+            guard let self, let terminal,
+                  self.terminalSurfaces.isRegistered(terminal, for: paneId) else { return }
             self.setTerminalFindNavigatorVisible(isVisible, for: paneId)
             self.keyboardCoordinator.setFindNavigatorActive(isVisible, for: paneId)
         }
         #endif
-        terminalViews[paneId] = terminal
+        let replacesRegisteredTerminal = terminalSurfaces.register(terminal, for: paneId)
         #if os(iOS)
         terminal.acceptsTerminalInput = sessionState.paneState(for: paneId)?.connectionState.isConnected == true
         // A replacement is commonly registered before UIKit attaches it.
@@ -1076,7 +1062,8 @@ final class TerminalTabManager: ObservableObject {
             keyboardCoordinator.terminalProviderIdentityDidChange(for: paneId)
         }
         Task { @MainActor [weak self, weak terminal] in
-            guard let self, let terminal, self.terminalViews[paneId] === terminal else { return }
+            guard let self, let terminal,
+                  self.terminalSurfaces.isRegistered(terminal, for: paneId) else { return }
             self.keyboardCoordinator.setWindowAttached(terminal.window != nil, for: paneId)
             self.publishTerminalInputAvailability(for: paneId)
             self.setTerminalFindNavigatorVisible(terminal.isFindNavigatorVisible, for: paneId)
@@ -1086,42 +1073,60 @@ final class TerminalTabManager: ObservableObject {
             )
         }
         #endif
-        scheduleTerminalRegistryVersionUpdate()
     }
 
     @discardableResult
     private func detachTerminalRegistration(for paneId: UUID) -> GhosttyTerminalView? {
-        let terminal = terminalViews.removeValue(forKey: paneId)
-        if let terminal {
-            #if os(iOS)
-            terminal.onWindowAttachmentChange = nil
-            terminal.onTerminalDirectTouch = nil
-            terminal.onKeyboardAccessoryHideRequested = nil
-            terminal.onFindNavigatorVisibilityChange = nil
-            terminalFindNavigatorVisibleByPane.removeValue(forKey: paneId)
-            terminalVoicePresentationByPane.removeValue(forKey: paneId)
-            keyboardCoordinator.setWindowAttached(false, for: paneId)
-            keyboardCoordinator.removePane(paneId)
-            #endif
+        terminalSurfaces.remove(for: paneId) { [self] terminal in
+            prepareTerminalSurfaceRemoval(terminal, for: paneId)
         }
-        scheduleTerminalRegistryVersionUpdate()
-        return terminal
     }
 
     /// Unregister a dismantled platform view only if it is still the pane's
     /// registered terminal. SwiftUI may create its replacement before the old
     /// view's deferred teardown runs during window reconstruction.
     func unregisterTerminal(_ terminal: GhosttyTerminalView, for paneId: UUID) {
-        guard let registeredTerminal = terminalViews[paneId],
-              TerminalRegistryPolicy.shouldRemove(
-                  registered: ObjectIdentifier(registeredTerminal),
-                  dismantled: ObjectIdentifier(terminal)
-              ) else {
-            terminal.cleanup()
-            return
-        }
-        detachTerminalRegistration(for: paneId)
-        terminal.cleanup()
+        terminalSurfaces.unregister(
+            terminal,
+            for: paneId,
+            prepareForRemoval: { [self] current in
+                prepareTerminalSurfaceRemoval(current, for: paneId)
+            },
+            cleanup: { $0.cleanup() }
+        )
+    }
+
+    private func prepareTerminalSurfaceRemoval(
+        _ terminal: GhosttyTerminalView,
+        for paneId: UUID
+    ) {
+        #if os(iOS)
+        terminal.onWindowAttachmentChange = nil
+        terminal.onTerminalDirectTouch = nil
+        terminal.onKeyboardAccessoryHideRequested = nil
+        terminal.onFindNavigatorVisibilityChange = nil
+        terminalFindNavigatorVisibleByPane.removeValue(forKey: paneId)
+        terminalVoicePresentationByPane.removeValue(forKey: paneId)
+        keyboardCoordinator.setWindowAttached(false, for: paneId)
+        keyboardCoordinator.removePane(paneId)
+        #endif
+    }
+
+    private func drainTerminalSurfaces() {
+        terminalSurfaces.drain(
+            prepareForRemoval: { [self] paneId, terminal in
+                prepareTerminalSurfaceRemoval(terminal, for: paneId)
+            },
+            cleanup: { $0.cleanup() }
+        )
+    }
+
+    func getTerminal(for paneId: UUID) -> GhosttyTerminalView? {
+        terminalSurfaces.surface(for: paneId)
+    }
+
+    func isCurrentTerminal(_ terminal: GhosttyTerminalView, for paneId: UUID) -> Bool {
+        terminalSurfaces.isRegistered(terminal, for: paneId)
     }
 
     #if os(iOS)
@@ -1150,17 +1155,6 @@ final class TerminalTabManager: ObservableObject {
         }
     }
     #endif
-
-    private func scheduleTerminalRegistryVersionUpdate() {
-        Task { @MainActor [weak self] in
-            self?.terminalRegistryVersion &+= 1
-        }
-    }
-
-    /// Get terminal for a pane
-    func getTerminal(for paneId: UUID) -> GhosttyTerminalView? {
-        terminalViews[paneId]
-    }
 
     /// Register SSH shell for a pane
     @discardableResult
@@ -1863,7 +1857,7 @@ final class TerminalTabManager: ObservableObject {
     #if os(iOS)
     private func publishTerminalInputAvailability(for paneId: UUID) {
         let connectionState = sessionState.paneState(for: paneId)?.connectionState ?? .idle
-        let terminal = terminalViews[paneId]
+        let terminal = terminalSurfaces.surface(for: paneId)
 
         // Routing must be enabled before the coordinator can preserve or
         // reacquire the responder at the connected boundary.
@@ -1907,7 +1901,7 @@ final class TerminalTabManager: ObservableObject {
         case .disconnected, .failed:
             reconnectCoordinator.complete(for: paneId)
             setPanePresentationOverrides(.empty, for: paneId)
-            terminalViews[paneId]?.applyPresentationOverrides(.empty)
+            terminalSurfaces.surface(for: paneId)?.applyPresentationOverrides(.empty)
             if paneTmuxStatus(for: paneId) == .foreground {
                 setPaneTmuxStatus(.background, for: paneId)
             }
@@ -2055,7 +2049,7 @@ final class TerminalTabManager: ObservableObject {
         }
         setPanePresentationOverrides(overrides, for: paneId)
         sessionState.requestPersistence()
-        terminalViews[paneId]?.applyPresentationOverrides(overrides)
+        terminalSurfaces.surface(for: paneId)?.applyPresentationOverrides(overrides)
         return TerminalZoomResult(
             presentationOverrides: overrides,
             effectiveFontSize: overrides.resolvedFontSize()
@@ -2882,7 +2876,6 @@ extension TerminalTabManager {
             uniqueClients[ObjectIdentifier(cleanup.client)] = cleanup.client
         }
 
-        let terminals = Array(terminalViews.values)
         let eternalRuntimes = Array(eternalTerminalRuntimes.values)
         sessionState.resetForTesting()
         splitZoomedTabIds = []
@@ -2895,8 +2888,7 @@ extension TerminalTabManager {
         keyboardCoordinator.setViewActive(false)
         #endif
         tmuxAttachPrompt = nil
-        terminalRegistryVersion = 0
-        terminalViews.removeAll()
+        drainTerminalSurfaces()
         eternalTerminalRuntimes.removeAll()
         shellRegistry.removeAll()
         connectionCleanupsInFlight.removeAll()
@@ -2915,9 +2907,6 @@ extension TerminalTabManager {
         tmuxCleanupServers.removeAll()
         eternalTerminalResumeStore = defaultEternalTerminalResumeStore
         moshResumeStore = defaultMoshResumeStore
-        for terminal in terminals {
-            terminal.cleanup()
-        }
         for client in uniqueClients.values {
             await client.disconnect()
         }

@@ -35,7 +35,7 @@ extension View {
     func terminalKeyboardAvoidance(
         focusedPaneId: UUID?,
         paneIds: [UUID],
-        terminalRegistryVersion: Int,
+        terminalSurfaceChange: TerminalSurfaceRegistryChange?,
         terminalProvider: @escaping (UUID) -> GhosttyTerminalView?,
         keyboardCoordinator: TerminalKeyboardCoordinator,
         enabledOverride: Bool? = nil
@@ -44,7 +44,7 @@ extension View {
             TerminalKeyboardAvoidanceModifier(
                 focusedPaneId: focusedPaneId,
                 paneIds: paneIds,
-                terminalRegistryVersion: terminalRegistryVersion,
+                terminalSurfaceChange: terminalSurfaceChange,
                 terminalProvider: terminalProvider,
                 keyboardCoordinator: keyboardCoordinator,
                 enabledOverride: enabledOverride
@@ -214,7 +214,7 @@ private final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
 private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
     let focusedPaneId: UUID?
     let paneIds: [UUID]
-    let terminalRegistryVersion: Int
+    let terminalSurfaceChange: TerminalSurfaceRegistryChange?
     let terminalProvider: (UUID) -> GhosttyTerminalView?
     let enabledOverride: Bool?
 
@@ -225,14 +225,14 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
     init(
         focusedPaneId: UUID?,
         paneIds: [UUID],
-        terminalRegistryVersion: Int,
+        terminalSurfaceChange: TerminalSurfaceRegistryChange?,
         terminalProvider: @escaping (UUID) -> GhosttyTerminalView?,
         keyboardCoordinator: TerminalKeyboardCoordinator,
         enabledOverride: Bool?
     ) {
         self.focusedPaneId = focusedPaneId
         self.paneIds = paneIds
-        self.terminalRegistryVersion = terminalRegistryVersion
+        self.terminalSurfaceChange = terminalSurfaceChange
         self.terminalProvider = terminalProvider
         self.enabledOverride = enabledOverride
         _keyboardCoordinator = ObservedObject(wrappedValue: keyboardCoordinator)
@@ -264,7 +264,7 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
             .onChange(of: focusedPaneId) { _ in
                 refresh(animation: .easeOut(duration: 0.12))
             }
-            .onChange(of: terminalRegistryVersion) { _ in
+            .onChange(of: terminalSurfaceChange) { _ in
                 refresh(animation: nil)
             }
             .onChange(of: keyboardCoordinator.softwareKeyboardEndFrame) { _ in
@@ -641,7 +641,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     private func processExitHandler(for terminal: GhosttyTerminalView) -> () -> Void {
         { [weak terminal] in
             guard let terminal,
-                  tabManager.getTerminal(for: paneId) === terminal else { return }
+                  tabManager.isCurrentTerminal(terminal, for: paneId) else { return }
             onProcessExit()
         }
     }

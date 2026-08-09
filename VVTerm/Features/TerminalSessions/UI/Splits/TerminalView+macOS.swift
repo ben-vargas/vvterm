@@ -18,7 +18,7 @@ extension View {
     func terminalKeyboardAvoidance(
         focusedPaneId: UUID?,
         paneIds: [UUID],
-        terminalRegistryVersion: Int,
+        terminalSurfaceChange: TerminalSurfaceRegistryChange?,
         terminalProvider: @escaping (UUID) -> GhosttyTerminalView?
     ) -> some View {
         self
@@ -148,7 +148,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     private func processExitHandler(for terminal: GhosttyTerminalView) -> () -> Void {
         { [weak terminal] in
             guard let terminal,
-                  tabManager.getTerminal(for: paneId) === terminal else { return }
+                  tabManager.isCurrentTerminal(terminal, for: paneId) else { return }
             onProcessExit()
         }
     }
