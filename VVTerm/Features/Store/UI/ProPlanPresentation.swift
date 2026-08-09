@@ -1,14 +1,6 @@
 import Foundation
 
-enum ProPlanKind: String, Identifiable {
-    case monthly
-    case yearly
-    case lifetime
-
-    static let displayOrder: [ProPlanKind] = [.monthly, .yearly, .lifetime]
-
-    var id: String { rawValue }
-
+extension ProPlanKind {
     var title: String {
         switch self {
         case .monthly:
@@ -34,12 +26,6 @@ enum ProPlanKind: String, Identifiable {
     var badge: String? {
         self == .yearly ? String(localized: "Best value") : nil
     }
-}
-
-enum ProPlanIntroductoryOfferState: Equatable {
-    case unavailable
-    case ineligible
-    case eligibleForSevenDayFreeTrial
 }
 
 struct ProPlanPresentation {
