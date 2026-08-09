@@ -15,13 +15,15 @@ struct VVTermApp: App {
         let serverManager = ServerManager(
             dependencies: .live(actionAuthorizer: appLockManager)
         )
+        let engagementTracker = EngagementTracker(dependencies: .live)
         let tabManager = TerminalTabManagerLiveComposition.makeManager(
             appLockManager: appLockManager,
-            serverManager: serverManager
+            serverManager: serverManager,
+            engagementTracker: engagementTracker
         )
         let storeManager = StoreManager(
             client: AppStoreKitClient(),
-            effects: .live
+            effects: .live(engagementTracker: engagementTracker)
         )
         let terminalThemeManager = TerminalThemeManager(dependencies: .live)
         let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager(
@@ -32,6 +34,7 @@ struct VVTermApp: App {
         _storeManager = StateObject(wrappedValue: storeManager)
         _appLockManager = StateObject(wrappedValue: appLockManager)
         _serverManager = StateObject(wrappedValue: serverManager)
+        _engagementTracker = StateObject(wrappedValue: engagementTracker)
         _terminalThemeManager = StateObject(wrappedValue: terminalThemeManager)
         _terminalAccessoryPreferencesManager = StateObject(
             wrappedValue: terminalAccessoryPreferencesManager
@@ -84,6 +87,7 @@ struct VVTermApp: App {
     #endif
     @StateObject private var appLockManager: AppLockManager
     @StateObject private var serverManager: ServerManager
+    @StateObject private var engagementTracker: EngagementTracker
     @StateObject private var tabManager: TerminalTabManager
     @StateObject private var storeManager: StoreManager
     @StateObject private var remoteFileTabManager = RemoteFileTabManager()
@@ -180,6 +184,7 @@ struct VVTermApp: App {
     private var macOSAppContent: some View {
         ContentView(
             serverManager: serverManager,
+            engagementTracker: engagementTracker,
             tabManager: tabManager,
             fileTabs: remoteFileTabManager,
             fileBrowser: remoteFileBrowserStore,
@@ -225,7 +230,8 @@ struct VVTermApp: App {
         } else if usesTerminalReconnectUITestHarness {
             TerminalReconnectUITestHarness(
                 tabManager: tabManager,
-                serverManager: serverManager
+                serverManager: serverManager,
+                engagementTracker: engagementTracker
             )
                 .environmentObject(ghosttyApp)
                 .environmentObject(terminalThemeManager)
@@ -254,6 +260,7 @@ struct VVTermApp: App {
     private var iOSAppContent: some View {
         iOSContentView(
             serverManager: serverManager,
+            engagementTracker: engagementTracker,
             tabManager: tabManager,
             fileTabs: remoteFileTabManager,
             fileBrowser: remoteFileBrowserStore

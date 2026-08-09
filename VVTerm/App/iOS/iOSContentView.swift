@@ -19,9 +19,9 @@ struct iOSContentView: View {
         LocalSSHDiscoveryManager()
     }
     @ObservedObject private var serverManager: ServerManager
+    @ObservedObject private var engagementTracker: EngagementTracker
     @ObservedObject private var tabManager: TerminalTabManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
-    @StateObject private var engagementTracker = EngagementTracker.shared
     @Environment(\.requestReview) private var requestReview
 
     @State private var selectedWorkspace: Workspace?
@@ -33,11 +33,13 @@ struct iOSContentView: View {
 
     init(
         serverManager: ServerManager,
+        engagementTracker: EngagementTracker,
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
+        _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         _tabManager = ObservedObject(wrappedValue: tabManager)
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser

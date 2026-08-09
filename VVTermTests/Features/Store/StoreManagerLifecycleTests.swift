@@ -212,6 +212,19 @@ final class StoreManagerLifecycleTests: XCTestCase {
         }
     }
 
+    func testReviewAfterPurchaseRoutesThroughStoreEffects() {
+        let client = StoreClientFake()
+        var recordedEffects: [StoreManagerEffect] = []
+        let manager = StoreManager(
+            client: client,
+            effects: StoreManagerEffects { recordedEffects.append($0) }
+        )
+
+        manager.requestReviewAfterPurchase()
+
+        XCTAssertEqual(recordedEffects, [.reviewRequestedAfterPurchase])
+    }
+
     func testStartLoadsProductsThenEntitlementsAndIsIdempotent() async {
         let client = StoreClientFake()
         client.loadedProducts = [monthlyProduct]

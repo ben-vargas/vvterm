@@ -36,16 +36,19 @@ struct TerminalReconnectUITestHarness: View {
 
     @ObservedObject private var tabManager: TerminalTabManager
     @ObservedObject private var serverManager: ServerManager
+    @ObservedObject private var engagementTracker: EngagementTracker
     @StateObject private var fileTabs: RemoteFileTabManager
     @StateObject private var fileBrowser: RemoteFileBrowserStore
     @State private var fixtureState = FixtureState.preparing
 
     init(
         tabManager: TerminalTabManager,
-        serverManager: ServerManager
+        serverManager: ServerManager,
+        engagementTracker: EngagementTracker
     ) {
         _tabManager = ObservedObject(wrappedValue: tabManager)
         _serverManager = ObservedObject(wrappedValue: serverManager)
+        _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         _fileTabs = StateObject(
             wrappedValue: RemoteFileTabManager(defaults: Self.fixtureDefaults)
         )
@@ -127,6 +130,7 @@ struct TerminalReconnectUITestHarness: View {
             if usesNavigationHarness {
                 iOSContentView(
                     serverManager: serverManager,
+                    engagementTracker: engagementTracker,
                     tabManager: tabManager,
                     fileTabs: fileTabs,
                     fileBrowser: fileBrowser

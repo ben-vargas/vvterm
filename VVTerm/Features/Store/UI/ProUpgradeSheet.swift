@@ -578,7 +578,7 @@ struct ProUpgradeSheet: View {
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     close()
-                    EngagementTracker.shared.requestReviewAfterPurchase()
+                    storeManager.requestReviewAfterPurchase()
                 }
             }
         case .failed(let message):

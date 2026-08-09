@@ -1,11 +1,11 @@
 import Foundation
 
 extension StoreManagerEffects {
-    static var live: Self {
+    static func live(engagementTracker: EngagementTracker) -> Self {
         StoreManagerEffects { effect in
             switch effect {
             case .paywallPresented(let source):
-                EngagementTracker.shared.notePaywallPresented()
+                engagementTracker.notePaywallPresented()
                 AnalyticsTracker.shared.trackPaywallViewed(source: source.rawValue)
             case .paywallCTATapped(let source, let productID):
                 AnalyticsTracker.shared.trackPaywallCTATapped(
@@ -40,6 +40,8 @@ extension StoreManagerEffects {
                 )
             case .entitlementsUpdated(let isPro):
                 AnalyticsTracker.shared.trackAppLaunched(isPro: isPro)
+            case .reviewRequestedAfterPurchase:
+                engagementTracker.requestReviewAfterPurchase()
             }
         }
     }

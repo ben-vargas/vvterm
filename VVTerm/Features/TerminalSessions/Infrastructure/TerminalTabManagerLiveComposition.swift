@@ -11,7 +11,8 @@ enum TerminalTabManagerLiveComposition {
 
     static func makeManager(
         appLockManager: AppLockManager,
-        serverManager: ServerManager
+        serverManager: ServerManager,
+        engagementTracker: EngagementTracker
     ) -> TerminalTabManager {
         let defaults = UserDefaults.standard
         let networkMonitor = NetworkMonitor.shared
@@ -38,13 +39,13 @@ enum TerminalTabManagerLiveComposition {
                     LiveActivityManager.shared.refresh(with: connectionStates)
                 },
                 recordSuccessfulConnection: { id, transport in
-                    EngagementTracker.shared.recordSuccessfulConnection(
+                    engagementTracker.recordSuccessfulConnection(
                         id: id,
                         transport: transport
                     )
                 },
                 noteTerminalSessionEnded: { otherTerminalsActive in
-                    EngagementTracker.shared.noteTerminalSessionEnded(
+                    engagementTracker.noteTerminalSessionEnded(
                         otherTerminalsActive: otherTerminalsActive
                     )
                 },

@@ -158,6 +158,10 @@ final class StoreManager: ObservableObject {
         ))
     }
 
+    func requestReviewAfterPurchase() {
+        effects.record(.reviewRequestedAfterPurchase)
+    }
+
     func introductoryOfferState(for product: StoreProduct) async -> ProPlanIntroductoryOfferState {
         await client.introductoryOfferState(productId: product.id)
     }

@@ -17,10 +17,10 @@ struct ContentView: View {
         LocalSSHDiscoveryManager()
     }
     @ObservedObject private var serverManager: ServerManager
+    @ObservedObject private var engagementTracker: EngagementTracker
     @ObservedObject private var tabManager: TerminalTabManager
     @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var storeManager: StoreManager
-    @StateObject private var engagementTracker = EngagementTracker.shared
     @Environment(\.requestReview) private var requestReview
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
@@ -49,12 +49,14 @@ struct ContentView: View {
 
     init(
         serverManager: ServerManager,
+        engagementTracker: EngagementTracker,
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore,
         onOpenSettings: @escaping () -> Void
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
+        _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         _tabManager = ObservedObject(wrappedValue: tabManager)
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
@@ -377,12 +379,15 @@ struct ContentView: View {
         dependencies: .live(actionAuthorizer: appLockManager),
         startsAutomatically: false
     )
+    let engagementTracker = EngagementTracker(dependencies: .live)
     let tabManager = TerminalTabManagerLiveComposition.makeManager(
         appLockManager: appLockManager,
-        serverManager: serverManager
+        serverManager: serverManager,
+        engagementTracker: engagementTracker
     )
     ContentView(
         serverManager: serverManager,
+        engagementTracker: engagementTracker,
         tabManager: tabManager,
         fileTabs: RemoteFileTabManager(),
         fileBrowser: VVTermApp.makeRemoteFileBrowserStore(
