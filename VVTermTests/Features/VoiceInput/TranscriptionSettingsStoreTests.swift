@@ -33,7 +33,7 @@ final class TranscriptionSettingsStoreTests: XCTestCase {
         )
     }
 
-    func testCurrentWhisperModelIdMapsMediumModelTo8BitVariant() {
+    func testCurrentWhisperModelIdKeepsSupportedMediumModel() {
         UserDefaults.standard.set(
             "mlx-community/whisper-medium-mlx",
             forKey: TranscriptionSettingsKeys.mlxWhisperModelId
@@ -41,7 +41,19 @@ final class TranscriptionSettingsStoreTests: XCTestCase {
 
         XCTAssertEqual(
             TranscriptionSettingsStore.currentWhisperModelId(),
-            "mlx-community/whisper-medium-mlx-8bit"
+            "mlx-community/whisper-medium-mlx"
+        )
+    }
+
+    func testCurrentWhisperModelIdMigratesUnsupportedMediumVariant() {
+        UserDefaults.standard.set(
+            "mlx-community/whisper-medium-mlx-q4",
+            forKey: TranscriptionSettingsKeys.mlxWhisperModelId
+        )
+
+        XCTAssertEqual(
+            TranscriptionSettingsStore.currentWhisperModelId(),
+            "mlx-community/whisper-medium-mlx"
         )
     }
 

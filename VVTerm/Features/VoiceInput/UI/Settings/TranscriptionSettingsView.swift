@@ -90,14 +90,7 @@ struct TranscriptionSettingsView: View {
                 modelSection(
                     manager: whisperManager,
                     modelBinding: $whisperModelId,
-                    models: [
-                        ("mlx-community/whisper-tiny-mlx", String(localized: "Tiny"), "~39 MB"),
-                        ("mlx-community/whisper-base-mlx", String(localized: "Base"), "~74 MB"),
-                        ("mlx-community/whisper-small-mlx", String(localized: "Small"), "~244 MB"),
-                        ("mlx-community/whisper-medium-mlx-8bit", String(localized: "Medium (8-bit)"), "~400 MB"),
-                        ("mlx-community/whisper-medium-mlx-q4", String(localized: "Medium (Q4)"), "~250 MB"),
-                        ("mlx-community/whisper-medium-mlx-fp32", String(localized: "Medium (FP32)"), "~1.5 GB")
-                    ]
+                    models: MLXModelCatalog.options(for: .whisper)
                 )
             }
 
@@ -105,9 +98,7 @@ struct TranscriptionSettingsView: View {
                 modelSection(
                     manager: parakeetManager,
                     modelBinding: $parakeetModelId,
-                    models: [
-                        ("mlx-community/parakeet-tdt-0.6b-v2", String(localized: "Parakeet TDT 0.6B"), "~600 MB")
-                    ],
+                    models: MLXModelCatalog.options(for: .parakeetTDT),
                     footnote: String(localized: "Parakeet supports English only.")
                 )
             }
@@ -144,25 +135,24 @@ struct TranscriptionSettingsView: View {
     private func modelSection(
         manager: MLXModelManager,
         modelBinding: Binding<String>,
-        models: [(String, String, String)],
+        models: [MLXModelOption],
         footnote: String? = nil
     ) -> some View {
         Section {
             Picker("Model", selection: modelBinding) {
-                ForEach(models, id: \.0) { id, name, size in
+                ForEach(models) { option in
                     HStack {
-                        Text(name)
+                        Text(option.title)
                         Spacer()
-                        Text(size)
+                        Text(option.downloadSizeLabel)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .tag(id)
+                    .tag(option.id)
                 }
             }
             .onChangeCompat(of: modelBinding.wrappedValue) { newValue in
                 manager.modelId = newValue
-                manager.refreshStatus()
             }
 
             modelStatusRow(manager: manager)
@@ -221,12 +211,31 @@ struct TranscriptionSettingsView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+            case .checkingLegacyDownload:
+                Label("Checking old download...", systemImage: "arrow.triangle.2.circlepath")
+                    .foregroundStyle(.secondary)
             case .downloading:
                 Text("Downloading...")
                     .foregroundStyle(.orange)
             case .ready:
                 Label("Ready", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
+            case .updateRequired:
+                VStack(alignment: .trailing, spacing: 6) {
+                    Label("Update Required", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    if MLXModelCatalog.downloadManifest(for: manager.modelId, kind: manager.kind) != nil {
+                        Button("Download Update") {
+                            Task { await manager.downloadModel() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                    Button("Remove Old Download", role: .destructive) {
+                        manager.removeIncompatibleDownload()
+                    }
+                    .controlSize(.small)
+                }
             case .failed(let error):
                 VStack(alignment: .trailing, spacing: 4) {
                     Label("Failed", systemImage: "xmark.circle.fill")
@@ -284,14 +293,17 @@ struct TranscriptionSettingsView: View {
 
     private static func resolveWhisperModelId() -> String {
         let defaults = UserDefaults.standard
+        let raw: String
         if let current = defaults.string(forKey: TranscriptionSettingsKeys.mlxWhisperModelId) {
-            return current
+            raw = current
+        } else if let legacy = defaults.string(forKey: "whisperModelId") {
+            raw = legacy
+        } else {
+            raw = TranscriptionSettingsDefaults.mlxWhisperModelId
         }
-        if let legacy = defaults.string(forKey: "whisperModelId") {
-            defaults.set(legacy, forKey: TranscriptionSettingsKeys.mlxWhisperModelId)
-            return legacy
-        }
-        return TranscriptionSettingsDefaults.mlxWhisperModelId
+        let resolved = MLXModelLegacyMigration.resolveModelID(raw, kind: .whisper).modelID
+        defaults.set(resolved, forKey: TranscriptionSettingsKeys.mlxWhisperModelId)
+        return resolved
     }
 
     private static func resolveParakeetModelId() -> String {
@@ -322,6 +334,15 @@ struct TranscriptionSettingsView: View {
            let legacy = defaults.string(forKey: "whisperModelId") {
             defaults.set(legacy, forKey: TranscriptionSettingsKeys.mlxWhisperModelId)
             whisperModelId = legacy
+        }
+
+        let resolvedWhisperModelID = MLXModelLegacyMigration.resolveModelID(
+            whisperModelId,
+            kind: .whisper
+        ).modelID
+        if resolvedWhisperModelID != whisperModelId {
+            whisperModelId = resolvedWhisperModelID
+            whisperManager.modelId = resolvedWhisperModelID
         }
 
         if defaults.string(forKey: TranscriptionSettingsKeys.mlxParakeetModelId) == nil,

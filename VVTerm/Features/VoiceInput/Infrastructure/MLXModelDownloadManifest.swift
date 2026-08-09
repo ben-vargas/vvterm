@@ -124,8 +124,13 @@ nonisolated enum MLXModelFileVerifier {
         expectedBytes: Int64,
         sha256 expectedSHA256: String
     ) throws {
-        let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        let values = try url.resourceValues(forKeys: [
+            .fileSizeKey,
+            .isRegularFileKey,
+            .isSymbolicLinkKey
+        ])
         guard values.isRegularFile == true,
+              values.isSymbolicLink != true,
               let fileSize = values.fileSize,
               Int64(fileSize) == expectedBytes else {
             throw MLXModelDownloadError.unexpectedResponseSize

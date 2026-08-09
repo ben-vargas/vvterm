@@ -28,8 +28,8 @@ struct TranscriptionSettingsKeys {
 
 struct TranscriptionSettingsDefaults {
     static let provider: TranscriptionProvider = .system
-    static let mlxWhisperModelId = "mlx-community/whisper-tiny-mlx"
-    static let mlxParakeetModelId = "mlx-community/parakeet-tdt-0.6b-v2"
+    static let mlxWhisperModelId = MLXModelCatalog.defaultModelID(for: .whisper)
+    static let mlxParakeetModelId = MLXModelCatalog.defaultModelID(for: .parakeetTDT)
     static let language = "en"
     static let autoLanguageCode = "auto"
 }
@@ -61,7 +61,15 @@ struct TranscriptionSettingsStore {
         } else {
             raw = TranscriptionSettingsDefaults.mlxWhisperModelId
         }
-        return normalizedWhisperModelId(raw)
+        let resolution = MLXModelLegacyMigration.resolveModelID(raw, kind: .whisper)
+        if case .migrated = resolution {
+            UserDefaults.standard.set(
+                resolution.modelID,
+                forKey: TranscriptionSettingsKeys.mlxWhisperModelId
+            )
+            UserDefaults.standard.removeObject(forKey: "whisperModelId")
+        }
+        return resolution.modelID
     }
 
     static func currentLanguageCode() -> String {
@@ -82,16 +90,4 @@ struct TranscriptionSettingsStore {
         return TranscriptionSettingsDefaults.mlxParakeetModelId
     }
 
-    private static func normalizedWhisperModelId(_ modelId: String) -> String {
-        let trimmed = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return TranscriptionSettingsDefaults.mlxWhisperModelId }
-        if trimmed == "mlx-community/whisper-medium-mlx" {
-            return "mlx-community/whisper-medium-mlx-8bit"
-        }
-        if trimmed.hasSuffix("-mlx") { return trimmed }
-        if trimmed.hasPrefix("mlx-community/whisper-") {
-            return "\(trimmed)-mlx"
-        }
-        return trimmed
-    }
 }

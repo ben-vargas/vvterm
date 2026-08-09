@@ -26,4 +26,23 @@ final class MLXModelCatalogTests: XCTestCase {
         XCTAssertTrue(MLXModelCatalog.allOptions.contains { $0.kind == .whisper })
         XCTAssertTrue(MLXModelCatalog.allOptions.contains { $0.kind == .parakeetTDT })
     }
+
+    func testEveryVisibleOptionDerivesItsSizeFromTheManifest() throws {
+        for kind in MLXModelKind.allCases {
+            for option in MLXModelCatalog.options(for: kind) {
+                let manifest = try XCTUnwrap(
+                    MLXModelCatalog.downloadManifest(for: option.id, kind: kind)
+                )
+                XCTAssertEqual(option.expectedDownloadBytes, manifest.expectedBytes)
+                XCTAssertEqual(
+                    option.downloadSizeLabel,
+                    ByteCountFormatter.string(
+                        fromByteCount: try XCTUnwrap(manifest.expectedBytes),
+                        countStyle: .file
+                    )
+                )
+            }
+        }
+    }
+
 }

@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import CryptoKit
 import os.log
 
 enum MLXModelKind: String, CaseIterable, Identifiable {
@@ -105,8 +104,10 @@ final class MLXModelManager: NSObject, ObservableObject {
 
     enum DownloadState: Equatable {
         case idle
+        case checkingLegacyDownload
         case downloading(DownloadProgress)
         case ready
+        case updateRequired
         case failed(String)
     }
 
@@ -116,6 +117,7 @@ final class MLXModelManager: NSObject, ObservableObject {
     @Published private(set) var repoSizeBytes: Int64?
     @Published var modelId: String {
         didSet {
+            recordPendingLegacyCleanup(for: oldValue)
             if let activeContext, activeContext.modelID != normalizedModelId {
                 cancelActiveDownload()
             }
@@ -136,6 +138,9 @@ final class MLXModelManager: NSObject, ObservableObject {
     private var downloadStartTime: Date?
     private var storageTask: Task<Void, Never>?
     private var storageOperationID: UUID?
+    private var statusTask: Task<Void, Never>?
+    private var statusOperationID: UUID?
+    private var pendingLegacyCleanup: Set<URL> = []
 
     init(kind: MLXModelKind, modelId: String) {
         self.kind = kind
@@ -190,18 +195,59 @@ final class MLXModelManager: NSObject, ObservableObject {
 
     func refreshStatus() {
         if isModelAvailable {
+            statusTask?.cancel()
             state = .ready
         } else if case .downloading = state {
             return
         } else {
-            state = .idle
+            refreshLegacyDownloadStatus()
         }
         refreshStorageUsage()
         refreshRepoSize()
     }
 
+    private func refreshLegacyDownloadStatus() {
+        statusTask?.cancel()
+        let operationID = UUID()
+        statusOperationID = operationID
+        let root = Self.modelsRoot
+        let kind = kind
+        let modelID = normalizedModelId
+
+        if case .unsupported = MLXModelLegacyMigration.resolveModelID(modelID, kind: kind) {
+            state = .updateRequired
+            return
+        }
+
+        state = .checkingLegacyDownload
+        statusTask = Task.detached { [weak self] in
+            let result = MLXModelLegacyAdopter.adoptIfPossible(
+                root: root,
+                kind: kind,
+                modelID: modelID
+            )
+            guard let self, !Task.isCancelled else { return }
+            await MainActor.run {
+                guard self.statusOperationID == operationID,
+                      self.normalizedModelId == modelID else {
+                    return
+                }
+                switch result {
+                case .adopted:
+                    self.state = .ready
+                case .noLegacyDownload:
+                    self.state = .idle
+                case .updateRequired:
+                    self.state = .updateRequired
+                }
+                self.refreshStorageUsage()
+            }
+        }
+    }
+
     func removeModel() {
         cancelActiveDownload()
+        statusTask?.cancel()
         do {
             if FileManager.default.fileExists(atPath: modelDirectory.path) {
                 try FileManager.default.removeItem(at: modelDirectory)
@@ -214,6 +260,24 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
     }
 
+    func removeIncompatibleDownload() {
+        cancelActiveDownload()
+        statusTask?.cancel()
+        do {
+            try MLXModelLegacyAdopter.removeIncompatibleDownloads(
+                root: Self.modelsRoot,
+                kind: kind,
+                modelID: normalizedModelId
+            )
+            pendingLegacyCleanup.removeAll()
+            state = .idle
+            refreshStorageUsage()
+        } catch {
+            logger.error("Failed to remove incompatible MLX model: \(error.localizedDescription)")
+            state = .failed(String(localized: "Failed to remove model"))
+        }
+    }
+
     static func clearAllStorage() {
         let root = modelsRoot
         guard FileManager.default.fileExists(atPath: root.path) else { return }
@@ -221,6 +285,7 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     func downloadModel() async {
+        statusTask?.cancel()
         let modelId = normalizedModelId
         guard !modelId.isEmpty else {
             state = .failed(String(localized: "Model ID is required"))
@@ -281,7 +346,20 @@ final class MLXModelManager: NSObject, ObservableObject {
                 to: context.stagingDirectory.appendingPathComponent(MLXModelDownloadManifest.markerFilename),
                 options: .atomic
             )
-            try Self.installStagedModel(context)
+            try MLXModelStorageInstaller.install(
+                stagingDirectory: context.stagingDirectory,
+                finalDirectory: context.finalDirectory
+            )
+            try? MLXModelLegacyAdopter.removeIncompatibleDownloads(
+                root: Self.modelsRoot,
+                kind: kind,
+                modelID: modelId
+            )
+            for directory in pendingLegacyCleanup
+                where FileManager.default.fileExists(atPath: directory.path) {
+                try? FileManager.default.removeItem(at: directory)
+            }
+            pendingLegacyCleanup.removeAll()
             guard operationState.finish(operationID: operationID) else { return }
             activeContext = nil
             state = .ready
@@ -295,13 +373,21 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
     }
 
-    static func isModelAvailable(kind: MLXModelKind, modelId: String) -> Bool {
+    nonisolated static func isModelAvailable(kind: MLXModelKind, modelId: String) -> Bool {
+        isModelAvailable(kind: kind, modelId: modelId, modelsRoot: modelsRoot)
+    }
+
+    nonisolated static func isModelAvailable(
+        kind: MLXModelKind,
+        modelId: String,
+        modelsRoot: URL
+    ) -> Bool {
         let normalized = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty,
               let manifest = MLXModelCatalog.downloadManifest(for: normalized, kind: kind) else {
             return false
         }
-        let directory = modelDirectory(for: kind, modelId: normalized)
+        let directory = modelDirectory(for: kind, modelId: normalized, modelsRoot: modelsRoot)
         let marker = directory.appendingPathComponent(MLXModelDownloadManifest.markerFilename)
         guard let revisionData = try? Data(contentsOf: marker),
               String(data: revisionData, encoding: .utf8) == manifest.revision else {
@@ -318,10 +404,15 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     nonisolated static func modelDirectory(for kind: MLXModelKind, modelId: String) -> URL {
-        let sanitized = sanitizeModelId(modelId)
-        return modelsRoot
-            .appendingPathComponent(kind.folderName, isDirectory: true)
-            .appendingPathComponent(sanitized, isDirectory: true)
+        modelDirectory(for: kind, modelId: modelId, modelsRoot: modelsRoot)
+    }
+
+    nonisolated static func modelDirectory(
+        for kind: MLXModelKind,
+        modelId: String,
+        modelsRoot: URL
+    ) -> URL {
+        MLXModelStorageLayout.currentDirectory(root: modelsRoot, kind: kind, modelID: modelId)
     }
 
     nonisolated static func weightFiles(in directory: URL, allowedExtensions: Set<String>) -> [URL] {
@@ -331,7 +422,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         return files.filter { allowedExtensions.contains($0.pathExtension.lowercased()) }
     }
 
-    static func allowedWeightExtensions(for kind: MLXModelKind) -> Set<String> {
+    nonisolated static func allowedWeightExtensions(for kind: MLXModelKind) -> Set<String> {
         return Set(["safetensors", "npz"])
     }
 
@@ -339,12 +430,23 @@ final class MLXModelManager: NSObject, ObservableObject {
         modelId.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    nonisolated private static func sanitizeModelId(_ modelId: String) -> String {
-        let trimmed = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
-        let collapsed = trimmed.isEmpty ? "unknown-model" : trimmed
-        return SHA256.hash(data: Data(collapsed.utf8))
-            .map { String(format: "%02x", $0) }
-            .joined()
+    private func recordPendingLegacyCleanup(for previousModelID: String) {
+        let previous = previousModelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !previous.isEmpty, previous != normalizedModelId else { return }
+
+        for directory in MLXModelStorageLayout.legacyDirectories(
+            root: Self.modelsRoot,
+            kind: kind,
+            modelID: previous
+        ) where FileManager.default.fileExists(atPath: directory.path) {
+            pendingLegacyCleanup.insert(directory)
+        }
+
+        let current = Self.modelDirectory(for: kind, modelId: previous)
+        if FileManager.default.fileExists(atPath: current.path),
+           !Self.isModelAvailable(kind: kind, modelId: previous) {
+            pendingLegacyCleanup.insert(current)
+        }
     }
 
     nonisolated private static func directorySizeBytes(_ directory: URL) -> Int64 {
@@ -373,33 +475,6 @@ final class MLXModelManager: NSObject, ObservableObject {
             throw MLXModelDownloadError.insufficientFreeSpace
         }
         return capacity
-    }
-
-    private static func installStagedModel(_ context: DownloadContext) throws {
-        let fileManager = FileManager.default
-        let backupDirectory = context.finalDirectory
-            .deletingLastPathComponent()
-            .appendingPathComponent(".\(context.finalDirectory.lastPathComponent)-backup", isDirectory: true)
-
-        if fileManager.fileExists(atPath: backupDirectory.path) {
-            try fileManager.removeItem(at: backupDirectory)
-        }
-        if fileManager.fileExists(atPath: context.finalDirectory.path) {
-            try fileManager.moveItem(at: context.finalDirectory, to: backupDirectory)
-        }
-
-        do {
-            try fileManager.moveItem(at: context.stagingDirectory, to: context.finalDirectory)
-            if fileManager.fileExists(atPath: backupDirectory.path) {
-                try? fileManager.removeItem(at: backupDirectory)
-            }
-        } catch {
-            if fileManager.fileExists(atPath: backupDirectory.path),
-               !fileManager.fileExists(atPath: context.finalDirectory.path) {
-                try? fileManager.moveItem(at: backupDirectory, to: context.finalDirectory)
-            }
-            throw error
-        }
     }
 
     func refreshStorageUsage() {
