@@ -3,6 +3,32 @@ import Foundation
 import Combine
 import os.log
 
+struct StoreEntitlementSnapshot {
+    static let free = StoreEntitlementSnapshot(
+        hasStoreAccess: false,
+        hasLifetimeAccess: false,
+        subscriptionStatus: nil
+    )
+
+    let hasStoreAccess: Bool
+    let hasLifetimeAccess: Bool
+    let subscriptionStatus: Product.SubscriptionInfo.Status?
+
+    func hasProAccess(reviewModeEnabled: Bool) -> Bool {
+        hasStoreAccess || reviewModeEnabled
+    }
+
+    func isLifetimeAccessActive(reviewModeEnabled: Bool) -> Bool {
+        !reviewModeEnabled && hasLifetimeAccess
+    }
+
+    func visibleSubscriptionStatus(
+        reviewModeEnabled: Bool
+    ) -> Product.SubscriptionInfo.Status? {
+        reviewModeEnabled ? nil : subscriptionStatus
+    }
+}
+
 // MARK: - Store Manager
 
 @MainActor
@@ -10,9 +36,7 @@ final class StoreManager: ObservableObject {
     static let shared = StoreManager()
     static let reviewModeCode = ReviewModeCode.value
 
-    @Published var isPro: Bool = false
-    @Published var isLifetime: Bool = false
-    @Published var subscriptionStatus: Product.SubscriptionInfo.Status?
+    @Published private(set) var entitlementSnapshot = StoreEntitlementSnapshot.free
     @Published var products: [Product] = []
     @Published var purchaseState: PurchaseState = .idle
     @Published var restoreState: RestoreState = .idle
@@ -26,6 +50,18 @@ final class StoreManager: ObservableObject {
     private var reviewModeExpiresAt: Date?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "Store")
     private let reviewModeDuration: TimeInterval = 60 * 60 * 5
+
+    var isPro: Bool {
+        entitlementSnapshot.hasProAccess(reviewModeEnabled: isReviewModeEnabled)
+    }
+
+    var isLifetime: Bool {
+        entitlementSnapshot.isLifetimeAccessActive(reviewModeEnabled: isReviewModeEnabled)
+    }
+
+    var subscriptionStatus: Product.SubscriptionInfo.Status? {
+        entitlementSnapshot.visibleSubscriptionStatus(reviewModeEnabled: isReviewModeEnabled)
+    }
 
     // MARK: - Sorted Products
 
@@ -290,9 +326,6 @@ final class StoreManager: ObservableObject {
         isReviewModeEnabled = enabled
 
         if enabled {
-            isPro = true
-            isLifetime = false
-            subscriptionStatus = nil
             reviewModeExpiresAt = Date().addingTimeInterval(reviewModeDuration)
             scheduleReviewModeExpiry()
             logger.info("Review mode enabled")
@@ -349,12 +382,28 @@ final class StoreManager: ObservableObject {
         hasLifetime: Bool,
         status: Product.SubscriptionInfo.Status?
     ) {
-        isPro = hasAccess || isReviewModeEnabled
-        isLifetime = hasLifetime
-        subscriptionStatus = status
+        entitlementSnapshot = StoreEntitlementSnapshot(
+            hasStoreAccess: hasAccess,
+            hasLifetimeAccess: hasLifetime,
+            subscriptionStatus: status
+        )
         AnalyticsTracker.shared.trackAppLaunched(isPro: isPro)
         logger.info("Entitlements checked: isPro=\(hasAccess), isLifetime=\(hasLifetime), reviewMode=\(self.isReviewModeEnabled)")
     }
+
+    #if DEBUG
+    func setProAccessForTesting(_ enabled: Bool) {
+        entitlementSnapshot = StoreEntitlementSnapshot(
+            hasStoreAccess: enabled,
+            hasLifetimeAccess: false,
+            subscriptionStatus: nil
+        )
+    }
+
+    func setEntitlementSnapshotForTesting(_ snapshot: StoreEntitlementSnapshot) {
+        entitlementSnapshot = snapshot
+    }
+    #endif
 }
 
 private extension Product.SubscriptionPeriod {

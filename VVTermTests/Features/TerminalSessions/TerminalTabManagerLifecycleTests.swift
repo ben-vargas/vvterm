@@ -1396,9 +1396,9 @@ struct TerminalTabManagerLifecycleTests {
     @Test
     func splitPaneUsesLatestManagerStateWhenViewTabIsStale() async {
         await withCleanManager { manager in
-            let wasPro = StoreManager.shared.isPro
-            StoreManager.shared.isPro = true
-            defer { StoreManager.shared.isPro = wasPro }
+            let previousEntitlements = StoreManager.shared.entitlementSnapshot
+            StoreManager.shared.setProAccessForTesting(true)
+            defer { StoreManager.shared.setEntitlementSnapshotForTesting(previousEntitlements) }
 
             let tab = TerminalTab(serverId: UUID(), title: "Split")
             installTab(tab, in: manager)
@@ -1425,9 +1425,9 @@ struct TerminalTabManagerLifecycleTests {
     @Test
     func focusingPaneUsesLatestManagerStateWhenViewTabIsStale() async {
         await withCleanManager { manager in
-            let wasPro = StoreManager.shared.isPro
-            StoreManager.shared.isPro = true
-            defer { StoreManager.shared.isPro = wasPro }
+            let previousEntitlements = StoreManager.shared.entitlementSnapshot
+            StoreManager.shared.setProAccessForTesting(true)
+            defer { StoreManager.shared.setEntitlementSnapshotForTesting(previousEntitlements) }
 
             let staleTab = TerminalTab(serverId: UUID(), title: "Focus stale tab")
             installTab(staleTab, in: manager, connectionState: .connected)
@@ -1461,9 +1461,9 @@ struct TerminalTabManagerLifecycleTests {
     @Test
     func splitKeyboardCommandsNavigateZoomAndResizeLatestLayout() async {
         await withCleanManager { manager in
-            let wasPro = StoreManager.shared.isPro
-            StoreManager.shared.isPro = true
-            defer { StoreManager.shared.isPro = wasPro }
+            let previousEntitlements = StoreManager.shared.entitlementSnapshot
+            StoreManager.shared.setProAccessForTesting(true)
+            defer { StoreManager.shared.setEntitlementSnapshotForTesting(previousEntitlements) }
 
             let staleTab = TerminalTab(serverId: UUID(), title: "Keyboard splits")
             installTab(staleTab, in: manager, connectionState: .connected)
@@ -1519,9 +1519,9 @@ struct TerminalTabManagerLifecycleTests {
     @Test
     func splitCreationCommandReportsUpgradeRequirement() async {
         await withCleanManager { manager in
-            let wasPro = StoreManager.shared.isPro
-            StoreManager.shared.isPro = false
-            defer { StoreManager.shared.isPro = wasPro }
+            let previousEntitlements = StoreManager.shared.entitlementSnapshot
+            StoreManager.shared.setProAccessForTesting(false)
+            defer { StoreManager.shared.setEntitlementSnapshotForTesting(previousEntitlements) }
 
             let tab = TerminalTab(serverId: UUID(), title: "Free split")
             installTab(tab, in: manager, connectionState: .connected)
@@ -1534,9 +1534,9 @@ struct TerminalTabManagerLifecycleTests {
     @Test
     func closingSplitPaneKeepsSiblingConnected() async {
         await withCleanManager { manager in
-            let wasPro = StoreManager.shared.isPro
-            StoreManager.shared.isPro = true
-            defer { StoreManager.shared.isPro = wasPro }
+            let previousEntitlements = StoreManager.shared.entitlementSnapshot
+            StoreManager.shared.setProAccessForTesting(true)
+            defer { StoreManager.shared.setEntitlementSnapshotForTesting(previousEntitlements) }
 
             let tab = TerminalTab(serverId: UUID(), title: "Close split")
             installTab(tab, in: manager, connectionState: .connected)
@@ -1558,9 +1558,9 @@ struct TerminalTabManagerLifecycleTests {
     @Test
     func closeTabUsesLatestManagerStateWhenViewTabIsStale() async {
         await withCleanManager { manager in
-            let wasPro = StoreManager.shared.isPro
-            StoreManager.shared.isPro = true
-            defer { StoreManager.shared.isPro = wasPro }
+            let previousEntitlements = StoreManager.shared.entitlementSnapshot
+            StoreManager.shared.setProAccessForTesting(true)
+            defer { StoreManager.shared.setEntitlementSnapshotForTesting(previousEntitlements) }
 
             let tab = TerminalTab(serverId: UUID(), title: "Close stale tab")
             installTab(tab, in: manager, connectionState: .connected)

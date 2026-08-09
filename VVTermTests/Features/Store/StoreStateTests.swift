@@ -3,7 +3,32 @@ import StoreKit
 import StoreKitTest
 @testable import VVTerm
 
+@MainActor
 final class StoreStateTests: XCTestCase {
+    func testEntitlementSnapshotDerivesFreeAndProAccess() {
+        let free = StoreEntitlementSnapshot.free
+        let paid = StoreEntitlementSnapshot(
+            hasStoreAccess: true,
+            hasLifetimeAccess: false,
+            subscriptionStatus: nil
+        )
+
+        XCTAssertFalse(free.hasProAccess(reviewModeEnabled: false))
+        XCTAssertTrue(paid.hasProAccess(reviewModeEnabled: false))
+    }
+
+    func testReviewModeMasksLifetimeAndSubscriptionPresentation() {
+        let lifetime = StoreEntitlementSnapshot(
+            hasStoreAccess: true,
+            hasLifetimeAccess: true,
+            subscriptionStatus: nil
+        )
+
+        XCTAssertTrue(lifetime.hasProAccess(reviewModeEnabled: true))
+        XCTAssertFalse(lifetime.isLifetimeAccessActive(reviewModeEnabled: true))
+        XCTAssertNil(lifetime.visibleSubscriptionStatus(reviewModeEnabled: true))
+    }
+
     func testPurchaseStateEqualityMatchesAssociatedMessage() {
         XCTAssertEqual(PurchaseState.failed("A"), PurchaseState.failed("A"))
         XCTAssertNotEqual(PurchaseState.failed("A"), PurchaseState.failed("B"))

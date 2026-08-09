@@ -273,7 +273,9 @@ struct TerminalReconnectUITestHarness: View {
             }
 
             if usesColdRelaunchHarness {
-                StoreManager.shared.isPro = true
+                #if DEBUG
+                StoreManager.shared.setProAccessForTesting(true)
+                #endif
             }
             if !usesColdRelaunchHarness || seedsColdRelaunchHarness {
                 let firstTab = try await tabManager.openTab(for: server)
