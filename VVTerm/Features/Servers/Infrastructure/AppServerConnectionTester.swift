@@ -4,6 +4,47 @@ import MoshBootstrap
 
 extension KnownHostsManager: ServerHostKeyRepository {}
 
+nonisolated enum ServerConnectionTestPlan: Equatable, Sendable {
+    case sshOnly
+    case mosh(portRange: ClosedRange<Int>)
+    case eternalTerminal(port: UInt16)
+
+    init(server: Server) {
+        switch server.connectionMode {
+        case .standard, .tailscale, .cloudflare:
+            self = .sshOnly
+        case .mosh:
+            self = .mosh(portRange: 60_001...61_000)
+        case .eternalTerminal:
+            let port = server.eternalTerminalPort
+            let resolvedPort: UInt16 = (1...Int(UInt16.max)).contains(port) ? UInt16(port) : 2_022
+            self = .eternalTerminal(port: resolvedPort)
+        }
+    }
+}
+
+nonisolated enum ServerConnectionApprovalRequirement: Equatable, Sendable {
+    case credentialEndpoint
+    case hostKey(host: String, port: Int)
+}
+
+nonisolated enum ServerConnectionApprovalPolicy {
+    static func requirement(
+        for error: Error,
+        server: Server
+    ) -> ServerConnectionApprovalRequirement? {
+        if let credentialError = error as? ServerCredentialAccessError,
+           credentialError == .approvalRequired {
+            return .credentialEndpoint
+        }
+        if let sshError = error as? SSHError,
+           case .hostKeyApprovalRequired = sshError {
+            return .hostKey(host: server.host, port: server.port)
+        }
+        return nil
+    }
+}
+
 @MainActor
 struct ServerFormDependencies {
     let credentials: any ServerCredentialRepository
@@ -14,7 +55,10 @@ struct ServerFormDependencies {
         let hostKeys = KnownHostsManager.shared
         return Self(
             credentials: KeychainManager.shared,
-            connectionTester: AppServerConnectionTester(hostKeys: hostKeys),
+            connectionTester: AppServerConnectionTester(
+                hostKeys: hostKeys,
+                now: Date.init
+            ),
             hostKeys: hostKeys
         )
     }
@@ -22,12 +66,18 @@ struct ServerFormDependencies {
 
 nonisolated final class AppServerConnectionTester: ServerConnectionTesting, @unchecked Sendable {
     private let hostKeys: any ServerHostKeyRepository
+    private let now: @Sendable () -> Date
 
-    init(hostKeys: any ServerHostKeyRepository) {
+    init(
+        hostKeys: any ServerHostKeyRepository,
+        now: @escaping @Sendable () -> Date
+    ) {
         self.hostKeys = hostKeys
+        self.now = now
     }
 
     func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult {
+        let plan = ServerConnectionTestPlan(server: server)
         do {
             try Task.checkCancellation()
             try await SSHConnectionOperationService.shared.withTemporaryConnection(
@@ -35,11 +85,14 @@ nonisolated final class AppServerConnectionTester: ServerConnectionTesting, @unc
                 credentials: credentials
             ) { client in
                 try Task.checkCancellation()
-                if server.connectionMode == .mosh {
+                switch plan {
+                case .sshOnly:
+                    break
+                case .mosh(let portRange):
                     let connectInfo = try await RemoteMoshManager.shared.bootstrapConnectInfo(
                         using: client,
                         startCommand: "exec true",
-                        portRange: 60_001...61_000
+                        portRange: portRange
                     )
                     await RemoteMoshManager.terminateBootstrappedServer(
                         pid: connectInfo.serverPID,
@@ -52,10 +105,10 @@ nonisolated final class AppServerConnectionTester: ServerConnectionTesting, @unc
                             )
                         }
                     )
-                } else if server.connectionMode == .eternalTerminal {
+                case .eternalTerminal(let port):
                     let session = ETTerminalSession(
                         host: server.host,
-                        port: UInt16(exactly: server.eternalTerminalPort) ?? 2_022,
+                        port: port,
                         bootstrapExecutor: SSHETBootstrapExecutor(connectedClient: client),
                         bootstrapOptions: SSHETBootstrapExecutor.bootstrapOptions
                     )
@@ -101,12 +154,12 @@ nonisolated final class AppServerConnectionTester: ServerConnectionTesting, @unc
         } else {
             requiresCloudflareOverrides = false
         }
-        if let sshError = error as? SSHError,
-           case .hostKeyApprovalRequired = sshError {
+        if let approval = ServerConnectionApprovalPolicy.requirement(for: error, server: server),
+           case .hostKey(let host, let port) = approval {
             hostKeyChallenge = hostKeys.pendingChallenge(
-                for: server.host,
-                port: server.port,
-                now: Date()
+                for: host,
+                port: port,
+                now: now()
             )
         } else {
             hostKeyChallenge = nil
