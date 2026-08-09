@@ -158,12 +158,16 @@ final class ServerStatsDomainTests: XCTestCase {
     }
 
     func testStatsPreferencesDefaultStyleIsCardsDetailed() {
-        XCTAssertEqual(StatsPreferences.defaultValue.style, .cardsDetailed)
+        XCTAssertEqual(
+            StatsPreferences.defaultValue(lastWriterDeviceId: "test").style,
+            .cardsDetailed
+        )
     }
 
     func testStatsPreferencesDefaultBlocksIncludeDockerVisible() {
-        XCTAssertTrue(StatsPreferences.defaultValue.visibleBlocks.contains(.docker))
-        XCTAssertTrue(StatsPreferences.defaultValue.isBlockVisible(.docker))
+        let preferences = StatsPreferences.defaultValue(lastWriterDeviceId: "test")
+        XCTAssertTrue(preferences.visibleBlocks.contains(.docker))
+        XCTAssertTrue(preferences.isBlockVisible(.docker))
     }
 
     func testStatsPreferencesNormalizeDeduplicatesAndReindexesBlocks() {

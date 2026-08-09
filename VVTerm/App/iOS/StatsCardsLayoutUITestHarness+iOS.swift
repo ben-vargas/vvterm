@@ -54,7 +54,7 @@ struct StatsCardsLayoutUITestHarness: View {
     }
 
     private var preferences: StatsPreferences {
-        var preferences = StatsPreferences.defaultValue
+        var preferences = StatsPreferences.defaultValue(lastWriterDeviceId: "ui-test")
         preferences.style = style
         return preferences
     }

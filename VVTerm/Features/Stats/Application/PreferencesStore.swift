@@ -10,6 +10,7 @@ import AppKit
 @MainActor
 final class PreferencesStore: ObservableObject {
     static let shared = PreferencesStore()
+    static let defaultsKey = CloudKitSyncConstants.statsPreferencesStorageKey
 
     @Published private(set) var preferences: StatsPreferences
 
@@ -156,32 +157,39 @@ final class PreferencesStore: ObservableObject {
     private func persistPreferences() {
         do {
             let encoded = try JSONEncoder().encode(preferences)
-            defaults.set(encoded, forKey: StatsPreferences.defaultsKey)
+            defaults.set(encoded, forKey: Self.defaultsKey)
         } catch {
             logger.error("Failed to encode stats preferences: \(error.localizedDescription)")
         }
     }
 
     private static func loadPreferences(from defaults: UserDefaults) -> StatsPreferences {
-        guard let data = defaults.data(forKey: StatsPreferences.defaultsKey) else {
-            let defaultPreferences = StatsPreferences.defaultValue.normalized()
+        guard let data = defaults.data(forKey: Self.defaultsKey) else {
+            let defaultPreferences = StatsPreferences
+                .defaultValue(lastWriterDeviceId: DeviceIdentity.id)
+                .normalized()
             if let encoded = try? JSONEncoder().encode(defaultPreferences) {
-                defaults.set(encoded, forKey: StatsPreferences.defaultsKey)
+                defaults.set(encoded, forKey: Self.defaultsKey)
             }
             return defaultPreferences
         }
 
         do {
-            let decoded = try JSONDecoder().decode(StatsPreferences.self, from: data)
+            var decoded = try JSONDecoder().decode(StatsPreferences.self, from: data)
+            if decoded.lastWriterDeviceId.isEmpty {
+                decoded.lastWriterDeviceId = DeviceIdentity.id
+            }
             let normalized = decoded.normalized()
             if normalized != decoded, let encoded = try? JSONEncoder().encode(normalized) {
-                defaults.set(encoded, forKey: StatsPreferences.defaultsKey)
+                defaults.set(encoded, forKey: Self.defaultsKey)
             }
             return normalized
         } catch {
-            let defaultPreferences = StatsPreferences.defaultValue.normalized()
+            let defaultPreferences = StatsPreferences
+                .defaultValue(lastWriterDeviceId: DeviceIdentity.id)
+                .normalized()
             if let encoded = try? JSONEncoder().encode(defaultPreferences) {
-                defaults.set(encoded, forKey: StatsPreferences.defaultsKey)
+                defaults.set(encoded, forKey: Self.defaultsKey)
             }
             return defaultPreferences
         }
