@@ -3,7 +3,8 @@ import SwiftUI
 // MARK: - Server Sidebar View (macOS)
 
 struct ServerSidebarView: View {
-    @ObservedObject var serverManager: ServerManager
+    let serverManager: ServerManager
+    @ObservedObject private var stateStore: ServerStateStore
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedServer: Server?
 
@@ -41,6 +42,7 @@ struct ServerSidebarView: View {
         selectedServer: Binding<Server?>
     ) {
         self.serverManager = serverManager
+        _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
         _tabManager = ObservedObject(wrappedValue: tabManager)
         _selectedWorkspace = selectedWorkspace
         _selectedServer = selectedServer
@@ -49,7 +51,7 @@ struct ServerSidebarView: View {
     // MARK: - Filter State
 
     private var canAddServer: Bool {
-        !serverManager.workspaces.isEmpty
+        !stateStore.workspaces.isEmpty
     }
 
     private var selectedEnvironmentIds: Set<UUID> {
@@ -91,7 +93,7 @@ struct ServerSidebarView: View {
         )
         let reconciled = WorkspaceSelectionPolicy.reconciledEnvironmentFilters(
             stored: migrated,
-            workspaces: serverManager.workspaces
+            workspaces: stateStore.workspaces
         )
         if reconciled != storedEnvironmentFilters {
             storedEnvironmentFilters = reconciled
@@ -125,13 +127,13 @@ struct ServerSidebarView: View {
 
     private var serverCount: Int {
         guard let workspace = selectedWorkspace else { return 0 }
-        return serverManager.servers.filter { $0.workspaceId == workspace.id }.count
+        return stateStore.servers.filter { $0.workspaceId == workspace.id }.count
     }
 
     var filteredServers: [Server] {
         guard let workspace = selectedWorkspace else { return [] }
 
-        var servers = serverManager.servers.filter { $0.workspaceId == workspace.id }
+        var servers = stateStore.servers.filter { $0.workspaceId == workspace.id }
 
         // Apply environment filter
         if isEnvironmentFiltering {
@@ -176,7 +178,7 @@ struct ServerSidebarView: View {
             .padding(.top, 12)
             .padding(.bottom, 4)
 
-            ServerLocalStorageNotice(serverManager: serverManager)
+            ServerLocalStorageNotice(stateStore: stateStore)
 
             if environmentFiltersVisible {
                 environmentFilterInline
@@ -205,7 +207,7 @@ struct ServerSidebarView: View {
                                 tabManager: tabManager,
                                 server: server,
                                 isSelected: selectedServer?.id == server.id,
-                                isLocked: serverManager.isServerLocked(
+                                isLocked: stateStore.isServerLocked(
                                     server,
                                     hasProAccess: storeManager.isPro
                                 ),
@@ -387,7 +389,7 @@ struct ServerSidebarView: View {
             guard showingWorkspaceSwitcher else { return }
             dismissWorkspacePickerForPendingPrefilledAddServerIfNeeded()
         }
-        .onChange(of: serverManager.workspaces) { _ in
+        .onChange(of: stateStore.workspaces) { _ in
             reconcileEnvironmentFilters()
         }
         .onAppear {
@@ -726,7 +728,7 @@ struct ServerSidebarView: View {
         let movedAcrossWorkspaces = originalServer.workspaceId != server.workspaceId
 
         if movedAcrossWorkspaces,
-           let destinationWorkspace = serverManager.workspace(withId: server.workspaceId) {
+           let destinationWorkspace = stateStore.workspace(withID: server.workspaceId) {
             selectedWorkspace = destinationWorkspace
             selectedServer = server
             return
@@ -765,7 +767,7 @@ struct ServerSidebarView: View {
                 Text("No servers found.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-            } else if serverManager.workspaces.isEmpty {
+            } else if stateStore.workspaces.isEmpty {
                 Image(systemName: "folder")
                     .font(.system(size: 32))
                     .foregroundStyle(.tertiary)

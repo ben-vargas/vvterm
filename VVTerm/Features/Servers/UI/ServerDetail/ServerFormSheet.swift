@@ -36,7 +36,8 @@ extension ServerTransportSelection {
 // MARK: - Server Form Sheet
 
 struct ServerFormSheet: View {
-    @ObservedObject var serverManager: ServerManager
+    let serverManager: ServerManager
+    @ObservedObject private var stateStore: ServerStateStore
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var appLockManager: AppLockManager
     let workspace: Workspace?
@@ -85,6 +86,7 @@ struct ServerFormSheet: View {
         onSave: @escaping (Server) -> Void
     ) {
         self.serverManager = serverManager
+        _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
         self.workspace = workspace
         self.server = server
         self.prefill = prefill
@@ -124,15 +126,15 @@ struct ServerFormSheet: View {
     }
 
     private var serverCount: Int {
-        serverManager.servers.count
+        stateStore.servers.count
     }
 
     private var isAtLimit: Bool {
-        !isEditing && !serverManager.canAddServer(hasProAccess: storeManager.isPro)
+        !isEditing && !stateStore.canAddServer(hasProAccess: storeManager.isPro)
     }
 
     private var assignmentWorkspaces: [Workspace] {
-        serverManager.assignmentWorkspaces(for: server, hasProAccess: storeManager.isPro)
+        stateStore.assignmentWorkspaces(for: server, hasProAccess: storeManager.isPro)
     }
 
     private var selectedWorkspace: Workspace? {
@@ -148,11 +150,11 @@ struct ServerFormSheet: View {
         guard let server,
               let selectedWorkspace,
               selectedWorkspace.id != server.workspaceId,
-              serverManager.moveRequiresEnvironmentFallback(server, destination: selectedWorkspace) else {
+              stateStore.moveRequiresEnvironmentFallback(server, destination: selectedWorkspace) else {
             return nil
         }
 
-        let resolvedEnvironment = serverManager.resolvedEnvironment(
+        let resolvedEnvironment = stateStore.resolvedEnvironment(
             for: server,
             destination: selectedWorkspace,
             preferredEnvironment: form.environment
@@ -171,7 +173,7 @@ struct ServerFormSheet: View {
             return nil
         }
 
-        if serverManager.workspaces.count <= 1 {
+        if stateStore.workspaces.count <= 1 {
             if isEditing {
                 return String(localized: "No additional workspaces yet. Create one to move this server.")
             }
@@ -398,7 +400,7 @@ struct ServerFormSheet: View {
                 Picker("Workspace", selection: $form.workspaceID) {
                     ForEach(assignmentWorkspaces) { workspace in
                         HStack(spacing: 8) {
-                            if serverManager.isWorkspaceLocked(workspace, hasProAccess: storeManager.isPro) {
+                            if stateStore.isWorkspaceLocked(workspace, hasProAccess: storeManager.isPro) {
                                 Image(systemName: "lock.fill")
                                     .foregroundStyle(.secondary)
                             } else {
@@ -416,7 +418,7 @@ struct ServerFormSheet: View {
                 LabeledContent("Workspace") {
                     if let selectedWorkspace {
                         HStack(spacing: 8) {
-                            if serverManager.isWorkspaceLocked(selectedWorkspace, hasProAccess: storeManager.isPro) {
+                            if stateStore.isWorkspaceLocked(selectedWorkspace, hasProAccess: storeManager.isPro) {
                                 Image(systemName: "lock.fill")
                                     .foregroundStyle(.secondary)
                             } else {
@@ -477,7 +479,7 @@ struct ServerFormSheet: View {
                     title: String(localized: "Server Limit Reached"),
                     message: String(
                         format: String(localized: "You've reached the free limit of %@. Pro unlocks unlimited servers, connections, and split panes."),
-                        FreeTierLimits.serverLimitDescription(serverManager.freeServerLimit)
+                        FreeTierLimits.serverLimitDescription(stateStore.freeServerLimit)
                     )
                 ) {
                     showingServerLimitAlert = true
@@ -487,7 +489,7 @@ struct ServerFormSheet: View {
             Section {
                 UsageIndicator(
                     current: serverCount,
-                    limit: serverManager.freeServerLimit,
+                    limit: stateStore.freeServerLimit,
                     label: String(localized: "Servers"),
                     showUpgrade: $showingServerLimitAlert
                 )
@@ -849,7 +851,7 @@ struct ServerFormSheet: View {
             id: id,
             workspaceID: selectedWorkspace?.id
                 ?? assignmentWorkspaces.first?.id
-                ?? serverManager.workspaces.first?.id
+                ?? stateStore.workspaces.first?.id
                 ?? UUID(),
             createdAt: createdAt
         )
@@ -991,7 +993,8 @@ struct ServerFormSheet: View {
 }
 
 struct MoveServerSheet: View {
-    @ObservedObject var serverManager: ServerManager
+    let serverManager: ServerManager
+    @ObservedObject private var stateStore: ServerStateStore
     @EnvironmentObject private var storeManager: StoreManager
     let server: Server
     let preferredDestination: Workspace?
@@ -1013,6 +1016,7 @@ struct MoveServerSheet: View {
         onMove: @escaping (Server) -> Void
     ) {
         self.serverManager = serverManager
+        _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
         self.server = server
         self.preferredDestination = preferredDestination
         self.onMove = onMove
@@ -1021,11 +1025,11 @@ struct MoveServerSheet: View {
     }
 
     private var currentWorkspace: Workspace? {
-        serverManager.workspace(withId: server.workspaceId)
+        stateStore.workspace(withID: server.workspaceId)
     }
 
     private var destinationWorkspaces: [Workspace] {
-        let destinations = serverManager.moveDestinations(
+        let destinations = stateStore.moveDestinations(
             for: server,
             hasProAccess: storeManager.isPro
         )
@@ -1055,7 +1059,7 @@ struct MoveServerSheet: View {
     }
 
     private var destinationAvailabilityNotice: String {
-        if serverManager.workspaces.count <= 1 {
+        if stateStore.workspaces.count <= 1 {
             if storeManager.isPro {
                 return String(localized: "No additional workspaces yet. Create one to move this server.")
             }
@@ -1068,11 +1072,11 @@ struct MoveServerSheet: View {
 
     private var environmentNotice: String? {
         guard let selectedDestination,
-              serverManager.moveRequiresEnvironmentFallback(server, destination: selectedDestination) else {
+              stateStore.moveRequiresEnvironmentFallback(server, destination: selectedDestination) else {
             return nil
         }
 
-        let resolvedEnvironment = serverManager.resolvedEnvironment(
+        let resolvedEnvironment = stateStore.resolvedEnvironment(
             for: server,
             destination: selectedDestination,
             preferredEnvironment: selectedEnvironment
@@ -1211,7 +1215,7 @@ struct MoveServerSheet: View {
 
         guard let selectedDestination else { return }
 
-        selectedEnvironment = serverManager.resolvedEnvironment(
+        selectedEnvironment = stateStore.resolvedEnvironment(
             for: server,
             destination: selectedDestination,
             preferredEnvironment: selectedEnvironment

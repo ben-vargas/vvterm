@@ -1,10 +1,14 @@
 import SwiftUI
 
 struct ServerLocalStorageNotice: View {
-    @ObservedObject var serverManager: ServerManager
+    @ObservedObject var stateStore: ServerStateStore
+
+    init(stateStore: ServerStateStore) {
+        _stateStore = ObservedObject(wrappedValue: stateStore)
+    }
 
     var body: some View {
-        if !serverManager.localStorageIssues.isEmpty {
+        if !stateStore.localStorageIssues.isEmpty {
             NoticeBannerView(
                 item: NoticeItem(
                     id: "server-local-storage-unreadable",
@@ -13,7 +17,7 @@ struct ServerLocalStorageNotice: View {
                     leading: .icon("externaldrive.badge.exclamationmark"),
                     title: String(localized: "Local data could not be read"),
                     message: String(localized: "VVTerm preserved a backup before using replacement data."),
-                    dismissAction: serverManager.dismissLocalStorageIssues
+                    dismissAction: stateStore.dismissLocalStorageIssues
                 )
             )
             .frame(maxWidth: .infinity)

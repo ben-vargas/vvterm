@@ -51,16 +51,27 @@ extension AnalyticsTracker: FreePlanAssignmentTracking {}
 
 extension ServerManagerDependencies {
     static var live: Self {
+        let stateStore = ServerStateStore(
+            dependencies: ServerStateStoreDependencies(
+                localRepository: ServerLocalStore(),
+                preferences: ServerManagerUserDefaultsPreferences(),
+                freePlanTracker: AnalyticsTracker.shared,
+                isSyncEnabled: { SyncSettings.isEnabled },
+                now: Date.init,
+                makeID: UUID.init,
+                defaultWorkspaceName: { AppLanguage.localizedString("My Servers") },
+                canonicalDefaultWorkspaceNames: {
+                    Set(AppLanguage.localizedValues(for: "My Servers"))
+                }
+            )
+        )
         Self(
-            localRepository: ServerLocalStore(),
+            stateStore: stateStore,
             remoteRepository: CloudKitManager.shared,
             syncRepository: CloudKitSyncCoordinator.shared,
             credentialRepository: KeychainManager.shared,
             actionAuthorizer: AppLockManager.shared,
             knownHosts: KnownHostsManager.shared,
-            freePlanTracker: AnalyticsTracker.shared,
-            preferences: ServerManagerUserDefaultsPreferences(),
-            isSyncEnabled: { SyncSettings.isEnabled },
             isRemoteSchemaError: CloudKitManager.isSchemaError,
             now: Date.init,
             makeID: UUID.init

@@ -3,7 +3,8 @@ import SwiftUI
 // MARK: - Workspace Form Sheet (Create/Edit)
 
 struct WorkspaceFormSheet: View {
-    @ObservedObject var serverManager: ServerManager
+    let serverManager: ServerManager
+    @ObservedObject private var stateStore: ServerStateStore
     let workspace: Workspace?
     let onSave: (Workspace) -> Void
 
@@ -20,7 +21,7 @@ struct WorkspaceFormSheet: View {
     private var isEditing: Bool { workspace != nil }
 
     private var isAtLimit: Bool {
-        !isEditing && !serverManager.canAddWorkspace(hasProAccess: storeManager.isPro)
+        !isEditing && !stateStore.canAddWorkspace(hasProAccess: storeManager.isPro)
     }
 
     let availableColors: [Color] = [
@@ -33,6 +34,7 @@ struct WorkspaceFormSheet: View {
         onSave: @escaping (Workspace) -> Void
     ) {
         self.serverManager = serverManager
+        _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
         self.workspace = workspace
         self.onSave = onSave
 
@@ -161,7 +163,7 @@ struct WorkspaceFormSheet: View {
                     name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                     colorHex: colorHex,
                     icon: workspace?.icon,
-                    order: workspace?.order ?? serverManager.workspaces.count,
+                    order: workspace?.order ?? stateStore.workspaces.count,
                     environments: workspace?.environments ?? ServerEnvironment.builtInEnvironments,
                     lastSelectedEnvironmentId: workspace?.lastSelectedEnvironmentId,
                     lastSelectedServerId: workspace?.lastSelectedServerId,
@@ -220,7 +222,7 @@ struct WorkspaceFormSheet: View {
         guard let workspace else {
             return String(localized: "This will delete the workspace and all servers in it. This cannot be undone.")
         }
-        let count = serverManager.servers(in: workspace, environment: nil).count
+        let count = stateStore.servers(in: workspace, environment: nil).count
         if count == 0 {
             return String(localized: "This will delete the workspace. This cannot be undone.")
         }

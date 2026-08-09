@@ -8,7 +8,7 @@ struct ServerManagerBootstrapTests {
     @Test
     func bootstrapCreationRunsOnlyBeforeAnyFirstRunMarkerExists() {
         #expect(
-            ServerManager.shouldCreateBootstrapWorkspace(
+            ServerStateStore.shouldCreateBootstrapWorkspace(
                 didBootstrapDefaultWorkspace: false,
                 hasSeenWelcome: false,
                 hasLocalWorkspaces: false
@@ -19,21 +19,21 @@ struct ServerManagerBootstrapTests {
     @Test
     func bootstrapCreationIsBlockedByEitherBootstrapFlagOrWelcomeFlag() {
         #expect(
-            !ServerManager.shouldCreateBootstrapWorkspace(
+            !ServerStateStore.shouldCreateBootstrapWorkspace(
                 didBootstrapDefaultWorkspace: true,
                 hasSeenWelcome: false,
                 hasLocalWorkspaces: false
             )
         )
         #expect(
-            !ServerManager.shouldCreateBootstrapWorkspace(
+            !ServerStateStore.shouldCreateBootstrapWorkspace(
                 didBootstrapDefaultWorkspace: false,
                 hasSeenWelcome: true,
                 hasLocalWorkspaces: false
             )
         )
         #expect(
-            !ServerManager.shouldCreateBootstrapWorkspace(
+            !ServerStateStore.shouldCreateBootstrapWorkspace(
                 didBootstrapDefaultWorkspace: false,
                 hasSeenWelcome: false,
                 hasLocalWorkspaces: true
@@ -65,7 +65,7 @@ struct ServerManagerBootstrapTests {
             username: "root"
         )
 
-        let candidates = ServerManager.backfillCandidates(
+        let candidates = ServerStateStore.backfillCandidates(
             localWorkspaces: [bootstrapWorkspace, remoteWorkspace],
             localServers: [bootstrapServer, remoteServer],
             cloudWorkspaceIDs: [remoteWorkspace.id],
@@ -84,7 +84,12 @@ struct ServerManagerBootstrapTests {
             order: 0
         )
 
-        #expect(ServerManager.isCanonicalDefaultWorkspaceCandidate(localizedWorkspace))
+        #expect(
+            ServerStateStore.isCanonicalDefaultWorkspaceCandidate(
+                localizedWorkspace,
+                canonicalNames: Set(AppLanguage.localizedValues(for: "My Servers"))
+            )
+        )
     }
 
     @Test
@@ -95,7 +100,7 @@ struct ServerManagerBootstrapTests {
             order: 0
         )
 
-        let candidates = ServerManager.backfillCandidates(
+        let candidates = ServerStateStore.backfillCandidates(
             localWorkspaces: [bootstrapWorkspace],
             localServers: [],
             cloudWorkspaceIDs: [],
@@ -118,7 +123,7 @@ struct ServerManagerBootstrapTests {
         )
         let fallbackWorkspace = Workspace(id: UUID(), name: "My Servers", order: 0)
 
-        let repairWorkspace = ServerManager.workspaceForOrphanRepair(
+        let repairWorkspace = ServerStateStore.workspaceForOrphanRepair(
             existingWorkspaces: [],
             servers: [orphanedServer],
             fallbackWorkspace: fallbackWorkspace
@@ -139,7 +144,7 @@ struct ServerManagerBootstrapTests {
         )
         let fallbackWorkspace = Workspace(id: UUID(), name: "Fallback", order: 1)
 
-        let repairWorkspace = ServerManager.workspaceForOrphanRepair(
+        let repairWorkspace = ServerStateStore.workspaceForOrphanRepair(
             existingWorkspaces: [workspace],
             servers: [validServer],
             fallbackWorkspace: fallbackWorkspace

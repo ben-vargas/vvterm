@@ -217,11 +217,13 @@ struct TerminalReconnectUITestHarness: View {
 
     private func toggleServerMetadata() {
         guard let activeServer else { return }
-        if serverManager.servers.isEmpty {
-            serverManager.servers = navigationFixtureServers(activeServer: activeServer)
-        } else {
-            serverManager.servers = []
-        }
+        let servers = serverManager.stateStore.servers.isEmpty
+            ? navigationFixtureServers(activeServer: activeServer)
+            : []
+        serverManager.stateStore.replaceCollections(
+            servers: servers,
+            workspaces: serverManager.stateStore.workspaces
+        )
     }
 
     private var fixtureDiagnosticFallback: String {
@@ -265,15 +267,20 @@ struct TerminalReconnectUITestHarness: View {
             credentials.privateKey = privateKey
             try KeychainManager.shared.storeCredentials(credentials, for: server)
             if usesNavigationHarness {
-                serverManager.workspaces = [
-                    Workspace(
-                        id: Self.workspaceId,
-                        name: "DEV-213 Navigation"
-                    )
-                ]
-                serverManager.servers = navigationFixtureServers(activeServer: server)
+                serverManager.stateStore.replaceCollections(
+                    servers: navigationFixtureServers(activeServer: server),
+                    workspaces: [
+                        Workspace(
+                            id: Self.workspaceId,
+                            name: "DEV-213 Navigation"
+                        )
+                    ]
+                )
             } else {
-                serverManager.servers = [server]
+                serverManager.stateStore.replaceCollections(
+                    servers: [server],
+                    workspaces: serverManager.stateStore.workspaces
+                )
             }
 
             if !usesColdRelaunchHarness || seedsColdRelaunchHarness {

@@ -3,7 +3,8 @@ import SwiftUI
 // MARK: - Environment Form Sheet (Create/Edit)
 
 struct EnvironmentFormSheet: View {
-    @ObservedObject var serverManager: ServerManager
+    let serverManager: ServerManager
+    private let stateStore: ServerStateStore
     let workspace: Workspace
     let environment: ServerEnvironment?
     let onSave: (Workspace, ServerEnvironment) -> Void
@@ -26,6 +27,7 @@ struct EnvironmentFormSheet: View {
         onSave: @escaping (Workspace, ServerEnvironment) -> Void
     ) {
         self.serverManager = serverManager
+        stateStore = serverManager.stateStore
         self.workspace = workspace
         self.environment = environment
         self.onSave = onSave
@@ -129,7 +131,7 @@ struct EnvironmentFormSheet: View {
                         dismiss()
                     }
                 } else {
-                    let newEnvironment = try serverManager.createCustomEnvironment(
+                    let newEnvironment = try stateStore.createCustomEnvironment(
                         name: trimmedName,
                         color: selectedColorHex,
                         hasProAccess: storeManager.isPro
@@ -146,11 +148,18 @@ struct EnvironmentFormSheet: View {
                 }
             } catch {
                 await MainActor.run {
-                    self.error = error.localizedDescription
+                    self.error = errorMessage(for: error)
                     self.isSaving = false
                 }
             }
         }
+    }
+
+    private func errorMessage(for error: Error) -> String {
+        if error as? ServerStateStoreError == .proAccessRequiredForCustomEnvironment {
+            return String(localized: "Upgrade to Pro for custom environments")
+        }
+        return error.localizedDescription
     }
 }
 

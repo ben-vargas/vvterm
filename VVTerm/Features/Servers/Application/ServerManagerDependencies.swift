@@ -53,15 +53,12 @@ protocol FreePlanAssignmentTracking: AnyObject {
 
 @MainActor
 struct ServerManagerDependencies {
-    let localRepository: any ServerLocalRepository
+    let stateStore: ServerStateStore
     let remoteRepository: any ServerRemoteRepository
     let syncRepository: any ServerSyncRepository
     let credentialRepository: any ServerManagerCredentialRepository
     let actionAuthorizer: any ProtectedServerActionAuthorizing
     let knownHosts: any ServerKnownHostRepository
-    let freePlanTracker: any FreePlanAssignmentTracking
-    let preferences: any ServerManagerPreferences
-    let isSyncEnabled: () -> Bool
     let isRemoteSchemaError: (Error) -> Bool
     let now: () -> Date
     let makeID: () -> UUID

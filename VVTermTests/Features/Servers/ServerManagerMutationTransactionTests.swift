@@ -24,7 +24,7 @@ struct ServerManagerMutationTransactionTests {
             )
         }
 
-        #expect(manager.servers.isEmpty)
+        #expect(manager.stateStore.servers.isEmpty)
         #expect(credentials.deletedServerIDs == [server.id])
         #expect(sync.enqueuedServerUpserts.isEmpty)
     }
@@ -54,7 +54,7 @@ struct ServerManagerMutationTransactionTests {
             )
         }
 
-        #expect(manager.servers == [storedServer])
+        #expect(manager.stateStore.servers == [storedServer])
         #expect(credentials.storedServers == [editedServer, storedServer])
         #expect(credentials.storedPasswords == ["new-password", "old-password"])
         #expect(credentials.deletedServerIDs == [storedServer.id])
@@ -66,20 +66,31 @@ struct ServerManagerMutationTransactionTests {
         sync: ServerSyncRepositoryFake? = nil
     ) -> ServerManager {
         let sync = sync ?? ServerSyncRepositoryFake()
+        let now = { Date(timeIntervalSinceReferenceDate: 10_000) }
+        let makeID = { UUID(uuidString: "90000000-0000-0000-0000-000000000001")! }
+        let stateStore = ServerStateStore(
+            dependencies: ServerStateStoreDependencies(
+                localRepository: local,
+                preferences: ServerManagerPreferencesFake(),
+                freePlanTracker: FreePlanAssignmentTrackerFake(),
+                isSyncEnabled: { false },
+                now: now,
+                makeID: makeID,
+                defaultWorkspaceName: { "My Servers" },
+                canonicalDefaultWorkspaceNames: { ["My Servers"] }
+            )
+        )
         return ServerManager(
             dependencies: ServerManagerDependencies(
-                localRepository: local,
+                stateStore: stateStore,
                 remoteRepository: ServerRemoteRepositoryFake(),
                 syncRepository: sync,
                 credentialRepository: credentials,
                 actionAuthorizer: ProtectedServerActionAuthorizerFake(),
                 knownHosts: ServerKnownHostRepositoryFake(),
-                freePlanTracker: FreePlanAssignmentTrackerFake(),
-                preferences: ServerManagerPreferencesFake(),
-                isSyncEnabled: { false },
                 isRemoteSchemaError: { _ in false },
-                now: { Date(timeIntervalSinceReferenceDate: 10_000) },
-                makeID: { UUID(uuidString: "90000000-0000-0000-0000-000000000001")! }
+                now: now,
+                makeID: makeID
             ),
             startsAutomatically: false
         )

@@ -70,7 +70,7 @@ struct iOSContentView: View {
                 }
             )
             .safeAreaInset(edge: .top, spacing: 0) {
-                ServerLocalStorageNotice(serverManager: serverManager)
+                ServerLocalStorageNotice(stateStore: serverManager.stateStore)
             }
             .navigationDestination(isPresented: terminalPresentation) {
                 if let terminalRoute {
