@@ -2,29 +2,123 @@ import Foundation
 import SwiftUI
 import Combine
 
-@MainActor
-final class LocalSSHDiscoveryManager: ObservableObject {
-    enum ScanState: Equatable {
-        case idle
-        case scanning
-        case completed
-        case unsupportedNetwork
-        case failed(String)
-    }
-
-    enum PermissionState: Equatable {
+struct LocalSSHDiscoveryState: Equatable {
+    enum Permission: Equatable {
         case unknown
         case granted
         case denied
     }
 
+    struct Scan: Equatable {
+        enum Source: Hashable {
+            case bonjour
+            case probe
+        }
+
+        let id: UUID
+        var activeSources: Set<Source> = []
+        var permission: Permission = .unknown
+    }
+
+    enum Phase: Equatable {
+        case idle
+        case scanning(Scan)
+        case completed(Permission)
+        case unsupportedNetwork
+        case failed(Scan, String)
+    }
+
+    private(set) var phase: Phase = .idle
+
+    var isScanning: Bool {
+        if case .scanning = phase { return true }
+        return false
+    }
+
+    var permission: Permission {
+        switch phase {
+        case .scanning(let scan), .failed(let scan, _):
+            return scan.permission
+        case .completed(let permission):
+            return permission
+        case .idle, .unsupportedNetwork:
+            return .unknown
+        }
+    }
+
+    var error: String? {
+        guard case .failed(_, let message) = phase else { return nil }
+        return message
+    }
+
+    func isSourceActive(_ source: Scan.Source) -> Bool {
+        guard case .scanning(let scan) = phase else { return false }
+        return scan.activeSources.contains(source)
+    }
+
+    mutating func start(id: UUID) {
+        phase = .scanning(Scan(id: id))
+    }
+
+    mutating func rejectUnsupportedNetwork() {
+        phase = .unsupportedNetwork
+    }
+
+    mutating func stop(clearResults: Bool) {
+        guard !clearResults else {
+            phase = .idle
+            return
+        }
+
+        if case .scanning(let scan) = phase {
+            phase = .completed(scan.permission)
+        }
+    }
+
+    @discardableResult
+    mutating func handle(_ event: LocalSSHDiscoveryEvent, scanID: UUID) -> Bool {
+        switch phase {
+        case .scanning(var scan) where scan.id == scanID:
+            switch event {
+            case .scanningStarted:
+                return true
+            case .sourceStatus(let status):
+                switch status {
+                case .bonjourStarted:
+                    scan.activeSources.insert(.bonjour)
+                case .bonjourFinished:
+                    scan.activeSources.remove(.bonjour)
+                case .probeStarted:
+                    scan.activeSources.insert(.probe)
+                case .probeFinished:
+                    scan.activeSources.remove(.probe)
+                }
+                phase = .scanning(scan)
+            case .hostFound:
+                scan.permission = .granted
+                phase = .scanning(scan)
+            case .permissionDenied:
+                scan.permission = .denied
+                phase = .scanning(scan)
+            case .failed(let message):
+                phase = .failed(scan, message)
+            case .scanningFinished:
+                phase = .completed(scan.permission)
+            }
+            return true
+        case .failed(let scan, _) where scan.id == scanID:
+            if case .scanningFinished = event { return true }
+            return false
+        case .idle, .completed, .unsupportedNetwork, .scanning, .failed:
+            return false
+        }
+    }
+}
+
+@MainActor
+final class LocalSSHDiscoveryManager: ObservableObject {
     @Published private(set) var hosts: [DiscoveredSSHHost] = []
-    @Published private(set) var isScanning = false
-    @Published private(set) var scanState: ScanState = .idle
-    @Published private(set) var permissionState: PermissionState = .unknown
-    @Published private(set) var error: String?
-    @Published private(set) var bonjourActive = false
-    @Published private(set) var probeActive = false
+    @Published private(set) var state = LocalSSHDiscoveryState()
 
     private let service: LocalSSHDiscoveryService
     private var streamTask: Task<Void, Never>?
@@ -42,32 +136,29 @@ final class LocalSSHDiscoveryManager: ObservableObject {
         streamTask?.cancel()
     }
 
+    var isScanning: Bool { state.isScanning }
+    var permissionState: LocalSSHDiscoveryState.Permission { state.permission }
+    var bonjourActive: Bool { state.isSourceActive(.bonjour) }
+    var probeActive: Bool { state.isSourceActive(.probe) }
+
     func startScan() {
         guard NetworkMonitor.shared.connectionType != .cellular else {
-            isScanning = false
-            scanState = .unsupportedNetwork
-            error = nil
+            state.rejectUnsupportedNetwork()
             hosts = []
-            bonjourActive = false
-            probeActive = false
             return
         }
 
         stopScan(clearResults: false)
 
         hosts = []
-        error = nil
-        isScanning = true
-        scanState = .scanning
-        permissionState = .unknown
-        bonjourActive = false
-        probeActive = false
+        let scanID = UUID()
+        state.start(id: scanID)
 
         let stream = service.startScan()
         streamTask = Task { [weak self] in
             guard let self else { return }
             for await event in stream {
-                self.handleEvent(event)
+                self.handleEvent(event, scanID: scanID)
             }
         }
     }
@@ -80,19 +171,14 @@ final class LocalSSHDiscoveryManager: ObservableObject {
         streamTask?.cancel()
         streamTask = nil
         service.stopScan()
-        isScanning = false
-        bonjourActive = false
-        probeActive = false
+        state.stop(clearResults: clearResults)
         if clearResults {
             hosts = []
-            error = nil
-            scanState = .idle
-            permissionState = .unknown
         }
     }
 
     var statusText: String {
-        switch scanState {
+        switch state.phase {
         case .idle:
             return String(localized: "Ready to scan your local network.")
         case .unsupportedNetwork:
@@ -116,45 +202,19 @@ final class LocalSSHDiscoveryManager: ObservableObject {
                 format: String(localized: "%lld SSH host(s) found."),
                 Int64(hosts.count)
             )
-        case .failed(let message):
+        case .failed(_, let message):
             return message
         }
     }
 
-    private func handleEvent(_ event: LocalSSHDiscoveryEvent) {
+    private func handleEvent(_ event: LocalSSHDiscoveryEvent, scanID: UUID) {
+        guard state.handle(event, scanID: scanID) else { return }
+
         switch event {
-        case .scanningStarted:
-            isScanning = true
-            scanState = .scanning
-        case .sourceStatus(let status):
-            switch status {
-            case .bonjourStarted:
-                bonjourActive = true
-            case .bonjourFinished:
-                bonjourActive = false
-            case .probeStarted:
-                probeActive = true
-            case .probeFinished:
-                probeActive = false
-            }
         case .hostFound(let discovered):
-            permissionState = .granted
             upsert(discovered)
-        case .permissionDenied:
-            permissionState = .denied
-        case .failed(let message):
-            error = message
-            scanState = .failed(message)
-        case .scanningFinished:
-            isScanning = false
-            bonjourActive = false
-            probeActive = false
-            if case .failed = scanState {
-                return
-            }
-            if scanState != .unsupportedNetwork {
-                scanState = .completed
-            }
+        case .scanningStarted, .sourceStatus, .permissionDenied, .failed, .scanningFinished:
+            break
         }
     }
 
