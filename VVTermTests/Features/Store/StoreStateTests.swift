@@ -13,20 +13,8 @@ final class StoreStateTests: XCTestCase {
             subscriptionStatus: nil
         )
 
-        XCTAssertFalse(free.hasProAccess(reviewModeEnabled: false))
-        XCTAssertTrue(paid.hasProAccess(reviewModeEnabled: false))
-    }
-
-    func testReviewModeMasksLifetimeAndSubscriptionPresentation() {
-        let lifetime = StoreEntitlementSnapshot(
-            hasStoreAccess: true,
-            hasLifetimeAccess: true,
-            subscriptionStatus: nil
-        )
-
-        XCTAssertTrue(lifetime.hasProAccess(reviewModeEnabled: true))
-        XCTAssertFalse(lifetime.isLifetimeAccessActive(reviewModeEnabled: true))
-        XCTAssertNil(lifetime.visibleSubscriptionStatus(reviewModeEnabled: true))
+        XCTAssertFalse(free.hasStoreAccess)
+        XCTAssertTrue(paid.hasStoreAccess)
     }
 
     func testPurchaseStateEqualityMatchesAssociatedMessage() {
