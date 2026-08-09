@@ -98,6 +98,14 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
 /// Main stats collector that uses a shared SSH connection when available
 @MainActor
 final class ServerStatsCollector: ObservableObject {
+    typealias ConnectionRunner = (
+        _ client: SSHClient,
+        _ server: Server,
+        _ credentials: ServerCredentials,
+        _ disconnectWhenDone: Bool,
+        _ operation: @escaping (SSHClient) async throws -> Void
+    ) async throws -> Void
+
     @Published var stats = ServerStats()
     @Published var cpuHistory: [StatsPoint] = []
     @Published var memoryHistory: [StatsPoint] = []
@@ -110,21 +118,52 @@ final class ServerStatsCollector: ObservableObject {
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "Stats")
     private let dockerCollector = DockerStatsCollector()
+    private let makeClient: @MainActor () -> SSHClient
+    private let runWithConnection: ConnectionRunner
+
+    private enum ClientOwnership: Equatable {
+        case owned
+        case shared
+
+        var disconnectWhenDone: Bool { self == .owned }
+    }
+
+    private struct CollectionIdentity: Equatable {
+        let serverID: UUID
+        let clientID: ObjectIdentifier
+        let ownership: ClientOwnership
+    }
 
     private final class CollectionAttempt {
         let id: UUID
+        let serverID: UUID
         let client: SSHClient
-        let ownsClient: Bool
+        let ownership: ClientOwnership
         let context = StatsCollectionContext()
         var collectDocker: Bool
         var task: Task<Void, Never>?
         var remotePlatform: RemotePlatform = .unknown
         var platformCollector: PlatformStatsCollector?
 
-        init(id: UUID, client: SSHClient, ownsClient: Bool, collectDocker: Bool) {
+        var identity: CollectionIdentity {
+            CollectionIdentity(
+                serverID: serverID,
+                clientID: ObjectIdentifier(client),
+                ownership: ownership
+            )
+        }
+
+        init(
+            id: UUID,
+            serverID: UUID,
+            client: SSHClient,
+            ownership: ClientOwnership,
+            collectDocker: Bool
+        ) {
             self.id = id
+            self.serverID = serverID
             self.client = client
-            self.ownsClient = ownsClient
+            self.ownership = ownership
             self.collectDocker = collectDocker
         }
     }
@@ -134,6 +173,23 @@ final class ServerStatsCollector: ObservableObject {
     var isCollecting: Bool { collectionState.isCollecting }
     var connectionError: String? { collectionState.errorMessage }
     var securityApproval: ServerSecurityApprovalRequest? { collectionState.securityApproval }
+    var isDockerCollectionEnabled: Bool { activeAttempt?.collectDocker ?? false }
+
+    init(
+        makeClient: @escaping @MainActor () -> SSHClient = { SSHClient() },
+        runWithConnection: @escaping ConnectionRunner = { client, server, credentials, disconnectWhenDone, operation in
+            try await SSHConnectionOperationService.shared.runWithConnection(
+                using: client,
+                server: server,
+                credentials: credentials,
+                disconnectWhenDone: disconnectWhenDone,
+                operation: operation
+            )
+        }
+    ) {
+        self.makeClient = makeClient
+        self.runWithConnection = runWithConnection
+    }
 
     // MARK: - Collection Control
 
@@ -142,16 +198,28 @@ final class ServerStatsCollector: ObservableObject {
         using sharedClient: SSHClient? = nil,
         collectDocker: Bool = false
     ) async {
-        if let activeAttempt {
+        let (client, ownership) = collectionClient(
+            for: server.id,
+            sharedClient: sharedClient
+        )
+        let requestedIdentity = CollectionIdentity(
+            serverID: server.id,
+            clientID: ObjectIdentifier(client),
+            ownership: ownership
+        )
+
+        if let activeAttempt, activeAttempt.identity == requestedIdentity {
             activeAttempt.collectDocker = collectDocker
             return
         }
 
-        let client = sharedClient ?? SSHClient()
+        supersedeActiveAttempt()
+
         let attempt = CollectionAttempt(
             id: UUID(),
+            serverID: server.id,
             client: client,
-            ownsClient: sharedClient == nil,
+            ownership: ownership,
             collectDocker: collectDocker
         )
         activeAttempt = attempt
@@ -175,15 +243,16 @@ final class ServerStatsCollector: ObservableObject {
 
         // Connect in background
         let attemptID = attempt.id
-        let ownsClient = attempt.ownsClient
+        let disconnectWhenDone = attempt.ownership.disconnectWhenDone
+        let runWithConnection = self.runWithConnection
         let task = Task.detached(priority: .utility) { [weak self] in
             var failureMessage: String?
             do {
-                try await SSHConnectionOperationService.shared.runWithConnection(
-                    using: client,
-                    server: server,
-                    credentials: credentials,
-                    disconnectWhenDone: ownsClient
+                try await runWithConnection(
+                    client,
+                    server,
+                    credentials,
+                    disconnectWhenDone
                 ) { connectedClient in
                     guard await self?.markCollectionConnected(attemptID: attemptID) == true else { return }
 
@@ -221,16 +290,7 @@ final class ServerStatsCollector: ObservableObject {
 
         activeAttempt = nil
         collectionState.stop()
-        attempt.task?.cancel()
-        attempt.task = nil
-
-        // Disconnect SSH only if we own the connection
-        if attempt.ownsClient {
-            let client = attempt.client
-            Task.detached {
-                await client.disconnect()
-            }
-        }
+        cancel(attempt)
     }
 
     func resolveSecurityApproval(
@@ -514,6 +574,40 @@ final class ServerStatsCollector: ObservableObject {
         }
 
         return nil
+    }
+
+    private func collectionClient(
+        for serverID: UUID,
+        sharedClient: SSHClient?
+    ) -> (client: SSHClient, ownership: ClientOwnership) {
+        if let sharedClient {
+            return (sharedClient, .shared)
+        }
+
+        if let activeAttempt,
+           activeAttempt.serverID == serverID,
+           activeAttempt.ownership == .owned {
+            return (activeAttempt.client, .owned)
+        }
+
+        return (makeClient(), .owned)
+    }
+
+    private func supersedeActiveAttempt() {
+        guard let attempt = activeAttempt else { return }
+        activeAttempt = nil
+        cancel(attempt)
+    }
+
+    private func cancel(_ attempt: CollectionAttempt) {
+        attempt.task?.cancel()
+        attempt.task = nil
+
+        guard attempt.ownership == .owned else { return }
+        let client = attempt.client
+        Task.detached {
+            await client.disconnect()
+        }
     }
 
     private func currentCollectionAttempt(_ attemptID: UUID) -> CollectionAttempt? {
