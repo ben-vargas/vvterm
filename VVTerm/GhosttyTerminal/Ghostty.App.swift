@@ -102,7 +102,8 @@ extension Ghostty {
             themeName: String,
             cursorStyle: TerminalCursorStyle = TerminalDefaults.defaultCursorStyle,
             cursorBlink: Bool = TerminalDefaults.defaultCursorBlink,
-            optionAsAltMode: TerminalOptionAsAltMode = .none
+            optionAsAltMode: TerminalOptionAsAltMode = .none,
+            remoteClipboardReadPolicy: TerminalRemoteClipboardReadPolicy = .defaultValue
         ) -> String {
             #if os(macOS)
             let platformInputConfig = "macos-option-as-alt = \(optionAsAltConfigValue(optionAsAltMode))"
@@ -132,8 +133,9 @@ extension Ghostty {
             # Disable audible bell
             audible-bell = false
 
-            # Remote applications must not read the local clipboard.
-            clipboard-read = deny
+            # Remote clipboard access uses Ghostty's supported consent policy.
+            clipboard-read = \(remoteClipboardReadPolicy.rawValue)
+            clipboard-write = ask
 
             # Limit scrollback to prevent unbounded memory growth
             # 10000 lines is plenty for most use cases (~5-10MB)
@@ -193,6 +195,12 @@ extension Ghostty {
         @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
         @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
         @AppStorage("appearanceMode") private var appearanceMode = "system"
+        @AppStorage(TerminalRemoteClipboardReadPolicy.userDefaultsKey)
+        private var remoteClipboardReadPolicyRaw = TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
+
+        private var remoteClipboardReadPolicy: TerminalRemoteClipboardReadPolicy {
+            TerminalRemoteClipboardReadPolicy(rawValue: remoteClipboardReadPolicyRaw) ?? .defaultValue
+        }
 
         private var effectiveThemeName: String {
             let preferredThemeName: String
@@ -603,7 +611,8 @@ extension Ghostty {
                     themeName: effectiveThemeName,
                     cursorStyle: terminalCursorStyle,
                     cursorBlink: terminalCursorBlink,
-                    optionAsAltMode: terminalOptionAsAltMode
+                    optionAsAltMode: terminalOptionAsAltMode,
+                    remoteClipboardReadPolicy: remoteClipboardReadPolicy
                 )
 
                 Ghostty.logger.info("Loading Ghostty theme: \(self.effectiveThemeName)")
@@ -926,33 +935,35 @@ extension Ghostty {
 
         static func confirmReadClipboard(
             _ userdata: UnsafeMutableRawPointer?,
-            string _: UnsafePointer<CChar>?,
+            string: UnsafePointer<CChar>?,
             state: UnsafeMutableRawPointer?,
             request: ghostty_clipboard_request_e
         ) {
-            guard let userdata, let state else { return }
+            guard let userdata, let string, let state else { return }
             let terminalView = Unmanaged<GhosttyTerminalView>
                 .fromOpaque(userdata)
                 .takeUnretainedValue()
-            guard let surface = terminalView.surface?.unsafeCValue else { return }
-
-            let completedValue = clipboardReadCompletionValue(request: request)
-            completedValue.withCString { pointer in
-                ghostty_surface_complete_clipboard_request(surface, pointer, state, true)
-            }
-            Ghostty.logger.debug("Completed clipboard confirmation request: \(request.rawValue)")
+            let clipboardString = String(cString: string)
+            terminalView.handleClipboardConfirmation(
+                clipboardString,
+                state: state,
+                kind: clipboardConfirmationKind(request: request)
+            )
+            Ghostty.logger.debug("Queued clipboard confirmation request: \(request.rawValue)")
         }
 
-        nonisolated static func clipboardReadCompletionValue(
+        nonisolated static func clipboardConfirmationKind(
             request: ghostty_clipboard_request_e
-        ) -> String {
+        ) -> TerminalClipboardConfirmationKind {
             switch request {
-            case GHOSTTY_CLIPBOARD_REQUEST_PASTE,
-                 GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ,
-                 GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE:
-                return ""
+            case GHOSTTY_CLIPBOARD_REQUEST_PASTE:
+                return .unsafePaste
+            case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ:
+                return .remoteRead
+            case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE:
+                return .remoteWrite
             default:
-                return ""
+                return .remoteRead
             }
         }
 

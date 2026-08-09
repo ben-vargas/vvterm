@@ -162,6 +162,8 @@ struct TerminalSettingsView: View {
 
     // Image paste settings
     @AppStorage("terminalImagePasteBehavior") private var imagePasteBehaviorRaw = ImagePasteBehavior.askOnce.rawValue
+    @AppStorage(TerminalRemoteClipboardReadPolicy.userDefaultsKey)
+    private var remoteClipboardReadPolicyRaw = TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
 
     // SSH settings
     @AppStorage("sshKeepAliveEnabled") private var keepAliveEnabled = true
@@ -227,6 +229,17 @@ struct TerminalSettingsView: View {
             set: { behavior in
                 imagePasteBehaviorRaw = behavior.rawValue
             }
+        )
+    }
+
+    private var remoteClipboardReadPolicy: TerminalRemoteClipboardReadPolicy {
+        TerminalRemoteClipboardReadPolicy(rawValue: remoteClipboardReadPolicyRaw) ?? .defaultValue
+    }
+
+    private var remoteClipboardReadPolicyBinding: Binding<TerminalRemoteClipboardReadPolicy> {
+        Binding(
+            get: { remoteClipboardReadPolicy },
+            set: { remoteClipboardReadPolicyRaw = $0.rawValue }
         )
     }
 
@@ -457,6 +470,28 @@ struct TerminalSettingsView: View {
         }
     }
 
+    private var remoteClipboardSection: some View {
+        Section {
+            Picker("Remote Clipboard Reads", selection: remoteClipboardReadPolicyBinding) {
+                ForEach(TerminalRemoteClipboardReadPolicy.allCases) { policy in
+                    Text(policy.settingsTitle).tag(policy)
+                }
+            }
+            .pickerStyle(.menu)
+
+            if remoteClipboardReadPolicy == .allow {
+                Label("Remote programs can read clipboard data without asking.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
+        } header: {
+            Text("Remote Clipboard")
+        } footer: {
+            Text(remoteClipboardReadPolicy.settingsDescription)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private var imagePasteSectionFooter: String {
         switch imagePasteBehavior {
         case .disabled:
@@ -516,6 +551,7 @@ struct TerminalSettingsView: View {
             sessionPersistenceSection
             copyProcessingSection
             richClipboardSection
+            remoteClipboardSection
             sshConnectionSection
             dangerZoneSection
         }

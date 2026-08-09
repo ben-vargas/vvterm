@@ -1151,7 +1151,10 @@ class GhosttyTerminalView: UIView {
 
     private var didSignalReady = false
     private var readonly = false
-    private var isClipboardWriteConfirmationPresented = false
+    private let clipboardConfirmationQueue = TerminalClipboardConfirmationQueue()
+    private var presentedClipboardConfirmation: UIAlertController?
+    private var clipboardConfirmationRetryWorkItem: DispatchWorkItem?
+    private var clipboardConfirmationRetryCount = 0
 
     /// Prevent rendering when the view is offscreen or being torn down.
     private var isShuttingDown = false
@@ -1536,6 +1539,7 @@ class GhosttyTerminalView: UIView {
     }
 
     isolated deinit {
+        cancelClipboardConfirmations()
         cancelTrackedHardwareInput()
         stopSelectionAutoscroll()
         for observer in hardwareKeyboardObservers {
@@ -1556,6 +1560,7 @@ class GhosttyTerminalView: UIView {
     /// Explicitly cleanup the terminal before removal from view hierarchy.
     /// Call this in dismantleUIView to ensure proper cleanup.
     func cleanup() {
+        cancelClipboardConfirmations()
         cancelTrackedHardwareInput()
         isShuttingDown = true
         isPaused = true
@@ -3852,30 +3857,100 @@ class GhosttyTerminalView: UIView {
         case .writeImmediately:
             Clipboard.copy(text)
         case .requestConfirmation:
-            presentClipboardWriteConfirmation(for: text)
+            clipboardConfirmationQueue.enqueue(kind: .remoteWrite) { decision in
+                guard decision == .allow else { return }
+                Clipboard.copy(text)
+            }
+            presentNextClipboardConfirmationIfPossible()
         }
     }
 
-    private func presentClipboardWriteConfirmation(for text: String) {
-        guard !isClipboardWriteConfirmationPresented,
-              let presenter = nearestPresentingViewController() else {
+    func handleClipboardConfirmation(
+        _ text: String,
+        state: UnsafeMutableRawPointer,
+        kind: TerminalClipboardConfirmationKind
+    ) {
+        guard let surface = surface?.unsafeCValue else { return }
+        clipboardConfirmationQueue.enqueue(kind: kind) { decision in
+            let completedValue = decision == .allow ? text : ""
+            completedValue.withCString { pointer in
+                ghostty_surface_complete_clipboard_request(surface, pointer, state, true)
+            }
+        }
+        presentNextClipboardConfirmationIfPossible()
+    }
+
+    private func presentNextClipboardConfirmationIfPossible() {
+        guard !isShuttingDown,
+              presentedClipboardConfirmation == nil,
+              let request = clipboardConfirmationQueue.requestToPresent else {
             return
         }
-        isClipboardWriteConfirmationPresented = true
+
+        guard let presenter = nearestPresentingViewController(),
+              !(presenter is UIAlertController),
+              !presenter.isBeingPresented,
+              !presenter.isBeingDismissed else {
+            scheduleClipboardConfirmationRetry(for: request.id)
+            return
+        }
 
         let alert = UIAlertController(
-            title: String(localized: "Allow Clipboard Change?"),
-            message: String(localized: "The remote terminal wants to replace your clipboard."),
+            title: request.kind.title,
+            message: request.kind.message,
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel) { [weak self] _ in
-            self?.isClipboardWriteConfirmationPresented = false
+            self?.finishClipboardConfirmation(id: request.id, decision: .cancel)
         })
         alert.addAction(UIAlertAction(title: String(localized: "Allow"), style: .default) { [weak self] _ in
-            self?.isClipboardWriteConfirmationPresented = false
-            Clipboard.copy(text)
+            self?.finishClipboardConfirmation(id: request.id, decision: .allow)
         })
+        presentedClipboardConfirmation = alert
         presenter.present(alert, animated: true)
+    }
+
+    private func finishClipboardConfirmation(
+        id: UUID,
+        decision: TerminalClipboardConfirmationDecision
+    ) {
+        presentedClipboardConfirmation = nil
+        clipboardConfirmationRetryCount = 0
+        _ = clipboardConfirmationQueue.resolve(id: id, decision: decision)
+        scheduleClipboardConfirmationRetry(for: clipboardConfirmationQueue.requestToPresent?.id)
+    }
+
+    private func scheduleClipboardConfirmationRetry(for requestID: UUID?) {
+        guard let requestID else { return }
+        clipboardConfirmationRetryWorkItem?.cancel()
+
+        switch TerminalClipboardPresentationRetryPolicy.action(
+            after: clipboardConfirmationRetryCount
+        ) {
+        case .cancel:
+            clipboardConfirmationRetryCount = 0
+            _ = clipboardConfirmationQueue.resolve(id: requestID, decision: .cancel)
+            scheduleClipboardConfirmationRetry(for: clipboardConfirmationQueue.requestToPresent?.id)
+            return
+        case .retry(let nextAttempt):
+            clipboardConfirmationRetryCount = nextAttempt
+        }
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.clipboardConfirmationRetryWorkItem = nil
+            self?.presentNextClipboardConfirmationIfPossible()
+        }
+        clipboardConfirmationRetryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
+    }
+
+    private func cancelClipboardConfirmations() {
+        clipboardConfirmationRetryWorkItem?.cancel()
+        clipboardConfirmationRetryWorkItem = nil
+        clipboardConfirmationRetryCount = 0
+        clipboardConfirmationQueue.cancelAll()
+        presentedClipboardConfirmation?.dismiss(animated: false)
+        presentedClipboardConfirmation = nil
     }
 
     private func presentSelectionMenuController(_ controller: UIViewController) {

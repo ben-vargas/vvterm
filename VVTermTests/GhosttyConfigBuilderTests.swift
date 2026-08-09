@@ -114,7 +114,8 @@ struct GhosttyConfigBuilderTests {
         #expect(content.contains("cursor-style = block"))
         #expect(content.contains("cursor-style-blink = true"))
         #expect(content.contains("keybind = shift+enter=text:\\n"))
-        #expect(content.contains("clipboard-read = deny"))
+        #expect(content.contains("clipboard-read = ask"))
+        #expect(content.contains("clipboard-write = ask"))
     }
 
     @Test
@@ -133,25 +134,36 @@ struct GhosttyConfigBuilderTests {
     }
 
     @Test
-    func remoteClipboardRequestsCompleteWithoutClipboardData() {
-        #expect(
-            Ghostty.App.clipboardReadCompletionValue(
-                request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ
-            ).isEmpty
-        )
-        #expect(
-            Ghostty.App.clipboardReadCompletionValue(
-                request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE
-            ).isEmpty
-        )
+    func configContentUsesEachRemoteClipboardReadPolicy() {
+        for policy in TerminalRemoteClipboardReadPolicy.allCases {
+            let content = Ghostty.ConfigBuilder.configContent(
+                primaryFontFamily: "Menlo",
+                fontSize: 13,
+                shellName: "fish",
+                themeName: "Aizen Light",
+                remoteClipboardReadPolicy: policy
+            )
+
+            #expect(content.contains("clipboard-read = \(policy.rawValue)"))
+        }
     }
 
     @Test
-    func unapprovedPasteCompletesWithoutPasteData() {
+    func ghosttyClipboardRequestsMapToExplicitPrompts() {
         #expect(
-            Ghostty.App.clipboardReadCompletionValue(
+            Ghostty.App.clipboardConfirmationKind(
+                request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ
+            ) == .remoteRead
+        )
+        #expect(
+            Ghostty.App.clipboardConfirmationKind(
+                request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE
+            ) == .remoteWrite
+        )
+        #expect(
+            Ghostty.App.clipboardConfirmationKind(
                 request: GHOSTTY_CLIPBOARD_REQUEST_PASTE
-            ).isEmpty
+            ) == .unsafePaste
         )
     }
 }
