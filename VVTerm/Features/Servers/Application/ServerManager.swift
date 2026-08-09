@@ -950,6 +950,7 @@ final class ServerManager: ObservableObject {
     }
 
     func updateServer(_ server: Server) async throws {
+        let index = try Self.existingServerIndex(for: server.id, in: servers)
         var updatedServer = server
         updatedServer = Server(
             id: server.id,
@@ -976,9 +977,7 @@ final class ServerManager: ObservableObject {
             updatedAt: Date()
         )
 
-        if let index = servers.firstIndex(where: { $0.id == server.id }) {
-            servers[index] = updatedServer
-        }
+        servers[index] = updatedServer
         enqueuePendingServerUpsert(updatedServer)
         await persistLocalMutations(logMessage: "Updated server: \(updatedServer.name)")
     }
@@ -1035,6 +1034,7 @@ final class ServerManager: ObservableObject {
     }
 
     func updateWorkspace(_ workspace: Workspace) async throws {
+        let index = try Self.existingWorkspaceIndex(for: workspace.id, in: workspaces)
         var updatedWorkspace = workspace
         updatedWorkspace = Workspace(
             id: workspace.id,
@@ -1049,12 +1049,24 @@ final class ServerManager: ObservableObject {
             updatedAt: Date()
         )
 
-        if let index = workspaces.firstIndex(where: { $0.id == workspace.id }) {
-            workspaces[index] = updatedWorkspace
-        }
+        workspaces[index] = updatedWorkspace
         promotePendingBootstrapWorkspaceIfNeeded(for: updatedWorkspace.id, reason: "updating workspace metadata")
         enqueuePendingWorkspaceUpsert(updatedWorkspace)
         await persistLocalMutations(logMessage: "Updated workspace: \(updatedWorkspace.name)")
+    }
+
+    static func existingServerIndex(for id: UUID, in servers: [Server]) throws -> Int {
+        guard let index = servers.firstIndex(where: { $0.id == id }) else {
+            throw VVTermError.serverNotFound
+        }
+        return index
+    }
+
+    static func existingWorkspaceIndex(for id: UUID, in workspaces: [Workspace]) throws -> Int {
+        guard let index = workspaces.firstIndex(where: { $0.id == id }) else {
+            throw VVTermError.workspaceNotFound
+        }
+        return index
     }
 
     func deleteWorkspace(_ workspace: Workspace) async throws {
@@ -1467,6 +1479,8 @@ enum VVTermError: LocalizedError {
     case connectionFailed(String)
     case authenticationFailed
     case authorizationRequired
+    case serverNotFound
+    case workspaceNotFound
     case timeout
 
     var errorDescription: String? {
@@ -1484,6 +1498,10 @@ enum VVTermError: LocalizedError {
             return String(localized: "Authentication failed")
         case .authorizationRequired:
             return String(localized: "Authorization is required")
+        case .serverNotFound:
+            return String(localized: "Server no longer exists.")
+        case .workspaceNotFound:
+            return String(localized: "Workspace no longer exists.")
         case .timeout:
             return String(localized: "Connection timed out")
         }

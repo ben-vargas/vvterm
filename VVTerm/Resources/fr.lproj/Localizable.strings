@@ -1701,3 +1701,5 @@
 "Remote Clipboard Reads" = "Lecture distante du presse-papiers";
 "Remote programs can read clipboard data without asking." = "Les programmes distants peuvent lire le presse-papiers sans demander.";
 "Remote Clipboard" = "Presse-papiers distant";
+"Server no longer exists." = "Le serveur n’existe plus.";
+"Workspace no longer exists." = "L’espace de travail n’existe plus.";

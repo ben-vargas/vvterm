@@ -1699,3 +1699,5 @@
 "Remote Clipboard Reads" = "リモートのクリップボード読み取り";
 "Remote programs can read clipboard data without asking." = "リモートプログラムが確認なしでクリップボードを読み取れます。";
 "Remote Clipboard" = "リモートクリップボード";
+"Server no longer exists." = "サーバーは存在しません。";
+"Workspace no longer exists." = "ワークスペースは存在しません。";

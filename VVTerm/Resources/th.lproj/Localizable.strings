@@ -1699,3 +1699,5 @@
 "Remote Clipboard Reads" = "การอ่านคลิปบอร์ดจากระยะไกล";
 "Remote programs can read clipboard data without asking." = "โปรแกรมระยะไกลสามารถอ่านข้อมูลคลิปบอร์ดได้โดยไม่ต้องถาม";
 "Remote Clipboard" = "คลิปบอร์ดระยะไกล";
+"Server no longer exists." = "ไม่มีเซิร์ฟเวอร์นี้แล้ว";
+"Workspace no longer exists." = "ไม่มีพื้นที่ทำงานนี้แล้ว";

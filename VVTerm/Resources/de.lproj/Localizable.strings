@@ -1699,3 +1699,5 @@
 "Remote Clipboard Reads" = "Remote-Lesezugriff auf Zwischenablage";
 "Remote programs can read clipboard data without asking." = "Remote-Programme können Daten aus der Zwischenablage ohne Nachfrage lesen.";
 "Remote Clipboard" = "Remote-Zwischenablage";
+"Server no longer exists." = "Der Server ist nicht mehr vorhanden.";
+"Workspace no longer exists." = "Der Arbeitsbereich ist nicht mehr vorhanden.";

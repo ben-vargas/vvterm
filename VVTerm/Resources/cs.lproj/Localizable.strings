@@ -1700,3 +1700,5 @@
 "Remote Clipboard Reads" = "Vzdálené čtení schránky";
 "Remote programs can read clipboard data without asking." = "Vzdálené programy mohou číst data ze schránky bez dotazu.";
 "Remote Clipboard" = "Vzdálená schránka";
+"Server no longer exists." = "Server již neexistuje.";
+"Workspace no longer exists." = "Pracovní prostor již neexistuje.";

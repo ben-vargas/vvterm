@@ -1699,3 +1699,5 @@
 "Remote Clipboard Reads" = "Lectura remota del portapapeles";
 "Remote programs can read clipboard data without asking." = "Los programas remotos pueden leer datos del portapapeles sin preguntar.";
 "Remote Clipboard" = "Portapapeles remoto";
+"Server no longer exists." = "El servidor ya no existe.";
+"Workspace no longer exists." = "El espacio de trabajo ya no existe.";

@@ -1701,3 +1701,5 @@
 "Remote Clipboard Reads" = "Zdalny odczyt schowka";
 "Remote programs can read clipboard data without asking." = "Programy zdalne mogą odczytywać dane schowka bez pytania.";
 "Remote Clipboard" = "Zdalny schowek";
+"Server no longer exists." = "Serwer już nie istnieje.";
+"Workspace no longer exists." = "Obszar roboczy już nie istnieje.";

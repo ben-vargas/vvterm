@@ -1706,3 +1706,5 @@
 "Remote Clipboard Reads" = "Віддалене читання буфера обміну";
 "Remote programs can read clipboard data without asking." = "Віддалені програми можуть читати дані буфера обміну без запиту.";
 "Remote Clipboard" = "Віддалений буфер обміну";
+"Server no longer exists." = "Сервер більше не існує.";
+"Workspace no longer exists." = "Робочий простір більше не існує.";

@@ -1751,3 +1751,5 @@
 "Remote Clipboard Reads" = "Remote Clipboard Reads";
 "Remote programs can read clipboard data without asking." = "Remote programs can read clipboard data without asking.";
 "Remote Clipboard" = "Remote Clipboard";
+"Server no longer exists." = "Server no longer exists.";
+"Workspace no longer exists." = "Workspace no longer exists.";
