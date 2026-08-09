@@ -143,11 +143,12 @@ class GhosttyRenderingSetup {
 
         // Immediately set size after creation to minimize "small grid" warnings
         let scaledSize = view.convertToBacking(initialBounds.size.width > 0 ? initialBounds.size : NSSize(width: 800, height: 600))
-        ghostty_surface_set_size(
-            cSurface,
-            UInt32(scaledSize.width),
-            UInt32(scaledSize.height)
-        )
+        if let surfaceSize = TerminalGeometryConversion.ghosttySurfaceSize(
+            width: scaledSize.width,
+            height: scaledSize.height
+        ) {
+            ghostty_surface_set_size(cSurface, surfaceSize.width, surfaceSize.height)
+        }
 
         // Set content scale for retina displays
         let scale = window?.backingScaleFactor ?? 1.0
@@ -236,11 +237,15 @@ class GhosttyRenderingSetup {
 
         // Then set size with scaled dimensions
         let initialSize = initialBounds.size.width > 0 ? initialBounds.size : CGSize(width: 800, height: 600)
-        let scaledWidth = UInt32(initialSize.width * scale)
-        let scaledHeight = UInt32(initialSize.height * scale)
-        ghostty_surface_set_size(cSurface, scaledWidth, scaledHeight)
-
-        Self.logger.info("Ghostty surface created - scale: \(scale), size: \(scaledWidth)x\(scaledHeight)")
+        if let surfaceSize = TerminalGeometryConversion.ghosttySurfaceSize(
+            width: initialSize.width * scale,
+            height: initialSize.height * scale
+        ) {
+            ghostty_surface_set_size(cSurface, surfaceSize.width, surfaceSize.height)
+            Self.logger.info("Ghostty surface created - scale: \(scale), size: \(surfaceSize.width)x\(surfaceSize.height)")
+        } else {
+            Self.logger.error("Ghostty surface created without a valid initial size")
+        }
 
         return cSurface
     }
@@ -289,18 +294,21 @@ class GhosttyRenderingSetup {
             CATransaction.commit()
         }
 
-        // Update surface scale factors
         let fbFrame = view.convertToBacking(view.frame)
+        guard let surfaceSize = TerminalGeometryConversion.ghosttySurfaceSize(
+            width: fbFrame.size.width,
+            height: fbFrame.size.height
+        ) else {
+            return
+        }
+
+        // Update surface scale factors
         let xScale = fbFrame.size.width / view.frame.size.width
         let yScale = fbFrame.size.height / view.frame.size.height
         ghostty_surface_set_content_scale(surface, xScale, yScale)
 
         // Update surface size (framebuffer dimensions changed)
-        ghostty_surface_set_size(
-            surface,
-            UInt32(fbFrame.size.width),
-            UInt32(fbFrame.size.height)
-        )
+        ghostty_surface_set_size(surface, surfaceSize.width, surfaceSize.height)
     }
 
     /// Update Metal layer frame and Ghostty surface size (macOS)
@@ -323,16 +331,18 @@ class GhosttyRenderingSetup {
         let heightChanged = abs(scaledSize.height - lastSize.height) >= 1.0
 
         guard widthChanged || heightChanged else { return false }
+        guard let surfaceSize = TerminalGeometryConversion.ghosttySurfaceSize(
+            width: scaledSize.width,
+            height: scaledSize.height
+        ) else {
+            return false
+        }
 
         lastSize = scaledSize
         if let metalLayer = metalLayer {
             metalLayer.drawableSize = scaledSize
         }
-        ghostty_surface_set_size(
-            surface,
-            UInt32(scaledSize.width),
-            UInt32(scaledSize.height)
-        )
+        ghostty_surface_set_size(surface, surfaceSize.width, surfaceSize.height)
         ghostty_surface_refresh(surface)
 
         return true

@@ -365,11 +365,13 @@ extension GhosttyTerminalView {
     func sizeDidChange(_ size: CGSize) {
         guard let surface = surface?.unsafeCValue else { return }
         let scaledSize = convertToBacking(size)
-        ghostty_surface_set_size(
-            surface,
-            UInt32(scaledSize.width),
-            UInt32(scaledSize.height)
-        )
+        guard let surfaceSize = TerminalGeometryConversion.ghosttySurfaceSize(
+            width: scaledSize.width,
+            height: scaledSize.height
+        ) else {
+            return
+        }
+        ghostty_surface_set_size(surface, surfaceSize.width, surfaceSize.height)
 
         // Trigger a refresh to process the size change
         ghostty_surface_refresh(surface)

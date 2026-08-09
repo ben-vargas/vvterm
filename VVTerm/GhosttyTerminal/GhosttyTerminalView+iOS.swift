@@ -1806,16 +1806,21 @@ class GhosttyTerminalView: UIView {
         preservesForegroundKeyboardGrid = false
         guard let surface = surface?.unsafeCValue else { return }
         let surfaceSize = keyboardAvoidancePreservedSurfaceSize ?? size
-        guard surfaceSize.width > 0 && surfaceSize.height > 0 else { return }
-
         updateContentScaleIfNeeded()
+        let scale = self.contentScaleFactor
+        guard let ghosttySize = TerminalGeometryConversion.ghosttySurfaceSize(
+            width: surfaceSize.width * scale,
+            height: surfaceSize.height * scale
+        ) else {
+            return
+        }
+
         configureIOSurfaceLayers(size: surfaceSize)
 
-        let scale = self.contentScaleFactor
-        let pixelWidth = floor(surfaceSize.width * scale)
-        let pixelHeight = floor(surfaceSize.height * scale)
-        guard pixelWidth > 0 && pixelHeight > 0 else { return }
-        let pixelSize = CGSize(width: pixelWidth, height: pixelHeight)
+        let pixelSize = CGSize(
+            width: CGFloat(ghosttySize.width),
+            height: CGFloat(ghosttySize.height)
+        )
 
         if tracksKeyboardAvoidanceReferenceSize {
             updateKeyboardAvoidanceReferenceSize(surfaceSize)
@@ -1827,11 +1832,7 @@ class GhosttyTerminalView: UIView {
             lastContentScale = scale
 
             ghostty_surface_set_content_scale(surface, scale, scale)
-            ghostty_surface_set_size(
-                surface,
-                UInt32(pixelWidth),
-                UInt32(pixelHeight)
-            )
+            ghostty_surface_set_size(surface, ghosttySize.width, ghosttySize.height)
             reportGridResizeIfNeeded()
         }
 
@@ -3248,7 +3249,11 @@ class GhosttyTerminalView: UIView {
     }
 
     private func readNativeSelectionLine(surface: ghostty_surface_t, row: Int, columns: Int) -> String {
-        guard columns > 0 else { return "" }
+        guard columns > 0,
+              let wireRow = UInt32(exactly: row),
+              let wireEndColumn = UInt32(exactly: columns - 1) else {
+            return ""
+        }
 
         var text = ghostty_text_s()
         let selection = ghostty_selection_s(
@@ -3256,13 +3261,13 @@ class GhosttyTerminalView: UIView {
                 tag: GHOSTTY_POINT_VIEWPORT,
                 coord: GHOSTTY_POINT_COORD_EXACT,
                 x: 0,
-                y: UInt32(row)
+                y: wireRow
             ),
             bottom_right: ghostty_point_s(
                 tag: GHOSTTY_POINT_VIEWPORT,
                 coord: GHOSTTY_POINT_COORD_EXACT,
-                x: UInt32(columns - 1),
-                y: UInt32(row)
+                x: wireEndColumn,
+                y: wireRow
             ),
             rectangle: true
         )
@@ -3780,19 +3785,25 @@ class GhosttyTerminalView: UIView {
               let surface = surface?.unsafeCValue else { return nil }
 
         let normalized = touchSelection.normalized
+        guard let startColumn = UInt32(exactly: normalized.start.column),
+              let startRow = UInt32(exactly: normalized.start.row),
+              let endColumn = UInt32(exactly: normalized.end.column),
+              let endRow = UInt32(exactly: normalized.end.row) else {
+            return nil
+        }
         var text = ghostty_text_s()
         let selection = ghostty_selection_s(
             top_left: ghostty_point_s(
                 tag: GHOSTTY_POINT_VIEWPORT,
                 coord: GHOSTTY_POINT_COORD_EXACT,
-                x: UInt32(normalized.start.column),
-                y: UInt32(normalized.start.row)
+                x: startColumn,
+                y: startRow
             ),
             bottom_right: ghostty_point_s(
                 tag: GHOSTTY_POINT_VIEWPORT,
                 coord: GHOSTTY_POINT_COORD_EXACT,
-                x: UInt32(normalized.end.column),
-                y: UInt32(normalized.end.row)
+                x: endColumn,
+                y: endRow
             ),
             rectangle: false
         )
@@ -5558,13 +5569,19 @@ class GhosttyTerminalView: UIView {
 
         // Set scale and size
         let scale = self.contentScaleFactor
-        let pixelWidth = floor(bounds.width * scale)
-        let pixelHeight = floor(bounds.height * scale)
-        guard pixelWidth > 0 && pixelHeight > 0 else { return }
-        lastPixelSize = CGSize(width: pixelWidth, height: pixelHeight)
+        guard let ghosttySize = TerminalGeometryConversion.ghosttySurfaceSize(
+            width: bounds.width * scale,
+            height: bounds.height * scale
+        ) else {
+            return
+        }
+        lastPixelSize = CGSize(
+            width: CGFloat(ghosttySize.width),
+            height: CGFloat(ghosttySize.height)
+        )
         lastContentScale = scale
         ghostty_surface_set_content_scale(surface, scale, scale)
-        ghostty_surface_set_size(surface, UInt32(pixelWidth), UInt32(pixelHeight))
+        ghostty_surface_set_size(surface, ghosttySize.width, ghosttySize.height)
         if window != nil {
             ghostty_surface_set_occlusion(surface, true)
         }

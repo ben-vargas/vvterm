@@ -1053,11 +1053,12 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
 
         // Force a size update to trigger tmux redraw
         let scaledSize = convertToBacking(bounds.size)
-        ghostty_surface_set_size(
-            surface,
-            UInt32(scaledSize.width),
-            UInt32(scaledSize.height)
-        )
+        if let surfaceSize = TerminalGeometryConversion.ghosttySurfaceSize(
+            width: scaledSize.width,
+            height: scaledSize.height
+        ) {
+            ghostty_surface_set_size(surface, surfaceSize.width, surfaceSize.height)
+        }
 
         ghostty_surface_refresh(surface)
         ghostty_surface_draw(surface)

@@ -1005,12 +1005,11 @@ actor SSHClient {
         for shellId: UUID
     ) async throws {
         if let runtime = moshShells[shellId] {
-            guard let wireCols = Int32(exactly: cols),
-                  let wireRows = Int32(exactly: rows) else {
+            guard let wireSize = TerminalGeometryConversion.gridSize(cols: cols, rows: rows) else {
                 throw SSHError.unknown("Invalid terminal size \(cols)x\(rows)")
             }
             do {
-                try await runtime.session.enqueue(.resize(cols: wireCols, rows: wireRows))
+                try await runtime.session.enqueue(.resize(cols: wireSize.cols, rows: wireSize.rows))
                 return
             } catch {
                 throw SSHError.moshSessionFailed(error.localizedDescription)
@@ -1167,12 +1166,15 @@ actor SSHClient {
         rows: Int
     ) async throws -> ShellHandle {
         guard !isAborted else { throw SSHError.notConnected }
+        guard let wireSize = TerminalGeometryConversion.gridSize(cols: cols, rows: rows) else {
+            throw SSHError.unknown("Invalid terminal size \(cols)x\(rows)")
+        }
 
         let restoredSession = try await MoshClientSession.restore(from: snapshot)
         do {
             try await restoredSession.start()
             try await restoredSession.enqueue(
-                .resize(cols: Int32(cols), rows: Int32(rows))
+                .resize(cols: wireSize.cols, rows: wireSize.rows)
             )
             return registerMoshShell(
                 PreparedMoshShell(
@@ -1286,6 +1288,9 @@ actor SSHClient {
         rows: Int
     ) async throws -> PreparedMoshShell {
         try validateShellStartupSession(expectedSession)
+        guard let wireSize = TerminalGeometryConversion.gridSize(cols: cols, rows: rows) else {
+            throw SSHError.unknown("Invalid terminal size \(cols)x\(rows)")
+        }
 
         let startupTimeout = candidateHosts.count > 1 ? Duration.seconds(4) : moshStartupTimeout
         var lastStartupError: Error?
@@ -1312,7 +1317,9 @@ actor SSHClient {
             do {
                 pendingOps = try await SSHClient.runWithTimeout(startupTimeout) {
                     try await candidateSession.start()
-                    try await candidateSession.enqueue(.resize(cols: Int32(cols), rows: Int32(rows)))
+                    try await candidateSession.enqueue(
+                        .resize(cols: wireSize.cols, rows: wireSize.rows)
+                    )
                     return try await SSHClient.waitForMoshTransportReadiness {
                         await candidateSession.drainHostOps()
                     }
@@ -2635,8 +2642,7 @@ actor SSHSession {
         guard isActive, let session = libssh2Session else {
             throw SSHError.notConnected
         }
-        guard let wireCols = Int32(exactly: cols),
-              let wireRows = Int32(exactly: rows) else {
+        guard let wireSize = TerminalGeometryConversion.gridSize(cols: cols, rows: rows) else {
             throw SSHError.unknown("Invalid terminal size \(cols)x\(rows)")
         }
 
@@ -2708,8 +2714,8 @@ actor SSHSession {
                         UInt32(terminalType.rawValue.utf8.count),
                         nil,
                         0,
-                        wireCols,
-                        wireRows,
+                        wireSize.cols,
+                        wireSize.rows,
                         Int32(pixelSize?.width ?? 0),
                         Int32(pixelSize?.height ?? 0)
                     )
@@ -3625,8 +3631,7 @@ actor SSHSession {
         guard let state = shellChannels[shellId] else {
             throw SSHError.notConnected
         }
-        guard let wireCols = Int32(exactly: cols),
-              let wireRows = Int32(exactly: rows) else {
+        guard let wireSize = TerminalGeometryConversion.gridSize(cols: cols, rows: rows) else {
             throw SSHError.unknown("Invalid terminal size \(cols)x\(rows)")
         }
 
@@ -3636,8 +3641,8 @@ actor SSHSession {
             try Task.checkCancellation()
             let result = libssh2_channel_request_pty_size_ex(
                 state.channel,
-                wireCols,
-                wireRows,
+                wireSize.cols,
+                wireSize.rows,
                 Int32(pixelSize?.width ?? 0),
                 Int32(pixelSize?.height ?? 0)
             )

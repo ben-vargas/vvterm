@@ -8,17 +8,20 @@ struct TerminalPixelSize: Equatable, Sendable {
 
     init?(width: CGFloat, height: CGFloat) {
         guard width.isFinite, height.isFinite,
-              width > 0, height > 0,
-              width <= CGFloat(Int32.max), height <= CGFloat(Int32.max) else {
+              width > 0, height > 0 else {
             return nil
         }
 
-        let pixelWidth = Int(width.rounded(.down))
-        let pixelHeight = Int(height.rounded(.down))
-        guard pixelWidth > 0, pixelHeight > 0 else { return nil }
+        let truncatedWidth = width.rounded(.towardZero)
+        let truncatedHeight = height.rounded(.towardZero)
+        guard truncatedWidth > 0, truncatedHeight > 0,
+              let wireWidth = Int32(exactly: truncatedWidth),
+              let wireHeight = Int32(exactly: truncatedHeight) else {
+            return nil
+        }
 
-        self.width = pixelWidth
-        self.height = pixelHeight
+        self.width = Int(wireWidth)
+        self.height = Int(wireHeight)
     }
 
     init?(size: CGSize) {
