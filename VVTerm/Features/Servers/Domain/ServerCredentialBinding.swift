@@ -80,3 +80,16 @@ enum ServerCredentialAccessError: LocalizedError, Equatable {
         }
     }
 }
+
+extension ServerCredentials {
+    func isAuthorized(for server: Server) -> Bool {
+        serverId == server.id
+            && credentialBinding == ServerCredentialBinding(server: server)
+    }
+
+    func requireAuthorization(for server: Server) throws {
+        guard isAuthorized(for: server) else {
+            throw ServerCredentialAccessError.approvalRequired
+        }
+    }
+}

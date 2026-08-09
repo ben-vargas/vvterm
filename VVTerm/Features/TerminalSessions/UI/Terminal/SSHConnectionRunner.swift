@@ -30,6 +30,7 @@ enum SSHConnectionRunner {
             onAttempt(attempt)
 
             do {
+                try credentials.requireAuthorization(for: server)
                 logger.info(
                     "Connecting to \(server.host, privacy: .private(mask: .hash))... (attempt \(attempt))"
                 )
@@ -133,6 +134,10 @@ enum SSHConnectionRunner {
                 guard shouldContinueConnection() else { return }
                 lastError = error
                 logger.error("SSH connection failed (attempt \(attempt)): \(error.localizedDescription)")
+
+                if error is ServerCredentialAccessError {
+                    break
+                }
 
                 if attempt < maxAttempts, let sshError = error as? SSHError {
                     let shouldReset = await shouldResetClient(sshError)

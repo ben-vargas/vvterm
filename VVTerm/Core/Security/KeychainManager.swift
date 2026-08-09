@@ -85,7 +85,10 @@ final class KeychainManager {
     // MARK: - Full Credentials
 
     func getCredentials(for server: Server) throws -> ServerCredentials {
-        var credentials = ServerCredentials(serverId: server.id)
+        var credentials = ServerCredentials(
+            serverId: server.id,
+            credentialBinding: ServerCredentialBinding(server: server)
+        )
 
         logger.info("Getting credentials for server \(server.id.uuidString), authMethod: \(String(describing: server.authMethod))")
 

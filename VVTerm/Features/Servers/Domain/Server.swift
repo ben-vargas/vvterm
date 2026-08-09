@@ -240,6 +240,7 @@ enum AuthMethod: String, Codable, CaseIterable, Identifiable {
 
 struct ServerCredentials: Sendable {
     let serverId: UUID
+    var credentialBinding: ServerCredentialBinding?
     var password: String?
     var privateKey: Data?
     var publicKey: Data?

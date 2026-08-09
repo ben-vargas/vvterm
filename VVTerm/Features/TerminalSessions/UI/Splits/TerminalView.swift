@@ -546,6 +546,10 @@ struct TerminalPaneView: View {
         tabManager.terminalConnectionGeneration(for: paneId)
     }
 
+    private var credentialBinding: ServerCredentialBinding {
+        ServerCredentialBinding(server: server)
+    }
+
     private var isHostKeyApprovalRequired: Bool {
         guard case .failed(let error) = connectionState else { return false }
         return error == SSHError.hostKeyApprovalRequired.localizedDescription
@@ -834,6 +838,10 @@ struct TerminalPaneView: View {
             connectWatchdogToken = UUID()
             startConnectWatchdog()
         }
+        .onChange(of: credentialBinding) { _ in
+            credentials = nil
+            loadCredentials()
+        }
         .onChange(of: paneState?.tmuxStatus) { status in
             showingTmuxInstallPrompt = TmuxInstallPromptPolicy.shouldPresent(for: status)
         }
@@ -1075,7 +1083,8 @@ struct TerminalPaneView: View {
         connectWatchdogToken = UUID()
         credentialLoadErrorMessage = nil
         operationNotice = nil
-        if credentials == nil {
+        if credentials?.isAuthorized(for: server) != true {
+            credentials = nil
             loadCredentials()
             guard credentials != nil else { return }
         }

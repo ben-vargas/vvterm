@@ -70,6 +70,34 @@ struct ServerCredentialBindingTests {
         #expect(status == .noCredentials)
     }
 
+    @Test
+    func inMemoryCredentialsRequireTheirApprovedEndpoint() throws {
+        let original = makeServer()
+        let credentials = ServerCredentials(
+            serverId: original.id,
+            credentialBinding: ServerCredentialBinding(server: original),
+            password: "secret"
+        )
+
+        try credentials.requireAuthorization(for: original)
+
+        var changed = original
+        changed.host = "other.example.com"
+
+        #expect(!credentials.isAuthorized(for: changed))
+        #expect(throws: ServerCredentialAccessError.approvalRequired) {
+            try credentials.requireAuthorization(for: changed)
+        }
+    }
+
+    @Test
+    func unboundInMemoryCredentialsAreRejected() {
+        let server = makeServer()
+        let credentials = ServerCredentials(serverId: server.id, password: "secret")
+
+        #expect(!credentials.isAuthorized(for: server))
+    }
+
     enum EndpointChange: CaseIterable {
         case host
         case port
