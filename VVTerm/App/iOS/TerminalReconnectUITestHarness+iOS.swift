@@ -34,18 +34,22 @@ struct TerminalReconnectUITestHarness: View {
     private static let fixturePrivateKeyDefaultsKey = "sshPrivateKeyBase64"
     private static let fixtureUsernameDefaultsKey = "sshUsername"
 
-    @ObservedObject private var tabManager = TerminalTabManager.shared
+    @ObservedObject private var tabManager: TerminalTabManager
     @ObservedObject private var serverManager = ServerManager.shared
     @StateObject private var fileTabs: RemoteFileTabManager
     @StateObject private var fileBrowser: RemoteFileBrowserStore
     @State private var fixtureState = FixtureState.preparing
 
-    init() {
+    init(tabManager: TerminalTabManager) {
+        _tabManager = ObservedObject(wrappedValue: tabManager)
         _fileTabs = StateObject(
             wrappedValue: RemoteFileTabManager(defaults: Self.fixtureDefaults)
         )
         _fileBrowser = StateObject(
-            wrappedValue: RemoteFileBrowserStore(defaults: Self.fixtureDefaults)
+            wrappedValue: VVTermApp.makeRemoteFileBrowserStore(
+                tabManager: tabManager,
+                defaults: Self.fixtureDefaults
+            )
         )
     }
 
@@ -53,6 +57,7 @@ struct TerminalReconnectUITestHarness: View {
         fixtureContent
             .overlay(alignment: .topLeading) {
                 TerminalReconnectDiagnosticsLabel(
+                    tabManager: tabManager,
                     serverId: activeServer?.id,
                     fallback: fixtureDiagnosticFallback
                 )
@@ -116,6 +121,7 @@ struct TerminalReconnectUITestHarness: View {
         case .ready(let server):
             if usesNavigationHarness {
                 iOSContentView(
+                    tabManager: tabManager,
                     fileTabs: fileTabs,
                     fileBrowser: fileBrowser
                 )
@@ -328,11 +334,12 @@ struct TerminalReconnectUITestHarness: View {
 }
 
 private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
+    let tabManager: TerminalTabManager
     let serverId: UUID?
     let fallback: String
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(tabManager: tabManager)
     }
 
     func makeUIView(context: Context) -> UILabel {
@@ -356,11 +363,16 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
     }
 
     final class Coordinator {
+        private let tabManager: TerminalTabManager
         private weak var label: UILabel?
         private weak var configuredTerminal: GhosttyTerminalView?
         private var serverId: UUID?
         private var fallback = "setup=preparing"
         private var timer: Timer?
+
+        init(tabManager: TerminalTabManager) {
+            self.tabManager = tabManager
+        }
 
         func install(_ label: UILabel) {
             self.label = label
@@ -384,7 +396,6 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
         }
 
         private func refresh() {
-            let tabManager = TerminalTabManager.shared
             guard let serverId,
                   let paneId = tabManager.selectedTab(for: serverId)?.focusedPaneId else {
                 publish(fallback)

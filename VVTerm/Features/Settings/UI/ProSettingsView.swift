@@ -247,5 +247,5 @@ extension View {
 
 #Preview {
     ProSettingsView()
-        .environmentObject(StoreManager(client: AppStoreKitClient()))
+        .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
 }

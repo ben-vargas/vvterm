@@ -11,8 +11,20 @@ import WidgetKit
 @main
 struct VVTermApp: App {
     init() {
-        let storeManager = StoreManager(client: AppStoreKitClient())
+        let tabManager = TerminalTabManagerLiveComposition.makeManager()
+        let storeManager = StoreManager(
+            client: AppStoreKitClient(),
+            effects: .live
+        )
+        _tabManager = StateObject(wrappedValue: tabManager)
         _storeManager = StateObject(wrappedValue: storeManager)
+        _remoteFileBrowserStore = StateObject(
+            wrappedValue: Self.makeRemoteFileBrowserStore(tabManager: tabManager)
+        )
+        appDelegate.configure(tabManager: tabManager)
+        #if os(macOS)
+        MacConnectionToolbarController.shared.configure(tabManager: tabManager)
+        #endif
         storeManager.start()
 
         TerminalDefaults.applyIfNeeded()
@@ -33,9 +45,10 @@ struct VVTermApp: App {
     @StateObject private var screenAwakeCoordinator = TerminalScreenAwakeCoordinator()
     #endif
     @StateObject private var appLockManager = AppLockManager.shared
+    @StateObject private var tabManager: TerminalTabManager
     @StateObject private var storeManager: StoreManager
     @StateObject private var remoteFileTabManager = RemoteFileTabManager()
-    @StateObject private var remoteFileBrowserStore = VVTermApp.makeRemoteFileBrowserStore()
+    @StateObject private var remoteFileBrowserStore: RemoteFileBrowserStore
     @StateObject private var terminalThemeManager = TerminalThemeManager.shared
     @StateObject private var terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager.shared
 
@@ -123,6 +136,7 @@ struct VVTermApp: App {
 
     private var macOSAppContent: some View {
         ContentView(
+            tabManager: tabManager,
             fileTabs: remoteFileTabManager,
             fileBrowser: remoteFileBrowserStore
         )
@@ -164,19 +178,19 @@ struct VVTermApp: App {
             TerminalScreenAwakeUITestHarness()
                 .modifier(AppearanceModifier())
         } else if usesTerminalReconnectUITestHarness {
-            TerminalReconnectUITestHarness()
+            TerminalReconnectUITestHarness(tabManager: tabManager)
                 .environmentObject(ghosttyApp)
                 .environmentObject(terminalThemeManager)
                 .environmentObject(terminalAccessoryPreferencesManager)
                 .modifier(AppearanceModifier())
         } else if usesTerminalSplitKeyboardUITestHarness {
-            TerminalSplitKeyboardUITestHarness()
+            TerminalSplitKeyboardUITestHarness(tabManager: tabManager)
                 .environmentObject(ghosttyApp)
                 .environmentObject(terminalThemeManager)
                 .environmentObject(terminalAccessoryPreferencesManager)
                 .modifier(AppearanceModifier())
         } else if usesTerminalKeyboardUITestHarness {
-            TerminalKeyboardUITestHarness()
+            TerminalKeyboardUITestHarness(tabManager: tabManager)
                 .environmentObject(ghosttyApp)
                 .environmentObject(terminalThemeManager)
                 .environmentObject(terminalAccessoryPreferencesManager)
@@ -191,6 +205,7 @@ struct VVTermApp: App {
 
     private var iOSAppContent: some View {
         iOSContentView(
+            tabManager: tabManager,
             fileTabs: remoteFileTabManager,
             fileBrowser: remoteFileBrowserStore
         )
@@ -265,25 +280,29 @@ private enum VVTermLauncherWidgetRefresh {
 }
 #endif
 
-private extension VVTermApp {
-    static func makeRemoteFileBrowserStore() -> RemoteFileBrowserStore {
+extension VVTermApp {
+    static func makeRemoteFileBrowserStore(
+        tabManager: TerminalTabManager,
+        defaults: UserDefaults = .standard
+    ) -> RemoteFileBrowserStore {
         let adapter = SSHSFTPAdapter(borrowedClientProvider: { serverId in
-            TerminalTabManager.shared.sharedStatsClient(for: serverId)
+            tabManager.sharedStatsClient(for: serverId)
         })
 
         return RemoteFileBrowserStore(
+            defaults: defaults,
             remoteFileServiceAdapter: adapter,
             serverProvider: { serverId in
                 ServerManager.shared.servers.first { $0.id == serverId }
             },
             workingDirectoryProvider: { serverId in
-                if let selectedTab = TerminalTabManager.shared.selectedTab(for: serverId),
-                   let path = TerminalTabManager.shared.workingDirectory(for: selectedTab.focusedPaneId) {
+                if let selectedTab = tabManager.selectedTab(for: serverId),
+                   let path = tabManager.workingDirectory(for: selectedTab.focusedPaneId) {
                     return path
                 }
 
-                if let anyPane = TerminalTabManager.shared.paneStates.values.first(where: { $0.serverId == serverId }),
-                   let path = TerminalTabManager.shared.workingDirectory(for: anyPane.paneId) {
+                if let anyPane = tabManager.paneStates.values.first(where: { $0.serverId == serverId }),
+                   let path = tabManager.workingDirectory(for: anyPane.paneId) {
                     return path
                 }
 

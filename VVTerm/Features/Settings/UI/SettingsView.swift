@@ -309,5 +309,5 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView()
-        .environmentObject(StoreManager(client: AppStoreKitClient()))
+        .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
 }

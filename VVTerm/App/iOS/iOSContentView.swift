@@ -16,7 +16,7 @@ struct iOSContentView: View {
     let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     @StateObject private var serverManager = ServerManager.shared
-    @StateObject private var tabManager = TerminalTabManager.shared
+    @ObservedObject private var tabManager: TerminalTabManager
     @StateObject private var viewTabConfig = ViewTabConfigurationManager.shared
     @StateObject private var engagementTracker = EngagementTracker.shared
     @Environment(\.requestReview) private var requestReview
@@ -27,6 +27,16 @@ struct iOSContentView: View {
     @State private var pendingConnections: [UUID: PendingConnection] = [:]
     @State private var showingTabLimitAlert = false
     @State private var lockedServerName: String?
+
+    init(
+        tabManager: TerminalTabManager,
+        fileTabs: RemoteFileTabManager,
+        fileBrowser: RemoteFileBrowserStore
+    ) {
+        _tabManager = ObservedObject(wrappedValue: tabManager)
+        self.fileTabs = fileTabs
+        self.fileBrowser = fileBrowser
+    }
 
     private var preferredConnectView: ConnectionViewTabID {
         viewTabConfig.effectiveDefaultTab()

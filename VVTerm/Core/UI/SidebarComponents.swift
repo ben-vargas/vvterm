@@ -12,11 +12,33 @@ struct ServerRow: View {
     let onConnect: (Server) -> Void
     var onLockedTap: (() -> Void)? = nil
 
-    @ObservedObject private var tabManager = TerminalTabManager.shared
+    @ObservedObject private var tabManager: TerminalTabManager
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
     #if os(macOS)
     @Environment(\.controlActiveState) private var controlActiveState
     #endif
+
+    init(
+        tabManager: TerminalTabManager,
+        server: Server,
+        isSelected: Bool,
+        isLocked: Bool,
+        onSelect: @escaping () -> Void,
+        onEdit: @escaping (Server) -> Void,
+        onMove: ((Server) -> Void)? = nil,
+        onConnect: @escaping (Server) -> Void,
+        onLockedTap: (() -> Void)? = nil
+    ) {
+        _tabManager = ObservedObject(wrappedValue: tabManager)
+        self.server = server
+        self.isSelected = isSelected
+        self.isLocked = isLocked
+        self.onSelect = onSelect
+        self.onEdit = onEdit
+        self.onMove = onMove
+        self.onConnect = onConnect
+        self.onLockedTap = onLockedTap
+    }
 
     private var tabCount: Int {
         tabManager.tabs(for: server.id).count

@@ -91,7 +91,7 @@ nonisolated enum RestoreState: Equatable {
     }
 }
 
-nonisolated enum PaywallSource: String {
+nonisolated enum PaywallSource: String, Equatable, Sendable {
     case general
     case serverLimit = "server_limit"
     case workspaceLimit = "workspace_limit"

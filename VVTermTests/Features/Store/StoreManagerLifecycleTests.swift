@@ -13,7 +13,11 @@ final class StoreManagerLifecycleTests: XCTestCase {
         let client = StoreClientFake()
         client.purchaseResult = .verified(productId: VVTermProducts.proMonthly)
         client.entitlementResult = entitlementResult(productIds: [VVTermProducts.proMonthly])
-        let manager = StoreManager(client: client)
+        var recordedEffects: [StoreManagerEffect] = []
+        let manager = StoreManager(
+            client: client,
+            effects: StoreManagerEffects { recordedEffects.append($0) }
+        )
 
         await manager.purchase(monthlyProduct)
 
@@ -22,12 +26,26 @@ final class StoreManagerLifecycleTests: XCTestCase {
         XCTAssertTrue(manager.isPro)
         XCTAssertEqual(client.purchasedProductIds, [VVTermProducts.proMonthly])
         XCTAssertEqual(client.entitlementRequestCount, 1)
+        XCTAssertEqual(
+            recordedEffects,
+            [
+                .purchaseStarted(
+                    source: .general,
+                    productID: VVTermProducts.proMonthly
+                ),
+                .entitlementsUpdated(isPro: true),
+                .purchaseSucceeded(
+                    source: .general,
+                    productID: VVTermProducts.proMonthly
+                )
+            ]
+        )
     }
 
     func testUnverifiedPurchaseFailsWithoutGrantingAccess() async {
         let client = StoreClientFake()
         client.purchaseResult = .unverified(productId: VVTermProducts.proMonthly)
-        let manager = StoreManager(client: client)
+        let manager = makeManager(client)
 
         await manager.purchase(monthlyProduct)
 
@@ -43,7 +61,7 @@ final class StoreManagerLifecycleTests: XCTestCase {
     func testUserCancelledPurchaseReturnsToIdle() async {
         let client = StoreClientFake()
         client.purchaseResult = .userCancelled
-        let manager = StoreManager(client: client)
+        let manager = makeManager(client)
 
         await manager.purchase(monthlyProduct)
 
@@ -55,7 +73,7 @@ final class StoreManagerLifecycleTests: XCTestCase {
     func testPendingPurchaseReturnsToIdleWithoutGrantingAccess() async {
         let client = StoreClientFake()
         client.purchaseResult = .pending
-        let manager = StoreManager(client: client)
+        let manager = makeManager(client)
 
         await manager.purchase(monthlyProduct)
 
@@ -67,7 +85,7 @@ final class StoreManagerLifecycleTests: XCTestCase {
     func testRestoreSyncsAndAppliesLifetimeEntitlement() async {
         let client = StoreClientFake()
         client.entitlementResult = entitlementResult(productIds: [VVTermProducts.proLifetime])
-        let manager = StoreManager(client: client)
+        let manager = makeManager(client)
 
         await manager.restorePurchases()
 
@@ -87,7 +105,7 @@ final class StoreManagerLifecycleTests: XCTestCase {
                 ],
                 subscriptionStatus: nil
             )
-            let manager = StoreManager(client: client)
+            let manager = makeManager(client)
 
             await manager.checkEntitlements()
 
@@ -105,7 +123,7 @@ final class StoreManagerLifecycleTests: XCTestCase {
             ],
             subscriptionStatus: nil
         )
-        let manager = StoreManager(client: client)
+        let manager = makeManager(client)
 
         await manager.checkEntitlements()
 
@@ -115,12 +133,83 @@ final class StoreManagerLifecycleTests: XCTestCase {
     func testUnknownPurchaseReturnsToIdleWithoutRefreshingEntitlements() async {
         let client = StoreClientFake()
         client.purchaseResult = .unknown
-        let manager = StoreManager(client: client)
+        var recordedEffects: [StoreManagerEffect] = []
+        let manager = StoreManager(
+            client: client,
+            effects: StoreManagerEffects { recordedEffects.append($0) }
+        )
 
         await manager.purchase(monthlyProduct)
 
         XCTAssertEqual(manager.purchaseState, .idle)
         XCTAssertEqual(client.entitlementRequestCount, 0)
+        XCTAssertEqual(
+            recordedEffects,
+            [
+                .purchaseStarted(
+                    source: .general,
+                    productID: VVTermProducts.proMonthly
+                )
+            ]
+        )
+    }
+
+    func testPaywallAndNonSuccessPurchaseEffectsAreExact() async {
+        let scenarios: [(StorePurchaseResult, StoreManagerEffect)] = [
+            (
+                .userCancelled,
+                .purchaseCancelled(
+                    source: .serverLimit,
+                    productID: VVTermProducts.proMonthly
+                )
+            ),
+            (
+                .pending,
+                .purchasePending(
+                    source: .serverLimit,
+                    productID: VVTermProducts.proMonthly
+                )
+            ),
+            (
+                .unverified(productId: VVTermProducts.proMonthly),
+                .purchaseFailed(
+                    source: .serverLimit,
+                    productID: VVTermProducts.proMonthly,
+                    reason: "StoreError"
+                )
+            )
+        ]
+
+        for (purchaseResult, outcomeEffect) in scenarios {
+            let client = StoreClientFake()
+            client.purchaseResult = purchaseResult
+            var recordedEffects: [StoreManagerEffect] = []
+            let manager = StoreManager(
+                client: client,
+                effects: StoreManagerEffects { recordedEffects.append($0) }
+            )
+
+            manager.notePaywallPresented(source: .serverLimit)
+            manager.notePaywallCTATapped(product: monthlyProduct)
+            await manager.purchase(monthlyProduct)
+
+            XCTAssertEqual(
+                recordedEffects,
+                [
+                    .paywallPresented(source: .serverLimit),
+                    .paywallCTATapped(
+                        source: .serverLimit,
+                        productID: VVTermProducts.proMonthly
+                    ),
+                    .purchaseStarted(
+                        source: .serverLimit,
+                        productID: VVTermProducts.proMonthly
+                    ),
+                    outcomeEffect
+                ],
+                "Unexpected effects for \(purchaseResult)"
+            )
+        }
     }
 
     func testStartLoadsProductsThenEntitlementsAndIsIdempotent() async {
@@ -129,7 +218,7 @@ final class StoreManagerLifecycleTests: XCTestCase {
         client.entitlementResult = entitlementResult(productIds: [VVTermProducts.proMonthly])
         let started = expectation(description: "Startup completed")
         client.onEntitlementRequest = { started.fulfill() }
-        let manager = StoreManager(client: client)
+        let manager = makeManager(client)
 
         manager.start()
         manager.start()
@@ -158,7 +247,7 @@ final class StoreManagerLifecycleTests: XCTestCase {
                 update.fulfill()
             }
         }
-        let manager = StoreManager(client: client)
+        let manager = makeManager(client)
 
         manager.start()
         await fulfillment(of: [startup], timeout: 1)
@@ -176,13 +265,50 @@ final class StoreManagerLifecycleTests: XCTestCase {
         let client = StoreClientFake()
         let terminated = expectation(description: "Transaction stream terminated")
         client.onTransactionStreamTermination = { terminated.fulfill() }
-        let manager = StoreManager(client: client)
+        let manager = makeManager(client)
 
         manager.start()
         manager.stop()
         await fulfillment(of: [terminated], timeout: 1)
 
         XCTAssertEqual(client.transactionStreamTerminationCount, 1)
+    }
+
+    func testStopRejectsLateEntitlementResultFromVerifiedUpdate() async {
+        let client = StoreClientFake()
+        let startupCompleted = expectation(description: "Startup completed")
+        client.onEntitlementRequest = { startupCompleted.fulfill() }
+        var recordedEffects: [StoreManagerEffect] = []
+        let manager = StoreManager(
+            client: client,
+            effects: StoreManagerEffects { recordedEffects.append($0) }
+        )
+
+        manager.start()
+        await fulfillment(of: [startupCompleted], timeout: 1)
+        await Task.yield()
+        client.onEntitlementRequest = nil
+        XCTAssertFalse(manager.isPro)
+
+        let gate = StoreEntitlementGate()
+        let updateStarted = expectation(description: "Update entitlement request started")
+        let updateReturned = expectation(description: "Update entitlement request returned")
+        client.entitlementsHandler = {
+            updateStarted.fulfill()
+            let result = await gate.wait()
+            updateReturned.fulfill()
+            return result
+        }
+
+        client.emit(.verified(productId: VVTermProducts.proMonthly))
+        await fulfillment(of: [updateStarted], timeout: 1)
+        manager.stop()
+        gate.resume(with: entitlementResult(productIds: [VVTermProducts.proMonthly]))
+        await fulfillment(of: [updateReturned], timeout: 1)
+        await Task.yield()
+
+        XCTAssertFalse(manager.isPro)
+        XCTAssertEqual(recordedEffects, [.entitlementsUpdated(isPro: false)])
     }
 
     func testStopCancelsStartupBeforeEntitlements() async {
@@ -199,7 +325,7 @@ final class StoreManagerLifecycleTests: XCTestCase {
                 throw CancellationError()
             }
         }
-        let manager = StoreManager(client: client)
+        let manager = makeManager(client)
 
         manager.start()
         await fulfillment(of: [productLoadStarted], timeout: 1)
@@ -225,7 +351,7 @@ final class StoreManagerLifecycleTests: XCTestCase {
             }
         }
         client.onTransactionStreamTermination = { streamTerminated.fulfill() }
-        var manager: StoreManager? = StoreManager(client: client)
+        var manager: StoreManager? = makeManager(client)
         weak var weakManager = manager
 
         manager?.start()
@@ -249,7 +375,7 @@ final class StoreManagerLifecycleTests: XCTestCase {
         let streamTerminated = expectation(description: "Transaction stream terminated")
         client.onEntitlementRequest = { startupCompleted.fulfill() }
         client.onTransactionStreamTermination = { streamTerminated.fulfill() }
-        var manager: StoreManager? = StoreManager(client: client)
+        var manager: StoreManager? = makeManager(client)
         weak var weakManager = manager
 
         manager?.start()
@@ -271,6 +397,10 @@ final class StoreManagerLifecycleTests: XCTestCase {
             subscriptionStatus: nil
         )
     }
+
+    private func makeManager(_ client: StoreClientFake) -> StoreManager {
+        StoreManager(client: client, effects: .none)
+    }
 }
 
 @MainActor
@@ -283,6 +413,7 @@ private final class StoreClientFake: StoreClient {
     var onEntitlementRequest: (() -> Void)?
     var onTransactionStreamTermination: (() -> Void)?
     var productsHandler: (() async throws -> [StoreProduct])?
+    var entitlementsHandler: (() async -> StoreEntitlementResult)?
 
     private(set) var events: [String] = []
     private(set) var purchasedProductIds: [String] = []
@@ -314,6 +445,9 @@ private final class StoreClientFake: StoreClient {
         events.append("entitlements")
         entitlementRequestCount += 1
         onEntitlementRequest?()
+        if let entitlementsHandler {
+            return await entitlementsHandler()
+        }
         if !entitlementResults.isEmpty {
             return entitlementResults.removeFirst()
         }
@@ -341,5 +475,21 @@ private final class StoreClientFake: StoreClient {
 
     func emit(_ update: StoreTransactionUpdate) {
         updatesContinuation?.yield(update)
+    }
+}
+
+@MainActor
+private final class StoreEntitlementGate {
+    private var continuation: CheckedContinuation<StoreEntitlementResult, Never>?
+
+    func wait() async -> StoreEntitlementResult {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func resume(with result: StoreEntitlementResult) {
+        continuation?.resume(returning: result)
+        continuation = nil
     }
 }

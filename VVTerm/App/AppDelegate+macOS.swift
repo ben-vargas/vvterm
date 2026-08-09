@@ -5,10 +5,25 @@ import os.log
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastForegroundSyncAt: Date = .distantPast
     private let foregroundSyncMinimumInterval: TimeInterval = 20
+    private weak var tabManager: TerminalTabManager?
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.VivyTerm",
         category: "Lifecycle"
     )
+
+    func configure(tabManager: TerminalTabManager) {
+        if let currentManager = self.tabManager {
+            precondition(currentManager === tabManager, "AppDelegate received a different terminal manager")
+        }
+        self.tabManager = tabManager
+    }
+
+    private var configuredTabManager: TerminalTabManager {
+        guard let tabManager else {
+            preconditionFailure("AppDelegate must be configured with a terminal manager")
+        }
+        return tabManager
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Task {
@@ -48,7 +63,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "Application became active monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
         )
         NetworkMonitor.shared.refreshCurrentPath()
-        TerminalTabManager.shared.handleMacRecoverySignal(.applicationActivated)
+        configuredTabManager.handleMacRecoverySignal(.applicationActivated)
         guard SyncSettings.isEnabled else { return }
 
         let now = Date()
@@ -69,7 +84,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
-        let cleanupTask = TerminalTabManager.shared.beginApplicationTermination()
+        let cleanupTask = configuredTabManager.beginApplicationTermination()
         let semaphore = DispatchSemaphore(value: 0)
         Task.detached {
             await cleanupTask.value
@@ -93,7 +108,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info(
             "Workspace will sleep monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
         )
-        TerminalTabManager.shared.handleMacRecoverySignal(.sleep)
+        configuredTabManager.handleMacRecoverySignal(.sleep)
     }
 
     @objc private func workspaceDidWake(_ notification: Notification) {
@@ -107,7 +122,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info(
             "Screens did sleep monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
         )
-        TerminalTabManager.shared.handleMacRecoverySignal(.sleep)
+        configuredTabManager.handleMacRecoverySignal(.sleep)
     }
 
     @objc private func screensDidWake(_ notification: Notification) {
@@ -119,7 +134,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshNetworkAndHandleWake() {
         NetworkMonitor.shared.refreshCurrentPath()
-        TerminalTabManager.shared.handleMacRecoverySignal(.wake)
+        configuredTabManager.handleMacRecoverySignal(.wake)
     }
 }
 #endif

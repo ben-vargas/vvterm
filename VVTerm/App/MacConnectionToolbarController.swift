@@ -28,7 +28,7 @@ extension NSToolbarItem.Identifier {
 private struct MacTabStripHost: View {
     @ObservedObject var bridge = MacToolbarBridge.shared
     // Observed so live tab-title changes (which don't bump the bridge) redraw.
-    @ObservedObject var tabManager = TerminalTabManager.shared
+    @ObservedObject var tabManager: TerminalTabManager
 
     var body: some View {
         bridge.tabStrip()
@@ -54,6 +54,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
 
     let toolbar: NSToolbar
     private let bridge = MacToolbarBridge.shared
+    private weak var tabManager: TerminalTabManager?
     private var cancellable: AnyCancellable?
     private var currentPicker: ToolbarViewPickerData?
     private var zenPopover: NSPopover?
@@ -76,13 +77,31 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
         cancellable = bridge.$revision
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refreshContent() }
+    }
+
+    func configure(tabManager: TerminalTabManager) {
+        if let currentManager = self.tabManager {
+            precondition(
+                currentManager === tabManager,
+                "Mac toolbar received a different terminal manager"
+            )
+        }
+        self.tabManager = tabManager
         reconcile()
+    }
+
+    private var configuredTabManager: TerminalTabManager {
+        guard let tabManager else {
+            preconditionFailure("Mac toolbar must be configured with a terminal manager")
+        }
+        return tabManager
     }
 
     private var desiredIdentifiers: [NSToolbarItem.Identifier] {
         // Leading flexible space puts the sidebar toggle at the right edge of
         // the sidebar region (next to the divider), the standard macOS spot.
         var ids: [NSToolbarItem.Identifier] = [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator]
+        guard tabManager != nil else { return ids }
         guard bridge.isActive else { return ids }
         if bridge.isZenMode {
             // Keep the sidebar toggle at the right edge of the sidebar section,
@@ -111,6 +130,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     }
 
     private func reconcile() {
+        guard tabManager != nil else { return }
         let desired = desiredIdentifiers
         let current = toolbar.items.map { $0.itemIdentifier }
         guard desired != current else {
@@ -267,7 +287,9 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
         // every other item so they overflow first, and let it shrink (tabs
         // scroll internally) rather than collapse to the chevron.
         item.visibilityPriority = NSToolbarItem.VisibilityPriority(rawValue: 2000)
-        let host = NSHostingView(rootView: MacTabStripHost())
+        let host = NSHostingView(
+            rootView: MacTabStripHost(tabManager: configuredTabManager)
+        )
         host.translatesAutoresizingMaskIntoConstraints = false
         // Report only a small minimum to the toolbar (not the greedy
         // maxWidth:.infinity intrinsic width). Otherwise NSToolbar treats the

@@ -13,7 +13,7 @@ struct ContentView: View {
     let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     @StateObject private var serverManager = ServerManager.shared
-    @StateObject private var tabManager = TerminalTabManager.shared
+    @ObservedObject private var tabManager: TerminalTabManager
     @EnvironmentObject private var storeManager: StoreManager
     @StateObject private var engagementTracker = EngagementTracker.shared
     @Environment(\.requestReview) private var requestReview
@@ -41,6 +41,16 @@ struct ContentView: View {
     @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
     @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
     @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
+
+    init(
+        tabManager: TerminalTabManager,
+        fileTabs: RemoteFileTabManager,
+        fileBrowser: RemoteFileBrowserStore
+    ) {
+        _tabManager = ObservedObject(wrappedValue: tabManager)
+        self.fileTabs = fileTabs
+        self.fileBrowser = fileBrowser
+    }
 
     /// Whether the selected server has an open terminal/file surface.
     private var selectedServerHasOpenConnectionSurface: Bool {
@@ -245,6 +255,7 @@ struct ContentView: View {
                 // LEFT: Sidebar with workspace + servers
                 ServerSidebarView(
                     serverManager: serverManager,
+                    tabManager: tabManager,
                     selectedWorkspace: $selectedWorkspace,
                     selectedServer: $selectedServer
                 )
@@ -278,6 +289,7 @@ struct ContentView: View {
                     withShellEnvironment(
                         ServerSidebarView(
                             serverManager: serverManager,
+                            tabManager: tabManager,
                             selectedWorkspace: $selectedWorkspace,
                             selectedServer: $selectedServer
                         )
@@ -341,11 +353,13 @@ struct ContentView: View {
 // MARK: - Preview
 
 #Preview {
+    let tabManager = TerminalTabManagerLiveComposition.makeManager()
     ContentView(
+        tabManager: tabManager,
         fileTabs: RemoteFileTabManager(),
-        fileBrowser: RemoteFileBrowserStore()
+        fileBrowser: VVTermApp.makeRemoteFileBrowserStore(tabManager: tabManager)
     )
-    .environmentObject(StoreManager(client: AppStoreKitClient()))
+    .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
 }
 
 #if os(macOS)

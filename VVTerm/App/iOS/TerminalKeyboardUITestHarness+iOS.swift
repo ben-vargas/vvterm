@@ -27,7 +27,11 @@ struct TerminalKeyboardUITestHarness: View {
         ).utf8
     )
 
-    init() {
+    init(tabManager: TerminalTabManager) {
+        self.tabManager = tabManager
+        _keyboardCoordinator = ObservedObject(
+            wrappedValue: tabManager.keyboardCoordinator
+        )
         _ = Self.clearTerminalBackgroundCacheForUITest
     }
 
@@ -73,7 +77,8 @@ struct TerminalKeyboardUITestHarness: View {
 
     @EnvironmentObject private var ghosttyApp: Ghostty.App
     @EnvironmentObject private var appLockManager: AppLockManager
-    @ObservedObject private var keyboardCoordinator = TerminalTabManager.shared.keyboardCoordinator
+    private let tabManager: TerminalTabManager
+    @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
     @State private var terminalView: GhosttyTerminalView?
     @State private var terminalReady = false
@@ -141,6 +146,7 @@ struct TerminalKeyboardUITestHarness: View {
         ZStack(alignment: .topLeading) {
             if showsTerminal {
                 TerminalKeyboardHarnessRepresentable(
+                    tabManager: tabManager,
                     terminalView: $terminalView,
                     terminalReady: $terminalReady,
                     focusRequestID: focusRequestID,
@@ -501,7 +507,7 @@ struct TerminalKeyboardUITestHarness: View {
                             lifecycleStatus = .connected
                             applyRouteActivation(.foregroundActive)
                             terminalView?.resumeRendering()
-                            TerminalTabManager.shared.keyboardCoordinator
+                            tabManager.keyboardCoordinator
                                 .activeTerminalContentDidBecomeVisible(for: Self.paneId)
                         }
                     }
@@ -719,7 +725,7 @@ struct TerminalKeyboardUITestHarness: View {
 
     private func configureLifecycleHarness() {
         guard let terminalView else { return }
-        let manager = TerminalTabManager.shared
+        let manager = tabManager
         if manager.paneStates[Self.paneId] == nil {
             let tab = TerminalTab(serverId: UUID(), title: "Keyboard lifecycle test")
             manager.paneStates[Self.paneId] = TerminalPaneState(
@@ -746,18 +752,18 @@ struct TerminalKeyboardUITestHarness: View {
         keyboardAccessoryPairingObservation = .observing(
             accessoryOnlyObserved: false
         )
-        TerminalTabManager.shared.keyboardCoordinator.userRequestedShow()
+        tabManager.keyboardCoordinator.userRequestedShow()
         terminalView?.dismissFindNavigator()
     }
 
     private func presentSettings() {
-        TerminalTabManager.shared.keyboardCoordinator
+        tabManager.keyboardCoordinator
             .deactivateInputImmediately(reason: .routeModal)
         showingSettings = true
     }
 
     private func requestPaneCloseConfirmation() {
-        TerminalTabManager.shared.keyboardCoordinator
+        tabManager.keyboardCoordinator
             .deactivateInputImmediately(reason: .routeModal)
         showingPaneCloseConfirmation = true
     }
@@ -771,7 +777,7 @@ struct TerminalKeyboardUITestHarness: View {
         windowOwnership: TerminalKeyboardRouteActivationPolicy.WindowOwnership = .unknown,
         contentObscured: Bool = false
     ) {
-        let manager = TerminalTabManager.shared
+        let manager = tabManager
         let presentationOwnership: TerminalKeyboardRouteActivationPolicy.PresentationOwnership =
             showingSettings || showingPaneCloseConfirmation ? .routeModal : .terminal
         switch TerminalKeyboardRouteActivationPolicy.effect(
@@ -836,7 +842,7 @@ struct TerminalKeyboardUITestHarness: View {
         keyboardVisible = visible
         keyboardHeight = frame?.height ?? 0
         keyboardFrame = frame
-        TerminalTabManager.shared.keyboardCoordinator
+        tabManager.keyboardCoordinator
             .keyboardUITestSetSoftwareKeyboardEndFrame(frame)
         refreshDiagnostics()
     }
@@ -850,7 +856,7 @@ struct TerminalKeyboardUITestHarness: View {
             width: screenBounds.width,
             height: height
         )
-        TerminalTabManager.shared.keyboardCoordinator
+        tabManager.keyboardCoordinator
             .keyboardUITestReceiveKeyboardEndFrame(frame, isLocal: false)
         foreignKeyboardFrameInjectionCount += 1
         refreshDiagnostics()
@@ -872,7 +878,7 @@ struct TerminalKeyboardUITestHarness: View {
             privacyModeEnabled: privacyModeEnabled,
             isAppLocked: appLockManager.isAppLocked
         ) {
-            TerminalTabManager.shared.keyboardCoordinator.deactivateInputImmediately()
+            tabManager.keyboardCoordinator.deactivateInputImmediately()
         } else {
             applyRouteActivation(.foregroundInactive)
         }
@@ -881,13 +887,13 @@ struct TerminalKeyboardUITestHarness: View {
     private func resumeLifecycleHarnessAfterForeground() {
         guard terminalReady else { return }
         terminalView?.resumeRendering()
-        TerminalTabManager.shared.keyboardCoordinator.setActivePane(Self.paneId)
-        TerminalTabManager.shared.keyboardCoordinator.setViewActive(true)
+        tabManager.keyboardCoordinator.setActivePane(Self.paneId)
+        tabManager.keyboardCoordinator.setViewActive(true)
         if simulatesKeyboardFrames {
-            TerminalTabManager.shared.keyboardCoordinator
+            tabManager.keyboardCoordinator
                 .keyboardUITestSetSoftwareKeyboardEndFrame(keyboardFrame)
         }
-        TerminalTabManager.shared.keyboardCoordinator.activeTerminalSceneDidActivate(
+        tabManager.keyboardCoordinator.activeTerminalSceneDidActivate(
             for: Self.paneId
         )
         lifecycleStatus = .connected
@@ -935,7 +941,8 @@ struct TerminalSplitKeyboardUITestHarness: View {
     private static let secondPaneId = UUID(uuidString: "4405E542-FE33-4D06-9F8A-ABF93A0CFA8F")!
 
     @EnvironmentObject private var ghosttyApp: Ghostty.App
-    @ObservedObject private var keyboardCoordinator = TerminalTabManager.shared.keyboardCoordinator
+    private let tabManager: TerminalTabManager
+    @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @State private var firstTerminal: GhosttyTerminalView?
     @State private var secondTerminal: GhosttyTerminalView?
     @State private var firstReady = false
@@ -948,6 +955,13 @@ struct TerminalSplitKeyboardUITestHarness: View {
     @State private var diagnostics = "notReady"
 
     private let diagnosticTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
+
+    init(tabManager: TerminalTabManager) {
+        self.tabManager = tabManager
+        _keyboardCoordinator = ObservedObject(
+            wrappedValue: tabManager.keyboardCoordinator
+        )
+    }
 
     private var isReady: Bool {
         firstReady && secondReady
@@ -1009,7 +1023,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
                 }
                 .accessibilityIdentifier("vvterm.keyboardTest.focus.second")
                 Button("Keyboard") {
-                    TerminalTabManager.shared.keyboardCoordinator.userRequestedShow()
+                    tabManager.keyboardCoordinator.userRequestedShow()
                 }
                 .accessibilityIdentifier("vvterm.keyboardTest.showKeyboard")
                 Button("HW On") {
@@ -1055,6 +1069,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
         label: String
     ) -> some View {
         TerminalKeyboardHarnessRepresentable(
+            tabManager: tabManager,
             terminalView: terminal,
             terminalReady: ready,
             focusRequestID: 0,
@@ -1075,7 +1090,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
 
     private func configureIfReady() {
         guard isReady, let firstTerminal, let secondTerminal else { return }
-        let manager = TerminalTabManager.shared
+        let manager = tabManager
         for (paneId, terminal) in [
             (Self.firstPaneId, firstTerminal),
             (Self.secondPaneId, secondTerminal),
@@ -1100,7 +1115,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
         focusedPaneId = paneId
         firstTerminal.acceptsTerminalInput = paneId == Self.firstPaneId
         secondTerminal.acceptsTerminalInput = paneId == Self.secondPaneId
-        TerminalTabManager.shared.keyboardCoordinator.setActivePane(paneId)
+        tabManager.keyboardCoordinator.setActivePane(paneId)
     }
 
     private func terminal(for paneId: UUID) -> GhosttyTerminalView? {
@@ -1156,6 +1171,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
 
 struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
     @EnvironmentObject private var ghosttyApp: Ghostty.App
+    let tabManager: TerminalTabManager
     @Binding var terminalView: GhosttyTerminalView?
     @Binding var terminalReady: Bool
     let focusRequestID: Int
@@ -1172,6 +1188,7 @@ struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: TerminalKeyboardHarnessContainerView, context: Context) {
+        uiView.tabManager = tabManager
         uiView.paneId = paneId
         uiView.onInput = onInput
         uiView.onZoomAction = onZoomAction
@@ -1192,15 +1209,18 @@ struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
 
     static func dismantleUIView(_ uiView: TerminalKeyboardHarnessContainerView, coordinator: ()) {
         uiView.releaseTerminalInput()
-        guard let terminal = uiView.terminalView, let paneId = uiView.paneId else { return }
+        guard let terminal = uiView.terminalView,
+              let tabManager = uiView.tabManager,
+              let paneId = uiView.paneId else { return }
         Task { @MainActor in
-            TerminalTabManager.shared.unregisterTerminal(terminal, for: paneId)
+            tabManager.unregisterTerminal(terminal, for: paneId)
         }
     }
 }
 
 final class TerminalKeyboardHarnessContainerView: UIView {
     private(set) weak var terminalView: GhosttyTerminalView?
+    weak var tabManager: TerminalTabManager?
     var paneId: UUID?
     var onInput: ((Data) -> Void)?
     var onZoomAction: ((TerminalZoomAction) -> Void)?

@@ -22,6 +22,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private var lastForegroundSyncAt: Date = .distantPast
     private let foregroundSyncMinimumInterval: TimeInterval = 20
     private var resumableTerminalLifecycleTask: Task<Void, Never>?
+    private weak var tabManager: TerminalTabManager?
+
+    func configure(tabManager: TerminalTabManager) {
+        if let currentManager = self.tabManager {
+            precondition(currentManager === tabManager, "AppDelegate received a different terminal manager")
+        }
+        self.tabManager = tabManager
+    }
+
+    private var configuredTabManager: TerminalTabManager {
+        guard let tabManager else {
+            preconditionFailure("AppDelegate must be configured with a terminal manager")
+        }
+        return tabManager
+    }
 
     func application(
         _ application: UIApplication,
@@ -103,7 +118,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
     @discardableResult
     func handleApplicationWillTerminate() -> Bool {
-        TerminalTabManager.shared.beginApplicationTermination()
+        configuredTabManager.beginApplicationTermination()
         return LiveActivityManager.shared.endForApplicationTermination()
     }
 
@@ -172,19 +187,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private func queueResumableTerminalBackgroundPreparation(
         completion: @escaping @MainActor () -> Void = {}
     ) {
+        let tabManager = configuredTabManager
         let previousTask = resumableTerminalLifecycleTask
         resumableTerminalLifecycleTask = Task { @MainActor in
             await previousTask?.value
-            await TerminalTabManager.shared.prepareResumableSessionsForApplicationBackground()
+            await tabManager.prepareResumableSessionsForApplicationBackground()
             completion()
         }
     }
 
     private func queueResumableTerminalResume() {
+        let tabManager = configuredTabManager
         let previousTask = resumableTerminalLifecycleTask
         resumableTerminalLifecycleTask = Task { @MainActor in
             await previousTask?.value
-            await TerminalTabManager.shared.resumeResumableSessionsFromApplicationBackground()
+            await tabManager.resumeResumableSessionsFromApplicationBackground()
         }
     }
 }

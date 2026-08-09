@@ -8,7 +8,7 @@ struct ServerSidebarView: View {
     @Binding var selectedServer: Server?
 
     @EnvironmentObject private var storeManager: StoreManager
-    @ObservedObject private var tabManager = TerminalTabManager.shared
+    @ObservedObject private var tabManager: TerminalTabManager
     #if os(macOS)
     @EnvironmentObject private var commandBridge: MacShellCommandBridge
     #endif
@@ -33,6 +33,18 @@ struct ServerSidebarView: View {
 
     @AppStorage("environmentFilters.v2") private var storedEnvironmentFilters: String = ""
     @AppStorage("environmentFilters") private var legacyEnvironmentFilters: String = ""
+
+    init(
+        serverManager: ServerManager,
+        tabManager: TerminalTabManager,
+        selectedWorkspace: Binding<Workspace?>,
+        selectedServer: Binding<Server?>
+    ) {
+        self.serverManager = serverManager
+        _tabManager = ObservedObject(wrappedValue: tabManager)
+        _selectedWorkspace = selectedWorkspace
+        _selectedServer = selectedServer
+    }
 
     // MARK: - Filter State
 
@@ -190,6 +202,7 @@ struct ServerSidebarView: View {
                     LazyVStack(spacing: 4) {
                         ForEach(filteredServers) { server in
                             ServerRow(
+                                tabManager: tabManager,
                                 server: server,
                                 isSelected: selectedServer?.id == server.id,
                                 isLocked: serverManager.isServerLocked(

@@ -18,6 +18,8 @@ struct StoreEntitlementSnapshot {
 
 @MainActor
 final class StoreManager: ObservableObject {
+    private final class TransactionListenerToken {}
+
     @Published private(set) var entitlementSnapshot = StoreEntitlementSnapshot.free
     @Published var products: [StoreProduct] = []
     @Published var purchaseState: PurchaseState = .idle
@@ -28,7 +30,9 @@ final class StoreManager: ObservableObject {
 
     private var startupTask: Task<Void, Never>?
     private var updateListenerTask: Task<Void, Never>?
+    private var transactionListenerToken: TransactionListenerToken?
     private let client: any StoreClient
+    private let effects: StoreManagerEffects
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.VVTerm",
         category: "Store"
@@ -62,8 +66,12 @@ final class StoreManager: ObservableObject {
 
     // MARK: - Initialization
 
-    init(client: any StoreClient) {
+    init(
+        client: any StoreClient,
+        effects: StoreManagerEffects
+    ) {
         self.client = client
+        self.effects = effects
     }
 
     func start() {
@@ -85,6 +93,7 @@ final class StoreManager: ObservableObject {
     }
 
     func stop() {
+        transactionListenerToken = nil
         startupTask?.cancel()
         updateListenerTask?.cancel()
         startupTask = nil
@@ -139,15 +148,14 @@ final class StoreManager: ObservableObject {
     func notePaywallPresented(source: PaywallSource) {
         activePaywallSource = source
         hasPresentedPaywallThisLaunch = true
-        EngagementTracker.shared.notePaywallPresented()
-        AnalyticsTracker.shared.trackPaywallViewed(source: source.rawValue)
+        effects.record(.paywallPresented(source: source))
     }
 
     func notePaywallCTATapped(product: StoreProduct) {
-        AnalyticsTracker.shared.trackPaywallCTATapped(
-            source: activePaywallSource.rawValue,
-            productId: product.id
-        )
+        effects.record(.paywallCTATapped(
+            source: activePaywallSource,
+            productID: product.id
+        ))
     }
 
     func introductoryOfferState(for product: StoreProduct) async -> ProPlanIntroductoryOfferState {
@@ -159,10 +167,10 @@ final class StoreManager: ObservableObject {
     func purchase(_ product: StoreProduct) async {
         purchaseState = .purchasing
         lastPurchasedProductId = nil
-        AnalyticsTracker.shared.trackPurchaseStarted(
-            source: activePaywallSource.rawValue,
-            productId: product.id
-        )
+        effects.record(.purchaseStarted(
+            source: activePaywallSource,
+            productID: product.id
+        ))
         logger.info("Purchasing \(product.id)")
 
         do {
@@ -180,28 +188,28 @@ final class StoreManager: ObservableObject {
                 throw StoreError.verificationFailed
 
             case .userCancelled:
-                AnalyticsTracker.shared.trackPurchaseCancelled(
-                    source: activePaywallSource.rawValue,
-                    productId: product.id
-                )
+                effects.record(.purchaseCancelled(
+                    source: activePaywallSource,
+                    productID: product.id
+                ))
                 applyIdlePurchaseState(logMessage: "Purchase cancelled by user")
 
             case .pending:
-                AnalyticsTracker.shared.trackPurchasePending(
-                    source: activePaywallSource.rawValue,
-                    productId: product.id
-                )
+                effects.record(.purchasePending(
+                    source: activePaywallSource,
+                    productID: product.id
+                ))
                 applyIdlePurchaseState(logMessage: "Purchase pending")
 
             case .unknown:
                 purchaseState = .idle
             }
         } catch {
-            AnalyticsTracker.shared.trackPurchaseFailed(
-                source: activePaywallSource.rawValue,
-                productId: product.id,
+            effects.record(.purchaseFailed(
+                source: activePaywallSource,
+                productID: product.id,
                 reason: String(describing: type(of: error))
-            )
+            ))
             purchaseState = .failed(error.localizedDescription)
             logger.error("Purchase failed: \(error.localizedDescription)")
         }
@@ -251,12 +259,20 @@ final class StoreManager: ObservableObject {
     private func startTransactionListener() {
         guard updateListenerTask == nil else { return }
         let updates = client.transactionUpdates()
-        updateListenerTask = Task { [weak self] in
+        let token = TransactionListenerToken()
+        transactionListenerToken = token
+        let client = self.client
+        let logger = self.logger
+        updateListenerTask = Task { [weak self, client, logger, token] in
             for await update in updates {
-                guard let self else { return }
+                guard !Task.isCancelled else { return }
                 switch update {
                 case .verified:
-                    await checkEntitlements()
+                    let result = await client.entitlements(
+                        subscriptionProductIds: Self.subscriptionProductIds
+                    )
+                    guard !Task.isCancelled else { return }
+                    self?.applyTransactionEntitlementResult(result, token: token)
                 case .unverified(let productId):
                     logger.error(
                         "Ignored unverified StoreKit update for product \(productId, privacy: .public)"
@@ -264,6 +280,14 @@ final class StoreManager: ObservableObject {
                 }
             }
         }
+    }
+
+    private func applyTransactionEntitlementResult(
+        _ result: StoreEntitlementResult,
+        token: TransactionListenerToken
+    ) {
+        guard transactionListenerToken === token else { return }
+        applyEntitlementResult(result)
     }
 
     // MARK: - Subscription Info
@@ -285,10 +309,10 @@ final class StoreManager: ObservableObject {
     private func applySuccessfulPurchase(of product: StoreProduct) {
         lastPurchasedProductId = product.id
         purchaseState = .purchased
-        AnalyticsTracker.shared.trackPurchaseSucceeded(
-            source: activePaywallSource.rawValue,
-            productId: product.id
-        )
+        effects.record(.purchaseSucceeded(
+            source: activePaywallSource,
+            productID: product.id
+        ))
         logger.info("Purchase successful: \(product.id)")
     }
 
@@ -312,7 +336,7 @@ final class StoreManager: ObservableObject {
             hasLifetimeAccess: hasLifetime,
             subscriptionStatus: status
         )
-        AnalyticsTracker.shared.trackAppLaunched(isPro: isPro)
+        effects.record(.entitlementsUpdated(isPro: isPro))
         logger.info("Entitlements checked: isPro=\(hasAccess), isLifetime=\(hasLifetime)")
     }
 
