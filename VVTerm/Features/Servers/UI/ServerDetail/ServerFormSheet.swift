@@ -103,7 +103,9 @@ struct ServerFormSheet: View {
             wrappedValue: ServerFormOperationController(
                 connectionTester: dependencies.connectionTester,
                 hostKeys: dependencies.hostKeys,
-                saveUseCase: saveUseCase
+                saveUseCase: saveUseCase,
+                now: dependencies.now,
+                makeID: dependencies.makeID
             )
         )
 

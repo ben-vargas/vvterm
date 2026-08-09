@@ -57,6 +57,22 @@ private final class ServerHostKeyRepositoryFake: ServerHostKeyRepository, @unche
     }
 }
 
+private final class ServerOperationIDSequence: @unchecked Sendable {
+    private let lock = NSLock()
+    private var remainingIDs: [UUID]
+
+    init(_ ids: [UUID]) {
+        remainingIDs = ids
+    }
+
+    func next() -> UUID {
+        lock.withLock {
+            precondition(!remainingIDs.isEmpty, "Missing test operation ID")
+            return remainingIDs.removeFirst()
+        }
+    }
+}
+
 @MainActor
 private final class ServerMutationRepositoryGate: ServerMutationRepository {
     private var continuation: CheckedContinuation<Server, Error>?
@@ -106,8 +122,13 @@ private final class ServerCredentialStoreStub: ServerCredentialTransactionReposi
 struct ServerFormOperationControllerTests {
     @Test
     func replacementRejectsTheCancelledTestsLateCompletion() async {
+        let firstOperationID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        let secondOperationID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
         let tester = ServerConnectionTesterFake()
-        let controller = makeController(connectionTester: tester)
+        let controller = makeController(
+            connectionTester: tester,
+            operationIDs: [firstOperationID, secondOperationID]
+        )
         let first = makeInput(host: "first.example.com")
         let second = makeInput(host: "second.example.com")
 
@@ -116,6 +137,7 @@ struct ServerFormOperationControllerTests {
             credentials: first.credentials,
             snapshot: first.snapshot
         )
+        #expect(controller.phase == .testing(id: firstOperationID, snapshot: first.snapshot))
         #expect(await tester.waitForCallCount(1))
 
         controller.startConnectionTest(
@@ -128,10 +150,11 @@ struct ServerFormOperationControllerTests {
         await tester.complete(call: 0, with: .success)
         for _ in 0..<20 { await Task.yield() }
 
-        guard case .testing(_, let activeSnapshot) = controller.phase else {
+        guard case .testing(let activeID, let activeSnapshot) = controller.phase else {
             Issue.record("The replacement test is no longer active")
             return
         }
+        #expect(activeID == secondOperationID)
         #expect(activeSnapshot == second.snapshot)
 
         let failure = ServerConnectionTestFailure(
@@ -145,8 +168,12 @@ struct ServerFormOperationControllerTests {
 
     @Test
     func cancellationRejectsALateConnectionTestCompletion() async {
+        let operationID = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
         let tester = ServerConnectionTesterFake()
-        let controller = makeController(connectionTester: tester)
+        let controller = makeController(
+            connectionTester: tester,
+            operationIDs: [operationID]
+        )
         let input = makeInput(host: "cancelled.example.com")
 
         controller.startConnectionTest(
@@ -181,7 +208,8 @@ struct ServerFormOperationControllerTests {
         let controller = makeController(
             connectionTester: tester,
             hostKeys: hostKeys,
-            now: { fixedNow }
+            now: { fixedNow },
+            operationIDs: [UUID(uuidString: "00000000-0000-0000-0000-000000000004")!]
         )
         let input = makeInput(host: challenge.host)
         let failure = ServerConnectionTestFailure(
@@ -222,7 +250,8 @@ struct ServerFormOperationControllerTests {
             hostKeys: ServerHostKeyRepositoryFake(
                 challenge: challenge,
                 approvalResult: false
-            )
+            ),
+            operationIDs: [UUID(uuidString: "00000000-0000-0000-0000-000000000005")!]
         )
         let input = makeInput(host: challenge.host)
         let approvalRequired = ServerConnectionTestFailure(
@@ -248,7 +277,10 @@ struct ServerFormOperationControllerTests {
 
     @Test
     func credentialEndpointApprovalIsAnExplicitDismissiblePhase() {
-        let controller = makeController(connectionTester: ServerConnectionTesterFake())
+        let controller = makeController(
+            connectionTester: ServerConnectionTesterFake(),
+            operationIDs: []
+        )
 
         controller.requireCredentialApproval()
 
@@ -261,11 +293,13 @@ struct ServerFormOperationControllerTests {
 
     @Test
     func cancellationRejectsALateSaveCompletion() async {
+        let operationID = UUID(uuidString: "00000000-0000-0000-0000-000000000006")!
         let tester = ServerConnectionTesterFake()
         let mutations = ServerMutationRepositoryGate()
         let controller = makeController(
             connectionTester: tester,
-            mutations: mutations
+            mutations: mutations,
+            operationIDs: [operationID]
         )
         let input = makeInput(host: "save.example.com")
         var savedServer: Server?
@@ -277,6 +311,7 @@ struct ServerFormOperationControllerTests {
             authorize: { true },
             onSaved: { savedServer = $0 }
         )
+        #expect(controller.phase == .saving(id: operationID))
         await mutations.waitUntilStarted()
 
         controller.cancel()
@@ -291,16 +326,19 @@ struct ServerFormOperationControllerTests {
         connectionTester: any ServerConnectionTesting,
         hostKeys: any ServerHostKeyRepository = ServerHostKeyRepositoryFake(),
         mutations: (any ServerMutationRepository)? = nil,
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = { .distantPast },
+        operationIDs: [UUID]
     ) -> ServerFormOperationController {
-        ServerFormOperationController(
+        let idSequence = ServerOperationIDSequence(operationIDs)
+        return ServerFormOperationController(
             connectionTester: connectionTester,
             hostKeys: hostKeys,
             saveUseCase: ServerSaveUseCase(
                 mutations: mutations ?? ServerMutationRepositoryGate(),
                 credentials: ServerCredentialStoreStub()
             ),
-            now: now
+            now: now,
+            makeID: { idSequence.next() }
         )
     }
 

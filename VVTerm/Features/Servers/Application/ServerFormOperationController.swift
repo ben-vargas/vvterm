@@ -48,6 +48,7 @@ final class ServerFormOperationController: ObservableObject {
     private let hostKeys: any ServerHostKeyRepository
     private let saveUseCase: ServerSaveUseCase
     private let now: @Sendable () -> Date
+    private let makeID: @Sendable () -> UUID
     private var connectionTestTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
 
@@ -55,12 +56,14 @@ final class ServerFormOperationController: ObservableObject {
         connectionTester: any ServerConnectionTesting,
         hostKeys: any ServerHostKeyRepository,
         saveUseCase: ServerSaveUseCase,
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date,
+        makeID: @escaping @Sendable () -> UUID
     ) {
         self.connectionTester = connectionTester
         self.hostKeys = hostKeys
         self.saveUseCase = saveUseCase
         self.now = now
+        self.makeID = makeID
     }
 
     deinit {
@@ -152,7 +155,7 @@ final class ServerFormOperationController: ObservableObject {
         snapshot: ServerFormModel.ConnectionSnapshot
     ) {
         connectionTestTask?.cancel()
-        let operationID = UUID()
+        let operationID = makeID()
         phase = .testing(id: operationID, snapshot: snapshot)
 
         let tester = connectionTester
@@ -201,7 +204,7 @@ final class ServerFormOperationController: ObservableObject {
     ) {
         guard !isSaving else { return }
         saveTask?.cancel()
-        let operationID = UUID()
+        let operationID = makeID()
         phase = .saving(id: operationID)
         let useCase = saveUseCase
 

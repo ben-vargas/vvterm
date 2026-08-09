@@ -50,16 +50,21 @@ struct ServerFormDependencies {
     let credentials: any ServerCredentialRepository
     let connectionTester: any ServerConnectionTesting
     let hostKeys: any ServerHostKeyRepository
+    let now: @Sendable () -> Date
+    let makeID: @Sendable () -> UUID
 
     static var live: Self {
         let hostKeys = KnownHostsManager.shared
+        let now: @Sendable () -> Date = { Date() }
         return Self(
             credentials: KeychainManager.shared,
             connectionTester: AppServerConnectionTester(
                 hostKeys: hostKeys,
-                now: Date.init
+                now: now
             ),
-            hostKeys: hostKeys
+            hostKeys: hostKeys,
+            now: now,
+            makeID: { UUID() }
         )
     }
 }
