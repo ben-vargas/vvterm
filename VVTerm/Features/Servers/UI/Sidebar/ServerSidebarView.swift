@@ -231,7 +231,7 @@ struct ServerSidebarView: View {
                 serverManager: serverManager,
                 workspace: selectedWorkspace,
                 prefill: addServerPrefill,
-                credentials: KeychainManager.shared,
+                dependencies: .live,
                 onSave: { _ in showingAddServer = false }
             )
             .adaptiveSoftScrollEdges()
@@ -258,7 +258,7 @@ struct ServerSidebarView: View {
                 serverManager: serverManager,
                 workspace: selectedWorkspace,
                 server: server,
-                credentials: KeychainManager.shared,
+                dependencies: .live,
                 onSave: { updatedServer in
                     handleSavedServer(updatedServer, originalServer: server)
                     serverToEdit = nil

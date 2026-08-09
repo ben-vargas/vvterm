@@ -166,7 +166,7 @@ struct ServerTerminalRoute: View {
                             serverManager: serverManager,
                             workspace: serverManager.workspaces.first { $0.id == server.workspaceId },
                             server: server,
-                            credentials: KeychainManager.shared,
+                            dependencies: .live,
                             onSave: { _ in presentedRouteSheet = nil }
                         )
                     }

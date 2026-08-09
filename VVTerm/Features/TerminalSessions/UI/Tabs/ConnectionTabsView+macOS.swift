@@ -179,7 +179,7 @@ extension ConnectionTerminalContainer {
                     serverManager: serverManager,
                     workspace: serverManager.workspaces.first { $0.id == editingServer.workspaceId },
                     server: editingServer,
-                    credentials: KeychainManager.shared,
+                    dependencies: .live,
                     onSave: { _ in
                         serverToEdit = nil
                     }

@@ -1,6 +1,4 @@
 import SwiftUI
-import MoshBootstrap
-import ETSession
 
 extension ServerTransportSelection {
     var displayName: String {
@@ -49,29 +47,19 @@ struct ServerFormSheet: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var form: ServerFormModel
+    @StateObject private var operations: ServerFormOperationController
     @State private var showCloudflareOverrides: Bool = false
 
     @State private var showingServerLimitAlert = false
     @State private var showingCreateWorkspace = false
     @State private var showingAddKeySheet = false
-    @State var isSaving = false
-    @State private var isLoadingCredentials = false
-    @State private var error: String?
     @State private var storedKeys: [SSHKeyEntry] = []
     @State private var selectedStoredKey: SSHKeyEntry?
     @State private var programmaticSSHKeyValue: String?
-    @State private var isTestingConnection = false
-    @State private var connectionTestError: String?
-    @State private var connectionTestSucceeded = false
-    @State private var lastTestSnapshot: ServerFormModel.ConnectionSnapshot?
     @State private var showingLocalDiscoverySheet = false
-    @State private var showingCredentialEndpointApproval = false
-    @State private var showingHostKeyTrustConfirmation = false
-    @State private var hostKeyTrustChallenge: KnownHostsManager.Challenge?
     @State private var hasAuthorizedInitialEdit: Bool
 
     private let credentials: any ServerCredentialRepository
-    private let saveUseCase: ServerSaveUseCase
 
     var isEditing: Bool { server != nil }
 
@@ -85,7 +73,7 @@ struct ServerFormSheet: View {
     }
 
     private var hostKeyTrustPresentation: SSHHostKeyTrustPresentation? {
-        hostKeyTrustChallenge.map(SSHHostKeyTrustPresentation.init)
+        operations.hostKeyChallenge.map(SSHHostKeyTrustPresentation.init)
     }
 
     init(
@@ -93,19 +81,26 @@ struct ServerFormSheet: View {
         workspace: Workspace?,
         server: Server? = nil,
         prefill: ServerFormPrefill? = nil,
-        credentials: any ServerCredentialRepository,
+        dependencies: ServerFormDependencies,
         onSave: @escaping (Server) -> Void
     ) {
         self.serverManager = serverManager
         self.workspace = workspace
         self.server = server
         self.prefill = prefill
-        self.credentials = credentials
-        self.saveUseCase = ServerSaveUseCase(
+        self.credentials = dependencies.credentials
+        let saveUseCase = ServerSaveUseCase(
             mutations: serverManager,
-            credentials: credentials
+            credentials: dependencies.credentials
         )
         self.onSave = onSave
+        _operations = StateObject(
+            wrappedValue: ServerFormOperationController(
+                connectionTester: dependencies.connectionTester,
+                hostKeys: dependencies.hostKeys,
+                saveUseCase: saveUseCase
+            )
+        )
 
         var initialForm = ServerFormModel(
             server: server,
@@ -188,11 +183,41 @@ struct ServerFormSheet: View {
     }
 
     private var hasValidConnectionTest: Bool {
-        connectionTestSucceeded && lastTestSnapshot == form.connectionSnapshot
+        operations.hasValidConnectionTest(for: form.connectionSnapshot)
     }
+
+    var isSaving: Bool { operations.isSaving }
+
+    private var isLoadingCredentials: Bool { operations.isLoadingCredentials }
+
+    private var isTestingConnection: Bool { operations.isTestingConnection }
 
     var saveButtonDisabled: Bool {
         !form.isValid || isSaving || isAtLimit || isLoadingCredentials || isTestingConnection
+    }
+
+    private var serverLimitAlertBinding: Binding<Bool> {
+        Binding(
+            get: { showingServerLimitAlert || operations.requiresUpgrade },
+            set: { isPresented in
+                showingServerLimitAlert = isPresented
+                if !isPresented { operations.clearPresentation() }
+            }
+        )
+    }
+
+    private var credentialApprovalBinding: Binding<Bool> {
+        Binding(
+            get: { operations.credentialApprovalRequired },
+            set: { if !$0 { operations.clearPresentation() } }
+        )
+    }
+
+    private var hostKeyTrustBinding: Binding<Bool> {
+        Binding(
+            get: { operations.hostKeyChallenge != nil },
+            set: { if !$0 { operations.rejectHostKeyChallenge() } }
+        )
     }
 
     var body: some View {
@@ -294,8 +319,8 @@ struct ServerFormSheet: View {
                 }
                 .adaptiveSoftScrollEdges()
             }
-            .limitReachedAlert(.servers, isPresented: $showingServerLimitAlert)
-            .alert("Approve Credential Endpoint?", isPresented: $showingCredentialEndpointApproval) {
+            .limitReachedAlert(.servers, isPresented: serverLimitAlertBinding)
+            .alert("Approve Credential Endpoint?", isPresented: credentialApprovalBinding) {
                 Button("Cancel", role: .cancel) { }
                 Button("Approve") {
                     approveCredentialEndpoint()
@@ -305,7 +330,7 @@ struct ServerFormSheet: View {
             }
             .alert(
                 hostKeyTrustPresentation?.title ?? String(localized: "Trust SSH Host?"),
-                isPresented: $showingHostKeyTrustConfirmation
+                isPresented: hostKeyTrustBinding
             ) {
                 Button("Cancel", role: .cancel) {
                     rejectHostKeyChallenge()
@@ -328,6 +353,14 @@ struct ServerFormSheet: View {
             .onAppear {
                 selectMatchingStoredKeyIfAvailable()
                 reconcileAssignmentWorkspace()
+            }
+            .onChange(of: operations.connectionTestFailure) { failure in
+                if failure?.requiresCloudflareOverrides == true {
+                    showCloudflareOverrides = true
+                }
+            }
+            .onDisappear {
+                operations.cancel()
             }
             .onChange(of: form.host) { _ in resetConnectionTestState() }
             .onChange(of: form.port) { _ in resetConnectionTestState() }
@@ -687,7 +720,7 @@ struct ServerFormSheet: View {
 
     @ViewBuilder
     private var errorSection: some View {
-        if let error = error {
+        if let error = operations.failureMessage {
             Section {
                 Text(error)
                     .foregroundStyle(.red)
@@ -721,11 +754,11 @@ struct ServerFormSheet: View {
 
     @ViewBuilder
     private var connectionFooter: some View {
-        if connectionTestSucceeded && hasValidConnectionTest {
+        if hasValidConnectionTest {
             Label(String(localized: "Connection successful"), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
                 .font(.caption)
-        } else if let connectionTestError {
+        } else if let connectionTestError = operations.connectionTestFailure?.message {
             Text(connectionTestError)
                 .foregroundStyle(.red)
                 .font(.caption)
@@ -773,7 +806,9 @@ struct ServerFormSheet: View {
             }
             form.sshPublicKey = entry.publicKey ?? ""
         } catch {
-            self.error = String(format: String(localized: "Failed to load key: %@"), error.localizedDescription)
+            operations.fail(
+                String(format: String(localized: "Failed to load key: %@"), error.localizedDescription)
+            )
         }
     }
 
@@ -806,9 +841,7 @@ struct ServerFormSheet: View {
     // MARK: - Connection Test
 
     private func resetConnectionTestState() {
-        connectionTestError = nil
-        connectionTestSucceeded = false
-        lastTestSnapshot = nil
+        operations.resetConnectionTest()
     }
 
     private func buildServer(id: UUID, createdAt: Date) -> Server {
@@ -850,20 +883,20 @@ struct ServerFormSheet: View {
     }
 
     private func loadStoredCredentials(for server: Server) {
-        isLoadingCredentials = true
-        defer { isLoadingCredentials = false }
+        operations.beginCredentialLoad()
 
         do {
             form.apply(try credentials.getCredentials(for: server), for: server)
             selectMatchingStoredKeyIfAvailable()
-            error = nil
+            operations.finishCredentialLoad()
         } catch ServerCredentialAccessError.approvalRequired {
-            error = nil
-            showingCredentialEndpointApproval = true
+            operations.requireCredentialApproval()
         } catch {
-            self.error = String(
-                format: String(localized: "Failed to load credentials: %@"),
-                error.localizedDescription
+            operations.fail(
+                String(
+                    format: String(localized: "Failed to load credentials: %@"),
+                    error.localizedDescription
+                )
             )
         }
     }
@@ -880,7 +913,7 @@ struct ServerFormSheet: View {
                 try credentials.approveCredentialUse(for: server)
                 loadStoredCredentials(for: server)
             } catch {
-                self.error = error.localizedDescription
+                operations.fail(error.localizedDescription)
             }
         }
     }
@@ -909,195 +942,51 @@ struct ServerFormSheet: View {
         )
     }
 
-    private func runConnectionTest(force: Bool) async -> Bool {
+    private func runConnectionTest(force: Bool) async {
         if let server {
             guard await appLockManager.authorizeProtectedServerAction(
                 server,
                 action: .testConnection
-            ) else { return false }
+            ) else { return }
         }
 
-        let snapshot = await MainActor.run { form.connectionSnapshot }
-        let shouldSkip = await MainActor.run { !force && hasValidConnectionTest }
-        if shouldSkip {
-            return true
-        }
-
-        let (testServer, credentials) = await MainActor.run { () -> (Server, ServerCredentials) in
-            isTestingConnection = true
-            connectionTestError = nil
-            connectionTestSucceeded = false
-
-            let serverId = server?.id ?? UUID()
-            let server = buildServer(id: serverId, createdAt: server?.createdAt ?? Date())
-            let credentials = form.makeCredentials(serverID: serverId)
-            return (server, credentials)
-        }
-
-        let result = await Task.detached(priority: .userInitiated) { () -> Result<Void, Error> in
-            do {
-                try await SSHConnectionOperationService.shared.withTemporaryConnection(
-                    server: testServer,
-                    credentials: credentials
-                ) { client in
-                    if testServer.connectionMode == .mosh {
-                        let connectInfo = try await RemoteMoshManager.shared.bootstrapConnectInfo(
-                            using: client,
-                            startCommand: "exec true",
-                            portRange: 60001...61000
-                        )
-                        await RemoteMoshManager.terminateBootstrappedServer(
-                            pid: connectInfo.serverPID,
-                            terminate: { pid in
-                                await RemoteMoshManager.shared.terminateMoshServer(
-                                    pid: pid,
-                                    execute: { command, timeout in
-                                        try await client.execute(command, timeout: timeout)
-                                    }
-                                )
-                            }
-                        )
-                    } else if testServer.connectionMode == .eternalTerminal {
-                        let session = ETTerminalSession(
-                            host: testServer.host,
-                            port: UInt16(exactly: testServer.eternalTerminalPort) ?? 2022,
-                            bootstrapExecutor: SSHETBootstrapExecutor(
-                                connectedClient: client
-                            ),
-                            bootstrapOptions: SSHETBootstrapExecutor.bootstrapOptions
-                        )
-                        do {
-                            try await session.connect()
-                            await session.close()
-                        } catch {
-                            await session.close()
-                            throw error
-                        }
-                    }
-                }
-                return .success(())
-            } catch {
-                return .failure(error)
-            }
-        }.value
-
-        var success = false
-        await MainActor.run {
-            isTestingConnection = false
-            lastTestSnapshot = snapshot
-
-            switch result {
-            case .success:
-                connectionTestSucceeded = true
-                success = true
-            case .failure(let error):
-                let baseMessage = testServer.connectionMode == .eternalTerminal
-                    ? EternalTerminalErrorPresentation.message(
-                        for: error,
-                        host: testServer.host,
-                        port: testServer.eternalTerminalPort
-                    )
-                    : error.localizedDescription
-                if testServer.connectionMode == .tailscale {
-                    let reminder = String(localized: "This app currently supports direct tailnet connections only (no userspace proxy fallback).")
-                    if baseMessage.contains(reminder) {
-                        connectionTestError = baseMessage
-                    } else {
-                        connectionTestError = "\(baseMessage)\n\(reminder)"
-                    }
-                } else {
-                    connectionTestError = baseMessage
-                }
-                if let sshError = error as? SSHError, case .cloudflareConfigurationRequired = sshError {
-                    showCloudflareOverrides = true
-                }
-                if let sshError = error as? SSHError, case .hostKeyApprovalRequired = sshError {
-                    hostKeyTrustChallenge = KnownHostsManager.shared.pendingChallenge(
-                        for: testServer.host,
-                        port: testServer.port
-                    )
-                    showingHostKeyTrustConfirmation = hostKeyTrustChallenge != nil
-                }
-                connectionTestSucceeded = false
-                success = false
-            }
-        }
-
-        return success
+        let snapshot = form.connectionSnapshot
+        guard force || !operations.hasValidConnectionTest(for: snapshot) else { return }
+        let serverID = server?.id ?? UUID()
+        operations.startConnectionTest(
+            server: buildServer(id: serverID, createdAt: server?.createdAt ?? Date()),
+            credentials: form.makeCredentials(serverID: serverID),
+            snapshot: snapshot
+        )
     }
 
     private func rejectHostKeyChallenge() {
-        if let hostKeyTrustChallenge {
-            KnownHostsManager.shared.reject(hostKeyTrustChallenge)
-        }
-        self.hostKeyTrustChallenge = nil
+        operations.rejectHostKeyChallenge()
     }
 
     private func approveHostKeyChallengeAndRetest() {
-        guard let hostKeyTrustChallenge,
-              KnownHostsManager.shared.approve(hostKeyTrustChallenge) else {
-            connectionTestError = String(localized: "SSH host key approval expired. Try again.")
-            self.hostKeyTrustChallenge = nil
-            return
-        }
-
-        self.hostKeyTrustChallenge = nil
+        guard operations.approveHostKeyChallenge() else { return }
         Task {
-            _ = await runConnectionTest(force: true)
+            await runConnectionTest(force: true)
         }
     }
 
     func saveServer() {
-        isSaving = true
-        error = nil
-
-        Task {
-            do {
-                if let server {
-                    guard await appLockManager.authorizeProtectedServerAction(
-                        server,
-                        action: .save
-                    ) else {
-                        await MainActor.run { isSaving = false }
-                        return
-                    }
-                }
-
-                let (newServer, credentials) = await MainActor.run { () -> (Server, ServerCredentials) in
-                    let serverId = server?.id ?? UUID()
-                    let server = buildServer(id: serverId, createdAt: server?.createdAt ?? Date())
-                    let credentials = form.makeCredentials(serverID: serverId)
-                    return (server, credentials)
-                }
-
-                let mutation: ServerMutation = isEditing ? .update(newServer) : .create(newServer)
-                let savedServer = try await saveUseCase.execute(
-                    mutation,
-                    credentials: credentials,
-                    hasProAccess: storeManager.isPro
-                )
-
-                await MainActor.run {
-                    isSaving = false
-                    onSave(savedServer)
-                    dismiss()
-                }
-            } catch let error as VVTermError {
-                await MainActor.run {
-                    if case .proRequired = error {
-                        self.showingServerLimitAlert = true
-                    } else {
-                        self.error = error.localizedDescription
-                    }
-                    self.isSaving = false
-                }
-            } catch {
-                await MainActor.run {
-                    self.error = error.localizedDescription
-                    self.isSaving = false
-                }
+        let serverID = server?.id ?? UUID()
+        let newServer = buildServer(id: serverID, createdAt: server?.createdAt ?? Date())
+        operations.save(
+            mutation: isEditing ? .update(newServer) : .create(newServer),
+            credentials: form.makeCredentials(serverID: serverID),
+            hasProAccess: storeManager.isPro,
+            authorize: {
+                guard let server else { return true }
+                return await appLockManager.authorizeProtectedServerAction(server, action: .save)
+            },
+            onSaved: { savedServer in
+                onSave(savedServer)
+                dismiss()
             }
-        }
+        )
     }
 }
 
@@ -1385,7 +1274,7 @@ struct MoveServerSheet: View {
     ServerFormSheet(
         serverManager: ServerManager.shared,
         workspace: nil,
-        credentials: KeychainManager.shared,
+        dependencies: .live,
         onSave: { _ in }
     )
 }

@@ -81,7 +81,7 @@ struct ServerListScreen: View {
                     serverManager: serverManager,
                     workspace: selectedWorkspace,
                     prefill: addServerPrefill,
-                    credentials: KeychainManager.shared,
+                    dependencies: .live,
                     onSave: { _ in showingAddServer = false }
                 )
             }
@@ -120,7 +120,7 @@ struct ServerListScreen: View {
                     serverManager: serverManager,
                     workspace: selectedWorkspace,
                     server: server,
-                    credentials: KeychainManager.shared,
+                    dependencies: .live,
                     onSave: { updatedServer in
                         handleSavedServer(updatedServer, originalServer: server)
                         serverToEdit = nil
