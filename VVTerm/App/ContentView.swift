@@ -18,12 +18,12 @@ struct ContentView: View {
     @StateObject private var engagementTracker = EngagementTracker.shared
     @Environment(\.requestReview) private var requestReview
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
 
     #if os(macOS)
     // Re-injected into the AppKit-hosted sidebar/detail panes, since environment
     // values do not cross an NSHostingController boundary automatically.
     @EnvironmentObject private var ghosttyApp: Ghostty.App
-    @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @EnvironmentObject private var appLockManager: AppLockManager
     @Environment(\.locale) private var locale
@@ -64,7 +64,6 @@ struct ContentView: View {
         canUseZenMode && isZenModeEnabled
     }
 
-    #if os(macOS)
     private var effectiveTerminalThemeName: String {
         let fallback = colorScheme == .dark ? "Aizen Dark" : "Aizen Light"
         let preferred = usePerAppearanceTheme
@@ -80,6 +79,7 @@ struct ContentView: View {
         ThemeColorParser.previewPalette(for: effectiveTerminalThemeName).background
     }
 
+    #if os(macOS)
     private var zenWindowTitle: String {
         guard effectiveZenModeEnabled, let selectedServer else { return "" }
         return selectedServer.name
