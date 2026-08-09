@@ -149,7 +149,14 @@ struct DockerStatsCollector: Sendable {
             return nil
         }
 
-        return UInt64(max(value * multiplier, 0))
+        let byteCount = value * multiplier
+        let uint64UpperBound = 18_446_744_073_709_551_616.0
+        guard byteCount.isFinite,
+              byteCount >= 0,
+              byteCount < uint64UpperBound else {
+            return nil
+        }
+        return UInt64(byteCount)
     }
 
     func psCommands(platform: RemotePlatform, environment: RemoteEnvironment, limit: Int?) -> [String] {

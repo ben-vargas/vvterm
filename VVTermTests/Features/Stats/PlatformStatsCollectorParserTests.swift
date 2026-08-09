@@ -807,4 +807,13 @@ final class PlatformStatsCollectorParserTests: XCTestCase {
         XCTAssertEqual(collector.parseSize("2,5 kB"), 2_500)
         XCTAssertEqual(collector.parseSize("64B"), 64)
     }
+
+    func testDockerSizeParserRejectsOverflowingProducts() {
+        let collector = DockerStatsCollector()
+
+        XCTAssertNil(collector.parseSize("16777216TiB"))
+        XCTAssertNil(collector.parseSize("100000000TB"))
+        XCTAssertNil(collector.parseSize("999999999999999999999999999999999999999B"))
+        XCTAssertEqual(collector.parseSize("16777215TiB"), 16_777_215 * 1_099_511_627_776)
+    }
 }
