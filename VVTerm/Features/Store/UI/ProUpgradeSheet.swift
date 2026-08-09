@@ -1,5 +1,4 @@
 import SwiftUI
-import StoreKit
 
 // MARK: - Pro Upgrade Sheet
 
@@ -418,7 +417,7 @@ struct ProUpgradeSheet: View {
         ProPlanKind.displayOrder.filter { product(for: $0) != nil }
     }
 
-    private var selectedProduct: Product? {
+    private var selectedProduct: StoreProduct? {
         product(for: selectedPlan)
     }
 
@@ -433,7 +432,7 @@ struct ProUpgradeSheet: View {
         return .yearly
     }
 
-    private func product(for plan: ProPlanKind) -> Product? {
+    private func product(for plan: ProPlanKind) -> StoreProduct? {
         switch plan {
         case .monthly:
             return storeManager.monthlyProduct
@@ -444,7 +443,7 @@ struct ProUpgradeSheet: View {
         }
     }
 
-    private func presentation(for plan: ProPlanKind, product: Product) -> ProPlanPresentation {
+    private func presentation(for plan: ProPlanKind, product: StoreProduct) -> ProPlanPresentation {
         ProPlanPresentation(
             plan: plan,
             displayPrice: product.displayPrice,

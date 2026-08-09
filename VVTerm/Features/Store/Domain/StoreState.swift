@@ -1,6 +1,59 @@
 import Foundation
 
-enum PurchaseState: Equatable {
+nonisolated struct StoreProduct: Identifiable, Equatable, Sendable {
+    let id: String
+    let displayName: String
+    let displayPrice: String
+}
+
+nonisolated enum StorePurchaseResult: Equatable, Sendable {
+    case verified(productId: String)
+    case unverified(productId: String)
+    case userCancelled
+    case pending
+    case unknown
+}
+
+nonisolated enum StoreTransactionUpdate: Equatable, Sendable {
+    case verified(productId: String)
+    case unverified(productId: String)
+}
+
+nonisolated enum StoreSubscriptionState: Equatable, Sendable {
+    case subscribed
+    case inGracePeriod
+    case inBillingRetryPeriod
+    case expired
+    case revoked
+    case unknown
+}
+
+nonisolated struct StoreSubscriptionEntitlement: Equatable, Sendable {
+    let state: StoreSubscriptionState
+    let isVerified: Bool
+}
+
+nonisolated enum StoreVerificationResult<Value: Equatable & Sendable>: Equatable, Sendable {
+    case verified(Value)
+    case unverified
+}
+
+nonisolated struct StoreSubscriptionTransaction: Equatable, Sendable {
+    let productID: String
+    let expirationDate: Date?
+}
+
+nonisolated struct StoreSubscriptionStatus: Equatable, Sendable {
+    let transaction: StoreVerificationResult<StoreSubscriptionTransaction>
+    let state: StoreSubscriptionState
+
+    var expirationDate: Date? {
+        guard case .verified(let transaction) = transaction else { return nil }
+        return transaction.expirationDate
+    }
+}
+
+nonisolated enum PurchaseState: Equatable {
     case idle
     case purchasing
     case purchased
@@ -18,7 +71,7 @@ enum PurchaseState: Equatable {
     }
 }
 
-enum RestoreState: Equatable {
+nonisolated enum RestoreState: Equatable {
     case idle
     case restoring
     case restored(hasAccess: Bool)
@@ -38,7 +91,7 @@ enum RestoreState: Equatable {
     }
 }
 
-enum PaywallSource: String {
+nonisolated enum PaywallSource: String {
     case general
     case serverLimit = "server_limit"
     case workspaceLimit = "workspace_limit"
@@ -53,7 +106,7 @@ enum PaywallSource: String {
     case dockerStats = "docker_stats"
 }
 
-enum VVTermProducts {
+nonisolated enum VVTermProducts {
     static let proMonthly = "com.vivy.vivyterm.pro.monthly"
     static let proYearly = "com.vivy.vivyterm.pro.yearly"
     static let proLifetime = "com.vivy.vivyterm.pro.lifetime"
@@ -62,7 +115,7 @@ enum VVTermProducts {
     static let allProducts = [proMonthly, proYearly, proLifetime]
 }
 
-enum StoreError: LocalizedError {
+nonisolated enum StoreError: LocalizedError {
     case verificationFailed
     case productNotFound
     case purchaseFailed(String)
