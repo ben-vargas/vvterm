@@ -94,7 +94,7 @@ struct LimitReachedAlert: ViewModifier {
             case .servers:
                 return String(
                     format: String(localized: "You've reached the free limit of %@. Pro unlocks unlimited servers, workspaces, simultaneous connections, and split panes."),
-                    FreeTierLimits.serverLimitDescription(serverLimit)
+                    FreeTierLimitPresentation.serverCountDescription(serverLimit)
                 )
             case .workspaces:
                 return String(format: String(localized: "You've reached the free limit of %lld workspace. Pro unlocks unlimited workspaces, servers, simultaneous connections, and split panes."), Int64(FreeTierLimits.maxWorkspaces))
@@ -311,7 +311,7 @@ struct LockedItemAlert: ViewModifier {
             case .server:
                 return String(
                     format: String(localized: "This server exceeds your free plan limit of %@. Renew your Pro subscription to access all your servers."),
-                    FreeTierLimits.serverLimitDescription(serverLimit)
+                    FreeTierLimitPresentation.serverCountDescription(serverLimit)
                 )
             case .workspace:
                 return String(format: String(localized: "This workspace exceeds your free plan limit of %lld workspace. Renew your Pro subscription to access all your workspaces."), Int64(FreeTierLimits.maxWorkspaces))

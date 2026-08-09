@@ -16,11 +16,4 @@ nonisolated enum FreeTierLimits {
         components.day = 25
         return components.date ?? Date(timeIntervalSince1970: 1_782_345_600)
     }()
-
-    static func serverLimitDescription(_ limit: Int) -> String {
-        if limit == 1 {
-            return String(localized: "1 server")
-        }
-        return String(format: String(localized: "%lld servers"), Int64(limit))
-    }
 }

@@ -484,7 +484,7 @@ struct ServerFormSheet: View {
                     title: String(localized: "Server Limit Reached"),
                     message: String(
                         format: String(localized: "You've reached the free limit of %@. Pro unlocks unlimited servers, connections, and split panes."),
-                        FreeTierLimits.serverLimitDescription(stateStore.freeServerLimit)
+                        FreeTierLimitPresentation.serverCountDescription(stateStore.freeServerLimit)
                     )
                 ) {
                     showingServerLimitAlert = true
