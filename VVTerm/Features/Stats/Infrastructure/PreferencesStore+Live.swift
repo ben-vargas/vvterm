@@ -22,12 +22,14 @@ extension CloudKitSyncResolutionHub: StatsPreferencesResolutionSource {
 extension PreferencesStoreDependencies {
     static var live: Self {
         PreferencesStoreDependencies(
-            defaults: .standard,
+            persistence: UserDefaultsStatsPreferencesStore(
+                defaults: .standard,
+                key: CloudKitSyncConstants.statsPreferencesStorageKey
+            ),
             cloud: CloudKitManager.shared,
             mutationQueue: CloudKitSyncCoordinator.shared,
             syncLifecycle: CloudKitSyncLifecycleDriver.shared,
             resolutionSource: CloudKitSyncResolutionHub.shared,
-            persistenceKey: CloudKitSyncConstants.statsPreferencesStorageKey,
             writerID: DeviceIdentity.id,
             isSyncEnabled: { SyncSettings.isEnabled },
             now: Date.init,

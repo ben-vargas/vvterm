@@ -30,13 +30,18 @@ protocol StatsPreferencesResolutionSource: AnyObject {
 }
 
 @MainActor
+protocol StatsPreferencesPersisting: AnyObject {
+    func loadPreferences(defaultWriterID: String) -> StatsPreferences
+    func savePreferences(_ preferences: StatsPreferences)
+}
+
+@MainActor
 struct PreferencesStoreDependencies {
-    let defaults: UserDefaults
+    let persistence: any StatsPreferencesPersisting
     let cloud: any StatsPreferencesCloudClient
     let mutationQueue: any StatsPreferencesMutationQueue
     let syncLifecycle: any StatsPreferencesSyncLifecycle
     let resolutionSource: any StatsPreferencesResolutionSource
-    let persistenceKey: String
     let writerID: String
     let isSyncEnabled: () -> Bool
     let now: () -> Date

@@ -72,8 +72,6 @@ final class PreferencesStore: ObservableObject {
     private var startupSyncTask: Task<Void, Never>?
     private var lifecycleSyncTask: Task<Void, Never>?
 
-    private var defaults: UserDefaults { dependencies.defaults }
-
     init(dependencies: PreferencesStoreDependencies) {
         self.dependencies = dependencies
         let observerCleanup = StatsPreferencesObserverCleanup(
@@ -81,10 +79,8 @@ final class PreferencesStore: ObservableObject {
             resolutionSource: dependencies.resolutionSource
         )
         self.observerCleanupRequest = observerCleanup.request
-        self.preferences = PreferencesStore.loadPreferences(
-            from: dependencies.defaults,
-            key: dependencies.persistenceKey,
-            writerID: dependencies.writerID
+        self.preferences = dependencies.persistence.loadPreferences(
+            defaultWriterID: dependencies.writerID
         )
 
         guard dependencies.startsSynchronization else { return }
@@ -195,48 +191,7 @@ final class PreferencesStore: ObservableObject {
     }
 
     private func persistPreferences() {
-        do {
-            let encoded = try JSONEncoder().encode(preferences)
-            defaults.set(encoded, forKey: dependencies.persistenceKey)
-        } catch {
-            logger.error("Failed to encode stats preferences: \(error.localizedDescription)")
-        }
-    }
-
-    private static func loadPreferences(
-        from defaults: UserDefaults,
-        key: String,
-        writerID: String
-    ) -> StatsPreferences {
-        guard let data = defaults.data(forKey: key) else {
-            let defaultPreferences = StatsPreferences
-                .defaultValue(lastWriterDeviceId: writerID)
-                .normalized()
-            if let encoded = try? JSONEncoder().encode(defaultPreferences) {
-                defaults.set(encoded, forKey: key)
-            }
-            return defaultPreferences
-        }
-
-        do {
-            var decoded = try JSONDecoder().decode(StatsPreferences.self, from: data)
-            if decoded.lastWriterDeviceId.isEmpty {
-                decoded.lastWriterDeviceId = writerID
-            }
-            let normalized = decoded.normalized()
-            if normalized != decoded, let encoded = try? JSONEncoder().encode(normalized) {
-                defaults.set(encoded, forKey: key)
-            }
-            return normalized
-        } catch {
-            let defaultPreferences = StatsPreferences
-                .defaultValue(lastWriterDeviceId: writerID)
-                .normalized()
-            if let encoded = try? JSONEncoder().encode(defaultPreferences) {
-                defaults.set(encoded, forKey: key)
-            }
-            return defaultPreferences
-        }
+        dependencies.persistence.savePreferences(preferences)
     }
 
     private func scheduleSyncWithCloud() {

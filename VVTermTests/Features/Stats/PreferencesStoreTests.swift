@@ -144,6 +144,24 @@ private final class StatsPreferencesResolutionSourceStub: StatsPreferencesResolu
 }
 
 @MainActor
+private final class StatsPreferencesStoreSpy: StatsPreferencesPersisting {
+    private let initialPreferences: StatsPreferences
+    private(set) var savedPreferences: [StatsPreferences] = []
+
+    init(initialPreferences: StatsPreferences) {
+        self.initialPreferences = initialPreferences
+    }
+
+    func loadPreferences(defaultWriterID: String) -> StatsPreferences {
+        initialPreferences
+    }
+
+    func savePreferences(_ preferences: StatsPreferences) {
+        savedPreferences.append(preferences)
+    }
+}
+
+@MainActor
 final class PreferencesStoreTests: XCTestCase {
     private var suiteName: String!
     private var defaults: UserDefaults!
@@ -169,6 +187,18 @@ final class PreferencesStoreTests: XCTestCase {
 
         XCTAssertEqual(store.preferences.lastWriterDeviceId, writerID)
         XCTAssertNotNil(defaults.data(forKey: persistenceKey))
+    }
+
+    func testStoreLoadsAndSavesOnlyThroughInjectedPersistence() {
+        let initial = StatsPreferences.defaultValue(lastWriterDeviceId: writerID)
+        let persistence = StatsPreferencesStoreSpy(initialPreferences: initial)
+        let store = makeStore(persistence: persistence)
+
+        XCTAssertEqual(store.preferences, initial)
+
+        store.setStyle(.classic)
+
+        XCTAssertEqual(persistence.savedPreferences, [store.preferences])
     }
 
     func testLegacyEmptyWriterReceivesApplicationWriterIdentity() throws {
@@ -402,6 +432,7 @@ final class PreferencesStoreTests: XCTestCase {
     }
 
     private func makeStore(
+        persistence: (any StatsPreferencesPersisting)? = nil,
         cloud: StatsPreferencesCloudStub? = nil,
         queue: StatsPreferencesMutationQueueSpy? = nil,
         lifecycle: StatsPreferencesSyncLifecycleStub? = nil,
@@ -417,12 +448,14 @@ final class PreferencesStoreTests: XCTestCase {
         let resolutionSource = resolutionSource ?? StatsPreferencesResolutionSourceStub()
         return PreferencesStore(
             dependencies: PreferencesStoreDependencies(
-                defaults: defaults,
+                persistence: persistence ?? UserDefaultsStatsPreferencesStore(
+                    defaults: defaults,
+                    key: persistenceKey
+                ),
                 cloud: cloud,
                 mutationQueue: queue,
                 syncLifecycle: lifecycle,
                 resolutionSource: resolutionSource,
-                persistenceKey: persistenceKey,
                 writerID: writerID,
                 isSyncEnabled: isSyncEnabled,
                 now: now,
