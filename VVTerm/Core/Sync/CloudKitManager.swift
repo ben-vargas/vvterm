@@ -233,12 +233,12 @@ final class CloudKitManager: ObservableObject {
             for record in batch.records {
                 switch record.recordType {
                 case RecordType.server:
-                    if let server = Server(from: record) {
+                    if let server = ServerCloudKitRecordCodec.server(from: record) {
                         serversByID[server.id] = server
                         deletedServerIDs.remove(server.id)
                     }
                 case RecordType.workspace:
-                    if let workspace = Workspace(from: record) {
+                    if let workspace = WorkspaceCloudKitRecordCodec.workspace(from: record) {
                         workspacesByID[workspace.id] = workspace
                         deletedWorkspaceIDs.remove(workspace.id)
                     }
@@ -285,7 +285,7 @@ final class CloudKitManager: ObservableObject {
 
     func saveServer(_ server: Server) async throws {
         try await prepareSyncMutation()
-        let record = server.toRecord(in: recordZoneID)
+        let record = ServerCloudKitRecordCodec.record(for: server, in: recordZoneID)
         try await performSyncMutation(
             successLog: "Saved server \(server.name) to CloudKit",
             failureLog: "Failed to save server"
@@ -313,7 +313,7 @@ final class CloudKitManager: ObservableObject {
 
     func saveWorkspace(_ workspace: Workspace) async throws {
         try await prepareSyncMutation()
-        let record = workspace.toRecord(in: recordZoneID)
+        let record = WorkspaceCloudKitRecordCodec.record(for: workspace, in: recordZoneID)
         try await performSyncMutation(
             successLog: "Saved workspace \(workspace.name) to CloudKit",
             failureLog: "Failed to save workspace"
