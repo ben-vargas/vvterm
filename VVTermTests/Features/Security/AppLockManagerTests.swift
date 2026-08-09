@@ -88,4 +88,25 @@ final class AppLockManagerTests: XCTestCase {
         XCTAssertEqual(publicationCount, 0)
         withExtendedLifetime(cancellable) {}
     }
+
+    func testBiometryValuesAreDerivedFromAvailability() {
+        let defaults = makeDefaults()
+        let authService = StubBiometricAuthService(
+            availabilityResult: .available(.touchID)
+        )
+        let manager = AppLockManager(defaults: defaults, authService: authService)
+
+        XCTAssertEqual(manager.biometricAvailability, .available(.touchID))
+        XCTAssertTrue(manager.isBiometryAvailable)
+        XCTAssertEqual(manager.biometryKind, .touchID)
+        XCTAssertNil(manager.biometryAvailabilityMessage)
+
+        authService.availabilityResult = .unavailable("Biometry unavailable")
+        manager.refreshBiometryAvailability()
+
+        XCTAssertEqual(manager.biometricAvailability, .unavailable("Biometry unavailable"))
+        XCTAssertFalse(manager.isBiometryAvailable)
+        XCTAssertEqual(manager.biometryKind, .none)
+        XCTAssertEqual(manager.biometryAvailabilityMessage, "Biometry unavailable")
+    }
 }

@@ -14,9 +14,7 @@ final class AppLockManager: ObservableObject {
     @Published private(set) var isAppLocked: Bool
     @Published private(set) var isAuthenticating = false
     @Published private(set) var lastErrorMessage: String?
-    @Published private(set) var isBiometryAvailable = false
-    @Published private(set) var biometryKind: BiometryKind = .none
-    @Published private(set) var biometryAvailabilityMessage: String?
+    @Published private(set) var biometricAvailability: BiometricAvailability
 
     @Published var fullAppLockEnabled: Bool {
         didSet {
@@ -49,6 +47,27 @@ final class AppLockManager: ObservableObject {
         biometryKind.displayName
     }
 
+    var isBiometryAvailable: Bool {
+        if case .available = biometricAvailability {
+            return true
+        }
+        return false
+    }
+
+    var biometryKind: BiometryKind {
+        if case .available(let kind) = biometricAvailability {
+            return kind
+        }
+        return .none
+    }
+
+    var biometryAvailabilityMessage: String? {
+        if case .unavailable(let message) = biometricAvailability {
+            return message
+        }
+        return nil
+    }
+
     private let defaults: UserDefaults
     private let authService: any BiometricAuthServing
     private var lastAppUnlockAt: Date?
@@ -57,6 +76,7 @@ final class AppLockManager: ObservableObject {
     init(defaults: UserDefaults, authService: any BiometricAuthServing) {
         self.defaults = defaults
         self.authService = authService
+        self.biometricAvailability = authService.availability()
 
         let fullLockEnabled = defaults.object(forKey: Keys.fullAppLockEnabled) as? Bool ?? false
         self.fullAppLockEnabled = fullLockEnabled
@@ -64,8 +84,6 @@ final class AppLockManager: ObservableObject {
         let storedGrace = defaults.object(forKey: Keys.authGraceSeconds) as? Int ?? 30
         self.authGraceSeconds = max(0, min(storedGrace, 300))
         self.isAppLocked = fullLockEnabled
-
-        refreshBiometryAvailability()
     }
 
     convenience init() {
@@ -73,29 +91,9 @@ final class AppLockManager: ObservableObject {
     }
 
     func refreshBiometryAvailability() {
-        let nextIsAvailable: Bool
-        let nextKind: BiometryKind
-        let nextMessage: String?
-
-        switch authService.availability() {
-        case .available(let kind):
-            nextIsAvailable = true
-            nextKind = kind
-            nextMessage = nil
-        case .unavailable(let message):
-            nextIsAvailable = false
-            nextKind = .none
-            nextMessage = message
-        }
-
-        if isBiometryAvailable != nextIsAvailable {
-            isBiometryAvailable = nextIsAvailable
-        }
-        if biometryKind != nextKind {
-            biometryKind = nextKind
-        }
-        if biometryAvailabilityMessage != nextMessage {
-            biometryAvailabilityMessage = nextMessage
+        let nextAvailability = authService.availability()
+        if biometricAvailability != nextAvailability {
+            biometricAvailability = nextAvailability
         }
     }
 
