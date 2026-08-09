@@ -195,32 +195,11 @@ actor CloudflareTransportManager {
         guard let activeSession else { return }
         self.activeSession = nil
         do {
-            try await CloudflareTransportManager.runWithTimeout(disconnectTimeout) {
+            try await HardOperationDeadline.run(timeout: disconnectTimeout) {
                 await activeSession.disconnect()
             }
         } catch {
             logger.warning("Timed out while disconnecting Cloudflare transport session")
-        }
-    }
-
-    private nonisolated static func runWithTimeout<T: Sendable>(
-        _ timeout: Duration,
-        operation: @escaping @Sendable () async throws -> T
-    ) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask {
-                try await operation()
-            }
-            group.addTask {
-                try await Task.sleep(for: timeout)
-                throw SSHError.timeout
-            }
-
-            guard let result = try await group.next() else {
-                throw SSHError.timeout
-            }
-            group.cancelAll()
-            return result
         }
     }
 
