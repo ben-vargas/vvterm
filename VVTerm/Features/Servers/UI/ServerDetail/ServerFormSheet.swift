@@ -2,15 +2,7 @@ import SwiftUI
 import MoshBootstrap
 import ETSession
 
-enum ServerTransportSelection: String, CaseIterable, Identifiable, Equatable {
-    case standard
-    case tailscale
-    case mosh
-    case eternalTerminal
-    case cloudflare
-
-    var id: String { rawValue }
-
+extension ServerTransportSelection {
     var displayName: String {
         switch self {
         case .standard:
@@ -41,88 +33,13 @@ enum ServerTransportSelection: String, CaseIterable, Identifiable, Equatable {
         }
     }
 
-    var connectionMode: SSHConnectionMode {
-        switch self {
-        case .standard:
-            return .standard
-        case .tailscale:
-            return .tailscale
-        case .mosh:
-            return .mosh
-        case .eternalTerminal:
-            return .eternalTerminal
-        case .cloudflare:
-            return .cloudflare
-        }
-    }
-
-    init(server: Server) {
-        switch server.connectionMode {
-        case .tailscale:
-            self = .tailscale
-        case .mosh:
-            self = .mosh
-        case .eternalTerminal:
-            self = .eternalTerminal
-        case .cloudflare:
-            self = .cloudflare
-        case .standard:
-            self = .standard
-        }
-    }
-}
-
-struct ServerFormCredentialBuilder {
-    static func build(
-        serverId: UUID,
-        transportSelection: ServerTransportSelection,
-        authMethod: AuthMethod,
-        password: String,
-        sshKey: String,
-        sshPassphrase: String,
-        sshPublicKey: String,
-        cloudflareAccessMode: CloudflareAccessMode?,
-        cloudflareClientID: String,
-        cloudflareClientSecret: String
-    ) -> ServerCredentials {
-        var credentials = ServerCredentials(serverId: serverId)
-
-        guard transportSelection != .tailscale else {
-            return credentials
-        }
-
-        switch authMethod {
-        case .password:
-            credentials.password = password
-        case .sshKey:
-            credentials.sshKey = sshKey.data(using: .utf8)
-            if !sshPublicKey.isEmpty {
-                credentials.publicKey = sshPublicKey.data(using: .utf8)
-            }
-        case .sshKeyWithPassphrase:
-            credentials.sshKey = sshKey.data(using: .utf8)
-            credentials.sshPassphrase = sshPassphrase
-            if !sshPublicKey.isEmpty {
-                credentials.publicKey = sshPublicKey.data(using: .utf8)
-            }
-        }
-
-        if transportSelection == .cloudflare, cloudflareAccessMode == .serviceToken {
-            let clientID = cloudflareClientID.trimmingCharacters(in: .whitespacesAndNewlines)
-            let clientSecret = cloudflareClientSecret.trimmingCharacters(in: .whitespacesAndNewlines)
-            credentials.cloudflareClientID = clientID.isEmpty ? nil : clientID
-            credentials.cloudflareClientSecret = clientSecret.isEmpty ? nil : clientSecret
-        }
-
-        return credentials
-    }
 }
 
 // MARK: - Server Form Sheet
 
 struct ServerFormSheet: View {
     @ObservedObject var serverManager: ServerManager
-    @ObservedObject private var storeManager = StoreManager.shared
+    @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var appLockManager: AppLockManager
     let workspace: Workspace?
     let server: Server?
@@ -131,28 +48,8 @@ struct ServerFormSheet: View {
 
     @Environment(\.dismiss) var dismiss
 
-    @State private var name: String = ""
-    @State private var host: String = ""
-    @State private var port: String = "22"
-    @State private var eternalTerminalPort: String = "2022"
-    @State private var username: String = ""
-    @State private var transportSelection: ServerTransportSelection = .standard
-    @State private var selectedAuthMethod: AuthMethod = .password
-    @State private var password: String = ""
-    @State private var sshKey: String = ""
-    @State private var sshPassphrase: String = ""
-    @State private var sshPublicKey: String = ""
-    @State private var selectedCloudflareAccessMode: CloudflareAccessMode = .oauth
-    @State private var cloudflareClientID: String = ""
-    @State private var cloudflareClientSecret: String = ""
-    @State private var cloudflareTeamDomainOverride: String = ""
+    @State private var form: ServerFormModel
     @State private var showCloudflareOverrides: Bool = false
-    @State private var selectedWorkspaceId: UUID?
-    @State private var selectedEnvironment: ServerEnvironment = .production
-    @State private var notes: String = ""
-    @State private var requiresBiometricUnlock: Bool = false
-    @State private var tmuxEnabled: Bool = true
-    @State private var tmuxStartupBehavior: TmuxStartupBehavior = .vvtermManaged
 
     @State private var showingServerLimitAlert = false
     @State private var showingCreateWorkspace = false
@@ -166,12 +63,15 @@ struct ServerFormSheet: View {
     @State private var isTestingConnection = false
     @State private var connectionTestError: String?
     @State private var connectionTestSucceeded = false
-    @State private var lastTestSnapshot: ConnectionTestSnapshot?
+    @State private var lastTestSnapshot: ServerFormModel.ConnectionSnapshot?
     @State private var showingLocalDiscoverySheet = false
     @State private var showingCredentialEndpointApproval = false
     @State private var showingHostKeyTrustConfirmation = false
     @State private var hostKeyTrustChallenge: KnownHostsManager.Challenge?
     @State private var hasAuthorizedInitialEdit: Bool
+
+    private let credentials: any ServerCredentialRepository
+    private let saveUseCase: ServerSaveUseCase
 
     var isEditing: Bool { server != nil }
 
@@ -193,47 +93,39 @@ struct ServerFormSheet: View {
         workspace: Workspace?,
         server: Server? = nil,
         prefill: ServerFormPrefill? = nil,
+        credentials: any ServerCredentialRepository,
         onSave: @escaping (Server) -> Void
     ) {
         self.serverManager = serverManager
         self.workspace = workspace
         self.server = server
         self.prefill = prefill
+        self.credentials = credentials
+        self.saveUseCase = ServerSaveUseCase(
+            mutations: serverManager,
+            credentials: credentials
+        )
         self.onSave = onSave
 
-        let initialWorkspaceId = server?.workspaceId ?? workspace?.id
-        _selectedWorkspaceId = State(initialValue: initialWorkspaceId)
-        _hasAuthorizedInitialEdit = State(initialValue: server?.requiresBiometricUnlock != true)
-
-        if let server = server {
-            _name = State(initialValue: server.name)
-            _host = State(initialValue: server.host)
-            _port = State(initialValue: String(server.port))
-            _eternalTerminalPort = State(initialValue: String(server.eternalTerminalPort))
-            _username = State(initialValue: server.username)
-            _transportSelection = State(initialValue: ServerTransportSelection(server: server))
-            _selectedAuthMethod = State(initialValue: server.authMethod)
-            _selectedCloudflareAccessMode = State(initialValue: server.cloudflareAccessMode ?? .oauth)
-            _cloudflareTeamDomainOverride = State(initialValue: server.cloudflareTeamDomainOverride ?? "")
-            _showCloudflareOverrides = State(
-                initialValue: !(server.cloudflareTeamDomainOverride ?? "").isEmpty
+        var initialForm = ServerFormModel(
+            server: server,
+            workspaceID: workspace?.id,
+            defaultTmuxEnabled: Self.defaultTmuxEnabled(),
+            defaultTmuxStartupBehavior: Self.defaultTmuxStartupBehavior()
+        )
+        if server == nil, let prefill {
+            initialForm.applyPrefill(
+                name: prefill.name,
+                host: prefill.host,
+                port: prefill.port,
+                username: prefill.username
             )
-            _selectedEnvironment = State(initialValue: server.environment)
-            _notes = State(initialValue: server.notes ?? "")
-            _requiresBiometricUnlock = State(initialValue: server.requiresBiometricUnlock)
-            _tmuxEnabled = State(initialValue: server.tmuxEnabledOverride ?? Self.defaultTmuxEnabled())
-            _tmuxStartupBehavior = State(initialValue: server.tmuxStartupBehaviorOverride ?? Self.defaultTmuxStartupBehavior())
-        } else if let prefill {
-            _name = State(initialValue: prefill.name)
-            _host = State(initialValue: prefill.host)
-            _port = State(initialValue: String(prefill.port))
-            _username = State(initialValue: prefill.username ?? "")
-            _tmuxEnabled = State(initialValue: Self.defaultTmuxEnabled())
-            _tmuxStartupBehavior = State(initialValue: Self.defaultTmuxStartupBehavior())
-        } else {
-            _tmuxEnabled = State(initialValue: Self.defaultTmuxEnabled())
-            _tmuxStartupBehavior = State(initialValue: Self.defaultTmuxStartupBehavior())
         }
+        _form = State(initialValue: initialForm)
+        _hasAuthorizedInitialEdit = State(initialValue: server?.requiresBiometricUnlock != true)
+        _showCloudflareOverrides = State(
+            initialValue: !(server?.cloudflareTeamDomainOverride ?? "").isEmpty
+        )
     }
 
     private var serverCount: Int {
@@ -241,16 +133,16 @@ struct ServerFormSheet: View {
     }
 
     private var isAtLimit: Bool {
-        !isEditing && !serverManager.canAddServer
+        !isEditing && !serverManager.canAddServer(hasProAccess: storeManager.isPro)
     }
 
     private var assignmentWorkspaces: [Workspace] {
-        serverManager.assignmentWorkspaces(for: server)
+        serverManager.assignmentWorkspaces(for: server, hasProAccess: storeManager.isPro)
     }
 
     private var selectedWorkspace: Workspace? {
-        if let selectedWorkspaceId,
-           let matchingWorkspace = assignmentWorkspaces.first(where: { $0.id == selectedWorkspaceId }) {
+        if let workspaceID = form.workspaceID,
+           let matchingWorkspace = assignmentWorkspaces.first(where: { $0.id == workspaceID }) {
             return matchingWorkspace
         }
 
@@ -268,7 +160,7 @@ struct ServerFormSheet: View {
         let resolvedEnvironment = serverManager.resolvedEnvironment(
             for: server,
             destination: selectedWorkspace,
-            preferredEnvironment: selectedEnvironment
+            preferredEnvironment: form.environment
         )
 
         return String(
@@ -295,48 +187,12 @@ struct ServerFormSheet: View {
         return String(localized: "No additional workspace is available for this server right now.")
     }
 
-    private struct ConnectionTestSnapshot: Equatable {
-        let host: String
-        let port: String
-        let eternalTerminalPort: String
-        let username: String
-        let transportSelection: ServerTransportSelection
-        let authMethod: AuthMethod
-        let password: String
-        let sshKey: String
-        let sshPassphrase: String
-        let sshPublicKey: String
-        let cloudflareAccessMode: CloudflareAccessMode
-        let cloudflareClientID: String
-        let cloudflareClientSecret: String
-        let cloudflareTeamDomainOverride: String
-    }
-
-    private var connectionSnapshot: ConnectionTestSnapshot {
-        ConnectionTestSnapshot(
-            host: host,
-            port: port,
-            eternalTerminalPort: eternalTerminalPort,
-            username: effectiveUsername,
-            transportSelection: transportSelection,
-            authMethod: selectedAuthMethod,
-            password: password,
-            sshKey: sshKey,
-            sshPassphrase: sshPassphrase,
-            sshPublicKey: sshPublicKey,
-            cloudflareAccessMode: selectedCloudflareAccessMode,
-            cloudflareClientID: cloudflareClientID,
-            cloudflareClientSecret: cloudflareClientSecret,
-            cloudflareTeamDomainOverride: cloudflareTeamDomainOverride
-        )
-    }
-
     private var hasValidConnectionTest: Bool {
-        connectionTestSucceeded && lastTestSnapshot == connectionSnapshot
+        connectionTestSucceeded && lastTestSnapshot == form.connectionSnapshot
     }
 
     var saveButtonDisabled: Bool {
-        !isValid || isSaving || isAtLimit || isLoadingCredentials || isTestingConnection
+        !form.isValid || isSaving || isAtLimit || isLoadingCredentials || isTestingConnection
     }
 
     var body: some View {
@@ -381,7 +237,7 @@ struct ServerFormSheet: View {
         .interactiveDismissDisabled(isSaving)
         .task {
             guard let server = server else {
-                storedKeys = KeychainManager.shared.getStoredSSHKeys()
+                storedKeys = credentials.getStoredSSHKeys()
                 return
             }
             guard await appLockManager.authorizeProtectedServerAction(server, action: .edit) else {
@@ -389,7 +245,7 @@ struct ServerFormSheet: View {
                 return
             }
             hasAuthorizedInitialEdit = true
-            storedKeys = KeychainManager.shared.getStoredSSHKeys()
+            storedKeys = credentials.getStoredSSHKeys()
             loadStoredCredentials(for: server)
         }
         #if os(iOS)
@@ -417,7 +273,7 @@ struct ServerFormSheet: View {
             .adaptiveSoftScrollEdges()
             .sheet(isPresented: $showingAddKeySheet) {
                 AddSSHKeySheet(onSave: { entry in
-                    storedKeys = KeychainManager.shared.getStoredSSHKeys()
+                    storedKeys = credentials.getStoredSSHKeys()
                     selectedStoredKey = entry
                     loadStoredKey(entry)
                 })
@@ -427,7 +283,7 @@ struct ServerFormSheet: View {
                 WorkspaceFormSheet(
                     serverManager: serverManager,
                     onSave: { workspace in
-                        selectedWorkspaceId = workspace.id
+                        form.workspaceID = workspace.id
                     }
                 )
                 .adaptiveSoftScrollEdges()
@@ -473,43 +329,43 @@ struct ServerFormSheet: View {
                 selectMatchingStoredKeyIfAvailable()
                 reconcileAssignmentWorkspace()
             }
-            .onChange(of: host) { _ in resetConnectionTestState() }
-            .onChange(of: port) { _ in resetConnectionTestState() }
-            .onChange(of: eternalTerminalPort) { _ in resetConnectionTestState() }
-            .onChange(of: username) { _ in resetConnectionTestState() }
-            .onChange(of: transportSelection) { _ in resetConnectionTestState() }
-            .onChange(of: selectedAuthMethod) { _ in resetConnectionTestState() }
-            .onChange(of: selectedWorkspaceId) { _ in
+            .onChange(of: form.host) { _ in resetConnectionTestState() }
+            .onChange(of: form.port) { _ in resetConnectionTestState() }
+            .onChange(of: form.eternalTerminalPort) { _ in resetConnectionTestState() }
+            .onChange(of: form.username) { _ in resetConnectionTestState() }
+            .onChange(of: form.transportSelection) { _ in resetConnectionTestState() }
+            .onChange(of: form.authMethod) { _ in resetConnectionTestState() }
+            .onChange(of: form.workspaceID) { _ in
                 reconcileAssignmentWorkspace()
                 resetConnectionTestState()
             }
-            .onChange(of: password) { _ in resetConnectionTestState() }
-            .onChange(of: sshKey) { _ in
+            .onChange(of: form.password) { _ in resetConnectionTestState() }
+            .onChange(of: form.sshKey) { _ in
                 if let programmaticSSHKeyValue,
-                   sshKey == programmaticSSHKeyValue {
+                   form.sshKey == programmaticSSHKeyValue {
                     self.programmaticSSHKeyValue = nil
                 } else if !isLoadingCredentials {
                     selectedStoredKey = nil
-                    sshPublicKey = ""
+                    form.sshPublicKey = ""
                 }
                 resetConnectionTestState()
             }
-            .onChange(of: sshPassphrase) { _ in resetConnectionTestState() }
-            .onChange(of: sshPublicKey) { _ in resetConnectionTestState() }
-            .onChange(of: selectedCloudflareAccessMode) { _ in resetConnectionTestState() }
-            .onChange(of: cloudflareClientID) { _ in resetConnectionTestState() }
-            .onChange(of: cloudflareClientSecret) { _ in resetConnectionTestState() }
-            .onChange(of: cloudflareTeamDomainOverride) { _ in resetConnectionTestState() }
+            .onChange(of: form.sshPassphrase) { _ in resetConnectionTestState() }
+            .onChange(of: form.sshPublicKey) { _ in resetConnectionTestState() }
+            .onChange(of: form.cloudflareAccessMode) { _ in resetConnectionTestState() }
+            .onChange(of: form.cloudflareClientID) { _ in resetConnectionTestState() }
+            .onChange(of: form.cloudflareClientSecret) { _ in resetConnectionTestState() }
+            .onChange(of: form.cloudflareTeamDomainOverride) { _ in resetConnectionTestState() }
     }
 
     @ViewBuilder
     private var assignmentSection: some View {
         Section {
             if assignmentWorkspaces.count > 1 {
-                Picker("Workspace", selection: $selectedWorkspaceId) {
+                Picker("Workspace", selection: $form.workspaceID) {
                     ForEach(assignmentWorkspaces) { workspace in
                         HStack(spacing: 8) {
-                            if serverManager.isWorkspaceLocked(workspace) {
+                            if serverManager.isWorkspaceLocked(workspace, hasProAccess: storeManager.isPro) {
                                 Image(systemName: "lock.fill")
                                     .foregroundStyle(.secondary)
                             } else {
@@ -527,7 +383,7 @@ struct ServerFormSheet: View {
                 LabeledContent("Workspace") {
                     if let selectedWorkspace {
                         HStack(spacing: 8) {
-                            if serverManager.isWorkspaceLocked(selectedWorkspace) {
+                            if serverManager.isWorkspaceLocked(selectedWorkspace, hasProAccess: storeManager.isPro) {
                                 Image(systemName: "lock.fill")
                                     .foregroundStyle(.secondary)
                             } else {
@@ -546,7 +402,7 @@ struct ServerFormSheet: View {
                 }
             }
 
-            Picker("Environment", selection: $selectedEnvironment) {
+            Picker("Environment", selection: $form.environment) {
                 ForEach(selectedWorkspace?.environments ?? ServerEnvironment.builtInEnvironments) { env in
                     HStack {
                         Circle()
@@ -608,13 +464,13 @@ struct ServerFormSheet: View {
 
     private var serverSection: some View {
         Section {
-            TextField("Name", text: $name, prompt: Text(String(localized: "My Server")))
+            TextField("Name", text: $form.name, prompt: Text(String(localized: "My Server")))
                 #if os(iOS)
                 .textContentType(.name)
                 #endif
 
             HStack(spacing: 12) {
-                TextField("Host", text: $host, prompt: Text(String(localized: "203.0.113.10")))
+                TextField("Host", text: $form.host, prompt: Text(String(localized: "203.0.113.10")))
                     #if os(iOS)
                     .textContentType(.URL)
                     #endif
@@ -624,7 +480,7 @@ struct ServerFormSheet: View {
                     .keyboardType(.URL)
                     #endif
 
-                TextField("Port", text: $port, prompt: Text(String(localized: "22")))
+                TextField("Port", text: $form.port, prompt: Text(String(localized: "22")))
                     #if os(iOS)
                     .keyboardType(.numberPad)
                     #endif
@@ -632,7 +488,7 @@ struct ServerFormSheet: View {
                     .frame(width: 76)
             }
 
-            TextField("Username", text: $username, prompt: Text(String(localized: "root")))
+            TextField("Username", text: $form.username, prompt: Text(String(localized: "root")))
                 #if os(iOS)
                 .textContentType(.username)
                 #endif
@@ -654,15 +510,15 @@ struct ServerFormSheet: View {
     @ViewBuilder
     private var authSection: some View {
         Section {
-            Picker("Transport", selection: $transportSelection) {
+            Picker("Transport", selection: $form.transportSelection) {
                 ForEach(ServerTransportSelection.allCases) { transport in
                     Label(transport.displayName, systemImage: transport.icon)
                         .tag(transport)
                 }
             }
 
-            if transportSelection == .eternalTerminal {
-                TextField("ET Port", text: $eternalTerminalPort, prompt: Text("2022"))
+            if form.transportSelection == .eternalTerminal {
+                TextField("ET Port", text: $form.eternalTerminalPort, prompt: Text("2022"))
                     #if os(iOS)
                     .keyboardType(.numberPad)
                     #endif
@@ -672,21 +528,21 @@ struct ServerFormSheet: View {
                     .foregroundStyle(.secondary)
             }
 
-            if transportSelection == .cloudflare {
-                Picker("Cloudflare Access", selection: $selectedCloudflareAccessMode) {
+            if form.transportSelection == .cloudflare {
+                Picker("Cloudflare Access", selection: $form.cloudflareAccessMode) {
                     ForEach(CloudflareAccessMode.allCases) { mode in
                         Text(mode.displayName).tag(mode)
                     }
                 }
 
-                switch selectedCloudflareAccessMode {
+                switch form.cloudflareAccessMode {
                 case .oauth:
                     Text(String(localized: "OAuth login will open in browser. Team/App domain values are auto-discovered from host."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     if showCloudflareOverrides {
-                        TextField("Team Domain Override", text: $cloudflareTeamDomainOverride, prompt: Text("team.cloudflareaccess.com"))
+                        TextField("Team Domain Override", text: $form.cloudflareTeamDomainOverride, prompt: Text("team.cloudflareaccess.com"))
                             .autocorrectionDisabled()
                             #if os(iOS)
                             .textInputAutocapitalization(.never)
@@ -702,26 +558,26 @@ struct ServerFormSheet: View {
                     }
 
                 case .serviceToken:
-                    TextField("Service Token Client ID", text: $cloudflareClientID, prompt: Text(String(localized: "Required")))
+                    TextField("Service Token Client ID", text: $form.cloudflareClientID, prompt: Text(String(localized: "Required")))
                         .autocorrectionDisabled()
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
-                    SecureField("Service Token Client Secret", text: $cloudflareClientSecret, prompt: Text(String(localized: "Required")))
+                    SecureField("Service Token Client Secret", text: $form.cloudflareClientSecret, prompt: Text(String(localized: "Required")))
                 }
             }
 
-            if transportSelection != .tailscale {
-                Picker("Method", selection: $selectedAuthMethod) {
+            if form.transportSelection != .tailscale {
+                Picker("Method", selection: $form.authMethod) {
                     ForEach(AuthMethod.allCases) { method in
                         Label(method.displayName, systemImage: method.icon)
                             .tag(method)
                     }
                 }
 
-                switch selectedAuthMethod {
+                switch form.authMethod {
                 case .password:
-                    SecureField("Password", text: $password, prompt: Text(String(localized: "Required")))
+                    SecureField("Password", text: $form.password, prompt: Text(String(localized: "Required")))
                         #if os(iOS)
                         .textContentType(.password)
                         #endif
@@ -731,7 +587,7 @@ struct ServerFormSheet: View {
 
                 case .sshKeyWithPassphrase:
                     keyInputView
-                    SecureField("Key Passphrase", text: $sshPassphrase, prompt: Text(String(localized: "Optional")))
+                    SecureField("Key Passphrase", text: $form.sshPassphrase, prompt: Text(String(localized: "Optional")))
                 }
             } else {
                 Text(String(localized: "Uses server-side Tailscale SSH policy. No password or SSH key is required."))
@@ -765,7 +621,7 @@ struct ServerFormSheet: View {
             .buttonStyle(.bordered)
             .tint(.secondary)
             .controlSize(.regular)
-            .disabled(!isValid || isTestingConnection)
+            .disabled(!form.isValid || isTestingConnection)
         } header: {
             sectionHeader("Connection")
         } footer: {
@@ -775,16 +631,16 @@ struct ServerFormSheet: View {
 
     private var sessionSection: some View {
         Section {
-            Toggle("Use tmux to preserve sessions", isOn: $tmuxEnabled)
+            Toggle("Use tmux to preserve sessions", isOn: $form.tmuxEnabled)
 
-            if tmuxEnabled {
-                Picker("On connect", selection: $tmuxStartupBehavior) {
+            if form.tmuxEnabled {
+                Picker("On connect", selection: $form.tmuxStartupBehavior) {
                     ForEach(TmuxStartupBehavior.configCases) { behavior in
                         Text(behavior.displayName).tag(behavior)
                     }
                 }
 
-                Text(tmuxStartupBehavior.descriptionText)
+                Text(form.tmuxStartupBehavior.descriptionText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -801,9 +657,9 @@ struct ServerFormSheet: View {
         Section {
             Toggle(
                 String(format: String(localized: "Require %@ to open this server"), appLockManager.biometryDisplayName),
-                isOn: $requiresBiometricUnlock
+                isOn: $form.requiresBiometricUnlock
             )
-            .disabled(!appLockManager.isBiometryAvailable && !requiresBiometricUnlock)
+            .disabled(!appLockManager.isBiometryAvailable && !form.requiresBiometricUnlock)
 
             if !appLockManager.isBiometryAvailable,
                let message = appLockManager.biometryAvailabilityMessage {
@@ -818,7 +674,7 @@ struct ServerFormSheet: View {
 
     private var notesSection: some View {
         Section {
-            TextEditor(text: $notes)
+            TextEditor(text: $form.notes)
                 .frame(minHeight: 56)
                 #if os(iOS)
                 .scrollContentBackground(.hidden)
@@ -904,18 +760,18 @@ struct ServerFormSheet: View {
 
     private func loadStoredKey(_ entry: SSHKeyEntry) {
         do {
-            if let keyData = try KeychainManager.shared.getStoredSSHKeyData(for: entry.id) {
+            if let keyData = try credentials.getStoredSSHKeyData(for: entry.id) {
                 if let keyString = String(data: keyData.key, encoding: .utf8) {
-                    if sshKey != keyString {
+                    if form.sshKey != keyString {
                         programmaticSSHKeyValue = keyString
                     }
-                    sshKey = keyString
+                    form.sshKey = keyString
                 }
                 if let passphrase = keyData.passphrase {
-                    sshPassphrase = passphrase
+                    form.sshPassphrase = passphrase
                 }
             }
-            sshPublicKey = entry.publicKey ?? ""
+            form.sshPublicKey = entry.publicKey ?? ""
         } catch {
             self.error = String(format: String(localized: "Failed to load key: %@"), error.localizedDescription)
         }
@@ -923,66 +779,27 @@ struct ServerFormSheet: View {
 
     private func selectMatchingStoredKeyIfAvailable() {
         guard selectedStoredKey == nil,
-              !sshKey.isEmpty,
+              !form.sshKey.isEmpty,
               !storedKeys.isEmpty,
-              selectedAuthMethod != .password else {
+              form.authMethod != .password else {
             return
         }
 
         for key in storedKeys {
-            guard let keyData = try? KeychainManager.shared.getStoredSSHKeyData(for: key.id),
+            guard let keyData = try? credentials.getStoredSSHKeyData(for: key.id),
                   let keyString = String(data: keyData.key, encoding: .utf8),
-                  keyString == sshKey else {
+                  keyString == form.sshKey else {
                 continue
             }
 
             if let storedPassphrase = keyData.passphrase,
                !storedPassphrase.isEmpty,
-               storedPassphrase != sshPassphrase {
+               storedPassphrase != form.sshPassphrase {
                 continue
             }
 
             selectedStoredKey = key
             return
-        }
-    }
-
-    // MARK: - Validation
-
-    private var isValid: Bool {
-        let validETPort = transportSelection != .eternalTerminal
-            || Int(eternalTerminalPort).map { (1...65535).contains($0) } == true
-        return !name.isEmpty &&
-        !host.isEmpty &&
-        Int(port).map { (1...65535).contains($0) } == true &&
-        validETPort &&
-        hasValidCredentials
-    }
-
-    private var hasValidCredentials: Bool {
-        guard transportSelection != .tailscale else {
-            return true
-        }
-
-        if transportSelection == .cloudflare {
-            switch selectedCloudflareAccessMode {
-            case .oauth:
-                break
-            case .serviceToken:
-                guard !cloudflareClientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                      !cloudflareClientSecret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                    return false
-                }
-            }
-        }
-
-        switch selectedAuthMethod {
-        case .password:
-            return !password.isEmpty
-        case .sshKey:
-            return !sshKey.isEmpty
-        case .sshKeyWithPassphrase:
-            return !sshKey.isEmpty && !sshPassphrase.isEmpty
         }
     }
 
@@ -995,32 +812,14 @@ struct ServerFormSheet: View {
     }
 
     private func buildServer(id: UUID, createdAt: Date) -> Server {
-        let portNum = Int(port) ?? 22
-        return Server(
+        form.makeServer(
             id: id,
-            workspaceId: selectedWorkspace?.id ?? assignmentWorkspaces.first?.id ?? serverManager.workspaces.first?.id ?? UUID(),
-            environment: selectedEnvironment,
-            name: name,
-            host: host,
-            port: portNum,
-            eternalTerminalPort: Int(eternalTerminalPort) ?? 2022,
-            username: effectiveUsername,
-            connectionMode: transportSelection.connectionMode,
-            authMethod: transportSelection == .tailscale ? .password : selectedAuthMethod,
-            cloudflareAccessMode: transportSelection == .cloudflare ? selectedCloudflareAccessMode : nil,
-            cloudflareTeamDomainOverride: transportSelection == .cloudflare ? normalizedCloudflareOverride(cloudflareTeamDomainOverride) : nil,
-            cloudflareAppDomainOverride: nil,
-            notes: notes.isEmpty ? nil : notes,
-            requiresBiometricUnlock: requiresBiometricUnlock,
-            tmuxEnabledOverride: tmuxEnabled,
-            tmuxStartupBehaviorOverride: tmuxStartupBehavior,
+            workspaceID: selectedWorkspace?.id
+                ?? assignmentWorkspaces.first?.id
+                ?? serverManager.workspaces.first?.id
+                ?? UUID(),
             createdAt: createdAt
         )
-    }
-
-    private var effectiveUsername: String {
-        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "root" : trimmed
     }
 
     private func sectionHeader(_ title: LocalizedStringKey) -> some View {
@@ -1050,52 +849,12 @@ struct ServerFormSheet: View {
         return TmuxStartupBehavior(rawValue: rawValue) ?? .askEveryTime
     }
 
-    private func buildCredentials(for serverId: UUID) -> ServerCredentials {
-        ServerFormCredentialBuilder.build(
-            serverId: serverId,
-            transportSelection: transportSelection,
-            authMethod: selectedAuthMethod,
-            password: password,
-            sshKey: sshKey,
-            sshPassphrase: sshPassphrase,
-            sshPublicKey: sshPublicKey,
-            cloudflareAccessMode: transportSelection == .cloudflare ? selectedCloudflareAccessMode : nil,
-            cloudflareClientID: cloudflareClientID,
-            cloudflareClientSecret: cloudflareClientSecret
-        )
-    }
-
     private func loadStoredCredentials(for server: Server) {
         isLoadingCredentials = true
         defer { isLoadingCredentials = false }
 
         do {
-            let credentials = try KeychainManager.shared.getCredentials(for: server)
-
-            if server.connectionMode != .tailscale {
-                switch server.authMethod {
-                case .password:
-                    password = credentials.password ?? ""
-                case .sshKey, .sshKeyWithPassphrase:
-                    if let keyData = credentials.privateKey,
-                       let keyString = String(data: keyData, encoding: .utf8) {
-                        sshKey = keyString
-                    }
-                    if server.authMethod == .sshKeyWithPassphrase {
-                        sshPassphrase = credentials.passphrase ?? ""
-                    }
-                }
-            }
-
-            if let publicKeyData = credentials.publicKey,
-               let publicKeyString = String(data: publicKeyData, encoding: .utf8) {
-                sshPublicKey = publicKeyString
-            } else {
-                sshPublicKey = ""
-            }
-
-            cloudflareClientID = credentials.cloudflareClientID ?? ""
-            cloudflareClientSecret = credentials.cloudflareClientSecret ?? ""
+            form.apply(try credentials.getCredentials(for: server), for: server)
             selectMatchingStoredKeyIfAvailable()
             error = nil
         } catch ServerCredentialAccessError.approvalRequired {
@@ -1118,7 +877,7 @@ struct ServerFormSheet: View {
             ) else { return }
 
             do {
-                try KeychainManager.shared.approveCredentialUse(for: server)
+                try credentials.approveCredentialUse(for: server)
                 loadStoredCredentials(for: server)
             } catch {
                 self.error = error.localizedDescription
@@ -1126,31 +885,26 @@ struct ServerFormSheet: View {
         }
     }
 
-    private func normalizedCloudflareOverride(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
     private func applyPrefill(_ prefill: ServerFormPrefill) {
-        name = prefill.name
-        host = prefill.host
-        port = String(prefill.port)
-        if let username = prefill.username, !username.isEmpty {
-            self.username = username
-        }
+        form.applyPrefill(
+            name: prefill.name,
+            host: prefill.host,
+            port: prefill.port,
+            username: prefill.username
+        )
         resetConnectionTestState()
     }
 
     private func reconcileAssignmentWorkspace() {
-        if selectedWorkspaceId == nil {
-            selectedWorkspaceId = assignmentWorkspaces.first?.id
+        if form.workspaceID == nil {
+            form.workspaceID = assignmentWorkspaces.first?.id
         }
 
         guard let selectedWorkspace else { return }
 
-        selectedEnvironment = ServerMoveSupport.resolveEnvironment(
-            currentEnvironment: server?.environment ?? selectedEnvironment,
-            preferredEnvironment: selectedEnvironment,
+        form.environment = ServerMoveSupport.resolveEnvironment(
+            currentEnvironment: server?.environment ?? form.environment,
+            preferredEnvironment: form.environment,
             destination: selectedWorkspace
         )
     }
@@ -1163,7 +917,7 @@ struct ServerFormSheet: View {
             ) else { return false }
         }
 
-        let snapshot = await MainActor.run { connectionSnapshot }
+        let snapshot = await MainActor.run { form.connectionSnapshot }
         let shouldSkip = await MainActor.run { !force && hasValidConnectionTest }
         if shouldSkip {
             return true
@@ -1176,7 +930,7 @@ struct ServerFormSheet: View {
 
             let serverId = server?.id ?? UUID()
             let server = buildServer(id: serverId, createdAt: server?.createdAt ?? Date())
-            let credentials = buildCredentials(for: serverId)
+            let credentials = form.makeCredentials(serverID: serverId)
             return (server, credentials)
         }
 
@@ -1312,20 +1066,20 @@ struct ServerFormSheet: View {
                 let (newServer, credentials) = await MainActor.run { () -> (Server, ServerCredentials) in
                     let serverId = server?.id ?? UUID()
                     let server = buildServer(id: serverId, createdAt: server?.createdAt ?? Date())
-                    let credentials = buildCredentials(for: serverId)
+                    let credentials = form.makeCredentials(serverID: serverId)
                     return (server, credentials)
                 }
 
-                if isEditing {
-                    try KeychainManager.shared.storeCredentials(credentials, for: newServer)
-                    try await serverManager.updateServer(newServer)
-                } else {
-                    try await serverManager.addServer(newServer, credentials: credentials)
-                }
+                let mutation: ServerMutation = isEditing ? .update(newServer) : .create(newServer)
+                let savedServer = try await saveUseCase.execute(
+                    mutation,
+                    credentials: credentials,
+                    hasProAccess: storeManager.isPro
+                )
 
                 await MainActor.run {
                     isSaving = false
-                    onSave(newServer)
+                    onSave(savedServer)
                     dismiss()
                 }
             } catch let error as VVTermError {
@@ -1349,7 +1103,7 @@ struct ServerFormSheet: View {
 
 struct MoveServerSheet: View {
     @ObservedObject var serverManager: ServerManager
-    @ObservedObject private var storeManager = StoreManager.shared
+    @EnvironmentObject private var storeManager: StoreManager
     let server: Server
     let preferredDestination: Workspace?
     let onMove: (Server) -> Void
@@ -1382,7 +1136,10 @@ struct MoveServerSheet: View {
     }
 
     private var destinationWorkspaces: [Workspace] {
-        let destinations = serverManager.moveDestinations(for: server)
+        let destinations = serverManager.moveDestinations(
+            for: server,
+            hasProAccess: storeManager.isPro
+        )
         guard let preferredDestination,
               destinations.contains(where: { $0.id == preferredDestination.id }) else {
             return destinations
@@ -1583,7 +1340,8 @@ struct MoveServerSheet: View {
                 let updatedServer = try await serverManager.moveServer(
                     server,
                     to: destination,
-                    preferredEnvironment: selectedEnvironment
+                    preferredEnvironment: selectedEnvironment,
+                    hasProAccess: storeManager.isPro
                 )
 
                 await MainActor.run {
@@ -1627,6 +1385,7 @@ struct MoveServerSheet: View {
     ServerFormSheet(
         serverManager: ServerManager.shared,
         workspace: nil,
+        credentials: KeychainManager.shared,
         onSave: { _ in }
     )
 }

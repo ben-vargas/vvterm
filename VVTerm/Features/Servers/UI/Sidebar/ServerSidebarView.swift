@@ -7,7 +7,7 @@ struct ServerSidebarView: View {
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedServer: Server?
 
-    @ObservedObject private var storeManager = StoreManager.shared
+    @EnvironmentObject private var storeManager: StoreManager
     @ObservedObject private var tabManager = TerminalTabManager.shared
     #if os(macOS)
     @EnvironmentObject private var commandBridge: MacShellCommandBridge
@@ -192,6 +192,10 @@ struct ServerSidebarView: View {
                             ServerRow(
                                 server: server,
                                 isSelected: selectedServer?.id == server.id,
+                                isLocked: serverManager.isServerLocked(
+                                    server,
+                                    hasProAccess: storeManager.isPro
+                                ),
                                 onSelect: { selectServer(server) },
                                 onEdit: { serverToEdit = $0 },
                                 onMove: { serverToMove = $0 },
@@ -227,6 +231,7 @@ struct ServerSidebarView: View {
                 serverManager: serverManager,
                 workspace: selectedWorkspace,
                 prefill: addServerPrefill,
+                credentials: KeychainManager.shared,
                 onSave: { _ in showingAddServer = false }
             )
             .adaptiveSoftScrollEdges()
@@ -253,6 +258,7 @@ struct ServerSidebarView: View {
                 serverManager: serverManager,
                 workspace: selectedWorkspace,
                 server: server,
+                credentials: KeychainManager.shared,
                 onSave: { updatedServer in
                     handleSavedServer(updatedServer, originalServer: server)
                     serverToEdit = nil
@@ -830,7 +836,7 @@ struct ServerSidebarView: View {
 
             Button {
                 #if os(macOS)
-                SettingsWindowManager.shared.show()
+                SettingsWindowManager.shared.show(storeManager: storeManager)
                 #endif
             } label: {
                 Image(systemName: "gear")

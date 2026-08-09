@@ -3,6 +3,34 @@ import Testing
 @testable import VVTerm
 
 struct ServerConnectionModeTests {
+    private func makeCredentials(
+        serverId: UUID,
+        transportSelection: ServerTransportSelection,
+        authMethod: AuthMethod,
+        password: String,
+        sshKey: String,
+        sshPassphrase: String,
+        sshPublicKey: String,
+        cloudflareAccessMode: CloudflareAccessMode?,
+        cloudflareClientID: String,
+        cloudflareClientSecret: String
+    ) -> ServerCredentials {
+        var form = ServerFormModel(
+            defaultTmuxEnabled: true,
+            defaultTmuxStartupBehavior: .vvtermManaged
+        )
+        form.transportSelection = transportSelection
+        form.authMethod = authMethod
+        form.password = password
+        form.sshKey = sshKey
+        form.sshPassphrase = sshPassphrase
+        form.sshPublicKey = sshPublicKey
+        form.cloudflareAccessMode = cloudflareAccessMode ?? .oauth
+        form.cloudflareClientID = cloudflareClientID
+        form.cloudflareClientSecret = cloudflareClientSecret
+        return form.makeCredentials(serverID: serverId)
+    }
+
     private func makeServer(
         connectionMode: SSHConnectionMode = .standard,
         authMethod: AuthMethod = .password
@@ -135,7 +163,7 @@ struct ServerConnectionModeTests {
         #expect(ServerTransportSelection(server: server) == .tailscale)
         #expect(ServerTransportSelection.tailscale.connectionMode == .tailscale)
 
-        let credentials = ServerFormCredentialBuilder.build(
+        let credentials = makeCredentials(
             serverId: UUID(),
             transportSelection: .tailscale,
             authMethod: .password,
@@ -156,7 +184,7 @@ struct ServerConnectionModeTests {
 
     @Test
     func moshPasswordSelectionPreservesPasswordCredentials() {
-        let passwordCredentials = ServerFormCredentialBuilder.build(
+        let passwordCredentials = makeCredentials(
             serverId: UUID(),
             transportSelection: .mosh,
             authMethod: .password,
@@ -174,7 +202,7 @@ struct ServerConnectionModeTests {
 
     @Test
     func moshKeySelectionPreservesKeyCredentials() {
-        let keyCredentials = ServerFormCredentialBuilder.build(
+        let keyCredentials = makeCredentials(
             serverId: UUID(),
             transportSelection: .mosh,
             authMethod: .sshKeyWithPassphrase,
@@ -193,7 +221,7 @@ struct ServerConnectionModeTests {
 
     @Test
     func eternalTerminalSelectionPreservesSSHCredentials() {
-        let credentials = ServerFormCredentialBuilder.build(
+        let credentials = makeCredentials(
             serverId: UUID(),
             transportSelection: .eternalTerminal,
             authMethod: .password,
@@ -212,7 +240,7 @@ struct ServerConnectionModeTests {
 
     @Test
     func cloudflareServiceTokenPreservesSSHAndAccessCredentials() {
-        let credentials = ServerFormCredentialBuilder.build(
+        let credentials = makeCredentials(
             serverId: UUID(),
             transportSelection: .cloudflare,
             authMethod: .password,

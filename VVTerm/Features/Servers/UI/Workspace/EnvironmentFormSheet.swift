@@ -9,6 +9,7 @@ struct EnvironmentFormSheet: View {
     let onSave: (Workspace, ServerEnvironment) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var storeManager: StoreManager
 
     @State private var name: String = ""
     @State private var selectedColorHex: String = Workspace.defaultColors.first ?? "#007AFF"
@@ -130,7 +131,8 @@ struct EnvironmentFormSheet: View {
                 } else {
                     let newEnvironment = try serverManager.createCustomEnvironment(
                         name: trimmedName,
-                        color: selectedColorHex
+                        color: selectedColorHex,
+                        hasProAccess: storeManager.isPro
                     )
                     var updatedWorkspace = workspace
                     updatedWorkspace.environments.append(newEnvironment)

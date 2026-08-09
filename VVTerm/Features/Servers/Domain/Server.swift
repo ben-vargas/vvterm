@@ -215,7 +215,7 @@ nonisolated enum AuthMethod: String, Codable, CaseIterable, Identifiable, Sendab
 
 // MARK: - Server Credentials (for authentication)
 
-struct ServerCredentials: Sendable {
+nonisolated struct ServerCredentials: Sendable {
     let serverId: UUID
     var credentialBinding: ServerCredentialBinding?
     var password: String?

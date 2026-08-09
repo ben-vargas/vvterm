@@ -4,6 +4,7 @@ import SwiftUI
 
 struct WorkspaceSwitcherSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var storeManager: StoreManager
     @ObservedObject var serverManager: ServerManager
     @Binding var selectedWorkspace: Workspace?
 
@@ -30,7 +31,10 @@ struct WorkspaceSwitcherSheet: View {
                             workspace: workspace,
                             isSelected: selectedWorkspace?.id == workspace.id,
                             isHovered: hoveredWorkspace?.id == workspace.id,
-                            isLocked: serverManager.isWorkspaceLocked(workspace),
+                            isLocked: serverManager.isWorkspaceLocked(
+                                workspace,
+                                hasProAccess: storeManager.isPro
+                            ),
                             serverCount: serverCount(for: workspace),
                             onSelect: {
                                 selectedWorkspace = workspace

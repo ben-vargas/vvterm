@@ -8,7 +8,7 @@ struct WorkspaceFormSheet: View {
     let onSave: (Workspace) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var storeManager = StoreManager.shared
+    @EnvironmentObject private var storeManager: StoreManager
 
     @State private var name: String = ""
     @State private var selectedColor: Color = .blue
@@ -20,7 +20,7 @@ struct WorkspaceFormSheet: View {
     private var isEditing: Bool { workspace != nil }
 
     private var isAtLimit: Bool {
-        !isEditing && !serverManager.canAddWorkspace
+        !isEditing && !serverManager.canAddWorkspace(hasProAccess: storeManager.isPro)
     }
 
     let availableColors: [Color] = [
@@ -171,7 +171,10 @@ struct WorkspaceFormSheet: View {
                 if isEditing {
                     try await serverManager.updateWorkspace(newWorkspace)
                 } else {
-                    try await serverManager.addWorkspace(newWorkspace)
+                    try await serverManager.addWorkspace(
+                        newWorkspace,
+                        hasProAccess: storeManager.isPro
+                    )
                 }
 
                 await MainActor.run {

@@ -1,7 +1,6 @@
 import Foundation
 import CloudKit
 import Combine
-import SwiftUI
 import os.log
 
 nonisolated struct ServerDataLoadState: Equatable, Sendable {
@@ -57,7 +56,7 @@ nonisolated struct ServerDataLoadState: Equatable, Sendable {
 }
 
 @MainActor
-final class ServerManager: ObservableObject {
+final class ServerManager: ObservableObject, ServerMutationRepository {
     static let shared = ServerManager()
 
     @Published var servers: [Server] = []
@@ -928,13 +927,39 @@ final class ServerManager: ObservableObject {
 
     // MARK: - Server CRUD
 
-    func addServer(_ server: Server, credentials: ServerCredentials) async throws {
-        guard canAddServer else {
-            throw VVTermError.proRequired(String(localized: "Upgrade to Pro for unlimited servers"))
+    func validate(_ mutation: ServerMutation, hasProAccess: Bool) throws {
+        switch mutation {
+        case .create:
+            guard canAddServer(hasProAccess: hasProAccess) else {
+                throw VVTermError.proRequired(String(localized: "Upgrade to Pro for unlimited servers"))
+            }
+        case .update(let server):
+            _ = try Self.existingServerIndex(for: server.id, in: servers)
         }
+    }
 
-        var newServer = server
-        newServer = Server(
+    func apply(_ mutation: ServerMutation) async throws -> Server {
+        switch mutation {
+        case .create(let server):
+            let newServer = Self.serverForInsertion(server)
+            promotePendingBootstrapWorkspaceIfNeeded(for: newServer.workspaceId, reason: "adding a server")
+            servers.append(newServer)
+            enqueuePendingServerUpsert(newServer)
+            await persistLocalMutations(logMessage: "Added server: \(newServer.name)")
+            return newServer
+
+        case .update(let server):
+            let index = try Self.existingServerIndex(for: server.id, in: servers)
+            let updatedServer = Self.serverForUpdate(server)
+            servers[index] = updatedServer
+            enqueuePendingServerUpsert(updatedServer)
+            await persistLocalMutations(logMessage: "Updated server: \(updatedServer.name)")
+            return updatedServer
+        }
+    }
+
+    private static func serverForInsertion(_ server: Server, now: Date = Date()) -> Server {
+        Server(
             id: server.id,
             workspaceId: server.workspaceId,
             environment: server.environment,
@@ -953,22 +978,13 @@ final class ServerManager: ObservableObject {
             requiresBiometricUnlock: server.requiresBiometricUnlock,
             tmuxEnabledOverride: server.tmuxEnabledOverride,
             tmuxStartupBehaviorOverride: server.tmuxStartupBehaviorOverride,
-            createdAt: Date(),
-            updatedAt: Date()
+            createdAt: now,
+            updatedAt: now
         )
-
-        try keychain.storeCredentials(credentials, for: newServer)
-
-        promotePendingBootstrapWorkspaceIfNeeded(for: newServer.workspaceId, reason: "adding a server")
-        servers.append(newServer)
-        enqueuePendingServerUpsert(newServer)
-        await persistLocalMutations(logMessage: "Added server: \(newServer.name)")
     }
 
-    func updateServer(_ server: Server) async throws {
-        let index = try Self.existingServerIndex(for: server.id, in: servers)
-        var updatedServer = server
-        updatedServer = Server(
+    private static func serverForUpdate(_ server: Server, now: Date = Date()) -> Server {
+        Server(
             id: server.id,
             workspaceId: server.workspaceId,
             environment: server.environment,
@@ -990,12 +1006,8 @@ final class ServerManager: ObservableObject {
             tmuxEnabledOverride: server.tmuxEnabledOverride,
             tmuxStartupBehaviorOverride: server.tmuxStartupBehaviorOverride,
             createdAt: server.createdAt,
-            updatedAt: Date()
+            updatedAt: now
         )
-
-        servers[index] = updatedServer
-        enqueuePendingServerUpsert(updatedServer)
-        await persistLocalMutations(logMessage: "Updated server: \(updatedServer.name)")
     }
 
     func deleteServer(_ server: Server) async throws {
@@ -1027,8 +1039,8 @@ final class ServerManager: ObservableObject {
 
     // MARK: - Workspace CRUD
 
-    func addWorkspace(_ workspace: Workspace) async throws {
-        guard canAddWorkspace else {
+    func addWorkspace(_ workspace: Workspace, hasProAccess: Bool) async throws {
+        guard canAddWorkspace(hasProAccess: hasProAccess) else {
             throw VVTermError.proRequired(String(localized: "Upgrade to Pro for unlimited workspaces"))
         }
 
@@ -1135,7 +1147,7 @@ final class ServerManager: ObservableObject {
     }
 
     func reorderWorkspaces(from source: IndexSet, to destination: Int) async throws {
-        workspaces.move(fromOffsets: source, toOffset: destination)
+        workspaces.moveElements(fromOffsets: source, toOffset: destination)
         pendingBootstrapWorkspaceID = nil
 
         // Update order for all workspaces
@@ -1199,24 +1211,25 @@ final class ServerManager: ObservableObject {
         return workspaces.first { $0.id == id }
     }
 
-    func assignmentWorkspaces(for server: Server?) -> [Workspace] {
-        if StoreManager.shared.isPro {
+    func assignmentWorkspaces(for server: Server?, hasProAccess: Bool) -> [Workspace] {
+        if hasProAccess {
             return workspacesSortedByOrder
         }
 
         guard let server,
               let currentWorkspace = workspace(withId: server.workspaceId) else {
-            return workspacesSortedByOrder.filter { unlockedWorkspaceIds.contains($0.id) }
+            let unlockedIDs = unlockedWorkspaceIDs(hasProAccess: false)
+            return workspacesSortedByOrder.filter { unlockedIDs.contains($0.id) }
         }
 
-        let allowedDestinationIDs = moveDestinationIDs(for: server)
+        let allowedDestinationIDs = moveDestinationIDs(for: server, hasProAccess: false)
         return workspacesSortedByOrder.filter {
             $0.id == currentWorkspace.id || allowedDestinationIDs.contains($0.id)
         }
     }
 
-    func moveDestinations(for server: Server) -> [Workspace] {
-        let destinationIDs = moveDestinationIDs(for: server)
+    func moveDestinations(for server: Server, hasProAccess: Bool) -> [Workspace] {
+        let destinationIDs = moveDestinationIDs(for: server, hasProAccess: hasProAccess)
         return workspacesSortedByOrder.filter { destinationIDs.contains($0.id) }
     }
 
@@ -1239,23 +1252,28 @@ final class ServerManager: ObservableObject {
         )
     }
 
-    func canAssignServer(_ server: Server, to destination: Workspace) -> Bool {
+    func canAssignServer(_ server: Server, to destination: Workspace, hasProAccess: Bool) -> Bool {
         if server.workspaceId == destination.id {
             return true
         }
-        return moveDestinationIDs(for: server).contains(destination.id)
+        return moveDestinationIDs(for: server, hasProAccess: hasProAccess).contains(destination.id)
     }
 
     func moveServer(
         _ server: Server,
         to destination: Workspace,
-        preferredEnvironment: ServerEnvironment? = nil
+        preferredEnvironment: ServerEnvironment? = nil,
+        hasProAccess: Bool
     ) async throws -> Server {
         guard let refreshedDestination = workspace(withId: destination.id) else {
             throw VVTermError.moveNotAllowed(String(localized: "The destination workspace is no longer available."))
         }
 
-        if let restriction = moveRestriction(for: server, destination: refreshedDestination) {
+        if let restriction = moveRestriction(
+            for: server,
+            destination: refreshedDestination,
+            hasProAccess: hasProAccess
+        ) {
             throw restriction
         }
 
@@ -1270,7 +1288,7 @@ final class ServerManager: ObservableObject {
         updatedServer.workspaceId = refreshedDestination.id
         updatedServer.environment = resolvedEnvironment
 
-        try await updateServer(updatedServer)
+        _ = try await apply(.update(updatedServer))
         try await updateWorkspaceSelectionMetadataAfterMove(
             serverId: server.id,
             from: sourceWorkspace,
@@ -1282,18 +1300,14 @@ final class ServerManager: ObservableObject {
 
     // MARK: - Pro Limits
 
-    var canAddServer: Bool {
-        if StoreManager.shared.isPro { return true }
+    func canAddServer(hasProAccess: Bool) -> Bool {
+        if hasProAccess { return true }
         return servers.count < freeServerLimit
     }
 
-    var canAddWorkspace: Bool {
-        if StoreManager.shared.isPro { return true }
+    func canAddWorkspace(hasProAccess: Bool) -> Bool {
+        if hasProAccess { return true }
         return workspaces.count < FreeTierLimits.maxWorkspaces
-    }
-
-    var canCreateCustomEnvironment: Bool {
-        StoreManager.shared.isPro
     }
 
     var freeServerLimit: Int {
@@ -1318,65 +1332,70 @@ final class ServerManager: ObservableObject {
     }
 
     /// Set of server IDs that are accessible on free tier (oldest N servers)
-    var unlockedServerIds: Set<UUID> {
-        if StoreManager.shared.isPro { return Set(servers.map(\.id)) }
+    func unlockedServerIDs(hasProAccess: Bool) -> Set<UUID> {
+        if hasProAccess { return Set(servers.map(\.id)) }
         let unlocked = serversSortedByCreation.prefix(freeServerLimit)
         return Set(unlocked.map(\.id))
     }
 
     /// Set of workspace IDs that are accessible on free tier (first N workspaces by order)
-    var unlockedWorkspaceIds: Set<UUID> {
-        if StoreManager.shared.isPro { return Set(workspaces.map(\.id)) }
+    func unlockedWorkspaceIDs(hasProAccess: Bool) -> Set<UUID> {
+        if hasProAccess { return Set(workspaces.map(\.id)) }
         let unlocked = workspacesSortedByOrder.prefix(FreeTierLimits.maxWorkspaces)
         return Set(unlocked.map(\.id))
     }
 
     /// Check if a specific server is locked (over free tier limit)
-    func isServerLocked(_ server: Server) -> Bool {
-        if StoreManager.shared.isPro { return false }
-        return !unlockedServerIds.contains(server.id)
+    func isServerLocked(_ server: Server, hasProAccess: Bool) -> Bool {
+        if hasProAccess { return false }
+        return !unlockedServerIDs(hasProAccess: false).contains(server.id)
     }
 
     /// Check if a specific workspace is locked (over free tier limit)
-    func isWorkspaceLocked(_ workspace: Workspace) -> Bool {
-        if StoreManager.shared.isPro { return false }
-        return !unlockedWorkspaceIds.contains(workspace.id)
+    func isWorkspaceLocked(_ workspace: Workspace, hasProAccess: Bool) -> Bool {
+        if hasProAccess { return false }
+        return !unlockedWorkspaceIDs(hasProAccess: false).contains(workspace.id)
     }
 
     /// Number of servers that are locked due to downgrade
-    var lockedServersCount: Int {
-        if StoreManager.shared.isPro { return 0 }
+    func lockedServersCount(hasProAccess: Bool) -> Int {
+        if hasProAccess { return 0 }
         return max(0, servers.count - freeServerLimit)
     }
 
     /// Number of workspaces that are locked due to downgrade
-    var lockedWorkspacesCount: Int {
-        if StoreManager.shared.isPro { return 0 }
+    func lockedWorkspacesCount(hasProAccess: Bool) -> Int {
+        if hasProAccess { return 0 }
         return max(0, workspaces.count - FreeTierLimits.maxWorkspaces)
     }
 
     /// Whether user has any locked items after downgrade
-    var hasLockedItems: Bool {
-        lockedServersCount > 0 || lockedWorkspacesCount > 0
+    func hasLockedItems(hasProAccess: Bool) -> Bool {
+        lockedServersCount(hasProAccess: hasProAccess) > 0
+            || lockedWorkspacesCount(hasProAccess: hasProAccess) > 0
     }
 
-    private func moveDestinationIDs(for server: Server) -> Set<UUID> {
+    private func moveDestinationIDs(for server: Server, hasProAccess: Bool) -> Set<UUID> {
         ServerMoveSupport.allowedDestinationIDs(
-            isPro: StoreManager.shared.isPro,
+            isPro: hasProAccess,
             sourceWorkspaceId: server.workspaceId,
             workspacesInOrder: workspacesSortedByOrder,
-            unlockedWorkspaceIds: unlockedWorkspaceIds
+            unlockedWorkspaceIds: unlockedWorkspaceIDs(hasProAccess: hasProAccess)
         )
     }
 
-    private func moveRestriction(for server: Server, destination: Workspace) -> VVTermError? {
+    private func moveRestriction(
+        for server: Server,
+        destination: Workspace,
+        hasProAccess: Bool
+    ) -> VVTermError? {
         guard server.workspaceId != destination.id else { return nil }
 
-        if moveDestinationIDs(for: server).contains(destination.id) {
+        if moveDestinationIDs(for: server, hasProAccess: hasProAccess).contains(destination.id) {
             return nil
         }
 
-        if !StoreManager.shared.isPro && isWorkspaceLocked(destination) {
+        if !hasProAccess && isWorkspaceLocked(destination, hasProAccess: false) {
             return VVTermError.proRequired(String(localized: "Upgrade to Pro to move servers into locked workspaces"))
         }
 
@@ -1403,8 +1422,12 @@ final class ServerManager: ObservableObject {
         }
     }
 
-    func createCustomEnvironment(name: String, color: String) throws -> ServerEnvironment {
-        guard canCreateCustomEnvironment else {
+    func createCustomEnvironment(
+        name: String,
+        color: String,
+        hasProAccess: Bool
+    ) throws -> ServerEnvironment {
+        guard hasProAccess else {
             throw VVTermError.proRequired(String(localized: "Upgrade to Pro for custom environments"))
         }
         return ServerEnvironment(
@@ -1430,7 +1453,7 @@ final class ServerManager: ObservableObject {
         for server in serversToUpdate {
             var updatedServer = server
             updatedServer.environment = environment
-            try await updateServer(updatedServer)
+            _ = try await apply(.update(updatedServer))
         }
 
         return updatedWorkspace
@@ -1460,7 +1483,7 @@ final class ServerManager: ObservableObject {
         for server in serversToUpdate {
             var updatedServer = server
             updatedServer.environment = fallback
-            try await updateServer(updatedServer)
+            _ = try await apply(.update(updatedServer))
         }
 
         return updatedWorkspace
@@ -1469,6 +1492,23 @@ final class ServerManager: ObservableObject {
     func handleAppLanguageChange() {
         guard refreshPendingBootstrapWorkspaceLocalizationIfNeeded() else { return }
         saveLocalData()
+    }
+}
+
+private extension Array {
+    mutating func moveElements(fromOffsets source: IndexSet, toOffset destination: Int) {
+        guard !source.isEmpty, source.allSatisfy(indices.contains) else { return }
+
+        let originalCount = count
+        let movingElements = source.map { self[$0] }
+        for index in source.sorted(by: >) {
+            remove(at: index)
+        }
+
+        let boundedDestination = Swift.max(0, Swift.min(destination, originalCount))
+        let removedBeforeDestination = source.count(in: ..<boundedDestination)
+        let adjustedDestination = boundedDestination - removedBeforeDestination
+        insert(contentsOf: movingElements, at: adjustedDestination)
     }
 }
 
