@@ -3,15 +3,6 @@ import Foundation
 enum DiscoverySource: String, CaseIterable, Codable, Hashable, Sendable {
     case bonjour
     case portScan
-
-    var label: String {
-        switch self {
-        case .bonjour:
-            return String(localized: "Bonjour")
-        case .portScan:
-            return String(localized: "Port Scan")
-        }
-    }
 }
 
 struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {
