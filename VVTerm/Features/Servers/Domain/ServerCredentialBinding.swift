@@ -1,6 +1,6 @@
 import Foundation
 
-struct ServerCredentialBinding: Codable, Equatable, Sendable {
+nonisolated struct ServerCredentialBinding: Codable, Equatable, Sendable {
     let host: String
     let port: Int
     let eternalTerminalPort: Int?
@@ -68,7 +68,7 @@ enum ServerCredentialBindingStatus: Equatable, Sendable {
     }
 }
 
-enum ServerCredentialAccessError: LocalizedError, Equatable {
+nonisolated enum ServerCredentialAccessError: LocalizedError, Equatable {
     case approvalRequired
 
     var errorDescription: String? {
@@ -82,12 +82,12 @@ enum ServerCredentialAccessError: LocalizedError, Equatable {
 }
 
 extension ServerCredentials {
-    func isAuthorized(for server: Server) -> Bool {
+    nonisolated func isAuthorized(for server: Server) -> Bool {
         serverId == server.id
             && credentialBinding == ServerCredentialBinding(server: server)
     }
 
-    func requireAuthorization(for server: Server) throws {
+    nonisolated func requireAuthorization(for server: Server) throws {
         guard isAuthorized(for: server) else {
             throw ServerCredentialAccessError.approvalRequired
         }

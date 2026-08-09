@@ -1,17 +1,13 @@
 import Foundation
-import CoreGraphics
 import os.log
 
+@MainActor
 final class TerminalPaneSSHCoordinator {
     let paneId: UUID
     let server: Server
     let credentials: ServerCredentials
-    weak var terminal: GhosttyTerminalView?
     let sshClient: SSHClient
     let tabManager: TerminalTabManager
-    var isTerminalReady = false
-    var preservePane = false
-    var lastReportedSize: CGSize = .zero
 
     private let richPasteRuntime: TerminalRichPasteRuntime
     private let transportWriteQueue = TerminalTransportWriteQueue()
@@ -112,21 +108,35 @@ final class TerminalPaneSSHCoordinator {
         let server = self.server
         let credentials = self.credentials
         let logger = self.logger
+        let transport = SSHConnectionRunnerTransport.live(client: sshClient)
+        let initialTerminalState = Self.initialTerminalState(for: terminal)
         let hasEstablishedConnection = tabManager.paneStates[paneId]?.hasEstablishedConnection == true
         guard tabManager.startSSHConnectionTask(
             for: paneId,
             server: server,
             client: sshClient,
             operation: { [weak terminal] context in
-                guard let terminal else { return }
                 await Self.runConnection(
                     server: server,
                     credentials: credentials,
                     sshClient: sshClient,
-                    terminal: terminal,
+                    transport: transport,
+                    initialTerminalState: initialTerminalState,
                     context: context,
                     hasEstablishedConnection: hasEstablishedConnection,
-                    logger: logger
+                    logger: logger,
+                    writeOutput: { [weak terminal] data in
+                        guard context.isCurrent(), let terminal else { return false }
+                        terminal.feedData(data)
+                        return true
+                    },
+                    reportFailure: { [weak terminal] error in
+                        guard context.isCurrent() else { return }
+                        let message = "\r\n\u{001B}[31mSSH Error: \(error.localizedDescription)\u{001B}[0m\r\n"
+                        if let data = message.data(using: .utf8) {
+                            terminal?.feedData(data)
+                        }
+                    }
                 )
             }
         ) else {
@@ -142,76 +152,78 @@ final class TerminalPaneSSHCoordinator {
         server: Server,
         credentials: ServerCredentials,
         sshClient: SSHClient,
-        terminal: GhosttyTerminalView,
+        transport: SSHConnectionRunnerTransport,
+        initialTerminalState: SSHConnectionInitialTerminalState,
         context: TerminalSSHConnectionContext,
         hasEstablishedConnection: Bool,
-        logger: Logger
+        logger: Logger,
+        writeOutput: @MainActor @escaping @Sendable (Data) -> Bool,
+        reportFailure: @MainActor @escaping @Sendable (Error) -> Void
     ) async {
         await SSHConnectionRunner.run(
             server: server,
             credentials: credentials,
-            sshClient: sshClient,
-            terminal: terminal,
+            transport: transport,
+            initialTerminalState: initialTerminalState,
             logger: logger,
             shouldContinueConnection: context.isCurrent,
             onAttempt: { attempt in
-                    context.updateConnectionState(
-                        TerminalConnectionAttemptPolicy.state(
-                            attempt: attempt,
-                            hasEstablishedConnection: hasEstablishedConnection
-                        )
+                context.updateConnectionState(
+                    TerminalConnectionAttemptPolicy.state(
+                        attempt: attempt,
+                        hasEstablishedConnection: hasEstablishedConnection
                     )
-                },
-                startupPlan: context.startupPlan,
-                restoreMoshShell: context.restoreMoshShell,
-                registerShell: { shell in
-                    guard await context.registerShell(shell) else { return false }
-                    context.updateConnectionState(.connected)
-                    if shell.origin == .fresh, let cwd = context.workingDirectory() {
-                        await applyWorkingDirectory(
-                            cwd,
-                            shellId: shell.id,
-                            sshClient: sshClient,
-                            logger: logger
-                        )
-                    }
-                    if shell.transport == .mosh {
-                        await context.persistMoshSnapshot(shell.id)
-                    }
-                    return true
-                },
-                onBeforeShellStart: { _, _ in },
-                onTitleChange: context.updateTitle,
-                shouldContinueStreaming: { data, terminal in
-                    guard context.isCurrent() else { return false }
-                    terminal.feedData(data)
-                    return true
-                },
-                shouldResetClient: { sshError in
-                    switch sshError {
-                    case .notConnected, .connectionFailed, .socketError, .timeout:
-                        return true
-                    case .channelOpenFailed, .shellRequestFailed:
-                        let hasOtherRegistrations = await context.hasOtherRegistrations()
-                        return !hasOtherRegistrations
-                    case .authenticationFailed, .tailscaleAuthenticationNotAccepted, .cloudflareConfigurationRequired, .cloudflareAuthenticationFailed, .cloudflareTunnelFailed, .hostKeyApprovalRequired, .hostKeyVerificationFailed, .moshServerMissing, .moshServerRuntimeBroken, .moshBootstrapFailed, .moshSessionFailed, .moshInvalidEndpoint, .moshUDPTimeout, .moshClientSessionFailed, .outputLimitExceeded, .unknown:
-                        return false
-                    }
-                },
-                onProcessExit: context.handleShellEnd,
-                onFailure: { error, terminal in
-                    guard context.isCurrent() else { return }
-                    let errorMsg = "\r\n\u{001B}[31mSSH Error: \(error.localizedDescription)\u{001B}[0m\r\n"
-                    if let data = errorMsg.data(using: .utf8) {
-                        terminal.feedData(data)
-                    }
-                    context.handleFailure(error)
+                )
+            },
+            startupPlan: context.startupPlan,
+            restoreMoshShell: context.restoreMoshShell,
+            registerShell: { shell in
+                guard await context.registerShell(shell) else { return false }
+                context.updateConnectionState(.connected)
+                if shell.origin == .fresh, let cwd = context.workingDirectory() {
+                    await applyWorkingDirectory(
+                        cwd,
+                        shellId: shell.id,
+                        sshClient: sshClient,
+                        logger: logger
+                    )
                 }
+                if shell.transport == .mosh {
+                    await context.persistMoshSnapshot(shell.id)
+                }
+                return true
+            },
+            onTitleChange: context.updateTitle,
+            writeOutput: writeOutput,
+            shouldResetClient: { sshError in
+                switch sshError {
+                case .notConnected, .connectionFailed, .socketError, .timeout:
+                    return true
+                case .channelOpenFailed, .shellRequestFailed:
+                    let hasOtherRegistrations = await context.hasOtherRegistrations()
+                    return !hasOtherRegistrations
+                case .authenticationFailed, .tailscaleAuthenticationNotAccepted, .cloudflareConfigurationRequired, .cloudflareAuthenticationFailed, .cloudflareTunnelFailed, .hostKeyApprovalRequired, .hostKeyVerificationFailed, .moshServerMissing, .moshServerRuntimeBroken, .moshBootstrapFailed, .moshSessionFailed, .moshInvalidEndpoint, .moshUDPTimeout, .moshClientSessionFailed, .outputLimitExceeded, .unknown:
+                    return false
+                }
+            },
+            onProcessExit: context.handleShellEnd,
+            onFailure: { error in
+                guard context.isCurrent() else { return }
+                reportFailure(error)
+                context.handleFailure(error)
+            }
         )
     }
 
-    func cancelShell() {
-        terminal = nil
+    private static func initialTerminalState(
+        for terminal: GhosttyTerminalView
+    ) -> SSHConnectionInitialTerminalState {
+        let size = terminal.terminalSize()
+        return SSHConnectionInitialTerminalState(
+            columns: Int(size?.columns ?? 80),
+            rows: Int(size?.rows ?? 24),
+            pixelSize: terminal.currentTerminalPixelSize
+        )
     }
 
     private static func applyWorkingDirectory(

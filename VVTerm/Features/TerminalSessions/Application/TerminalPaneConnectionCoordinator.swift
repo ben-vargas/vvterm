@@ -1,9 +1,9 @@
 import CoreGraphics
 import Foundation
 
-/// Selects one transport coordinator once per pane. Transport state itself is
-/// retained by TerminalTabManager so SwiftUI view reconstruction cannot replace
-/// a live ET session.
+/// Selects one application transport coordinator per pane. Transport state is
+/// retained by TerminalTabManager so view reconstruction cannot replace a live
+/// session.
 @MainActor
 final class TerminalPaneConnectionCoordinator {
     private enum Backend {
@@ -12,6 +12,10 @@ final class TerminalPaneConnectionCoordinator {
     }
 
     let tabManager: TerminalTabManager
+    weak var terminal: GhosttyTerminalView?
+    var isTerminalReady = false
+    var preservePane = false
+    var lastReportedSize: CGSize = .zero
     private let backend: Backend
 
     init(
@@ -45,66 +49,6 @@ final class TerminalPaneConnectionCoordinator {
         switch backend {
         case .ssh(let coordinator): coordinator.paneId
         case .eternalTerminal(let coordinator): coordinator.paneId
-        }
-    }
-
-    var terminal: GhosttyTerminalView? {
-        get {
-            switch backend {
-            case .ssh(let coordinator): coordinator.terminal
-            case .eternalTerminal(let coordinator): coordinator.terminal
-            }
-        }
-        set {
-            switch backend {
-            case .ssh(let coordinator): coordinator.terminal = newValue
-            case .eternalTerminal(let coordinator): coordinator.terminal = newValue
-            }
-        }
-    }
-
-    var isTerminalReady: Bool {
-        get {
-            switch backend {
-            case .ssh(let coordinator): coordinator.isTerminalReady
-            case .eternalTerminal(let coordinator): coordinator.isTerminalReady
-            }
-        }
-        set {
-            switch backend {
-            case .ssh(let coordinator): coordinator.isTerminalReady = newValue
-            case .eternalTerminal(let coordinator): coordinator.isTerminalReady = newValue
-            }
-        }
-    }
-
-    var preservePane: Bool {
-        get {
-            switch backend {
-            case .ssh(let coordinator): coordinator.preservePane
-            case .eternalTerminal(let coordinator): coordinator.preservePane
-            }
-        }
-        set {
-            switch backend {
-            case .ssh(let coordinator): coordinator.preservePane = newValue
-            case .eternalTerminal(let coordinator): coordinator.preservePane = newValue
-            }
-        }
-    }
-
-    var lastReportedSize: CGSize {
-        get {
-            switch backend {
-            case .ssh(let coordinator): coordinator.lastReportedSize
-            case .eternalTerminal(let coordinator): coordinator.lastReportedSize
-            }
-        }
-        set {
-            switch backend {
-            case .ssh(let coordinator): coordinator.lastReportedSize = newValue
-            case .eternalTerminal(let coordinator): coordinator.lastReportedSize = newValue
-            }
         }
     }
 
@@ -149,6 +93,7 @@ final class TerminalPaneConnectionCoordinator {
     }
 
     func startConnection(terminal: GhosttyTerminalView) {
+        self.terminal = terminal
         switch backend {
         case .ssh(let coordinator): coordinator.startSSHConnection(terminal: terminal)
         case .eternalTerminal(let coordinator): coordinator.start(terminal: terminal)
@@ -156,8 +101,10 @@ final class TerminalPaneConnectionCoordinator {
     }
 
     func cancelConnection() {
+        terminal = nil
         switch backend {
-        case .ssh(let coordinator): coordinator.cancelShell()
+        case .ssh:
+            break
         case .eternalTerminal(let coordinator): coordinator.cancel()
         }
     }
@@ -169,10 +116,6 @@ private final class EternalTerminalPaneCoordinator {
     let server: Server
     let credentials: ServerCredentials
     let tabManager: TerminalTabManager
-    weak var terminal: GhosttyTerminalView?
-    var isTerminalReady = false
-    var preservePane = false
-    var lastReportedSize: CGSize = .zero
 
     init(
         paneId: UUID,
@@ -187,7 +130,6 @@ private final class EternalTerminalPaneCoordinator {
     }
 
     func start(terminal: GhosttyTerminalView) {
-        self.terminal = terminal
         let runtime = tabManager.eternalTerminalRuntime(
             for: paneId,
             server: server,

@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 /// Backing-pixel dimensions accepted by the SSH and ET wire protocols.
-struct TerminalPixelSize: Equatable, Sendable {
+nonisolated struct TerminalPixelSize: Equatable, Sendable {
     let width: Int
     let height: Int
 
