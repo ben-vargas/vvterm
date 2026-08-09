@@ -331,7 +331,7 @@ struct ConnectionTerminalContainer: View {
         guard selectedView != ConnectionViewTab.terminal.id else { return }
         for tab in serverTabs {
             for paneId in tab.allPaneIds {
-                tabManager.setTerminalPendingVoiceReturn(false, for: paneId)
+                tabManager.applyTerminalVoiceEvent(.pendingReturnDismissed, for: paneId)
             }
         }
         #endif

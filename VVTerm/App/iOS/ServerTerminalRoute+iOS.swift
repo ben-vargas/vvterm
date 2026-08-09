@@ -113,12 +113,12 @@ struct ServerTerminalRoute: View {
 
     private var isFocusedTerminalVoiceRecording: Bool {
         guard let focusedPaneId else { return false }
-        return tabManager.terminalVoiceRecordingByPane[focusedPaneId] ?? false
+        return tabManager.terminalVoicePresentation(for: focusedPaneId).isRecording
     }
 
     private var isFocusedTerminalPendingVoiceReturn: Bool {
         guard let focusedPaneId else { return false }
-        return tabManager.terminalPendingVoiceReturnByPane[focusedPaneId] ?? false
+        return tabManager.terminalVoicePresentation(for: focusedPaneId).isPendingReturn
     }
 
     private var shouldShowFloatingTerminalControls: Bool {
@@ -598,7 +598,7 @@ struct ServerTerminalRoute: View {
               tabManager.paneStates[focusedPaneId]?.connectionState.isConnected == true else { return }
         clearPendingVoiceReturnForFocusedPane()
         if focusedTerminal?.triggerVoiceInput() == true {
-            tabManager.setTerminalVoiceRecording(true, for: focusedPaneId)
+            tabManager.applyTerminalVoiceEvent(.recordingStarted, for: focusedPaneId)
         }
     }
 
@@ -611,7 +611,7 @@ struct ServerTerminalRoute: View {
 
     private func clearPendingVoiceReturnForFocusedPane() {
         guard let focusedPaneId else { return }
-        tabManager.setTerminalPendingVoiceReturn(false, for: focusedPaneId)
+        tabManager.applyTerminalVoiceEvent(.pendingReturnDismissed, for: focusedPaneId)
     }
 
     @ViewBuilder

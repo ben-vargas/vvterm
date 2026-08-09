@@ -38,6 +38,35 @@ enum TerminalRegistryPolicy {
     }
 }
 
+nonisolated enum TerminalVoicePresentationState: Equatable, Sendable {
+    nonisolated enum Event: Equatable, Sendable {
+        case recordingStarted
+        case recordingStopped
+        case transcriptionSent
+        case pendingReturnDismissed
+    }
+
+    case idle
+    case recording
+    case pendingReturn
+
+    var isRecording: Bool { self == .recording }
+    var isPendingReturn: Bool { self == .pendingReturn }
+
+    func applying(_ event: Event) -> Self {
+        switch event {
+        case .recordingStarted:
+            return .recording
+        case .recordingStopped:
+            return self == .recording ? .idle : self
+        case .transcriptionSent:
+            return .pendingReturn
+        case .pendingReturnDismissed:
+            return self == .pendingReturn ? .idle : self
+        }
+    }
+}
+
 @MainActor
 final class TerminalTabManager: ObservableObject {
     private struct ConnectionCleanup {
@@ -122,8 +151,7 @@ final class TerminalTabManager: ObservableObject {
     @Published private(set) var titleOverrideByPane: [UUID: String] = [:]
     #if os(iOS)
     @Published private(set) var terminalFindNavigatorVisibleByPane: [UUID: Bool] = [:]
-    @Published private(set) var terminalVoiceRecordingByPane: [UUID: Bool] = [:]
-    @Published private(set) var terminalPendingVoiceReturnByPane: [UUID: Bool] = [:]
+    @Published private(set) var terminalVoicePresentationByPane: [UUID: TerminalVoicePresentationState] = [:]
     let keyboardCoordinator = TerminalKeyboardCoordinator()
     #endif
 
@@ -1109,8 +1137,7 @@ final class TerminalTabManager: ObservableObject {
             terminal.onKeyboardAccessoryHideRequested = nil
             terminal.onFindNavigatorVisibilityChange = nil
             terminalFindNavigatorVisibleByPane.removeValue(forKey: paneId)
-            terminalVoiceRecordingByPane.removeValue(forKey: paneId)
-            terminalPendingVoiceReturnByPane.removeValue(forKey: paneId)
+            terminalVoicePresentationByPane.removeValue(forKey: paneId)
             keyboardCoordinator.setWindowAttached(false, for: paneId)
             keyboardCoordinator.removePane(paneId)
             #endif
@@ -1142,23 +1169,22 @@ final class TerminalTabManager: ObservableObject {
         }
     }
 
-    func setTerminalVoiceRecording(_ isRecording: Bool, for paneId: UUID) {
-        if isRecording {
-            if terminalVoiceRecordingByPane[paneId] != true {
-                terminalVoiceRecordingByPane[paneId] = true
-            }
-        } else {
-            terminalVoiceRecordingByPane.removeValue(forKey: paneId)
-        }
+    func terminalVoicePresentation(for paneId: UUID) -> TerminalVoicePresentationState {
+        terminalVoicePresentationByPane[paneId] ?? .idle
     }
 
-    func setTerminalPendingVoiceReturn(_ isPending: Bool, for paneId: UUID) {
-        if isPending {
-            if terminalPendingVoiceReturnByPane[paneId] != true {
-                terminalPendingVoiceReturnByPane[paneId] = true
-            }
+    func applyTerminalVoiceEvent(
+        _ event: TerminalVoicePresentationState.Event,
+        for paneId: UUID
+    ) {
+        let current = terminalVoicePresentation(for: paneId)
+        let next = current.applying(event)
+        guard next != current else { return }
+
+        if next == .idle {
+            terminalVoicePresentationByPane.removeValue(forKey: paneId)
         } else {
-            terminalPendingVoiceReturnByPane.removeValue(forKey: paneId)
+            terminalVoicePresentationByPane[paneId] = next
         }
     }
     #endif
@@ -2939,8 +2965,7 @@ extension TerminalTabManager {
         titleOverrideByPane = [:]
         #if os(iOS)
         terminalFindNavigatorVisibleByPane = [:]
-        terminalVoiceRecordingByPane = [:]
-        terminalPendingVoiceReturnByPane = [:]
+        terminalVoicePresentationByPane = [:]
         keyboardCoordinator.setActivePane(nil)
         keyboardCoordinator.setViewActive(false)
         #endif
