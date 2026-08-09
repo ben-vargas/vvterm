@@ -217,6 +217,7 @@ final class EternalTerminalRuntime {
     private let server: Server
     private let bootstrapExecutor: SSHETBootstrapExecutor
     private let resumeStore: any EternalTerminalResumeStoring
+    private weak var tabManager: TerminalTabManager?
     private var session: ETTerminalSession?
     private weak var terminal: GhosttyTerminalView?
     private var outputTask: Task<Void, Never>?
@@ -238,17 +239,20 @@ final class EternalTerminalRuntime {
         paneId: UUID,
         server: Server,
         credentials: ServerCredentials,
+        tabManager: TerminalTabManager,
         resumeStore: any EternalTerminalResumeStoring
     ) {
         self.paneId = paneId
         self.server = server
+        self.tabManager = tabManager
         self.resumeStore = resumeStore
         let runtimeToken = identityToken
         let executor = SSHETBootstrapExecutor(
             server: server,
             credentials: credentials,
-            startupPlanProvider: { client in
-                try await TerminalTabManager.shared.eternalTerminalTmuxStartupPlan(
+            startupPlanProvider: { [weak tabManager] client in
+                guard let tabManager else { throw CancellationError() }
+                return try await tabManager.eternalTerminalTmuxStartupPlan(
                     for: paneId,
                     serverId: server.id,
                     client: client,
@@ -260,6 +264,10 @@ final class EternalTerminalRuntime {
     }
 
     var isStartInFlight: Bool { connectTask != nil }
+
+    private var isCurrentOwner: Bool {
+        tabManager?.isCurrentEternalTerminalRuntime(self, for: paneId) == true
+    }
 
     func abortConnection() {
         terminal = nil
@@ -287,10 +295,7 @@ final class EternalTerminalRuntime {
                 guard let self else { return }
                 let prepared = try await self.prepareSession()
                 guard !Task.isCancelled,
-                      TerminalTabManager.shared.isCurrentEternalTerminalRuntime(
-                        self,
-                        for: paneId
-                      ) else {
+                      self.isCurrentOwner else {
                     await prepared.session.close()
                     return
                 }
@@ -298,10 +303,7 @@ final class EternalTerminalRuntime {
                 self.configureLifecycle(for: prepared.origin)
                 self.observe(prepared.session, host: host, port: port)
                 try await prepared.session.connect()
-                guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(
-                    self,
-                    for: paneId
-                ) else {
+                guard self.isCurrentOwner else {
                     await prepared.session.close()
                     return
                 }
@@ -315,7 +317,7 @@ final class EternalTerminalRuntime {
             self?.connectTask = nil
         }
 
-        TerminalTabManager.shared.markEternalTerminalTransport(for: paneId)
+        tabManager?.markEternalTerminalTransport(for: paneId)
     }
 
     func send(_ data: Data) {
@@ -375,12 +377,12 @@ final class EternalTerminalRuntime {
 
     func beginNetworkRecoveryProbe() async -> UUID? {
         guard let session,
-              TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+              isCurrentOwner else {
             return nil
         }
         let probeID = networkRecoveryProbe.begin()
         await session.notifyNetworkPathChanged()
-        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+        guard isCurrentOwner else {
             return nil
         }
         return probeID
@@ -391,15 +393,14 @@ final class EternalTerminalRuntime {
     }
 
     func completedNetworkRecoveryProbe(_ probeID: UUID) -> Bool {
-        TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId)
-            && networkRecoveryProbe.didComplete(probeID)
+        isCurrentOwner && networkRecoveryProbe.didComplete(probeID)
     }
 
     func persistCheckpoint() async {
         guard let session else { return }
         do {
             let checkpoint = try await session.checkpoint()
-            guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+            guard isCurrentOwner else {
                 return
             }
             try resumeStore.save(checkpoint, for: paneId)
@@ -414,7 +415,7 @@ final class EternalTerminalRuntime {
         guard let session else { return }
         do {
             let checkpoint = try await session.prepareForApplicationBackground()
-            guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+            guard isCurrentOwner else {
                 return
             }
             try resumeStore.save(checkpoint, for: paneId)
@@ -476,13 +477,13 @@ final class EternalTerminalRuntime {
         let credentials = try await ETBootstrap(
             options: SSHETBootstrapExecutor.bootstrapOptions
         ).run(using: bootstrapExecutor)
-        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+        guard isCurrentOwner else {
             throw CancellationError()
         }
         let resumeCredentials = try EternalTerminalResumeCredentials(credentials)
         try resumeStore.save(resumeCredentials, for: paneId)
         let terminalType = await bootstrapExecutor.preparedTerminalType()
-        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+        guard isCurrentOwner else {
             throw CancellationError()
         }
         let session = try ETTerminalSession(
@@ -517,7 +518,7 @@ final class EternalTerminalRuntime {
     private func configureLifecycle(for origin: EternalTerminalSessionOrigin) {
         guard origin == .resumed else { return }
         startupApplied = true
-        let context = TerminalTabManager.shared.eternalTerminalTmuxResumeContext(for: paneId)
+        let context = tabManager?.eternalTerminalTmuxResumeContext(for: paneId)
         tmuxLifecycle = context
         tmuxLifecycleParser = context.map {
             TmuxLifecycleStreamParser(markerToken: $0.markerToken)
@@ -530,7 +531,7 @@ final class EternalTerminalRuntime {
         host: String,
         port: Int
     ) async {
-        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+        guard isCurrentOwner else {
             return
         }
         let recoveryProbeIDAtEvent = networkRecoveryProbe.pendingID
@@ -551,10 +552,7 @@ final class EternalTerminalRuntime {
                         pixelWidth: lastTerminalSize.pixels?.width,
                         pixelHeight: lastTerminalSize.pixels?.height
                     )
-                    guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(
-                        self,
-                        for: paneId
-                    ) else { return }
+                    guard isCurrentOwner else { return }
                     applyStartupPlanIfNeeded()
                 } else {
                     logger.error("ET connected without a valid Ghostty terminal grid")
@@ -576,14 +574,14 @@ final class EternalTerminalRuntime {
             host: host,
             port: port
         ) else { return }
-        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+        guard isCurrentOwner else {
             return
         }
         if state == .connected {
             networkRecoveryProbe.recordConnected(eventProbeID: recoveryProbeIDAtEvent)
         }
-        TerminalTabManager.shared.updatePaneState(paneId, connectionState: connectionState)
-        TerminalTabManager.shared.markEternalTerminalTransport(for: paneId)
+        tabManager?.updatePaneState(paneId, connectionState: connectionState)
+        tabManager?.markEternalTerminalTransport(for: paneId)
     }
 
     private func applyStartupPlanIfNeeded() {
@@ -594,10 +592,7 @@ final class EternalTerminalRuntime {
         Task { [weak self] in
             let plan = await executor.preparedStartupPlan()
             guard let self,
-                  TerminalTabManager.shared.isCurrentEternalTerminalRuntime(
-                    self,
-                    for: paneId
-                  ) else { return }
+                  self.isCurrentOwner else { return }
             let resumeContext = plan.tmuxLifecycle.map {
                 EternalTerminalTmuxResumeContext(
                     ownership: $0.ownership,
@@ -608,7 +603,7 @@ final class EternalTerminalRuntime {
             tmuxLifecycleParser = resumeContext.map {
                 TmuxLifecycleStreamParser(markerToken: $0.markerToken)
             }
-            TerminalTabManager.shared.setEternalTerminalTmuxResumeContext(
+            tabManager?.setEternalTerminalTmuxResumeContext(
                 resumeContext,
                 for: paneId
             )
@@ -623,7 +618,7 @@ final class EternalTerminalRuntime {
     }
 
     private func consumeOutput(_ data: Data) {
-        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+        guard isCurrentOwner else {
             return
         }
         guard var parser = tmuxLifecycleParser else {
@@ -645,9 +640,9 @@ final class EternalTerminalRuntime {
         case .creationFailed:
             reason = .tmuxCreationFailed
         }
-        TerminalTabManager.shared.handleShellEnd(for: paneId, reason: reason)
-        Task {
-            await TerminalTabManager.shared.unregisterEternalTerminalRuntime(
+        tabManager?.handleShellEnd(for: paneId, reason: reason)
+        Task { [weak tabManager] in
+            await tabManager?.unregisterEternalTerminalRuntime(
                 for: paneId,
                 ifOwnedBy: self
             )
@@ -655,7 +650,7 @@ final class EternalTerminalRuntime {
     }
 
     private func publishFailure(_ error: Error, host: String, port: Int) {
-        guard TerminalTabManager.shared.isCurrentEternalTerminalRuntime(self, for: paneId) else {
+        guard isCurrentOwner else {
             logger.info(
                 "Ignoring failure from stale ET runtime for pane \(self.paneId.uuidString, privacy: .public)"
             )
@@ -675,7 +670,7 @@ final class EternalTerminalRuntime {
                 reason: EternalTerminalErrorPresentation.analyticsCategory(for: error)
             )
         }
-        TerminalTabManager.shared.updatePaneState(
+        tabManager?.updatePaneState(
             paneId,
             connectionState: .failed(EternalTerminalErrorPresentation.message(
                 for: error,
@@ -683,6 +678,6 @@ final class EternalTerminalRuntime {
                 port: port
             ))
         )
-        TerminalTabManager.shared.markEternalTerminalTransport(for: paneId)
+        tabManager?.markEternalTerminalTransport(for: paneId)
     }
 }

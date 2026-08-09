@@ -1353,6 +1353,7 @@ final class TerminalTabManager: ObservableObject {
             paneId: paneId,
             server: server,
             credentials: credentials,
+            tabManager: self,
             resumeStore: eternalTerminalResumeStore
         )
         eternalTerminalRuntimes[paneId] = runtime
