@@ -234,7 +234,7 @@ struct DockerStatsCollector: Sendable {
         }
 
         if let availability = unavailableState(from: output) {
-            throw DockerControlError.commandFailed(availability.message)
+            throw DockerControlError.commandFailed(availability.controlFailureMessage)
         }
 
         let lowercased = output.lowercased()
@@ -520,6 +520,23 @@ private enum DockerControlError: LocalizedError {
             return String(localized: "Container ID is missing.")
         case .commandFailed(let message):
             return message.isEmpty ? String(localized: "Docker command failed.") : message
+        }
+    }
+}
+
+private extension DockerAvailability {
+    var controlFailureMessage: String {
+        switch self {
+        case .unknown:
+            return "Docker status is unknown."
+        case .available:
+            return "Docker is available."
+        case .commandMissing:
+            return "Docker command not found."
+        case .daemonUnavailable(let message),
+             .permissionDenied(let message),
+             .unavailable(let message):
+            return message
         }
     }
 }
