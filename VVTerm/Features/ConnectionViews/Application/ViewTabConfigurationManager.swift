@@ -5,35 +5,22 @@
 
 import Combine
 import Foundation
-import os.log
+
+@MainActor
+protocol ConnectionViewTabConfigurationPersisting {
+    func load() -> ConnectionViewTabConfiguration
+    func save(_ configuration: ConnectionViewTabConfiguration)
+}
 
 @MainActor
 final class ViewTabConfigurationManager: ObservableObject {
-    static let shared = ViewTabConfigurationManager()
+    private let persistence: any ConnectionViewTabConfigurationPersisting
 
-    static let configurationKey = "connectionViewTabConfiguration"
+    @Published private(set) var configuration: ConnectionViewTabConfiguration
 
-    private enum LegacyKey {
-        static let order = "connectionViewTabOrder"
-        static let defaultTab = "connectionDefaultViewTab"
-        static let showStats = "showStatsTab"
-        static let showTerminal = "showTerminalTab"
-        static let showFiles = "showFilesTab"
-
-        static let all = [order, defaultTab, showStats, showTerminal, showFiles]
-    }
-
-    private let defaults: UserDefaults
-    private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "com.vivy.vvterm",
-        category: "ViewTabConfigurationManager"
-    )
-
-    @Published private(set) var configuration: ConnectionViewTabConfiguration = .default
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        loadConfiguration()
+    init(persistence: any ConnectionViewTabConfigurationPersisting) {
+        self.persistence = persistence
+        configuration = persistence.load()
     }
 
     var tabOrder: [ConnectionViewTabID] {
@@ -115,74 +102,9 @@ final class ViewTabConfigurationManager: ObservableObject {
         configuration.effectiveView(for: storedView)
     }
 
-    private func loadConfiguration() {
-        if let data = defaults.data(forKey: Self.configurationKey) {
-            do {
-                configuration = try JSONDecoder().decode(ConnectionViewTabConfiguration.self, from: data)
-                removeLegacyConfiguration()
-                return
-            } catch {
-                logger.error("Failed to decode view tab configuration: \(error.localizedDescription)")
-            }
-        }
-
-        guard LegacyKey.all.contains(where: { defaults.object(forKey: $0) != nil }) else {
-            return
-        }
-
-        configuration = migratedLegacyConfiguration()
-        if saveConfiguration() {
-            removeLegacyConfiguration()
-        }
-    }
-
-    private func migratedLegacyConfiguration() -> ConnectionViewTabConfiguration {
-        let order: [ConnectionViewTabID]
-        if let data = defaults.data(forKey: LegacyKey.order),
-           let storedOrder = try? JSONDecoder().decode([String].self, from: data) {
-            order = storedOrder.compactMap(ConnectionViewTabID.init(rawValue:))
-        } else {
-            order = ConnectionViewTabID.allCases
-        }
-
-        let defaultTab = defaults.string(forKey: LegacyKey.defaultTab)
-            .flatMap(ConnectionViewTabID.init(rawValue:))
-            ?? .stats
-
-        let visibleTabs = Set(ConnectionViewTabID.allCases.filter { tab in
-            let key = switch tab {
-            case .stats: LegacyKey.showStats
-            case .terminal: LegacyKey.showTerminal
-            case .files: LegacyKey.showFiles
-            }
-            return defaults.object(forKey: key) as? Bool ?? true
-        })
-
-        return ConnectionViewTabConfiguration(
-            order: order,
-            visibleTabs: visibleTabs,
-            defaultTab: defaultTab
-        )
-    }
-
     private func updateConfiguration(_ newConfiguration: ConnectionViewTabConfiguration) {
         guard newConfiguration != configuration else { return }
         configuration = newConfiguration
-        saveConfiguration()
-    }
-
-    @discardableResult
-    private func saveConfiguration() -> Bool {
-        do {
-            defaults.set(try JSONEncoder().encode(configuration), forKey: Self.configurationKey)
-            return true
-        } catch {
-            logger.error("Failed to encode view tab configuration: \(error.localizedDescription)")
-            return false
-        }
-    }
-
-    private func removeLegacyConfiguration() {
-        LegacyKey.all.forEach(defaults.removeObject(forKey:))
+        persistence.save(newConfiguration)
     }
 }

@@ -19,7 +19,9 @@ final class ViewTabConfigurationManagerTests: XCTestCase {
     }
 
     private func persistedConfiguration(in defaults: UserDefaults) throws -> ConnectionViewTabConfiguration {
-        let data = try XCTUnwrap(defaults.data(forKey: ViewTabConfigurationManager.configurationKey))
+        let data = try XCTUnwrap(
+            defaults.data(forKey: UserDefaultsViewTabConfigurationStore.configurationKey)
+        )
         return try JSONDecoder().decode(ConnectionViewTabConfiguration.self, from: data)
     }
 
@@ -30,6 +32,22 @@ final class ViewTabConfigurationManagerTests: XCTestCase {
 
         XCTAssertEqual(manager.effectiveDefaultTab(), .stats)
         XCTAssertEqual(manager.configuration.defaultTab, .terminal)
+    }
+
+    func testManagerLoadsAndSavesOnlyThroughInjectedPersistence() {
+        let initial = ConnectionViewTabConfiguration(
+            order: [.files, .terminal, .stats],
+            visibleTabs: [.files, .terminal],
+            defaultTab: .files
+        )
+        let persistence = ViewTabConfigurationPersistenceSpy(initial: initial)
+        let manager = ViewTabConfigurationManager(persistence: persistence)
+
+        XCTAssertEqual(manager.configuration, initial)
+
+        manager.setVisibility(for: .stats, isVisible: true)
+
+        XCTAssertEqual(persistence.savedConfigurations, [manager.configuration])
     }
 
     func testCannotHideLastVisibleTab() {
@@ -73,7 +91,7 @@ final class ViewTabConfigurationManagerTests: XCTestCase {
         )
         defaults.set(
             try JSONEncoder().encode(storedConfiguration),
-            forKey: ViewTabConfigurationManager.configurationKey
+            forKey: UserDefaultsViewTabConfigurationStore.configurationKey
         )
         defaults.set("stats", forKey: "connectionDefaultViewTab")
         defaults.set(false, forKey: "showFilesTab")
@@ -126,5 +144,23 @@ final class ViewTabConfigurationManagerTests: XCTestCase {
         for key in legacyKeys {
             XCTAssertNil(defaults.object(forKey: key))
         }
+    }
+}
+
+@MainActor
+private final class ViewTabConfigurationPersistenceSpy: ConnectionViewTabConfigurationPersisting {
+    private let initial: ConnectionViewTabConfiguration
+    private(set) var savedConfigurations: [ConnectionViewTabConfiguration] = []
+
+    init(initial: ConnectionViewTabConfiguration) {
+        self.initial = initial
+    }
+
+    func load() -> ConnectionViewTabConfiguration {
+        initial
+    }
+
+    func save(_ configuration: ConnectionViewTabConfiguration) {
+        savedConfigurations.append(configuration)
     }
 }
