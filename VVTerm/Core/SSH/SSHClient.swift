@@ -33,7 +33,7 @@ enum LibSSH2Runtime {
 
 nonisolated struct ShellHandle: Sendable {
     let id: UUID
-    let stream: AsyncStream<Data>
+    let stream: TerminalOutputStream
     let transportState: ShellTransportState
     let origin: ShellStartOrigin
 
@@ -43,7 +43,7 @@ nonisolated struct ShellHandle: Sendable {
 
     init(
         id: UUID,
-        stream: AsyncStream<Data>,
+        stream: TerminalOutputStream,
         transportState: ShellTransportState = .ssh,
         origin: ShellStartOrigin = .fresh
     ) {
@@ -114,12 +114,13 @@ actor SSHClient {
 
     private struct MoshShellRuntime {
         let session: MoshClientSession
+        let output: TerminalOutputChannel
+        let streamTask: Task<Void, Never>
     }
 
     private struct PreparedMoshShell: Sendable {
         let session: MoshClientSession
         let pendingOps: [MoshHostOp]
-        let hostOpStream: AsyncStream<MoshHostOp>
     }
 
     private struct PreparedMoshBootstrap: Sendable {
@@ -537,6 +538,8 @@ actor SSHClient {
             }
 
             for runtime in activeMoshShells {
+                runtime.streamTask.cancel()
+                await runtime.output.cancel()
                 await runtime.session.stop()
             }
 
@@ -1028,6 +1031,8 @@ actor SSHClient {
 
     func closeShell(_ shellId: UUID) async {
         if let runtime = moshShells.removeValue(forKey: shellId) {
+            runtime.streamTask.cancel()
+            await runtime.output.cancel()
             await runtime.session.stop()
             return
         }
@@ -1170,12 +1175,10 @@ actor SSHClient {
             try await restoredSession.enqueue(
                 .resize(cols: Int32(cols), rows: Int32(rows))
             )
-            let hostOpStream = await restoredSession.hostOpStream()
             return registerMoshShell(
                 PreparedMoshShell(
                     session: restoredSession,
-                    pendingOps: [],
-                    hostOpStream: hostOpStream
+                    pendingOps: []
                 ),
                 origin: .restored
             )
@@ -1348,12 +1351,10 @@ actor SSHClient {
         }
 
         do {
-            let hostOpStream = await moshSession.hostOpStream()
             try validateShellStartupSession(expectedSession)
             return PreparedMoshShell(
                 session: moshSession,
-                pendingOps: pendingOps,
-                hostOpStream: hostOpStream
+                pendingOps: pendingOps
             )
         } catch {
             await moshSession.stop()
@@ -1370,48 +1371,82 @@ actor SSHClient {
             logger.info("Mosh: \(prepared.pendingOps.count) pending host ops before stream creation")
         }
 
-        let streamPair = AsyncStream<Data>.makeStream()
-        let continuation = streamPair.continuation
-        for op in prepared.pendingOps {
-            if let bytes = MoshStartupReadiness.visibleTerminalBytes(from: op) {
-                startupTrace?.recordOnce(.firstTerminalByte, detail: "mosh")
-                continuation.yield(bytes)
-            }
-        }
-
-        moshShells[shellId] = MoshShellRuntime(session: prepared.session)
-
+        let output = TerminalOutputChannel(overflowPolicy: .rejectNewData)
         let moshLogger = logger
         let trace = startupTrace
         let streamTask = Task { [weak self] in
             var totalBytes = 0
-            for await hostOp in prepared.hostOpStream {
-                guard !Task.isCancelled else { break }
-                if let bytes = MoshStartupReadiness.visibleTerminalBytes(from: hostOp) {
-                    trace?.recordOnce(.firstTerminalByte, detail: "mosh")
-                    totalBytes += bytes.count
-                    moshLogger.debug("Mosh host bytes: \(bytes.count)B (total: \(totalBytes))")
-                    continuation.yield(bytes)
+            var shouldContinue = true
+
+            for op in prepared.pendingOps {
+                guard !Task.isCancelled,
+                      let bytes = MoshStartupReadiness.visibleTerminalBytes(from: op) else {
+                    continue
+                }
+                trace?.recordOnce(.firstTerminalByte, detail: "mosh")
+                guard await output.send(bytes) else {
+                    shouldContinue = false
+                    break
+                }
+                let (newTotal, overflow) = totalBytes.addingReportingOverflow(bytes.count)
+                totalBytes = overflow ? Int.max : newTotal
+            }
+
+            while shouldContinue, !Task.isCancelled {
+                let hostOps = await prepared.session.drainHostOps()
+                for hostOp in hostOps {
+                    guard !Task.isCancelled else {
+                        shouldContinue = false
+                        break
+                    }
+                    if let bytes = MoshStartupReadiness.visibleTerminalBytes(from: hostOp) {
+                        trace?.recordOnce(.firstTerminalByte, detail: "mosh")
+                        guard await output.send(bytes) else {
+                            shouldContinue = false
+                            break
+                        }
+                        let (newTotal, overflow) = totalBytes.addingReportingOverflow(bytes.count)
+                        totalBytes = overflow ? Int.max : newTotal
+                        moshLogger.debug("Mosh host bytes: \(bytes.count)B (total: \(totalBytes))")
+                    }
+                }
+
+                guard shouldContinue, !Task.isCancelled else { break }
+                if hostOps.isEmpty {
+                    switch await prepared.session.state {
+                    case .idle, .stopped, .failed:
+                        shouldContinue = false
+                    case .starting, .running, .suspending, .suspended, .stopping:
+                        try? await Task.sleep(for: .milliseconds(10))
+                    }
                 }
             }
-            moshLogger.info("Mosh stream ended, total bytes delivered: \(totalBytes)")
-            continuation.finish()
-            await self?.closeShell(shellId)
-        }
-
-        continuation.onTermination = { [weak self] _ in
-            streamTask.cancel()
-            Task { [weak self] in
-                await self?.closeShell(shellId)
+            if !Task.isCancelled {
+                await output.finish()
+                moshLogger.info("Mosh stream ended, total bytes delivered: \(totalBytes)")
+                await self?.moshOutputDidFinish(shellId)
+            } else {
+                await output.cancel()
             }
         }
+
+        moshShells[shellId] = MoshShellRuntime(
+            session: prepared.session,
+            output: output,
+            streamTask: streamTask
+        )
 
         return ShellHandle(
             id: shellId,
-            stream: streamPair.stream,
+            stream: TerminalOutputStream(channel: output),
             transportState: .mosh,
             origin: origin
         )
+    }
+
+    private func moshOutputDidFinish(_ shellId: UUID) async {
+        guard let runtime = moshShells.removeValue(forKey: shellId) else { return }
+        await runtime.session.stop()
     }
 
     nonisolated static func waitForMoshTransportReadiness(
@@ -1624,16 +1659,16 @@ actor SSHSession {
     private final class ShellChannelState {
         let id: UUID
         var channel: OpaquePointer
-        let continuation: AsyncStream<Data>.Continuation
+        let output: TerminalOutputChannel
         var batchBuffer = Data()
         var lastYieldTime: UInt64 = DispatchTime.now().uptimeNanoseconds
         var recentBytesPerRead: Int = 0
         var didRecordFirstByte = false
 
-        init(id: UUID, channel: OpaquePointer, continuation: AsyncStream<Data>.Continuation) {
+        init(id: UUID, channel: OpaquePointer, output: TerminalOutputChannel) {
             self.id = id
             self.channel = channel
-            self.continuation = continuation
+            self.output = output
         }
     }
 
@@ -2725,16 +2760,13 @@ actor SSHSession {
             logger.info("Shell started (\(cols)x\(rows))")
 
             let shellId = UUID()
-            let stream = AsyncStream<Data> { continuation in
-                let state = ShellChannelState(id: shellId, channel: channel, continuation: continuation)
-                self.shellChannels[shellId] = state
-
-                continuation.onTermination = { [weak self] _ in
-                    Task { [weak self] in
-                        await self?.closeShell(shellId)
-                    }
-                }
-            }
+            let output = TerminalOutputChannel()
+            let stream = TerminalOutputStream(channel: output)
+            shellChannels[shellId] = ShellChannelState(
+                id: shellId,
+                channel: channel,
+                output: output
+            )
 
             pendingChannel = nil
             startIOLoop()
@@ -2960,36 +2992,43 @@ actor SSHSession {
                         let timeSinceYield = now - state.lastYieldTime
 
                         if state.batchBuffer.count >= batchThreshold || timeSinceYield >= maxBatchDelay {
-                            state.continuation.yield(state.batchBuffer)
-                            state.batchBuffer = Data()
+                            guard await flushShellOutput(state) else {
+                                await closeShellInternal(state.id)
+                                continue
+                            }
                             state.lastYieldTime = now
                         }
                     } else if bytesRead == Int(LIBSSH2_ERROR_EAGAIN) {
                         // Flush any pending data before waiting
-                        if !state.batchBuffer.isEmpty {
-                            state.continuation.yield(state.batchBuffer)
-                            state.batchBuffer = Data()
+                        if !state.batchBuffer.isEmpty,
+                           !(await flushShellOutput(state)) {
+                            await closeShellInternal(state.id)
+                            continue
+                        }
+                        if shellChannels[state.id] != nil {
                             state.lastYieldTime = DispatchTime.now().uptimeNanoseconds
                         }
                         // Reset to interactive mode when idle (waiting for input)
                         state.recentBytesPerRead = 0
                     } else if bytesRead < 0 {
                         // Error - flush remaining data first
-                        if !state.batchBuffer.isEmpty {
-                            state.continuation.yield(state.batchBuffer)
-                        }
+                        let preservesOutput = await flushShellOutput(state)
                         logger.error("Read error: \(bytesRead)")
-                        closeShellInternal(state.id)
+                        await closeShellInternal(
+                            state.id,
+                            preservesOutput: preservesOutput
+                        )
                         continue
                     }
 
                     // Check for EOF
                     if libssh2_channel_eof(state.channel) != 0 {
-                        if !state.batchBuffer.isEmpty {
-                            state.continuation.yield(state.batchBuffer)
-                        }
+                        let preservesOutput = await flushShellOutput(state)
                         logger.info("Channel EOF")
-                        closeShellInternal(state.id)
+                        await closeShellInternal(
+                            state.id,
+                            preservesOutput: preservesOutput
+                        )
                         didWork = true
                     }
                 }
@@ -3055,34 +3094,42 @@ actor SSHSession {
             await Task.yield()
         }
 
-        closeAllShellChannels()
+        await closeAllShellChannels()
         stopIOLoop()
     }
 
     func closeShell(_ shellId: UUID) async {
-        closeShellInternal(shellId)
+        await closeShellInternal(shellId)
     }
 
-    private func closeShellInternal(_ shellId: UUID) {
+    private func flushShellOutput(_ state: ShellChannelState) async -> Bool {
+        guard !state.batchBuffer.isEmpty else { return true }
+        let data = state.batchBuffer
+        state.batchBuffer = Data()
+        return await state.output.send(data)
+    }
+
+    private func closeShellInternal(
+        _ shellId: UUID,
+        preservesOutput: Bool = false
+    ) async {
         guard let state = shellChannels.removeValue(forKey: shellId) else { return }
-        if !state.batchBuffer.isEmpty {
-            state.continuation.yield(state.batchBuffer)
+        if preservesOutput {
+            await state.output.finish()
+        } else {
+            await state.output.cancel()
         }
         libssh2_channel_close(state.channel)
         libssh2_channel_free(state.channel)
-        state.continuation.finish()
     }
 
-    private func closeAllShellChannels() {
+    private func closeAllShellChannels() async {
         let states = shellChannels
         shellChannels.removeAll()
         for state in states.values {
-            if !state.batchBuffer.isEmpty {
-                state.continuation.yield(state.batchBuffer)
-            }
+            await state.output.cancel()
             libssh2_channel_close(state.channel)
             libssh2_channel_free(state.channel)
-            state.continuation.finish()
         }
     }
 
@@ -3090,10 +3137,9 @@ actor SSHSession {
         let states = shellChannels
         shellChannels.removeAll()
         for state in states.values {
-            if !state.batchBuffer.isEmpty {
-                state.continuation.yield(state.batchBuffer)
+            Task {
+                await state.output.cancel()
             }
-            state.continuation.finish()
         }
     }
 

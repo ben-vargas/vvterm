@@ -640,7 +640,7 @@ struct SSHStartupIntegrationTests {
         )
     }
 
-    private func awaitFirstData(from stream: AsyncStream<Data>) async throws {
+    private func awaitFirstData(from stream: TerminalOutputStream) async throws {
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
                 for await data in stream where !data.isEmpty {
