@@ -197,15 +197,8 @@ final class TerminalTabManager: ObservableObject {
         logger.info("Runtime pane title changed: \(title, privacy: .public)")
     }
 
-    private func setPaneTransport(
-        _ transport: ShellTransport,
-        fallbackReason: MoshFallbackReason?,
-        fallbackDiagnostics: MoshFallbackDiagnostics?,
-        for paneId: UUID
-    ) {
-        paneStates[paneId]?.activeTransport = transport
-        paneStates[paneId]?.moshFallbackReason = fallbackReason
-        paneStates[paneId]?.moshFallbackDiagnostics = fallbackDiagnostics
+    private func setPaneTransport(_ state: ShellTransportState, for paneId: UUID) {
+        paneStates[paneId]?.transportState = state
     }
 
     private func handleStaleShellStartContext(
@@ -677,7 +670,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func clearMoshFallbackDiagnostics(for paneId: UUID) {
-        paneStates[paneId]?.moshFallbackDiagnostics = nil
+        paneStates[paneId]?.transportState.clearFallbackDiagnostics()
     }
 
     // MARK: - Split Management
@@ -1189,19 +1182,14 @@ final class TerminalTabManager: ObservableObject {
         startToken: SSHShellRegistry.StartToken,
         for paneId: UUID,
         serverId: UUID,
-        transport: ShellTransport = .ssh,
-        fallbackReason: MoshFallbackReason? = nil,
-        fallbackDiagnostics: MoshFallbackDiagnostics? = nil
+        transportState: ShellTransportState = .ssh
     ) async -> Bool {
         let registerResult = shellRegistry.register(
             client: client,
             shellId: shellId,
             startToken: startToken,
             for: paneId,
-            serverId: serverId,
-            transport: transport,
-            fallbackReason: fallbackReason,
-            fallbackDiagnostics: fallbackDiagnostics
+            serverId: serverId
         )
 
         switch registerResult {
@@ -1218,12 +1206,7 @@ final class TerminalTabManager: ObservableObject {
             break
         }
 
-        setPaneTransport(
-            transport,
-            fallbackReason: fallbackReason,
-            fallbackDiagnostics: fallbackDiagnostics,
-            for: paneId
-        )
+        setPaneTransport(transportState, for: paneId)
         return true
     }
 
@@ -1300,12 +1283,7 @@ final class TerminalTabManager: ObservableObject {
             }
         }
 
-        setPaneTransport(
-            .ssh,
-            fallbackReason: nil,
-            fallbackDiagnostics: nil,
-            for: paneId
-        )
+        setPaneTransport(.ssh, for: paneId)
     }
 
     private func performTrackedConnectionCleanup(
@@ -1375,12 +1353,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func markEternalTerminalTransport(for paneId: UUID) {
-        setPaneTransport(
-            .eternalTerminal,
-            fallbackReason: nil,
-            fallbackDiagnostics: nil,
-            for: paneId
-        )
+        setPaneTransport(.eternalTerminal, for: paneId)
     }
 
     func eternalTerminalTmuxResumeContext(
@@ -1418,7 +1391,7 @@ final class TerminalTabManager: ObservableObject {
         guard eternalTerminalRuntimes[paneId] === runtime else { return false }
         eternalTerminalRuntimes.removeValue(forKey: paneId)
         if paneStates[paneId] != nil {
-            setPaneTransport(.ssh, fallbackReason: nil, fallbackDiagnostics: nil, for: paneId)
+            setPaneTransport(.ssh, for: paneId)
         }
         return true
     }
@@ -1811,12 +1784,7 @@ final class TerminalTabManager: ObservableObject {
         switch connectionState {
         case .connecting, .reconnecting:
             if paneStates[paneId]?.activeTransport != .eternalTerminal {
-                setPaneTransport(
-                    .ssh,
-                    fallbackReason: nil,
-                    fallbackDiagnostics: nil,
-                    for: paneId
-                )
+                setPaneTransport(.ssh, for: paneId)
             }
         case .disconnected, .failed:
             reconnectCoordinator.complete(for: paneId)

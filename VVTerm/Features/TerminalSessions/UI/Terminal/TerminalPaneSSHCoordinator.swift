@@ -200,9 +200,7 @@ final class TerminalPaneSSHCoordinator {
                         startToken: startToken,
                         for: paneId,
                         serverId: server.id,
-                        transport: shell.transport,
-                        fallbackReason: shell.fallbackReason,
-                        fallbackDiagnostics: shell.fallbackDiagnostics
+                        transportState: shell.transportState
                     ) else {
                         return false
                     }

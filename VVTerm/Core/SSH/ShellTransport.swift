@@ -1,13 +1,13 @@
 import Foundation
 
-enum ShellTransport: String, Codable, Hashable, Sendable {
+nonisolated enum ShellTransport: String, Codable, Hashable, Sendable {
     case ssh
     case mosh
     case eternalTerminal
     case sshFallback
 }
 
-enum MoshFallbackReason: String, Codable, Hashable, Sendable {
+nonisolated enum MoshFallbackReason: String, Codable, Hashable, Sendable {
     case serverMissing
     case serverRuntimeBroken
     case bootstrapFailed
@@ -40,6 +40,41 @@ enum MoshFallbackReason: String, Codable, Hashable, Sendable {
 
     var shouldOfferServerMaintenance: Bool {
         self == .serverMissing || self == .serverRuntimeBroken
+    }
+}
+
+nonisolated enum ShellTransportState: Equatable, Sendable {
+    case ssh
+    case mosh
+    case eternalTerminal
+    case sshFallback(reason: MoshFallbackReason, diagnostics: MoshFallbackDiagnostics?)
+
+    var transport: ShellTransport {
+        switch self {
+        case .ssh:
+            return .ssh
+        case .mosh:
+            return .mosh
+        case .eternalTerminal:
+            return .eternalTerminal
+        case .sshFallback:
+            return .sshFallback
+        }
+    }
+
+    var fallbackReason: MoshFallbackReason? {
+        guard case .sshFallback(let reason, _) = self else { return nil }
+        return reason
+    }
+
+    var fallbackDiagnostics: MoshFallbackDiagnostics? {
+        guard case .sshFallback(_, let diagnostics) = self else { return nil }
+        return diagnostics
+    }
+
+    mutating func clearFallbackDiagnostics() {
+        guard case .sshFallback(let reason, _) = self else { return }
+        self = .sshFallback(reason: reason, diagnostics: nil)
     }
 }
 

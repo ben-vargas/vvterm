@@ -83,12 +83,13 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Fallback")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.paneStates[tab.rootPaneId]?.activeTransport = .sshFallback
-            manager.paneStates[tab.rootPaneId]?.moshFallbackReason = .udpTimeout
-            manager.paneStates[tab.rootPaneId]?.moshFallbackDiagnostics = .make(
+            manager.paneStates[tab.rootPaneId]?.transportState = .sshFallback(
                 reason: .udpTimeout,
-                events: [],
-                appContext: .init(version: "test", platform: "test")
+                diagnostics: .make(
+                    reason: .udpTimeout,
+                    events: [],
+                    appContext: .init(version: "test", platform: "test")
+                )
             )
 
             manager.clearMoshFallbackDiagnostics(for: tab.rootPaneId)
@@ -390,12 +391,13 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Mosh recovery")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.paneStates[tab.rootPaneId]?.activeTransport = .sshFallback
-            manager.paneStates[tab.rootPaneId]?.moshFallbackReason = .udpTimeout
-            manager.paneStates[tab.rootPaneId]?.moshFallbackDiagnostics = .make(
+            manager.paneStates[tab.rootPaneId]?.transportState = .sshFallback(
                 reason: .udpTimeout,
-                events: [],
-                appContext: .init(version: "test", platform: "test")
+                diagnostics: .make(
+                    reason: .udpTimeout,
+                    events: [],
+                    appContext: .init(version: "test", platform: "test")
+                )
             )
 
             let client = SSHClient()
@@ -403,7 +405,7 @@ struct TerminalTabManagerLifecycleTests {
                 client,
                 paneId: tab.rootPaneId,
                 serverId: tab.serverId,
-                transport: .mosh,
+                transportState: .mosh,
                 in: manager
             ))
             #expect(manager.paneStates[tab.rootPaneId]?.activeTransport == .mosh)
@@ -447,7 +449,7 @@ struct TerminalTabManagerLifecycleTests {
         shellId: UUID = UUID(),
         paneId: UUID,
         serverId: UUID,
-        transport: ShellTransport = .ssh,
+        transportState: ShellTransportState = .ssh,
         in manager: TerminalTabManager
     ) async -> Bool {
         guard let startToken = manager.beginShellStart(for: paneId, client: client) else {
@@ -459,7 +461,7 @@ struct TerminalTabManagerLifecycleTests {
             startToken: startToken,
             for: paneId,
             serverId: serverId,
-            transport: transport
+            transportState: transportState
         )
     }
 
@@ -1382,7 +1384,7 @@ struct TerminalTabManagerLifecycleTests {
                 client,
                 paneId: tab.rootPaneId,
                 serverId: server.id,
-                transport: .mosh,
+                transportState: .mosh,
                 in: manager
             ))
 

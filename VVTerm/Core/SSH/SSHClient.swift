@@ -33,24 +33,22 @@ enum LibSSH2Runtime {
 nonisolated struct ShellHandle: Sendable {
     let id: UUID
     let stream: AsyncStream<Data>
-    let transport: ShellTransport
-    let fallbackReason: MoshFallbackReason?
-    let fallbackDiagnostics: MoshFallbackDiagnostics?
+    let transportState: ShellTransportState
     let origin: ShellStartOrigin
+
+    var transport: ShellTransport { transportState.transport }
+    var fallbackReason: MoshFallbackReason? { transportState.fallbackReason }
+    var fallbackDiagnostics: MoshFallbackDiagnostics? { transportState.fallbackDiagnostics }
 
     init(
         id: UUID,
         stream: AsyncStream<Data>,
-        transport: ShellTransport = .ssh,
-        fallbackReason: MoshFallbackReason? = nil,
-        fallbackDiagnostics: MoshFallbackDiagnostics? = nil,
+        transportState: ShellTransportState = .ssh,
         origin: ShellStartOrigin = .fresh
     ) {
         self.id = id
         self.stream = stream
-        self.transport = transport
-        self.fallbackReason = fallbackReason
-        self.fallbackDiagnostics = fallbackDiagnostics
+        self.transportState = transportState
         self.origin = origin
     }
 }
@@ -818,7 +816,7 @@ actor SSHClient {
             return ShellHandle(
                 id: sshShell.id,
                 stream: sshShell.stream,
-                transport: .ssh
+                transportState: .ssh
             )
         }
 
@@ -838,11 +836,12 @@ actor SSHClient {
             return ShellHandle(
                 id: fallbackShell.id,
                 stream: fallbackShell.stream,
-                transport: .sshFallback,
-                fallbackReason: .unsupportedRemoteCapabilities,
-                fallbackDiagnostics: MoshFallbackDiagnostics.make(
+                transportState: .sshFallback(
                     reason: .unsupportedRemoteCapabilities,
-                    events: startupTrace?.snapshot() ?? []
+                    diagnostics: MoshFallbackDiagnostics.make(
+                        reason: .unsupportedRemoteCapabilities,
+                        events: startupTrace?.snapshot() ?? []
+                    )
                 )
             )
         }
@@ -891,11 +890,12 @@ actor SSHClient {
                 return ShellHandle(
                     id: fallbackShell.id,
                     stream: fallbackShell.stream,
-                    transport: .sshFallback,
-                    fallbackReason: fallbackReason,
-                    fallbackDiagnostics: MoshFallbackDiagnostics.make(
+                    transportState: .sshFallback(
                         reason: fallbackReason,
-                        events: startupTrace?.snapshot() ?? []
+                        diagnostics: MoshFallbackDiagnostics.make(
+                            reason: fallbackReason,
+                            events: startupTrace?.snapshot() ?? []
+                        )
                     )
                 )
             } catch {
@@ -1381,7 +1381,7 @@ actor SSHClient {
         return ShellHandle(
             id: shellId,
             stream: streamPair.stream,
-            transport: .mosh,
+            transportState: .mosh,
             origin: origin
         )
     }

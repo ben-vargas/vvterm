@@ -124,18 +124,14 @@ struct SSHShellRegistryTests {
             shellId: UUID(),
             startToken: firstToken,
             for: paneId,
-            serverId: serverId,
-            transport: .ssh,
-            fallbackReason: nil
+            serverId: serverId
         )
         let replacementRegistration = registry.register(
             client: client,
             shellId: shellId,
             startToken: replacementToken,
             for: paneId,
-            serverId: serverId,
-            transport: .ssh,
-            fallbackReason: nil
+            serverId: serverId
         )
 
         #expect(staleRegistration == .stale)
@@ -162,9 +158,7 @@ struct SSHShellRegistryTests {
             shellId: UUID(),
             startToken: oldStartToken,
             for: paneId,
-            serverId: serverId,
-            transport: .ssh,
-            fallbackReason: nil
+            serverId: serverId
         )
 
         let detached = registry.drain()
@@ -178,9 +172,7 @@ struct SSHShellRegistryTests {
             shellId: UUID(),
             startToken: oldStartToken,
             for: paneId,
-            serverId: serverId,
-            transport: .ssh,
-            fallbackReason: nil
+            serverId: serverId
         )
 
         #expect(detached.registrations.count == 1)

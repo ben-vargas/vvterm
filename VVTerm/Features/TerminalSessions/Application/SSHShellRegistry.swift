@@ -14,9 +14,6 @@ nonisolated struct SSHShellRegistry {
         let client: SSHClient
         let shellId: UUID
         let startToken: StartToken
-        let transport: ShellTransport
-        let fallbackReason: MoshFallbackReason?
-        let fallbackDiagnostics: MoshFallbackDiagnostics?
     }
 
     nonisolated struct StartContext: Sendable {
@@ -61,10 +58,7 @@ nonisolated struct SSHShellRegistry {
         shellId: UUID,
         startToken: StartToken,
         for entityId: UUID,
-        serverId: UUID,
-        transport: ShellTransport,
-        fallbackReason: MoshFallbackReason?,
-        fallbackDiagnostics: MoshFallbackDiagnostics? = nil
+        serverId: UUID
     ) -> RegisterResult {
         guard let context = startsInFlight[entityId],
               ObjectIdentifier(context.client) == ObjectIdentifier(client),
@@ -79,10 +73,7 @@ nonisolated struct SSHShellRegistry {
             serverId: serverId,
             client: client,
             shellId: shellId,
-            startToken: startToken,
-            transport: transport,
-            fallbackReason: fallbackReason,
-            fallbackDiagnostics: fallbackDiagnostics
+            startToken: startToken
         )
         registrations[entityId] = newRegistration
         return .accepted
