@@ -314,6 +314,6 @@ struct ConnectionSession: Identifiable {
 1. **Never apply glass to terminal content** - only navigation/toolbars
 2. **Deduplicate by ID** when syncing from CloudKit
 3. **Pro limits enforced in**: `ServerManager.canAddServer`, `canAddWorkspace`, `ConnectionSessionManager.canOpenNewTab`
-4. **Keychain credentials** are NOT synced - only server metadata syncs via CloudKit
+4. **Keychain credentials** use opt-in iCloud Keychain sync. Device identity, session resume secrets, and derived caches stay device-only.
 5. **iOS keyboard toolbar** provides Esc, Tab, Ctrl, arrows, function keys
 6. **Voice-to-command** uses MLX Whisper/Parakeet on-device or Apple Speech fallback

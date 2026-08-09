@@ -1416,7 +1416,11 @@
 "Support" = "สนับสนุน";
 "Swift Source" = "ที่มาอย่างรวดเร็ว";
 "Symlink" = "ซิมลิงค์";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "ซิงค์เซิร์ฟเวอร์ พื้นที่ทำงาน ธีม และการตั้งค่าอุปกรณ์เสริมคีย์บอร์ดในอุปกรณ์ Apple ทั้งหมดของคุณ";
+"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "เซิร์ฟเวอร์และข้อมูลประจำตัวที่เลือกจะซิงค์ระหว่างอุปกรณ์ Apple ของคุณ ข้อมูลประจำตัวใช้พวงกุญแจ iCloud";
+"Credentials could not be copied. Existing credentials were kept." = "ไม่สามารถคัดลอกข้อมูลประจำตัวได้ ระบบเก็บข้อมูลประจำตัวเดิมไว้";
+"Remove credentials from iCloud Keychain" = "ลบข้อมูลประจำตัวออกจากพวงกุญแจ iCloud";
+"This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "การดำเนินการนี้จะลบข้อมูลประจำตัว VVTerm ออกจากพวงกุญแจ iCloud บนอุปกรณ์ Apple ทุกเครื่อง ข้อมูลประจำตัวเฉพาะอุปกรณ์จะยังอยู่บนอุปกรณ์นี้";
+"Some iCloud Keychain credentials could not be removed. Device-only credentials were kept." = "ไม่สามารถลบข้อมูลประจำตัวบางรายการออกจากพวงกุญแจ iCloud ได้ ระบบเก็บข้อมูลประจำตัวเฉพาะอุปกรณ์ไว้";
 "Tab \\(number)" = "แท็บ \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "เงื่อนไข";

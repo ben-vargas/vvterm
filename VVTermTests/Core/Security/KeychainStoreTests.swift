@@ -1,3 +1,4 @@
+import Foundation
 import Security
 import XCTest
 @testable import VVTerm
@@ -15,65 +16,216 @@ final class KeychainStoreTests: XCTestCase {
     }
 
     override func tearDown() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
-        ]
-        SecItemDelete(query as CFDictionary)
+        for scope in KeychainStorageScope.allCases {
+            try? store.delete(key, scope: scope)
+        }
         store = nil
         super.tearDown()
     }
 
     func testSetStoresDeviceOnlyItem() throws {
-        let expected = Data("secret".utf8)
+        let expected = Data("local-secret".utf8)
 
-        try store.set(expected, forKey: key)
+        try store.set(expected, forKey: key, scope: .deviceOnly)
 
-        let local = copyItem(synchronizable: false)
-        XCTAssertEqual(local.status, errSecSuccess)
-        XCTAssertEqual(local.data, expected)
-        XCTAssertEqual(copyItem(synchronizable: true).status, errSecItemNotFound)
+        XCTAssertEqual(try store.get(key, scope: .deviceOnly), expected)
+        XCTAssertNil(try store.get(key, scope: .iCloud))
     }
 
-    func testGetMigratesLegacySynchronizedItemToDeviceOnlyStorage() throws {
-        let expected = Data("legacy-secret".utf8)
-        let attributes: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: expected,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
-            kSecAttrSynchronizable as String: kCFBooleanTrue as Any
-        ]
-        let addStatus = SecItemAdd(attributes as CFDictionary, nil)
-        if addStatus == errSecMissingEntitlement || addStatus == errSecNotAvailable {
+    func testSetStoresSynchronizedItem() throws {
+        let expected = Data("cloud-secret".utf8)
+
+        do {
+            try store.set(expected, forKey: key, scope: .iCloud)
+        } catch KeychainError.unhandled(let status)
+            where status == errSecMissingEntitlement || status == errSecNotAvailable {
             throw XCTSkip("Synchronized Keychain items are unavailable in this test environment")
         }
-        XCTAssertEqual(addStatus, errSecSuccess)
 
-        XCTAssertEqual(try store.get(key), expected)
-        XCTAssertEqual(copyItem(synchronizable: true).status, errSecItemNotFound)
-
-        let local = copyItem(synchronizable: false)
-        XCTAssertEqual(local.status, errSecSuccess)
-        XCTAssertEqual(local.data, expected)
+        XCTAssertEqual(try store.get(key, scope: .iCloud), expected)
+        XCTAssertNil(try store.get(key, scope: .deviceOnly))
     }
 
-    private func copyItem(synchronizable: Bool) -> (status: OSStatus, data: Data?) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecAttrSynchronizable as String: synchronizable ? kCFBooleanTrue : kCFBooleanFalse,
-            kSecReturnAttributes as String: kCFBooleanTrue as Any,
-            kSecReturnData as String: kCFBooleanTrue as Any,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        let attributes = item as? [String: Any]
-        return (status, attributes?[kSecValueData as String] as? Data)
+    func testGetDoesNotDeleteEitherCopy() throws {
+        let backing = InMemoryKeychainStoreBacking()
+        let store = KeychainStore(service: service, backing: backing)
+        try store.set(Data("local".utf8), forKey: key, scope: .deviceOnly)
+        try store.set(Data("cloud".utf8), forKey: key, scope: .iCloud)
+        let before = backing.snapshot()
+
+        XCTAssertEqual(
+            try store.get(key, scope: .deviceOnly),
+            Data("local".utf8)
+        )
+        XCTAssertEqual(
+            try store.get(key, scope: .iCloud),
+            Data("cloud".utf8)
+        )
+        XCTAssertEqual(backing.snapshot(), before)
+    }
+
+    func testContainsDoesNotModifyStorage() throws {
+        let backing = InMemoryKeychainStoreBacking()
+        let store = KeychainStore(service: service, backing: backing)
+        try store.set(Data("local".utf8), forKey: key, scope: .deviceOnly)
+        try store.set(Data("cloud".utf8), forKey: key, scope: .iCloud)
+        let before = backing.snapshot()
+
+        XCTAssertTrue(try store.contains(key, scope: .deviceOnly))
+        XCTAssertTrue(try store.contains(key, scope: .iCloud))
+        XCTAssertEqual(backing.snapshot(), before)
+    }
+
+    func testCopyWritesAndVerifiesDestinationWithoutDeletingSource() throws {
+        let backing = InMemoryKeychainStoreBacking()
+        let store = KeychainStore(service: service, backing: backing)
+        let expected = Data("local".utf8)
+        try store.set(expected, forKey: key, scope: .deviceOnly)
+
+        try store.copyAll(
+            from: .deviceOnly,
+            to: .iCloud,
+            where: { $0 == self.key }
+        )
+
+        XCTAssertEqual(try store.get(key, scope: .deviceOnly), expected)
+        XCTAssertEqual(try store.get(key, scope: .iCloud), expected)
+    }
+
+    func testFailedDestinationWritePreservesSource() throws {
+        let backing = InMemoryKeychainStoreBacking()
+        let store = KeychainStore(service: service, backing: backing)
+        let expected = Data("local".utf8)
+        try store.set(expected, forKey: key, scope: .deviceOnly)
+        backing.failWrites(to: .iCloud)
+
+        XCTAssertThrowsError(
+            try store.copyAll(
+                from: .deviceOnly,
+                to: .iCloud,
+                where: { $0 == self.key }
+            )
+        )
+        XCTAssertEqual(try store.get(key, scope: .deviceOnly), expected)
+        XCTAssertNil(try store.get(key, scope: .iCloud))
+    }
+
+    func testMoveDoesNotDeleteAnySourceUntilEveryCopySucceeds() throws {
+        let backing = InMemoryKeychainStoreBacking()
+        let store = KeychainStore(service: service, backing: backing)
+        let firstKey = "a"
+        let secondKey = "b"
+        try store.set(Data("first".utf8), forKey: firstKey, scope: .deviceOnly)
+        try store.set(Data("second".utf8), forKey: secondKey, scope: .deviceOnly)
+        backing.failWrites(to: .iCloud, service: service, key: secondKey)
+
+        XCTAssertThrowsError(
+            try store.moveAll(
+                from: .deviceOnly,
+                to: .iCloud,
+                where: { $0 == firstKey || $0 == secondKey }
+            )
+        )
+
+        XCTAssertEqual(try store.get(firstKey, scope: .deviceOnly), Data("first".utf8))
+        XCTAssertEqual(try store.get(secondKey, scope: .deviceOnly), Data("second".utf8))
+        XCTAssertEqual(try store.get(firstKey, scope: .iCloud), Data("first".utf8))
+        XCTAssertNil(try store.get(secondKey, scope: .iCloud))
+    }
+}
+
+nonisolated final class InMemoryKeychainStoreBacking: KeychainStoreBacking, @unchecked Sendable {
+    struct Item: Hashable {
+        let service: String
+        let key: String
+        let scope: KeychainStorageScope
+    }
+
+    enum Failure: Error, Equatable {
+        case writeRejected
+    }
+
+    private let lock = NSLock()
+    private var values: [Item: Data] = [:]
+    private var failedWriteScopes: Set<KeychainStorageScope> = []
+    private var failedWriteItems: Set<Item> = []
+
+    func set(
+        _ data: Data,
+        service: String,
+        key: String,
+        scope: KeychainStorageScope
+    ) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        let item = Item(service: service, key: key, scope: scope)
+        guard !failedWriteScopes.contains(scope),
+              !failedWriteItems.contains(item) else {
+            throw Failure.writeRejected
+        }
+        values[item] = data
+    }
+
+    func get(
+        service: String,
+        key: String,
+        scope: KeychainStorageScope
+    ) throws -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return values[Item(service: service, key: key, scope: scope)]
+    }
+
+    func contains(
+        service: String,
+        key: String,
+        scope: KeychainStorageScope
+    ) throws -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return values[Item(service: service, key: key, scope: scope)] != nil
+    }
+
+    func delete(
+        service: String,
+        key: String,
+        scope: KeychainStorageScope
+    ) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        values.removeValue(forKey: Item(service: service, key: key, scope: scope))
+    }
+
+    func keys(
+        service: String,
+        scope: KeychainStorageScope
+    ) throws -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values.keys.compactMap { item in
+            item.service == service && item.scope == scope ? item.key : nil
+        }
+    }
+
+    func failWrites(to scope: KeychainStorageScope) {
+        lock.lock()
+        failedWriteScopes.insert(scope)
+        lock.unlock()
+    }
+
+    func failWrites(
+        to scope: KeychainStorageScope,
+        service: String,
+        key: String
+    ) {
+        lock.lock()
+        failedWriteItems.insert(Item(service: service, key: key, scope: scope))
+        lock.unlock()
+    }
+
+    func snapshot() -> [Item: Data] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values
     }
 }

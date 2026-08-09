@@ -1,36 +1,67 @@
 import Foundation
-import Security
 import os.log
 
 // MARK: - Keychain Manager
 
 @MainActor
 final class KeychainManager {
-    static let shared = KeychainManager()
+    nonisolated static let credentialService = "app.vivy.vvterm"
+    nonisolated static let cloudflareTokenService = "app.vivy.vvterm.cloudflare.tokens"
+    nonisolated static let iCloudMigrationKey = "vvterm.keychain.iCloudMigration.v1"
+
+    static let shared = KeychainManager(performsInitialMigration: true)
 
     private let store: KeychainStore
+    private let cloudflareTokenStore: KeychainStore
+    private let isSyncEnabled: @Sendable () -> Bool
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "Keychain")
 
-    private init() {
-        store = KeychainStore(service: "app.vivy.vvterm")
+    init(
+        store: KeychainStore = KeychainStore(service: credentialService),
+        cloudflareTokenStore: KeychainStore = KeychainStore(
+            service: cloudflareTokenService
+        ),
+        isSyncEnabled: @escaping @Sendable () -> Bool = { SyncSettings.isEnabled },
+        performsInitialMigration: Bool = false
+    ) {
+        self.store = store
+        self.cloudflareTokenStore = cloudflareTokenStore
+        self.isSyncEnabled = isSyncEnabled
+        if performsInitialMigration,
+           isSyncEnabled(),
+           !UserDefaults.standard.bool(forKey: Self.iCloudMigrationKey) {
+            do {
+                try synchronizeCredentialStorage(isEnabled: true)
+                UserDefaults.standard.set(true, forKey: Self.iCloudMigrationKey)
+            } catch {
+                logger.error("Could not prepare credential sync: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Password Operations
 
-    private func storePassword(for serverId: UUID, password: String) throws {
+    private func storePassword(
+        for serverId: UUID,
+        password: String,
+        scope: KeychainStorageScope
+    ) throws {
         let key = passwordKey(for: serverId)
         guard let data = password.data(using: .utf8) else {
             throw KeychainError.encodingFailed
         }
-        try store.set(data, forKey: key)
+        try store.set(data, forKey: key, scope: scope)
         logger.info("Stored password for server \(serverId.uuidString)")
     }
 
-    private func getPassword(for serverId: UUID) throws -> String? {
+    private func getPassword(
+        for serverId: UUID,
+        scope: KeychainStorageScope
+    ) throws -> String? {
         let key = passwordKey(for: serverId)
 
         // Try store first
-        if let data = try store.get(key) {
+        if let data = try store.get(key, scope: scope) {
             guard let password = String(data: data, encoding: .utf8) else {
                 throw KeychainError.decodingFailed
             }
@@ -42,40 +73,49 @@ final class KeychainManager {
 
     // MARK: - SSH Key Operations
 
-    private func storeSSHKey(for serverId: UUID, privateKey: Data, passphrase: String?, publicKey: Data? = nil) throws {
+    private func storeSSHKey(
+        for serverId: UUID,
+        privateKey: Data,
+        passphrase: String?,
+        publicKey: Data? = nil,
+        scope: KeychainStorageScope
+    ) throws {
         let keyKey = sshKeyKey(for: serverId)
-        try store.set(privateKey, forKey: keyKey)
+        try store.set(privateKey, forKey: keyKey, scope: scope)
 
         if let passphrase = passphrase {
             let passphraseKey = sshPassphraseKey(for: serverId)
             guard let passphraseData = passphrase.data(using: .utf8) else {
                 throw KeychainError.encodingFailed
             }
-            try store.set(passphraseData, forKey: passphraseKey)
+            try store.set(passphraseData, forKey: passphraseKey, scope: scope)
         }
 
         let publicKeyKey = sshPublicKeyKey(for: serverId)
         if let publicKey, !publicKey.isEmpty {
-            try store.set(publicKey, forKey: publicKeyKey)
+            try store.set(publicKey, forKey: publicKeyKey, scope: scope)
         } else {
-            try? store.delete(publicKeyKey)
+            try? store.delete(publicKeyKey, scope: scope)
         }
 
         logger.info("Stored SSH key for server \(serverId.uuidString)")
     }
 
-    private func getSSHKey(for serverId: UUID) throws -> (key: Data, passphrase: String?, publicKey: Data?)? {
+    private func getSSHKey(
+        for serverId: UUID,
+        scope: KeychainStorageScope
+    ) throws -> (key: Data, passphrase: String?, publicKey: Data?)? {
         let keyKey = sshKeyKey(for: serverId)
         let passphraseKey = sshPassphraseKey(for: serverId)
         let publicKeyKey = sshPublicKeyKey(for: serverId)
 
         // Try store first
-        if let keyData = try store.get(keyKey) {
+        if let keyData = try store.get(keyKey, scope: scope) {
             var passphrase: String? = nil
-            if let passphraseData = try store.get(passphraseKey) {
+            if let passphraseData = try store.get(passphraseKey, scope: scope) {
                 passphrase = String(data: passphraseData, encoding: .utf8)
             }
-            let publicKeyData = try store.get(publicKeyKey)
+            let publicKeyData = try store.get(publicKeyKey, scope: scope)
             return (key: keyData, passphrase: passphrase, publicKey: publicKeyData)
         }
 
@@ -97,22 +137,24 @@ final class KeychainManager {
             return credentials
         }
 
-        guard try credentialBindingStatus(for: server) != .approvalRequired else {
+        let resolution = try credentialStorageResolution(for: server)
+        guard resolution?.status != .approvalRequired else {
             logger.warning("Blocked credentials for a changed server endpoint: \(server.id.uuidString)")
             throw ServerCredentialAccessError.approvalRequired
         }
+        let scope = resolution?.scope ?? preferredStorageScope
 
         switch server.authMethod {
         case .password:
-            credentials.password = try getPassword(for: server.id)
+            credentials.password = try getPassword(for: server.id, scope: scope)
             logger.info("Password retrieved: \(credentials.password != nil)")
         case .sshKey:
-            if let sshData = try getSSHKey(for: server.id) {
+            if let sshData = try getSSHKey(for: server.id, scope: scope) {
                 credentials.privateKey = sshData.key
                 credentials.publicKey = sshData.publicKey
             }
         case .sshKeyWithPassphrase:
-            if let sshData = try getSSHKey(for: server.id) {
+            if let sshData = try getSSHKey(for: server.id, scope: scope) {
                 credentials.privateKey = sshData.key
                 credentials.passphrase = sshData.passphrase
                 credentials.publicKey = sshData.publicKey
@@ -120,7 +162,10 @@ final class KeychainManager {
         }
 
         if server.connectionMode == .cloudflare, server.cloudflareAccessMode == .serviceToken,
-           let cloudflareToken = try getCloudflareServiceToken(for: server.id) {
+           let cloudflareToken = try getCloudflareServiceToken(
+               for: server.id,
+               scope: scope
+           ) {
             credentials.cloudflareClientID = cloudflareToken.clientID
             credentials.cloudflareClientSecret = cloudflareToken.clientSecret
         }
@@ -133,11 +178,16 @@ final class KeychainManager {
             throw KeychainError.credentialServerMismatch
         }
 
+        let scope = preferredStorageScope
         if server.connectionMode != .tailscale {
             switch server.authMethod {
             case .password:
                 if let password = credentials.password {
-                    try storePassword(for: server.id, password: password)
+                    try storePassword(
+                        for: server.id,
+                        password: password,
+                        scope: scope
+                    )
                 }
             case .sshKey, .sshKeyWithPassphrase:
                 if let privateKey = credentials.privateKey {
@@ -145,7 +195,8 @@ final class KeychainManager {
                         for: server.id,
                         privateKey: privateKey,
                         passphrase: credentials.passphrase,
-                        publicKey: credentials.publicKey
+                        publicKey: credentials.publicKey,
+                        scope: scope
                     )
                 }
             }
@@ -158,53 +209,54 @@ final class KeychainManager {
             try storeCloudflareServiceToken(
                 for: server.id,
                 clientID: clientID,
-                clientSecret: clientSecret
+                clientSecret: clientSecret,
+                scope: scope
             )
         } else {
             deleteCloudflareServiceToken(for: server.id)
         }
 
-        try approveCredentialUse(for: server)
+        try approveCredentialUse(for: server, scope: scope)
     }
 
     func credentialBindingStatus(for server: Server) throws -> ServerCredentialBindingStatus {
-        let hasCredentials = try credentialKeys(for: server.id).contains { key in
-            try store.contains(key)
-        }
-        guard hasCredentials else { return .noCredentials }
-
-        let storedBinding: ServerCredentialBinding?
-        if let data = try store.get(credentialBindingKey(for: server.id)) {
-            storedBinding = try? JSONDecoder().decode(ServerCredentialBinding.self, from: data)
-        } else {
-            storedBinding = nil
-        }
-
-        return ServerCredentialBindingStatus.resolve(
-            storedBinding: storedBinding,
-            currentBinding: ServerCredentialBinding(server: server),
-            hasStoredCredentials: true
-        )
+        try credentialStorageResolution(for: server)?.status ?? .noCredentials
     }
 
     func approveCredentialUse(for server: Server) throws {
-        let hasCredentials = try credentialKeys(for: server.id).contains { key in
-            try store.contains(key)
-        }
-        guard hasCredentials else {
-            try? store.delete(credentialBindingKey(for: server.id))
+        guard let resolution = try credentialStorageResolution(for: server) else {
+            try? store.delete(
+                credentialBindingKey(for: server.id),
+                scope: preferredStorageScope
+            )
             return
         }
 
+        try approveCredentialUse(for: server, scope: resolution.scope)
+    }
+
+    private func approveCredentialUse(
+        for server: Server,
+        scope: KeychainStorageScope
+    ) throws {
         let binding = ServerCredentialBinding(server: server)
         let data = try JSONEncoder().encode(binding)
-        try store.set(data, forKey: credentialBindingKey(for: server.id))
+        try store.set(
+            data,
+            forKey: credentialBindingKey(for: server.id),
+            scope: scope
+        )
         logger.info("Approved credential endpoint for server \(server.id.uuidString)")
     }
 
     // MARK: - Cloudflare Service Token
 
-    private func storeCloudflareServiceToken(for serverId: UUID, clientID: String, clientSecret: String) throws {
+    private func storeCloudflareServiceToken(
+        for serverId: UUID,
+        clientID: String,
+        clientSecret: String,
+        scope: KeychainStorageScope
+    ) throws {
         let idKey = cloudflareClientIDKey(for: serverId)
         let secretKey = cloudflareClientSecretKey(for: serverId)
 
@@ -213,17 +265,20 @@ final class KeychainManager {
             throw KeychainError.encodingFailed
         }
 
-        try store.set(idData, forKey: idKey)
-        try store.set(secretData, forKey: secretKey)
+        try store.set(idData, forKey: idKey, scope: scope)
+        try store.set(secretData, forKey: secretKey, scope: scope)
         logger.info("Stored Cloudflare service token for server \(serverId.uuidString)")
     }
 
-    private func getCloudflareServiceToken(for serverId: UUID) throws -> (clientID: String, clientSecret: String)? {
+    private func getCloudflareServiceToken(
+        for serverId: UUID,
+        scope: KeychainStorageScope
+    ) throws -> (clientID: String, clientSecret: String)? {
         let idKey = cloudflareClientIDKey(for: serverId)
         let secretKey = cloudflareClientSecretKey(for: serverId)
 
-        guard let idData = try store.get(idKey),
-              let secretData = try store.get(secretKey),
+        guard let idData = try store.get(idKey, scope: scope),
+              let secretData = try store.get(secretKey, scope: scope),
               let clientID = String(data: idData, encoding: .utf8),
               let clientSecret = String(data: secretData, encoding: .utf8) else {
             return nil
@@ -233,8 +288,8 @@ final class KeychainManager {
     }
 
     private func deleteCloudflareServiceToken(for serverId: UUID) {
-        try? store.delete(cloudflareClientIDKey(for: serverId))
-        try? store.delete(cloudflareClientSecretKey(for: serverId))
+        deleteCredentialKey(cloudflareClientIDKey(for: serverId))
+        deleteCredentialKey(cloudflareClientSecretKey(for: serverId))
     }
 
     // MARK: - Delete Operations
@@ -248,13 +303,17 @@ final class KeychainManager {
         let cloudflareSecretKey = cloudflareClientSecretKey(for: serverId)
         let bindingKey = credentialBindingKey(for: serverId)
 
-        try? store.delete(passwordKey)
-        try? store.delete(keyKey)
-        try? store.delete(passphraseKey)
-        try? store.delete(publicKeyKey)
-        try? store.delete(cloudflareIDKey)
-        try? store.delete(cloudflareSecretKey)
-        try? store.delete(bindingKey)
+        for key in [
+            passwordKey,
+            keyKey,
+            passphraseKey,
+            publicKeyKey,
+            cloudflareIDKey,
+            cloudflareSecretKey,
+            bindingKey
+        ] {
+            deleteCredentialKey(key)
+        }
 
         logger.info("Deleted credentials for server \(serverId.uuidString)")
     }
@@ -300,23 +359,159 @@ final class KeychainManager {
         ]
     }
 
+    private struct CredentialStorageResolution {
+        let scope: KeychainStorageScope
+        let status: ServerCredentialBindingStatus
+    }
+
+    private var preferredStorageScope: KeychainStorageScope {
+        isSyncEnabled() ? .iCloud : .deviceOnly
+    }
+
+    private var readScopes: [KeychainStorageScope] {
+        isSyncEnabled() ? [.iCloud, .deviceOnly] : [.deviceOnly]
+    }
+
+    private var credentialDeletionScopes: [KeychainStorageScope] {
+        isSyncEnabled() ? [.iCloud, .deviceOnly] : [.deviceOnly]
+    }
+
+    private func credentialStorageResolution(
+        for server: Server
+    ) throws -> CredentialStorageResolution? {
+        let currentBinding = ServerCredentialBinding(server: server)
+        var firstStoredResolution: CredentialStorageResolution?
+
+        for scope in readScopes {
+            let hasCredentials = try credentialKeys(for: server.id).contains { key in
+                try store.contains(key, scope: scope)
+            }
+            guard hasCredentials else { continue }
+
+            let storedBinding: ServerCredentialBinding?
+            if let data = try store.get(
+                credentialBindingKey(for: server.id),
+                scope: scope
+            ) {
+                storedBinding = try? JSONDecoder().decode(
+                    ServerCredentialBinding.self,
+                    from: data
+                )
+            } else {
+                storedBinding = nil
+            }
+            let resolution = CredentialStorageResolution(
+                scope: scope,
+                status: ServerCredentialBindingStatus.resolve(
+                    storedBinding: storedBinding,
+                    currentBinding: currentBinding,
+                    hasStoredCredentials: true
+                )
+            )
+            if resolution.status == .matches {
+                return resolution
+            }
+            if firstStoredResolution == nil {
+                firstStoredResolution = resolution
+            }
+        }
+
+        return firstStoredResolution
+    }
+
+    private func deleteCredentialKey(_ key: String) {
+        for scope in credentialDeletionScopes {
+            try? store.delete(key, scope: scope)
+        }
+    }
+
+    func synchronizeCredentialStorage(isEnabled: Bool) throws {
+        let source: KeychainStorageScope = isEnabled ? .deviceOnly : .iCloud
+        let destination: KeychainStorageScope = isEnabled ? .iCloud : .deviceOnly
+
+        try store.copyAll(
+            from: source,
+            to: destination,
+            where: Self.isSynchronizableCredentialKey
+        )
+        try cloudflareTokenStore.copyAll(
+            from: source,
+            to: destination,
+            where: { $0.hasPrefix("oauth.") }
+        )
+
+        if isEnabled {
+            try store.deleteAll(
+                in: source,
+                where: Self.isSynchronizableCredentialKey
+            )
+            try cloudflareTokenStore.deleteAll(
+                in: source,
+                where: { $0.hasPrefix("oauth.") }
+            )
+        }
+        logger.info(
+            "Prepared credential storage for iCloud sync enabled=\(isEnabled)"
+        )
+    }
+
+    func handleSyncToggle(isEnabled: Bool) throws {
+        try synchronizeCredentialStorage(isEnabled: isEnabled)
+        if isEnabled {
+            UserDefaults.standard.set(true, forKey: Self.iCloudMigrationKey)
+        }
+    }
+
+    func removeCredentialsFromICloud() throws {
+        try store.deleteAll(
+            in: .iCloud,
+            where: Self.isSynchronizableCredentialKey
+        )
+        try cloudflareTokenStore.deleteAll(
+            in: .iCloud,
+            where: { $0.hasPrefix("oauth.") }
+        )
+        logger.info("Removed VVTerm credentials from iCloud Keychain")
+    }
+
+    nonisolated static func isSynchronizableCredentialKey(_ key: String) -> Bool {
+        if key == "vvterm.sshkeys.index" {
+            return true
+        }
+        if key.hasPrefix("sshkey.") {
+            return key.hasSuffix(".data") || key.hasSuffix(".passphrase")
+        }
+        guard key.hasPrefix("server.") else { return false }
+        return [
+            ".password",
+            ".sshkey",
+            ".passphrase",
+            ".publickey",
+            ".cloudflare.clientid",
+            ".cloudflare.clientsecret",
+            ".credential-binding.v1"
+        ].contains { key.hasSuffix($0) }
+    }
+
     // MARK: - Reusable SSH Keys (Keychain Library)
 
     private let sshKeysIndexKey = "vvterm.sshkeys.index"
 
     /// Get all stored SSH key entries (metadata only, not the actual keys)
     func getStoredSSHKeys() -> [SSHKeyEntry] {
-        guard let data = try? store.get(sshKeysIndexKey),
-              let keys = try? JSONDecoder().decode([SSHKeyEntry].self, from: data) else {
-            return []
+        for scope in readScopes {
+            if let data = try? store.get(sshKeysIndexKey, scope: scope),
+               let keys = try? JSONDecoder().decode([SSHKeyEntry].self, from: data) {
+                return keys.sorted { $0.createdAt > $1.createdAt }
+            }
         }
-        return keys.sorted { $0.createdAt > $1.createdAt }
+        return []
     }
 
     /// Save the SSH key index
     private func saveSSHKeysIndex(_ keys: [SSHKeyEntry]) throws {
         let data = try JSONEncoder().encode(keys)
-        try store.set(data, forKey: sshKeysIndexKey)
+        try store.set(data, forKey: sshKeysIndexKey, scope: preferredStorageScope)
     }
 
     /// Store a new SSH key in the keychain library
@@ -336,12 +531,20 @@ final class KeychainManager {
         )
 
         // Store the actual key data
-        try store.set(privateKey, forKey: storedKeyDataKey(for: entry.id))
+        try store.set(
+            privateKey,
+            forKey: storedKeyDataKey(for: entry.id),
+            scope: preferredStorageScope
+        )
 
         // Store passphrase if provided
         if let passphrase = passphrase, !passphrase.isEmpty,
            let passphraseData = passphrase.data(using: .utf8) {
-            try store.set(passphraseData, forKey: storedKeyPassphraseKey(for: entry.id))
+            try store.set(
+                passphraseData,
+                forKey: storedKeyPassphraseKey(for: entry.id),
+                scope: preferredStorageScope
+            )
         }
 
         // Update index
@@ -355,12 +558,22 @@ final class KeychainManager {
 
     /// Get the actual key data for a stored SSH key
     func getStoredSSHKeyData(for keyId: UUID) throws -> (key: Data, passphrase: String?)? {
-        guard let keyData = try store.get(storedKeyDataKey(for: keyId)) else {
-            return nil
+        var storedScope: KeychainStorageScope?
+        var storedKeyData: Data?
+        for scope in readScopes {
+            if let keyData = try store.get(storedKeyDataKey(for: keyId), scope: scope) {
+                storedScope = scope
+                storedKeyData = keyData
+                break
+            }
         }
+        guard let scope = storedScope, let keyData = storedKeyData else { return nil }
 
         var passphrase: String? = nil
-        if let passphraseData = try store.get(storedKeyPassphraseKey(for: keyId)) {
+        if let passphraseData = try store.get(
+            storedKeyPassphraseKey(for: keyId),
+            scope: scope
+        ) {
             passphrase = String(data: passphraseData, encoding: .utf8)
         }
 
@@ -370,8 +583,8 @@ final class KeychainManager {
     /// Delete a stored SSH key from the library
     func deleteStoredSSHKey(_ keyId: UUID) throws {
         // Delete key data
-        try? store.delete(storedKeyDataKey(for: keyId))
-        try? store.delete(storedKeyPassphraseKey(for: keyId))
+        deleteCredentialKey(storedKeyDataKey(for: keyId))
+        deleteCredentialKey(storedKeyPassphraseKey(for: keyId))
 
         // Update index
         var keys = getStoredSSHKeys()

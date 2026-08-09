@@ -13,6 +13,9 @@ struct SyncSettingsView: View {
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @EnvironmentObject private var terminalAccessory: TerminalAccessoryPreferencesManager
     @AppStorage(SyncSettings.enabledKey) private var syncEnabled = true
+    @State private var credentialSyncError: String?
+    @State private var confirmsCloudCredentialRemoval = false
+    @State private var ignoresNextSyncToggleChange = false
 
     var body: some View {
         Form {
@@ -24,10 +27,16 @@ struct SyncSettingsView: View {
                     Spacer()
                     statusBadge
                 }
+
+                if let credentialSyncError {
+                    Text(credentialSyncError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             } header: {
                 Text("iCloud")
             } footer: {
-                Text("Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices.")
+                Text("Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain.")
             }
 
             if syncEnabled {
@@ -96,6 +105,14 @@ struct SyncSettingsView: View {
                     }
                 }
 
+            } else {
+                Section {
+                    Button("Remove credentials from iCloud Keychain", role: .destructive) {
+                        confirmsCloudCredentialRemoval = true
+                    }
+                } footer: {
+                    Text("This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device.")
+                }
             }
 
             // Debug section when CloudKit is unavailable
@@ -133,7 +150,43 @@ struct SyncSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(
+            "Remove credentials from iCloud Keychain",
+            isPresented: $confirmsCloudCredentialRemoval,
+            titleVisibility: .visible
+        ) {
+            Button("Remove credentials from iCloud Keychain", role: .destructive) {
+                do {
+                    try KeychainManager.shared.removeCredentialsFromICloud()
+                    credentialSyncError = nil
+                } catch {
+                    credentialSyncError = String(
+                        localized: "Some iCloud Keychain credentials could not be removed. Device-only credentials were kept."
+                    )
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device.")
+        }
         .onChangeCompat(of: syncEnabled) { enabled in
+            if ignoresNextSyncToggleChange {
+                ignoresNextSyncToggleChange = false
+                return
+            }
+            do {
+                try KeychainManager.shared.handleSyncToggle(
+                    isEnabled: enabled
+                )
+                credentialSyncError = nil
+            } catch {
+                credentialSyncError = String(
+                    localized: "Credentials could not be copied. Existing credentials were kept."
+                )
+                ignoresNextSyncToggleChange = true
+                syncEnabled = !enabled
+                return
+            }
             cloudKit.handleSyncToggle(enabled)
             if enabled {
                 Task {

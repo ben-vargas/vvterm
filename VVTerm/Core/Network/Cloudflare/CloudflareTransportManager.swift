@@ -296,7 +296,7 @@ actor CloudflareTransportManager {
 
     private func loadPersistedMetadata(for cacheKey: String) -> AccessMetadata? {
         guard
-            let data = try? metadataKeychain.get(metadataStorageKey),
+            let data = try? metadataKeychain.get(metadataStorageKey, scope: .deviceOnly),
             let persistedMap = try? JSONDecoder().decode([String: PersistedAccessMetadata].self, from: data),
             let persisted = persistedMap[cacheKey]
         else {
@@ -307,7 +307,7 @@ actor CloudflareTransportManager {
 
     private func persistMetadata(_ metadata: AccessMetadata, for cacheKey: String) {
         var persistedMap: [String: PersistedAccessMetadata] = [:]
-        if let existingData = try? metadataKeychain.get(metadataStorageKey),
+        if let existingData = try? metadataKeychain.get(metadataStorageKey, scope: .deviceOnly),
            let decoded = try? JSONDecoder().decode([String: PersistedAccessMetadata].self, from: existingData) {
             persistedMap = decoded
         }
@@ -317,14 +317,14 @@ actor CloudflareTransportManager {
             appDomain: metadata.appDomain
         )
         if let encoded = try? JSONEncoder().encode(persistedMap) {
-            try? metadataKeychain.set(encoded, forKey: metadataStorageKey)
+            try? metadataKeychain.set(encoded, forKey: metadataStorageKey, scope: .deviceOnly)
         }
     }
 
     private func clearCachedMetadata(for cacheKey: String) {
         metadataCache.removeValue(forKey: cacheKey)
         guard
-            let existingData = try? metadataKeychain.get(metadataStorageKey),
+            let existingData = try? metadataKeychain.get(metadataStorageKey, scope: .deviceOnly),
             var persistedMap = try? JSONDecoder().decode([String: PersistedAccessMetadata].self, from: existingData),
             persistedMap.removeValue(forKey: cacheKey) != nil
         else {
@@ -332,12 +332,12 @@ actor CloudflareTransportManager {
         }
 
         if persistedMap.isEmpty {
-            try? metadataKeychain.delete(metadataStorageKey)
+            try? metadataKeychain.delete(metadataStorageKey, scope: .deviceOnly)
             return
         }
 
         if let encoded = try? JSONEncoder().encode(persistedMap) {
-            try? metadataKeychain.set(encoded, forKey: metadataStorageKey)
+            try? metadataKeychain.set(encoded, forKey: metadataStorageKey, scope: .deviceOnly)
         }
     }
 

@@ -1417,7 +1417,11 @@
 "Support" = "Падтрымка";
 "Swift Source" = "Swift Source";
 "Symlink" = "Сімвалная спасылка";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "Сінхранізуйце серверы, працоўныя прасторы, тэмы і налады клавіятуры на ўсіх вашых прыладах Apple.";
+"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "Серверы і выбраныя ўліковыя даныя сінхранізуюцца паміж вашымі прыладамі Apple. Уліковыя даныя захоўваюцца ў Вязцы ключоў iCloud.";
+"Credentials could not be copied. Existing credentials were kept." = "Не ўдалося скапіяваць уліковыя даныя. Існуючыя ўліковыя даныя захаваны.";
+"Remove credentials from iCloud Keychain" = "Выдаліць уліковыя даныя з Вязкі ключоў iCloud";
+"This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "Гэта выдаліць уліковыя даныя VVTerm з Вязкі ключоў iCloud на ўсіх вашых прыладах Apple. Уліковыя даныя толькі для гэтай прылады застануцца на ёй.";
+"Some iCloud Keychain credentials could not be removed. Device-only credentials were kept." = "Некаторыя ўліковыя даныя не ўдалося выдаліць з Вязкі ключоў iCloud. Уліковыя даныя толькі для гэтай прылады захаваны.";
 "Tab \\(number)" = "Укладка \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Умовы";

@@ -1417,7 +1417,11 @@
 "Support" = "Podpora";
 "Swift Source" = "Rychlý zdroj";
 "Symlink" = "Symbolický odkaz";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "Synchronizujte servery, pracovní prostory, motivy a nastavení příslušenství klávesnice na všech vašich zařízeních Apple.";
+"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "Servery a vybrané přihlašovací údaje se synchronizují mezi vašimi zařízeními Apple. Přihlašovací údaje používají Klíčenku na iCloudu.";
+"Credentials could not be copied. Existing credentials were kept." = "Přihlašovací údaje se nepodařilo zkopírovat. Stávající přihlašovací údaje byly zachovány.";
+"Remove credentials from iCloud Keychain" = "Odstranit přihlašovací údaje z Klíčenky na iCloudu";
+"This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "Tímto odstraníte přihlašovací údaje VVTerm z Klíčenky na iCloudu na všech zařízeních Apple. Přihlašovací údaje pouze pro toto zařízení zůstanou v zařízení.";
+"Some iCloud Keychain credentials could not be removed. Device-only credentials were kept." = "Některé přihlašovací údaje se nepodařilo odstranit z Klíčenky na iCloudu. Přihlašovací údaje pouze pro zařízení byly zachovány.";
 "Tab \\(number)" = "Karta \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Podmínky";

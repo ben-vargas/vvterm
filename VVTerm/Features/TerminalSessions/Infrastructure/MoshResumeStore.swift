@@ -96,7 +96,29 @@ protocol MoshResumeSecretStoring {
     func delete(_ key: String) throws
 }
 
-extension KeychainStore: MoshResumeSecretStoring {}
+final class DeviceOnlyMoshResumeSecretStore: MoshResumeSecretStoring {
+    private let store: KeychainStore
+
+    init(
+        store: KeychainStore = KeychainStore(
+            service: "app.vivy.vvterm.mosh.resume"
+        )
+    ) {
+        self.store = store
+    }
+
+    func set(_ data: Data, forKey key: String) throws {
+        try store.set(data, forKey: key, scope: .deviceOnly)
+    }
+
+    func get(_ key: String) throws -> Data? {
+        try store.get(key, scope: .deviceOnly)
+    }
+
+    func delete(_ key: String) throws {
+        try store.delete(key, scope: .deviceOnly)
+    }
+}
 
 final class MoshResumeStore: MoshResumeStoring {
     static let shared = MoshResumeStore()
@@ -106,9 +128,7 @@ final class MoshResumeStore: MoshResumeStoring {
     private let checkpointDirectory: URL?
 
     init(
-        keychain: any MoshResumeSecretStoring = KeychainStore(
-            service: "app.vivy.vvterm.mosh.resume"
-        ),
+        keychain: any MoshResumeSecretStoring = DeviceOnlyMoshResumeSecretStore(),
         fileManager: FileManager = .default,
         checkpointDirectory: URL? = nil
     ) {

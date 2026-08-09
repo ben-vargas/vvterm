@@ -1461,7 +1461,11 @@
 "Support" = "Hỗ trợ";
 "Swift Source" = "Nguồn Swift";
 "Symlink" = "Liên kết tượng trưng";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "Đồng bộ hóa máy chủ, không gian làm việc, chủ đề và cài đặt phụ kiện bàn phím trên tất cả các thiết bị Apple của bạn.";
+"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "Máy chủ và thông tin xác thực đã chọn đồng bộ hóa trên các thiết bị Apple của bạn. Thông tin xác thực sử dụng Chuỗi khóa iCloud.";
+"Credentials could not be copied. Existing credentials were kept." = "Không thể sao chép thông tin xác thực. Thông tin xác thực hiện có vẫn được giữ lại.";
+"Remove credentials from iCloud Keychain" = "Xóa thông tin xác thực khỏi Chuỗi khóa iCloud";
+"This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "Thao tác này xóa thông tin xác thực VVTerm khỏi Chuỗi khóa iCloud trên tất cả thiết bị Apple của bạn. Thông tin xác thực chỉ dành cho thiết bị vẫn ở trên thiết bị này.";
+"Some iCloud Keychain credentials could not be removed. Device-only credentials were kept." = "Không thể xóa một số thông tin xác thực khỏi Chuỗi khóa iCloud. Thông tin xác thực chỉ dành cho thiết bị vẫn được giữ lại.";
 "Tab \\(number)" = "Tab \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Điều khoản";

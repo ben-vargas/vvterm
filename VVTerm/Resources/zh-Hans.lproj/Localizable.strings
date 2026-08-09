@@ -1413,7 +1413,11 @@
 "Support" = "支持";
 "Swift Source" = "斯威夫特源";
 "Symlink" = "符号链接";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "在所有 Apple 设备上同步服务器、工作区、主题和键盘配件设置。";
+"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "服务器和所选凭据会在您的 Apple 设备间同步。凭据使用 iCloud 钥匙串。";
+"Credentials could not be copied. Existing credentials were kept." = "无法复制凭据。现有凭据已保留。";
+"Remove credentials from iCloud Keychain" = "从 iCloud 钥匙串移除凭据";
+"This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "这会从您所有 Apple 设备的 iCloud 钥匙串中移除 VVTerm 凭据。仅限设备的凭据会保留在此设备上。";
+"Some iCloud Keychain credentials could not be removed. Device-only credentials were kept." = "部分 iCloud 钥匙串凭据无法移除。仅限设备的凭据已保留。";
 "Tab \\(number)" = "选项卡 \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "条款";

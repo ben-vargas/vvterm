@@ -1415,7 +1415,11 @@
 "Support" = "Support";
 "Swift Source" = "Swift Source";
 "Symlink" = "Symlink";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices.";
+"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain.";
+"Credentials could not be copied. Existing credentials were kept." = "Credentials could not be copied. Existing credentials were kept.";
+"Remove credentials from iCloud Keychain" = "Remove credentials from iCloud Keychain";
+"This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device.";
+"Some iCloud Keychain credentials could not be removed. Device-only credentials were kept." = "Some iCloud Keychain credentials could not be removed. Device-only credentials were kept.";
 "Tab \\(number)" = "Tab \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Terms";

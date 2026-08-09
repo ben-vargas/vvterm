@@ -103,7 +103,10 @@ final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked
     func credentials(for paneId: UUID) throws -> EternalTerminalResumeCredentials? {
         let data: Data
         do {
-            guard let stored = try keychain.get(Self.key(for: paneId)) else { return nil }
+            guard let stored = try keychain.get(
+                Self.key(for: paneId),
+                scope: .deviceOnly
+            ) else { return nil }
             data = stored
         } catch {
             throw EternalTerminalResumeCredentialError.secureStorageUnavailable
@@ -123,7 +126,7 @@ final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked
     func save(_ credentials: EternalTerminalResumeCredentials, for paneId: UUID) throws {
         do {
             let data = try JSONEncoder().encode(credentials)
-            try keychain.set(data, forKey: Self.key(for: paneId))
+            try keychain.set(data, forKey: Self.key(for: paneId), scope: .deviceOnly)
         } catch {
             throw EternalTerminalResumeCredentialError.secureStorageUnavailable
         }
@@ -155,7 +158,7 @@ final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked
     func deleteResumeState(for paneId: UUID) throws {
         var failed = false
         do {
-            try keychain.delete(Self.key(for: paneId))
+            try keychain.delete(Self.key(for: paneId), scope: .deviceOnly)
         } catch {
             failed = true
         }
