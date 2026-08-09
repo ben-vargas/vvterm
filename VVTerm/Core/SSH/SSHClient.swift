@@ -3290,21 +3290,20 @@ actor SSHSession {
         let direction = libssh2_session_block_directions(session)
         guard direction != 0 else { return }
 
-        // Use poll() for reliable, low-overhead socket waiting
-        // This is simpler and more reliable than DispatchSource for this use case
-        var pfd = pollfd()
-        pfd.fd = socket
-        pfd.events = 0
+        var events: Int16 = 0
 
         if direction & LIBSSH2_SESSION_BLOCK_INBOUND != 0 {
-            pfd.events |= Int16(POLLIN)
+            events |= Int16(POLLIN)
         }
         if direction & LIBSSH2_SESSION_BLOCK_OUTBOUND != 0 {
-            pfd.events |= Int16(POLLOUT)
+            events |= Int16(POLLOUT)
         }
 
-        // Poll with 5ms timeout - short enough for responsiveness, long enough to avoid busy spinning
-        _ = poll(&pfd, 1, 5)
+        await SSHSocketReadinessPoller.shared.wait(
+            fileDescriptor: socket,
+            events: events,
+            timeoutMilliseconds: 5
+        )
     }
 
     private func resolveNumericPeerAddress(for socket: Int32) -> String? {
