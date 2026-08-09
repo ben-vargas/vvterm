@@ -44,6 +44,17 @@ final class CloudKitManager: ObservableObject {
         static let userPreference = "UserPreference"
     }
 
+    private static let fetchedRecordKeys = [
+        "workspaceId", "name", "host", "port", "eternalTerminalPort", "username",
+        "connectionMode", "authMethod", "cloudflareAccessMode",
+        "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
+        "lastConnected", "isFavorite", "requiresBiometricUnlock", "tmuxEnabledOverride",
+        "tmuxStartupBehaviorOverride", "createdAt", "updatedAt", "environment",
+        "colorHex", "icon", "order", "lastSelectedEnvironmentId", "lastSelectedServerId",
+        "environments", "content", "deletedAt", "darkThemeName", "lightThemeName",
+        "usePerAppearanceTheme", "schemaVersion", "payload", "lastWriterDeviceId"
+    ]
+
     private var accountStatusChecked = false
     private var isSyncEnabled: Bool { SyncSettings.isEnabled }
     private var fetchChangesTask: Task<CloudKitChanges, Error>?
@@ -200,23 +211,36 @@ final class CloudKitManager: ObservableObject {
         var token = previousToken
         var moreComing = true
 
-        var servers: [Server] = []
-        var workspaces: [Workspace] = []
-        var deletedServerIDs: [UUID] = []
-        var deletedWorkspaceIDs: [UUID] = []
+        var budget = CloudKitSyncBudget()
+        var serversByID: [UUID: Server] = [:]
+        var workspacesByID: [UUID: Workspace] = [:]
+        var deletedServerIDs: Set<UUID> = []
+        var deletedWorkspaceIDs: Set<UUID> = []
 
         while moreComing {
-            let batch = try await fetchZoneChanges(zoneID: zoneID, previousToken: token)
+            try budget.requireCapacityForNextPage()
+            let batch = try await fetchZoneChanges(
+                zoneID: zoneID,
+                previousToken: token,
+                budget: budget
+            )
+            try budget.recordBatch(
+                records: batch.records.count,
+                deletions: batch.deletions.count,
+                aggregateBytes: batch.recordByteCount
+            )
 
             for record in batch.records {
                 switch record.recordType {
                 case RecordType.server:
                     if let server = Server(from: record) {
-                        servers.append(server)
+                        serversByID[server.id] = server
+                        deletedServerIDs.remove(server.id)
                     }
                 case RecordType.workspace:
                     if let workspace = Workspace(from: record) {
-                        workspaces.append(workspace)
+                        workspacesByID[workspace.id] = workspace
+                        deletedWorkspaceIDs.remove(workspace.id)
                     }
                 default:
                     break
@@ -227,11 +251,13 @@ final class CloudKitManager: ObservableObject {
                 switch deletion.recordType {
                 case RecordType.server:
                     if let id = UUID(uuidString: deletion.recordID.recordName) {
-                        deletedServerIDs.append(id)
+                        serversByID.removeValue(forKey: id)
+                        deletedServerIDs.insert(id)
                     }
                 case RecordType.workspace:
                     if let id = UUID(uuidString: deletion.recordID.recordName) {
-                        deletedWorkspaceIDs.append(id)
+                        workspacesByID.removeValue(forKey: id)
+                        deletedWorkspaceIDs.insert(id)
                     }
                 default:
                     break
@@ -247,10 +273,10 @@ final class CloudKitManager: ObservableObject {
         }
 
         return CloudKitChanges(
-            servers: servers,
-            workspaces: workspaces,
-            deletedServerIDs: deletedServerIDs,
-            deletedWorkspaceIDs: deletedWorkspaceIDs,
+            servers: Array(serversByID.values),
+            workspaces: Array(workspacesByID.values),
+            deletedServerIDs: Array(deletedServerIDs),
+            deletedWorkspaceIDs: Array(deletedWorkspaceIDs),
             isFullFetch: isFullFetch
         )
     }
@@ -697,6 +723,7 @@ final class CloudKitManager: ObservableObject {
     private struct ZoneChangeBatch {
         let records: [CKRecord]
         let deletions: [Deletion]
+        let recordByteCount: Int
         let serverChangeToken: CKServerChangeToken?
         let moreComing: Bool
     }
@@ -740,33 +767,48 @@ final class CloudKitManager: ObservableObject {
         try await ensureCustomZone()
         let zoneID = recordZoneID
         var token: CKServerChangeToken?
-        var records: [CKRecord] = []
+        var recordsByID: [String: CKRecord] = [:]
         var moreComing = true
+        var budget = CloudKitSyncBudget()
 
         while moreComing {
-            let batch = try await fetchZoneChanges(zoneID: zoneID, previousToken: token)
-            if let recordTypes {
-                records.append(contentsOf: batch.records.filter { recordTypes.contains($0.recordType) })
-            } else {
-                records.append(contentsOf: batch.records)
+            try budget.requireCapacityForNextPage()
+            let batch = try await fetchZoneChanges(
+                zoneID: zoneID,
+                previousToken: token,
+                budget: budget
+            )
+            try budget.recordBatch(
+                records: batch.records.count,
+                deletions: batch.deletions.count,
+                aggregateBytes: batch.recordByteCount
+            )
+            for record in batch.records where recordTypes?.contains(record.recordType) != false {
+                recordsByID[recordKey(record.recordID, recordType: record.recordType)] = record
+            }
+            for deletion in batch.deletions {
+                recordsByID.removeValue(
+                    forKey: recordKey(deletion.recordID, recordType: deletion.recordType)
+                )
             }
             token = batch.serverChangeToken
             moreComing = batch.moreComing
         }
 
-        return records
+        return Array(recordsByID.values)
     }
 
     private func fetchZoneChanges(
         zoneID: CKRecordZone.ID,
-        previousToken: CKServerChangeToken?
+        previousToken: CKServerChangeToken?,
+        budget: CloudKitSyncBudget
     ) async throws -> ZoneChangeBatch {
         let logger = logger
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ZoneChangeBatch, Error>) in
             let configuration = CKFetchRecordZoneChangesOperation.ZoneConfiguration(
                 previousServerChangeToken: previousToken,
-                resultsLimit: nil,
-                desiredKeys: nil
+                resultsLimit: min(200, budget.remainingRecords, budget.remainingDeletions),
+                desiredKeys: Self.fetchedRecordKeys
             )
             let operation = CKFetchRecordZoneChangesOperation(
                 recordZoneIDs: [zoneID],
@@ -776,14 +818,33 @@ final class CloudKitManager: ObservableObject {
 
             var records: [CKRecord] = []
             var deletions: [Deletion] = []
+            var recordByteCount = 0
             var serverChangeToken: CKServerChangeToken?
             var moreComing = false
             var zoneError: Error?
 
             operation.recordWasChangedBlock = { recordID, recordResult in
+                guard zoneError == nil else { return }
                 switch recordResult {
                 case .success(let record):
-                    records.append(record)
+                    do {
+                        guard records.count < budget.remainingRecords else {
+                            throw CloudKitSyncBudgetError.tooManyRecords
+                        }
+                        let bytes = try CloudKitRecordSizer.byteCount(
+                            of: record,
+                            limits: budget.limits
+                        )
+                        let (newByteCount, overflow) = recordByteCount.addingReportingOverflow(bytes)
+                        guard !overflow, newByteCount <= budget.remainingBytes else {
+                            throw CloudKitSyncBudgetError.aggregateDataTooLarge
+                        }
+                        recordByteCount = newByteCount
+                        records.append(record)
+                    } catch {
+                        zoneError = error
+                        operation.cancel()
+                    }
                 case .failure(let error):
                     logger.error(
                         "Failed to fetch record \(recordID.recordName): \(error.localizedDescription)"
@@ -792,6 +853,12 @@ final class CloudKitManager: ObservableObject {
             }
 
             operation.recordWithIDWasDeletedBlock = { recordID, recordType in
+                guard zoneError == nil else { return }
+                guard deletions.count < budget.remainingDeletions else {
+                    zoneError = CloudKitSyncBudgetError.tooManyDeletions
+                    operation.cancel()
+                    return
+                }
                 deletions.append(Deletion(recordID: recordID, recordType: recordType))
             }
 
@@ -801,7 +868,9 @@ final class CloudKitManager: ObservableObject {
                     serverChangeToken = info.serverChangeToken
                     moreComing = info.moreComing
                 case .failure(let error):
-                    zoneError = error
+                    if zoneError == nil {
+                        zoneError = error
+                    }
                 }
             }
 
@@ -815,13 +884,14 @@ final class CloudKitManager: ObservableObject {
                             returning: ZoneChangeBatch(
                                 records: records,
                                 deletions: deletions,
+                                recordByteCount: recordByteCount,
                                 serverChangeToken: serverChangeToken,
                                 moreComing: moreComing
                             )
                         )
                     }
                 case .failure(let error):
-                    continuation.resume(throwing: error)
+                    continuation.resume(throwing: zoneError ?? error)
                 }
             }
 
@@ -989,6 +1059,13 @@ final class CloudKitManager: ObservableObject {
 
             database.add(operation)
         }
+    }
+
+    private func recordKey(
+        _ recordID: CKRecord.ID,
+        recordType: CKRecord.RecordType
+    ) -> String {
+        "\(recordType):\(recordID.recordName)"
     }
 
     // MARK: - Force Sync
