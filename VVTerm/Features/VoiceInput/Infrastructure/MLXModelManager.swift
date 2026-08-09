@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CryptoKit
 import os.log
 
 enum MLXModelKind: String, CaseIterable, Identifiable {
@@ -135,8 +136,6 @@ final class MLXModelManager: NSObject, ObservableObject {
     private var downloadStartTime: Date?
     private var storageTask: Task<Void, Never>?
     private var storageOperationID: UUID?
-    private var repoSizeTask: Task<Void, Never>?
-    private var lastRepoSizeModelId: String?
 
     init(kind: MLXModelKind, modelId: String) {
         self.kind = kind
@@ -145,31 +144,18 @@ final class MLXModelManager: NSObject, ObservableObject {
         session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
     }
 
-    private struct HFModelInfo: Decodable {
-        let siblings: [HFSibling]
-        let usedStorage: Int64?
-    }
-
-    private struct HFSibling: Decodable {
-        let rfilename: String
-    }
-
-    private struct SafetensorsIndex: Decodable {
-        let weightMap: [String: String]
-
-        enum CodingKeys: String, CodingKey {
-            case weightMap = "weight_map"
-        }
-    }
-
     struct DownloadItem {
         let url: URL
         let destination: URL
+        let expectedBytes: Int64
+        let sha256: String
     }
 
     private struct DownloadContext {
         let modelID: String
-        let directory: URL
+        let manifest: MLXModelDownloadManifest
+        let finalDirectory: URL
+        let stagingDirectory: URL
     }
 
     private struct ActiveFileDownload {
@@ -240,16 +226,26 @@ final class MLXModelManager: NSObject, ObservableObject {
             state = .failed(String(localized: "Model ID is required"))
             return
         }
+        guard let manifest = MLXModelCatalog.downloadManifest(for: modelId, kind: kind) else {
+            state = .failed(MLXModelDownloadError.unsupportedModel.localizedDescription)
+            return
+        }
         guard let operationID = operationState.start() else { return }
 
+        let finalDirectory = Self.modelDirectory(for: kind, modelId: modelId)
+        let stagingDirectory = finalDirectory
+            .deletingLastPathComponent()
+            .appendingPathComponent(".\(finalDirectory.lastPathComponent)-\(operationID.uuidString).download", isDirectory: true)
         let context = DownloadContext(
             modelID: modelId,
-            directory: Self.modelDirectory(for: kind, modelId: modelId)
+            manifest: manifest,
+            finalDirectory: finalDirectory,
+            stagingDirectory: stagingDirectory
         )
         activeContext = context
         completedBytes = 0
         currentFileBytes = 0
-        expectedTotalBytes = repoSizeBytes ?? 0
+        expectedTotalBytes = manifest.expectedBytes ?? 0
         downloadStartTime = Date()
         state = .downloading(DownloadProgress(
             fraction: 0,
@@ -259,22 +255,39 @@ final class MLXModelManager: NSObject, ObservableObject {
         ))
 
         do {
-            try FileManager.default.createDirectory(at: context.directory, withIntermediateDirectories: true)
+            let fileManager = FileManager.default
+            try fileManager.createDirectory(at: Self.modelsRoot, withIntermediateDirectories: true)
+            let capacity = try Self.availableStorageCapacity(at: Self.modelsRoot)
+            expectedTotalBytes = try MLXModelDownloadBudget.validate(
+                manifest: manifest,
+                currentRepositoryBytes: Self.directorySizeBytes(Self.modelsRoot),
+                availableCapacity: capacity
+            )
+            if fileManager.fileExists(atPath: context.stagingDirectory.path) {
+                try fileManager.removeItem(at: context.stagingDirectory)
+            }
+            try fileManager.createDirectory(at: context.stagingDirectory, withIntermediateDirectories: true)
 
-            let items = try await resolveDownloadItems(context: context)
+            let items = try resolveDownloadItems(context: context)
             guard operationState.isActive(operationID: operationID) else { return }
 
             for item in items {
                 currentFileBytes = 0
                 try await download(item, operationID: operationID)
-                completedBytes = Self.addingBytes(completedBytes, currentFileBytes)
+                completedBytes = Self.addingBytes(completedBytes, item.expectedBytes)
             }
 
+            try Data(manifest.revision.utf8).write(
+                to: context.stagingDirectory.appendingPathComponent(MLXModelDownloadManifest.markerFilename),
+                options: .atomic
+            )
+            try Self.installStagedModel(context)
             guard operationState.finish(operationID: operationID) else { return }
             activeContext = nil
             state = .ready
             refreshStorageUsage()
         } catch {
+            try? FileManager.default.removeItem(at: context.stagingDirectory)
             guard operationState.finish(operationID: operationID) else { return }
             activeContext = nil
             logger.error("Failed to download MLX model: \(error.localizedDescription)")
@@ -284,11 +297,24 @@ final class MLXModelManager: NSObject, ObservableObject {
 
     static func isModelAvailable(kind: MLXModelKind, modelId: String) -> Bool {
         let normalized = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return false }
+        guard !normalized.isEmpty,
+              let manifest = MLXModelCatalog.downloadManifest(for: normalized, kind: kind) else {
+            return false
+        }
         let directory = modelDirectory(for: kind, modelId: normalized)
+        let marker = directory.appendingPathComponent(MLXModelDownloadManifest.markerFilename)
+        guard let revisionData = try? Data(contentsOf: marker),
+              String(data: revisionData, encoding: .utf8) == manifest.revision else {
+            return false
+        }
         let config = directory.appendingPathComponent("config.json")
         let weights = weightFiles(in: directory, allowedExtensions: allowedWeightExtensions(for: kind))
-        return FileManager.default.fileExists(atPath: config.path) && !weights.isEmpty
+        guard FileManager.default.fileExists(atPath: config.path), !weights.isEmpty else { return false }
+        return manifest.files.allSatisfy { file in
+            let url = directory.appendingPathComponent(file.localFilename)
+            let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            return size.map(Int64.init) == file.expectedBytes
+        }
     }
 
     nonisolated static func modelDirectory(for kind: MLXModelKind, modelId: String) -> URL {
@@ -316,7 +342,9 @@ final class MLXModelManager: NSObject, ObservableObject {
     nonisolated private static func sanitizeModelId(_ modelId: String) -> String {
         let trimmed = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
         let collapsed = trimmed.isEmpty ? "unknown-model" : trimmed
-        return collapsed.replacingOccurrences(of: "/", with: "--")
+        return SHA256.hash(data: Data(collapsed.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     nonisolated private static func directorySizeBytes(_ directory: URL) -> Int64 {
@@ -336,6 +364,42 @@ final class MLXModelManager: NSObject, ObservableObject {
             total = addingBytes(total, Int64(size))
         }
         return total
+    }
+
+    nonisolated private static func availableStorageCapacity(at directory: URL) throws -> Int64 {
+        let values = try directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        guard let capacity = values.volumeAvailableCapacityForImportantUsage,
+              capacity >= 0 else {
+            throw MLXModelDownloadError.insufficientFreeSpace
+        }
+        return capacity
+    }
+
+    private static func installStagedModel(_ context: DownloadContext) throws {
+        let fileManager = FileManager.default
+        let backupDirectory = context.finalDirectory
+            .deletingLastPathComponent()
+            .appendingPathComponent(".\(context.finalDirectory.lastPathComponent)-backup", isDirectory: true)
+
+        if fileManager.fileExists(atPath: backupDirectory.path) {
+            try fileManager.removeItem(at: backupDirectory)
+        }
+        if fileManager.fileExists(atPath: context.finalDirectory.path) {
+            try fileManager.moveItem(at: context.finalDirectory, to: backupDirectory)
+        }
+
+        do {
+            try fileManager.moveItem(at: context.stagingDirectory, to: context.finalDirectory)
+            if fileManager.fileExists(atPath: backupDirectory.path) {
+                try? fileManager.removeItem(at: backupDirectory)
+            }
+        } catch {
+            if fileManager.fileExists(atPath: backupDirectory.path),
+               !fileManager.fileExists(atPath: context.finalDirectory.path) {
+                try? fileManager.moveItem(at: backupDirectory, to: context.finalDirectory)
+            }
+            throw error
+        }
     }
 
     func refreshStorageUsage() {
@@ -359,146 +423,21 @@ final class MLXModelManager: NSObject, ObservableObject {
 
     func refreshRepoSize() {
         let modelId = normalizedModelId
-        guard !modelId.isEmpty else {
-            repoSizeBytes = nil
-            return
-        }
-        if lastRepoSizeModelId == modelId, repoSizeBytes != nil {
-            return
-        }
-        repoSizeTask?.cancel()
-        lastRepoSizeModelId = modelId
-        repoSizeBytes = nil
-        repoSizeTask = Task.detached { [weak self] in
-            let size = await MLXModelSizeCache.shared.size(for: modelId)
-            guard let self, !Task.isCancelled else { return }
-            await MainActor.run {
-                guard self.lastRepoSizeModelId == modelId,
-                      self.normalizedModelId == modelId else { return }
-                self.repoSizeBytes = size
-            }
-        }
+        repoSizeBytes = MLXModelCatalog.downloadManifest(for: modelId, kind: kind)?.expectedBytes
     }
 
-    private func resolveDownloadItems(context: DownloadContext) async throws -> [DownloadItem] {
-        let base = "https://huggingface.co/\(context.modelID)/resolve/main"
-        var configPath: String?
-        var weightPaths: [String] = []
-        let allowedExtensions = Self.allowedWeightExtensions(for: kind)
-
-        if let files = try? await fetchModelFiles(modelID: context.modelID) {
-            configPath = files.first { $0.hasSuffix("config.json") }
-
-            if let indexPath = files.first(where: { $0.hasSuffix(".safetensors.index.json") }) {
-                let indexURL = URL(string: "\(base)/\(indexPath)")!
-                let (data, _) = try await session.data(from: indexURL)
-                let index = try JSONDecoder().decode(SafetensorsIndex.self, from: data)
-                weightPaths = Array(Set(index.weightMap.values)).sorted()
+    private func resolveDownloadItems(context: DownloadContext) throws -> [DownloadItem] {
+        try context.manifest.files.map { file in
+            guard let url = URL(string: file.sourceURL) else {
+                throw MLXModelDownloadError.invalidManifest
             }
-
-            if weightPaths.isEmpty {
-                if let safetensors = files.first(where: { $0.hasSuffix(".safetensors") }) {
-                    weightPaths = [safetensors]
-                } else if let npz = files.first(where: { $0.hasSuffix(".npz") }) {
-                    weightPaths = [npz]
-                }
-            }
+            return DownloadItem(
+                url: url,
+                destination: context.stagingDirectory.appendingPathComponent(file.localFilename),
+                expectedBytes: file.expectedBytes,
+                sha256: file.sha256
+            )
         }
-
-        if configPath == nil {
-            configPath = "config.json"
-        }
-
-        if weightPaths.isEmpty {
-            if let indexed = try await resolveWeightsFromIndex(base: base) {
-                weightPaths = indexed
-            }
-        }
-
-        if !weightPaths.isEmpty {
-            weightPaths = weightPaths.filter { path in
-                allowedExtensions.contains((path as NSString).pathExtension.lowercased())
-            }
-            let hasSafetensors = weightPaths.contains { ($0 as NSString).pathExtension.lowercased() == "safetensors" }
-            if hasSafetensors {
-                weightPaths = weightPaths.filter { ($0 as NSString).pathExtension.lowercased() == "safetensors" }
-            }
-        }
-
-        if weightPaths.isEmpty {
-            weightPaths = try await resolveWeightsFallback(base: base, allowedExtensions: allowedExtensions)
-        }
-
-        guard !weightPaths.isEmpty else {
-            throw NSError(domain: "MLXModelManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "No compatible weights found for this model"])
-        }
-
-        let configURL = URL(string: "\(base)/\(configPath!)")!
-        var items: [DownloadItem] = [
-            DownloadItem(url: configURL, destination: context.directory.appendingPathComponent("config.json"))
-        ]
-
-        for path in weightPaths {
-            let url = URL(string: "\(base)/\(path)")!
-            items.append(DownloadItem(url: url, destination: context.directory.appendingPathComponent((path as NSString).lastPathComponent)))
-        }
-
-        if kind == .whisper {
-            let tokenizerBase = "https://raw.githubusercontent.com/openai/whisper/main/whisper/assets"
-            let tokenizerFiles = ["gpt2.tiktoken", "multilingual.tiktoken"]
-            for name in tokenizerFiles {
-                if let url = URL(string: "\(tokenizerBase)/\(name)") {
-                    items.append(DownloadItem(url: url, destination: context.directory.appendingPathComponent(name)))
-                }
-            }
-        }
-
-        return items
-    }
-
-    private func fetchModelFiles(modelID: String) async throws -> [String] {
-        let url = URL(string: "https://huggingface.co/api/models/\(modelID)")!
-        let (data, _) = try await session.data(from: url)
-        let info = try JSONDecoder().decode(HFModelInfo.self, from: data)
-        return info.siblings.map(\.rfilename)
-    }
-
-    private func resolveWeightsFallback(base: String, allowedExtensions: Set<String>) async throws -> [String] {
-        let candidates = ["model.safetensors", "weights.safetensors", "weights.npz", "model.npz"]
-        for name in candidates {
-            let ext = (name as NSString).pathExtension.lowercased()
-            guard allowedExtensions.contains(ext) else { continue }
-            let url = URL(string: "\(base)/\(name)")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "HEAD"
-            do {
-                let response = try await session.data(for: request).1
-                if let http = response as? HTTPURLResponse, (200..<400).contains(http.statusCode) {
-                    return [name]
-                }
-            } catch {
-                continue
-            }
-        }
-        return []
-    }
-
-    private func resolveWeightsFromIndex(base: String) async throws -> [String]? {
-        let indexNames = ["model.safetensors.index.json", "weights.safetensors.index.json"]
-        for name in indexNames {
-            let url = URL(string: "\(base)/\(name)")!
-            do {
-                let (data, _) = try await session.data(from: url)
-                let index = try JSONDecoder().decode(SafetensorsIndex.self, from: data)
-                let weights = Array(Set(index.weightMap.values)).sorted()
-                if !weights.isEmpty {
-                    return weights
-                }
-            } catch {
-                continue
-            }
-        }
-        return nil
     }
 
     private func download(_ item: DownloadItem, operationID: UUID) async throws {
@@ -530,6 +469,7 @@ final class MLXModelManager: NSObject, ObservableObject {
 
         guard operationState.cancel(operationID: operationID) else { return }
         activeContext = nil
+        try? FileManager.default.removeItem(at: context.stagingDirectory)
         if let activeFile {
             self.activeFile = nil
             activeFile.continuation.resume(throwing: CancellationError())
@@ -616,7 +556,21 @@ extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
             )))
             return
         }
+        if let response = downloadTask.response,
+           response.expectedContentLength > 0,
+           response.expectedContentLength != item.expectedBytes {
+            completeActiveFile(
+                taskIdentifier: downloadTask.taskIdentifier,
+                result: .failure(MLXModelDownloadError.unexpectedResponseSize)
+            )
+            return
+        }
         do {
+            try MLXModelFileVerifier.verify(
+                location,
+                expectedBytes: item.expectedBytes,
+                sha256: item.sha256
+            )
             if FileManager.default.fileExists(atPath: item.destination.path) {
                 try FileManager.default.removeItem(at: item.destination)
             }
@@ -635,7 +589,19 @@ extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
         totalBytesWritten: Int64,
         totalBytesExpectedToWrite: Int64
     ) {
-        guard operationState.accepts(taskIdentifier: downloadTask.taskIdentifier) else { return }
+        guard operationState.accepts(taskIdentifier: downloadTask.taskIdentifier),
+              let activeFile,
+              activeFile.task.taskIdentifier == downloadTask.taskIdentifier else { return }
+        if totalBytesWritten > activeFile.item.expectedBytes
+            || (totalBytesExpectedToWrite > 0
+                && totalBytesExpectedToWrite != activeFile.item.expectedBytes) {
+            activeFile.task.cancel()
+            completeActiveFile(
+                taskIdentifier: downloadTask.taskIdentifier,
+                result: .failure(MLXModelDownloadError.unexpectedResponseSize)
+            )
+            return
+        }
         updateProgress(currentBytes: totalBytesWritten, currentTotalBytes: totalBytesExpectedToWrite)
     }
 
