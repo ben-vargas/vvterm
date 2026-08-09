@@ -63,9 +63,7 @@ extension TerminalTabManager {
                 connectionState: paneState.connectionState,
                 hasEstablishedConnection: paneState.hasEstablishedConnection,
                 activeTransport: paneState.activeTransport,
-                hasEternalTerminalRuntime: existingEternalTerminalRuntime(
-                    for: paneState.paneId
-                ) != nil
+                hasEternalTerminalRuntime: hasEternalTerminalRuntime(for: paneState.paneId)
             )
             return strategy == .ignore ? nil : (paneState.paneId, strategy)
         }

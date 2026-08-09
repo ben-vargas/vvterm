@@ -5,7 +5,11 @@ import os.log
 @MainActor
 enum TerminalSessionPaneRemoval {
     case closeTab(TerminalTab)
-    case removed(paneId: UUID, updatedTab: TerminalTab)
+    case removed(
+        paneId: UUID,
+        paneState: TerminalPaneState?,
+        updatedTab: TerminalTab
+    )
 }
 
 /// Owns the durable terminal tab graph and its pane state.
@@ -267,7 +271,11 @@ final class TerminalSessionStateStore: ObservableObject {
             }
         }
         replaceTab(updatedTab)
-        return .removed(paneId: paneId, updatedTab: updatedTab)
+        return .removed(
+            paneId: paneId,
+            paneState: paneStates.removeValue(forKey: paneId),
+            updatedTab: updatedTab
+        )
     }
 
     @discardableResult
@@ -359,10 +367,6 @@ final class TerminalSessionStateStore: ObservableObject {
             schedulePersist()
         }
         return true
-    }
-
-    func removePaneState(for paneId: UUID) {
-        paneStates.removeValue(forKey: paneId)
     }
 
     func requestPersistence() {

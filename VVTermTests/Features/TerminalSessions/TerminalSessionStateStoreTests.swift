@@ -116,6 +116,46 @@ struct TerminalSessionStateStoreTests {
         #expect(store.paneState(for: second.rootPaneId) == nil)
     }
 
+    @Test
+    func removingSplitPaneReturnsAndRemovesItsDescriptor() {
+        let store = makeStore(
+            snapshot: StateStoreSnapshotMemory(),
+            selections: ConnectionViewSelectionStore()
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Split")
+        store.install(
+            tab,
+            paneState: TerminalPaneState(
+                paneId: tab.rootPaneId,
+                tabId: tab.id,
+                serverId: tab.serverId
+            ),
+            select: true
+        )
+        guard let splitPaneId = store.createSplitPane(
+            in: tab,
+            paneId: tab.rootPaneId,
+            placement: .right,
+            tmuxStatus: .off
+        ), let splitTab = store.tab(id: tab.id, for: tab.serverId) else {
+            Issue.record("Expected split pane")
+            return
+        }
+
+        guard case .removed(let removedPaneId, let paneState, let updatedTab) = store.removePane(
+            in: splitTab,
+            paneId: splitPaneId
+        ) else {
+            Issue.record("Expected split pane removal")
+            return
+        }
+
+        #expect(removedPaneId == splitPaneId)
+        #expect(paneState?.paneId == splitPaneId)
+        #expect(store.paneState(for: splitPaneId) == nil)
+        #expect(updatedTab.allPaneIds == [tab.rootPaneId])
+    }
+
     private func makeStore(
         snapshot: StateStoreSnapshotMemory,
         selections: ConnectionViewSelectionStore

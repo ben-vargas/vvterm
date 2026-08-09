@@ -53,21 +53,11 @@ final class TerminalPaneConnectionCoordinator {
     }
 
     var hasLiveConnection: Bool {
-        switch backend {
-        case .ssh:
-            tabManager.shellId(for: paneId) != nil
-        case .eternalTerminal:
-            tabManager.existingEternalTerminalRuntime(for: paneId) != nil
-        }
+        tabManager.hasLiveTransport(for: paneId)
     }
 
     var isConnectionStartInFlight: Bool {
-        switch backend {
-        case .ssh:
-            tabManager.isShellStartInFlight(for: paneId)
-        case .eternalTerminal:
-            tabManager.existingEternalTerminalRuntime(for: paneId)?.isStartInFlight == true
-        }
+        tabManager.isTransportStartInFlight(for: paneId)
     }
 
     func installRichPasteInterception(on terminal: GhosttyTerminalView) {
@@ -146,15 +136,16 @@ private final class EternalTerminalPaneCoordinator {
     }
 
     func send(_ data: Data) {
-        tabManager.existingEternalTerminalRuntime(for: paneId)?.send(data)
+        tabManager.sendEternalTerminalInput(data, for: paneId)
     }
 
     func handleResize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
-        guard let runtime = tabManager.existingEternalTerminalRuntime(for: paneId) else {
-            return
-        }
-        runtime.resize(cols: cols, rows: rows, pixelSize: pixelSize)
-        runtime.startIfNeeded()
+        tabManager.resizeEternalTerminal(
+            for: paneId,
+            cols: cols,
+            rows: rows,
+            pixelSize: pixelSize
+        )
     }
 
     func cancel() {

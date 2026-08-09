@@ -80,8 +80,8 @@ struct TerminalTabManagerIndependenceTests {
 
         #expect(first.paneState(for: tab.rootPaneId)?.connectionState == .connected)
         #expect(second.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
-        #expect(first.getSSHClient(for: tab.rootPaneId) === client)
-        #expect(second.getSSHClient(for: tab.rootPaneId) == nil)
+        #expect(first.activeSSHRoute(for: tab.rootPaneId)?.client === client)
+        #expect(second.activeSSHRoute(for: tab.rootPaneId) == nil)
         #expect(first.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm-isolated")
         #expect(second.tmuxResolver.sessionNames[tab.rootPaneId] == nil)
         #expect(first.getTerminal(for: tab.rootPaneId) === terminal)

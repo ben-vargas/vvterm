@@ -88,17 +88,12 @@ final class TerminalPaneSSHCoordinator {
         paneId: UUID,
         tabManager: TerminalTabManager
     ) -> (client: SSHClient, shellId: UUID)? {
-        guard let client = tabManager.getSSHClient(for: paneId),
-              let shellId = tabManager.shellId(for: paneId) else {
-            return nil
-        }
-
-        return (client: client, shellId: shellId)
+        tabManager.activeSSHRoute(for: paneId)
     }
 
     func startSSHConnection(terminal: GhosttyTerminalView) {
         let paneId = self.paneId
-        if tabManager.shellId(for: paneId) != nil {
+        if tabManager.activeSSHRoute(for: paneId) != nil {
             tabManager.updatePaneState(paneId, connectionState: .connected)
             logger.debug("Reusing existing shell for pane \(paneId.uuidString, privacy: .public)")
             return
@@ -140,7 +135,7 @@ final class TerminalPaneSSHCoordinator {
                 )
             }
         ) else {
-            if tabManager.shellId(for: paneId) != nil {
+            if tabManager.activeSSHRoute(for: paneId) != nil {
                 tabManager.updatePaneState(paneId, connectionState: .connected)
             }
             logger.debug("Shell start already in progress for pane \(paneId.uuidString, privacy: .public)")

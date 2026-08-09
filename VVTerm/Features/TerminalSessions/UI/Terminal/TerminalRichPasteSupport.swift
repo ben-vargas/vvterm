@@ -249,8 +249,8 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
             sessionId: paneId,
             uiModel: uiModel,
             resolveConnectedSSHClient: {
-                if let registeredClient = tabManager.getSSHClient(for: paneId) {
-                    return registeredClient
+                if let route = tabManager.activeSSHRoute(for: paneId) {
+                    return route.client
                 }
 
                 if await sshClient.isConnected {

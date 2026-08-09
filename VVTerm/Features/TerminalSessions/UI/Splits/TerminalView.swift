@@ -235,7 +235,7 @@ struct TerminalTabView: View {
     }
 
     private func handlePaneExit(paneId: UUID) {
-        let startToken = tabManager.connectionStartToken(for: paneId)
+        let startToken = tabManager.connectionOwnershipToken(for: paneId)
         tabManager.updatePaneState(paneId, connectionState: .disconnected)
         guard let startToken else { return }
         Task {
@@ -1186,15 +1186,12 @@ struct TerminalPaneView: View {
                 return
             }
 
-            if tabManager.shellId(for: paneId) != nil
-                || tabManager.existingEternalTerminalRuntime(for: paneId) != nil,
-               connectionState.isConnected {
+            if tabManager.hasLiveTransport(for: paneId), connectionState.isConnected {
                 tabManager.updatePaneState(paneId, connectionState: .connected)
                 return
             }
 
-            let inFlight = tabManager.isShellStartInFlight(for: paneId)
-                || tabManager.existingEternalTerminalRuntime(for: paneId)?.isStartInFlight == true
+            let inFlight = tabManager.isTransportStartInFlight(for: paneId)
             if inFlight {
                 // Keep polling while a shell start is still in flight so stale locks
                 // and hung attempts are eventually surfaced to the user.

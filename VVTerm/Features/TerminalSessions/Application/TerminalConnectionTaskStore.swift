@@ -9,6 +9,10 @@ final class TerminalConnectionTaskStore {
 
     private var entries: [UUID: Entry] = [:]
 
+    var paneIds: Set<UUID> {
+        Set(entries.keys)
+    }
+
     @discardableResult
     func start(
         for paneId: UUID,
