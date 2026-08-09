@@ -10,7 +10,7 @@ nonisolated struct TerminalNetworkRecoveryGate {
     private var generation: UUID?
 
     mutating func receive(
-        _ readiness: NetworkMonitor.Readiness,
+        _ readiness: TerminalNetworkReadiness,
         shouldWait: Bool
     ) -> Action {
         switch readiness {

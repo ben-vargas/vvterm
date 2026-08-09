@@ -69,8 +69,6 @@ nonisolated enum TerminalVoicePresentationState: Equatable, Sendable {
 
 @MainActor
 final class TerminalTabManager: ObservableObject {
-    private static let persistenceKey = "terminalTabsSnapshot.v1"
-
     private struct ConnectionCleanup {
         let client: SSHClient
         let task: Task<Void, Never>
@@ -82,20 +80,7 @@ final class TerminalTabManager: ObservableObject {
         case indeterminate
     }
 
-    static let shared = TerminalTabManager(
-        snapshotStore: UserDefaultsTerminalTabSnapshotStore(
-            key: persistenceKey
-        ),
-        networkReadinessPublisher: NetworkMonitor.shared.$snapshot
-            .map(\.readiness)
-            .removeDuplicates()
-            .eraseToAnyPublisher(),
-        liveActivityRefresh: { connectionStates in
-            LiveActivityManager.shared.refresh(with: connectionStates)
-        },
-        eternalTerminalResumeStore: EternalTerminalResumeStore.shared,
-        moshResumeStore: MoshResumeStore.shared
-    )
+    static let shared = TerminalTabManagerLiveComposition.makeManager()
 
     // MARK: - Published State
 
@@ -169,7 +154,9 @@ final class TerminalTabManager: ObservableObject {
     /// Pane state keyed by pane ID
     @Published var paneStates: [UUID: TerminalPaneState] = [:] {
         didSet {
-            liveActivityRefresh(paneStates.values.map(\.connectionState))
+            dependencies.effects.refreshLiveActivity(
+                paneStates.values.map(\.connectionState)
+            )
         }
     }
     @Published private(set) var runtimeTitleByPane: [UUID: String] = [:]
@@ -182,7 +169,7 @@ final class TerminalTabManager: ObservableObject {
 
     @Published var tmuxAttachPrompt: TmuxAttachPrompt?
 
-    let tmuxResolver = TmuxAttachResolver()
+    let tmuxResolver: TmuxAttachResolver
 
     /// Bumps when a terminal view is registered/unregistered so views refresh.
     @Published private(set) var terminalRegistryVersion: Int = 0
@@ -193,19 +180,24 @@ final class TerminalTabManager: ObservableObject {
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "TerminalTabManager")
 
     private let snapshotStore: any TerminalTabSnapshotStoring
-    private let liveActivityRefresh: ([ConnectionState]) -> Void
+    private let dependencies: TerminalTabManagerDependencies
+    private(set) var currentNetworkReadiness: TerminalNetworkReadiness
     private var persistTask: Task<Void, Never>?
     private var isRestoring = false
 
     init(
         snapshotStore: any TerminalTabSnapshotStoring,
-        networkReadinessPublisher: AnyPublisher<NetworkMonitor.Readiness, Never>?,
-        liveActivityRefresh: @escaping ([ConnectionState]) -> Void,
+        dependencies: TerminalTabManagerDependencies,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshResumeStore: any MoshResumeStoring
     ) {
         self.snapshotStore = snapshotStore
-        self.liveActivityRefresh = liveActivityRefresh
+        self.dependencies = dependencies
+        self.currentNetworkReadiness = dependencies.networkReadiness.initial
+        self.tmuxResolver = TmuxAttachResolver(
+            configuration: dependencies.tmuxConfiguration,
+            remoteTmux: dependencies.remoteTmux
+        )
         self.eternalTerminalResumeStore = eternalTerminalResumeStore
         self.defaultEternalTerminalResumeStore = eternalTerminalResumeStore
         self.moshResumeStore = moshResumeStore
@@ -215,8 +207,9 @@ final class TerminalTabManager: ObservableObject {
             self?.terminalViews[paneId]
         }
         #endif
-        networkReadinessCancellable = networkReadinessPublisher?
+        networkReadinessCancellable = dependencies.networkReadiness.updates
             .sink { [weak self] readiness in
+                self?.currentNetworkReadiness = readiness
                 #if os(macOS)
                 self?.handleMacRecoverySignal(.networkChanged(readiness))
                 #elseif os(iOS)
@@ -224,8 +217,30 @@ final class TerminalTabManager: ObservableObject {
                 #endif
             }
         restoreSnapshot()
-        liveActivityRefresh(paneStates.values.map(\.connectionState))
+        dependencies.effects.refreshLiveActivity(
+            paneStates.values.map(\.connectionState)
+        )
     }
+
+    #if DEBUG
+    convenience init(
+        snapshotStore: any TerminalTabSnapshotStoring,
+        networkReadinessPublisher: AnyPublisher<TerminalNetworkReadiness, Never>?,
+        liveActivityRefresh: @escaping ([ConnectionState]) -> Void,
+        eternalTerminalResumeStore: any EternalTerminalResumeStoring,
+        moshResumeStore: any MoshResumeStoring
+    ) {
+        self.init(
+            snapshotStore: snapshotStore,
+            dependencies: .testing(
+                networkReadinessPublisher: networkReadinessPublisher,
+                liveActivityRefresh: liveActivityRefresh
+            ),
+            eternalTerminalResumeStore: eternalTerminalResumeStore,
+            moshResumeStore: moshResumeStore
+        )
+    }
+    #endif
 
     private func paneTmuxStatus(for paneId: UUID) -> TmuxStatus? {
         paneStates[paneId]?.tmuxStatus
@@ -319,7 +334,7 @@ final class TerminalTabManager: ObservableObject {
         tabOpensInFlight.insert(server.id)
         defer { tabOpensInFlight.remove(server.id) }
 
-        guard await AppLockManager.shared.ensureServerUnlocked(server) else {
+        guard await dependencies.effects.authorizeServer(server) else {
             throw VVTermError.authenticationFailed
         }
 
@@ -398,9 +413,7 @@ final class TerminalTabManager: ObservableObject {
 
         }
 
-        EngagementTracker.shared.noteTerminalSessionEnded(
-            otherTerminalsActive: hasConnectedPanes
-        )
+        dependencies.effects.noteTerminalSessionEnded(hasConnectedPanes)
 
         logger.info("Closed tab \(currentTab.id)")
     }
@@ -550,7 +563,7 @@ final class TerminalTabManager: ObservableObject {
             requiresReadyNetwork: requiresReadyNetwork,
             generation: generation,
             replacingCurrent: replacingCurrent,
-            networkReadiness: NetworkMonitor.shared.readiness
+            networkReadiness: currentNetworkReadiness
         )
     }
 
@@ -560,7 +573,7 @@ final class TerminalTabManager: ObservableObject {
         requiresReadyNetwork: Bool,
         generation: UUID,
         replacingCurrent: Bool,
-        networkReadiness: NetworkMonitor.Readiness
+        networkReadiness: TerminalNetworkReadiness
     ) -> Bool {
         guard paneStates[paneId] != nil else { return false }
         let networkIsReady = networkReadiness == .ready
@@ -669,7 +682,7 @@ final class TerminalTabManager: ObservableObject {
             return
         }
         #if os(iOS)
-        if NetworkMonitor.shared.readiness == .unavailable {
+        if currentNetworkReadiness == .unavailable {
             queueIOSReconnectUntilNetworkReady(for: attempt.paneId)
             return
         }
@@ -679,7 +692,7 @@ final class TerminalTabManager: ObservableObject {
         let windowSceneIsActive = windowScene.map {
             $0.activationState == .foregroundActive
         } ?? true
-        guard UIApplication.shared.applicationState == .active,
+        guard dependencies.applicationIsActive(),
               windowSceneIsActive else {
             reconnectCoordinator.complete(for: attempt.paneId)
             updatePaneState(attempt.paneId, connectionState: .disconnected)
@@ -786,7 +799,7 @@ final class TerminalTabManager: ObservableObject {
         guard hasProAccess else { return nil }
         let newPaneId = createSplitPane(tab: tab, paneId: paneId, placement: placement)
         if newPaneId != nil {
-            AnalyticsTracker.shared.trackSplitPaneCreated()
+            dependencies.effects.recordSplitPaneCreated()
         }
         return newPaneId
     }
@@ -1360,7 +1373,11 @@ final class TerminalTabManager: ObservableObject {
                 await beforeCleanup()
             }
             if let tmuxSessionName {
-                await RemoteTmuxManager.shared.killSession(named: tmuxSessionName, using: registration.client)
+                await self.dependencies.remoteTmux.killSession(
+                    named: tmuxSessionName,
+                    using: registration.client,
+                    backend: nil
+                )
             }
             if !self.shellRegistry.hasClientReferences(registration.client) {
                 // Abort the whole session before its bounded shutdown. A last
@@ -1416,7 +1433,8 @@ final class TerminalTabManager: ObservableObject {
             server: server,
             credentials: credentials,
             tabManager: self,
-            resumeStore: eternalTerminalResumeStore
+            resumeStore: eternalTerminalResumeStore,
+            dependencies: dependencies.eternalTerminalRuntime
         )
         eternalTerminalRuntimes[paneId] = runtime
         markEternalTerminalTransport(for: paneId)
@@ -1974,7 +1992,7 @@ final class TerminalTabManager: ObservableObject {
         #if os(iOS)
         if connectionState.isConnecting,
            paneStates[paneId]?.hasEstablishedConnection == true,
-           NetworkMonitor.shared.readiness == .unavailable {
+           currentNetworkReadiness == .unavailable {
             queueIOSReconnectUntilNetworkReady(for: paneId)
         }
         #endif
@@ -2005,9 +2023,10 @@ final class TerminalTabManager: ObservableObject {
             }
         case .connected:
             reconnectCoordinator.complete(for: paneId)
-            EngagementTracker.shared.recordSuccessfulConnection(
-                id: paneId,
-                transport: paneStates[paneId]?.activeTransport.rawValue ?? ShellTransport.ssh.rawValue
+            dependencies.effects.recordSuccessfulConnection(
+                paneId,
+                paneStates[paneId]?.activeTransport.rawValue
+                    ?? ShellTransport.ssh.rawValue
             )
         case .idle:
             reconnectCoordinator.complete(for: paneId)
@@ -2247,12 +2266,12 @@ final class TerminalTabManager: ObservableObject {
         backend: RemoteTmuxBackend
     ) async {
         guard tmuxCleanupServers.insert(serverId).inserted else { return }
-        await RemoteTmuxManager.shared.cleanupLegacySessions(
+        await dependencies.remoteTmux.cleanupLegacySessions(
             using: client,
             backend: backend
         )
-        await RemoteTmuxManager.shared.cleanupDetachedSessions(
-            deviceId: DeviceIdentity.id,
+        await dependencies.remoteTmux.cleanupDetachedSessions(
+            deviceId: dependencies.tmuxConfiguration.deviceID,
             keeping: tmuxSessionNamesToKeep(
                 for: serverId,
                 paneId: paneId,
@@ -2271,7 +2290,7 @@ final class TerminalTabManager: ObservableObject {
     ) async {
         updatePaneTmuxStatus(paneId, status: currentTmuxStatus(for: paneId, serverId: serverId))
         let terminalType = await client.remoteTerminalType()
-        await RemoteTmuxManager.shared.prepareConfig(
+        await dependencies.remoteTmux.prepareConfig(
             using: client,
             terminalType: terminalType,
             themeStyle: currentRemoteTmuxThemeStyle(),
@@ -2325,10 +2344,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func currentRemoteTmuxThemeStyle() -> RemoteTmuxThemeStyle {
-        let storedName = UserDefaults.standard.string(
-            forKey: CloudKitSyncConstants.terminalThemeNameKey
-        )
-        return Self.remoteTmuxThemeStyle(for: storedName)
+        dependencies.tmuxConfiguration.themeStyle()
     }
 
     nonisolated static func remoteTmuxThemeStyle(
@@ -2355,7 +2371,7 @@ final class TerminalTabManager: ObservableObject {
         backend: RemoteTmuxBackend? = nil
     ) async -> String {
         if let seedPaneId = paneStates[paneId]?.seedPaneId,
-           let path = await RemoteTmuxManager.shared.currentPath(
+           let path = await dependencies.remoteTmux.currentPath(
                sessionName: tmuxResolver.sessionName(for: seedPaneId),
                using: client,
                backend: backend
@@ -2363,7 +2379,7 @@ final class TerminalTabManager: ObservableObject {
             return path
         }
 
-        if let path = await RemoteTmuxManager.shared.currentPath(
+        if let path = await dependencies.remoteTmux.currentPath(
             sessionName: tmuxResolver.sessionName(for: paneId),
             using: client,
             backend: backend
@@ -2430,7 +2446,7 @@ final class TerminalTabManager: ObservableObject {
             client: client,
             startToken: startToken,
             availabilityResolver: {
-                await RemoteTmuxManager.shared.tmuxAvailability(using: client)
+                await dependencies.remoteTmux.tmuxAvailability(using: client)
             }
         )
     }
@@ -2471,7 +2487,7 @@ final class TerminalTabManager: ObservableObject {
             serverId: serverId,
             client: client,
             availabilityResolver: {
-                await RemoteTmuxManager.shared.tmuxAvailability(using: client)
+                await dependencies.remoteTmux.tmuxAvailability(using: client)
             },
             transport: .eternalTerminal,
             requestId: runtimeToken,
@@ -2681,7 +2697,7 @@ final class TerminalTabManager: ObservableObject {
                 for: paneId,
                 using: registration.client,
                 sendScript: { script in
-                    try await RemoteTmuxManager.shared.sendScript(
+                    try await self.dependencies.remoteTmux.sendScript(
                         script,
                         using: registration.client,
                         shellId: registration.shellId
@@ -2772,7 +2788,9 @@ final class TerminalTabManager: ObservableObject {
         sendScript: @MainActor @Sendable (String) async throws -> Void,
         validateOwner: @MainActor @Sendable () -> Bool
     ) async throws -> TmuxInstallOutcome {
-        guard let backend = await RemoteTmuxManager.shared.tmuxInstallBackend(using: client) else {
+        guard let backend = await dependencies.remoteTmux.tmuxInstallBackend(
+            using: client
+        ) else {
             return .unavailable
         }
         try Task.checkCancellation()
@@ -2805,7 +2823,9 @@ final class TerminalTabManager: ObservableObject {
         for _ in 0..<6 {
             try await Task.sleep(for: .seconds(2))
             guard validateOwner() else { throw CancellationError() }
-            let availability = await RemoteTmuxManager.shared.tmuxAvailability(using: client)
+            let availability = await dependencies.remoteTmux.tmuxAvailability(
+                using: client
+            )
             try Task.checkCancellation()
             guard validateOwner() else { throw CancellationError() }
 
@@ -2863,7 +2883,9 @@ final class TerminalTabManager: ObservableObject {
         guard let registration = shellRegistry.registration(for: paneId) else {
             throw SSHError.notConnected
         }
-        try await RemoteMoshManager.shared.installMoshServer(using: registration.client)
+        try await dependencies.remoteMosh.installMoshServer(
+            using: registration.client
+        )
     }
 
     private func managedTmuxSessionNameToKill(for paneId: UUID, status: TmuxStatus) -> String? {
@@ -2879,8 +2901,13 @@ final class TerminalTabManager: ObservableObject {
         guard ownership == .managed else { return }
 
         let sessionName = tmuxResolver.sessionName(for: paneId)
-        Task.detached { [client = registration.client, sessionName] in
-            await RemoteTmuxManager.shared.killSession(named: sessionName, using: client)
+        Task.detached {
+            [client = registration.client, remoteTmux = dependencies.remoteTmux, sessionName] in
+            await remoteTmux.killSession(
+                named: sessionName,
+                using: client,
+                backend: nil
+            )
         }
     }
 

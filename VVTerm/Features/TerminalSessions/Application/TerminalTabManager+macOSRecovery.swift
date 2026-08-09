@@ -10,8 +10,10 @@ extension TerminalTabManager {
             activeMacRecoveryGeneration = nil
             activeMacRecoveryReconciliationID = nil
         }
-        let readiness = NetworkMonitor.shared.readiness
-        let action = macRecoveryGate.receive(signal, networkReadiness: readiness)
+        let action = macRecoveryGate.receive(
+            signal,
+            networkReadiness: currentNetworkReadiness
+        )
 
         switch action {
         case .none:
@@ -151,7 +153,7 @@ extension TerminalTabManager {
     ) -> Bool {
         activeMacRecoveryGeneration == generation
             && activeMacRecoveryReconciliationID == reconciliationID
-            && NetworkMonitor.shared.readiness == .ready
+            && currentNetworkReadiness == .ready
             && !Task.isCancelled
     }
 }

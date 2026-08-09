@@ -13,7 +13,7 @@ nonisolated struct MacTerminalRecoveryGate {
         case sleep
         case wake
         case applicationActivated
-        case networkChanged(NetworkMonitor.Readiness)
+        case networkChanged(TerminalNetworkReadiness)
     }
 
     enum Action: Equatable, Sendable {
@@ -26,7 +26,7 @@ nonisolated struct MacTerminalRecoveryGate {
 
     mutating func receive(
         _ signal: Signal,
-        networkReadiness: NetworkMonitor.Readiness
+        networkReadiness: TerminalNetworkReadiness
     ) -> Action {
         switch signal {
         case .sleep:
@@ -71,7 +71,7 @@ nonisolated struct MacTerminalRecoveryGate {
 
     private mutating func recoveryAction(
         cycleID: UUID,
-        networkReadiness: NetworkMonitor.Readiness
+        networkReadiness: TerminalNetworkReadiness
     ) -> Action {
         guard networkReadiness == .ready else {
             guard case .sleeping = state else { return .none }

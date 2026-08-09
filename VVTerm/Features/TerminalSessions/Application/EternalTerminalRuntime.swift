@@ -217,6 +217,7 @@ final class EternalTerminalRuntime {
     private let server: Server
     private let bootstrapExecutor: SSHETBootstrapExecutor
     private let resumeStore: any EternalTerminalResumeStoring
+    private let dependencies: EternalTerminalRuntimeDependencies
     private weak var tabManager: TerminalTabManager?
     private var session: ETTerminalSession?
     private weak var terminal: GhosttyTerminalView?
@@ -240,12 +241,14 @@ final class EternalTerminalRuntime {
         server: Server,
         credentials: ServerCredentials,
         tabManager: TerminalTabManager,
-        resumeStore: any EternalTerminalResumeStoring
+        resumeStore: any EternalTerminalResumeStoring,
+        dependencies: EternalTerminalRuntimeDependencies
     ) {
         self.paneId = paneId
         self.server = server
         self.tabManager = tabManager
         self.resumeStore = resumeStore
+        self.dependencies = dependencies
         let runtimeToken = identityToken
         let executor = SSHETBootstrapExecutor(
             server: server,
@@ -288,7 +291,7 @@ final class EternalTerminalRuntime {
         let host = server.host
         let port = server.eternalTerminalPort
 
-        AnalyticsTracker.shared.trackConnectionAttempted(transport: ShellTransport.eternalTerminal.rawValue)
+        dependencies.record(.connectionAttempted)
 
         connectTask = Task { [weak self] in
             do {
@@ -346,8 +349,11 @@ final class EternalTerminalRuntime {
 
     func killManagedTmuxSession(named sessionName: String) async {
         do {
-            try await withBootstrapSSHClient { client in
-                await RemoteTmuxManager.shared.killSession(named: sessionName, using: client)
+            try await withBootstrapSSHClient { [dependencies] client in
+                await dependencies.killTmuxSession(
+                    named: sessionName,
+                    using: client
+                )
             }
         } catch {
             logger.warning("Failed to clean up ET tmux session: \(error.localizedDescription, privacy: .public)")
@@ -538,9 +544,7 @@ final class EternalTerminalRuntime {
         if state == .reconnecting || state == .disconnected {
             if !reconnectEventActive {
                 reconnectEventActive = true
-                AnalyticsTracker.shared.trackConnectionReconnecting(
-                    transport: ShellTransport.eternalTerminal.rawValue
-                )
+                dependencies.record(.connectionReconnecting)
             }
         } else if state == .connected {
             reconnectEventActive = false
@@ -665,9 +669,12 @@ final class EternalTerminalRuntime {
         }
         if !failureReported {
             failureReported = true
-            AnalyticsTracker.shared.trackConnectionFailed(
-                transport: ShellTransport.eternalTerminal.rawValue,
-                reason: EternalTerminalErrorPresentation.analyticsCategory(for: error)
+            dependencies.record(
+                .connectionFailed(
+                    reason: EternalTerminalErrorPresentation.analyticsCategory(
+                        for: error
+                    )
+                )
             )
         }
         tabManager?.updatePaneState(

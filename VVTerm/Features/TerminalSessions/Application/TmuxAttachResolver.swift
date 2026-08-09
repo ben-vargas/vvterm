@@ -2,6 +2,9 @@ import Foundation
 
 @MainActor
 final class TmuxAttachResolver {
+    private let configuration: TerminalTmuxConfiguration
+    private let remoteTmux: any TerminalRemoteTmuxServicing
+
     var sessionNames: [UUID: String] = [:]
     var sessionOwnership: [UUID: TmuxSessionOwnership] = [:]
     private(set) var confirmedManagedSessions: Set<UUID> = []
@@ -10,37 +13,46 @@ final class TmuxAttachResolver {
     private var promptQueue: [TmuxAttachPrompt] = []
     private var promptContinuations: [UUID: CheckedContinuation<TmuxAttachSelection, Never>] = [:]
 
+    init(
+        configuration: TerminalTmuxConfiguration,
+        remoteTmux: any TerminalRemoteTmuxServicing
+    ) {
+        self.configuration = configuration
+        self.remoteTmux = remoteTmux
+    }
+
+    #if DEBUG
+    convenience init() {
+        let dependencies = TerminalTabManagerDependencies.testing(
+            networkReadinessPublisher: nil,
+            liveActivityRefresh: { _ in }
+        )
+        self.init(
+            configuration: dependencies.tmuxConfiguration,
+            remoteTmux: dependencies.remoteTmux
+        )
+    }
+    #endif
+
     // MARK: - Settings
 
     var tmuxEnabledDefault: Bool {
-        let defaults = UserDefaults.standard
-        if defaults.object(forKey: "terminalTmuxEnabledDefault") == nil {
-            return true
-        }
-        return defaults.bool(forKey: "terminalTmuxEnabledDefault")
+        configuration.enabledByDefault()
     }
 
     var tmuxStartupBehaviorDefault: TmuxStartupBehavior {
-        let defaults = UserDefaults.standard
-        guard let rawValue = defaults.string(forKey: "terminalTmuxStartupBehaviorDefault") else {
-            return .askEveryTime
-        }
-        return TmuxStartupBehavior(rawValue: rawValue) ?? .askEveryTime
+        configuration.startupBehaviorByDefault()
     }
 
     func isTmuxEnabled(for serverId: UUID) -> Bool {
-        if let server = ServerManager.shared.servers.first(where: { $0.id == serverId }),
-           let override = server.tmuxEnabledOverride {
+        if let override = configuration.serverSettings(serverId)?.enabledOverride {
             return override
         }
         return tmuxEnabledDefault
     }
 
     func tmuxStartupBehavior(for serverId: UUID) -> TmuxStartupBehavior {
-        guard let server = ServerManager.shared.servers.first(where: { $0.id == serverId }) else {
-            return tmuxStartupBehaviorDefault
-        }
-        if let override = server.tmuxStartupBehaviorOverride {
+        if let override = configuration.serverSettings(serverId)?.startupBehaviorOverride {
             return override
         }
         return tmuxStartupBehaviorDefault
@@ -49,7 +61,7 @@ final class TmuxAttachResolver {
     // MARK: - Session Naming
 
     func managedSessionName(for entityId: UUID) -> String {
-        "vvterm_\(DeviceIdentity.id)_\(entityId.uuidString)"
+        "vvterm_\(configuration.deviceID)_\(entityId.uuidString)"
     }
 
     func sessionName(for entityId: UUID) -> String {
@@ -126,7 +138,7 @@ final class TmuxAttachResolver {
             case .managed:
                 return .createManaged
             case .external:
-                let sessions = try await RemoteTmuxManager.shared.listSessions(
+                let sessions = try await remoteTmux.listSessions(
                     using: client,
                     backend: backend
                 )
@@ -146,7 +158,7 @@ final class TmuxAttachResolver {
         case .skipTmux:
             return .skipTmux
         case .askEveryTime:
-            let sessions = try await RemoteTmuxManager.shared.listSessions(
+            let sessions = try await remoteTmux.listSessions(
                 using: client,
                 backend: backend
             )
@@ -208,7 +220,7 @@ final class TmuxAttachResolver {
     }
 
     func isCurrentDeviceManagedSessionName(_ name: String) -> Bool {
-        name.hasPrefix("vvterm_\(DeviceIdentity.id)_")
+        name.hasPrefix("vvterm_\(configuration.deviceID)_")
     }
 
     // MARK: - Prompt Requests
@@ -220,7 +232,8 @@ final class TmuxAttachResolver {
         availableSessions: [TmuxAttachSessionInfo],
         setPrompt: @MainActor @Sendable @escaping (TmuxAttachPrompt?) -> Void
     ) async -> TmuxAttachSelection {
-        let serverName = ServerManager.shared.servers.first(where: { $0.id == serverId })?.name ?? String(localized: "Server")
+        let serverName = configuration.serverSettings(serverId)?.name
+            ?? String(localized: "Server")
         let prompt = TmuxAttachPrompt(
             id: requestId,
             paneId: entityId,

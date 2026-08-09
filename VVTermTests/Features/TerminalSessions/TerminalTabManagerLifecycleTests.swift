@@ -1605,7 +1605,9 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: UUID(), title: "Termination")
             installTab(tab, in: manager, connectionState: .connected)
 
-            #expect(AppDelegate().handleApplicationWillTerminate())
+            let appDelegate = AppDelegate()
+            appDelegate.configure(tabManager: manager)
+            #expect(appDelegate.handleApplicationWillTerminate())
 
             #expect(manager.tabs(for: tab.serverId).map(\.id) == [tab.id])
             #expect(manager.paneStates[tab.rootPaneId]?.connectionState == .disconnected)

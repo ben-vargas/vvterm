@@ -2,7 +2,7 @@
 import Foundation
 
 extension TerminalTabManager {
-    func handleIOSNetworkReadinessChange(_ readiness: NetworkMonitor.Readiness) {
+    func handleIOSNetworkReadinessChange(_ readiness: TerminalNetworkReadiness) {
         switch readiness {
         case .unknown:
             return
