@@ -1,23 +1,21 @@
 #if os(iOS)
 import Combine
 import Foundation
-import UIKit
+
+@MainActor
+protocol TerminalIdleTimerControlling: AnyObject {
+    func setIdleTimerDisabled(_ isDisabled: Bool)
+}
 
 /// Aggregates visible terminal routes because the iOS idle timer is shared by
 /// every VVTerm window in the process.
 @MainActor
 final class TerminalScreenAwakeCoordinator: ObservableObject {
     private var requestingRouteIDs: Set<UUID> = []
-    private let setIdleTimerDisabled: @MainActor (Bool) -> Void
+    private let idleTimer: any TerminalIdleTimerControlling
 
-    convenience init() {
-        self.init {
-            UIApplication.shared.isIdleTimerDisabled = $0
-        }
-    }
-
-    init(setIdleTimerDisabled: @escaping @MainActor (Bool) -> Void) {
-        self.setIdleTimerDisabled = setIdleTimerDisabled
+    init(idleTimer: any TerminalIdleTimerControlling) {
+        self.idleTimer = idleTimer
     }
 
     nonisolated static func shouldRequest(
@@ -43,7 +41,7 @@ final class TerminalScreenAwakeCoordinator: ObservableObject {
 
         let shouldDisableIdleTimer = !requestingRouteIDs.isEmpty
         guard shouldDisableIdleTimer != wasIdleTimerDisabled else { return }
-        setIdleTimerDisabled(shouldDisableIdleTimer)
+        idleTimer.setIdleTimerDisabled(shouldDisableIdleTimer)
     }
 }
 #endif

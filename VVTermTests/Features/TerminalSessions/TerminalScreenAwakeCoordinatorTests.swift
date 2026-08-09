@@ -5,6 +5,14 @@ import Testing
 
 @MainActor
 struct TerminalScreenAwakeCoordinatorTests {
+    private final class IdleTimerSpy: TerminalIdleTimerControlling {
+        private(set) var values: [Bool] = []
+
+        func setIdleTimerDisabled(_ isDisabled: Bool) {
+            values.append(isDisabled)
+        }
+    }
+
     @Test
     func requestRequiresEnabledVisibleForegroundTerminalRoute() {
         #expect(
@@ -51,25 +59,23 @@ struct TerminalScreenAwakeCoordinatorTests {
 
     @Test
     func activeRequestsAreAggregatedAcrossTerminalScenes() {
-        var idleTimerValues: [Bool] = []
-        let coordinator = TerminalScreenAwakeCoordinator { isDisabled in
-            idleTimerValues.append(isDisabled)
-        }
+        let idleTimer = IdleTimerSpy()
+        let coordinator = TerminalScreenAwakeCoordinator(idleTimer: idleTimer)
         let firstScene = UUID()
         let secondScene = UUID()
 
         coordinator.update(isRequested: true, for: firstScene)
         coordinator.update(isRequested: true, for: firstScene)
         coordinator.update(isRequested: true, for: secondScene)
-        #expect(idleTimerValues == [true])
+        #expect(idleTimer.values == [true])
 
         coordinator.update(isRequested: false, for: firstScene)
-        #expect(idleTimerValues == [true])
+        #expect(idleTimer.values == [true])
 
         coordinator.update(isRequested: true, for: secondScene)
         coordinator.update(isRequested: false, for: secondScene)
         coordinator.update(isRequested: false, for: secondScene)
-        #expect(idleTimerValues == [true, false])
+        #expect(idleTimer.values == [true, false])
     }
 }
 #endif
