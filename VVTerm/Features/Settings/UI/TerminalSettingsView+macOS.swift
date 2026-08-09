@@ -209,15 +209,21 @@ struct CustomThemeManagerRow: View {
                 PillBadge(text: assignment, color: .secondary)
             }
 
+            if case .needsRepair = theme.validationState {
+                PillBadge(text: String(localized: "Needs Repair"), color: .orange)
+            }
+
             if isHovered || isSelected {
-                Menu {
-                    applyMenuItems
-                } label: {
-                    Image(systemName: "paintbrush.pointed.fill")
-                        .foregroundStyle(isSelected ? selectedTextColor.opacity(0.9) : .secondary)
-                        .imageScale(.medium)
+                if theme.canApply {
+                    Menu {
+                        applyMenuItems
+                    } label: {
+                        Image(systemName: "paintbrush.pointed.fill")
+                            .foregroundStyle(isSelected ? selectedTextColor.opacity(0.9) : .secondary)
+                            .imageScale(.medium)
+                    }
+                    .menuStyle(.borderlessButton)
                 }
-                .menuStyle(.borderlessButton)
 
                 Button {
                     onEdit()
@@ -234,6 +240,10 @@ struct CustomThemeManagerRow: View {
         .background(isSelected ? selectionFillColor : Color.clear, in: RoundedRectangle(cornerRadius: 6))
         .contentShape(Rectangle())
         .onTapGesture {
+            guard theme.canApply else {
+                onEdit()
+                return
+            }
             if usePerAppearanceTheme {
                 onApply(.both)
             } else {
@@ -241,8 +251,10 @@ struct CustomThemeManagerRow: View {
             }
         }
         .contextMenu {
-            applyMenuItems
-            Divider()
+            if theme.canApply {
+                applyMenuItems
+                Divider()
+            }
             Button("Edit") {
                 onEdit()
             }

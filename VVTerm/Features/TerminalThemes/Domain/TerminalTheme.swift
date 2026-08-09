@@ -30,6 +30,49 @@ nonisolated struct TerminalTheme: Identifiable, Codable, Equatable, Sendable {
     var isDeleted: Bool {
         deletedAt != nil
     }
+
+    var validationState: TerminalThemeValidationState {
+        do {
+            let content = try TerminalThemeValidator.validateAndNormalizeThemeContent(content)
+            _ = try TerminalThemeValidator.validateAndNormalizeThemeName(name)
+            return .ready(normalizedContent: content)
+        } catch {
+            return .needsRepair(message: error.localizedDescription)
+        }
+    }
+
+    var canApply: Bool {
+        if case .ready = validationState { return true }
+        return false
+    }
+}
+
+nonisolated enum TerminalThemeValidationState: Equatable, Sendable {
+    case ready(normalizedContent: String)
+    case needsRepair(message: String)
+}
+
+nonisolated enum TerminalThemeMergePolicy {
+    static func merge(local: [TerminalTheme], remote: [TerminalTheme]) -> [TerminalTheme] {
+        var themesByID: [UUID: TerminalTheme] = [:]
+        for theme in local {
+            if let existing = themesByID[theme.id], existing.updatedAt >= theme.updatedAt {
+                continue
+            }
+            themesByID[theme.id] = theme
+        }
+
+        for untrustedTheme in remote {
+            guard let theme = try? TerminalThemeValidator.validateStoredTheme(untrustedTheme) else {
+                continue
+            }
+            if let existing = themesByID[theme.id], existing.updatedAt >= theme.updatedAt {
+                continue
+            }
+            themesByID[theme.id] = theme
+        }
+        return Array(themesByID.values)
+    }
 }
 
 nonisolated struct TerminalThemePreference: Codable, Equatable, Sendable {
@@ -49,15 +92,14 @@ extension TerminalTheme {
             let id = UUID(uuidString: record.recordID.recordName),
             let name = record["name"] as? String,
             let content = record["content"] as? String,
-            let validatedName = try? TerminalThemeValidator.validateAndNormalizeThemeName(name),
-            let normalizedContent = try? TerminalThemeValidator.validateAndNormalizeThemeContent(content)
+            let validatedName = try? TerminalThemeValidator.validateAndNormalizeThemeName(name)
         else {
             return nil
         }
 
         self.id = id
         self.name = validatedName
-        self.content = normalizedContent
+        self.content = content
         self.updatedAt = record["updatedAt"] as? Date ?? Date.distantPast
         self.deletedAt = record["deletedAt"] as? Date
     }

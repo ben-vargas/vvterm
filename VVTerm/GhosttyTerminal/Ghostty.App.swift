@@ -195,14 +195,25 @@ extension Ghostty {
         @AppStorage("appearanceMode") private var appearanceMode = "system"
 
         private var effectiveThemeName: String {
-            guard usePerAppearanceTheme else { return terminalThemeName }
+            let preferredThemeName: String
+            let fallbackThemeName: String
+            if !usePerAppearanceTheme {
+                preferredThemeName = terminalThemeName
+                fallbackThemeName = "Aizen Dark"
+                return TerminalThemeManager.shared.applicationThemeName(
+                    preferred: preferredThemeName,
+                    fallback: fallbackThemeName
+                )
+            }
 
             // Check in-app appearance setting first
             switch appearanceMode {
             case "light":
-                return terminalThemeNameLight
+                preferredThemeName = terminalThemeNameLight
+                fallbackThemeName = "Aizen Light"
             case "dark":
-                return terminalThemeName
+                preferredThemeName = terminalThemeName
+                fallbackThemeName = "Aizen Dark"
             default:
                 // System mode - follow actual system appearance
                 #if os(macOS)
@@ -210,8 +221,14 @@ extension Ghostty {
                 #else
                 let isDark = UITraitCollection.current.userInterfaceStyle == .dark
                 #endif
-                return isDark ? terminalThemeName : terminalThemeNameLight
+                preferredThemeName = isDark ? terminalThemeName : terminalThemeNameLight
+                fallbackThemeName = isDark ? "Aizen Dark" : "Aizen Light"
             }
+
+            return TerminalThemeManager.shared.applicationThemeName(
+                preferred: preferredThemeName,
+                fallback: fallbackThemeName
+            )
         }
 
         private var terminalCursorStyle: TerminalCursorStyle {
@@ -686,6 +703,14 @@ extension Ghostty {
                 var isDir: ObjCBool = false
                 fm.fileExists(atPath: src, isDirectory: &isDir)
                 guard !isDir.boolValue else { continue }
+
+                guard let content = try? String(contentsOfFile: src, encoding: .utf8),
+                      (try? TerminalThemeValidator.validateAndNormalizeThemeContent(content)) != nil else {
+                    if fm.fileExists(atPath: dst) {
+                        try? fm.removeItem(atPath: dst)
+                    }
+                    continue
+                }
 
                 if fm.fileExists(atPath: dst) {
                     try? fm.removeItem(atPath: dst)

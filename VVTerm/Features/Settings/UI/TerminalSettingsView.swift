@@ -196,7 +196,7 @@ struct TerminalSettingsView: View {
 
     private var customThemeOptions: [String] {
         let builtIn = Set(builtInThemeOptions)
-        return customThemes.map(\.name).filter { !builtIn.contains($0) }
+        return customThemes.filter(\.canApply).map(\.name).filter { !builtIn.contains($0) }
     }
 
     private var allThemeNames: [String] {
@@ -605,7 +605,7 @@ struct TerminalSettingsView: View {
     }
 
     private func ensureThemeSelectionIsValid() {
-        let available = Set(allThemeNames)
+        let available = Set(builtInThemeOptions + customThemes.map(\.name))
         if !available.contains(themeName) {
             themeName = "Aizen Dark"
         }
@@ -893,7 +893,11 @@ struct ManageCustomThemesSheet: View {
 
     @ViewBuilder
     func applyMenuItems(themeName: String) -> some View {
-        if usePerAppearanceTheme {
+        if let theme = customThemes.first(where: { $0.name == themeName }), !theme.canApply {
+            Button("Repair Theme") {
+                themePendingEdit = theme
+            }
+        } else if usePerAppearanceTheme {
             Button("Apply to Dark") {
                 applyThemeSelection(themeName: themeName, applyTarget: .dark)
             }
@@ -994,7 +998,6 @@ struct ThemeBuilderSheet: View {
     let usePerAppearanceTheme: Bool
     let showApplyTarget: Bool
     let title: String
-    let preservedExtraLines: [String]
     let onDeleteRequest: (() -> Void)?
     let onSave: (String, String, CustomThemeApplyTarget) throws -> Void
 
@@ -1008,6 +1011,7 @@ struct ThemeBuilderSheet: View {
     @State private var selectionBackground: String
     @State private var selectionForeground: String
     @State private var paletteColors: [String]
+    @State private var advancedLines: String
     @State private var applyTarget: CustomThemeApplyTarget
     @State private var errorMessage: String?
     @State var showingDeleteConfirmation = false
@@ -1040,8 +1044,6 @@ struct ThemeBuilderSheet: View {
         self.onSave = onSave
 
         let parsed = Self.parseThemeValues(from: initialContent)
-        self.preservedExtraLines = parsed.extraLines
-
         _name = State(initialValue: initialName)
         _background = State(initialValue: parsed.background)
         _foreground = State(initialValue: parsed.foreground)
@@ -1050,6 +1052,7 @@ struct ThemeBuilderSheet: View {
         _selectionBackground = State(initialValue: parsed.selectionBackground)
         _selectionForeground = State(initialValue: parsed.selectionForeground)
         _paletteColors = State(initialValue: parsed.paletteColors)
+        _advancedLines = State(initialValue: parsed.extraLines.joined(separator: "\n"))
         _applyTarget = State(initialValue: initialApplyTarget)
     }
 
@@ -1155,6 +1158,18 @@ struct ThemeBuilderSheet: View {
                     sectionHeader("Palette (0-15)")
                 } footer: {
                     Text("Optional ANSI palette entries. Leave empty to use Ghostty defaults.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section {
+                    TextEditor(text: $advancedLines)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 88)
+                } header: {
+                    sectionHeader("Advanced Theme Values")
+                } footer: {
+                    Text("Only supported visual theme keys can be saved. Remove unsafe or invalid lines to repair this theme.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1423,7 +1438,7 @@ struct ThemeBuilderSheet: View {
                 }
             }
 
-            lines.append(contentsOf: preservedExtraLines)
+            lines.append(contentsOf: advancedLines.components(separatedBy: .newlines))
 
             let content = lines.joined(separator: "\n") + "\n"
             let normalized = try TerminalThemeValidator.validateAndNormalizeThemeContent(content)

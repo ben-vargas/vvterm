@@ -26,6 +26,7 @@ final class TerminalThemeManager: ObservableObject {
 
     private let defaults: UserDefaults
     private let cloudKit: CloudKitManager
+    private let fileStore: TerminalThemeFileStore
     private let syncCoordinator = CloudKitSyncCoordinator.shared
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm", category: "TerminalThemeManager")
 
@@ -43,9 +44,15 @@ final class TerminalThemeManager: ObservableObject {
     private var pendingPreferenceSyncTask: Task<Void, Never>?
     private let foregroundSyncMinimumInterval: TimeInterval = 20
 
-    private init(defaults: UserDefaults = .standard, cloudKit: CloudKitManager? = nil) {
+    init(
+        defaults: UserDefaults = .standard,
+        cloudKit: CloudKitManager? = nil,
+        fileStore: TerminalThemeFileStore = .appStorage,
+        startsSynchronization: Bool = true
+    ) {
         self.defaults = defaults
         self.cloudKit = cloudKit ?? .shared
+        self.fileStore = fileStore
         self.lastKnownPreferenceSnapshot = PreferenceSnapshot(
             darkThemeName: defaults.string(forKey: darkThemeKey) ?? "Aizen Dark",
             lightThemeName: defaults.string(forKey: lightThemeKey) ?? "Aizen Light",
@@ -55,9 +62,10 @@ final class TerminalThemeManager: ObservableObject {
         loadThemes()
         syncCustomThemeFiles()
         ensureThemeSelectionIsValid()
+        guard startsSynchronization else { return }
+
         observeThemePreferenceChanges()
         observeForegroundSync()
-
         Task {
             await syncFromCloud()
             await syncCoordinator.drainPendingMutations()
@@ -76,9 +84,18 @@ final class TerminalThemeManager: ObservableObject {
 
     var customThemeNames: [String] {
         customThemes
-            .filter { !$0.isDeleted }
+            .filter { !$0.isDeleted && $0.canApply }
             .map(\.name)
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    func applicationThemeName(preferred: String, fallback: String) -> String {
+        guard let customTheme = customThemes.first(where: {
+            !$0.isDeleted && $0.name == preferred
+        }) else {
+            return preferred
+        }
+        return customTheme.canApply ? preferred : fallback
     }
 
     nonisolated static func builtInThemeNames() -> [String] {
@@ -215,9 +232,7 @@ final class TerminalThemeManager: ObservableObject {
             return
         }
         do {
-            customThemes = try JSONDecoder()
-                .decode([TerminalTheme].self, from: data)
-                .compactMap { try? TerminalThemeValidator.validateAndNormalizeTheme($0) }
+            customThemes = try JSONDecoder().decode([TerminalTheme].self, from: data)
         } catch {
             customThemes = []
             logger.error("Failed to decode custom themes: \(error.localizedDescription)")
@@ -236,34 +251,16 @@ final class TerminalThemeManager: ObservableObject {
     private func syncCustomThemeFiles() {
         defer { ThemeColorParser.invalidateCache() }
 
-        let fm = FileManager.default
-        let directoryURL = TerminalThemeStoragePaths.customThemesDirectoryURL()
-
         do {
-            try fm.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-
-            let visibleThemes = customThemes.filter { !$0.isDeleted }
-            let visibleNames = Set(visibleThemes.map(\.name))
-
-            let existingFiles = try fm.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil)
-            for file in existingFiles {
-                guard !visibleNames.contains(file.lastPathComponent) else { continue }
-                try? fm.removeItem(at: file)
-            }
-
-            for theme in visibleThemes {
-                guard let fileURL = TerminalThemeStoragePaths.customThemeFileURL(for: theme.name) else {
-                    continue
-                }
-                try theme.content.write(to: fileURL, atomically: true, encoding: .utf8)
-            }
+            try fileStore.synchronize(customThemes)
         } catch {
             logger.error("Failed to sync custom theme files: \(error.localizedDescription)")
         }
     }
 
     private func ensureThemeSelectionIsValid() {
-        let available = Set(Self.builtInThemeNames() + customThemeNames)
+        let storedThemeNames = customThemes.filter { !$0.isDeleted }.map(\.name)
+        let available = Set(Self.builtInThemeNames() + storedThemeNames)
         let fallbackDark = "Aizen Dark"
         let fallbackLight = "Aizen Light"
 
@@ -450,7 +447,17 @@ final class TerminalThemeManager: ObservableObject {
         do {
             let localSnapshot = customThemes
             let remoteThemes = try await cloudKit.fetchTerminalThemes()
-            let remoteByID = Dictionary(uniqueKeysWithValues: remoteThemes.map { ($0.id, $0) })
+            var remoteByID: [UUID: TerminalTheme] = [:]
+            for remoteTheme in remoteThemes {
+                guard let validTheme = try? TerminalThemeValidator.validateStoredTheme(remoteTheme) else {
+                    continue
+                }
+                if let existing = remoteByID[validTheme.id],
+                   existing.updatedAt >= validTheme.updatedAt {
+                    continue
+                }
+                remoteByID[validTheme.id] = validTheme
+            }
 
             mergeRemoteThemes(remoteThemes)
 
@@ -488,24 +495,7 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     private func mergeRemoteThemes(_ remoteThemes: [TerminalTheme]) {
-        var localByID = Dictionary(uniqueKeysWithValues: customThemes.map { ($0.id, $0) })
-
-        for untrustedRemoteTheme in remoteThemes {
-            guard let remoteTheme = try? TerminalThemeValidator.validateAndNormalizeTheme(
-                untrustedRemoteTheme
-            ) else {
-                continue
-            }
-            if let localTheme = localByID[remoteTheme.id] {
-                if remoteTheme.updatedAt > localTheme.updatedAt {
-                    localByID[remoteTheme.id] = remoteTheme
-                }
-            } else {
-                localByID[remoteTheme.id] = remoteTheme
-            }
-        }
-
-        customThemes = Array(localByID.values)
+        customThemes = TerminalThemeMergePolicy.merge(local: customThemes, remote: remoteThemes)
         saveThemes()
         syncCustomThemeFiles()
         ensureThemeSelectionIsValid()

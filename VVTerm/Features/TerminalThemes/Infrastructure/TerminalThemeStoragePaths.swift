@@ -32,3 +32,44 @@ nonisolated enum TerminalThemeStoragePaths {
         customThemeFileURL(for: themeName)?.path
     }
 }
+
+nonisolated struct TerminalThemeFileStore: Sendable {
+    let directoryURL: URL
+
+    static var appStorage: TerminalThemeFileStore {
+        TerminalThemeFileStore(directoryURL: TerminalThemeStoragePaths.customThemesDirectoryURL())
+    }
+
+    func synchronize(_ themes: [TerminalTheme], fileManager: FileManager = .default) throws {
+        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+
+        for theme in themes {
+            guard let fileURL = fileURL(for: theme.name) else { continue }
+
+            if theme.isDeleted {
+                if fileManager.fileExists(atPath: fileURL.path) {
+                    try fileManager.removeItem(at: fileURL)
+                }
+                continue
+            }
+
+            guard case .ready(let normalizedContent) = theme.validationState else {
+                continue
+            }
+            try normalizedContent.write(to: fileURL, atomically: true, encoding: .utf8)
+        }
+    }
+
+    func fileURL(for themeName: String) -> URL? {
+        guard let name = try? TerminalThemeValidator.validateAndNormalizeThemeName(themeName) else {
+            return nil
+        }
+        let standardizedDirectory = directoryURL.standardizedFileURL.resolvingSymlinksInPath()
+        let fileURL = standardizedDirectory
+            .appendingPathComponent(name, isDirectory: false)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        guard fileURL.deletingLastPathComponent() == standardizedDirectory else { return nil }
+        return fileURL
+    }
+}

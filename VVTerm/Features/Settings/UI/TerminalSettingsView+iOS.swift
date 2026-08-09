@@ -129,6 +129,12 @@ extension ManageCustomThemesSheet {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                if case .needsRepair = theme.validationState {
+                    Label("Needs Repair", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
 
             Spacer(minLength: 8)
