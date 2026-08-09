@@ -19,12 +19,16 @@ struct VVTermApp: App {
         let appLockManager = AppLockManager.shared
         let terminalThemeManager = TerminalThemeManager.shared
         let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager.shared
+        let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: .standard)
         _tabManager = StateObject(wrappedValue: tabManager)
         _storeManager = StateObject(wrappedValue: storeManager)
         _appLockManager = StateObject(wrappedValue: appLockManager)
         _terminalThemeManager = StateObject(wrappedValue: terminalThemeManager)
         _terminalAccessoryPreferencesManager = StateObject(
             wrappedValue: terminalAccessoryPreferencesManager
+        )
+        _viewTabConfigurationManager = StateObject(
+            wrappedValue: viewTabConfigurationManager
         )
         _remoteFileBrowserStore = StateObject(
             wrappedValue: Self.makeRemoteFileBrowserStore(tabManager: tabManager)
@@ -34,6 +38,7 @@ struct VVTermApp: App {
             appLockManager: appLockManager,
             terminalThemeManager: terminalThemeManager,
             terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
+            viewTabConfigurationManager: viewTabConfigurationManager,
             storeManager: storeManager
         )
         #endif
@@ -67,6 +72,7 @@ struct VVTermApp: App {
     @StateObject private var remoteFileBrowserStore: RemoteFileBrowserStore
     @StateObject private var terminalThemeManager: TerminalThemeManager
     @StateObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
+    @StateObject private var viewTabConfigurationManager: ViewTabConfigurationManager
     #if os(macOS)
     private let settingsWindowPresenter: SettingsWindowPresenter
     #endif
@@ -274,6 +280,7 @@ struct VVTermApp: App {
             }
             .environmentObject(appLockManager)
             .environmentObject(storeManager)
+            .environmentObject(viewTabConfigurationManager)
         }
         #if os(macOS)
         .windowToolbarStyle(.unified)

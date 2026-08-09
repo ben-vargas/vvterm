@@ -270,7 +270,7 @@ struct GeneralSettingsView: View {
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
     @AppStorage(AnalyticsTracker.enabledKey) private var analyticsEnabled = true
     @EnvironmentObject private var appLockManager: AppLockManager
-    @StateObject private var viewTabConfig = ViewTabConfigurationManager.shared
+    @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @State private var isShowingStatsAppearance = false
 
     private let authGraceOptions = [0, 15, 30, 60, 120, 300]
@@ -476,5 +476,6 @@ struct GeneralSettingsView: View {
 
 #Preview {
     GeneralSettingsView()
+        .environmentObject(ViewTabConfigurationManager(defaults: .standard))
         .frame(width: 500, height: 400)
 }

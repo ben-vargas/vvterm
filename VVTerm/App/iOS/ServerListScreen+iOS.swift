@@ -18,7 +18,7 @@ struct ServerListScreen: View {
     let onActiveConnectionSelected: (Server) -> Void
 
     @EnvironmentObject private var storeManager: StoreManager
-    @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
+    @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @State private var showingAddServer = false
     @State private var showingAddWorkspace = false
     @State private var showingSettings = false

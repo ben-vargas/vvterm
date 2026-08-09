@@ -23,6 +23,7 @@ struct ContentView: View {
     @Environment(\.requestReview) private var requestReview
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
+    @EnvironmentObject private var viewTabConfigurationManager: ViewTabConfigurationManager
 
     #if os(macOS)
     // Re-injected into the AppKit-hosted sidebar/detail panes, since environment
@@ -165,7 +166,7 @@ struct ContentView: View {
                 let tab = try await tabManager.openTab(for: server)
                 await MainActor.run {
                     tabManager.selectView(
-                        ViewTabConfigurationManager.shared.effectiveDefaultTab(),
+                        viewTabConfigurationManager.effectiveDefaultTab(),
                         for: server.id
                     )
                     tabManager.selectTab(tab.id, for: server.id)
@@ -330,6 +331,7 @@ struct ContentView: View {
             .environmentObject(terminalAccessoryPreferencesManager)
             .environmentObject(appLockManager)
             .environmentObject(storeManager)
+            .environmentObject(viewTabConfigurationManager)
             .environmentObject(commandBridge)
             .environment(\.locale, locale)
             .environment(\.privacyModeEnabled, privacyModeEnabled)
@@ -375,6 +377,7 @@ struct ContentView: View {
         onOpenSettings: {}
     )
     .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
+    .environmentObject(ViewTabConfigurationManager(defaults: .standard))
 }
 
 #if os(macOS)

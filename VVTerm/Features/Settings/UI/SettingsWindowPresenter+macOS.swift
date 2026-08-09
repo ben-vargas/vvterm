@@ -26,6 +26,7 @@ final class SettingsWindowPresenter {
         appLockManager: AppLockManager,
         terminalThemeManager: TerminalThemeManager,
         terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager,
+        viewTabConfigurationManager: ViewTabConfigurationManager,
         storeManager: StoreManager
     ) {
         makeWindow = {
@@ -33,6 +34,7 @@ final class SettingsWindowPresenter {
                 appLockManager: appLockManager,
                 terminalThemeManager: terminalThemeManager,
                 terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
+                viewTabConfigurationManager: viewTabConfigurationManager,
                 storeManager: storeManager
             )
             return Self.makeSettingsWindow(rootView: settingsView)
@@ -83,6 +85,7 @@ private struct LocalizedSettingsView: View {
     @ObservedObject var appLockManager: AppLockManager
     @ObservedObject var terminalThemeManager: TerminalThemeManager
     @ObservedObject var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
+    @ObservedObject var viewTabConfigurationManager: ViewTabConfigurationManager
     @ObservedObject var storeManager: StoreManager
 
     var body: some View {
@@ -94,6 +97,7 @@ private struct LocalizedSettingsView: View {
                 .environment(\.locale, locale)
                 .environmentObject(terminalThemeManager)
                 .environmentObject(terminalAccessoryPreferencesManager)
+                .environmentObject(viewTabConfigurationManager)
                 .environmentObject(storeManager)
         }
         .environmentObject(appLockManager)

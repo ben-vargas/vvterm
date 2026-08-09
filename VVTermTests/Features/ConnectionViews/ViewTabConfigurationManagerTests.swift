@@ -50,6 +50,25 @@ final class ViewTabConfigurationManagerTests: XCTestCase {
         XCTAssertEqual(persistence.savedConfigurations, [manager.configuration])
     }
 
+    func testInjectedManagersKeepIndependentIdentityAndState() {
+        let firstPersistence = ViewTabConfigurationPersistenceSpy(initial: .default)
+        let secondInitial = ConnectionViewTabConfiguration(
+            order: [.files, .terminal, .stats],
+            visibleTabs: [.files, .terminal],
+            defaultTab: .files
+        )
+        let secondPersistence = ViewTabConfigurationPersistenceSpy(initial: secondInitial)
+        let first = ViewTabConfigurationManager(persistence: firstPersistence)
+        let second = ViewTabConfigurationManager(persistence: secondPersistence)
+
+        first.setDefaultTab(.terminal)
+        first.setVisibility(for: .files, isVisible: false)
+
+        XCTAssertFalse(first === second)
+        XCTAssertEqual(second.configuration, secondInitial)
+        XCTAssertTrue(secondPersistence.savedConfigurations.isEmpty)
+    }
+
     func testCannotHideLastVisibleTab() {
         let manager = ViewTabConfigurationManager(defaults: makeDefaults())
         manager.setVisibility(for: .terminal, isVisible: false)

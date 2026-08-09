@@ -28,7 +28,7 @@ struct ConnectionTerminalContainer: View {
     @EnvironmentObject var commandBridge: MacShellCommandBridge
     #endif
     @Environment(\.colorScheme) private var colorScheme
-    @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
+    @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
 
     #if os(iOS)
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) var preservesTerminalSizeForKeyboard = false

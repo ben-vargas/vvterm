@@ -11,6 +11,7 @@ struct ServerSidebarView: View {
     @Binding var selectedServer: Server?
 
     @EnvironmentObject private var storeManager: StoreManager
+    @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @ObservedObject private var tabManager: TerminalTabManager
     #if os(macOS)
     @EnvironmentObject private var commandBridge: MacShellCommandBridge
@@ -728,7 +729,7 @@ struct ServerSidebarView: View {
                 await MainActor.run {
                     selectedServer = server
                     tabManager.selectView(
-                        ViewTabConfigurationManager.shared.effectiveDefaultTab(),
+                        viewTabConfig.effectiveDefaultTab(),
                         for: server.id
                     )
                     tabManager.selectTab(tab.id, for: server.id)

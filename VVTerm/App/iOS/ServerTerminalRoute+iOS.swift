@@ -27,7 +27,7 @@ struct ServerTerminalRoute: View {
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
 
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
-    @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
+    @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var screenAwakeCoordinator: TerminalScreenAwakeCoordinator
     @EnvironmentObject private var storeManager: StoreManager

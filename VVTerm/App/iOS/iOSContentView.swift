@@ -20,7 +20,7 @@ struct iOSContentView: View {
     }
     @StateObject private var serverManager = ServerManager.shared
     @ObservedObject private var tabManager: TerminalTabManager
-    @StateObject private var viewTabConfig = ViewTabConfigurationManager.shared
+    @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @StateObject private var engagementTracker = EngagementTracker.shared
     @Environment(\.requestReview) private var requestReview
 

@@ -102,8 +102,6 @@ final class UserDefaultsViewTabConfigurationStore: ConnectionViewTabConfiguratio
 }
 
 extension ViewTabConfigurationManager {
-    static let shared = ViewTabConfigurationManager()
-
     convenience init(defaults: UserDefaults = .standard) {
         self.init(
             persistence: UserDefaultsViewTabConfigurationStore(defaults: defaults)
