@@ -52,4 +52,20 @@ final class PreferencesStoreTests: XCTestCase {
 
         XCTAssertEqual(store.preferences.lastWriterDeviceId, DeviceIdentity.id)
     }
+
+    func testTypedCloudResolutionAppliesOnlyStatsPreferences() {
+        let resolutionHub = CloudKitSyncResolutionHub()
+        let store = PreferencesStore(defaults: defaults, syncResolutionHub: resolutionHub)
+        let remote = StatsPreferences(
+            style: .classic,
+            blocks: StatsPreferences.defaultBlocks,
+            updatedAt: Date(),
+            lastWriterDeviceId: "remote"
+        )
+
+        resolutionHub.publish(.statsPreferences(remote))
+
+        XCTAssertEqual(store.preferences.style, .classic)
+        XCTAssertEqual(store.preferences.lastWriterDeviceId, "remote")
+    }
 }

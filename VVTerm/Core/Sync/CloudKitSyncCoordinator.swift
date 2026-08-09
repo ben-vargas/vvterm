@@ -12,14 +12,9 @@ final class CloudKitSyncCoordinator {
         category: "CloudKitSyncCoordinator"
     )
     private let queue = PendingCloudKitSyncQueue()
+    private let resolutionHub = CloudKitSyncResolutionHub.shared
     private var isDraining = false
     private var shouldDrainAgain = false
-    static let terminalAccessoryProfileDidResolveNotification = Notification.Name(
-        "TerminalAccessoryProfileDidResolveFromCloudKit"
-    )
-    static let statsPreferencesDidResolveNotification = Notification.Name(
-        "StatsPreferencesDidResolveFromCloudKit"
-    )
 
     private init() {}
 
@@ -153,18 +148,10 @@ final class CloudKitSyncCoordinator {
             try await cloudKit.saveTerminalThemePreference(preference)
         case .terminalAccessoryProfileUpsert(let profile):
             let resolvedProfile = try await cloudKit.syncTerminalAccessoryProfile(profile)
-            NotificationCenter.default.post(
-                name: Self.terminalAccessoryProfileDidResolveNotification,
-                object: self,
-                userInfo: ["profile": resolvedProfile]
-            )
+            resolutionHub.publish(.terminalAccessoryProfile(resolvedProfile))
         case .statsPreferencesUpsert(let preferences):
             let resolvedPreferences = try await cloudKit.syncStatsPreferences(preferences)
-            NotificationCenter.default.post(
-                name: Self.statsPreferencesDidResolveNotification,
-                object: self,
-                userInfo: ["preferences": resolvedPreferences]
-            )
+            resolutionHub.publish(.statsPreferences(resolvedPreferences))
         }
     }
 

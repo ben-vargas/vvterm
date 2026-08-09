@@ -1,11 +1,6 @@
 import Foundation
 import Combine
 import os.log
-#if os(iOS)
-import UIKit
-#elseif os(macOS)
-import AppKit
-#endif
 
 @MainActor
 final class PreferencesStore: ObservableObject {
@@ -17,28 +12,30 @@ final class PreferencesStore: ObservableObject {
     private let defaults: UserDefaults
     private let cloudKit: CloudKitManager
     private let syncCoordinator = CloudKitSyncCoordinator.shared
+    private let syncLifecycle: CloudKitSyncLifecycleDriver
+    private let syncResolutionHub: CloudKitSyncResolutionHub
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm",
         category: "StatsPreferences"
     )
 
-    private var foregroundObserver: NSObjectProtocol?
-    private var syncToggleObserver: NSObjectProtocol?
-    private var cloudResolutionObserver: NSObjectProtocol?
+    private var syncLifecycleObserverID: UUID?
+    private var syncResolutionObserverID: UUID?
     private var pendingSyncTask: Task<Void, Never>?
-    private var lastKnownSyncEnabled: Bool
-    private var lastForegroundSyncAt: Date = .distantPast
-    private let foregroundSyncMinimumInterval: TimeInterval = 20
 
-    init(defaults: UserDefaults = .standard, cloudKit: CloudKitManager? = nil) {
+    init(
+        defaults: UserDefaults = .standard,
+        cloudKit: CloudKitManager? = nil,
+        syncLifecycle: CloudKitSyncLifecycleDriver? = nil,
+        syncResolutionHub: CloudKitSyncResolutionHub? = nil
+    ) {
         self.defaults = defaults
         self.cloudKit = cloudKit ?? CloudKitManager.shared
+        self.syncLifecycle = syncLifecycle ?? .shared
+        self.syncResolutionHub = syncResolutionHub ?? .shared
         self.preferences = PreferencesStore.loadPreferences(from: defaults)
-        self.lastKnownSyncEnabled = SyncSettings.isEnabled
 
-        observeForegroundSync()
-        observeSyncToggleChanges()
-        observeCloudResolutionChanges()
+        observeSyncEvents()
 
         Task {
             await syncWithCloud()
@@ -47,14 +44,17 @@ final class PreferencesStore: ObservableObject {
     }
 
     deinit {
-        if let foregroundObserver {
-            NotificationCenter.default.removeObserver(foregroundObserver)
+        if let syncLifecycleObserverID {
+            let syncLifecycle = syncLifecycle
+            Task { @MainActor in
+                syncLifecycle.removeObserver(syncLifecycleObserverID)
+            }
         }
-        if let syncToggleObserver {
-            NotificationCenter.default.removeObserver(syncToggleObserver)
-        }
-        if let cloudResolutionObserver {
-            NotificationCenter.default.removeObserver(cloudResolutionObserver)
+        if let syncResolutionObserverID {
+            let syncResolutionHub = syncResolutionHub
+            Task { @MainActor in
+                syncResolutionHub.removeObserver(syncResolutionObserverID)
+            }
         }
         pendingSyncTask?.cancel()
     }
@@ -222,76 +222,28 @@ final class PreferencesStore: ObservableObject {
         }
     }
 
-    private func observeForegroundSync() {
-        #if os(iOS)
-        let name = UIApplication.didBecomeActiveNotification
-        #elseif os(macOS)
-        let name = NSApplication.didBecomeActiveNotification
-        #else
-        return
-        #endif
-
-        foregroundObserver = NotificationCenter.default.addObserver(
-            forName: name,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.syncWithCloudIfNeededForForeground()
-            }
-        }
-    }
-
-    private func syncWithCloudIfNeededForForeground() async {
-        let now = Date()
-        guard now.timeIntervalSince(lastForegroundSyncAt) >= foregroundSyncMinimumInterval else {
-            return
-        }
-
-        lastForegroundSyncAt = now
-        await syncWithCloud()
-        await syncCoordinator.drainPendingMutations()
-    }
-
-    private func observeSyncToggleChanges() {
-        syncToggleObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: defaults,
-            queue: .main
-        ) { [weak self] _ in
+    private func observeSyncEvents() {
+        syncLifecycleObserverID = syncLifecycle.observe { [weak self] event in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let isEnabled = SyncSettings.isEnabled
-                guard isEnabled != self.lastKnownSyncEnabled else { return }
-                self.lastKnownSyncEnabled = isEnabled
-                if isEnabled {
+                switch event {
+                case .foreground, .syncEnabled:
                     await self.syncWithCloud()
-                } else {
+                    await self.syncCoordinator.drainPendingMutations()
+                case .syncDisabled:
                     self.pendingSyncTask?.cancel()
                     self.pendingSyncTask = nil
                 }
             }
         }
-    }
-
-    private func observeCloudResolutionChanges() {
-        cloudResolutionObserver = NotificationCenter.default.addObserver(
-            forName: CloudKitSyncCoordinator.statsPreferencesDidResolveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            let resolvedPreferences = notification.userInfo?["preferences"] as? StatsPreferences
-            Task { @MainActor [weak self] in
-                guard let self,
-                      let resolvedPreferences else {
-                    return
-                }
-
-                let mergedWithCurrent = StatsPreferences
-                    .merged(local: self.preferences, remote: resolvedPreferences)
-                    .normalized()
-                self.applyPreferences(mergedWithCurrent, scheduleCloudSync: false)
+        syncResolutionObserverID = syncResolutionHub.observe { [weak self] resolution in
+            guard let self, case .statsPreferences(let resolvedPreferences) = resolution else {
+                return
             }
+            let mergedWithCurrent = StatsPreferences
+                .merged(local: self.preferences, remote: resolvedPreferences)
+                .normalized()
+            self.applyPreferences(mergedWithCurrent, scheduleCloudSync: false)
         }
     }
 }

@@ -6,11 +6,6 @@
 import Foundation
 import Combine
 import os.log
-#if os(iOS)
-import UIKit
-#elseif os(macOS)
-import AppKit
-#endif
 
 @MainActor
 final class TerminalThemeManager: ObservableObject {
@@ -28,6 +23,7 @@ final class TerminalThemeManager: ObservableObject {
     private let cloudKit: CloudKitManager
     private let fileStore: TerminalThemeFileStore
     private let syncCoordinator = CloudKitSyncCoordinator.shared
+    private let syncLifecycle: CloudKitSyncLifecycleDriver
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm", category: "TerminalThemeManager")
 
     private let customThemesKey = CloudKitSyncConstants.terminalCustomThemesStorageKey
@@ -37,22 +33,22 @@ final class TerminalThemeManager: ObservableObject {
     private let preferenceUpdatedAtKey = CloudKitSyncConstants.terminalThemePreferenceUpdatedAtKey
 
     private var defaultsObserver: NSObjectProtocol?
-    private var foregroundObserver: NSObjectProtocol?
+    private var syncLifecycleObserverID: UUID?
     private var lastKnownPreferenceSnapshot: PreferenceSnapshot
-    private var lastForegroundSyncAt: Date = .distantPast
     private var isApplyingRemotePreference = false
     private var pendingPreferenceSyncTask: Task<Void, Never>?
-    private let foregroundSyncMinimumInterval: TimeInterval = 20
 
     init(
         defaults: UserDefaults = .standard,
         cloudKit: CloudKitManager? = nil,
         fileStore: TerminalThemeFileStore = .appStorage,
+        syncLifecycle: CloudKitSyncLifecycleDriver? = nil,
         startsSynchronization: Bool = true
     ) {
         self.defaults = defaults
         self.cloudKit = cloudKit ?? .shared
         self.fileStore = fileStore
+        self.syncLifecycle = syncLifecycle ?? .shared
         self.lastKnownPreferenceSnapshot = PreferenceSnapshot(
             darkThemeName: defaults.string(forKey: darkThemeKey) ?? "Aizen Dark",
             lightThemeName: defaults.string(forKey: lightThemeKey) ?? "Aizen Light",
@@ -65,7 +61,7 @@ final class TerminalThemeManager: ObservableObject {
         guard startsSynchronization else { return }
 
         observeThemePreferenceChanges()
-        observeForegroundSync()
+        observeSyncLifecycle()
         Task {
             await syncFromCloud()
             await syncCoordinator.drainPendingMutations()
@@ -76,8 +72,11 @@ final class TerminalThemeManager: ObservableObject {
         if let defaultsObserver {
             NotificationCenter.default.removeObserver(defaultsObserver)
         }
-        if let foregroundObserver {
-            NotificationCenter.default.removeObserver(foregroundObserver)
+        if let syncLifecycleObserverID {
+            let syncLifecycle = syncLifecycle
+            Task { @MainActor in
+                syncLifecycle.removeObserver(syncLifecycleObserverID)
+            }
         }
         pendingPreferenceSyncTask?.cancel()
     }
@@ -354,35 +353,20 @@ final class TerminalThemeManager: ObservableObject {
         }
     }
 
-    private func observeForegroundSync() {
-        #if os(iOS)
-        let name = UIApplication.didBecomeActiveNotification
-        #elseif os(macOS)
-        let name = NSApplication.didBecomeActiveNotification
-        #else
-        return
-        #endif
-
-        foregroundObserver = NotificationCenter.default.addObserver(
-            forName: name,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+    private func observeSyncLifecycle() {
+        syncLifecycleObserverID = syncLifecycle.observe { [weak self] event in
             Task { @MainActor [weak self] in
-                await self?.syncFromCloudIfNeededForForeground()
+                guard let self else { return }
+                switch event {
+                case .foreground, .syncEnabled:
+                    await self.syncFromCloud()
+                    await self.syncCoordinator.drainPendingMutations()
+                case .syncDisabled:
+                    self.pendingPreferenceSyncTask?.cancel()
+                    self.pendingPreferenceSyncTask = nil
+                }
             }
         }
-    }
-
-    private func syncFromCloudIfNeededForForeground() async {
-        let now = Date()
-        guard now.timeIntervalSince(lastForegroundSyncAt) >= foregroundSyncMinimumInterval else {
-            return
-        }
-
-        lastForegroundSyncAt = now
-        await syncFromCloud()
-        await syncCoordinator.drainPendingMutations()
     }
 
     private func handleThemePreferenceChange() {

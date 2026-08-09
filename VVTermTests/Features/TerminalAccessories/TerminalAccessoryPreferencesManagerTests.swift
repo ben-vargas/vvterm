@@ -77,4 +77,29 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
 
         XCTAssertEqual(manager.profile.lastWriterDeviceId, DeviceIdentity.id)
     }
+
+    func testTypedCloudResolutionAppliesOnlyAccessoryProfile() {
+        let resolutionHub = CloudKitSyncResolutionHub()
+        let manager = TerminalAccessoryPreferencesManager(
+            defaults: defaults,
+            syncResolutionHub: resolutionHub
+        )
+        let updatedAt = Date()
+        let remote = TerminalAccessoryProfile(
+            schemaVersion: TerminalAccessoryProfile.schemaVersion,
+            layout: TerminalAccessoryLayout(
+                version: 1,
+                activeItems: Array(TerminalAccessoryProfile.defaultActiveItems.reversed()),
+                updatedAt: updatedAt
+            ),
+            customActions: [],
+            updatedAt: updatedAt,
+            lastWriterDeviceId: "remote"
+        )
+
+        resolutionHub.publish(.terminalAccessoryProfile(remote))
+
+        XCTAssertEqual(manager.activeItems, Array(TerminalAccessoryProfile.defaultActiveItems.reversed()))
+        XCTAssertEqual(manager.profile.lastWriterDeviceId, "remote")
+    }
 }
