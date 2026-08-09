@@ -2,6 +2,47 @@ import XCTest
 @testable import VVTerm
 
 final class ServerStatsDomainTests: XCTestCase {
+    func testCollectionFailureRemainsObservable() {
+        let attemptID = UUID()
+        var state = ServerStatsCollectionState()
+
+        state.start(attemptID: attemptID)
+        XCTAssertTrue(state.markConnected(attemptID: attemptID))
+        XCTAssertTrue(state.finish(attemptID: attemptID, errorMessage: "Connection failed"))
+
+        XCTAssertEqual(state.phase, .failed(message: "Connection failed"))
+        XCTAssertFalse(state.isCollecting)
+        XCTAssertEqual(state.errorMessage, "Connection failed")
+    }
+
+    func testStaleCollectionCompletionCannotFinishNewAttempt() {
+        let firstAttemptID = UUID()
+        let secondAttemptID = UUID()
+        var state = ServerStatsCollectionState()
+
+        state.start(attemptID: firstAttemptID)
+        state.stop()
+        state.start(attemptID: secondAttemptID)
+
+        XCTAssertFalse(state.finish(attemptID: firstAttemptID, errorMessage: "Stale failure"))
+        XCTAssertEqual(state.phase, .starting(attemptID: secondAttemptID))
+        XCTAssertTrue(state.isCollecting)
+        XCTAssertNil(state.errorMessage)
+    }
+
+    func testStaleCollectionConnectionCannotAdvanceNewAttempt() {
+        let firstAttemptID = UUID()
+        let secondAttemptID = UUID()
+        var state = ServerStatsCollectionState()
+
+        state.start(attemptID: firstAttemptID)
+        state.stop()
+        state.start(attemptID: secondAttemptID)
+
+        XCTAssertFalse(state.markConnected(attemptID: firstAttemptID))
+        XCTAssertEqual(state.phase, .starting(attemptID: secondAttemptID))
+    }
+
     func testMemoryPercentReturnsZeroWhenTotalIsZero() {
         var stats = ServerStats()
         stats.memoryUsed = 512
