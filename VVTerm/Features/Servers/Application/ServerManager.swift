@@ -63,6 +63,7 @@ final class ServerManager: ObservableObject {
     @Published var servers: [Server] = []
     @Published var workspaces: [Workspace] = []
     @Published private(set) var loadState = ServerDataLoadState()
+    @Published private(set) var localStorageIssues: [ServerLocalStorageIssue] = []
     @Published private(set) var freePlanGeneration: FreePlanGeneration = ServerManager.loadStoredFreePlanGeneration() ?? .currentOneServer
 
     var isLoading: Bool { loadState.isLoading }
@@ -71,6 +72,7 @@ final class ServerManager: ObservableObject {
     private let cloudKit = CloudKitManager.shared
     private let syncCoordinator = CloudKitSyncCoordinator.shared
     private let keychain = KeychainManager.shared
+    private let localStore = ServerLocalStore()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "ServerManager")
     private var isSyncEnabled: Bool { SyncSettings.isEnabled }
     private var activeLoad: (id: UUID, task: Task<Void, Never>)?
@@ -100,14 +102,24 @@ final class ServerManager: ObservableObject {
     private func loadLocalData() {
         var shouldPersist = false
 
-        if let decoded = loadStoredServers() {
+        switch localStore.loadServers() {
+        case .missing:
+            break
+        case .loaded(let decoded):
             servers = decoded
             logger.info("Loaded \(decoded.count) servers from local storage")
+        case .unreadable(let issue):
+            recordLocalStorageIssue(issue)
         }
 
-        if let decoded = loadStoredWorkspaces() {
+        switch localStore.loadWorkspaces() {
+        case .missing:
+            break
+        case .loaded(let decoded):
             workspaces = decoded
             logger.info("Loaded \(decoded.count) workspaces from local storage")
+        case .unreadable(let issue):
+            recordLocalStorageIssue(issue)
         }
 
         shouldPersist = reconcilePendingBootstrapWorkspaceState() || shouldPersist
@@ -128,36 +140,26 @@ final class ServerManager: ObservableObject {
     }
 
     private func saveLocalData() {
-        storeServers(servers)
-        storeWorkspaces(workspaces)
-    }
-
-    private func loadStoredServers() -> [Server]? {
-        guard let data = UserDefaults.standard.data(forKey: serversKey) else {
-            return nil
+        do {
+            try localStore.storeServers(servers)
+            try localStore.storeWorkspaces(workspaces)
+        } catch {
+            logger.error("Failed to encode local server data: \(error.localizedDescription)")
         }
-        return try? JSONDecoder().decode([Server].self, from: data)
     }
 
-    private func loadStoredWorkspaces() -> [Workspace]? {
-        guard let data = UserDefaults.standard.data(forKey: workspacesKey) else {
-            return nil
-        }
-        return try? JSONDecoder().decode([Workspace].self, from: data)
-    }
-
-    private func storeServers(_ servers: [Server]) {
-        guard let data = try? JSONEncoder().encode(servers) else {
+    private func recordLocalStorageIssue(_ issue: ServerLocalStorageIssue) {
+        guard !localStorageIssues.contains(where: { $0.id == issue.id }) else {
             return
         }
-        UserDefaults.standard.set(data, forKey: serversKey)
+        localStorageIssues.append(issue)
+        logger.error(
+            "Quarantined unreadable local \(issue.collection.rawValue, privacy: .public) data"
+        )
     }
 
-    private func storeWorkspaces(_ workspaces: [Workspace]) {
-        guard let data = try? JSONEncoder().encode(workspaces) else {
-            return
-        }
-        UserDefaults.standard.set(data, forKey: workspacesKey)
+    func dismissLocalStorageIssues() {
+        localStorageIssues.removeAll()
     }
 
     private var didBootstrapDefaultWorkspace: Bool {
