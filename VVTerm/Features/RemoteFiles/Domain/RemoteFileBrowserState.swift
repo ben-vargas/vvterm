@@ -19,6 +19,16 @@ struct RemoteFileFilesystemStatus: Hashable, Sendable {
     }
 }
 
+enum RemoteFileFilesystemCapacity: Hashable, Sendable {
+    case known(RemoteFileFilesystemStatus)
+    case unavailable
+
+    var status: RemoteFileFilesystemStatus? {
+        guard case .known(let status) = self else { return nil }
+        return status
+    }
+}
+
 enum RemoteFileDirectoryPhase: Equatable, Sendable {
     case notLoaded
     case loading(requestID: UUID, hasLoadedDirectory: Bool)

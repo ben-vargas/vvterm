@@ -430,7 +430,7 @@ final class RemoteFileBrowserStore: ObservableObject {
             try await service.listDirectory(at: normalizedPath, maxEntries: Self.directoryEntryLimit)
         }
         let filesystemStatus = try? await withRemoteFileService(for: server) { service in
-            try await service.fileSystemStatus(at: normalizedPath)
+            try await service.fileSystemCapacity(at: normalizedPath).status
         }
         return DirectorySnapshot(
             path: normalizedPath,

@@ -139,7 +139,6 @@ actor SSHClient {
     private let connectTimeout: Duration
     private let disconnectTimeout: Duration = .seconds(4)
     private let execTimeout: Duration = .seconds(20)
-    private let downloadTimeout: Duration = .seconds(120)
     private let uploadTimeout: Duration = .seconds(60)
 
     init(connectTimeout: Duration = .seconds(30)) {
@@ -720,11 +719,11 @@ actor SSHClient {
         return try await session.readFile(at: path, maxBytes: maxBytes, offset: offset)
     }
 
-    func fileSystemStatus(at path: String) async throws -> RemoteFileFilesystemStatus {
+    func fileSystemCapacity(at path: String) async throws -> RemoteFileFilesystemCapacity {
         guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
-        return try await session.fileSystemStatus(at: path)
+        return try await session.fileSystemCapacity(at: path)
     }
 
     func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
@@ -735,7 +734,7 @@ actor SSHClient {
         logger.info(
             "Starting SSH download [remote: \(path, privacy: .private(mask: .hash))] [local: \(localURL.path, privacy: .private(mask: .hash))]"
         )
-        try await SSHClient.runWithTimeout(downloadTimeout) {
+        try await SSHClient.runWithTimeout(Self.streamTransferTimeout(for: maxBytes)) {
             try Task.checkCancellation()
             try await session.downloadFile(at: path, to: localURL, maxBytes: maxBytes)
         }
@@ -763,7 +762,7 @@ actor SSHClient {
         logger.info(
             "Starting streamed SSH upload [path: \(remotePath, privacy: .private(mask: .hash))] [bytes: \(expectedBytes)]"
         )
-        try await SSHClient.runWithTimeout(uploadTimeout) {
+        try await SSHClient.runWithTimeout(Self.streamTransferTimeout(for: expectedBytes)) {
             try Task.checkCancellation()
             try await session.writeFile(
                 from: localURL,
@@ -1482,6 +1481,15 @@ actor SSHClient {
             group.cancelAll()
             return result
         }
+    }
+
+    /// Allows slow large transfers while keeping one operation bounded.
+    /// The timeout assumes at least 64 KiB/s and is capped at 24 hours.
+    private nonisolated static func streamTransferTimeout(for byteCount: UInt64) -> Duration {
+        let secondsForBytes = byteCount / UInt64(64 * 1_024)
+        let secondsWithSetup = secondsForBytes.addingReportingOverflow(120)
+        let requestedSeconds = secondsWithSetup.overflow ? UInt64.max : secondsWithSetup.partialValue
+        return .seconds(Int64(min(requestedSeconds, 86_400)))
     }
 
     private func fallbackReason(for error: Error) -> MoshFallbackReason {
@@ -2437,7 +2445,7 @@ actor SSHSession {
         return path.isEmpty ? "/" : path
     }
 
-    func fileSystemStatus(at path: String) async throws -> RemoteFileFilesystemStatus {
+    func fileSystemCapacity(at path: String) async throws -> RemoteFileFilesystemCapacity {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = RemoteFilePath.normalize(path)
         var status = LIBSSH2_SFTP_STATVFS()
@@ -2457,17 +2465,24 @@ actor SSHSession {
             if result == 0 {
                 let fragmentSize = UInt64(status.f_frsize)
                 let blockSize = fragmentSize > 0 ? fragmentSize : UInt64(status.f_bsize)
-                return RemoteFileFilesystemStatus(
+                return .known(RemoteFileFilesystemStatus(
                     blockSize: blockSize,
                     totalBlocks: UInt64(status.f_blocks),
                     freeBlocks: UInt64(status.f_bfree),
                     availableBlocks: UInt64(status.f_bavail)
-                )
+                ))
             }
 
             if result == Int32(LIBSSH2_ERROR_EAGAIN) {
                 await waitForSocket()
                 continue
+            }
+
+            let sftpStatus = libssh2_sftp_last_error(sftp)
+            if result == Int32(LIBSSH2_ERROR_METHOD_NOT_SUPPORTED)
+                || (result == Int32(LIBSSH2_ERROR_SFTP_PROTOCOL)
+                    && sftpStatus == LIBSSH2_FX_OP_UNSUPPORTED) {
+                return .unavailable
             }
 
             throw Self.remoteFileError(from: sftp, operation: "read filesystem status", path: normalizedPath)

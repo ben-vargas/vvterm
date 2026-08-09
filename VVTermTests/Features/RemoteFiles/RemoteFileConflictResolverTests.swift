@@ -129,7 +129,7 @@ private struct FakeRemoteFileService: RemoteFileService {
         "/"
     }
 
-    func fileSystemStatus(at path: String) async throws -> RemoteFileFilesystemStatus {
+    func fileSystemCapacity(at path: String) async throws -> RemoteFileFilesystemCapacity {
         throw RemoteFileBrowserError.failed("Unused in tests")
     }
 }

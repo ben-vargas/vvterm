@@ -109,7 +109,7 @@ struct RemoteFileTransferCoordinatorTests {
             )
         )
 
-        await #expect(throws: RemoteFileBrowserError.self) {
+        await #expect(throws: RemoteFileTransferError.self) {
             try await store.makeRemoteTransferPlan(
                 for: root,
                 using: service,
@@ -134,6 +134,37 @@ struct RemoteFileTransferCoordinatorTests {
             try await service.downloadFile(at: "/remote/file", to: localURL, maxBytes: 4)
         }
         #expect(!FileManager.default.fileExists(atPath: localURL.path))
+    }
+
+    @Test
+    func interruptedDownloadPreservesExistingFileAndCleansStagingFile() async throws {
+        let store = RemoteFileBrowserStore(defaults: makeDefaults())
+        let service = RecordingRemoteFileService(
+            directoryContents: [:],
+            downloadData: Data("partial".utf8),
+            downloadError: .disconnected
+        )
+        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "vvterm-interrupted-download-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let localURL = directoryURL.appendingPathComponent("existing.txt")
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        try Data("original".utf8).write(to: localURL)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+
+        await #expect(throws: RemoteFileBrowserError.self) {
+            try await store.downloadFileAtomically(
+                at: "/remote/existing.txt",
+                to: localURL,
+                maxBytes: 100,
+                using: service
+            )
+        }
+
+        #expect(try String(contentsOf: localURL, encoding: .utf8) == "original")
+        let remainingNames = try FileManager.default.contentsOfDirectory(atPath: directoryURL.path)
+        #expect(remainingNames == ["existing.txt"])
     }
 
     @Test
@@ -169,7 +200,7 @@ struct RemoteFileTransferCoordinatorTests {
             )
         )
 
-        #expect(throws: RemoteFileBrowserError.self) {
+        #expect(throws: RemoteFileTransferError.self) {
             try budget.downloadLimit(reportedBytes: 11, availableCapacity: 30)
         }
     }
@@ -329,7 +360,7 @@ struct RemoteFileTransferCoordinatorTests {
         var byteBudget = RemoteFileTransferByteBudget(limits: limits)
         var visitedIdentities: Set<LocalFileIdentity> = []
 
-        await #expect(throws: RemoteFileBrowserError.self) {
+        await #expect(throws: RemoteFileTransferError.self) {
             try await store.makeLocalUploadPlan(
                 at: localURL,
                 depth: 0,
@@ -363,7 +394,7 @@ struct RemoteFileTransferCoordinatorTests {
         var byteBudget = RemoteFileTransferByteBudget(limits: limits)
         var visitedIdentities: Set<LocalFileIdentity> = []
 
-        await #expect(throws: RemoteFileBrowserError.self) {
+        await #expect(throws: RemoteFileTransferError.self) {
             try await store.makeLocalUploadPlan(
                 at: directory,
                 depth: 0,
@@ -416,17 +447,116 @@ struct RemoteFileTransferCoordinatorTests {
         )
         try budget.record(11)
 
-        #expect(throws: RemoteFileBrowserError.self) {
-            try budget.validateUploadCapacity(availableBytes: 30)
+        let capacity = RemoteFileFilesystemCapacity.known(RemoteFileFilesystemStatus(
+            blockSize: 1,
+            totalBlocks: 30,
+            freeBlocks: 30,
+            availableBlocks: 30
+        ))
+        #expect(throws: RemoteFileTransferError.self) {
+            try budget.validateUploadCapacity(capacity)
         }
     }
 
-    private func makeEntry(name: String, path: String, type: RemoteFileType = .file) -> RemoteFileEntry {
+    @Test
+    func standardLimitsAllowFilesAbove256MiBAndTransfersAbove1GiB() throws {
+        var budget = RemoteFileTransferByteBudget()
+        let fileBytes = UInt64(257) * 1_024 * 1_024
+
+        try budget.record(fileBytes)
+        try budget.record(UInt64(1) * 1_024 * 1_024 * 1_024)
+
+        #expect(budget.consumedBytes > UInt64(1) * 1_024 * 1_024 * 1_024)
+    }
+
+    @Test
+    func unavailableFilesystemCapacityDoesNotBlockUpload() throws {
+        var budget = RemoteFileTransferByteBudget()
+        try budget.record(UInt64(2) * 1_024 * 1_024 * 1_024)
+
+        try budget.validateUploadCapacity(.unavailable)
+    }
+
+    @Test
+    func knownFilesystemCapacityReportsExactShortfall() throws {
+        var budget = RemoteFileTransferByteBudget(
+            limits: RemoteFileTransferLimits(
+                maxDepth: 1,
+                maxEntries: 1,
+                maxEntriesPerDirectory: 1,
+                maxFileBytes: 1_000,
+                maxAggregateBytes: 1_000,
+                maxElapsed: .seconds(10),
+                minimumFreeBytes: 20
+            )
+        )
+        try budget.record(91)
+        let capacity = RemoteFileFilesystemCapacity.known(RemoteFileFilesystemStatus(
+            blockSize: 1,
+            totalBlocks: 100,
+            freeBlocks: 100,
+            availableBlocks: 100
+        ))
+
+        do {
+            try budget.validateUploadCapacity(capacity)
+            Issue.record("Expected the capacity check to fail")
+        } catch let error as RemoteFileTransferError {
+            #expect(error == .insufficientCapacity(requiredBytes: 91, availableBytes: 80))
+        }
+    }
+
+    @Test
+    func standardTraversalLimitsRemainBoundedButAllowLargeDirectories() {
+        let limits = RemoteFileTransferLimits.standard
+
+        #expect(limits.maxEntries >= 1_000_000)
+        #expect(limits.maxEntriesPerDirectory >= 100_000)
+        #expect(limits.maxDepth == 64)
+    }
+
+    @Test
+    func remoteCopyUsesStreamedFileUpload() async throws {
+        let store = RemoteFileBrowserStore(defaults: makeDefaults())
+        let source = RecordingRemoteFileService(
+            directoryContents: [:],
+            downloadData: Data("stream me".utf8)
+        )
+        let destination = RecordingRemoteFileService(directoryContents: [:])
+        let entry = makeEntry(
+            name: "large.bin",
+            path: "/source/large.bin",
+            size: UInt64(source.downloadData.count)
+        )
+        let plan = RemoteFileTransferPlanNode(entry: entry, children: [])
+        var budget = RemoteFileTransferByteBudget()
+
+        try await store.copyRemoteTransferPlan(
+            plan,
+            to: "/destination",
+            operationRootPath: "/destination",
+            sourceService: source,
+            destinationService: destination,
+            progressTracker: nil,
+            destinationCapacity: .unavailable,
+            byteBudget: &budget
+        )
+
+        #expect(destination.dataUploadCount == 0)
+        #expect(destination.fileUploadCount == 1)
+    }
+
+    private func makeEntry(
+        name: String,
+        path: String,
+        type: RemoteFileType = .file,
+        size: UInt64? = nil
+    ) -> RemoteFileEntry {
         RemoteFileEntry(
             name: name,
             path: path,
             type: type,
-            size: nil,
+            size: size,
             modifiedAt: nil,
             permissions: nil,
             symlinkTarget: nil
@@ -451,17 +581,22 @@ private final class RecordingRemoteFileService: RemoteFileService {
     let directoryContents: [String: [RemoteFileEntry]]
     let statEntries: [String: RemoteFileEntry]
     let downloadData: Data
+    let downloadError: RemoteFileBrowserError?
     private(set) var operations: [Operation] = []
     private(set) var listedPaths: [String] = []
+    private(set) var dataUploadCount = 0
+    private(set) var fileUploadCount = 0
 
     init(
         directoryContents: [String: [RemoteFileEntry]],
         statEntries: [String: RemoteFileEntry] = [:],
-        downloadData: Data = Data()
+        downloadData: Data = Data(),
+        downloadError: RemoteFileBrowserError? = nil
     ) {
         self.directoryContents = directoryContents
         self.statEntries = statEntries
         self.downloadData = downloadData
+        self.downloadError = downloadError
     }
 
     func listDirectory(at path: String, maxEntries: Int?) async throws -> [RemoteFileEntry] {
@@ -491,6 +626,9 @@ private final class RecordingRemoteFileService: RemoteFileService {
             throw RemoteFileBrowserError.resourceLimitExceeded
         }
         try downloadData.write(to: localURL)
+        if let downloadError {
+            throw downloadError
+        }
     }
 
     func upload(
@@ -499,6 +637,7 @@ private final class RecordingRemoteFileService: RemoteFileService {
         permissions: Int32,
         strategy: SSHUploadStrategy
     ) async throws {
+        dataUploadCount += 1
         operations.append(.upload(RemoteFilePath.normalize(remotePath)))
     }
 
@@ -508,6 +647,7 @@ private final class RecordingRemoteFileService: RemoteFileService {
         expectedBytes: UInt64,
         permissions: Int32
     ) async throws {
+        fileUploadCount += 1
         let attributes = try FileManager.default.attributesOfItem(atPath: localURL.path)
         let byteCount = (attributes[.size] as? NSNumber)?.uint64Value ?? 0
         guard byteCount == expectedBytes else {
@@ -534,7 +674,7 @@ private final class RecordingRemoteFileService: RemoteFileService {
         "/"
     }
 
-    func fileSystemStatus(at path: String) async throws -> RemoteFileFilesystemStatus {
+    func fileSystemCapacity(at path: String) async throws -> RemoteFileFilesystemCapacity {
         throw RemoteFileBrowserError.failed("Unused in tests")
     }
 }

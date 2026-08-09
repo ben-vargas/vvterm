@@ -24,5 +24,5 @@ protocol RemoteFileService {
     func deleteDirectory(at path: String) async throws
     func setPermissions(at path: String, permissions: UInt32) async throws
     func resolveHomeDirectory() async throws -> String
-    func fileSystemStatus(at path: String) async throws -> RemoteFileFilesystemStatus
+    func fileSystemCapacity(at path: String) async throws -> RemoteFileFilesystemCapacity
 }

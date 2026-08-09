@@ -75,7 +75,7 @@ struct SFTPRemoteFileService: RemoteFileService {
         try await client.resolveHomeDirectory()
     }
 
-    func fileSystemStatus(at path: String) async throws -> RemoteFileFilesystemStatus {
-        try await client.fileSystemStatus(at: path)
+    func fileSystemCapacity(at path: String) async throws -> RemoteFileFilesystemCapacity {
+        try await client.fileSystemCapacity(at: path)
     }
 }
