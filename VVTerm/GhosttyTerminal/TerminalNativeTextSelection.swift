@@ -1,3 +1,133 @@
+import Foundation
+
+struct TerminalNativeSelectionLifecycle: Equatable {
+    enum Phase: Equatable {
+        case inactive
+        case prepared(selection: NSRange?, restoreTerminalInput: Bool)
+        case interacting(selection: NSRange?, restoreTerminalInput: Bool)
+        case selected(range: NSRange, restoreTerminalInput: Bool)
+        case restoringTerminalInput(id: UUID)
+    }
+
+    private(set) var phase: Phase = .inactive
+
+    var selection: NSRange? {
+        switch phase {
+        case .prepared(let selection, _), .interacting(let selection, _):
+            selection
+        case .selected(let range, _):
+            range
+        case .inactive, .restoringTerminalInput:
+            nil
+        }
+    }
+
+    var interactionIsActive: Bool {
+        if case .interacting = phase {
+            return true
+        }
+        return false
+    }
+
+    var keepsFirstResponder: Bool {
+        switch phase {
+        case .prepared, .interacting, .selected:
+            true
+        case .inactive, .restoringTerminalInput:
+            false
+        }
+    }
+
+    var shouldRefreshSnapshot: Bool {
+        interactionIsActive || selection != nil
+    }
+
+    mutating func prepare(restoreTerminalInput: Bool) {
+        phase = .prepared(
+            selection: selection,
+            restoreTerminalInput: shouldRestoreTerminalInput || restoreTerminalInput
+        )
+    }
+
+    mutating func beginInteraction(restoreTerminalInput: Bool) {
+        phase = .interacting(
+            selection: selection,
+            restoreTerminalInput: shouldRestoreTerminalInput || restoreTerminalInput
+        )
+    }
+
+    mutating func endInteraction(restorationID: UUID = UUID()) -> UUID? {
+        if let selection {
+            phase = .selected(
+                range: selection,
+                restoreTerminalInput: shouldRestoreTerminalInput
+            )
+            return nil
+        }
+        return beginRestorationIfNeeded(id: restorationID)
+    }
+
+    mutating func setSelection(
+        _ selection: NSRange?,
+        restorationID: UUID = UUID()
+    ) -> UUID? {
+        switch phase {
+        case .prepared(_, let restoreTerminalInput):
+            phase = .prepared(selection: selection, restoreTerminalInput: restoreTerminalInput)
+        case .interacting(_, let restoreTerminalInput):
+            phase = .interacting(selection: selection, restoreTerminalInput: restoreTerminalInput)
+        case .selected(_, let restoreTerminalInput):
+            if let selection {
+                phase = .selected(range: selection, restoreTerminalInput: restoreTerminalInput)
+            } else {
+                return beginRestorationIfNeeded(id: restorationID)
+            }
+        case .inactive:
+            if let selection {
+                phase = .selected(range: selection, restoreTerminalInput: false)
+            }
+        case .restoringTerminalInput:
+            if let selection {
+                phase = .selected(range: selection, restoreTerminalInput: false)
+            }
+        }
+        return nil
+    }
+
+    mutating func cancel() {
+        phase = .inactive
+    }
+
+    mutating func completeRestoration(id: UUID) -> Bool {
+        guard case .restoringTerminalInput(let pendingID) = phase,
+              pendingID == id else {
+            return false
+        }
+        phase = .inactive
+        return true
+    }
+
+    private var shouldRestoreTerminalInput: Bool {
+        switch phase {
+        case .prepared(_, let restore),
+             .interacting(_, let restore),
+             .selected(_, let restore):
+            restore
+        case .inactive, .restoringTerminalInput:
+            false
+        }
+    }
+
+    private mutating func beginRestorationIfNeeded(id: UUID) -> UUID? {
+        guard shouldRestoreTerminalInput else {
+            phase = .inactive
+            return nil
+        }
+        phase = .restoringTerminalInput(id: id)
+        return id
+    }
+}
+
 #if os(iOS)
 import UIKit
 

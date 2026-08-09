@@ -1204,13 +1204,13 @@ class GhosttyTerminalView: UIView {
     private let zoomIndicatorView = TerminalZoomIndicatorView()
     private var zoomIndicatorHideWorkItem: DispatchWorkItem?
     private var nativeSelectionSnapshot = TerminalNativeTextSnapshot.empty
-    private var nativeSelectedRange: NSRange?
+    private var nativeSelectionLifecycle = TerminalNativeSelectionLifecycle()
+    private var nativeSelectedRange: NSRange? { nativeSelectionLifecycle.selection }
+    private var nativeSelectionInteractionActive: Bool { nativeSelectionLifecycle.interactionIsActive }
+    private var prefersNativeSelectionFirstResponder: Bool { nativeSelectionLifecycle.keepsFirstResponder }
     private weak var nativeTextInputDelegate: UITextInputDelegate?
     private lazy var nativeSelectionTokenizer = UITextInputStringTokenizer(textInput: self)
     private var nativeSelectionAffinity: UITextStorageDirection = .forward
-    private var nativeSelectionInteractionActive = false
-    private var prefersNativeSelectionFirstResponder = false
-    private var shouldRestoreIMEProxyFocusAfterNativeSelection = false
     private var nativeTextInteraction: UITextInteraction?
     private var nativeFindInteraction: UIFindInteraction?
     @available(iOS 16.0, *)
@@ -1391,7 +1391,7 @@ class GhosttyTerminalView: UIView {
         if isPaused { return }
         guard surface?.unsafeCValue != nil else { return }
         guard bounds.width > 0 && bounds.height > 0 else { return }
-        if usesNativeTouchSelection, nativeSelectionInteractionActive || nativeSelectedRange != nil {
+        if usesNativeTouchSelection, nativeSelectionLifecycle.shouldRefreshSnapshot {
             refreshNativeSelectionSnapshot()
         }
         markIOSurfaceLayersForDisplay()
@@ -2398,11 +2398,13 @@ class GhosttyTerminalView: UIView {
 
     private func clearNativeSelectionStateForTerminalInput() {
         guard usesNativeTouchSelection else { return }
-        nativeSelectionInteractionActive = false
-        prefersNativeSelectionFirstResponder = false
-        shouldRestoreIMEProxyFocusAfterNativeSelection = false
-        if nativeSelectedRange != nil {
-            setNativeSelectedRange(nil)
+        let hadSelection = nativeSelectionLifecycle.selection != nil
+        if hadSelection {
+            nativeTextInputDelegate?.selectionWillChange(self)
+        }
+        nativeSelectionLifecycle.cancel()
+        if hadSelection {
+            nativeTextInputDelegate?.selectionDidChange(self)
         }
     }
 
@@ -2498,7 +2500,7 @@ class GhosttyTerminalView: UIView {
 
     override func becomeFirstResponder() -> Bool {
         guard isTextInputSessionEligible else { return false }
-        if prefersNativeSelectionFirstResponder {
+        if nativeSelectionLifecycle.keepsFirstResponder {
             let result = super.becomeFirstResponder()
             if result || super.isFirstResponder {
                 imeProxyFocusDidChange(isFocused: true)
@@ -2707,10 +2709,10 @@ class GhosttyTerminalView: UIView {
             return
         }
         let location = touches.first?.location(in: self)
-        if usesNativeTouchSelection, nativeSelectionInteractionActive {
+        if usesNativeTouchSelection, nativeSelectionLifecycle.interactionIsActive {
             return
         }
-        if usesNativeTouchSelection, nativeSelectedRange != nil || prefersNativeSelectionFirstResponder {
+        if usesNativeTouchSelection, nativeSelectionLifecycle.keepsFirstResponder {
             if let location, isPointOnNativeSelectionHandleHitArea(location) {
                 return
             }
@@ -3174,7 +3176,7 @@ class GhosttyTerminalView: UIView {
     }
 
     private var canHandlePinchZoom: Bool {
-        if usesNativeTouchSelection, nativeSelectionInteractionActive || nativeSelectedRange != nil {
+        if usesNativeTouchSelection, nativeSelectionLifecycle.shouldRefreshSnapshot {
             return false
         }
         if usesAppOwnedTouchSelection, touchSelection != nil {
@@ -3203,7 +3205,7 @@ class GhosttyTerminalView: UIView {
     }
 
     private func notifyNativeSelectionLayoutChange() {
-        guard nativeSelectionInteractionActive || nativeSelectedRange != nil else { return }
+        guard nativeSelectionLifecycle.shouldRefreshSnapshot else { return }
         nativeTextInputDelegate?.textWillChange(self)
         nativeTextInputDelegate?.textDidChange(self)
         nativeTextInputDelegate?.selectionWillChange(self)
@@ -3220,7 +3222,7 @@ class GhosttyTerminalView: UIView {
             return
         }
 
-        guard let nativeSelectedRange else { return }
+        guard let nativeSelectedRange = nativeSelectionLifecycle.selection else { return }
         let clamped = nativeSelectionSnapshot.clampedRange(nativeSelectedRange)
         if clamped != nativeSelectedRange {
             setNativeSelectedRange(clamped)
@@ -3287,29 +3289,22 @@ class GhosttyTerminalView: UIView {
 
     private func setNativeSelectedRange(_ range: NSRange?) {
         let clampedRange = range.map { nativeSelectionSnapshot.clampedRange($0) }
-        if nativeSelectedRange == clampedRange {
+        if nativeSelectionLifecycle.selection == clampedRange {
             notifyNativeSelectionLayoutChange()
             return
         }
 
         nativeTextInputDelegate?.selectionWillChange(self)
-        nativeSelectedRange = clampedRange
-        if clampedRange == nil, !nativeSelectionInteractionActive {
-            prefersNativeSelectionFirstResponder = false
-        }
+        let restorationID = nativeSelectionLifecycle.setSelection(clampedRange)
         nativeTextInputDelegate?.selectionDidChange(self)
-        restoreIMEProxyFocusAfterNativeSelectionIfNeeded()
+        scheduleNativeSelectionTerminalInputRestoration(restorationID)
     }
 
-    private func restoreIMEProxyFocusAfterNativeSelectionIfNeeded() {
-        guard shouldRestoreIMEProxyFocusAfterNativeSelection,
-              !nativeSelectionInteractionActive,
-              nativeSelectedRange == nil else {
-            return
-        }
-        shouldRestoreIMEProxyFocusAfterNativeSelection = false
+    private func scheduleNativeSelectionTerminalInputRestoration(_ restorationID: UUID?) {
+        guard let restorationID else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self,
+                  self.nativeSelectionLifecycle.completeRestoration(id: restorationID),
                   !self.isShuttingDown,
                   self.isTextInputSessionEligible,
                   !self.isFindNavigatorActive else {
@@ -3321,7 +3316,7 @@ class GhosttyTerminalView: UIView {
 
     private func isPointOnNativeSelectionHandleHitArea(_ point: CGPoint) -> Bool {
         guard usesNativeTouchSelection,
-              let nativeSelectedRange,
+              let nativeSelectedRange = nativeSelectionLifecycle.selection,
               nativeSelectedRange.length > 0 else {
             return false
         }
@@ -3337,7 +3332,8 @@ class GhosttyTerminalView: UIView {
 
     private func selectedNativeSelectionText() -> String? {
         guard allowsHostTextSelection else { return nil }
-        guard let nativeSelectedRange, nativeSelectedRange.length > 0 else { return nil }
+        guard let nativeSelectedRange = nativeSelectionLifecycle.selection,
+              nativeSelectedRange.length > 0 else { return nil }
         return nativeSelectionSnapshot.text(in: nativeSelectedRange)
     }
 
@@ -4262,7 +4258,6 @@ class GhosttyTerminalView: UIView {
     private func clearSelectionAfterPaste() {
         if usesNativeTouchSelection, nativeSelectedRange != nil {
             setNativeSelectedRange(nil)
-            prefersNativeSelectionFirstResponder = false
         }
         if usesAppOwnedTouchSelection, touchSelection != nil {
             clearTouchSelection()
@@ -5570,16 +5565,18 @@ extension GhosttyTerminalView: UITextInteractionDelegate {
               ) else {
             return false
         }
-        prefersNativeSelectionFirstResponder = true
-        shouldRestoreIMEProxyFocusAfterNativeSelection = isTerminalTextInputActive
+        nativeSelectionLifecycle.prepare(restoreTerminalInput: isTerminalTextInputActive)
         refreshNativeSelectionSnapshot()
-        return nativeSelectionSnapshot.length > 0
+        guard nativeSelectionSnapshot.length > 0 else {
+            nativeSelectionLifecycle.cancel()
+            return false
+        }
+        return true
     }
 
     func interactionWillBegin(_ interaction: UITextInteraction) {
-        shouldRestoreIMEProxyFocusAfterNativeSelection = shouldRestoreIMEProxyFocusAfterNativeSelection
-            || isTerminalTextInputActive
-        nativeSelectionInteractionActive = true
+        let terminalInputWasActive = isTerminalTextInputActive
+        nativeSelectionLifecycle.beginInteraction(restoreTerminalInput: terminalInputWasActive)
         if !isTerminalTextInputActive {
             _ = becomeFirstResponder()
         }
@@ -5587,12 +5584,9 @@ extension GhosttyTerminalView: UITextInteractionDelegate {
     }
 
     func interactionDidEnd(_ interaction: UITextInteraction) {
-        nativeSelectionInteractionActive = false
-        if nativeSelectedRange == nil {
-            prefersNativeSelectionFirstResponder = false
-        }
+        let restorationID = nativeSelectionLifecycle.endInteraction()
         refreshNativeSelectionSnapshot()
-        restoreIMEProxyFocusAfterNativeSelectionIfNeeded()
+        scheduleNativeSelectionTerminalInputRestoration(restorationID)
     }
 }
 
