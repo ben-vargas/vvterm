@@ -1700,3 +1700,5 @@
 "Remote Clipboard" = "원격 클립보드";
 "Server no longer exists." = "서버가 더 이상 존재하지 않습니다.";
 "Workspace no longer exists." = "작업 공간이 더 이상 존재하지 않습니다.";
+"Local data could not be read" = "로컬 데이터를 읽을 수 없습니다";
+"VVTerm preserved a backup before using replacement data." = "VVTerm은 대체 데이터를 사용하기 전에 백업을 보존했습니다.";

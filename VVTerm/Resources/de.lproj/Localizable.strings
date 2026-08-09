@@ -1701,3 +1701,5 @@
 "Remote Clipboard" = "Remote-Zwischenablage";
 "Server no longer exists." = "Der Server ist nicht mehr vorhanden.";
 "Workspace no longer exists." = "Der Arbeitsbereich ist nicht mehr vorhanden.";
+"Local data could not be read" = "Lokale Daten konnten nicht gelesen werden";
+"VVTerm preserved a backup before using replacement data." = "VVTerm hat eine Sicherung erhalten, bevor Ersatzdaten verwendet wurden.";

@@ -59,6 +59,9 @@ struct iOSContentView: View {
                     terminalRoute = .active(serverId: server.id)
                 }
             )
+            .safeAreaInset(edge: .top, spacing: 0) {
+                ServerLocalStorageNotice(serverManager: serverManager)
+            }
             .navigationDestination(isPresented: terminalPresentation) {
                 if let terminalRoute {
                     ServerTerminalRoute(

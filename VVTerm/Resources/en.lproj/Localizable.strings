@@ -1753,3 +1753,5 @@
 "Remote Clipboard" = "Remote Clipboard";
 "Server no longer exists." = "Server no longer exists.";
 "Workspace no longer exists." = "Workspace no longer exists.";
+"Local data could not be read" = "Local data could not be read";
+"VVTerm preserved a backup before using replacement data." = "VVTerm preserved a backup before using replacement data.";

@@ -1701,3 +1701,5 @@
 "Remote Clipboard" = "リモートクリップボード";
 "Server no longer exists." = "サーバーは存在しません。";
 "Workspace no longer exists." = "ワークスペースは存在しません。";
+"Local data could not be read" = "ローカルデータを読み込めませんでした";
+"VVTerm preserved a backup before using replacement data." = "VVTermは代替データを使用する前にバックアップを保存しました。";

@@ -1701,3 +1701,5 @@
 "Remote Clipboard" = "Удалённый буфер обмена";
 "Server no longer exists." = "Сервер больше не существует.";
 "Workspace no longer exists." = "Рабочее пространство больше не существует.";
+"Local data could not be read" = "Не удалось прочитать локальные данные";
+"VVTerm preserved a backup before using replacement data." = "VVTerm сохранил резервную копию перед использованием новых данных.";

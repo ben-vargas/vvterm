@@ -139,6 +139,8 @@ struct ServerSidebarView: View {
             .padding(.top, 12)
             .padding(.bottom, 4)
 
+            ServerLocalStorageNotice(serverManager: serverManager)
+
             if environmentFiltersVisible {
                 environmentFilterInline
                     .padding(.horizontal, 12)

@@ -1746,3 +1746,5 @@
 "Remote Clipboard" = "Bảng tạm từ xa";
 "Server no longer exists." = "Máy chủ không còn tồn tại.";
 "Workspace no longer exists." = "Không gian làm việc không còn tồn tại.";
+"Local data could not be read" = "Không thể đọc dữ liệu cục bộ";
+"VVTerm preserved a backup before using replacement data." = "VVTerm đã giữ một bản sao lưu trước khi dùng dữ liệu thay thế.";

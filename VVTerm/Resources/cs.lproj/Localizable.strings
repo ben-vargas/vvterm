@@ -1702,3 +1702,5 @@
 "Remote Clipboard" = "Vzdálená schránka";
 "Server no longer exists." = "Server již neexistuje.";
 "Workspace no longer exists." = "Pracovní prostor již neexistuje.";
+"Local data could not be read" = "Místní data se nepodařilo přečíst";
+"VVTerm preserved a backup before using replacement data." = "VVTerm zachoval zálohu před použitím náhradních dat.";

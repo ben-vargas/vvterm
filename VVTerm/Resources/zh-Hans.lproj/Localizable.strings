@@ -1698,3 +1698,5 @@
 "Remote Clipboard" = "远程剪贴板";
 "Server no longer exists." = "服务器已不存在。";
 "Workspace no longer exists." = "工作区已不存在。";
+"Local data could not be read" = "无法读取本地数据";
+"VVTerm preserved a backup before using replacement data." = "VVTerm 在使用替代数据前保留了备份。";
