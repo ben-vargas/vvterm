@@ -66,4 +66,20 @@ struct TerminalNativeSelectionLifecycleTests {
         let didRestore = lifecycle.completeRestoration(id: restorationID)
         #expect(didRestore)
     }
+
+    @Test
+    func cancellationInvalidatesPendingTerminalInputRestoration() {
+        var lifecycle = TerminalNativeSelectionLifecycle()
+        let restorationID = UUID()
+
+        lifecycle.prepare(restoreTerminalInput: true)
+        lifecycle.beginInteraction(restoreTerminalInput: false)
+        #expect(lifecycle.endInteraction(restorationID: restorationID) == restorationID)
+
+        lifecycle.cancel()
+
+        let didRestore = lifecycle.completeRestoration(id: restorationID)
+        #expect(!didRestore)
+        #expect(lifecycle.phase == .inactive)
+    }
 }

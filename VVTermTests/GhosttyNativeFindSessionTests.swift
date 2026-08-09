@@ -83,5 +83,16 @@ struct GhosttyNativeFindSessionTests {
         #expect(shouldRestoreFocus)
         #expect(lifecycle.isActive == false)
     }
+
+    @Test
+    func repeatedLifecycleEndDoesNotRestoreStaleTerminalFocus() {
+        var lifecycle = TerminalFindNavigatorLifecycle()
+
+        lifecycle.begin(restoreTerminalFocus: true)
+
+        #expect(lifecycle.end())
+        #expect(!lifecycle.end())
+        #expect(!lifecycle.isActive)
+    }
 }
 #endif
