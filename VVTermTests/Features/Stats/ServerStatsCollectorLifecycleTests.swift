@@ -2,314 +2,441 @@ import Foundation
 import XCTest
 @testable import VVTerm
 
-private enum StatsConnectionTestError: Error {
-    case failed
-}
+@MainActor
+private final class StatsTestGate<Value> {
+    private let ignoresCancellation: Bool
+    private var continuation: CheckedContinuation<Value, Error>?
+    private var started = false
+    private var cancelled = false
+    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    private var cancellationWaiters: [CheckedContinuation<Void, Never>] = []
 
-private actor StatsConnectionGate {
-    struct Start: Equatable {
-        let serverID: UUID
-        let credentialServerID: UUID
-        let disconnectWhenDone: Bool
+    init(ignoresCancellation: Bool = false) {
+        self.ignoresCancellation = ignoresCancellation
     }
 
-    private var starts: [ObjectIdentifier: Start] = [:]
-    private var pending: [ObjectIdentifier: CheckedContinuation<Void, Error>] = [:]
-    private var cancelled: Set<ObjectIdentifier> = []
-    private var exited: Set<ObjectIdentifier> = []
-    private var startWaiters: [ObjectIdentifier: [CheckedContinuation<Void, Never>]] = [:]
-    private var cancellationWaiters: [ObjectIdentifier: [CheckedContinuation<Void, Never>]] = [:]
-    private var exitWaiters: [ObjectIdentifier: [CheckedContinuation<Void, Never>]] = [:]
-
-    func run(
-        client: SSHClient,
-        serverID: UUID,
-        credentialServerID: UUID,
-        disconnectWhenDone: Bool
-    ) async throws {
-        let clientID = ObjectIdentifier(client)
-        starts[clientID] = Start(
-            serverID: serverID,
-            credentialServerID: credentialServerID,
-            disconnectWhenDone: disconnectWhenDone
-        )
-        startWaiters.removeValue(forKey: clientID)?.forEach { $0.resume() }
-
-        defer {
-            exited.insert(clientID)
-            exitWaiters.removeValue(forKey: clientID)?.forEach { $0.resume() }
-        }
-
+    func wait() async throws -> Value {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                pending[clientID] = continuation
+                self.continuation = continuation
+                started = true
+                startWaiters.forEach { $0.resume() }
+                startWaiters.removeAll()
+                if cancelled, !ignoresCancellation {
+                    self.continuation = nil
+                    continuation.resume(throwing: CancellationError())
+                }
             }
         } onCancel: {
-            Task { await self.recordCancellation(for: clientID) }
+            Task { @MainActor [weak self] in
+                self?.recordCancellation()
+            }
         }
     }
 
-    func waitUntilStarted(_ client: SSHClient) async {
-        let clientID = ObjectIdentifier(client)
-        guard starts[clientID] == nil else { return }
+    func waitUntilStarted() async {
+        guard !started else { return }
         await withCheckedContinuation { continuation in
-            startWaiters[clientID, default: []].append(continuation)
+            startWaiters.append(continuation)
         }
     }
 
-    func waitUntilCancelled(_ client: SSHClient) async {
-        let clientID = ObjectIdentifier(client)
-        guard !cancelled.contains(clientID) else { return }
+    func waitUntilCancelled() async {
+        guard !cancelled else { return }
         await withCheckedContinuation { continuation in
-            cancellationWaiters[clientID, default: []].append(continuation)
+            cancellationWaiters.append(continuation)
         }
     }
 
-    func waitUntilExited(_ client: SSHClient) async {
-        let clientID = ObjectIdentifier(client)
-        guard !exited.contains(clientID) else { return }
+    func succeed(with value: Value) {
+        continuation?.resume(returning: value)
+        continuation = nil
+    }
+
+    private func recordCancellation() {
+        guard !cancelled else { return }
+        cancelled = true
+        cancellationWaiters.forEach { $0.resume() }
+        cancellationWaiters.removeAll()
+        if !ignoresCancellation {
+            continuation?.resume(throwing: CancellationError())
+            continuation = nil
+        }
+    }
+}
+
+@MainActor
+private final class StatsTestEvent {
+    private var count = 0
+    private var waiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
+    func record() {
+        count += 1
+        let ready = waiters.filter { count >= $0.count }
+        waiters.removeAll { count >= $0.count }
+        ready.forEach { $0.continuation.resume() }
+    }
+
+    func wait(for expectedCount: Int = 1) async {
+        guard count < expectedCount else { return }
         await withCheckedContinuation { continuation in
-            exitWaiters[clientID, default: []].append(continuation)
+            waiters.append((expectedCount, continuation))
+        }
+    }
+}
+
+@MainActor
+private final class StatsTestTarget: ServerStatsCollectionTarget {
+    let serverID: UUID
+
+    init(serverID: UUID = UUID()) {
+        self.serverID = serverID
+    }
+}
+
+@MainActor
+private final class StatsTestConnection: ServerStatsConnectionReference {
+    var identity: ServerStatsConnectionIdentity {
+        ServerStatsConnectionIdentity(self)
+    }
+}
+
+@MainActor
+private final class StatsTestApprovalReference: ServerStatsApprovalReference {
+    let request: ServerStatsApprovalRequest
+
+    init(request: ServerStatsApprovalRequest) {
+        self.request = request
+    }
+}
+
+@MainActor
+private final class StatsTestSession: ServerStatsCollectionSession {
+    enum CollectionBehavior {
+        case suspended(StatsTestGate<Void>)
+        case collect(StatsTestGate<ServerStats>?)
+    }
+
+    let connectionIdentity: ServerStatsConnectionIdentity
+    let ownership: ServerStatsClientOwnership
+    let runStarted = StatsTestEvent()
+    let runFinished = StatsTestEvent()
+    let collectionStarted = StatsTestEvent()
+    let disconnected = StatsTestEvent()
+    var collectionBehavior: CollectionBehavior
+    var collectionGate: StatsTestGate<ServerStats>?
+    var dockerGate: StatsTestGate<DockerStats>?
+    private(set) var disconnectCount = 0
+
+    init(
+        connection: StatsTestConnection,
+        ownership: ServerStatsClientOwnership,
+        collectionBehavior: CollectionBehavior
+    ) {
+        connectionIdentity = connection.identity
+        self.ownership = ownership
+        self.collectionBehavior = collectionBehavior
+        if case .collect(let collectionGate) = collectionBehavior {
+            self.collectionGate = collectionGate
         }
     }
 
-    func start(for client: SSHClient) -> Start? {
-        starts[ObjectIdentifier(client)]
+    func runCollection(
+        _ operation: @MainActor @escaping () async throws -> Void
+    ) async throws {
+        runStarted.record()
+        defer { runFinished.record() }
+        switch collectionBehavior {
+        case .suspended(let gate):
+            _ = try await gate.wait()
+        case .collect:
+            try await operation()
+        }
     }
 
-    func wasCancelled(_ client: SSHClient) -> Bool {
-        cancelled.contains(ObjectIdentifier(client))
+    func disconnect() async {
+        disconnectCount += 1
+        disconnected.record()
     }
 
-    func succeed(_ client: SSHClient) {
-        pending.removeValue(forKey: ObjectIdentifier(client))?.resume()
+    func prepareIfNeeded() async -> ServerStatsCollectionPreparation? {
+        nil
     }
 
-    func fail(_ client: SSHClient) {
-        pending.removeValue(forKey: ObjectIdentifier(client))?.resume(
-            throwing: StatsConnectionTestError.failed
+    func collectStats(collectDocker: Bool) async throws -> ServerStats {
+        collectionStarted.record()
+        if let collectionGate {
+            return try await collectionGate.wait()
+        }
+        return ServerStats()
+    }
+
+    func terminateProcess(_ process: ProcessInfo) async throws {}
+
+    func loadProcesses(fallback: [ProcessInfo]) async throws -> [ProcessInfo] {
+        fallback
+    }
+
+    func loadDockerStats(fallback: DockerStats) async -> DockerStats {
+        guard let dockerGate else { return fallback }
+        return (try? await dockerGate.wait()) ?? fallback
+    }
+
+    func loadStorageHealth(for volume: VolumeInfo) async throws -> StorageHealthResult {
+        .unavailable(.unsupported)
+    }
+
+    func performDockerAction(
+        _ action: DockerContainerAction,
+        on container: DockerContainer,
+        fallback: DockerStats
+    ) async throws -> DockerStats {
+        fallback
+    }
+}
+
+@MainActor
+private final class StatsTestSessionFactory {
+    typealias Behavior = StatsTestSession.CollectionBehavior
+
+    var behaviors: [Behavior]
+    private(set) var ownedConnections: [StatsTestConnection] = []
+    private(set) var sessions: [StatsTestSession] = []
+
+    init(behaviors: [Behavior]) {
+        self.behaviors = behaviors
+    }
+
+    func makeOwnedConnection() -> any ServerStatsConnectionReference {
+        let connection = StatsTestConnection()
+        ownedConnections.append(connection)
+        return connection
+    }
+
+    func makeSession(
+        target: any ServerStatsCollectionTarget,
+        connection: any ServerStatsConnectionReference,
+        ownership: ServerStatsClientOwnership
+    ) throws -> any ServerStatsCollectionSession {
+        guard let connection = connection as? StatsTestConnection else {
+            throw StatsTestError.incompatibleConnection
+        }
+        let behavior = behaviors.isEmpty
+            ? .suspended(StatsTestGate<Void>())
+            : behaviors.removeFirst()
+        let session = StatsTestSession(
+            connection: connection,
+            ownership: ownership,
+            collectionBehavior: behavior
         )
-    }
-
-    private func recordCancellation(for clientID: ObjectIdentifier) {
-        cancelled.insert(clientID)
-        cancellationWaiters.removeValue(forKey: clientID)?.forEach { $0.resume() }
+        sessions.append(session)
+        return session
     }
 }
 
-@MainActor
-private final class StatsClientFactory {
-    private(set) var clients: [SSHClient] = []
-
-    func makeClient() -> SSHClient {
-        let client = SSHClient()
-        clients.append(client)
-        return client
-    }
+private enum StatsTestError: Error {
+    case incompatibleConnection
 }
 
-@MainActor
 final class ServerStatsCollectorLifecycleTests: XCTestCase {
-    func testRepeatedOwnedStartIsIdempotentAndUpdatesDockerPolicy() async throws {
-        let gate = StatsConnectionGate()
-        let factory = StatsClientFactory()
-        let collector = makeCollector(factory: factory, gate: gate)
-        let server = makeServer()
-
-        await collector.startCollecting(for: server, collectDocker: false)
-        let client = try XCTUnwrap(factory.clients.first)
-        await gate.waitUntilStarted(client)
-        let firstAttemptID = try XCTUnwrap(collector.collectionState.phase.attemptID)
-
-        await collector.startCollecting(for: server, collectDocker: true)
-
-        XCTAssertEqual(collector.collectionState.phase.attemptID, firstAttemptID)
-        XCTAssertEqual(factory.clients.count, 1)
-        XCTAssertTrue(collector.isDockerCollectionEnabled)
-        let wasCancelled = await gate.wasCancelled(client)
-        XCTAssertFalse(wasCancelled)
-
-        collector.stopCollecting()
-        await gate.waitUntilCancelled(client)
-        await gate.succeed(client)
-    }
-
-    func testDifferentServerClientAndOwnershipReplaceActiveAttempt() async throws {
-        let gate = StatsConnectionGate()
-        let factory = StatsClientFactory()
-        let collector = makeCollector(factory: factory, gate: gate)
-        let firstServer = makeServer()
-        let secondServer = makeServer()
-        let firstSharedClient = SSHClient()
-        let secondSharedClient = SSHClient()
-
-        await collector.startCollecting(for: firstServer, using: firstSharedClient)
-        await gate.waitUntilStarted(firstSharedClient)
-        let firstAttemptID = try XCTUnwrap(collector.collectionState.phase.attemptID)
-        let sharedStart = await gate.start(for: firstSharedClient)
-        XCTAssertEqual(sharedStart?.disconnectWhenDone, false)
-
-        await collector.startCollecting(
-            for: firstServer,
-            using: firstSharedClient,
-            collectDocker: true
+    @MainActor
+    func testPreparationApprovalKeepsTypedRequestWithoutStartingConnectionTask() async {
+        let target = StatsTestTarget()
+        let request = ServerStatsApprovalRequest(
+            id: "credential:\(target.serverID.uuidString)",
+            serverID: target.serverID,
+            kind: .credentialEndpoint
         )
-        XCTAssertEqual(collector.collectionState.phase.attemptID, firstAttemptID)
-        XCTAssertTrue(collector.isDockerCollectionEnabled)
-        let sharedWasCancelled = await gate.wasCancelled(firstSharedClient)
-        XCTAssertFalse(sharedWasCancelled)
+        let reference = StatsTestApprovalReference(request: request)
+        let collector = ServerStatsCollector(
+            dependencies: ServerStatsCollectorDependencies(
+                makeOwnedConnection: { StatsTestConnection() },
+                makeSession: { _, _, _ in
+                    throw ServerStatsApprovalRequired(reference: reference)
+                },
+                makeAttemptID: UUID.init
+            )
+        )
 
-        await collector.startCollecting(for: firstServer, using: secondSharedClient)
-        await gate.waitUntilCancelled(firstSharedClient)
-        await gate.waitUntilStarted(secondSharedClient)
-        let secondAttemptID = try XCTUnwrap(collector.collectionState.phase.attemptID)
-        XCTAssertNotEqual(secondAttemptID, firstAttemptID)
+        await collector.startCollecting(for: target)
 
-        await collector.startCollecting(for: firstServer)
-        let firstOwnedClient = try XCTUnwrap(factory.clients.first)
-        await gate.waitUntilCancelled(secondSharedClient)
-        await gate.waitUntilStarted(firstOwnedClient)
-        let thirdAttemptID = try XCTUnwrap(collector.collectionState.phase.attemptID)
-        XCTAssertNotEqual(thirdAttemptID, secondAttemptID)
-        let ownedStart = await gate.start(for: firstOwnedClient)
-        XCTAssertEqual(ownedStart?.disconnectWhenDone, true)
-
-        await collector.startCollecting(for: secondServer)
-        let secondOwnedClient = try XCTUnwrap(factory.clients.last)
-        await gate.waitUntilCancelled(firstOwnedClient)
-        await gate.waitUntilStarted(secondOwnedClient)
-        XCTAssertNotEqual(collector.collectionState.phase.attemptID, thirdAttemptID)
-        XCTAssertEqual(factory.clients.count, 2)
-
-        collector.stopCollecting()
-        await gate.waitUntilCancelled(secondOwnedClient)
-        await gate.succeed(firstSharedClient)
-        await gate.succeed(secondSharedClient)
-        await gate.succeed(firstOwnedClient)
-        await gate.succeed(secondOwnedClient)
-    }
-
-    func testStopCancelsActiveAttempt() async throws {
-        let gate = StatsConnectionGate()
-        let factory = StatsClientFactory()
-        let collector = makeCollector(factory: factory, gate: gate)
-        let client = SSHClient()
-
-        await collector.startCollecting(for: makeServer(), using: client)
-        await gate.waitUntilStarted(client)
-
-        collector.stopCollecting()
-
-        await gate.waitUntilCancelled(client)
-        XCTAssertEqual(collector.collectionState.phase, .idle)
+        XCTAssertEqual(collector.collectionState.phase, .approvalRequired(request))
+        XCTAssertTrue(collector.approvalReferenceForPresentation === reference)
         XCTAssertFalse(collector.isCollecting)
-        XCTAssertNil(collector.connectionError)
-        await gate.succeed(client)
+
+        collector.resolveSecurityApproval(request)
+        XCTAssertEqual(collector.collectionState.phase, .idle)
     }
 
-    func testOwnedCollectionUsesInjectedCredentialLoaderAndConnectionRunner() async throws {
-        let gate = StatsConnectionGate()
-        let factory = StatsClientFactory()
-        var loadedServerIDs: [UUID] = []
+    @MainActor
+    func testRepeatedOwnedStartKeepsOneAttemptAndUpdatesDockerPolicy() async throws {
+        let runGate = StatsTestGate<Void>()
+        let factory = StatsTestSessionFactory(behaviors: [.suspended(runGate)])
+        let collector = makeCollector(factory: factory)
+        let target = StatsTestTarget()
+
+        await collector.startCollecting(for: target, collectDocker: false)
+        let session = try XCTUnwrap(factory.sessions.first)
+        await session.runStarted.wait()
+        let attemptID = try XCTUnwrap(collector.collectionState.phase.attemptID)
+
+        await collector.startCollecting(for: target, collectDocker: true)
+
+        XCTAssertEqual(collector.collectionState.phase.attemptID, attemptID)
+        XCTAssertEqual(factory.sessions.count, 1)
+        XCTAssertEqual(factory.ownedConnections.count, 1)
+        XCTAssertTrue(collector.isDockerCollectionEnabled)
+
+        collector.stopCollecting()
+        await runGate.waitUntilCancelled()
+        await session.disconnected.wait()
+        XCTAssertEqual(session.disconnectCount, 1)
+    }
+
+    @MainActor
+    func testReplacementCancelsFirstAttemptAndRejectsItsLateSnapshot() async throws {
+        let staleSnapshotGate = StatsTestGate<ServerStats>(ignoresCancellation: true)
+        let replacementGate = StatsTestGate<Void>()
+        let factory = StatsTestSessionFactory(behaviors: [
+            .collect(staleSnapshotGate),
+            .suspended(replacementGate)
+        ])
+        let repeatedAttemptID = UUID()
         let collector = makeCollector(
             factory: factory,
-            gate: gate,
-            loadCredentials: { server in
-                loadedServerIDs.append(server.id)
-                return Self.credentials(for: server)
-            }
+            makeAttemptID: { repeatedAttemptID }
         )
-        let server = makeServer()
+        let target = StatsTestTarget()
+        let firstConnection = StatsTestConnection()
+        let replacementConnection = StatsTestConnection()
 
-        await collector.startCollecting(for: server)
-        let client = try XCTUnwrap(factory.clients.first)
-        await gate.waitUntilStarted(client)
+        await collector.startCollecting(for: target, using: firstConnection)
+        let firstSession = try XCTUnwrap(factory.sessions.first)
+        await staleSnapshotGate.waitUntilStarted()
 
-        XCTAssertEqual(loadedServerIDs, [server.id])
-        let start = await gate.start(for: client)
-        XCTAssertEqual(start?.credentialServerID, server.id)
-        XCTAssertEqual(start?.disconnectWhenDone, true)
-
-        collector.stopCollecting()
-        await gate.waitUntilCancelled(client)
-        await gate.succeed(client)
-    }
-
-    func testStaleCompletionCannotMutateReplacementAttempt() async throws {
-        let gate = StatsConnectionGate()
-        let factory = StatsClientFactory()
-        let collector = makeCollector(factory: factory, gate: gate)
-        let server = makeServer()
-        let firstClient = SSHClient()
-        let replacementClient = SSHClient()
-
-        await collector.startCollecting(for: server, using: firstClient)
-        await gate.waitUntilStarted(firstClient)
-
-        await collector.startCollecting(for: server, using: replacementClient)
-        await gate.waitUntilCancelled(firstClient)
-        await gate.waitUntilStarted(replacementClient)
+        await collector.startCollecting(for: target, using: replacementConnection)
+        let replacementSession = try XCTUnwrap(factory.sessions.last)
+        await staleSnapshotGate.waitUntilCancelled()
+        await replacementSession.runStarted.wait()
         let replacementAttemptID = try XCTUnwrap(collector.collectionState.phase.attemptID)
+        XCTAssertEqual(replacementAttemptID, repeatedAttemptID)
 
-        await gate.fail(firstClient)
-        await gate.waitUntilExited(firstClient)
-        await Task.yield()
+        var staleStats = ServerStats()
+        staleStats.cpuUsage = 91
+        staleSnapshotGate.succeed(with: staleStats)
+        await firstSession.runFinished.wait()
 
         XCTAssertEqual(
             collector.collectionState.phase,
             .starting(attemptID: replacementAttemptID)
         )
-        XCTAssertNil(collector.connectionError)
+        XCTAssertEqual(collector.stats.cpuUsage, 0)
 
         collector.stopCollecting()
-        await gate.waitUntilCancelled(replacementClient)
-        await gate.succeed(replacementClient)
+        await replacementGate.waitUntilCancelled()
     }
 
+    @MainActor
+    func testOwnerReleaseCancelsActiveConnectionTask() async throws {
+        let runGate = StatsTestGate<Void>()
+        let factory = StatsTestSessionFactory(behaviors: [.suspended(runGate)])
+        weak var releasedCollector: ServerStatsCollector?
+
+        do {
+            let collector = makeCollector(factory: factory)
+            releasedCollector = collector
+            await collector.startCollecting(for: StatsTestTarget())
+            let session = try XCTUnwrap(factory.sessions.first)
+            await session.runStarted.wait()
+        }
+
+        await runGate.waitUntilCancelled()
+        XCTAssertNil(releasedCollector)
+    }
+
+    @MainActor
+    func testStopCancelsUserOperationAndRejectsCancellationIgnoringResult() async throws {
+        let factory = StatsTestSessionFactory(behaviors: [.collect(nil)])
+        let collector = makeCollector(factory: factory)
+        let sessionTarget = StatsTestTarget()
+        let connection = StatsTestConnection()
+
+        await collector.startCollecting(for: sessionTarget, using: connection)
+        let session = try XCTUnwrap(factory.sessions.first)
+        await session.collectionStarted.wait()
+
+        let dockerGate = StatsTestGate<DockerStats>(ignoresCancellation: true)
+        session.dockerGate = dockerGate
+        let operation = Task { @MainActor in
+            try await collector.loadDockerStats()
+        }
+        await dockerGate.waitUntilStarted()
+
+        collector.stopCollecting()
+        await dockerGate.waitUntilCancelled()
+
+        let staleDocker = DockerStats(
+            availability: .available,
+            containers: [],
+            timestamp: Date(timeIntervalSince1970: 123)
+        )
+        dockerGate.succeed(with: staleDocker)
+
+        do {
+            _ = try await operation.value
+            XCTFail("A stale operation must not return a result")
+        } catch {
+            // The attempt was invalidated before the cancellation-ignoring result returned.
+        }
+        XCTAssertNotEqual(collector.stats.docker, staleDocker)
+    }
+
+    @MainActor
+    func testIndependentCollectorsDoNotShareAttemptOrCancellation() async throws {
+        let firstGate = StatsTestGate<Void>()
+        let secondGate = StatsTestGate<Void>()
+        let firstFactory = StatsTestSessionFactory(behaviors: [.suspended(firstGate)])
+        let secondFactory = StatsTestSessionFactory(behaviors: [.suspended(secondGate)])
+        let firstCollector = makeCollector(factory: firstFactory)
+        let secondCollector = makeCollector(factory: secondFactory)
+
+        await firstCollector.startCollecting(for: StatsTestTarget())
+        await secondCollector.startCollecting(for: StatsTestTarget())
+        let firstSession = try XCTUnwrap(firstFactory.sessions.first)
+        let secondSession = try XCTUnwrap(secondFactory.sessions.first)
+        await firstSession.runStarted.wait()
+        await secondSession.runStarted.wait()
+
+        firstCollector.stopCollecting()
+        await firstGate.waitUntilCancelled()
+
+        XCTAssertTrue(secondCollector.isCollecting)
+        XCTAssertNotEqual(
+            firstSession.connectionIdentity,
+            secondSession.connectionIdentity
+        )
+
+        secondCollector.stopCollecting()
+        await secondGate.waitUntilCancelled()
+    }
+
+    @MainActor
     private func makeCollector(
-        factory: StatsClientFactory,
-        gate: StatsConnectionGate,
-        loadCredentials: ((Server) throws -> ServerCredentials)? = nil
+        factory: StatsTestSessionFactory,
+        makeAttemptID: @escaping () -> UUID = UUID.init
     ) -> ServerStatsCollector {
-        let loadCredentials = loadCredentials ?? { Self.credentials(for: $0) }
-        return ServerStatsCollector(
+        ServerStatsCollector(
             dependencies: ServerStatsCollectorDependencies(
-                makeClient: { factory.makeClient() },
-                loadCredentials: loadCredentials,
-                runWithConnection: { client, server, credentials, disconnectWhenDone, _ in
-                    try await gate.run(
-                        client: client,
-                        serverID: server.id,
-                        credentialServerID: credentials.serverId,
-                        disconnectWhenDone: disconnectWhenDone
+                makeOwnedConnection: { factory.makeOwnedConnection() },
+                makeSession: { target, connection, ownership in
+                    try factory.makeSession(
+                        target: target,
+                        connection: connection,
+                        ownership: ownership
                     )
                 },
-                makeAttemptID: UUID.init,
-                now: Date.init
+                makeAttemptID: makeAttemptID
             )
-        )
-    }
-
-    nonisolated private static func credentials(for server: Server) -> ServerCredentials {
-        ServerCredentials(
-            serverId: server.id,
-            credentialBinding: nil,
-            password: nil,
-            privateKey: nil,
-            publicKey: nil,
-            passphrase: nil,
-            cloudflareClientID: nil,
-            cloudflareClientSecret: nil
-        )
-    }
-
-    private func makeServer() -> Server {
-        Server(
-            workspaceId: UUID(),
-            name: "Stats Test",
-            host: "stats.example.com",
-            username: "tester",
-            connectionMode: .tailscale
         )
     }
 }
