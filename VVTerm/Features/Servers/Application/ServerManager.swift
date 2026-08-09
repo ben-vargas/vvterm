@@ -4,6 +4,14 @@ import os.log
 
 @MainActor
 final class ServerManager: ObservableObject, ServerMutationRepository {
+    private nonisolated final class LoadGeneration: Sendable {}
+
+    private nonisolated struct ActiveLoad: Sendable {
+        let operationID: UUID
+        let generation: LoadGeneration
+        let task: Task<Void, Never>
+    }
+
     let stateStore: ServerStateStore
 
     var servers: [Server] {
@@ -21,7 +29,8 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
     private let dependencies: ServerManagerDependencies
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "ServerManager")
     private var isSyncEnabled: Bool { stateStore.isSyncEnabled }
-    private var activeLoad: (id: UUID, task: Task<Void, Never>)?
+    private var activeLoad: ActiveLoad?
+    private var startupTask: Task<Void, Never>?
     private var stateObservation: AnyCancellable?
 
     private struct FullFetchBackfillResult {
@@ -40,11 +49,22 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         }
         // Then sync with CloudKit in background
         if startsAutomatically {
-            Task {
-                await resumePendingWorkspaceDeletion()
-                await loadData()
+            let stateStore = dependencies.stateStore
+            let syncRepository = dependencies.syncRepository
+            startupTask = Task { [weak self, stateStore, syncRepository] in
+                let recoveredPendingDeletion = self?.recoverPendingWorkspaceDeletion() ?? false
+                if recoveredPendingDeletion, stateStore.isSyncEnabled {
+                    await syncRepository.drainPendingMutations()
+                }
+                guard !Task.isCancelled else { return }
+                self?.beginLoadingIfNeeded()
             }
         }
+    }
+
+    deinit {
+        startupTask?.cancel()
+        activeLoad?.task.cancel()
     }
 
     private func resolvePendingBootstrapWorkspaceAgainstAuthoritativeFetch(_ changes: ServerRemoteChanges) {
@@ -156,16 +176,17 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         )
     }
 
-    private func resumePendingWorkspaceDeletion() async {
+    private func recoverPendingWorkspaceDeletion() -> Bool {
         do {
-            guard let journal = try workspaceDeletionTransaction.resumePending() else { return }
+            guard let journal = try workspaceDeletionTransaction.resumePending() else { return false }
             applyCommittedWorkspaceDeletion(journal.plan)
             if journal.phase != .complete {
                 logger.error("Workspace deletion recovery remains pending")
             }
-            await drainPendingRemoteMutations()
+            return true
         } catch {
             logger.error("Could not resume workspace deletion: \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -175,9 +196,6 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
 
         if let activeLoad {
             await activeLoad.task.value
-            if self.activeLoad?.id == activeLoad.id {
-                self.activeLoad = nil
-            }
         }
 
         // Clear local storage and the feature-owned observable state.
@@ -193,25 +211,25 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
     // MARK: - Data Loading
 
     func loadData() async {
-        if let activeLoad {
-            await activeLoad.task.value
-            return
-        }
-
-        let operationID = stateStore.startLoading(operationID: dependencies.makeID())
-        let task = Task { [weak self] in
-            guard let self else { return }
-            await performLoad(operationID: operationID)
-        }
-        activeLoad = (operationID, task)
+        guard let task = beginLoadingIfNeeded() else { return }
         await task.value
-
-        if activeLoad?.id == operationID {
-            activeLoad = nil
-        }
     }
 
-    private func performLoad(operationID: UUID) async {
+    func handleSyncDisabled() {
+        startupTask?.cancel()
+        startupTask = nil
+        invalidateActiveLoad()
+        stateStore.refreshFreePlanGeneration(
+            persistCurrentIfNeeded: true,
+            reason: "local_only"
+        )
+    }
+
+    @discardableResult
+    private func beginLoadingIfNeeded() -> Task<Void, Never>? {
+        if let activeLoad {
+            return activeLoad.task
+        }
 
         guard isSyncEnabled else {
             logger.info("iCloud sync disabled; using local data only")
@@ -219,70 +237,152 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
                 persistCurrentIfNeeded: true,
                 reason: "local_only"
             )
-            stateStore.finishLoading(operationID: operationID)
-            return
+            return nil
         }
 
-        do {
-            let shouldForceFullFetch = stateStore.shouldForceRemoteFullFetchForBootstrap
-            let fetchedChanges = try await dependencies.remoteRepository.fetchServerChanges(
-                forceFullFetch: shouldForceFullFetch
-            )
-            resolvePendingBootstrapWorkspaceAgainstAuthoritativeFetch(fetchedChanges)
-            let backfillResult = await backfillMissingLocalRecordsIfNeeded(for: fetchedChanges)
-            let changes = backfillResult.changes
-
-            // Merge CloudKit data with local (CloudKit wins for conflicts, dedupe by ID)
-            logger.info(
-                "CloudKit returned \(changes.workspaces.count) workspaces, \(changes.servers.count) servers (full fetch: \(changes.isFullFetch))"
-            )
-
-            removeKnownHostsDeletedByIncrementalChanges(changes)
-            stateStore.applyRemoteChanges(
-                changes,
-                canReplaceLocalState: backfillResult.canReplaceLocalState
-            )
-            reconcilePendingServerAndWorkspaceUpsertsAgainstRemote(changes)
-            applyPendingSyncOverlay()
-            _ = stateStore.reconcilePendingBootstrapWorkspaceState()
-
-            // Check for and repair orphaned servers (workspaceId doesn't match any workspace)
-            await repairOrphanedServers()
-            await drainPendingRemoteMutations()
-
-            // Save merged data locally
-            stateStore.persistCurrentCollections()
-            stateStore.refreshFreePlanGeneration(
-                persistCurrentIfNeeded: true,
-                reason: "cloudkit_load"
-            )
-
-            logger.info("Loaded \(self.workspaces.count) workspaces and \(self.servers.count) servers from CloudKit")
-            stateStore.finishLoading(operationID: operationID)
-        } catch {
-            logger.error("Failed to load from CloudKit: \(error.localizedDescription)")
-            // Local data is already loaded in init, so nothing to do here
-            logger.info("Using local data: \(self.workspaces.count) workspaces and \(self.servers.count) servers")
-
-            // Only try to push local data if it's a schema error (record type not found)
-            // This auto-creates schema in development mode
-            if dependencies.remoteRepository.isAvailable && dependencies.isRemoteSchemaError(error) {
-                logger.info("Schema error detected, attempting to initialize schema...")
-                await initializeRemoteSchema()
+        let operationID = stateStore.startLoading(operationID: dependencies.makeID())
+        let generation = LoadGeneration()
+        let remoteRepository = dependencies.remoteRepository
+        let shouldForceFullFetch = stateStore.shouldForceRemoteFullFetchForBootstrap
+        let task = Task { [weak self, remoteRepository] in
+            do {
+                let changes = try await remoteRepository.fetchServerChanges(
+                    forceFullFetch: shouldForceFullFetch
+                )
+                guard !Task.isCancelled else { return }
+                await self?.completeLoad(
+                    changes,
+                    operationID: operationID,
+                    generation: generation
+                )
+            } catch is CancellationError {
+                self?.finishCancelledLoad(
+                    operationID: operationID,
+                    generation: generation
+                )
+            } catch {
+                guard !Task.isCancelled else { return }
+                await self?.failLoad(
+                    error,
+                    operationID: operationID,
+                    generation: generation
+                )
             }
-            stateStore.failLoading(
-                operationID: operationID,
-                message: error.localizedDescription
-            )
         }
+        activeLoad = ActiveLoad(
+            operationID: operationID,
+            generation: generation,
+            task: task
+        )
+        return task
+    }
+
+    private func invalidateActiveLoad() {
+        guard let activeLoad else { return }
+        self.activeLoad = nil
+        activeLoad.task.cancel()
+        stateStore.finishLoading(operationID: activeLoad.operationID)
+    }
+
+    private func acceptsLoad(_ generation: LoadGeneration) -> Bool {
+        isSyncEnabled && activeLoad?.generation === generation
+    }
+
+    private func completeLoad(
+        _ fetchedChanges: ServerRemoteChanges,
+        operationID: UUID,
+        generation: LoadGeneration
+    ) async {
+        guard !Task.isCancelled, acceptsLoad(generation) else { return }
+        resolvePendingBootstrapWorkspaceAgainstAuthoritativeFetch(fetchedChanges)
+        guard let backfillResult = await backfillMissingLocalRecordsIfNeeded(
+            for: fetchedChanges,
+            generation: generation
+        ) else { return }
+        guard !Task.isCancelled, acceptsLoad(generation) else { return }
+        let changes = backfillResult.changes
+
+        // Merge CloudKit data with local (CloudKit wins for conflicts, dedupe by ID)
+        logger.info(
+            "CloudKit returned \(changes.workspaces.count) workspaces, \(changes.servers.count) servers (full fetch: \(changes.isFullFetch))"
+        )
+
+        removeKnownHostsDeletedByIncrementalChanges(changes)
+        stateStore.applyRemoteChanges(
+            changes,
+            canReplaceLocalState: backfillResult.canReplaceLocalState
+        )
+        reconcilePendingServerAndWorkspaceUpsertsAgainstRemote(changes)
+        applyPendingSyncOverlay()
+        _ = stateStore.reconcilePendingBootstrapWorkspaceState()
+
+        // Check for and repair orphaned servers (workspaceId doesn't match any workspace)
+        repairOrphanedServers()
+        guard !Task.isCancelled, acceptsLoad(generation) else { return }
+        await drainPendingRemoteMutations()
+        guard !Task.isCancelled, acceptsLoad(generation) else { return }
+
+        // Save merged data locally
+        stateStore.persistCurrentCollections()
+        stateStore.refreshFreePlanGeneration(
+            persistCurrentIfNeeded: true,
+            reason: "cloudkit_load"
+        )
+
+        logger.info("Loaded \(self.workspaces.count) workspaces and \(self.servers.count) servers from CloudKit")
+        finishActiveLoad(operationID: operationID, generation: generation)
+    }
+
+    private func failLoad(
+        _ error: Error,
+        operationID: UUID,
+        generation: LoadGeneration
+    ) async {
+        guard !Task.isCancelled, acceptsLoad(generation) else { return }
+        logger.error("Failed to load from CloudKit: \(error.localizedDescription)")
+        // Local data is already loaded in init, so nothing to do here
+        logger.info("Using local data: \(self.workspaces.count) workspaces and \(self.servers.count) servers")
+
+        // Only try to push local data if it's a schema error (record type not found)
+        // This auto-creates schema in development mode
+        if dependencies.remoteRepository.isAvailable && dependencies.isRemoteSchemaError(error) {
+            logger.info("Schema error detected, attempting to initialize schema...")
+            await initializeRemoteSchema(generation: generation)
+        }
+        guard !Task.isCancelled, acceptsLoad(generation) else { return }
+        activeLoad = nil
+        stateStore.failLoading(
+            operationID: operationID,
+            message: error.localizedDescription
+        )
+    }
+
+    private func finishCancelledLoad(
+        operationID: UUID,
+        generation: LoadGeneration
+    ) {
+        guard activeLoad?.generation === generation else { return }
+        activeLoad = nil
+        stateStore.finishLoading(operationID: operationID)
+    }
+
+    private func finishActiveLoad(
+        operationID: UUID,
+        generation: LoadGeneration
+    ) {
+        guard acceptsLoad(generation) else { return }
+        activeLoad = nil
+        stateStore.finishLoading(operationID: operationID)
     }
 
     /// If a full fetch is missing local records (common after schema was unavailable),
     /// push the missing records to CloudKit so users don't need to edit each item manually.
     private func backfillMissingLocalRecordsIfNeeded(
-        for changes: ServerRemoteChanges
-    ) async -> FullFetchBackfillResult {
-        guard changes.isFullFetch, isSyncEnabled, dependencies.remoteRepository.isAvailable else {
+        for changes: ServerRemoteChanges,
+        generation: LoadGeneration
+    ) async -> FullFetchBackfillResult? {
+        guard !Task.isCancelled, acceptsLoad(generation) else { return nil }
+        guard changes.isFullFetch, dependencies.remoteRepository.isAvailable else {
             return FullFetchBackfillResult(changes: changes, canReplaceLocalState: true)
         }
 
@@ -323,10 +423,15 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
 
         var uploadedWorkspaces: [Workspace] = []
         for workspace in missingWorkspaces {
+            guard !Task.isCancelled, acceptsLoad(generation) else { return nil }
             do {
                 try await dependencies.remoteRepository.saveWorkspace(workspace)
+                guard !Task.isCancelled, acceptsLoad(generation) else { return nil }
                 uploadedWorkspaces.append(workspace)
+            } catch is CancellationError {
+                return nil
             } catch {
+                guard acceptsLoad(generation) else { return nil }
                 logger.warning("Failed to backfill workspace \(workspace.name): \(error.localizedDescription)")
             }
         }
@@ -336,6 +441,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
 
         var uploadedServers: [Server] = []
         for server in missingServers {
+            guard !Task.isCancelled, acceptsLoad(generation) else { return nil }
             guard knownWorkspaceIDs.contains(server.workspaceId) else {
                 logger.warning("Skipping server backfill for \(server.name) because workspace \(server.workspaceId) is unavailable in CloudKit")
                 continue
@@ -343,8 +449,12 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
 
             do {
                 try await dependencies.remoteRepository.saveServer(server)
+                guard !Task.isCancelled, acceptsLoad(generation) else { return nil }
                 uploadedServers.append(server)
+            } catch is CancellationError {
+                return nil
             } catch {
+                guard acceptsLoad(generation) else { return nil }
                 logger.warning("Failed to backfill server \(server.name): \(error.localizedDescription)")
             }
         }
@@ -383,7 +493,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
     }
 
     /// Repairs servers that reference non-existent workspaces by reassigning them to the first available workspace
-    private func repairOrphanedServers() async {
+    private func repairOrphanedServers() {
         let repair = stateStore.repairOrphanedServers(at: dependencies.now())
         guard repair.workspace != nil || !repair.servers.isEmpty else { return }
 
@@ -398,29 +508,35 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
     }
 
     /// Push local data to CloudKit to auto-create schema in development mode
-    private func initializeRemoteSchema() async {
+    private func initializeRemoteSchema(generation: LoadGeneration) async {
         logger.info("Attempting to initialize CloudKit schema by pushing local data...")
 
         // Push workspaces first
         for workspace in workspaces {
+            guard !Task.isCancelled, acceptsLoad(generation) else { return }
             do {
-                if isSyncEnabled {
-                    try await dependencies.remoteRepository.saveWorkspace(workspace)
-                }
+                try await dependencies.remoteRepository.saveWorkspace(workspace)
+                guard !Task.isCancelled, acceptsLoad(generation) else { return }
                 logger.info("Pushed workspace to CloudKit: \(workspace.name)")
+            } catch is CancellationError {
+                return
             } catch {
+                guard acceptsLoad(generation) else { return }
                 logger.error("Failed to push workspace \(workspace.name): \(error.localizedDescription)")
             }
         }
 
         // Push servers
         for server in servers {
+            guard !Task.isCancelled, acceptsLoad(generation) else { return }
             do {
-                if isSyncEnabled {
-                    try await dependencies.remoteRepository.saveServer(server)
-                }
+                try await dependencies.remoteRepository.saveServer(server)
+                guard !Task.isCancelled, acceptsLoad(generation) else { return }
                 logger.info("Pushed server to CloudKit: \(server.name)")
+            } catch is CancellationError {
+                return
             } catch {
+                guard acceptsLoad(generation) else { return }
                 logger.error("Failed to push server \(server.name): \(error.localizedDescription)")
             }
         }

@@ -187,6 +187,9 @@ struct SyncSettingsView: View {
                 syncEnabled = !enabled
                 return
             }
+            if !enabled {
+                serverManager.handleSyncDisabled()
+            }
             cloudKit.handleSyncToggle(enabled)
             if enabled {
                 Task {

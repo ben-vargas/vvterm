@@ -119,6 +119,274 @@ struct ServerManagerMutationTransactionTests {
     }
 }
 
+@Suite(.serialized)
+@MainActor
+struct ServerManagerLoadLifecycleTests {
+    @Test
+    func syncDisableCancelsLoadAndRejectsCancellationIgnoringCompletion() async {
+        var syncEnabled = true
+        let gate = CancellationIgnoringGate<ServerRemoteChanges>()
+        let remote = ServerRemoteRepositoryFake()
+        remote.fetchHandler = { _, _ in await gate.wait() }
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { syncEnabled }
+        )
+        let loadTask = Task { await manager.loadData() }
+
+        #expect(await gate.waitUntilStarted())
+        syncEnabled = false
+        manager.handleSyncDisabled()
+
+        #expect(await gate.waitUntilCancelled())
+        gate.resolve(makeRemoteChanges(workspaceName: "Late Remote"))
+        await loadTask.value
+
+        #expect(manager.workspaces.isEmpty)
+        #expect(manager.servers.isEmpty)
+        #expect(manager.stateStore.loadState.phase == .idle)
+        #expect(sync.drainCount == 0)
+    }
+
+    @Test
+    func staleLoadGenerationCannotReplaceNewerLoad() async {
+        var syncEnabled = true
+        let firstGate = CancellationIgnoringGate<ServerRemoteChanges>()
+        let remote = ServerRemoteRepositoryFake()
+        remote.fetchHandler = { _, fetchCount in
+            if fetchCount == 1 {
+                return await firstGate.wait()
+            }
+            return makeRemoteChanges(workspaceName: "Current Remote")
+        }
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { syncEnabled }
+        )
+        let staleLoadTask = Task { await manager.loadData() }
+
+        #expect(await firstGate.waitUntilStarted())
+        syncEnabled = false
+        manager.handleSyncDisabled()
+        #expect(await firstGate.waitUntilCancelled())
+
+        syncEnabled = true
+        await manager.loadData()
+        #expect(manager.workspaces.map(\.name) == ["Current Remote"])
+
+        firstGate.resolve(makeRemoteChanges(workspaceName: "Stale Remote"))
+        await staleLoadTask.value
+
+        #expect(manager.workspaces.map(\.name) == ["Current Remote"])
+        #expect(sync.drainCount == 1)
+    }
+
+    @Test
+    func blockedAutomaticLoadDoesNotRetainOwnerAndObservesCancellation() async {
+        let gate = CancellationIgnoringGate<ServerRemoteChanges>()
+        let remote = ServerRemoteRepositoryFake()
+        remote.fetchHandler = { _, _ in await gate.wait() }
+        var manager: ServerManager? = makeManager(
+            remote: remote,
+            sync: ServerSyncRepositoryFake(),
+            isSyncEnabled: { true },
+            startsAutomatically: true
+        )
+        weak var releasedManager: ServerManager?
+        releasedManager = manager
+
+        #expect(await gate.waitUntilStarted())
+        manager = nil
+
+        #expect(await gate.waitUntilCancelled())
+        for _ in 0..<2_000 where releasedManager != nil {
+            await Task.yield()
+        }
+        #expect(releasedManager == nil)
+
+        gate.resolve(makeRemoteChanges(workspaceName: "Ignored Remote"))
+    }
+
+    @Test
+    func syncDisableCancelsBlockedStartupRecoveryBeforeRemoteLoad() async throws {
+        var syncEnabled = true
+        let drainGate = CancellationIgnoringGate<Void>()
+        let sync = ServerSyncRepositoryFake()
+        sync.drainHandler = { await drainGate.wait() }
+        let remote = ServerRemoteRepositoryFake()
+        let manager = makeManager(
+            local: try makePendingDeletionLocal(),
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { syncEnabled },
+            startsAutomatically: true
+        )
+
+        #expect(await drainGate.waitUntilStarted())
+        syncEnabled = false
+        manager.handleSyncDisabled()
+
+        #expect(await drainGate.waitUntilCancelled())
+        drainGate.resolve(())
+        for _ in 0..<2_000 where sync.completedDrainCount == 0 {
+            await Task.yield()
+        }
+        await Task.yield()
+
+        #expect(sync.completedDrainCount == 1)
+        #expect(remote.fetchCount == 0)
+    }
+
+    @Test
+    func blockedStartupRecoveryDoesNotRetainOwner() async throws {
+        let drainGate = CancellationIgnoringGate<Void>()
+        let sync = ServerSyncRepositoryFake()
+        sync.drainHandler = { await drainGate.wait() }
+        let remote = ServerRemoteRepositoryFake()
+        var manager: ServerManager? = makeManager(
+            local: try makePendingDeletionLocal(),
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { true },
+            startsAutomatically: true
+        )
+        weak var releasedManager: ServerManager?
+        releasedManager = manager
+
+        #expect(await drainGate.waitUntilStarted())
+        manager = nil
+
+        #expect(await drainGate.waitUntilCancelled())
+        for _ in 0..<2_000 where releasedManager != nil {
+            await Task.yield()
+        }
+        #expect(releasedManager == nil)
+        #expect(remote.fetchCount == 0)
+
+        drainGate.resolve(())
+    }
+
+    private func makeManager(
+        local: ServerLocalRepositoryFake? = nil,
+        remote: ServerRemoteRepositoryFake,
+        sync: ServerSyncRepositoryFake,
+        isSyncEnabled: @escaping () -> Bool,
+        startsAutomatically: Bool = false
+    ) -> ServerManager {
+        let now = { Date(timeIntervalSinceReferenceDate: 20_000) }
+        let makeID = { UUID(uuidString: "90000000-0000-0000-0000-000000000002")! }
+        let stateStore = ServerStateStore(
+            dependencies: ServerStateStoreDependencies(
+                localRepository: local ?? ServerLocalRepositoryFake(servers: [], workspaces: []),
+                preferences: ServerManagerPreferencesFake(),
+                freePlanTracker: FreePlanAssignmentTrackerFake(),
+                isSyncEnabled: isSyncEnabled,
+                now: now,
+                makeID: makeID,
+                defaultWorkspaceName: { "My Servers" },
+                canonicalDefaultWorkspaceNames: { ["My Servers"] }
+            )
+        )
+        return ServerManager(
+            dependencies: ServerManagerDependencies(
+                stateStore: stateStore,
+                remoteRepository: remote,
+                syncRepository: sync,
+                credentialRepository: ServerManagerCredentialRepositoryFake(),
+                actionAuthorizer: ProtectedServerActionAuthorizerFake(),
+                knownHosts: ServerKnownHostRepositoryFake(),
+                isRemoteSchemaError: { _ in false },
+                now: now,
+                makeID: makeID
+            ),
+            startsAutomatically: startsAutomatically
+        )
+    }
+
+    private func makeRemoteChanges(workspaceName: String) -> ServerRemoteChanges {
+        ServerRemoteChanges(
+            servers: [],
+            workspaces: [
+                Workspace(
+                    name: workspaceName,
+                    order: 0,
+                    createdAt: .distantPast,
+                    updatedAt: .distantPast
+                )
+            ],
+            deletedServerIDs: [],
+            deletedWorkspaceIDs: [],
+            isFullFetch: true
+        )
+    }
+
+    private func makePendingDeletionLocal() throws -> ServerLocalRepositoryFake {
+        let workspace = Workspace(
+            name: "Pending Deletion",
+            order: 0,
+            createdAt: .distantPast,
+            updatedAt: .distantPast
+        )
+        let plan = try #require(WorkspaceDeletionPlan(
+            workspaceID: workspace.id,
+            servers: [],
+            workspaces: [workspace],
+            id: UUID(),
+            mutationIDs: [UUID()],
+            mutationDate: .distantPast
+        ))
+        let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])
+        local.journal = WorkspaceDeletionJournal(plan: plan)
+        return local
+    }
+}
+
+@MainActor
+private final class CancellationIgnoringGate<Value> {
+    private var continuation: CheckedContinuation<Value, Never>?
+    private(set) var isStarted = false
+    private(set) var cancellationCount = 0
+
+    func wait() async -> Value {
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                isStarted = true
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancellationCount += 1
+            }
+        }
+    }
+
+    func resolve(_ value: Value) {
+        let continuation = continuation
+        self.continuation = nil
+        continuation?.resume(returning: value)
+    }
+
+    func waitUntilStarted() async -> Bool {
+        for _ in 0..<2_000 {
+            if isStarted { return true }
+            await Task.yield()
+        }
+        return isStarted
+    }
+
+    func waitUntilCancelled() async -> Bool {
+        for _ in 0..<2_000 {
+            if cancellationCount > 0 { return true }
+            await Task.yield()
+        }
+        return cancellationCount > 0
+    }
+}
+
 @MainActor
 private final class ServerLocalRepositoryFake: ServerLocalRepository {
     var servers: [Server]
@@ -162,10 +430,20 @@ private final class ServerLocalRepositoryFake: ServerLocalRepository {
 
 @MainActor
 private final class ServerRemoteRepositoryFake: ServerRemoteRepository {
-    let isAvailable = false
+    var isAvailable: Bool
+    var fetchHandler: (@MainActor (Bool, Int) async throws -> ServerRemoteChanges)?
+    private(set) var fetchCount = 0
+
+    init(isAvailable: Bool = false) {
+        self.isAvailable = isAvailable
+    }
 
     func fetchServerChanges(forceFullFetch: Bool) async throws -> ServerRemoteChanges {
-        ServerRemoteChanges(
+        fetchCount += 1
+        if let fetchHandler {
+            return try await fetchHandler(forceFullFetch, fetchCount)
+        }
+        return ServerRemoteChanges(
             servers: [],
             workspaces: [],
             deletedServerIDs: [],
@@ -181,6 +459,9 @@ private final class ServerRemoteRepositoryFake: ServerRemoteRepository {
 @MainActor
 private final class ServerSyncRepositoryFake: ServerSyncRepository {
     var enqueuedServerUpserts: [Server] = []
+    private(set) var drainCount = 0
+    private(set) var completedDrainCount = 0
+    var drainHandler: (@MainActor () async -> Void)?
 
     func pendingServerMutations() -> [ServerPendingMutation] { [] }
     func clearPendingServerAndWorkspaceMutations() {}
@@ -189,7 +470,11 @@ private final class ServerSyncRepositoryFake: ServerSyncRepository {
     func enqueueServerDelete(_ server: Server) {}
     func enqueueWorkspaceUpsert(_ workspace: Workspace) {}
     func enqueueWorkspaceDelete(_ workspace: Workspace) {}
-    func drainPendingMutations() async {}
+    func drainPendingMutations() async {
+        drainCount += 1
+        await drainHandler?()
+        completedDrainCount += 1
+    }
     func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws {}
 }
 
