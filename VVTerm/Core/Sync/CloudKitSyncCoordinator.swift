@@ -27,12 +27,16 @@ final class CloudKitSyncCoordinator {
         queue.snapshot()
     }
 
+    func quarantineSnapshot() -> [PendingCloudKitMutationQuarantine] {
+        queue.quarantineSnapshot()
+    }
+
     func clearPendingMutations() {
         queue.removeAll()
     }
 
-    func clearPendingMutations(for entities: Set<PendingCloudKitEntity>) {
-        queue.removeAll { entities.contains($0.entity) }
+    func clearPendingServerAndWorkspaceMutations() {
+        queue.removeAll { $0.payload.isServerOrWorkspace }
     }
 
     func removePendingMutation(_ mutationID: UUID) {
@@ -91,7 +95,7 @@ final class CloudKitSyncCoordinator {
             guard !snapshot.isEmpty else { return }
 
             var didProgress = false
-            let orderedMutations = snapshot.sorted(by: pendingSyncDrainOrder)
+            let orderedMutations = snapshot.sorted(by: PendingCloudKitMutation.drainsBefore)
 
             for mutation in orderedMutations {
                 guard queue.canAttempt(mutation, at: Date()) else {
@@ -130,72 +134,38 @@ final class CloudKitSyncCoordinator {
     }
 
     private func syncPendingMutation(_ mutation: PendingCloudKitMutation) async throws {
-        switch (mutation.entity, mutation.operation) {
-        case (.server, .upsert):
-            if let server = mutation.server {
-                try await cloudKit.saveServer(server)
-            }
-        case (.server, .delete):
-            if let server = mutation.server {
-                try await cloudKit.deleteServer(server)
-            }
-        case (.workspace, .upsert):
-            if let workspace = mutation.workspace {
-                try await cloudKit.saveWorkspace(workspace)
-            }
-        case (.workspace, .delete):
-            if let workspace = mutation.workspace {
-                try await cloudKit.deleteWorkspace(workspace)
-            }
-        case (.terminalTheme, .upsert), (.terminalTheme, .delete):
-            if let theme = mutation.terminalTheme {
-                try await cloudKit.saveTerminalTheme(theme)
-            }
-        case (.terminalThemePreference, .upsert):
-            if let preference = mutation.terminalThemePreference {
-                try await cloudKit.saveTerminalThemePreference(preference)
-            }
-        case (.terminalThemePreference, .delete):
-            break
-        case (.terminalAccessoryProfile, .upsert):
-            if let profile = mutation.terminalAccessoryProfile {
-                let resolvedProfile = try await cloudKit.syncTerminalAccessoryProfile(profile)
-                NotificationCenter.default.post(
-                    name: Self.terminalAccessoryProfileDidResolveNotification,
-                    object: self,
-                    userInfo: ["profile": resolvedProfile]
-                )
-            }
-        case (.terminalAccessoryProfile, .delete):
-            break
-        case (.statsPreferences, .upsert):
-            if let preferences = mutation.statsPreferences {
-                let resolvedPreferences = try await cloudKit.syncStatsPreferences(preferences)
-                NotificationCenter.default.post(
-                    name: Self.statsPreferencesDidResolveNotification,
-                    object: self,
-                    userInfo: ["preferences": resolvedPreferences]
-                )
-            }
-        case (.statsPreferences, .delete):
-            break
+        switch mutation.payload {
+        case .serverUpsert(let server):
+            try await cloudKit.saveServer(server)
+        case .serverDelete(let server):
+            try await cloudKit.deleteServer(server)
+        case .workspaceUpsert(let workspace):
+            try await cloudKit.saveWorkspace(workspace)
+        case .workspaceDelete(let workspace):
+            try await cloudKit.deleteWorkspace(workspace)
+        case .terminalThemeUpsert(let theme):
+            try await cloudKit.saveTerminalTheme(theme)
+        case .terminalThemePreferenceUpsert(let preference):
+            try await cloudKit.saveTerminalThemePreference(preference)
+        case .terminalAccessoryProfileUpsert(let profile):
+            let resolvedProfile = try await cloudKit.syncTerminalAccessoryProfile(profile)
+            NotificationCenter.default.post(
+                name: Self.terminalAccessoryProfileDidResolveNotification,
+                object: self,
+                userInfo: ["profile": resolvedProfile]
+            )
+        case .statsPreferencesUpsert(let preferences):
+            let resolvedPreferences = try await cloudKit.syncStatsPreferences(preferences)
+            NotificationCenter.default.post(
+                name: Self.statsPreferencesDidResolveNotification,
+                object: self,
+                userInfo: ["preferences": resolvedPreferences]
+            )
         }
-    }
-
-    private func pendingSyncDrainOrder(_ lhs: PendingCloudKitMutation, _ rhs: PendingCloudKitMutation) -> Bool {
-        if lhs.drainPriority != rhs.drainPriority {
-            return lhs.drainPriority < rhs.drainPriority
-        }
-
-        if lhs.createdAt != rhs.createdAt {
-            return lhs.createdAt < rhs.createdAt
-        }
-
-        return lhs.id.uuidString < rhs.id.uuidString
     }
 
     private func isIgnorableDeleteSyncError(_ error: Error, for mutation: PendingCloudKitMutation) -> Bool {
-        guard mutation.operation == .delete else { return false }
+        guard mutation.payload.isDelete else { return false }
         guard let ckError = error as? CKError else { return false }
 
         switch ckError.code {

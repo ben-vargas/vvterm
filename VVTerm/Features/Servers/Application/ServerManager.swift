@@ -322,26 +322,26 @@ final class ServerManager: ObservableObject {
     }
 
     private func applyPendingUpsertOverlay(in snapshot: [PendingCloudKitMutation]) {
-        for mutation in pendingMutations(in: snapshot, entity: .workspace, operation: .upsert) {
-            if let workspace = mutation.workspace {
-                applyPendingWorkspaceUpsert(workspace)
-            }
+        for mutation in snapshot {
+            guard case .workspaceUpsert(let workspace) = mutation.payload else { continue }
+            applyPendingWorkspaceUpsert(workspace)
         }
 
-        for mutation in pendingMutations(in: snapshot, entity: .server, operation: .upsert) {
-            if let server = mutation.server {
-                applyPendingServerUpsert(server)
-            }
+        for mutation in snapshot {
+            guard case .serverUpsert(let server) = mutation.payload else { continue }
+            applyPendingServerUpsert(server)
         }
     }
 
     private func applyPendingDeleteOverlay(in snapshot: [PendingCloudKitMutation]) {
-        for mutation in pendingMutations(in: snapshot, entity: .server, operation: .delete) {
-            applyPendingServerDelete(mutation.entityKey)
+        for mutation in snapshot {
+            guard case .serverDelete(let server) = mutation.payload else { continue }
+            applyPendingServerDelete(server.id)
         }
 
-        for mutation in pendingMutations(in: snapshot, entity: .workspace, operation: .delete) {
-            applyPendingWorkspaceDelete(mutation.entityKey)
+        for mutation in snapshot {
+            guard case .workspaceDelete(let workspace) = mutation.payload else { continue }
+            applyPendingWorkspaceDelete(workspace.id)
         }
     }
 
@@ -354,20 +354,12 @@ final class ServerManager: ObservableObject {
         removeResolvedPendingWorkspaceUpserts(in: snapshot, fetchedWorkspacesByID: fetchedWorkspacesByID)
     }
 
-    private func pendingMutations(
-        in snapshot: [PendingCloudKitMutation],
-        entity: PendingCloudKitEntity,
-        operation: PendingCloudKitOperation
-    ) -> [PendingCloudKitMutation] {
-        snapshot.filter { $0.entity == entity && $0.operation == operation }
-    }
-
     private func removeResolvedPendingServerUpserts(
         in snapshot: [PendingCloudKitMutation],
         fetchedServersByID: [UUID: Server]
     ) {
-        for mutation in pendingMutations(in: snapshot, entity: .server, operation: .upsert) {
-            guard let pendingServer = mutation.server,
+        for mutation in snapshot {
+            guard case .serverUpsert(let pendingServer) = mutation.payload,
                   let fetchedServer = fetchedServersByID[pendingServer.id] else {
                 continue
             }
@@ -382,8 +374,8 @@ final class ServerManager: ObservableObject {
         in snapshot: [PendingCloudKitMutation],
         fetchedWorkspacesByID: [UUID: Workspace]
     ) {
-        for mutation in pendingMutations(in: snapshot, entity: .workspace, operation: .upsert) {
-            guard let pendingWorkspace = mutation.workspace,
+        for mutation in snapshot {
+            guard case .workspaceUpsert(let pendingWorkspace) = mutation.payload,
                   let fetchedWorkspace = fetchedWorkspacesByID[pendingWorkspace.id] else {
                 continue
             }
@@ -402,8 +394,7 @@ final class ServerManager: ObservableObject {
         }
     }
 
-    private func applyPendingServerDelete(_ serverKey: String) {
-        guard let serverID = UUID(uuidString: serverKey) else { return }
+    private func applyPendingServerDelete(_ serverID: UUID) {
         servers.removeAll { $0.id == serverID }
     }
 
@@ -415,8 +406,7 @@ final class ServerManager: ObservableObject {
         }
     }
 
-    private func applyPendingWorkspaceDelete(_ workspaceKey: String) {
-        guard let workspaceID = UUID(uuidString: workspaceKey) else { return }
+    private func applyPendingWorkspaceDelete(_ workspaceID: UUID) {
         workspaces.removeAll { $0.id == workspaceID }
         servers.removeAll { $0.workspaceId == workspaceID }
     }
@@ -449,7 +439,7 @@ final class ServerManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: serversKey)
         UserDefaults.standard.removeObject(forKey: workspacesKey)
         pendingBootstrapWorkspaceID = nil
-        syncCoordinator.clearPendingMutations(for: [.server, .workspace])
+        syncCoordinator.clearPendingServerAndWorkspaceMutations()
 
         // Clear in-memory data
         servers = []
