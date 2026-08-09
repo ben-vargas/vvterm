@@ -1151,6 +1151,7 @@ class GhosttyTerminalView: UIView {
 
     private var didSignalReady = false
     private var readonly = false
+    private var isClipboardWriteConfirmationPresented = false
 
     /// Prevent rendering when the view is offscreen or being torn down.
     private var isShuttingDown = false
@@ -3844,6 +3845,37 @@ class GhosttyTerminalView: UIView {
             responder = current.next
         }
         return window?.rootViewController?.topMostPresentedViewController
+    }
+
+    func handleClipboardWrite(_ text: String, action: TerminalClipboardWriteAction) {
+        switch action {
+        case .writeImmediately:
+            Clipboard.copy(text)
+        case .requestConfirmation:
+            presentClipboardWriteConfirmation(for: text)
+        }
+    }
+
+    private func presentClipboardWriteConfirmation(for text: String) {
+        guard !isClipboardWriteConfirmationPresented,
+              let presenter = nearestPresentingViewController() else {
+            return
+        }
+        isClipboardWriteConfirmationPresented = true
+
+        let alert = UIAlertController(
+            title: String(localized: "Allow Clipboard Change?"),
+            message: String(localized: "The remote terminal wants to replace your clipboard."),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel) { [weak self] _ in
+            self?.isClipboardWriteConfirmationPresented = false
+        })
+        alert.addAction(UIAlertAction(title: String(localized: "Allow"), style: .default) { [weak self] _ in
+            self?.isClipboardWriteConfirmationPresented = false
+            Clipboard.copy(text)
+        })
+        presenter.present(alert, animated: true)
     }
 
     private func presentSelectionMenuController(_ controller: UIViewController) {

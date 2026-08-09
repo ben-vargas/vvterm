@@ -65,6 +65,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
 
     private var didSignalReady = false
     private var readonly = false
+    private var isClipboardWriteConfirmationPresented = false
 
     /// Cell size in points for row-to-pixel conversion (used by scroll view)
     var cellSize: NSSize = .zero
@@ -628,6 +629,42 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     @objc func paste(_ sender: Any?) {
         focusContextMenuTarget()
         performPasteAction()
+    }
+
+    func handleClipboardWrite(_ text: String, action: TerminalClipboardWriteAction) {
+        switch action {
+        case .writeImmediately:
+            Clipboard.copy(text)
+        case .requestConfirmation:
+            presentClipboardWriteConfirmation(for: text)
+        }
+    }
+
+    private func presentClipboardWriteConfirmation(for text: String) {
+        guard !isClipboardWriteConfirmationPresented else { return }
+        if let window, window.attachedSheet != nil { return }
+        isClipboardWriteConfirmationPresented = true
+
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Allow Clipboard Change?")
+        alert.informativeText = String(
+            localized: "The remote terminal wants to replace your clipboard."
+        )
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: String(localized: "Allow"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+
+        let completionHandler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            self?.isClipboardWriteConfirmationPresented = false
+            guard response == .alertFirstButtonReturn else { return }
+            Clipboard.copy(text)
+        }
+
+        if let window {
+            alert.beginSheetModal(for: window, completionHandler: completionHandler)
+        } else {
+            completionHandler(alert.runModal())
+        }
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {

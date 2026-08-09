@@ -893,7 +893,7 @@ extension Ghostty {
                 ghostty_surface_complete_clipboard_request(surface, ptr, state, false)
             }
 
-            Ghostty.logger.debug("Read clipboard: \(clipboardString.prefix(50))...")
+            Ghostty.logger.debug("Read clipboard [bytes: \(clipboardString.utf8.count)]")
         }
 
         static func confirmReadClipboard(
@@ -915,7 +915,11 @@ extension Ghostty {
             count: Int,
             confirm: Bool
         ) {
+            guard let userdata else { return }
             guard let contents = contents, count > 0 else { return }
+            let terminalView = Unmanaged<GhosttyTerminalView>
+                .fromOpaque(userdata)
+                .takeUnretainedValue()
             #if os(iOS)
             guard location != GHOSTTY_CLIPBOARD_SELECTION else { return }
             #endif
@@ -932,8 +936,15 @@ extension Ghostty {
                     // Apply copy transformations from settings
                     string = TerminalTextCleaner.cleanText(string, settings: .current())
 
-                    Clipboard.copy(string)
-                    Ghostty.logger.debug("Wrote to clipboard: \(string.prefix(50))...")
+                    let action = TerminalClipboardWritePolicy.action(
+                        requiresConfirmation: confirm
+                    )
+                    DispatchQueue.main.async {
+                        terminalView.handleClipboardWrite(string, action: action)
+                    }
+                    Ghostty.logger.debug(
+                        "Handled clipboard write [bytes: \(string.utf8.count)] [confirmation: \(confirm)]"
+                    )
                     return
                 }
             }
