@@ -55,7 +55,6 @@ struct TerminalKeyboardSyncScheduler: Equatable {
 
 #if os(iOS)
 import Combine
-import UIKit
 import os.log
 
 @MainActor
@@ -72,8 +71,6 @@ protocol TerminalKeyboardInputSession: AnyObject {
     func setTerminalInputAccessorySuppressed(_ suppressed: Bool)
     func refreshTerminalInputAccessoryAppearance()
 }
-
-extension GhosttyTerminalView: TerminalKeyboardInputSession {}
 
 /// Owns the terminal text-input session and observes what UIKit actually
 /// does with it. The design rule that keeps this correct: the app CONTROLS
@@ -232,7 +229,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         softwareKeyboardPresentation.frame
     }
     private(set) var keyboardAnimationDuration: TimeInterval = 0.25
-    private(set) var keyboardAnimationCurve: UIView.AnimationCurve = .easeInOut
+    private(set) var keyboardAnimationCurve = TerminalKeyboardAnimationCurve.easeInOut
 
     var terminalProvider: ((UUID) -> (any TerminalKeyboardInputSession)?)?
 
@@ -257,120 +254,52 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     /// An input assistant/shortcuts bar alone reports a small keyboard frame
     /// (~44-72pt); a real software keyboard is far taller on every device.
     private let softwareKeyboardMinimumHeight: CGFloat = 100
-    private var keyboardObservers: [NSObjectProtocol] = []
+    private let keyboardEventSource: any TerminalKeyboardEventSource
     private let lifecycleLoggingEnabled: Bool
 
-    init(lifecycleLoggingEnabled: Bool = TerminalKeyboardCoordinator.defaultLifecycleLoggingEnabled) {
+    init(
+        keyboardEventSource: any TerminalKeyboardEventSource,
+        lifecycleLoggingEnabled: Bool
+    ) {
+        self.keyboardEventSource = keyboardEventSource
         self.lifecycleLoggingEnabled = lifecycleLoggingEnabled
+        keyboardEventSource.start { [weak self] event in
+            self?.receive(event)
+        }
+    }
 
-        let center = NotificationCenter.default
-        let shouldLogLifecycle = lifecycleLoggingEnabled
-        // willShow/willHide fire at animation START so the bar travels with
-        // the keyboard instead of trailing it; willChangeFrame catches
-        // transitions that skip show/hide (hardware keyboard attaching while
-        // the keyboard is up slides the frame off screen).
-        for name in [
-            UIResponder.keyboardWillShowNotification,
-            UIResponder.keyboardWillChangeFrameNotification,
-        ] {
-            keyboardObservers.append(
-                center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
-                    let beginFrame = shouldLogLifecycle
-                        ? (note.userInfo?[UIResponder.keyboardFrameBeginUserInfoKey] as? NSValue)?.cgRectValue
-                        : nil
-                    let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?
-                        .cgRectValue
-                    let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval
-                    let curveRawValue = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int
-                    let isLocal = (note.userInfo?[UIResponder.keyboardIsLocalUserInfoKey] as? NSNumber)?
-                        .boolValue
-                    let sourceScreenIdentifier = (note.object as? UIScreen).map(ObjectIdentifier.init)
-                    let notificationName = shouldLogLifecycle ? note.name.rawValue : ""
-                    let notificationObject = shouldLogLifecycle ? String(describing: note.object) : ""
-                    // UIKit can emit keyboard-frame notifications while
-                    // SwiftUI is still reconciling the scene transition.
-                    // Publish observed geometry on the next main-queue turn
-                    // so ObservableObject never changes inside that update.
-                    DispatchQueue.main.async { [weak self] in
-                        self?.logKeyboardNotification(
-                            name: notificationName,
-                            object: notificationObject,
-                            beginFrame: beginFrame,
-                            endFrame: frame,
-                            isLocal: isLocal,
-                            duration: duration,
-                            curveRawValue: curveRawValue
-                        )
-                        self?.noteKeyboardEndFrame(
-                            frame,
-                            isLocal: isLocal,
-                            sourceScreenIdentifier: sourceScreenIdentifier,
-                            animationDuration: duration,
-                            animationCurveRawValue: curveRawValue
-                        )
-                    }
-                }
+    isolated deinit {
+        keyboardEventSource.stop()
+    }
+
+    private func receive(_ event: TerminalKeyboardEvent) {
+        if let diagnostics = event.diagnostics {
+            logKeyboardNotification(
+                name: diagnostics.name,
+                object: diagnostics.object,
+                beginFrame: diagnostics.beginFrame,
+                endFrame: diagnostics.endFrame,
+                isLocal: event.isLocal,
+                duration: event.animationDuration,
+                curveRawValue: event.animationCurve?.rawValue
             )
         }
-        keyboardObservers.append(
-            center.addObserver(
-                forName: UIResponder.keyboardDidChangeFrameNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] note in
-                let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?
-                    .cgRectValue
-                let isLocal = (note.userInfo?[UIResponder.keyboardIsLocalUserInfoKey] as? NSNumber)?
-                    .boolValue
-                let sourceScreenIdentifier = (note.object as? UIScreen).map(ObjectIdentifier.init)
-                DispatchQueue.main.async { [weak self] in
-                    self?.noteKeyboardEndFrame(
-                        frame,
-                        isLocal: isLocal,
-                        sourceScreenIdentifier: sourceScreenIdentifier,
-                        animationDuration: nil,
-                        animationCurveRawValue: nil
-                    )
-                }
-            }
-        )
-        for name in [
-            UIResponder.keyboardWillHideNotification,
-            UIResponder.keyboardDidHideNotification,
-        ] {
-            keyboardObservers.append(
-                center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
-                    let beginFrame = shouldLogLifecycle
-                        ? (note.userInfo?[UIResponder.keyboardFrameBeginUserInfoKey] as? NSValue)?.cgRectValue
-                        : nil
-                    let endFrame = shouldLogLifecycle
-                        ? (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
-                        : nil
-                    let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval
-                    let curveRawValue = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int
-                    let isLocal = (note.userInfo?[UIResponder.keyboardIsLocalUserInfoKey] as? NSNumber)?
-                        .boolValue
-                    let sourceScreenIdentifier = (note.object as? UIScreen).map(ObjectIdentifier.init)
-                    let notificationName = shouldLogLifecycle ? note.name.rawValue : ""
-                    let notificationObject = shouldLogLifecycle ? String(describing: note.object) : ""
-                    DispatchQueue.main.async { [weak self] in
-                        self?.logKeyboardNotification(
-                            name: notificationName,
-                            object: notificationObject,
-                            beginFrame: beginFrame,
-                            endFrame: endFrame,
-                            isLocal: isLocal,
-                            duration: duration,
-                            curveRawValue: curveRawValue
-                        )
-                        self?.noteSoftwareKeyboardHidden(
-                            isLocal: isLocal,
-                            sourceScreenIdentifier: sourceScreenIdentifier,
-                            animationDuration: duration,
-                            animationCurveRawValue: curveRawValue
-                        )
-                    }
-                }
+
+        switch event.kind {
+        case .frameChanged(let frame):
+            noteKeyboardEndFrame(
+                frame,
+                isLocal: event.isLocal,
+                sourceScreenIdentifier: event.sourceScreenIdentifier,
+                animationDuration: event.animationDuration,
+                animationCurve: event.animationCurve
+            )
+        case .hidden:
+            noteSoftwareKeyboardHidden(
+                isLocal: event.isLocal,
+                sourceScreenIdentifier: event.sourceScreenIdentifier,
+                animationDuration: event.animationDuration,
+                animationCurve: event.animationCurve
             )
         }
     }
@@ -385,10 +314,6 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-simulate-keyboard-frames")
     }
     #endif
-
-    nonisolated private static var defaultLifecycleLoggingEnabled: Bool {
-        DebugLogConfiguration.isEnabled("keyboard")
-    }
 
     /// Whether the terminal should hold the text-input session (first
     /// responder). Hardware keyboards and the user's software-keyboard hidden
@@ -842,7 +767,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         isLocal: Bool?,
         sourceScreenIdentifier: ObjectIdentifier?,
         animationDuration: TimeInterval?,
-        animationCurveRawValue: Int?
+        animationCurve: TerminalKeyboardAnimationCurve?
     ) {
         guard isLocal != false else {
             noteExternalKeyboardOwnership()
@@ -858,7 +783,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
               let terminal = activeTerminal else {
             return
         }
-        updateKeyboardAnimation(duration: animationDuration, curveRawValue: animationCurveRawValue)
+        updateKeyboardAnimation(duration: animationDuration, curve: animationCurve)
         let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
         if snapshot.isSoftwareKeyboardSuppressed {
             setSoftwareKeyboardPresentation(.hidden, terminal: terminal)
@@ -885,7 +810,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         isLocal: Bool?,
         sourceScreenIdentifier: ObjectIdentifier?,
         animationDuration: TimeInterval?,
-        animationCurveRawValue: Int?
+        animationCurve: TerminalKeyboardAnimationCurve?
     ) {
         guard isLocal != false else {
             noteExternalKeyboardOwnership()
@@ -896,7 +821,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         #endif
         guard activeTerminalSceneIsForeground,
               inputOwnership.allowsLocalAcquisition else { return }
-        updateKeyboardAnimation(duration: animationDuration, curveRawValue: animationCurveRawValue)
+        updateKeyboardAnimation(duration: animationDuration, curve: animationCurve)
         if let terminal = activeTerminal {
             let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
             guard Self.keyboardNotificationMatchesActiveScreen(
@@ -955,11 +880,14 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         terminal.setTerminalInputAccessorySuppressed(true)
     }
 
-    private func updateKeyboardAnimation(duration: TimeInterval?, curveRawValue: Int?) {
+    private func updateKeyboardAnimation(
+        duration: TimeInterval?,
+        curve: TerminalKeyboardAnimationCurve?
+    ) {
         if let duration, duration > 0 {
             keyboardAnimationDuration = duration
         }
-        if let curveRawValue, let curve = UIView.AnimationCurve(rawValue: curveRawValue) {
+        if let curve {
             keyboardAnimationCurve = curve
         }
     }
@@ -1728,7 +1656,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             isLocal: isLocal,
             sourceScreenIdentifier: nil,
             animationDuration: nil,
-            animationCurveRawValue: nil
+            animationCurve: nil
         )
     }
 

@@ -283,8 +283,6 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
             return .linear(duration: duration)
         case .easeInOut:
             return .easeInOut(duration: duration)
-        @unknown default:
-            return .easeInOut(duration: duration)
         }
     }
 

@@ -8,30 +8,6 @@ struct IMEProxySnapshot: Equatable {
     var markedRange: NSRange?
 }
 
-struct TerminalKeyboardCoordinatorDiagnosticSnapshot: Equatable {
-    var windowAttached: Bool
-    var windowIsKey: Bool
-    var sceneActivationState: String
-    var isFirstResponder: Bool
-    var isSoftwareInputActive: Bool
-    var keyboardLayoutFrame: CGRect? = nil
-    var screenFrame: CGRect? = nil
-    var screenIdentifier: ObjectIdentifier? = nil
-    var isSoftwareKeyboardSuppressed = false
-
-    var lifecycleDescription: String {
-        [
-            "windowAttached=\(windowAttached)",
-            "keyWindow=\(windowIsKey)",
-            "scene=\(sceneActivationState)",
-            "firstResponder=\(isFirstResponder)",
-            "softwareInput=\(isSoftwareInputActive)",
-            "softwareSuppressed=\(isSoftwareKeyboardSuppressed)",
-            "keyboardLayoutFrame=\(keyboardLayoutFrame?.debugDescription ?? "nil")",
-        ].joined(separator: " ")
-    }
-}
-
 /// Replaces the software keyboard while the terminal keeps first-responder
 /// ownership for hardware input. Let UIKit negotiate the host height through
 /// UIInputView's self-sizing contract instead of installing a required
