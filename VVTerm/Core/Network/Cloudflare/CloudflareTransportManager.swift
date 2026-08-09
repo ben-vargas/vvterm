@@ -2,6 +2,39 @@ import Foundation
 import Cloudflared
 import os.log
 
+struct CloudflareMetadataBodyBudget: Sendable {
+    private(set) var receivedBytes = 0
+    let maximumBytes: Int
+
+    func validateExpectedContentLength(_ expectedContentLength: Int64) throws {
+        guard expectedContentLength < 0 || expectedContentLength <= Int64(maximumBytes) else {
+            throw CloudflareMetadataRequestError.responseTooLarge
+        }
+    }
+
+    mutating func record(byteCount: Int) throws {
+        guard byteCount >= 0,
+              byteCount <= maximumBytes - min(receivedBytes, maximumBytes) else {
+            throw CloudflareMetadataRequestError.responseTooLarge
+        }
+        receivedBytes += byteCount
+    }
+}
+
+enum CloudflareMetadataRequestError: LocalizedError {
+    case nonHTTPResponse
+    case responseTooLarge
+
+    var errorDescription: String? {
+        switch self {
+        case .nonHTTPResponse:
+            return "Cloudflare metadata returned a non-HTTP response."
+        case .responseTooLarge:
+            return "Cloudflare metadata response exceeded the allowed size."
+        }
+    }
+}
+
 actor CloudflareTransportManager {
     private struct AccessMetadata: Sendable {
         let teamDomain: String
@@ -11,7 +44,20 @@ actor CloudflareTransportManager {
         let teamDomain: String
         let appDomain: String
     }
-    private final class RedirectBlockingDelegate: NSObject, URLSessionTaskDelegate {
+    private enum RedirectPolicy: Sendable {
+        case follow(maximumRedirects: Int)
+        case block
+    }
+
+    private final class RedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+        private let policy: RedirectPolicy
+        private let lock = NSLock()
+        private var redirectCount = 0
+
+        init(policy: RedirectPolicy) {
+            self.policy = policy
+        }
+
         func urlSession(
             _ session: URLSession,
             task: URLSessionTask,
@@ -19,13 +65,53 @@ actor CloudflareTransportManager {
             newRequest request: URLRequest,
             completionHandler: @escaping (URLRequest?) -> Void
         ) {
-            completionHandler(nil)
+            switch policy {
+            case .block:
+                completionHandler(nil)
+            case .follow(let maximumRedirects):
+                let shouldFollow = lock.withLock {
+                    redirectCount += 1
+                    return redirectCount <= maximumRedirects
+                }
+                completionHandler(shouldFollow ? request : nil)
+            }
+        }
+    }
+
+    private struct BoundedMetadataHTTPClient: HTTPClient {
+        let maximumBodyBytes: Int
+        let timeout: TimeInterval
+        let redirectPolicy: RedirectPolicy
+
+        func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+            var request = request
+            request.timeoutInterval = timeout
+            let delegate = RedirectDelegate(policy: redirectPolicy)
+            let (bytes, rawResponse) = try await URLSession.shared.bytes(
+                for: request,
+                delegate: delegate
+            )
+            guard let response = rawResponse as? HTTPURLResponse else {
+                throw CloudflareMetadataRequestError.nonHTTPResponse
+            }
+
+            var budget = CloudflareMetadataBodyBudget(maximumBytes: maximumBodyBytes)
+            try budget.validateExpectedContentLength(response.expectedContentLength)
+            var data = Data()
+            data.reserveCapacity(min(maximumBodyBytes, max(0, Int(response.expectedContentLength))))
+            for try await byte in bytes {
+                try budget.record(byteCount: 1)
+                data.append(byte)
+            }
+            return (data, response)
         }
     }
 
     private let callbackScheme = "vvterm-cfaccess"
     private let userAgent = "VVTerm"
     private let discoveryTimeout: TimeInterval = 12
+    private let metadataBodyLimit = 32 * 1_024
+    private let metadataRedirectLimit = 5
     private let disconnectTimeout: Duration = .seconds(4)
     private let metadataKeychain = KeychainStore(service: "app.vivy.vvterm.cloudflare.metadata")
     private let metadataStorageKey = "cache.v1"
@@ -258,7 +344,11 @@ actor CloudflareTransportManager {
     private func discoverMetadata(hostname: String) async throws -> AccessMetadata {
         let appURL = try URLTools.normalizeOriginURL(from: hostname)
         let appInfo = try await AppInfoResolver(
-            client: URLSessionHTTPClient(),
+            client: BoundedMetadataHTTPClient(
+                maximumBodyBytes: metadataBodyLimit,
+                timeout: discoveryTimeout,
+                redirectPolicy: .follow(maximumRedirects: metadataRedirectLimit)
+            ),
             userAgent: userAgent
         ).resolve(appURL: appURL)
         return AccessMetadata(teamDomain: appInfo.authDomain, appDomain: appInfo.appDomain)
@@ -311,10 +401,11 @@ actor CloudflareTransportManager {
         request.timeoutInterval = discoveryTimeout
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
 
-        let (_, responseRaw) = try await URLSession.shared.data(for: request)
-        guard let response = responseRaw as? HTTPURLResponse else {
-            return nil
-        }
+        let (_, response) = try await BoundedMetadataHTTPClient(
+            maximumBodyBytes: metadataBodyLimit,
+            timeout: discoveryTimeout,
+            redirectPolicy: .follow(maximumRedirects: metadataRedirectLimit)
+        ).send(request)
 
         guard let finalHost = response.url?.host?.trimmingCharacters(in: .whitespacesAndNewlines),
               !finalHost.isEmpty,
@@ -333,20 +424,16 @@ actor CloudflareTransportManager {
         method: String,
         appDomainFallback: String
     ) async throws -> AccessMetadata? {
-        let config = URLSessionConfiguration.ephemeral
-        let delegate = RedirectBlockingDelegate()
-        let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
-        defer { session.invalidateAndCancel() }
-
         var request = URLRequest(url: appURL)
         request.httpMethod = method
         request.timeoutInterval = discoveryTimeout
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
 
-        let (_, responseRaw) = try await session.data(for: request)
-        guard let response = responseRaw as? HTTPURLResponse else {
-            return nil
-        }
+        let (_, response) = try await BoundedMetadataHTTPClient(
+            maximumBodyBytes: metadataBodyLimit,
+            timeout: discoveryTimeout,
+            redirectPolicy: .block
+        ).send(request)
 
         guard let location = response.value(forHTTPHeaderField: "Location"),
               let locationURL = URL(string: location, relativeTo: appURL),
