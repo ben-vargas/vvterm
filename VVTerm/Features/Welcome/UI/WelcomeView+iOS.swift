@@ -47,7 +47,9 @@ private struct WelcomeContent: View {
 
                     // Features
                     VStack(alignment: .leading, spacing: 20) {
-                        ForEach(WelcomeFeatureCatalog.features) { feature in
+                        ForEach(WelcomeFeaturePresentationCatalog.features(
+                            companionPlatformTitle: "Available on Mac"
+                        )) { feature in
                             HStack(alignment: .top, spacing: 16) {
                                 Image(systemName: feature.icon)
                                     .font(.system(size: 20, weight: .medium))
