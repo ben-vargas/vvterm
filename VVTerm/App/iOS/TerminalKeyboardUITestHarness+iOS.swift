@@ -726,13 +726,13 @@ struct TerminalKeyboardUITestHarness: View {
     private func configureLifecycleHarness() {
         guard let terminalView else { return }
         let manager = tabManager
-        if manager.paneStates[Self.paneId] == nil {
+        if manager.paneState(for: Self.paneId) == nil {
             let tab = TerminalTab(serverId: UUID(), title: "Keyboard lifecycle test")
-            manager.paneStates[Self.paneId] = TerminalPaneState(
+            manager.setPaneStateForTesting(TerminalPaneState(
                 paneId: Self.paneId,
                 tabId: tab.id,
                 serverId: tab.serverId
-            )
+            ))
         }
         manager.registerTerminal(terminalView, for: Self.paneId)
         manager.updatePaneState(Self.paneId, connectionState: .connected)
@@ -1095,13 +1095,13 @@ struct TerminalSplitKeyboardUITestHarness: View {
             (Self.firstPaneId, firstTerminal),
             (Self.secondPaneId, secondTerminal),
         ] {
-            if manager.paneStates[paneId] == nil {
+            if manager.paneState(for: paneId) == nil {
                 let tab = TerminalTab(serverId: UUID(), title: "Split keyboard test")
-                manager.paneStates[paneId] = TerminalPaneState(
+                manager.setPaneStateForTesting(TerminalPaneState(
                     paneId: paneId,
                     tabId: tab.id,
                     serverId: tab.serverId
-                )
+                ))
             }
             manager.registerTerminal(terminal, for: paneId)
             manager.updatePaneState(paneId, connectionState: .connected)

@@ -135,13 +135,11 @@ struct EternalTerminalResumeCredentialStoreTests {
 
             let serverId = UUID()
             let firstTab = TerminalTab(serverId: serverId, title: "Close")
-            manager.tabsByServer[serverId] = [firstTab]
-            manager.selectedTabByServer[serverId] = firstTab.id
-            manager.paneStates[firstTab.rootPaneId] = TerminalPaneState(
+            manager.installTabForTesting(firstTab, paneState: TerminalPaneState(
                 paneId: firstTab.rootPaneId,
                 tabId: firstTab.id,
                 serverId: serverId
-            )
+            ))
             try store.save(credentials(), for: firstTab.rootPaneId)
 
             manager.closeTab(firstTab)
@@ -149,13 +147,11 @@ struct EternalTerminalResumeCredentialStoreTests {
             #expect(try store.credentials(for: firstTab.rootPaneId) == nil)
 
             let secondTab = TerminalTab(serverId: serverId, title: "Terminate")
-            manager.tabsByServer[serverId] = [secondTab]
-            manager.selectedTabByServer[serverId] = secondTab.id
-            manager.paneStates[secondTab.rootPaneId] = TerminalPaneState(
+            manager.installTabForTesting(secondTab, paneState: TerminalPaneState(
                 paneId: secondTab.rootPaneId,
                 tabId: secondTab.id,
                 serverId: serverId
-            )
+            ))
             let savedCredentials = try credentials()
             try store.save(savedCredentials, for: secondTab.rootPaneId)
             let lifecycle = EternalTerminalTmuxResumeContext(

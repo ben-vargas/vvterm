@@ -72,7 +72,7 @@ struct ServerTerminalRoute: View {
         guard let server = selectedServer else {
             return viewTabConfig.effectiveDefaultTab()
         }
-        return viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id])
+        return viewTabConfig.effectiveView(for: tabManager.selectedView(for: server.id))
     }
 
     private var selectedTab: TerminalTab? {
@@ -203,7 +203,7 @@ struct ServerTerminalRoute: View {
             .onChange(of: tabManager.terminalRegistryVersion) { _ in
                 updateTerminalRouteActivation()
             }
-            .onChangeCompat(of: tabManager.tabsByServer) { _ in
+            .onChangeCompat(of: tabManager.tabs(for: route.serverId)) { _ in
                 dismissIfContextEnded()
                 reconcileZenMode()
                 updateTerminalRouteActivation()
@@ -376,9 +376,9 @@ struct ServerTerminalRoute: View {
 
     private func selectedViewBinding(for serverId: UUID) -> Binding<ConnectionViewTabID> {
         Binding(
-            get: { viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[serverId]) },
+            get: { viewTabConfig.effectiveView(for: tabManager.selectedView(for: serverId)) },
             set: { newValue in
-                tabManager.selectedViewByServer[serverId] = viewTabConfig.effectiveView(for: newValue)
+                tabManager.selectView(viewTabConfig.effectiveView(for: newValue), for: serverId)
             }
         )
     }
@@ -597,7 +597,7 @@ struct ServerTerminalRoute: View {
         guard selectedView == .terminal else { return }
         guard terminalVoiceButtonEnabled else { return }
         guard let focusedPaneId,
-              tabManager.paneStates[focusedPaneId]?.connectionState.isConnected == true else { return }
+              tabManager.paneState(for: focusedPaneId)?.connectionState.isConnected == true else { return }
         clearPendingVoiceReturnForFocusedPane()
         if focusedTerminal?.triggerVoiceInput() == true {
             tabManager.applyTerminalVoiceEvent(.recordingStarted, for: focusedPaneId)
@@ -719,8 +719,8 @@ struct ServerTerminalRoute: View {
         Task {
             do {
                 let tab = try await tabManager.openTab(for: server)
-                tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: .terminal)
-                tabManager.selectedTabByServer[server.id] = tab.id
+                tabManager.selectView(viewTabConfig.effectiveView(for: .terminal), for: server.id)
+                tabManager.selectTab(tab.id, for: server.id)
             } catch {
                 // No-op: user cancelled biometric auth or open failed.
             }
@@ -753,7 +753,7 @@ struct ServerTerminalRoute: View {
 
         guard let newTab else { return }
         fileBrowser.prepareNewTab(newTab, duplicating: sourceTab)
-        tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: .files)
+        tabManager.selectView(viewTabConfig.effectiveView(for: .files), for: server.id)
     }
 
     private func disconnect(_ server: Server) {

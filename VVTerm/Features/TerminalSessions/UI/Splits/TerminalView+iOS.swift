@@ -460,7 +460,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
                 startConnectionIfNeeded(
                     terminal: existingTerminal,
                     coordinator: coordinator,
-                    state: tabManager.paneStates[paneId]?.connectionState ?? .idle
+                    state: tabManager.paneState(for: paneId)?.connectionState ?? .idle
                 )
             }
             return existingTerminal
@@ -485,7 +485,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
                     startConnectionIfNeeded(
                         terminal: terminalView,
                         coordinator: coordinator,
-                        state: tabManager.paneStates[paneId]?.connectionState ?? .idle
+                        state: tabManager.paneState(for: paneId)?.connectionState ?? .idle
                     )
                 }
             }
@@ -535,7 +535,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             return
         }
 
-        guard tabManager.paneStates[paneId] != nil else {
+        guard tabManager.paneState(for: paneId) != nil else {
             terminalView.acceptsTerminalInput = false
             terminalView.writeCallback = nil
             terminalView.onReady = nil
@@ -581,7 +581,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             }
         }
 
-        let state = tabManager.paneStates[paneId]?.connectionState ?? .idle
+        let state = tabManager.paneState(for: paneId)?.connectionState ?? .idle
         let shouldStartConnection = TerminalConnectionStartPolicy.shouldStart(
             connectionState: state
         )
@@ -598,7 +598,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
         guard let terminalView = uiView as? GhosttyTerminalView else { return }
 
-        let paneStillExists = coordinator.tabManager.paneStates[coordinator.paneId] != nil
+        let paneStillExists = coordinator.tabManager.paneState(for: coordinator.paneId) != nil
         if paneStillExists {
             coordinator.preservePane = true
             return
@@ -651,7 +651,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         coordinator: TerminalPaneConnectionCoordinator,
         state: ConnectionState
     ) {
-        guard tabManager.paneStates[paneId] != nil else { return }
+        guard tabManager.paneState(for: paneId) != nil else { return }
         guard !coordinator.hasLiveConnection else { return }
         guard !coordinator.isConnectionStartInFlight else { return }
         guard UIApplication.shared.applicationState == .active else { return }

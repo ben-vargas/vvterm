@@ -181,10 +181,10 @@ struct TerminalReconnectUITestHarness: View {
         guard let serverId = activeServer?.id else { return "setup=preparing" }
         let tabs = tabManager.tabs(for: serverId)
         let paneCount = tabs.reduce(0) { $0 + $1.paneCount }
-        let selected = tabManager.selectedTabByServer[serverId]?.uuidString ?? "none"
+        let selected = tabManager.selectedTabId(for: serverId)?.uuidString ?? "none"
         let focused = tabManager.selectedTab(for: serverId)?.focusedPaneId.uuidString ?? "none"
         let disconnected = tabs.flatMap(\.allPaneIds).filter {
-            tabManager.paneStates[$0]?.connectionState == .disconnected
+            tabManager.paneState(for: $0)?.connectionState == .disconnected
         }.count
         return "setup=ready tabs=\(tabs.count) panes=\(paneCount) selected=\(selected) focused=\(focused) disconnected=\(disconnected)"
     }
@@ -287,14 +287,14 @@ struct TerminalReconnectUITestHarness: View {
                         throw VVTermError.connectionFailed("Unable to seed split layout")
                     }
                     let secondTab = try await tabManager.openTab(for: server)
-                    tabManager.selectedTabByServer[server.id] = secondTab.id
+                    tabManager.selectTab(secondTab.id, for: server.id)
                 } else {
-                    tabManager.selectedTabByServer[server.id] = firstTab.id
+                    tabManager.selectTab(firstTab.id, for: server.id)
                 }
             } else if tabManager.tabs(for: server.id).isEmpty {
                 throw VVTermError.connectionFailed("Cold relaunch snapshot was not restored")
             }
-            tabManager.selectedViewByServer[server.id] = .terminal
+            tabManager.selectView(.terminal, for: server.id)
             fixtureState = .ready(server)
         } catch {
             fixtureState = .failed(error.localizedDescription)
@@ -402,9 +402,9 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
                 return
             }
 
-            let state = tabManager.paneStates[paneId]?.connectionState ?? .idle
+            let state = tabManager.paneState(for: paneId)?.connectionState ?? .idle
             let title = tabManager.runtimeTitleByPane[paneId] ?? "none"
-            let workingDirectory = tabManager.paneStates[paneId]?.workingDirectory ?? "none"
+            let workingDirectory = tabManager.paneState(for: paneId)?.workingDirectory ?? "none"
             guard let terminal = tabManager.getTerminal(for: paneId) else {
                 publish("setup=ready state=\(connectionToken(state)) title=\(title) terminal=missing")
                 return

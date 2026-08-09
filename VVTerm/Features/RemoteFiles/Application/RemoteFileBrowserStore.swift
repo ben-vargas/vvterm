@@ -104,17 +104,7 @@ final class RemoteFileBrowserStore: ObservableObject {
             ServerManager.shared.servers.first { $0.id == serverId }
         },
         workingDirectoryProvider: @escaping WorkingDirectoryProvider = { serverId in
-            if let selectedTab = TerminalTabManager.shared.selectedTab(for: serverId),
-               let path = TerminalTabManager.shared.workingDirectory(for: selectedTab.focusedPaneId) {
-                return path
-            }
-
-            if let anyPane = TerminalTabManager.shared.paneStates.values.first(where: { $0.serverId == serverId }),
-               let path = TerminalTabManager.shared.workingDirectory(for: anyPane.paneId) {
-                return path
-            }
-
-            return nil
+            TerminalTabManager.shared.workingDirectoryCandidate(for: serverId)
         }
     ) {
         self.defaults = defaults

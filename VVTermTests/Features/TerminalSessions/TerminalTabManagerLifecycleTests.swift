@@ -83,24 +83,26 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Fallback")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.paneStates[tab.rootPaneId]?.transportState = .sshFallback(
-                reason: .udpTimeout,
-                diagnostics: .make(
+            manager.updatePaneForTesting(tab.rootPaneId) {
+                $0.transportState = .sshFallback(
+                    reason: .udpTimeout,
+                    diagnostics: .make(
                     reason: .udpTimeout,
                     events: [],
                     appContext: .init(version: "test", platform: "test")
+                    )
                 )
-            )
+            }
 
             manager.clearMoshFallbackDiagnostics(for: tab.rootPaneId)
 
-            #expect(manager.paneStates[tab.rootPaneId]?.activeTransport == .sshFallback)
-            #expect(manager.paneStates[tab.rootPaneId]?.moshFallbackReason == .udpTimeout)
-            #expect(manager.paneStates[tab.rootPaneId]?.moshFallbackDiagnostics == nil)
+            #expect(manager.paneState(for: tab.rootPaneId)?.activeTransport == .sshFallback)
+            #expect(manager.paneState(for: tab.rootPaneId)?.moshFallbackReason == .udpTimeout)
+            #expect(manager.paneState(for: tab.rootPaneId)?.moshFallbackDiagnostics == nil)
 
             manager.updatePaneState(tab.rootPaneId, connectionState: .reconnecting(attempt: 1))
-            #expect(manager.paneStates[tab.rootPaneId]?.activeTransport == .ssh)
-            #expect(manager.paneStates[tab.rootPaneId]?.moshFallbackReason == nil)
+            #expect(manager.paneState(for: tab.rootPaneId)?.activeTransport == .ssh)
+            #expect(manager.paneState(for: tab.rootPaneId)?.moshFallbackReason == nil)
         }
     }
 
@@ -130,7 +132,7 @@ struct TerminalTabManagerLifecycleTests {
             #expect(await waitUntil {
                 manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .connecting
             })
-            #expect(manager.paneStates[tab.rootPaneId]?.connectionState.isConnecting == true)
+            #expect(manager.paneState(for: tab.rootPaneId)?.connectionState.isConnecting == true)
             #expect(
                 manager.terminalConnectionGeneration(for: tab.rootPaneId)
                     != originalTerminalGeneration
@@ -173,7 +175,7 @@ struct TerminalTabManagerLifecycleTests {
                 manager.terminalConnectionGeneration(for: tab.rootPaneId)
                     == originalTerminalGeneration
             )
-            #expect(manager.paneStates[tab.rootPaneId]?.connectionState == .disconnected)
+            #expect(manager.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
 
             manager.handleIOSNetworkReadinessChange(.ready)
             #expect(await waitUntil {
@@ -371,11 +373,11 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: UUID(), title: "Pane zoom")
             installTab(tab, in: manager, connectionState: .connected)
             let siblingPaneId = UUID()
-            manager.paneStates[siblingPaneId] = TerminalPaneState(
+            manager.setPaneStateForTesting(TerminalPaneState(
                 paneId: siblingPaneId,
                 tabId: tab.id,
                 serverId: tab.serverId
-            )
+            ))
 
             let result = manager.handleTerminalZoom(.zoomIn, for: tab.rootPaneId)
 
@@ -391,14 +393,16 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Mosh recovery")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.paneStates[tab.rootPaneId]?.transportState = .sshFallback(
-                reason: .udpTimeout,
-                diagnostics: .make(
+            manager.updatePaneForTesting(tab.rootPaneId) {
+                $0.transportState = .sshFallback(
+                    reason: .udpTimeout,
+                    diagnostics: .make(
                     reason: .udpTimeout,
                     events: [],
                     appContext: .init(version: "test", platform: "test")
+                    )
                 )
-            )
+            }
 
             let client = SSHClient()
             #expect(await startAndRegisterShell(
@@ -408,9 +412,9 @@ struct TerminalTabManagerLifecycleTests {
                 transportState: .mosh,
                 in: manager
             ))
-            #expect(manager.paneStates[tab.rootPaneId]?.activeTransport == .mosh)
-            #expect(manager.paneStates[tab.rootPaneId]?.moshFallbackReason == nil)
-            #expect(manager.paneStates[tab.rootPaneId]?.moshFallbackDiagnostics == nil)
+            #expect(manager.paneState(for: tab.rootPaneId)?.activeTransport == .mosh)
+            #expect(manager.paneState(for: tab.rootPaneId)?.moshFallbackReason == nil)
+            #expect(manager.paneState(for: tab.rootPaneId)?.moshFallbackDiagnostics == nil)
         }
     }
 
@@ -434,13 +438,11 @@ struct TerminalTabManagerLifecycleTests {
         in manager: TerminalTabManager,
         connectionState: ConnectionState = .connecting
     ) {
-        manager.tabsByServer[tab.serverId, default: []].append(tab)
-        manager.selectedTabByServer[tab.serverId] = tab.id
-        manager.paneStates[tab.rootPaneId] = TerminalPaneState(
+        manager.installTabForTesting(tab, paneState: TerminalPaneState(
             paneId: tab.rootPaneId,
             tabId: tab.id,
             serverId: tab.serverId
-        )
+        ))
         manager.updatePaneState(tab.rootPaneId, connectionState: connectionState)
     }
 
@@ -744,10 +746,10 @@ struct TerminalTabManagerLifecycleTests {
             manager.disconnectServer(firstTab.serverId)
 
             #expect(manager.tabs(for: firstTab.serverId).isEmpty)
-            #expect(manager.paneStates[firstTab.rootPaneId] == nil)
+            #expect(manager.paneState(for: firstTab.rootPaneId) == nil)
             #expect(!manager.connectedServerIds.contains(firstTab.serverId))
             #expect(manager.tabs(for: secondTab.serverId) == [secondTab])
-            #expect(manager.paneStates[secondTab.rootPaneId]?.connectionState == .connected)
+            #expect(manager.paneState(for: secondTab.rootPaneId)?.connectionState == .connected)
             #expect(manager.shellId(for: secondTab.rootPaneId) != nil)
             #expect(manager.connectedServerIds == [secondTab.serverId])
         }
@@ -814,7 +816,7 @@ struct TerminalTabManagerLifecycleTests {
             await manager.unregisterSSHClient(for: tab.rootPaneId)
 
             #expect(manager.tabs(for: tab.serverId) == [tab])
-            #expect(manager.paneStates[tab.rootPaneId]?.connectionState == .disconnected)
+            #expect(manager.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
             #expect(manager.shellId(for: tab.rootPaneId) == nil)
             #expect(!manager.connectedServerIds.contains(tab.serverId))
             #expect(!TerminalConnectionStartPolicy.shouldStart(connectionState: .disconnected))
@@ -833,7 +835,7 @@ struct TerminalTabManagerLifecycleTests {
             manager.handleShellEnd(for: tab.rootPaneId, reason: .tmuxEnded(.managed))
 
             #expect(manager.tabs(for: tab.serverId).isEmpty)
-            #expect(manager.paneStates[tab.rootPaneId] == nil)
+            #expect(manager.paneState(for: tab.rootPaneId) == nil)
             #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == nil)
         }
     }
@@ -850,11 +852,11 @@ struct TerminalTabManagerLifecycleTests {
                 right: .leaf(paneId: secondPaneId)
             ))
             installTab(tab, in: manager, connectionState: .connected)
-            manager.paneStates[secondPaneId] = TerminalPaneState(
+            manager.setPaneStateForTesting(TerminalPaneState(
                 paneId: secondPaneId,
                 tabId: tab.id,
                 serverId: tab.serverId
-            )
+            ))
             manager.tmuxResolver.sessionNames[secondPaneId] = "vvterm_second"
             manager.tmuxResolver.sessionOwnership[secondPaneId] = .managed
             manager.updatePaneTmuxStatus(secondPaneId, status: .background)
@@ -863,8 +865,8 @@ struct TerminalTabManagerLifecycleTests {
 
             let remainingTab = manager.tabs(for: tab.serverId).first
             #expect(remainingTab?.allPaneIds == [tab.rootPaneId])
-            #expect(manager.paneStates[tab.rootPaneId] != nil)
-            #expect(manager.paneStates[secondPaneId] == nil)
+            #expect(manager.paneState(for: tab.rootPaneId) != nil)
+            #expect(manager.paneState(for: secondPaneId) == nil)
         }
     }
 
@@ -880,9 +882,9 @@ struct TerminalTabManagerLifecycleTests {
             manager.handleShellEnd(for: tab.rootPaneId, reason: .tmuxDetached(.managed))
 
             #expect(manager.tabs(for: tab.serverId) == [tab])
-            #expect(manager.paneStates[tab.rootPaneId]?.connectionState == .disconnected)
-            #expect(manager.paneStates[tab.rootPaneId]?.disconnectReason == .tmuxDetached)
-            #expect(manager.paneStates[tab.rootPaneId]?.disconnectReason?.allowsAutomaticReconnect == false)
+            #expect(manager.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
+            #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == .tmuxDetached)
+            #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason?.allowsAutomaticReconnect == false)
             #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm_test")
             #expect(manager.tmuxResolver.hasConfirmedManagedSession(for: tab.rootPaneId))
         }
@@ -920,7 +922,7 @@ struct TerminalTabManagerLifecycleTests {
                     #expect(error is SSHError)
                 }
 
-                #expect(manager.paneStates[tab.rootPaneId]?.tmuxStatus == .background)
+                #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .background)
                 #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm_existing")
                 #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == .managed)
                 #expect(manager.tmuxResolver.hasConfirmedManagedSession(for: tab.rootPaneId))
@@ -962,7 +964,7 @@ struct TerminalTabManagerLifecycleTests {
                     availabilityResolver: { .confirmedMissing }
                 )
 
-                #expect(manager.paneStates[tab.rootPaneId]?.tmuxStatus == .missing)
+                #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .missing)
                 #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == nil)
                 #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == nil)
                 #expect(!manager.tmuxResolver.hasConfirmedManagedSession(for: tab.rootPaneId))
@@ -1031,7 +1033,7 @@ struct TerminalTabManagerLifecycleTests {
                 await gate.resolve(.confirmedMissing)
 
                 #expect(await stalePlan.value)
-                #expect(manager.paneStates[tab.rootPaneId]?.tmuxStatus == .background)
+                #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .background)
                 #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm_existing")
                 #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == .managed)
                 #expect(manager.tmuxResolver.hasConfirmedManagedSession(for: tab.rootPaneId))
@@ -1089,7 +1091,7 @@ struct TerminalTabManagerLifecycleTests {
                 await gate.resolve(.confirmedMissing)
 
                 #expect(await cancelledPlan.value)
-                #expect(manager.paneStates[tab.rootPaneId]?.tmuxStatus == .background)
+                #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .background)
                 #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm_existing")
                 #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == .managed)
                 #expect(manager.tmuxResolver.hasConfirmedManagedSession(for: tab.rootPaneId))
@@ -1212,10 +1214,10 @@ struct TerminalTabManagerLifecycleTests {
 
             #expect(manager.tabs(for: tab.serverId) == [tab])
             #expect(
-                manager.paneStates[tab.rootPaneId]?.connectionState
+                manager.paneState(for: tab.rootPaneId)?.connectionState
                     == .failed(String(localized: "Unable to start tmux session."))
             )
-            #expect(manager.paneStates[tab.rootPaneId]?.tmuxStatus == .unknown)
+            #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .unknown)
             #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == nil)
             #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == nil)
         }
@@ -1226,7 +1228,7 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Installed tmux")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.paneStates[tab.rootPaneId]?.disconnectReason = .tmuxDetached
+            manager.updatePaneForTesting(tab.rootPaneId) { $0.disconnectReason = .tmuxDetached }
             var reconnectRequested = false
 
             manager.completeTmuxInstall(
@@ -1250,9 +1252,9 @@ struct TerminalTabManagerLifecycleTests {
             manager.handleShellEnd(for: tab.rootPaneId, reason: .transportEnded)
 
             #expect(manager.tabs(for: tab.serverId) == [tab])
-            #expect(manager.paneStates[tab.rootPaneId]?.connectionState == .disconnected)
-            #expect(manager.paneStates[tab.rootPaneId]?.disconnectReason == .transportEnded)
-            #expect(manager.paneStates[tab.rootPaneId]?.disconnectReason?.allowsAutomaticReconnect == true)
+            #expect(manager.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
+            #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
+            #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason?.allowsAutomaticReconnect == true)
         }
     }
 
@@ -1269,8 +1271,8 @@ struct TerminalTabManagerLifecycleTests {
             )
             manager.handleConnectionFailure(for: tab.rootPaneId, error: SSHError.timeout)
 
-            #expect(manager.paneStates[tab.rootPaneId]?.disconnectReason == .transportEnded)
-            guard case .failed = manager.paneStates[tab.rootPaneId]?.connectionState else {
+            #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
+            guard case .failed = manager.paneState(for: tab.rootPaneId)?.connectionState else {
                 Issue.record("Expected a failed retry state")
                 return
             }
@@ -1297,8 +1299,8 @@ struct TerminalTabManagerLifecycleTests {
                 error: UnclassifiedReconnectError()
             )
 
-            #expect(manager.paneStates[tab.rootPaneId]?.disconnectReason == .transportEnded)
-            guard case .failed = manager.paneStates[tab.rootPaneId]?.connectionState else {
+            #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
+            guard case .failed = manager.paneState(for: tab.rootPaneId)?.connectionState else {
                 Issue.record("Expected a failed retry state")
                 return
             }
@@ -1317,8 +1319,8 @@ struct TerminalTabManagerLifecycleTests {
                 error: SSHError.authenticationFailed
             )
 
-            #expect(manager.paneStates[tab.rootPaneId]?.disconnectReason == nil)
-            guard case .failed = manager.paneStates[tab.rootPaneId]?.connectionState else {
+            #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == nil)
+            guard case .failed = manager.paneState(for: tab.rootPaneId)?.connectionState else {
                 Issue.record("Expected a failed authentication state")
                 return
             }
@@ -1347,8 +1349,8 @@ struct TerminalTabManagerLifecycleTests {
                 reason: .transportEnded
             )
 
-            #expect(manager.paneStates[tab.rootPaneId]?.connectionState == .connected)
-            #expect(manager.paneStates[tab.rootPaneId]?.disconnectReason == nil)
+            #expect(manager.paneState(for: tab.rootPaneId)?.connectionState == .connected)
+            #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == nil)
             #expect(manager.shellId(for: tab.rootPaneId) == activeShellId)
         }
     }
@@ -1364,11 +1366,11 @@ struct TerminalTabManagerLifecycleTests {
 
             let otherServerTab = try await manager.openTab(for: secondServer)
             #expect(manager.workingDirectory(for: otherServerTab.rootPaneId) == nil)
-            #expect(manager.paneStates[otherServerTab.rootPaneId]?.seedPaneId == nil)
+            #expect(manager.paneState(for: otherServerTab.rootPaneId)?.seedPaneId == nil)
 
             let secondFirstServerTab = try await manager.openTab(for: firstServer)
             #expect(manager.workingDirectory(for: secondFirstServerTab.rootPaneId) == "/srv/first")
-            #expect(manager.paneStates[secondFirstServerTab.rootPaneId]?.seedPaneId == firstTab.rootPaneId)
+            #expect(manager.paneState(for: secondFirstServerTab.rootPaneId)?.seedPaneId == firstTab.rootPaneId)
         }
     }
 
@@ -1557,9 +1559,9 @@ struct TerminalTabManagerLifecycleTests {
 
             manager.closePane(tab: tab, paneId: splitPane)
 
-            #expect(manager.paneStates[splitPane] == nil)
-            #expect(manager.paneStates[tab.rootPaneId]?.connectionState == .connected)
-            #expect(manager.paneStates[tab.rootPaneId]?.disconnectReason == nil)
+            #expect(manager.paneState(for: splitPane) == nil)
+            #expect(manager.paneState(for: tab.rootPaneId)?.connectionState == .connected)
+            #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == nil)
             #expect(manager.tabs(for: tab.serverId).first?.allPaneIds == [tab.rootPaneId])
         }
     }
@@ -1582,17 +1584,17 @@ struct TerminalTabManagerLifecycleTests {
 
             #expect(
                 TerminalLiveActivityPolicy.snapshot(
-                    for: manager.paneStates.values.map(\.connectionState)
+                    for: manager.allPaneStatesForTesting.map(\.connectionState)
                 )?.activeCount == 2
             )
 
             manager.closeTab(tab)
 
             #expect(manager.tabs(for: tab.serverId).isEmpty)
-            #expect(manager.paneStates.isEmpty)
+            #expect(manager.allPaneStatesForTesting.isEmpty)
             #expect(
                 TerminalLiveActivityPolicy.snapshot(
-                    for: manager.paneStates.values.map(\.connectionState)
+                    for: manager.allPaneStatesForTesting.map(\.connectionState)
                 ) == nil
             )
         }
@@ -1610,8 +1612,8 @@ struct TerminalTabManagerLifecycleTests {
             #expect(appDelegate.handleApplicationWillTerminate())
 
             #expect(manager.tabs(for: tab.serverId).map(\.id) == [tab.id])
-            #expect(manager.paneStates[tab.rootPaneId]?.connectionState == .disconnected)
-            #expect(manager.paneStates[tab.rootPaneId]?.disconnectReason == .transportEnded)
+            #expect(manager.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
+            #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
             #expect(manager.connectedServerIds.isEmpty)
         }
     }

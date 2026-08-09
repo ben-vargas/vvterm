@@ -9,7 +9,7 @@ extension TerminalTabManager {
 
         case .unavailable:
             let activeReconnectPaneIDs = reconnectCoordinator.activePaneIDs
-            let candidatePaneIDs: [UUID] = paneStates.values.compactMap { paneState in
+            let candidatePaneIDs: [UUID] = sessionState.allPaneStates.compactMap { paneState in
                 guard paneState.hasEstablishedConnection,
                       (paneState.connectionState.isConnecting
                         || activeReconnectPaneIDs.contains(paneState.paneId)) else {

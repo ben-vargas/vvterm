@@ -108,26 +108,22 @@ struct MoshResumeStoreTests {
             let serverId = UUID()
 
             let closedTab = TerminalTab(serverId: serverId, title: "Close")
-            manager.tabsByServer[serverId] = [closedTab]
-            manager.selectedTabByServer[serverId] = closedTab.id
-            manager.paneStates[closedTab.rootPaneId] = TerminalPaneState(
+            manager.installTabForTesting(closedTab, paneState: TerminalPaneState(
                 paneId: closedTab.rootPaneId,
                 tabId: closedTab.id,
                 serverId: serverId
-            )
+            ))
             try store.save(snapshot(), for: closedTab.rootPaneId)
 
             manager.closeTab(closedTab)
             #expect(try store.snapshot(for: closedTab.rootPaneId) == nil)
 
             let preservedTab = TerminalTab(serverId: serverId, title: "Terminate")
-            manager.tabsByServer[serverId] = [preservedTab]
-            manager.selectedTabByServer[serverId] = preservedTab.id
-            manager.paneStates[preservedTab.rootPaneId] = TerminalPaneState(
+            manager.installTabForTesting(preservedTab, paneState: TerminalPaneState(
                 paneId: preservedTab.rootPaneId,
                 tabId: preservedTab.id,
                 serverId: serverId
-            )
+            ))
             let expected = snapshot()
             try store.save(expected, for: preservedTab.rootPaneId)
 

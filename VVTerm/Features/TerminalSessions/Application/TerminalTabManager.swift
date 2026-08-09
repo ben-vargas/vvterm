@@ -82,20 +82,10 @@ final class TerminalTabManager: ObservableObject {
 
     static let shared = TerminalTabManagerLiveComposition.makeManager()
 
-    // MARK: - Published State
+    // MARK: - Session State
 
-    /// All tabs, organized by server
-    @Published var tabsByServer: [UUID: [TerminalTab]] = [:] {
-        didSet { schedulePersist() }
-    }
-
-    /// Currently selected tab ID per server
-    @Published var selectedTabByServer: [UUID: UUID] = [:] {
-        didSet {
-            schedulePersist()
-            updateTmuxSelectionStatuses()
-        }
-    }
+    let sessionState: TerminalSessionStateStore
+    let connectionViewSelections: ConnectionViewSelectionStore
 
     /// Tabs temporarily presenting only their focused pane. The focused pane is
     /// still derived from TerminalTab, and this presentation state is not persisted.
@@ -103,7 +93,7 @@ final class TerminalTabManager: ObservableObject {
 
     /// Servers with at least one live terminal shell.
     var connectedServerIds: Set<UUID> {
-        Set(paneStates.values.compactMap { state in
+        Set(sessionState.allPaneStates.compactMap { state in
             guard state.connectionState.isConnected,
                   shellRegistry.shellId(for: state.paneId) != nil
                     || eternalTerminalRuntimes[state.paneId] != nil else {
@@ -111,11 +101,6 @@ final class TerminalTabManager: ObservableObject {
             }
             return state.serverId
         })
-    }
-
-    /// Selected view type per server.
-    @Published var selectedViewByServer: [UUID: ConnectionViewTabID] = [:] {
-        didSet { schedulePersist() }
     }
 
     // MARK: - Terminal Registry
@@ -151,14 +136,6 @@ final class TerminalTabManager: ObservableObject {
     /// Server IDs with an in-flight tab-open request to avoid queued duplicates.
     private var tabOpensInFlight: Set<UUID> = []
 
-    /// Pane state keyed by pane ID
-    @Published var paneStates: [UUID: TerminalPaneState] = [:] {
-        didSet {
-            dependencies.effects.refreshLiveActivity(
-                paneStates.values.map(\.connectionState)
-            )
-        }
-    }
     @Published private(set) var runtimeTitleByPane: [UUID: String] = [:]
     @Published private(set) var titleOverrideByPane: [UUID: String] = [:]
     #if os(iOS)
@@ -179,11 +156,9 @@ final class TerminalTabManager: ObservableObject {
 
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "TerminalTabManager")
 
-    private let snapshotStore: any TerminalTabSnapshotStoring
     private let dependencies: TerminalTabManagerDependencies
     private(set) var currentNetworkReadiness: TerminalNetworkReadiness
-    private var persistTask: Task<Void, Never>?
-    private var isRestoring = false
+    private var stateCancellables: Set<AnyCancellable> = []
 
     init(
         snapshotStore: any TerminalTabSnapshotStoring,
@@ -191,12 +166,19 @@ final class TerminalTabManager: ObservableObject {
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshResumeStore: any MoshResumeStoring
     ) {
-        self.snapshotStore = snapshotStore
         self.dependencies = dependencies
         self.currentNetworkReadiness = dependencies.networkReadiness.initial
-        self.tmuxResolver = TmuxAttachResolver(
+        let tmuxResolver = TmuxAttachResolver(
             configuration: dependencies.tmuxConfiguration,
             remoteTmux: dependencies.remoteTmux
+        )
+        let connectionViewSelections = ConnectionViewSelectionStore()
+        self.tmuxResolver = tmuxResolver
+        self.connectionViewSelections = connectionViewSelections
+        self.sessionState = TerminalSessionStateStore(
+            snapshotStore: snapshotStore,
+            connectionViewSelections: connectionViewSelections,
+            tmuxResolver: tmuxResolver
         )
         self.eternalTerminalResumeStore = eternalTerminalResumeStore
         self.defaultEternalTerminalResumeStore = eternalTerminalResumeStore
@@ -207,6 +189,24 @@ final class TerminalTabManager: ObservableObject {
             self?.terminalViews[paneId]
         }
         #endif
+        sessionState.objectWillChange
+            .sink { [weak self] in self?.objectWillChange.send() }
+            .store(in: &stateCancellables)
+        connectionViewSelections.objectWillChange
+            .sink { [weak self] in self?.objectWillChange.send() }
+            .store(in: &stateCancellables)
+        sessionState.selectedTabChanges
+            .dropFirst()
+            .sink { [weak self] selectedTabs in
+                self?.updateTmuxSelectionStatuses(selectedTabs: selectedTabs)
+            }
+            .store(in: &stateCancellables)
+        sessionState.paneConnectionStateChanges
+            .dropFirst()
+            .sink { [weak self] connectionStates in
+                self?.dependencies.effects.refreshLiveActivity(connectionStates)
+            }
+            .store(in: &stateCancellables)
         networkReadinessCancellable = dependencies.networkReadiness.updates
             .sink { [weak self] readiness in
                 self?.currentNetworkReadiness = readiness
@@ -216,9 +216,8 @@ final class TerminalTabManager: ObservableObject {
                 self?.handleIOSNetworkReadinessChange(readiness)
                 #endif
             }
-        restoreSnapshot()
         dependencies.effects.refreshLiveActivity(
-            paneStates.values.map(\.connectionState)
+            sessionState.connectionStates
         )
     }
 
@@ -243,28 +242,28 @@ final class TerminalTabManager: ObservableObject {
     #endif
 
     private func paneTmuxStatus(for paneId: UUID) -> TmuxStatus? {
-        paneStates[paneId]?.tmuxStatus
+        sessionState.paneState(for: paneId)?.tmuxStatus
     }
 
     private func setPaneTmuxStatus(_ status: TmuxStatus, for paneId: UUID) {
-        guard let previousStatus = paneStates[paneId]?.tmuxStatus,
+        guard let previousStatus = sessionState.paneState(for: paneId)?.tmuxStatus,
               previousStatus != status else { return }
-        paneStates[paneId]?.tmuxStatus = status
+        sessionState.updatePane(paneId) { $0.tmuxStatus = status }
         logger.info(
             "Tmux status for pane \(paneId.uuidString, privacy: .public) changed from \(previousStatus.rawValue, privacy: .public) to \(status.rawValue, privacy: .public)"
         )
     }
 
     private func paneWorkingDirectory(for paneId: UUID) -> String? {
-        paneStates[paneId]?.workingDirectory
+        sessionState.paneState(for: paneId)?.workingDirectory
     }
 
     private func setPaneWorkingDirectory(_ workingDirectory: String, for paneId: UUID) {
-        paneStates[paneId]?.workingDirectory = workingDirectory
+        sessionState.updatePane(paneId) { $0.workingDirectory = workingDirectory }
     }
 
     private func setPanePresentationOverrides(_ presentationOverrides: TerminalPresentationOverrides, for paneId: UUID) {
-        paneStates[paneId]?.presentationOverrides = presentationOverrides
+        sessionState.updatePane(paneId) { $0.presentationOverrides = presentationOverrides }
     }
 
     private func setPaneTitle(_ title: String, for paneId: UUID) {
@@ -275,7 +274,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func setPaneTransport(_ state: ShellTransportState, for paneId: UUID) {
-        paneStates[paneId]?.transportState = state
+        sessionState.updatePane(paneId) { $0.transportState = state }
     }
 
     private func handleStaleShellStartContext(
@@ -301,22 +300,50 @@ final class TerminalTabManager: ObservableObject {
 
     /// Get tabs for a server
     func tabs(for serverId: UUID) -> [TerminalTab] {
-        tabsByServer[serverId] ?? []
+        sessionState.tabs(for: serverId)
     }
 
     /// Get currently selected tab for a server
     func selectedTab(for serverId: UUID) -> TerminalTab? {
-        guard let tabId = selectedTabByServer[serverId] else {
-            return tabs(for: serverId).first
+        sessionState.selectedTab(for: serverId)
+    }
+
+    func selectedTabId(for serverId: UUID) -> UUID? {
+        sessionState.selectedTabId(for: serverId)
+    }
+
+    func selectTab(_ tabId: UUID?, for serverId: UUID) {
+        sessionState.selectTab(tabId, for: serverId)
+    }
+
+    func selectedView(for serverId: UUID) -> ConnectionViewTabID? {
+        connectionViewSelections.selection(for: serverId)
+    }
+
+    func selectView(_ view: ConnectionViewTabID, for serverId: UUID) {
+        connectionViewSelections.setSelection(view, for: serverId)
+        sessionState.requestPersistence()
+    }
+
+    func paneState(for paneId: UUID) -> TerminalPaneState? {
+        sessionState.paneState(for: paneId)
+    }
+
+    func serverIdsWithTabs() -> Set<UUID> {
+        sessionState.serverIdsWithTabs
+    }
+
+    func workingDirectoryCandidate(for serverId: UUID) -> String? {
+        if let selectedTab = selectedTab(for: serverId),
+           let directory = workingDirectory(for: selectedTab.focusedPaneId) {
+            return directory
         }
-        return tabs(for: serverId).first { $0.id == tabId }
+        return sessionState.firstPaneState(for: serverId)?.workingDirectory
     }
 
     /// Check if can open new tab (Pro limit check)
     func canOpenNewTab(hasProAccess: Bool) -> Bool {
-        if hasProAccess { return true }
-        let totalTabs = tabsByServer.values.flatMap { $0 }.count
-        return totalTabs < FreeTierLimits.maxTabs
+        sessionState.canOpenNewTab(hasProAccess: hasProAccess)
     }
 
     private func hasLiveTerminalShell(for serverId: UUID) -> Bool {
@@ -338,31 +365,16 @@ final class TerminalTabManager: ObservableObject {
             throw VVTermError.authenticationFailed
         }
 
-        let tab = TerminalTab(serverId: server.id, title: server.name)
-
         let sourcePaneId = selectedTab(for: server.id)?.focusedPaneId
         let sourceWorkingDirectory = sourcePaneId
-            .flatMap { paneStates[$0]?.workingDirectory }
-
-        // Create pane state FIRST (before any @Published updates)
-        // This ensures the view has state when it renders
-        var rootState = TerminalPaneState(
-            paneId: tab.rootPaneId,
-            tabId: tab.id,
-            serverId: server.id
+            .flatMap { sessionState.paneState(for: $0)?.workingDirectory }
+        let tab = sessionState.createTab(
+            serverId: server.id,
+            title: server.name,
+            sourcePaneId: sourcePaneId,
+            sourceWorkingDirectory: sourceWorkingDirectory,
+            tmuxStatus: tmuxResolver.isTmuxEnabled(for: server.id) ? .unknown : .off
         )
-        rootState.workingDirectory = sourceWorkingDirectory
-        rootState.seedPaneId = sourcePaneId
-        rootState.tmuxStatus = tmuxResolver.isTmuxEnabled(for: server.id) ? .unknown : .off
-        paneStates[tab.rootPaneId] = rootState
-
-        // Now update tabs (triggers @Published, view will have state ready)
-        var serverTabs = tabsByServer[server.id] ?? []
-        serverTabs.append(tab)
-        tabsByServer[server.id] = serverTabs
-
-        // Select the new tab
-        selectedTabByServer[server.id] = tab.id
 
         logger.info("Opened new tab for \(server.name), pane: \(tab.rootPaneId)")
         return tab
@@ -389,29 +401,7 @@ final class TerminalTabManager: ObservableObject {
             cleanupPane(paneId, intent: intent)
         }
 
-        // Remove from tabs
-        if var serverTabs = tabsByServer[currentTab.serverId] {
-            let closingIndex = serverTabs.firstIndex { $0.id == currentTab.id }
-            serverTabs.removeAll { $0.id == currentTab.id }
-
-            // Select the closest neighbor when the selected tab is closed: the
-            // tab that shifted into its slot, or the new last tab if it was last.
-            if serverTabs.isEmpty {
-                tabsByServer.removeValue(forKey: currentTab.serverId)
-                selectedTabByServer.removeValue(forKey: currentTab.serverId)
-            } else {
-                tabsByServer[currentTab.serverId] = serverTabs
-            }
-
-            if selectedTabByServer[currentTab.serverId] == currentTab.id {
-                if let closingIndex, !serverTabs.isEmpty {
-                    selectedTabByServer[currentTab.serverId] = serverTabs[min(closingIndex, serverTabs.count - 1)].id
-                } else {
-                    selectedTabByServer.removeValue(forKey: currentTab.serverId)
-                }
-            }
-
-        }
+        sessionState.removeTab(currentTab)
 
         dependencies.effects.noteTerminalSessionEnded(hasConnectedPanes)
 
@@ -436,20 +426,19 @@ final class TerminalTabManager: ObservableObject {
     /// Disconnect all terminal tabs for a specific server.
     func disconnectServer(_ serverId: UUID) {
         closeAllTabs(for: serverId, intent: .explicitServerDisconnect)
-        tabsByServer.removeValue(forKey: serverId)
-        selectedTabByServer.removeValue(forKey: serverId)
-        selectedViewByServer.removeValue(forKey: serverId)
-        persistSnapshot()
+        sessionState.removeServer(serverId)
+        connectionViewSelections.setSelection(nil, for: serverId)
+        sessionState.persistNow()
         logger.info("Disconnected all terminal tabs for server \(serverId.uuidString, privacy: .public)")
     }
 
     /// Disconnect every active terminal tab.
     func disconnectAll() {
-        let serverIds = Set(tabsByServer.keys).union(connectedServerIds)
+        let serverIds = sessionState.serverIdsWithTabs.union(connectedServerIds)
         for serverId in serverIds {
             disconnectServer(serverId)
         }
-        persistSnapshot()
+        sessionState.persistNow()
         logger.info("Disconnected all terminal tabs")
     }
 
@@ -457,11 +446,7 @@ final class TerminalTabManager: ObservableObject {
     /// deleting tabs or terminating remote resumable sessions.
     @discardableResult
     func beginApplicationTermination() -> Task<Void, Never> {
-        persistTask?.cancel()
-        persistTask = nil
-        persistSnapshot()
-
-        let paneIds = Set(paneStates.keys)
+        let paneIds = sessionState.prepareForApplicationTermination()
             .union(shellRegistry.startsInFlight.keys)
             .union(eternalTerminalRuntimes.keys)
 
@@ -478,10 +463,6 @@ final class TerminalTabManager: ObservableObject {
         tabOpensInFlight.removeAll()
         for paneId in paneIds {
             detachTerminalRegistration(for: paneId)
-            if paneStates[paneId] != nil {
-                paneStates[paneId]?.disconnectReason = .transportEnded
-                paneStates[paneId]?.connectionState = .disconnected
-            }
         }
         runtimeTitleByPane.removeAll()
 
@@ -499,7 +480,7 @@ final class TerminalTabManager: ObservableObject {
     func invalidateReconnectPreparations(for serverId: UUID) {
         // Keep route departure synchronous. Suspended preparation may finish
         // its bounded wait, but cannot mutate the preserved pane afterward.
-        for paneState in paneStates.values where paneState.serverId == serverId {
+        for paneState in sessionState.paneStates(forServer: serverId) {
             reconnectCoordinator.invalidate(for: paneState.paneId)
         }
     }
@@ -517,7 +498,7 @@ final class TerminalTabManager: ObservableObject {
         for paneId: UUID,
         eternalTerminalProbeID: UUID? = nil
     ) async -> Bool {
-        guard let paneState = paneStates[paneId] else { return false }
+        guard let paneState = sessionState.paneState(for: paneId) else { return false }
         if paneState.activeTransport == .eternalTerminal {
             let runtime = eternalTerminalRuntimes[paneId]
             let completedProbe = eternalTerminalProbeID.map {
@@ -575,7 +556,7 @@ final class TerminalTabManager: ObservableObject {
         replacingCurrent: Bool,
         networkReadiness: TerminalNetworkReadiness
     ) -> Bool {
-        guard paneStates[paneId] != nil else { return false }
+        guard sessionState.containsPane(paneId) else { return false }
         let networkIsReady = networkReadiness == .ready
         guard !requiresReadyNetwork || networkIsReady else { return false }
 
@@ -602,7 +583,7 @@ final class TerminalTabManager: ObservableObject {
         generation: UUID,
         replacingCurrent: Bool
     ) -> Bool {
-        guard paneStates[paneId] != nil else { return false }
+        guard sessionState.containsPane(paneId) else { return false }
         return makeReconnectAttempt(
             for: paneId,
             generation: generation,
@@ -675,7 +656,7 @@ final class TerminalTabManager: ObservableObject {
 
     private func beginConnection(after attempt: TerminalReconnectCoordinator.Attempt) {
         guard reconnectCoordinator.attempt(for: attempt.paneId)?.id == attempt.id,
-              let paneState = paneStates[attempt.paneId] else {
+              let paneState = sessionState.paneState(for: attempt.paneId) else {
             logger.info(
                 "Ignoring stale reconnect preparation result \(attempt.id.uuidString, privacy: .public)"
             )
@@ -710,13 +691,14 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func failReconnect(_ attempt: TerminalReconnectCoordinator.Attempt) {
-        guard paneStates[attempt.paneId] != nil else { return }
+        guard sessionState.containsPane(attempt.paneId) else { return }
         logger.error(
             "Reconnect deadline exceeded for pane \(attempt.paneId.uuidString, privacy: .public), attempt \(attempt.id.uuidString, privacy: .public)"
         )
-        if paneStates[attempt.paneId]?.disconnectReason != nil {
-            paneStates[attempt.paneId]?.disconnectReason = nil
-            schedulePersist()
+        if sessionState.paneState(for: attempt.paneId)?.disconnectReason != nil {
+            sessionState.updatePane(attempt.paneId, persist: true) {
+                $0.disconnectReason = nil
+            }
         }
         updatePaneState(
             attempt.paneId,
@@ -731,7 +713,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func clearMoshFallbackDiagnostics(for paneId: UUID) {
-        paneStates[paneId]?.transportState.clearFallbackDiagnostics()
+        sessionState.updatePane(paneId) { $0.transportState.clearFallbackDiagnostics() }
     }
 
     // MARK: - Split Management
@@ -805,60 +787,19 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func createSplitPane(tab: TerminalTab, paneId: UUID, placement: TerminalSplitPlacement) -> UUID? {
-        // Resolve the latest tab from manager state since the passed value can be stale.
-        guard let currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }) else {
-            logger.warning("createSplitPane: tab not found \(tab.id.uuidString, privacy: .public)")
+        guard let currentTab = sessionState.tab(id: tab.id, for: tab.serverId),
+              let newPaneId = sessionState.createSplitPane(
+                  in: currentTab,
+                  paneId: paneId,
+                  placement: placement,
+                  tmuxStatus: tmuxResolver.isTmuxEnabled(for: currentTab.serverId) ? .unknown : .off
+              ) else {
+            logger.warning("createSplitPane: tab or pane not found")
             return nil
         }
-
-        let paneExists: Bool
-        if let layout = currentTab.layout {
-            paneExists = layout.findPane(paneId)
-        } else {
-            paneExists = currentTab.rootPaneId == paneId
+        if let updatedTab = sessionState.tab(id: currentTab.id, for: currentTab.serverId) {
+            updateTmuxFocus(for: updatedTab)
         }
-        guard paneExists else {
-            logger.warning("createSplitPane: pane not found \(paneId.uuidString, privacy: .public)")
-            return nil
-        }
-
-        let newPaneId = UUID()
-
-        // Create pane state FIRST (before any @Published updates)
-        // This ensures the view has state when it renders
-        var newState = TerminalPaneState(
-            paneId: newPaneId,
-            tabId: currentTab.id,
-            serverId: currentTab.serverId
-        )
-        newState.workingDirectory = paneStates[paneId]?.workingDirectory
-        newState.seedPaneId = paneId
-        newState.tmuxStatus = tmuxResolver.isTmuxEnabled(for: currentTab.serverId) ? .unknown : .off
-        paneStates[newPaneId] = newState
-
-        let sourceNode = TerminalSplitNode.leaf(paneId: paneId)
-        let newNode = TerminalSplitNode.leaf(paneId: newPaneId)
-        // Create the new split node
-        let newSplit = TerminalSplitNode.split(TerminalSplitNode.Split(
-            direction: placement.direction,
-            ratio: 0.5,
-            left: placement.insertsBeforeSource ? newNode : sourceNode,
-            right: placement.insertsBeforeSource ? sourceNode : newNode
-        ))
-
-        // Update tab layout
-        var updatedTab = currentTab
-        if let currentLayout = currentTab.layout {
-            updatedTab.layout = currentLayout.replacingPane(paneId, with: newSplit).equalized()
-        } else {
-            // No layout yet - create one with the split
-            updatedTab.layout = newSplit
-        }
-        updatedTab.focusedPaneId = newPaneId
-
-        // Update tabs array (triggers @Published, view will have state ready)
-        updateTab(updatedTab)
-
         logger.info("Split pane \(paneId) \(placement.direction.rawValue), new pane: \(newPaneId)")
         return newPaneId
     }
@@ -873,65 +814,23 @@ final class TerminalTabManager: ObservableObject {
         paneId: UUID,
         intent: TerminalTeardownIntent
     ) {
-        // Get current tab from manager (passed tab might be stale)
-        guard let currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }) else {
+        guard let removal = sessionState.removePane(in: tab, paneId: paneId) else {
             logger.warning("closePane: tab not found")
             return
         }
-
-        let paneExists: Bool
-        if let layout = currentTab.layout {
-            paneExists = layout.findPane(paneId)
-        } else {
-            paneExists = currentTab.rootPaneId == paneId
-        }
-        guard paneExists else {
-            logger.warning("closePane: pane not found \(paneId)")
-            return
-        }
-
-        // If this is the only pane, close the tab
-        if currentTab.paneCount <= 1 {
+        switch removal {
+        case .closeTab(let currentTab):
             closeTab(currentTab, intent: intent)
-            return
+        case .removed(let removedPaneId, let updatedTab):
+            updateTmuxFocus(for: updatedTab)
+            cleanupPane(removedPaneId, intent: intent)
+            logger.info("Closed pane \(removedPaneId)")
         }
-
-        // Update layout FIRST (before cleanup) to avoid "Initializing" flash
-        // When cleanupPane triggers @Published, the pane won't be rendered anymore
-        var updatedTab = currentTab
-        if let currentLayout = currentTab.layout,
-           let newLayout = currentLayout.removingPane(paneId) {
-            // Always keep the layout - even for single pane
-            // This ensures allPaneIds returns the correct remaining pane
-            // (not rootPaneId which might have been closed)
-            updatedTab.layout = newLayout.equalized()
-
-            // Focus the closest remaining pane (the one that took the closed
-            // pane's slot, or the new last pane if it was last) instead of
-            // jumping to the first pane.
-            if updatedTab.focusedPaneId == paneId {
-                let oldPanes = currentLayout.allPaneIds()
-                let newPanes = newLayout.allPaneIds()
-                if let closedIndex = oldPanes.firstIndex(of: paneId), !newPanes.isEmpty {
-                    updatedTab.focusedPaneId = newPanes[min(closedIndex, newPanes.count - 1)]
-                } else {
-                    updatedTab.focusedPaneId = newPanes.first ?? currentTab.rootPaneId
-                }
-            }
-        }
-        updateTab(updatedTab)
-
-        // Now clean up the pane (after layout is updated)
-        cleanupPane(paneId, intent: intent)
-        logger.info("Closed pane \(paneId)")
     }
 
     /// Update a tab in the tabs array
     func updateTab(_ tab: TerminalTab) {
-        guard var serverTabs = tabsByServer[tab.serverId],
-              let index = serverTabs.firstIndex(where: { $0.id == tab.id }) else { return }
-        serverTabs[index] = tab
-        tabsByServer[tab.serverId] = serverTabs
+        guard sessionState.replaceTab(tab) else { return }
         if !tab.hasSplits {
             splitZoomedTabIds.remove(tab.id)
         }
@@ -939,13 +838,8 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func focusPane(in tab: TerminalTab, paneId: UUID) {
-        guard var currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }),
-              currentTab.allPaneIds.contains(paneId),
-              currentTab.focusedPaneId != paneId else {
-            return
-        }
-        currentTab.focusedPaneId = paneId
-        updateTab(currentTab)
+        guard let updatedTab = sessionState.focusPane(in: tab, paneId: paneId) else { return }
+        updateTmuxFocus(for: updatedTab)
     }
 
     func updateSplitRatio(
@@ -953,24 +847,17 @@ final class TerminalTabManager: ObservableObject {
         node: TerminalSplitNode,
         ratio: Double
     ) {
-        guard var currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }),
-              let currentLayout = currentTab.layout else {
-            return
-        }
-        currentTab.layout = currentLayout.replacingNode(
-            node,
-            with: node.withUpdatedRatio(ratio)
-        )
-        updateTab(currentTab)
+        guard let updatedTab = sessionState.updateSplitRatio(
+            in: tab,
+            node: node,
+            ratio: ratio
+        ) else { return }
+        updateTmuxFocus(for: updatedTab)
     }
 
     func equalizeSplitLayout(in tab: TerminalTab) {
-        guard var currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }),
-              let currentLayout = currentTab.layout else {
-            return
-        }
-        currentTab.layout = currentLayout.equalized()
-        updateTab(currentTab)
+        guard let updatedTab = sessionState.equalizeSplitLayout(in: tab) else { return }
+        updateTmuxFocus(for: updatedTab)
     }
 
     func isSplitZoomed(in tab: TerminalTab) -> Bool {
@@ -1045,7 +932,7 @@ final class TerminalTabManager: ObservableObject {
         hasProAccess: Bool
     ) -> TerminalSplitCommandOutcome {
         guard canPerformSplitCommand(command, in: tab),
-              var currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }) else {
+              let currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }) else {
             return .unavailable
         }
 
@@ -1080,14 +967,18 @@ final class TerminalTabManager: ObservableObject {
             guard let paneId = currentTab.layout?.pane(before: currentTab.focusedPaneId) else {
                 return .unavailable
             }
-            currentTab.focusedPaneId = paneId
-            updateTab(currentTab)
+            guard let updatedTab = sessionState.selectAdjacentPane(in: currentTab, paneId: paneId) else {
+                return .unavailable
+            }
+            updateTmuxFocus(for: updatedTab)
         case .selectNext:
             guard let paneId = currentTab.layout?.pane(after: currentTab.focusedPaneId) else {
                 return .unavailable
             }
-            currentTab.focusedPaneId = paneId
-            updateTab(currentTab)
+            guard let updatedTab = sessionState.selectAdjacentPane(in: currentTab, paneId: paneId) else {
+                return .unavailable
+            }
+            updateTmuxFocus(for: updatedTab)
         case .selectAbove:
             return selectNeighbor(in: currentTab, direction: .above)
         case .selectBelow:
@@ -1097,9 +988,10 @@ final class TerminalTabManager: ObservableObject {
         case .selectRight:
             return selectNeighbor(in: currentTab, direction: .right)
         case .equalize:
-            guard let layout = currentTab.layout else { return .unavailable }
-            currentTab.layout = layout.equalized()
-            updateTab(currentTab)
+            guard let updatedTab = sessionState.equalizeSplitLayout(in: currentTab) else {
+                return .unavailable
+            }
+            updateTmuxFocus(for: updatedTab)
         case .moveDividerUp:
             return moveDivider(in: currentTab, direction: .up)
         case .moveDividerDown:
@@ -1117,15 +1009,17 @@ final class TerminalTabManager: ObservableObject {
         in tab: TerminalTab,
         direction: TerminalSplitFocusDirection
     ) -> TerminalSplitCommandOutcome {
-        guard var currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }),
+        guard let currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }),
               let paneId = currentTab.layout?.neighboringPane(
                   from: currentTab.focusedPaneId,
                   direction: direction
               ) else {
             return .unavailable
         }
-        currentTab.focusedPaneId = paneId
-        updateTab(currentTab)
+        guard let updatedTab = sessionState.selectAdjacentPane(in: currentTab, paneId: paneId) else {
+            return .unavailable
+        }
+        updateTmuxFocus(for: updatedTab)
         return .performed
     }
 
@@ -1133,16 +1027,10 @@ final class TerminalTabManager: ObservableObject {
         in tab: TerminalTab,
         direction: TerminalSplitResizeDirection
     ) -> TerminalSplitCommandOutcome {
-        guard var currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }),
-              let layout = currentTab.layout,
-              let updatedLayout = layout.movingDivider(
-                  near: currentTab.focusedPaneId,
-                  direction: direction
-              ) else {
+        guard let updatedTab = sessionState.moveDivider(in: tab, direction: direction) else {
             return .unavailable
         }
-        currentTab.layout = updatedLayout
-        updateTab(currentTab)
+        updateTmuxFocus(for: updatedTab)
         return .performed
     }
 
@@ -1179,7 +1067,7 @@ final class TerminalTabManager: ObservableObject {
         #endif
         terminalViews[paneId] = terminal
         #if os(iOS)
-        terminal.acceptsTerminalInput = paneStates[paneId]?.connectionState.isConnected == true
+        terminal.acceptsTerminalInput = sessionState.paneState(for: paneId)?.connectionState.isConnected == true
         // A replacement is commonly registered before UIKit attaches it.
         // Publish that fact before reconciling its new identity so the
         // coordinator cannot spend an acquisition or repair off-window.
@@ -1466,16 +1354,17 @@ final class TerminalTabManager: ObservableObject {
     func eternalTerminalTmuxResumeContext(
         for paneId: UUID
     ) -> EternalTerminalTmuxResumeContext? {
-        paneStates[paneId]?.eternalTerminalTmuxResumeContext
+        sessionState.paneState(for: paneId)?.eternalTerminalTmuxResumeContext
     }
 
     func setEternalTerminalTmuxResumeContext(
         _ context: EternalTerminalTmuxResumeContext?,
         for paneId: UUID
     ) {
-        guard paneStates[paneId]?.eternalTerminalTmuxResumeContext != context else { return }
-        paneStates[paneId]?.eternalTerminalTmuxResumeContext = context
-        schedulePersist()
+        guard sessionState.paneState(for: paneId)?.eternalTerminalTmuxResumeContext != context else { return }
+        sessionState.updatePane(paneId, persist: true) {
+            $0.eternalTerminalTmuxResumeContext = context
+        }
     }
 
     func unregisterEternalTerminalRuntime(
@@ -1497,7 +1386,7 @@ final class TerminalTabManager: ObservableObject {
     ) -> Bool {
         guard eternalTerminalRuntimes[paneId] === runtime else { return false }
         eternalTerminalRuntimes.removeValue(forKey: paneId)
-        if paneStates[paneId] != nil {
+        if sessionState.containsPane(paneId) {
             setPaneTransport(.ssh, for: paneId)
         }
         return true
@@ -1597,7 +1486,8 @@ final class TerminalTabManager: ObservableObject {
     func prepareResumableSessionsForApplicationBackground() async {
         await prepareEternalTerminalSessionsForApplicationBackground()
 
-        let moshRoutes: [(paneId: UUID, client: SSHClient, shellId: UUID)] = paneStates.compactMap { paneId, state in
+        let moshRoutes: [(paneId: UUID, client: SSHClient, shellId: UUID)] = sessionState.allPaneStates.compactMap { state in
+            let paneId = state.paneId
             guard state.activeTransport == .mosh,
                   let client = shellRegistry.client(for: paneId),
                   let shellId = shellRegistry.shellId(for: paneId) else {
@@ -1623,7 +1513,8 @@ final class TerminalTabManager: ObservableObject {
     func resumeResumableSessionsFromApplicationBackground() async {
         await resumeEternalTerminalSessionsFromApplicationBackground()
 
-        let moshRoutes: [(paneId: UUID, client: SSHClient, shellId: UUID)] = paneStates.compactMap { paneId, state in
+        let moshRoutes: [(paneId: UUID, client: SSHClient, shellId: UUID)] = sessionState.allPaneStates.compactMap { state in
+            let paneId = state.paneId
             guard state.activeTransport == .mosh,
                   let client = shellRegistry.client(for: paneId),
                   let shellId = shellRegistry.shellId(for: paneId) else {
@@ -1671,7 +1562,7 @@ final class TerminalTabManager: ObservableObject {
         for paneId: UUID,
         client: SSHClient
     ) -> SSHShellRegistry.StartToken? {
-        guard let serverId = paneStates[paneId]?.serverId else {
+        guard let serverId = sessionState.paneState(for: paneId)?.serverId else {
             return nil
         }
 
@@ -1837,7 +1728,7 @@ final class TerminalTabManager: ObservableObject {
         client: SSHClient,
         startToken: SSHShellRegistry.StartToken
     ) -> Bool {
-        paneStates[paneId] != nil
+        sessionState.containsPane(paneId)
             && shellRegistry.ownsConnection(
                 client: client,
                 startToken: startToken,
@@ -1886,8 +1777,8 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func hasOtherActivePanes(for serverId: UUID, excluding paneId: UUID) -> Bool {
-        paneStates.contains { entry in
-            entry.key != paneId && entry.value.serverId == serverId && entry.value.connectionState.isConnected
+        sessionState.allPaneStates.contains { state in
+            state.paneId != paneId && state.serverId == serverId && state.connectionState.isConnected
         }
     }
 
@@ -1906,15 +1797,16 @@ final class TerminalTabManager: ObservableObject {
 
     private func selectedTransport(for serverId: UUID) -> ShellTransport {
         if let selectedTab = selectedTab(for: serverId),
-           let state = paneStates[selectedTab.focusedPaneId] {
+           let state = sessionState.paneState(for: selectedTab.focusedPaneId) {
             return state.activeTransport
         }
 
-        if let connectedPane = paneStates.values.first(where: { $0.serverId == serverId && $0.connectionState.isConnected }) {
+        if let connectedPane = sessionState.paneStates(forServer: serverId)
+            .first(where: { $0.connectionState.isConnected }) {
             return connectedPane.activeTransport
         }
 
-        return paneStates.values.first(where: { $0.serverId == serverId })?.activeTransport ?? .ssh
+        return sessionState.firstPaneState(for: serverId)?.activeTransport ?? .ssh
     }
 
     /// Clean up a pane (terminal + SSH)
@@ -1936,7 +1828,7 @@ final class TerminalTabManager: ObservableObject {
         sshConnectionTasks.cancel(for: paneId)
         terminalConnectionGenerations.removeValue(forKey: paneId)
         detachTerminalRegistration(for: paneId)
-        paneStates.removeValue(forKey: paneId)
+        sessionState.removePaneState(for: paneId)
         runtimeTitleByPane.removeValue(forKey: paneId)
         titleOverrideByPane.removeValue(forKey: paneId)
 
@@ -1970,7 +1862,7 @@ final class TerminalTabManager: ObservableObject {
 
     #if os(iOS)
     private func publishTerminalInputAvailability(for paneId: UUID) {
-        let connectionState = paneStates[paneId]?.connectionState ?? .idle
+        let connectionState = sessionState.paneState(for: paneId)?.connectionState ?? .idle
         let terminal = terminalViews[paneId]
 
         // Routing must be enabled before the coordinator can preserve or
@@ -1988,30 +1880,28 @@ final class TerminalTabManager: ObservableObject {
 
     /// Update connection state for a pane
     func updatePaneState(_ paneId: UUID, connectionState: ConnectionState) {
-        paneStates[paneId]?.connectionState = connectionState
+        let clearedDisconnectReason = connectionState.isConnected
+            && sessionState.paneState(for: paneId)?.disconnectReason != nil
+        sessionState.updatePane(paneId, persist: clearedDisconnectReason) { paneState in
+            paneState.connectionState = connectionState
+            if connectionState.isConnected {
+                paneState.disconnectReason = nil
+                paneState.markConnectionEstablished()
+            }
+        }
         #if os(iOS)
         if connectionState.isConnecting,
-           paneStates[paneId]?.hasEstablishedConnection == true,
+           sessionState.paneState(for: paneId)?.hasEstablishedConnection == true,
            currentNetworkReadiness == .unavailable {
             queueIOSReconnectUntilNetworkReady(for: paneId)
         }
         #endif
-        if connectionState.isConnected {
-            let clearedDisconnectReason = paneStates[paneId]?.disconnectReason != nil
-            paneStates[paneId]?.disconnectReason = nil
-            if clearedDisconnectReason {
-                schedulePersist()
-            }
-        }
-        if connectionState.isConnected {
-            paneStates[paneId]?.markConnectionEstablished()
-        }
         #if os(iOS)
         publishTerminalInputAvailability(for: paneId)
         #endif
         switch connectionState {
         case .connecting, .reconnecting:
-            if paneStates[paneId]?.activeTransport != .eternalTerminal {
+            if sessionState.paneState(for: paneId)?.activeTransport != .eternalTerminal {
                 setPaneTransport(.ssh, for: paneId)
             }
         case .disconnected, .failed:
@@ -2025,7 +1915,7 @@ final class TerminalTabManager: ObservableObject {
             reconnectCoordinator.complete(for: paneId)
             dependencies.effects.recordSuccessfulConnection(
                 paneId,
-                paneStates[paneId]?.activeTransport.rawValue
+                sessionState.paneState(for: paneId)?.activeTransport.rawValue
                     ?? ShellTransport.ssh.rawValue
             )
         case .idle:
@@ -2037,9 +1927,8 @@ final class TerminalTabManager: ObservableObject {
         let requiresUserAction = (error as? SSHError).map {
             !$0.allowsAutomaticReconnectRetry
         } ?? false
-        if requiresUserAction, paneStates[paneId]?.disconnectReason != nil {
-            paneStates[paneId]?.disconnectReason = nil
-            schedulePersist()
+        if requiresUserAction, sessionState.paneState(for: paneId)?.disconnectReason != nil {
+            sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = nil }
         }
         updatePaneState(paneId, connectionState: .failed(error.localizedDescription))
     }
@@ -2070,7 +1959,7 @@ final class TerminalTabManager: ObservableObject {
         reason: TerminalShellEndReason,
         unregistering ownership: (client: SSHClient, shellId: UUID)?
     ) {
-        guard let paneState = paneStates[paneId] else { return }
+        guard let paneState = sessionState.paneState(for: paneId) else { return }
 
         switch reason {
         case .tmuxEnded(.managed):
@@ -2084,27 +1973,24 @@ final class TerminalTabManager: ObservableObject {
             if ownership == .managed {
                 tmuxResolver.confirmManagedSession(for: paneId)
             }
-            paneStates[paneId]?.disconnectReason = .tmuxDetached
+            sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = .tmuxDetached }
             updatePaneState(paneId, connectionState: .disconnected)
-            schedulePersist()
 
         case .tmuxCreationFailed:
             tmuxResolver.clearAttachmentState(for: paneId)
-            paneStates[paneId]?.disconnectReason = nil
+            sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = nil }
             updatePaneTmuxStatus(paneId, status: .unknown)
             updatePaneState(
                 paneId,
                 connectionState: .failed(String(localized: "Unable to start tmux session."))
             )
-            schedulePersist()
 
         case .tmuxEnded(.external):
-            paneStates[paneId]?.disconnectReason = .externalTmuxEnded
+            sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = .externalTmuxEnded }
             updatePaneState(paneId, connectionState: .disconnected)
-            schedulePersist()
 
         case .transportEnded:
-            paneStates[paneId]?.disconnectReason = .transportEnded
+            sessionState.updatePane(paneId) { $0.disconnectReason = .transportEnded }
             updatePaneState(paneId, connectionState: .disconnected)
         }
 
@@ -2123,7 +2009,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private var hasConnectedPanes: Bool {
-        paneStates.values.contains { $0.connectionState.isConnected }
+        sessionState.hasConnectedPanes
     }
 
     func updatePaneWorkingDirectory(_ paneId: UUID, rawDirectory: String) {
@@ -2132,14 +2018,14 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func updatePaneTitle(_ paneId: UUID, rawTitle: String) {
-        guard paneStates[paneId] != nil else { return }
+        guard sessionState.containsPane(paneId) else { return }
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
         setPaneTitle(title, for: paneId)
     }
 
     func setPaneTitleOverride(_ rawTitle: String?, for paneId: UUID) {
-        guard paneStates[paneId] != nil else { return }
+        guard sessionState.containsPane(paneId) else { return }
         let title = rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if title.isEmpty {
             titleOverrideByPane.removeValue(forKey: paneId)
@@ -2153,11 +2039,11 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func presentationOverrides(for paneId: UUID) -> TerminalPresentationOverrides {
-        paneStates[paneId]?.presentationOverrides ?? .empty
+        sessionState.paneState(for: paneId)?.presentationOverrides ?? .empty
     }
 
     func handleTerminalZoom(_ action: TerminalZoomAction, for paneId: UUID) -> TerminalZoomResult? {
-        guard paneStates[paneId] != nil else { return nil }
+        guard sessionState.containsPane(paneId) else { return nil }
 
         let currentOverrides = presentationOverrides(for: paneId)
         let overrides = currentOverrides.applyingZoom(action)
@@ -2168,7 +2054,7 @@ final class TerminalTabManager: ObservableObject {
             )
         }
         setPanePresentationOverrides(overrides, for: paneId)
-        schedulePersist()
+        sessionState.requestPersistence()
         terminalViews[paneId]?.applyPresentationOverrides(overrides)
         return TerminalZoomResult(
             presentationOverrides: overrides,
@@ -2250,7 +2136,9 @@ final class TerminalTabManager: ObservableObject {
 
     private func currentTmuxStatus(for paneId: UUID, serverId: UUID) -> TmuxStatus {
         guard let tab = selectedTab(for: serverId) else { return .background }
-        return (tab.id == selectedTabByServer[serverId] && tab.focusedPaneId == paneId) ? .foreground : .background
+        return (tab.id == sessionState.selectedTabId(for: serverId) && tab.focusedPaneId == paneId)
+            ? .foreground
+            : .background
     }
 
     private func disableTmuxAttachment(for paneId: UUID, status: TmuxStatus) {
@@ -2370,7 +2258,7 @@ final class TerminalTabManager: ObservableObject {
         using client: SSHClient,
         backend: RemoteTmuxBackend? = nil
     ) async -> String {
-        if let seedPaneId = paneStates[paneId]?.seedPaneId,
+        if let seedPaneId = sessionState.paneState(for: paneId)?.seedPaneId,
            let path = await dependencies.remoteTmux.currentPath(
                sessionName: tmuxResolver.sessionName(for: seedPaneId),
                using: client,
@@ -2413,19 +2301,28 @@ final class TerminalTabManager: ObservableObject {
         return normalized
     }
 
-    private func updateTmuxSelectionStatuses() {
-        for serverId in tabsByServer.keys {
+    private func updateTmuxSelectionStatuses(selectedTabs: [UUID: UUID]) {
+        for serverId in sessionState.serverIdsWithTabs {
             let tabsForServer = tabs(for: serverId)
             for tab in tabsForServer {
-                updateTmuxFocus(for: tab)
+                updateTmuxFocus(
+                    for: tab,
+                    isSelectedTab: selectedTabs[serverId] == tab.id
+                )
             }
         }
     }
 
     private func updateTmuxFocus(for tab: TerminalTab) {
-        let isSelectedTab = selectedTabByServer[tab.serverId] == tab.id
+        updateTmuxFocus(
+            for: tab,
+            isSelectedTab: sessionState.selectedTabId(for: tab.serverId) == tab.id
+        )
+    }
+
+    private func updateTmuxFocus(for tab: TerminalTab, isSelectedTab: Bool) {
         for paneId in tab.allPaneIds {
-            guard let state = paneStates[paneId] else { continue }
+            guard let state = sessionState.paneState(for: paneId) else { continue }
             guard state.tmuxStatus == .foreground || state.tmuxStatus == .background else { continue }
             let newStatus: TmuxStatus = (isSelectedTab && tab.focusedPaneId == paneId) ? .foreground : .background
             if state.tmuxStatus != newStatus {
@@ -2595,7 +2492,7 @@ final class TerminalTabManager: ObservableObject {
         )
         try validateOwner()
         tmuxResolver.updateAttachmentState(for: paneId, selection: selection, setPrompt: setTmuxAttachPrompt)
-        schedulePersist()
+        sessionState.requestPersistence()
 
         if case .skipTmux = selection {
             updatePaneTmuxStatus(paneId, status: .off)
@@ -2746,7 +2643,7 @@ final class TerminalTabManager: ObservableObject {
         runtime: EternalTerminalRuntime,
         onInstalled: @MainActor @escaping () -> Void
     ) async {
-        guard let serverId = paneStates[paneId]?.serverId,
+        guard let serverId = sessionState.paneState(for: paneId)?.serverId,
               tmuxResolver.isTmuxEnabled(for: serverId),
               isCurrentEternalTerminalRuntime(runtime, for: paneId) else { return }
 
@@ -2871,11 +2768,11 @@ final class TerminalTabManager: ObservableObject {
         sessionName: String,
         onInstalled: () -> Void
     ) {
-        guard paneStates[paneId] != nil else { return }
+        guard sessionState.containsPane(paneId) else { return }
         tmuxResolver.clearAttachmentState(for: paneId)
         tmuxResolver.sessionNames[paneId] = sessionName
         tmuxResolver.sessionOwnership[paneId] = .managed
-        schedulePersist()
+        sessionState.requestPersistence()
         onInstalled()
     }
 
@@ -2912,240 +2809,12 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func disableTmux(for serverId: UUID) {
-        for (paneId, state) in paneStates where state.serverId == serverId {
-            setPaneTmuxStatus(.off, for: paneId)
-            clearTmuxRuntimeState(for: paneId)
+        for state in sessionState.paneStates(forServer: serverId) {
+            setPaneTmuxStatus(.off, for: state.paneId)
+            clearTmuxRuntimeState(for: state.paneId)
         }
     }
 
-    // MARK: - Persistence
-
-    private func makeServerSnapshots() -> [TerminalTabsSnapshot.ServerSnapshot] {
-        tabsByServer.compactMap { serverId, tabs in
-            guard !tabs.isEmpty else { return nil }
-            return TerminalTabsSnapshot.ServerSnapshot(
-                serverId: serverId,
-                tabs: tabs.map {
-                    TerminalTabsSnapshot.TabSnapshot(
-                        from: $0,
-                        paneStates: paneStates,
-                        tmuxResolver: tmuxResolver
-                    )
-                },
-                selectedTabId: selectedTabByServer[serverId],
-                selectedView: selectedViewByServer[serverId]?.rawValue
-            )
-        }
-    }
-
-    private func makeSnapshot() -> TerminalTabsSnapshot {
-        TerminalTabsSnapshot(servers: makeServerSnapshots())
-    }
-
-    private func makeRestoredPaneStates(
-        from tabsByServer: [UUID: [TerminalTab]],
-        snapshotsByTabId: [UUID: TerminalTabsSnapshot.TabSnapshot]
-    ) -> [UUID: TerminalPaneState] {
-        var restoredPaneStates: [UUID: TerminalPaneState] = [:]
-
-        for tabs in tabsByServer.values {
-            for tab in tabs {
-                for paneId in tab.allPaneIds {
-                    var paneState = TerminalPaneState(
-                        paneId: paneId,
-                        tabId: tab.id,
-                        serverId: tab.serverId
-                    )
-                    paneState.connectionState = .disconnected
-                    paneState.markConnectionEstablished()
-                    if !tmuxResolver.isTmuxEnabled(for: tab.serverId) {
-                        paneState.tmuxStatus = .off
-                    }
-                    paneState.presentationOverrides = snapshotsByTabId[tab.id]?.panePresentationOverrides?[paneId] ?? .empty
-                    paneState.disconnectReason = snapshotsByTabId[tab.id]?.paneDisconnectReasons?[paneId]
-                    paneState.eternalTerminalTmuxResumeContext = snapshotsByTabId[tab.id]?.eternalTerminalTmuxResumeContexts?[paneId]
-                    restoredPaneStates[paneId] = paneState
-                }
-            }
-        }
-
-        return restoredPaneStates
-    }
-
-    private func applyRestoredSnapshot(_ snapshot: TerminalTabsSnapshot) {
-        var restoredTabsByServer: [UUID: [TerminalTab]] = [:]
-        var restoredSelectedTabs: [UUID: UUID] = [:]
-        var restoredSelectedViews: [UUID: ConnectionViewTabID] = [:]
-        var snapshotsByTabId: [UUID: TerminalTabsSnapshot.TabSnapshot] = [:]
-
-        for server in snapshot.servers {
-            for tabSnapshot in server.tabs {
-                snapshotsByTabId[tabSnapshot.id] = tabSnapshot
-            }
-            let tabs = server.tabs.map { $0.toTerminalTab() }
-            guard !tabs.isEmpty else { continue }
-            restoredTabsByServer[server.serverId] = tabs
-            if let selected = server.selectedTabId {
-                restoredSelectedTabs[server.serverId] = selected
-            }
-            if let view = server.selectedView.flatMap(ConnectionViewTabID.init(rawValue:)) {
-                restoredSelectedViews[server.serverId] = view
-            }
-        }
-
-        tabsByServer = restoredTabsByServer
-        selectedTabByServer = restoredSelectedTabs
-        selectedViewByServer = restoredSelectedViews
-        tmuxResolver.clearAllAttachmentState()
-        for tabSnapshot in snapshotsByTabId.values {
-            for (paneId, attachment) in tabSnapshot.tmuxAttachments ?? [:] {
-                tmuxResolver.sessionNames[paneId] = attachment.sessionName
-                tmuxResolver.sessionOwnership[paneId] = attachment.ownership
-                if attachment.managedSessionConfirmed == true {
-                    tmuxResolver.confirmManagedSession(for: paneId)
-                }
-            }
-        }
-        paneStates = makeRestoredPaneStates(
-            from: restoredTabsByServer,
-            snapshotsByTabId: snapshotsByTabId
-        )
-    }
-
-    private func schedulePersist() {
-        guard !isRestoring else { return }
-        persistTask?.cancel()
-        persistTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
-            await MainActor.run {
-                self?.persistSnapshot()
-            }
-        }
-    }
-
-    private func persistSnapshot() {
-        do {
-            let data = try JSONEncoder().encode(makeSnapshot())
-            snapshotStore.saveSnapshotData(data)
-        } catch {
-            logger.error("Failed to persist tabs snapshot: \(error.localizedDescription)")
-        }
-    }
-
-    private func restoreSnapshot() {
-        guard let data = snapshotStore.loadSnapshotData() else { return }
-        do {
-            let snapshot = try JSONDecoder().decode(TerminalTabsSnapshot.self, from: data)
-            isRestoring = true
-            applyRestoredSnapshot(snapshot)
-        } catch {
-            logger.error("Failed to restore tabs snapshot: \(error.localizedDescription)")
-        }
-        isRestoring = false
-    }
-}
-
-// MARK: - Persistence Snapshot
-
-private struct TerminalTabsSnapshot: Codable {
-    struct ServerSnapshot: Codable {
-        let serverId: UUID
-        let tabs: [TabSnapshot]
-        let selectedTabId: UUID?
-        let selectedView: String?
-    }
-
-    struct TabSnapshot: Codable {
-        let id: UUID
-        let serverId: UUID
-        let title: String
-        let createdAt: Date
-        let layout: TerminalSplitNode?
-        let focusedPaneId: UUID
-        let rootPaneId: UUID
-        let panePresentationOverrides: [UUID: TerminalPresentationOverrides]?
-        let paneDisconnectReasons: [UUID: TerminalDisconnectReason]?
-        let eternalTerminalTmuxResumeContexts: [UUID: EternalTerminalTmuxResumeContext]?
-        let tmuxAttachments: [UUID: TmuxAttachmentSnapshot]?
-
-        init(
-            from tab: TerminalTab,
-            paneStates: [UUID: TerminalPaneState],
-            tmuxResolver: TmuxAttachResolver
-        ) {
-            self.id = tab.id
-            self.serverId = tab.serverId
-            self.title = tab.title
-            self.createdAt = tab.createdAt
-            self.layout = tab.layout
-            self.focusedPaneId = tab.focusedPaneId
-            self.rootPaneId = tab.rootPaneId
-            let overrides: [UUID: TerminalPresentationOverrides] = Dictionary(
-                uniqueKeysWithValues: tab.allPaneIds.compactMap { paneId in
-                    guard let overrides = paneStates[paneId]?.presentationOverrides,
-                          !overrides.isEmpty else {
-                        return nil
-                    }
-                    return (paneId, overrides)
-                }
-            )
-            self.panePresentationOverrides = overrides.isEmpty ? nil : overrides
-            let disconnectReasons: [UUID: TerminalDisconnectReason] = Dictionary(
-                uniqueKeysWithValues: tab.allPaneIds.compactMap { paneId in
-                    guard let reason = paneStates[paneId]?.disconnectReason else { return nil }
-                    return (paneId, reason)
-                }
-            )
-            self.paneDisconnectReasons = disconnectReasons.isEmpty ? nil : disconnectReasons
-            let resumeContexts: [UUID: EternalTerminalTmuxResumeContext] = Dictionary(
-                uniqueKeysWithValues: tab.allPaneIds.compactMap { paneId in
-                    guard let context = paneStates[paneId]?.eternalTerminalTmuxResumeContext else {
-                        return nil
-                    }
-                    return (paneId, context)
-                }
-            )
-            self.eternalTerminalTmuxResumeContexts = resumeContexts.isEmpty ? nil : resumeContexts
-            let attachments: [UUID: TmuxAttachmentSnapshot] = Dictionary(
-                uniqueKeysWithValues: tab.allPaneIds.compactMap { paneId in
-                    guard let sessionName = tmuxResolver.sessionNames[paneId],
-                          let ownership = tmuxResolver.sessionOwnership[paneId] else {
-                        return nil
-                    }
-                    return (
-                        paneId,
-                        TmuxAttachmentSnapshot(
-                            sessionName: sessionName,
-                            ownership: ownership,
-                            managedSessionConfirmed: ownership == .managed
-                                && tmuxResolver.hasConfirmedManagedSession(for: paneId)
-                        )
-                    )
-                }
-            )
-            self.tmuxAttachments = attachments.isEmpty ? nil : attachments
-        }
-
-        func toTerminalTab() -> TerminalTab {
-            TerminalTab(
-                id: id,
-                serverId: serverId,
-                title: title,
-                createdAt: createdAt,
-                rootPaneId: rootPaneId,
-                focusedPaneId: focusedPaneId,
-                layout: layout
-            )
-        }
-    }
-
-    struct TmuxAttachmentSnapshot: Codable {
-        let sessionName: String
-        let ownership: TmuxSessionOwnership
-        let managedSessionConfirmed: Bool?
-    }
-
-    let servers: [ServerSnapshot]
 }
 
 #if DEBUG
@@ -3161,24 +2830,41 @@ extension TerminalTabManager {
     }
 
     func persistAndRestoreSnapshotForTesting() {
-        persistTask?.cancel()
-        persistTask = nil
-        persistSnapshot()
-        tmuxResolver.clearAllAttachmentState()
-        restoreSnapshot()
+        sessionState.persistAndRestoreSnapshotForTesting()
     }
 
     func snapshotDataForTesting() throws -> Data {
-        try JSONEncoder().encode(makeSnapshot())
+        try sessionState.snapshotDataForTesting()
+    }
+
+    func installTabForTesting(
+        _ tab: TerminalTab,
+        paneState: TerminalPaneState,
+        select: Bool = true
+    ) {
+        sessionState.install(tab, paneState: paneState, select: select)
+    }
+
+    func setPaneStateForTesting(_ paneState: TerminalPaneState) {
+        sessionState.setPaneState(paneState)
+    }
+
+    func updatePaneForTesting(
+        _ paneId: UUID,
+        _ mutation: (inout TerminalPaneState) -> Void
+    ) {
+        sessionState.updatePane(paneId, mutation)
+    }
+
+    var allPaneStatesForTesting: [TerminalPaneState] {
+        sessionState.allPaneStates
     }
 
     /// Resets manager state for deterministic integration tests.
     func resetForTesting() async {
-        persistTask?.cancel()
-        persistTask = nil
         sshConnectionTasks.cancelAll()
 
-        let allPaneIds = Set(paneStates.keys)
+        let allPaneIds = sessionState.paneIds
             .union(shellRegistry.startsInFlight.keys)
         for paneId in allPaneIds {
             clearTmuxRuntimeState(for: paneId)
@@ -3198,12 +2884,8 @@ extension TerminalTabManager {
 
         let terminals = Array(terminalViews.values)
         let eternalRuntimes = Array(eternalTerminalRuntimes.values)
-        isRestoring = true
-        tabsByServer = [:]
-        selectedTabByServer = [:]
+        sessionState.resetForTesting()
         splitZoomedTabIds = []
-        selectedViewByServer = [:]
-        paneStates = [:]
         runtimeTitleByPane = [:]
         titleOverrideByPane = [:]
         #if os(iOS)
@@ -3233,9 +2915,6 @@ extension TerminalTabManager {
         tmuxCleanupServers.removeAll()
         eternalTerminalResumeStore = defaultEternalTerminalResumeStore
         moshResumeStore = defaultMoshResumeStore
-        isRestoring = false
-
-        snapshotStore.removeSnapshotData()
         for terminal in terminals {
             terminal.cleanup()
         }

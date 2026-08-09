@@ -58,7 +58,7 @@ extension TerminalTabManager {
         paneId: UUID,
         strategy: MacTerminalRecoveryPolicy.ReadyStrategy
     )] {
-        paneStates.values.compactMap { paneState in
+        sessionState.allPaneStates.compactMap { paneState in
             let strategy = MacTerminalRecoveryPolicy.readyStrategy(
                 connectionState: paneState.connectionState,
                 hasEstablishedConnection: paneState.hasEstablishedConnection,
@@ -72,7 +72,7 @@ extension TerminalTabManager {
     }
 
     private var offlineRecoveryCandidatePaneIDs: [UUID] {
-        paneStates.values.compactMap { paneState in
+        sessionState.allPaneStates.compactMap { paneState in
             MacTerminalRecoveryPolicy.shouldPrepareWhileOffline(
                 connectionState: paneState.connectionState,
                 hasEstablishedConnection: paneState.hasEstablishedConnection
@@ -107,7 +107,7 @@ extension TerminalTabManager {
                 generation: generation,
                 reconciliationID: reconciliationID
             ) else { return }
-            guard paneStates[paneId] != nil else { continue }
+            guard paneState(for: paneId) != nil else { continue }
 
             let transportIsLive = await hasVerifiedLiveTransport(
                 for: paneId,
@@ -122,8 +122,8 @@ extension TerminalTabManager {
                 logger.info(
                     "Preserved live transport after Mac wake for pane \(paneId.uuidString, privacy: .public)"
                 )
-                if paneStates[paneId]?.activeTransport == .mosh,
-                   paneStates[paneId]?.connectionState.isConnected != true {
+                if paneState(for: paneId)?.activeTransport == .mosh,
+                   paneState(for: paneId)?.connectionState.isConnected != true {
                     updatePaneState(paneId, connectionState: .connected)
                 }
                 continue

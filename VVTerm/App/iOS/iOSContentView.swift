@@ -136,7 +136,7 @@ struct iOSContentView: View {
 
         let attemptID = UUID()
         terminalRoute = .connecting(server: server, attemptID: attemptID)
-        tabManager.selectedViewByServer[server.id] = preferredConnectView
+        tabManager.selectView(preferredConnectView, for: server.id)
         let pendingConnection = pendingConnection(for: server)
 
         Task {
@@ -149,8 +149,8 @@ struct iOSContentView: View {
                 guard resolveConnection(for: attemptID, as: .succeeded) else {
                     return
                 }
-                tabManager.selectedViewByServer[server.id] = preferredConnectView
-                tabManager.selectedTabByServer[server.id] = tab.id
+                tabManager.selectView(preferredConnectView, for: server.id)
+                tabManager.selectTab(tab.id, for: server.id)
             } catch {
                 guard resolveConnection(for: attemptID, as: .failed) else { return }
                 guard let error = error as? VVTermError else { return }

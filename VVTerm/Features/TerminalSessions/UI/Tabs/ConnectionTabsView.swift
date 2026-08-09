@@ -51,7 +51,7 @@ struct ConnectionTerminalContainer: View {
 
     /// Selected view type - persisted per server
     var selectedView: ConnectionViewTabID {
-        viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id])
+        viewTabConfig.effectiveView(for: tabManager.selectedView(for: server.id))
     }
 
     var visibleViewTabs: [ConnectionViewTabID] {
@@ -72,12 +72,12 @@ struct ConnectionTerminalContainer: View {
 
     var selectedViewBinding: Binding<ConnectionViewTabID> {
         Binding(
-            get: { viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id]) },
+            get: { viewTabConfig.effectiveView(for: tabManager.selectedView(for: server.id)) },
             set: { newValue in
-                let current = viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id])
+                let current = viewTabConfig.effectiveView(for: tabManager.selectedView(for: server.id))
                 guard current != newValue else { return }
                 DispatchQueue.main.async {
-                    tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: newValue)
+                    tabManager.selectView(viewTabConfig.effectiveView(for: newValue), for: server.id)
                 }
             }
         )
@@ -90,7 +90,7 @@ struct ConnectionTerminalContainer: View {
 
     /// Effective selected tab ID for this server.
     var selectedTabId: UUID? {
-        if let selectedId = tabManager.selectedTabByServer[server.id],
+        if let selectedId = tabManager.selectedTabId(for: server.id),
            serverTabs.contains(where: { $0.id == selectedId }) {
             return selectedId
         }
@@ -104,8 +104,8 @@ struct ConnectionTerminalContainer: View {
                 let validId = newValue.flatMap { requestedId in
                     serverTabs.contains(where: { $0.id == requestedId }) ? requestedId : serverTabs.first?.id
                 }
-                guard tabManager.selectedTabByServer[server.id] != validId else { return }
-                tabManager.selectedTabByServer[server.id] = validId
+                guard tabManager.selectedTabId(for: server.id) != validId else { return }
+                tabManager.selectTab(validId, for: server.id)
             }
         )
     }
@@ -147,12 +147,12 @@ struct ConnectionTerminalContainer: View {
         Binding(
             get: {
                 guard let prompt = tabManager.tmuxAttachPrompt else { return nil }
-                guard tabManager.paneStates[prompt.paneId]?.serverId == server.id else { return nil }
+                guard tabManager.paneState(for: prompt.paneId)?.serverId == server.id else { return nil }
                 return prompt
             },
             set: { newValue in
                 guard newValue == nil, let prompt = tabManager.tmuxAttachPrompt else { return }
-                guard tabManager.paneStates[prompt.paneId]?.serverId == server.id else { return }
+                guard tabManager.paneState(for: prompt.paneId)?.serverId == server.id else { return }
                 tabManager.cancelTmuxAttachPrompt(requestId: prompt.id)
             }
         )
@@ -316,10 +316,10 @@ struct ConnectionTerminalContainer: View {
     }
 
     private func repairSelectedTabSelectionIfNeeded() {
-        let currentId = tabManager.selectedTabByServer[server.id]
+        let currentId = tabManager.selectedTabId(for: server.id)
         let repairedId = selectedTabId
         guard currentId != repairedId else { return }
-        tabManager.selectedTabByServer[server.id] = repairedId
+        tabManager.selectTab(repairedId, for: server.id)
     }
 
     private func handleSelectedViewChange(_ selectedView: ConnectionViewTabID) {
@@ -344,7 +344,7 @@ struct ConnectionTerminalContainer: View {
                 let tab = try await tabManager.openTab(for: server)
                 await MainActor.run {
                     if selectTerminalViewOnSuccess {
-                        tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: .terminal)
+                        tabManager.selectView(viewTabConfig.effectiveView(for: .terminal), for: server.id)
                     }
                     selectedTabIdBinding.wrappedValue = tab.id
                 }
@@ -382,7 +382,7 @@ struct ConnectionTerminalContainer: View {
         fileBrowser.prepareNewTab(newTab, duplicating: sourceTab)
 
         if selectFilesViewOnSuccess {
-            tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: .files)
+            tabManager.selectView(viewTabConfig.effectiveView(for: .files), for: server.id)
         }
     }
 

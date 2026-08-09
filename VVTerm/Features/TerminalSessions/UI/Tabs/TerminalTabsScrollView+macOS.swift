@@ -58,7 +58,7 @@ private struct TerminalTabButton: View {
     @ObservedObject var tabManager: TerminalTabManager
 
     private var paneState: TerminalPaneState? {
-        tabManager.paneStates[tab.focusedPaneId]
+        tabManager.paneState(for: tab.focusedPaneId)
     }
 
     private var statusColor: Color {

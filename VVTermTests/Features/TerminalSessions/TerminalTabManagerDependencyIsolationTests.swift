@@ -184,7 +184,7 @@ struct TerminalTabManagerDependencyIsolationTests {
         } catch {
             #expect(firstEffects.authorizationRequests.count == 1)
         }
-        #expect(first.tabsByServer.isEmpty)
+        #expect(first.serverIdsWithTabs().isEmpty)
         #expect(secondEffects.authorizationRequests.isEmpty)
 
         let tab = TerminalTab(serverId: UUID(), title: "First manager")
@@ -273,13 +273,11 @@ struct TerminalTabManagerDependencyIsolationTests {
     }
 
     private func install(_ tab: TerminalTab, in manager: TerminalTabManager) {
-        manager.tabsByServer[tab.serverId] = [tab]
-        manager.selectedTabByServer[tab.serverId] = tab.id
-        manager.paneStates[tab.rootPaneId] = TerminalPaneState(
+        manager.installTabForTesting(tab, paneState: TerminalPaneState(
             paneId: tab.rootPaneId,
             tabId: tab.id,
             serverId: tab.serverId
-        )
+        ))
         manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
     }
 

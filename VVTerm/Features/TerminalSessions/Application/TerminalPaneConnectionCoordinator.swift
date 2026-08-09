@@ -158,7 +158,7 @@ private final class EternalTerminalPaneCoordinator {
     }
 
     func cancel() {
-        guard tabManager.paneStates[paneId] == nil else { return }
+        guard tabManager.paneState(for: paneId) == nil else { return }
         Task { await tabManager.unregisterEternalTerminalRuntime(for: paneId) }
     }
 }

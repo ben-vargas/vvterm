@@ -78,8 +78,8 @@ struct TerminalTabManagerIndependenceTests {
         first.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
         first.registerTerminal(terminal, for: tab.rootPaneId)
 
-        #expect(first.paneStates[tab.rootPaneId]?.connectionState == .connected)
-        #expect(second.paneStates[tab.rootPaneId]?.connectionState == .disconnected)
+        #expect(first.paneState(for: tab.rootPaneId)?.connectionState == .connected)
+        #expect(second.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
         #expect(first.getSSHClient(for: tab.rootPaneId) === client)
         #expect(second.getSSHClient(for: tab.rootPaneId) == nil)
         #expect(first.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm-isolated")
@@ -103,12 +103,12 @@ struct TerminalTabManagerIndependenceTests {
         let secondTab = TerminalTab(serverId: serverId, title: "Second")
 
         install(firstTab, in: first)
-        first.selectedViewByServer[serverId] = .files
+        first.selectView(.files, for: serverId)
         first.tmuxResolver.sessionNames[firstTab.rootPaneId] = "first-session"
         first.tmuxResolver.sessionOwnership[firstTab.rootPaneId] = .managed
 
         install(secondTab, in: second)
-        second.selectedViewByServer[serverId] = .stats
+        second.selectView(.stats, for: serverId)
 
         first.persistAndRestoreSnapshotForTesting()
         second.persistAndRestoreSnapshotForTesting()
@@ -116,16 +116,16 @@ struct TerminalTabManagerIndependenceTests {
         let restoredFirst = makeManager(snapshotStore: firstStore)
         let restoredSecond = makeManager(snapshotStore: secondStore)
 
-        #expect(restoredFirst.selectedTabByServer[serverId] == firstTab.id)
-        #expect(restoredFirst.selectedViewByServer[serverId] == .files)
-        #expect(restoredFirst.paneStates[firstTab.rootPaneId] != nil)
-        #expect(restoredFirst.paneStates[secondTab.rootPaneId] == nil)
+        #expect(restoredFirst.selectedTabId(for: serverId) == firstTab.id)
+        #expect(restoredFirst.selectedView(for: serverId) == .files)
+        #expect(restoredFirst.paneState(for: firstTab.rootPaneId) != nil)
+        #expect(restoredFirst.paneState(for: secondTab.rootPaneId) == nil)
         #expect(restoredFirst.tmuxResolver.sessionNames[firstTab.rootPaneId] == "first-session")
 
-        #expect(restoredSecond.selectedTabByServer[serverId] == secondTab.id)
-        #expect(restoredSecond.selectedViewByServer[serverId] == .stats)
-        #expect(restoredSecond.paneStates[secondTab.rootPaneId] != nil)
-        #expect(restoredSecond.paneStates[firstTab.rootPaneId] == nil)
+        #expect(restoredSecond.selectedTabId(for: serverId) == secondTab.id)
+        #expect(restoredSecond.selectedView(for: serverId) == .stats)
+        #expect(restoredSecond.paneState(for: secondTab.rootPaneId) != nil)
+        #expect(restoredSecond.paneState(for: firstTab.rootPaneId) == nil)
         #expect(restoredSecond.tmuxResolver.sessionNames[firstTab.rootPaneId] == nil)
     }
 
@@ -142,13 +142,11 @@ struct TerminalTabManagerIndependenceTests {
     }
 
     private func install(_ tab: TerminalTab, in manager: TerminalTabManager) {
-        manager.tabsByServer[tab.serverId, default: []].append(tab)
-        manager.selectedTabByServer[tab.serverId] = tab.id
-        manager.paneStates[tab.rootPaneId] = TerminalPaneState(
+        manager.installTabForTesting(tab, paneState: TerminalPaneState(
             paneId: tab.rootPaneId,
             tabId: tab.id,
             serverId: tab.serverId
-        )
+        ))
         manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
     }
 }

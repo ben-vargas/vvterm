@@ -74,7 +74,7 @@ struct ActiveServerSummary: Identifiable {
         server: (UUID) -> Server?,
         viewTabConfig: ViewTabConfigurationManager
     ) -> [ActiveServerSummary] {
-        let serverIds = Set(tabManager.tabsByServer.keys).union(fileTabs.tabsByServer.keys)
+        let serverIds = tabManager.serverIdsWithTabs().union(fileTabs.tabsByServer.keys)
 
         return serverIds.compactMap { serverId in
             let terminalTabs = tabManager.tabs(for: serverId)
@@ -84,7 +84,7 @@ struct ActiveServerSummary: Identifiable {
             let tab = representativeTab(
                 for: serverId,
                 tabs: terminalTabs,
-                selectedTabByServer: tabManager.selectedTabByServer
+                tabManager: tabManager
             )
             let state = representativePaneState(in: terminalTabs, tabManager: tabManager)
             let configuredServer = server(serverId)
@@ -116,7 +116,7 @@ struct ActiveServerSummary: Identifiable {
                     serverId: serverId,
                     hasTerminalTabs: !terminalTabs.isEmpty,
                     hasFileTabs: !remoteFileTabs.isEmpty,
-                    selectedViewByServer: tabManager.selectedViewByServer,
+                    selectedView: tabManager.selectedView(for: serverId),
                     viewTabConfig: viewTabConfig
                 )
             )
@@ -129,10 +129,10 @@ struct ActiveServerSummary: Identifiable {
     private static func representativeTab(
         for serverId: UUID,
         tabs: [TerminalTab],
-        selectedTabByServer: [UUID: UUID]
+        tabManager: TerminalTabManager
     ) -> TerminalTab? {
         guard !tabs.isEmpty else { return nil }
-        if let selectedId = selectedTabByServer[serverId],
+        if let selectedId = tabManager.selectedTabId(for: serverId),
            let match = tabs.first(where: { $0.id == selectedId }) {
             return match
         }
@@ -145,7 +145,7 @@ struct ActiveServerSummary: Identifiable {
     ) -> TerminalPaneState? {
         tabs
             .flatMap { orderedPaneIds(for: $0) }
-            .compactMap { tabManager.paneStates[$0] }
+            .compactMap { tabManager.paneState(for: $0) }
             .min { lhs, rhs in
                 stateSortRank(lhs.connectionState) < stateSortRank(rhs.connectionState)
             }
@@ -180,10 +180,10 @@ struct ActiveServerSummary: Identifiable {
         serverId: UUID,
         hasTerminalTabs: Bool,
         hasFileTabs: Bool,
-        selectedViewByServer: [UUID: ConnectionViewTabID],
+        selectedView: ConnectionViewTabID?,
         viewTabConfig: ViewTabConfigurationManager
     ) -> ConnectionViewTabID {
-        let selected = viewTabConfig.effectiveView(for: selectedViewByServer[serverId])
+        let selected = viewTabConfig.effectiveView(for: selectedView)
         switch selected {
         case .stats:
             return .stats

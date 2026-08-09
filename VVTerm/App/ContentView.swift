@@ -60,7 +60,7 @@ struct ContentView: View {
 
     /// Whether any server has an open terminal/file surface.
     private var hasOpenConnectionSurfaces: Bool {
-        tabManager.tabsByServer.values.contains { !$0.isEmpty }
+        !tabManager.serverIdsWithTabs().isEmpty
             || fileTabs.tabsByServer.values.contains { !$0.isEmpty }
             || !tabManager.connectedServerIds.isEmpty
     }
@@ -157,8 +157,11 @@ struct ContentView: View {
             do {
                 let tab = try await tabManager.openTab(for: server)
                 await MainActor.run {
-                    tabManager.selectedViewByServer[server.id] = ViewTabConfigurationManager.shared.effectiveDefaultTab()
-                    tabManager.selectedTabByServer[server.id] = tab.id
+                    tabManager.selectView(
+                        ViewTabConfigurationManager.shared.effectiveDefaultTab(),
+                        for: server.id
+                    )
+                    tabManager.selectTab(tab.id, for: server.id)
                 }
             } catch {
                 // No-op: user cancelled biometric auth or the tab limit blocked the open.

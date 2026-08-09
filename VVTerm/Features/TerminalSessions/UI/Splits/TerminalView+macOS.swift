@@ -167,7 +167,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     static func dismantleNSView(_ nsView: NSView, coordinator: TerminalPaneConnectionCoordinator) {
         guard let scrollView = nsView as? TerminalScrollView else { return }
         let terminal = scrollView.surfaceView
-        let paneStillExists = coordinator.tabManager.paneStates[coordinator.paneId] != nil
+        let paneStillExists = coordinator.tabManager.paneState(for: coordinator.paneId) != nil
         if paneStillExists {
             coordinator.preservePane = true
             return

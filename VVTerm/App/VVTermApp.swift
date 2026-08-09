@@ -296,17 +296,7 @@ extension VVTermApp {
                 ServerManager.shared.servers.first { $0.id == serverId }
             },
             workingDirectoryProvider: { serverId in
-                if let selectedTab = tabManager.selectedTab(for: serverId),
-                   let path = tabManager.workingDirectory(for: selectedTab.focusedPaneId) {
-                    return path
-                }
-
-                if let anyPane = tabManager.paneStates.values.first(where: { $0.serverId == serverId }),
-                   let path = tabManager.workingDirectory(for: anyPane.paneId) {
-                    return path
-                }
-
-                return nil
+                tabManager.workingDirectoryCandidate(for: serverId)
             }
         )
     }
