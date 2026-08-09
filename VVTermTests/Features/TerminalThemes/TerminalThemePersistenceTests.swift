@@ -2,8 +2,178 @@ import XCTest
 @testable import VVTerm
 
 @MainActor
+private final class TerminalThemeCloudStub: TerminalThemeCloudClient {
+    var themes: [TerminalTheme] = []
+    var preference: TerminalThemePreference?
+    private(set) var themeFetchCount = 0
+    var onThemeFetch: (() -> Void)?
+    var themesHandler: (() async throws -> [TerminalTheme])?
+
+    func fetchTerminalThemes() async throws -> [TerminalTheme] {
+        themeFetchCount += 1
+        onThemeFetch?()
+        if let themesHandler {
+            return try await themesHandler()
+        }
+        return themes
+    }
+
+    func fetchTerminalThemePreference() async throws -> TerminalThemePreference? {
+        preference
+    }
+}
+
+@MainActor
+private final class TerminalThemeMutationQueueSpy: TerminalThemeMutationQueue {
+    private(set) var enqueuedThemes: [TerminalTheme] = []
+    private(set) var enqueuedPreferences: [TerminalThemePreference] = []
+    private(set) var drainCount = 0
+    var onPreferenceEnqueue: (() -> Void)?
+    var onDrain: (() -> Void)?
+
+    func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) {
+        enqueuedThemes.append(theme)
+    }
+
+    func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) {
+        enqueuedPreferences.append(preference)
+        onPreferenceEnqueue?()
+    }
+
+    func drainPendingMutations() async {
+        drainCount += 1
+        onDrain?()
+    }
+
+    func reset() {
+        enqueuedThemes.removeAll()
+        enqueuedPreferences.removeAll()
+        drainCount = 0
+        onPreferenceEnqueue = nil
+        onDrain = nil
+    }
+}
+
+@MainActor
+private final class TerminalThemeSyncLifecycleStub: TerminalThemeSyncLifecycle {
+    private var observers: [UUID: (CloudKitSyncLifecycleEvent) -> Void] = [:]
+    private(set) var removedObserverIDs: [UUID] = []
+    var onRemove: (() -> Void)?
+
+    func observe(
+        _ observer: @escaping (CloudKitSyncLifecycleEvent) -> Void
+    ) -> UUID {
+        let id = UUID()
+        observers[id] = observer
+        return id
+    }
+
+    func removeObserver(_ id: UUID) {
+        observers.removeValue(forKey: id)
+        removedObserverIDs.append(id)
+        onRemove?()
+    }
+
+    func publish(_ event: CloudKitSyncLifecycleEvent) {
+        for observer in observers.values {
+            observer(event)
+        }
+    }
+}
+
+@MainActor
+private final class TerminalThemePreferenceChangeSourceStub: TerminalThemePreferenceChangeSource {
+    private final class ObserverToken: NSObject {}
+
+    private var observers: [ObjectIdentifier: () -> Void] = [:]
+    private(set) var removeCount = 0
+    var onRemove: (() -> Void)?
+
+    func observeChanges(
+        to defaults: UserDefaults,
+        _ observer: @escaping () -> Void
+    ) -> NSObjectProtocol {
+        let token = ObserverToken()
+        observers[ObjectIdentifier(token)] = observer
+        return token
+    }
+
+    func removeObserver(_ observer: NSObjectProtocol) {
+        guard let object = observer as? AnyObject else { return }
+        observers.removeValue(forKey: ObjectIdentifier(object))
+        removeCount += 1
+        onRemove?()
+    }
+
+    func publish() {
+        for observer in observers.values {
+            observer()
+        }
+    }
+}
+
+@MainActor
+private final class TerminalThemeDebounceGate {
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+    var onWait: (() -> Void)?
+    var onCancel: (() -> Void)?
+
+    func wait() async throws {
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                continuations.append(continuation)
+                onWait?()
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.onCancel?()
+            }
+        }
+    }
+
+    func releaseAll() {
+        let pending = continuations
+        continuations.removeAll()
+        pending.forEach { $0.resume() }
+    }
+}
+
+@MainActor
+private final class TerminalThemeCloudGate {
+    private var continuation: CheckedContinuation<[TerminalTheme], Never>?
+    var onWait: (() -> Void)?
+    var onCancel: (() -> Void)?
+
+    func wait() async throws -> [TerminalTheme] {
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                onWait?()
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.onCancel?()
+            }
+        }
+    }
+
+    func resolve(_ themes: [TerminalTheme]) {
+        continuation?.resume(returning: themes)
+        continuation = nil
+    }
+}
+
+@MainActor
 final class TerminalThemePersistenceTests: XCTestCase {
     private var temporaryDirectory: URL!
+    private let persistenceKeys = TerminalThemePersistenceKeys(
+        customThemes: "test.terminal-themes",
+        darkTheme: "test.terminal-theme.dark",
+        lightTheme: "test.terminal-theme.light",
+        usesPerAppearanceTheme: "test.terminal-theme.per-appearance",
+        preferenceUpdatedAt: "test.terminal-theme.updated-at",
+        activeBackgroundCache: "test.terminal-theme.background"
+    )
 
     override func setUpWithError() throws {
         temporaryDirectory = FileManager.default.temporaryDirectory
@@ -27,24 +197,20 @@ final class TerminalThemePersistenceTests: XCTestCase {
         let theme = TerminalTheme(name: "Legacy Theme", content: original)
         defaults.set(
             try JSONEncoder().encode([theme]),
-            forKey: CloudKitSyncConstants.terminalCustomThemesStorageKey
+            forKey: persistenceKeys.customThemes
         )
-        defaults.set(theme.name, forKey: CloudKitSyncConstants.terminalThemeNameKey)
+        defaults.set(theme.name, forKey: persistenceKeys.darkTheme)
 
         let store = TerminalThemeFileStore(directoryURL: temporaryDirectory)
         let fileURL = try XCTUnwrap(store.fileURL(for: theme.name))
         try original.write(to: fileURL, atomically: true, encoding: .utf8)
 
-        let manager = TerminalThemeManager(
-            defaults: defaults,
-            fileStore: store,
-            startsSynchronization: false
-        )
+        let manager = makeManager(defaults: defaults, fileStore: store)
 
         XCTAssertEqual(manager.customThemes, [theme])
         XCTAssertEqual(try String(contentsOf: fileURL, encoding: .utf8), original)
         XCTAssertEqual(
-            defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameKey),
+            defaults.string(forKey: persistenceKeys.darkTheme),
             theme.name
         )
         XCTAssertEqual(
@@ -138,17 +304,13 @@ final class TerminalThemePersistenceTests: XCTestCase {
         )
         defaults.set(
             try JSONEncoder().encode([darkTheme, lightTheme]),
-            forKey: CloudKitSyncConstants.terminalCustomThemesStorageKey
+            forKey: persistenceKeys.customThemes
         )
-        defaults.set(darkTheme.name, forKey: CloudKitSyncConstants.terminalThemeNameKey)
-        defaults.set(lightTheme.name, forKey: CloudKitSyncConstants.terminalThemeNameLightKey)
-        defaults.set(true, forKey: CloudKitSyncConstants.terminalUsePerAppearanceThemeKey)
+        defaults.set(darkTheme.name, forKey: persistenceKeys.darkTheme)
+        defaults.set(lightTheme.name, forKey: persistenceKeys.lightTheme)
+        defaults.set(true, forKey: persistenceKeys.usesPerAppearanceTheme)
 
-        let manager = TerminalThemeManager(
-            defaults: defaults,
-            fileStore: TerminalThemeFileStore(directoryURL: temporaryDirectory),
-            startsSynchronization: false
-        )
+        let manager = makeManager(defaults: defaults)
         let snapshot = manager.appearanceSnapshot(for: .light)
 
         XCTAssertEqual(snapshot.activeTheme.name, lightTheme.name)
@@ -177,24 +339,319 @@ final class TerminalThemePersistenceTests: XCTestCase {
         )
         defaults.set(
             try JSONEncoder().encode([darkTheme, lightTheme]),
-            forKey: CloudKitSyncConstants.terminalCustomThemesStorageKey
+            forKey: persistenceKeys.customThemes
         )
-        defaults.set(darkTheme.name, forKey: CloudKitSyncConstants.terminalThemeNameKey)
-        defaults.set(lightTheme.name, forKey: CloudKitSyncConstants.terminalThemeNameLightKey)
-        defaults.set(true, forKey: CloudKitSyncConstants.terminalUsePerAppearanceThemeKey)
+        defaults.set(darkTheme.name, forKey: persistenceKeys.darkTheme)
+        defaults.set(lightTheme.name, forKey: persistenceKeys.lightTheme)
+        defaults.set(true, forKey: persistenceKeys.usesPerAppearanceTheme)
 
-        let manager = TerminalThemeManager(
-            defaults: defaults,
-            fileStore: TerminalThemeFileStore(directoryURL: temporaryDirectory),
-            startsSynchronization: false
-        )
+        let manager = makeManager(defaults: defaults)
 
         let lightSnapshot = manager.activateAppearance(.light)
         XCTAssertEqual(manager.activeAppearanceSnapshot, lightSnapshot)
-        XCTAssertEqual(defaults.string(forKey: "terminalBackgroundColor"), "#FDFCFB")
+        XCTAssertEqual(defaults.string(forKey: persistenceKeys.activeBackgroundCache), "#FDFCFB")
 
         let darkSnapshot = manager.activateAppearance(.dark)
         XCTAssertEqual(manager.activeAppearanceSnapshot, darkSnapshot)
-        XCTAssertEqual(defaults.string(forKey: "terminalBackgroundColor"), "#010203")
+        XCTAssertEqual(defaults.string(forKey: persistenceKeys.activeBackgroundCache), "#010203")
+    }
+
+    func testInjectedClockAndPersistenceKeysOwnThemeMutation() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let now = Date(timeIntervalSince1970: 1234)
+        let manager = makeManager(defaults: defaults, now: { now })
+
+        let theme = try manager.createCustomTheme(
+            name: "Clocked",
+            content: "background = #010203\nforeground = #FFFFFF\n"
+        )
+
+        XCTAssertEqual(theme.updatedAt, now)
+        XCTAssertNotNil(defaults.data(forKey: persistenceKeys.customThemes))
+    }
+
+    func testForegroundAndSyncEnabledUseInjectedStateAndFeatureMergePolicy() async throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let themeID = UUID()
+        let local = TerminalTheme(
+            id: themeID,
+            name: "Local",
+            content: "background = #000000\nforeground = #ffffff\n",
+            updatedAt: Date(timeIntervalSince1970: 1)
+        )
+        defaults.set(try JSONEncoder().encode([local]), forKey: persistenceKeys.customThemes)
+        let remote = TerminalTheme(
+            id: themeID,
+            name: "Remote",
+            content: "background = #112233\nforeground = #ffffff\n",
+            updatedAt: Date(timeIntervalSince1970: 2)
+        )
+        let cloud = TerminalThemeCloudStub()
+        cloud.themes = [remote]
+        cloud.preference = TerminalThemePreference(
+            darkThemeName: "Aizen Dark",
+            lightThemeName: "Aizen Light",
+            usePerAppearanceTheme: true,
+            updatedAt: .distantPast
+        )
+        let queue = TerminalThemeMutationQueueSpy()
+        let lifecycle = TerminalThemeSyncLifecycleStub()
+        var syncEnabled = false
+        let manager = makeManager(
+            defaults: defaults,
+            cloud: cloud,
+            queue: queue,
+            lifecycle: lifecycle,
+            isSyncEnabled: { syncEnabled },
+            startsSynchronization: true
+        )
+        lifecycle.publish(.foreground)
+        XCTAssertEqual(cloud.themeFetchCount, 0)
+        XCTAssertEqual(manager.customThemes, [local])
+
+        let synced = expectation(description: "enabled theme sync")
+        let enabledDrained = expectation(description: "enabled theme drain")
+        cloud.onThemeFetch = { synced.fulfill() }
+        queue.onDrain = { enabledDrained.fulfill() }
+        syncEnabled = true
+        lifecycle.publish(.syncEnabled)
+        await fulfillment(of: [synced, enabledDrained], timeout: 1)
+
+        XCTAssertEqual(manager.customThemes, [remote])
+        XCTAssertEqual(queue.drainCount, 1)
+    }
+
+    func testPreferenceDebounceCoalescesAndSyncDisabledCancelsPendingWork() async throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let cloud = TerminalThemeCloudStub()
+        cloud.preference = TerminalThemePreference(
+            darkThemeName: "Aizen Dark",
+            lightThemeName: "Aizen Light",
+            usePerAppearanceTheme: true,
+            updatedAt: .distantPast
+        )
+        let queue = TerminalThemeMutationQueueSpy()
+        let lifecycle = TerminalThemeSyncLifecycleStub()
+        let preferenceChanges = TerminalThemePreferenceChangeSourceStub()
+        let debounce = TerminalThemeDebounceGate()
+        let startupDrained = expectation(description: "startup drain")
+        queue.onDrain = { startupDrained.fulfill() }
+        let manager = makeManager(
+            defaults: defaults,
+            cloud: cloud,
+            queue: queue,
+            lifecycle: lifecycle,
+            preferenceChanges: preferenceChanges,
+            isSyncEnabled: { true },
+            waitForPreferenceSyncDebounce: debounce.wait,
+            startsSynchronization: true
+        )
+        _ = manager
+        await fulfillment(of: [startupDrained], timeout: 1)
+        queue.reset()
+
+        let firstWait = expectation(description: "first preference debounce")
+        debounce.onWait = { firstWait.fulfill() }
+        defaults.set("Aizen Light", forKey: persistenceKeys.darkTheme)
+        preferenceChanges.publish()
+        await fulfillment(of: [firstWait], timeout: 1)
+
+        let secondWait = expectation(description: "replacement preference debounce")
+        debounce.onWait = { secondWait.fulfill() }
+        defaults.set("Aizen Dark", forKey: persistenceKeys.darkTheme)
+        preferenceChanges.publish()
+        await fulfillment(of: [secondWait], timeout: 1)
+        let enqueued = expectation(description: "coalesced preference enqueue")
+        queue.onPreferenceEnqueue = { enqueued.fulfill() }
+        debounce.releaseAll()
+        await fulfillment(of: [enqueued], timeout: 1)
+        XCTAssertEqual(queue.enqueuedPreferences.count, 1)
+
+        let thirdWait = expectation(description: "pending disabled preference")
+        let thirdCancelled = expectation(description: "disabled preference cancellation observed")
+        debounce.onWait = { thirdWait.fulfill() }
+        debounce.onCancel = { thirdCancelled.fulfill() }
+        defaults.set("Aizen Light", forKey: persistenceKeys.darkTheme)
+        preferenceChanges.publish()
+        await fulfillment(of: [thirdWait], timeout: 1)
+        lifecycle.publish(.syncDisabled)
+        await fulfillment(of: [thirdCancelled], timeout: 1)
+        debounce.releaseAll()
+        await Task.yield()
+        XCTAssertEqual(queue.enqueuedPreferences.count, 1)
+    }
+
+    func testBlockedStartupDoesNotRetainOwnerAndObservesCancellation() async throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let cloud = TerminalThemeCloudStub()
+        let queue = TerminalThemeMutationQueueSpy()
+        let gate = TerminalThemeCloudGate()
+        let started = expectation(description: "blocked startup began")
+        let cancelled = expectation(description: "blocked startup cancelled")
+        gate.onWait = { started.fulfill() }
+        gate.onCancel = { cancelled.fulfill() }
+        cloud.themesHandler = gate.wait
+        var manager: TerminalThemeManager? = makeManager(
+            defaults: defaults,
+            cloud: cloud,
+            queue: queue,
+            isSyncEnabled: { true },
+            startsSynchronization: true
+        )
+        weak var releasedManager: TerminalThemeManager?
+        releasedManager = manager
+
+        await fulfillment(of: [started], timeout: 1)
+        manager = nil
+        await fulfillment(of: [cancelled], timeout: 1)
+
+        XCTAssertNil(releasedManager)
+        XCTAssertEqual(queue.drainCount, 0)
+        gate.resolve([])
+    }
+
+    func testBlockedDebounceDoesNotRetainOwnerAndObservesCancellation() async throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let queue = TerminalThemeMutationQueueSpy()
+        let preferenceChanges = TerminalThemePreferenceChangeSourceStub()
+        let debounce = TerminalThemeDebounceGate()
+        let startupDrained = expectation(description: "startup drain")
+        queue.onDrain = { startupDrained.fulfill() }
+        var manager: TerminalThemeManager? = makeManager(
+            defaults: defaults,
+            queue: queue,
+            preferenceChanges: preferenceChanges,
+            isSyncEnabled: { true },
+            waitForPreferenceSyncDebounce: debounce.wait,
+            startsSynchronization: true
+        )
+        weak var releasedManager: TerminalThemeManager?
+        releasedManager = manager
+        await fulfillment(of: [startupDrained], timeout: 1)
+        queue.reset()
+        let started = expectation(description: "blocked debounce began")
+        let cancelled = expectation(description: "blocked debounce cancelled")
+        debounce.onWait = { started.fulfill() }
+        debounce.onCancel = { cancelled.fulfill() }
+
+        defaults.set("Aizen Light", forKey: persistenceKeys.darkTheme)
+        preferenceChanges.publish()
+        await fulfillment(of: [started], timeout: 1)
+        manager = nil
+        await fulfillment(of: [cancelled], timeout: 1)
+
+        XCTAssertNil(releasedManager)
+        debounce.releaseAll()
+        await Task.yield()
+        XCTAssertTrue(queue.enqueuedPreferences.isEmpty)
+    }
+
+    func testSyncDisabledRejectsBlockedStartupCompletionAndSkipsDrain() async throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let cloud = TerminalThemeCloudStub()
+        let queue = TerminalThemeMutationQueueSpy()
+        let lifecycle = TerminalThemeSyncLifecycleStub()
+        let gate = TerminalThemeCloudGate()
+        let started = expectation(description: "blocked startup began")
+        let cancelled = expectation(description: "blocked startup cancelled")
+        gate.onWait = { started.fulfill() }
+        gate.onCancel = { cancelled.fulfill() }
+        cloud.themesHandler = gate.wait
+        var syncEnabled = true
+        let manager = makeManager(
+            defaults: defaults,
+            cloud: cloud,
+            queue: queue,
+            lifecycle: lifecycle,
+            isSyncEnabled: { syncEnabled },
+            startsSynchronization: true
+        )
+        let remote = TerminalTheme(
+            name: "Late Remote",
+            content: "background = #112233\nforeground = #ffffff\n",
+            updatedAt: Date(timeIntervalSince1970: 2)
+        )
+
+        await fulfillment(of: [started], timeout: 1)
+        syncEnabled = false
+        lifecycle.publish(.syncDisabled)
+        await fulfillment(of: [cancelled], timeout: 1)
+        gate.resolve([remote])
+        await Task.yield()
+
+        XCTAssertTrue(manager.customThemes.isEmpty)
+        XCTAssertEqual(queue.drainCount, 0)
+    }
+
+    func testDeinitRemovesInjectedLifecycleObserver() async throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let lifecycle = TerminalThemeSyncLifecycleStub()
+        let preferenceChanges = TerminalThemePreferenceChangeSourceStub()
+        let removed = expectation(description: "theme lifecycle observer removed")
+        let preferenceRemoved = expectation(description: "theme preference observer removed")
+        lifecycle.onRemove = { removed.fulfill() }
+        preferenceChanges.onRemove = { preferenceRemoved.fulfill() }
+        var manager: TerminalThemeManager? = makeManager(
+            defaults: defaults,
+            lifecycle: lifecycle,
+            preferenceChanges: preferenceChanges,
+            startsSynchronization: true
+        )
+        weak var releasedManager: TerminalThemeManager?
+        releasedManager = manager
+
+        manager = nil
+        await fulfillment(of: [removed, preferenceRemoved], timeout: 1)
+
+        XCTAssertNil(releasedManager)
+        XCTAssertEqual(lifecycle.removedObserverIDs.count, 1)
+        XCTAssertEqual(preferenceChanges.removeCount, 1)
+    }
+
+    private func makeManager(
+        defaults: UserDefaults,
+        cloud: TerminalThemeCloudStub? = nil,
+        queue: TerminalThemeMutationQueueSpy? = nil,
+        lifecycle: TerminalThemeSyncLifecycleStub? = nil,
+        preferenceChanges: TerminalThemePreferenceChangeSourceStub? = nil,
+        fileStore: TerminalThemeFileStore? = nil,
+        isSyncEnabled: @escaping () -> Bool = { false },
+        now: @escaping () -> Date = Date.init,
+        waitForPreferenceSyncDebounce: @escaping () async throws -> Void = {},
+        startsSynchronization: Bool = false
+    ) -> TerminalThemeManager {
+        let cloud = cloud ?? TerminalThemeCloudStub()
+        let queue = queue ?? TerminalThemeMutationQueueSpy()
+        let lifecycle = lifecycle ?? TerminalThemeSyncLifecycleStub()
+        let preferenceChanges = preferenceChanges ?? TerminalThemePreferenceChangeSourceStub()
+        return TerminalThemeManager(
+            dependencies: TerminalThemeManagerDependencies(
+                defaults: defaults,
+                cloud: cloud,
+                mutationQueue: queue,
+                syncLifecycle: lifecycle,
+                preferenceChanges: preferenceChanges,
+                fileStore: fileStore ?? TerminalThemeFileStore(directoryURL: temporaryDirectory),
+                persistenceKeys: persistenceKeys,
+                isSyncEnabled: isSyncEnabled,
+                now: now,
+                waitForPreferenceSyncDebounce: waitForPreferenceSyncDebounce,
+                startsSynchronization: startsSynchronization
+            )
+        )
     }
 }
