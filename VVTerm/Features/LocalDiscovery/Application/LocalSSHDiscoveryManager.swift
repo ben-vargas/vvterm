@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 import Combine
 
 struct LocalSSHDiscoveryState: Equatable {
@@ -120,20 +119,19 @@ final class LocalSSHDiscoveryManager: ObservableObject {
     @Published private(set) var hosts: [DiscoveredSSHHost] = []
     @Published private(set) var state = LocalSSHDiscoveryState()
 
-    private let service: LocalSSHDiscoveryService
+    private let dependencies: LocalSSHDiscoveryDependencies
+    private let ownerReleaseStopRequest: LocalSSHDiscoveryStopRequest
     private var streamTask: Task<Void, Never>?
     private let maxHosts = 200
 
-    init(service: LocalSSHDiscoveryService) {
-        self.service = service
-    }
-
-    convenience init() {
-        self.init(service: LocalSSHDiscoveryService())
+    init(dependencies: LocalSSHDiscoveryDependencies) {
+        self.dependencies = dependencies
+        self.ownerReleaseStopRequest = dependencies.service.ownerReleaseStopRequest
     }
 
     deinit {
         streamTask?.cancel()
+        ownerReleaseStopRequest.perform()
     }
 
     var isScanning: Bool { state.isScanning }
@@ -142,22 +140,23 @@ final class LocalSSHDiscoveryManager: ObservableObject {
     var probeActive: Bool { state.isSourceActive(.probe) }
 
     func startScan() {
-        guard NetworkMonitor.shared.connectionType != .cellular else {
+        stopScan(clearResults: false)
+
+        guard dependencies.networkAvailability() == .supported else {
             state.rejectUnsupportedNetwork()
             hosts = []
             return
         }
 
-        stopScan(clearResults: false)
-
         hosts = []
-        let scanID = UUID()
+        let scanID = dependencies.makeScanID()
         state.start(id: scanID)
 
-        let stream = service.startScan()
+        let stream = dependencies.service.startScan()
         streamTask = Task { [weak self] in
-            guard let self else { return }
             for await event in stream {
+                guard !Task.isCancelled else { return }
+                guard let self else { return }
                 self.handleEvent(event, scanID: scanID)
             }
         }
@@ -170,7 +169,7 @@ final class LocalSSHDiscoveryManager: ObservableObject {
     func stopScan(clearResults: Bool = false) {
         streamTask?.cancel()
         streamTask = nil
-        service.stopScan()
+        dependencies.service.stopScan()
         state.stop(clearResults: clearResults)
         if clearResults {
             hosts = []

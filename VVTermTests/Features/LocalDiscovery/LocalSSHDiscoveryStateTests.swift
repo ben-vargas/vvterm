@@ -72,4 +72,189 @@ struct LocalSSHDiscoveryStateTests {
         #expect(!state.isSourceActive(.bonjour))
         #expect(state.phase == .completed(.unknown))
     }
+
+    @Test
+    func unsupportedNetworkDoesNotStartTheDiscoveryService() {
+        let service = LocalSSHDiscoveringFake()
+        let manager = LocalSSHDiscoveryManager(
+            dependencies: LocalSSHDiscoveryDependencies(
+                service: service,
+                networkAvailability: { .unsupported },
+                makeScanID: UUID.init
+            )
+        )
+
+        manager.startScan()
+
+        #expect(manager.state.phase == .unsupportedNetwork)
+        #expect(manager.hosts.isEmpty)
+        #expect(service.startCount == 0)
+        #expect(service.stopCount == 1)
+    }
+
+    @Test
+    func supportedNetworkStartsAndStopsTheOwnedScan() {
+        let service = LocalSSHDiscoveringFake()
+        let scanID = UUID()
+        let manager = LocalSSHDiscoveryManager(
+            dependencies: LocalSSHDiscoveryDependencies(
+                service: service,
+                networkAvailability: { .supported },
+                makeScanID: { scanID }
+            )
+        )
+
+        manager.startScan()
+
+        #expect(
+            manager.state.phase
+                == .scanning(LocalSSHDiscoveryState.Scan(id: scanID))
+        )
+        #expect(service.startCount == 1)
+        #expect(service.stopCount == 1)
+
+        manager.stopScan(clearResults: true)
+
+        #expect(manager.state.phase == .idle)
+        #expect(service.stopCount == 2)
+    }
+
+    @Test
+    func ownerReleaseCancelsAnOpenDiscoveryStream() async {
+        let service = LocalSSHDiscoveringFake()
+        var manager: LocalSSHDiscoveryManager? = LocalSSHDiscoveryManager(
+            dependencies: LocalSSHDiscoveryDependencies(
+                service: service,
+                networkAvailability: { .supported },
+                makeScanID: UUID.init
+            )
+        )
+        weak var weakManager: LocalSSHDiscoveryManager?
+        weakManager = manager
+
+        manager?.startScan()
+        manager = nil
+        #expect(await waitUntil {
+            service.stopCount == 2 && service.terminationCount == 1
+        })
+
+        #expect(weakManager == nil)
+        #expect(service.stopCount == 2)
+        #expect(service.terminationCount == 1)
+    }
+
+    @Test
+    func unsupportedRescanStopsTheActiveServiceBeforeRejectingTheNetwork() {
+        let service = LocalSSHDiscoveringFake()
+        var availability = LocalSSHDiscoveryNetworkAvailability.supported
+        let manager = LocalSSHDiscoveryManager(
+            dependencies: LocalSSHDiscoveryDependencies(
+                service: service,
+                networkAvailability: { availability },
+                makeScanID: UUID.init
+            )
+        )
+
+        manager.startScan()
+        availability = .unsupported
+        manager.rescan()
+
+        #expect(manager.state.phase == .unsupportedNetwork)
+        #expect(service.startCount == 1)
+        #expect(service.stopCount == 2)
+    }
+
+    @Test
+    func canceledOldStreamCannotChangeAReplacementScan() async {
+        let service = LocalSSHDiscoveringFake(finishesStreamOnStop: false)
+        let oldScanID = UUID()
+        let newScanID = UUID()
+        var scanIDs = [oldScanID, newScanID]
+        let manager = LocalSSHDiscoveryManager(
+            dependencies: LocalSSHDiscoveryDependencies(
+                service: service,
+                networkAvailability: { .supported },
+                makeScanID: { scanIDs.removeFirst() }
+            )
+        )
+
+        manager.startScan()
+        manager.rescan()
+        service.yield(.hostFound(makeHost(name: "Old")), toStreamAt: 0)
+        service.yield(.scanningFinished, toStreamAt: 0)
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(manager.hosts.isEmpty)
+        #expect(manager.state.phase == .scanning(LocalSSHDiscoveryState.Scan(id: newScanID)))
+
+        service.yield(.hostFound(makeHost(name: "New")), toStreamAt: 1)
+        #expect(await waitUntil { manager.hosts.map(\.displayName) == ["New"] })
+    }
+
+    private func makeHost(name: String) -> DiscoveredSSHHost {
+        DiscoveredSSHHost(
+            displayName: name,
+            host: "\(name.lowercased()).local",
+            port: 22,
+            sources: [.bonjour]
+        )
+    }
+
+    private func waitUntil(
+        _ condition: @MainActor () -> Bool
+    ) async -> Bool {
+        for _ in 0..<2_000 {
+            if condition() { return true }
+            await Task.yield()
+        }
+        return condition()
+    }
+}
+
+@MainActor
+private final class LocalSSHDiscoveringFake: LocalSSHDiscovering {
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+    private(set) var terminationCount = 0
+    private let finishesStreamOnStop: Bool
+    private var continuations: [AsyncStream<LocalSSHDiscoveryEvent>.Continuation] = []
+    private var activeStreamIndex: Int?
+
+    init(finishesStreamOnStop: Bool = true) {
+        self.finishesStreamOnStop = finishesStreamOnStop
+    }
+
+    var ownerReleaseStopRequest: LocalSSHDiscoveryStopRequest {
+        LocalSSHDiscoveryStopRequest {
+            self.stopScan()
+        }
+    }
+
+    func startScan() -> AsyncStream<LocalSSHDiscoveryEvent> {
+        startCount += 1
+        return AsyncStream { continuation in
+            let index = continuations.count
+            let termination = LocalSSHDiscoveryStopRequest { [weak self] in
+                self?.terminationCount += 1
+            }
+            continuation.onTermination = { _ in
+                termination.perform()
+            }
+            continuations.append(continuation)
+            activeStreamIndex = index
+        }
+    }
+
+    func stopScan() {
+        stopCount += 1
+        guard let activeStreamIndex else { return }
+        self.activeStreamIndex = nil
+        if finishesStreamOnStop {
+            continuations[activeStreamIndex].finish()
+        }
+    }
+
+    func yield(_ event: LocalSSHDiscoveryEvent, toStreamAt index: Int) {
+        continuations[index].yield(event)
+    }
 }
