@@ -169,42 +169,6 @@ final class TerminalThemeManager: ObservableObject {
         return snapshot
     }
 
-    nonisolated static func builtInThemeNames() -> [String] {
-        guard let resourcePath = Bundle.main.resourcePath else { return [] }
-        let fm = FileManager.default
-
-        let structuredPath = (resourcePath as NSString).appendingPathComponent("ghostty/themes")
-        if fm.fileExists(atPath: structuredPath),
-           let files = try? fm.contentsOfDirectory(atPath: structuredPath) {
-            return files
-                .filter { file in
-                    let fullPath = (structuredPath as NSString).appendingPathComponent(file)
-                    var isDir: ObjCBool = false
-                    fm.fileExists(atPath: fullPath, isDirectory: &isDir)
-                    return !isDir.boolValue && !file.hasPrefix(".")
-                }
-                .sorted()
-        }
-
-        guard let files = try? fm.contentsOfDirectory(atPath: resourcePath) else { return [] }
-        let knownNonThemes = Set([
-            "Info", "Assets", "PkgInfo", "ghostty", "xterm-ghostty",
-            "CodeSignature", "embedded", "_CodeSignature"
-        ])
-        return files
-            .filter { file in
-                let fullPath = (resourcePath as NSString).appendingPathComponent(file)
-                var isDir: ObjCBool = false
-                fm.fileExists(atPath: fullPath, isDirectory: &isDir)
-                guard !isDir.boolValue else { return false }
-                guard !file.hasPrefix(".") else { return false }
-                guard !file.contains(".") else { return false }
-                guard !knownNonThemes.contains(file) else { return false }
-                return true
-            }
-            .sorted()
-    }
-
     func suggestThemeName(from sourceName: String?) -> String {
         let trimmed = sourceName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if trimmed.isEmpty {
@@ -324,10 +288,10 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     private func syncCustomThemeFiles() {
-        defer { ThemeColorParser.invalidateCache() }
+        defer { dependencies.paletteResolver.invalidateCache() }
 
         do {
-            try dependencies.fileStore.synchronize(customThemes)
+            try dependencies.themeFiles.synchronize(customThemes)
         } catch {
             logger.error("Failed to sync custom theme files: \(error.localizedDescription)")
         }
@@ -335,7 +299,7 @@ final class TerminalThemeManager: ObservableObject {
 
     private func ensureThemeSelectionIsValid() {
         let storedThemeNames = customThemes.filter { !$0.isDeleted }.map(\.name)
-        let available = Set(Self.builtInThemeNames() + storedThemeNames)
+        let available = Set(dependencies.builtInThemeCatalog.themeNames() + storedThemeNames)
         let fallbackDark = "Aizen Dark"
         let fallbackLight = "Aizen Light"
 
@@ -369,7 +333,9 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     private func uniqueThemeName(from baseName: String, excludingThemeID: UUID? = nil) -> String {
-        let builtIn = Set(Self.builtInThemeNames().map(normalizedThemeNameKey(_:)))
+        let builtIn = Set(
+            dependencies.builtInThemeCatalog.themeNames().map(normalizedThemeNameKey(_:))
+        )
         let existing = Set(
             customThemes
                 .filter { !$0.isDeleted && $0.id != excludingThemeID }
@@ -644,9 +610,11 @@ final class TerminalThemeManager: ObservableObject {
         if let customTheme = customThemes.first(where: {
             !$0.isDeleted && $0.canApply && $0.name == name
         }) {
-            palette = ThemeColorParser.appearancePalette(themeContent: customTheme.content)
+            palette = dependencies.paletteResolver.palette(
+                forThemeContent: customTheme.content
+            )
         } else {
-            palette = ThemeColorParser.appearancePalette(for: name)
+            palette = dependencies.paletteResolver.palette(forThemeNamed: name)
         }
         return ResolvedTerminalTheme(
             name: name,

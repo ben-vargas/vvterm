@@ -40,7 +40,9 @@ extension TerminalThemeManagerDependencies {
             preferenceChanges: UserDefaultsTerminalThemePreferenceChangeSource(
                 notificationCenter: .default
             ),
-            fileStore: .appStorage,
+            themeFiles: TerminalThemeFileStore.appStorage,
+            builtInThemeCatalog: BundleTerminalThemeCatalog(),
+            paletteResolver: ThemeColorParserPaletteResolver(),
             persistenceKeys: TerminalThemePersistenceKeys(
                 customThemes: CloudKitSyncConstants.terminalCustomThemesStorageKey,
                 darkTheme: CloudKitSyncConstants.terminalThemeNameKey,

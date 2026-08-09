@@ -113,6 +113,55 @@ private final class TerminalThemePreferenceChangeSourceStub: TerminalThemePrefer
 }
 
 @MainActor
+private final class TerminalThemeFilesSpy: TerminalThemeFileSynchronizing {
+    private(set) var synchronizedThemes: [[TerminalTheme]] = []
+
+    func synchronize(_ themes: [TerminalTheme]) throws {
+        synchronizedThemes.append(themes)
+    }
+}
+
+@MainActor
+private struct BuiltInTerminalThemeCatalogStub: BuiltInTerminalThemeCatalog {
+    let names: [String]
+
+    func themeNames() -> [String] {
+        names
+    }
+}
+
+@MainActor
+private final class TerminalThemePaletteResolverSpy: TerminalThemePaletteResolving {
+    let namedPalette: TerminalThemePalette
+    let contentPalette: TerminalThemePalette
+    private(set) var resolvedNames: [String] = []
+    private(set) var resolvedContents: [String] = []
+    private(set) var cacheInvalidationCount = 0
+
+    init(
+        namedPalette: TerminalThemePalette = .fallback,
+        contentPalette: TerminalThemePalette = .fallback
+    ) {
+        self.namedPalette = namedPalette
+        self.contentPalette = contentPalette
+    }
+
+    func palette(forThemeNamed name: String) -> TerminalThemePalette {
+        resolvedNames.append(name)
+        return namedPalette
+    }
+
+    func palette(forThemeContent content: String) -> TerminalThemePalette {
+        resolvedContents.append(content)
+        return contentPalette
+    }
+
+    func invalidateCache() {
+        cacheInvalidationCount += 1
+    }
+}
+
+@MainActor
 private final class TerminalThemeDebounceGate {
     private var continuations: [CheckedContinuation<Void, Never>] = []
     var onWait: (() -> Void)?
@@ -205,7 +254,7 @@ final class TerminalThemePersistenceTests: XCTestCase {
         let fileURL = try XCTUnwrap(store.fileURL(for: theme.name))
         try original.write(to: fileURL, atomically: true, encoding: .utf8)
 
-        let manager = makeManager(defaults: defaults, fileStore: store)
+        let manager = makeManager(defaults: defaults, themeFiles: store)
 
         XCTAssertEqual(manager.customThemes, [theme])
         XCTAssertEqual(try String(contentsOf: fileURL, encoding: .utf8), original)
@@ -354,6 +403,75 @@ final class TerminalThemePersistenceTests: XCTestCase {
         let darkSnapshot = manager.activateAppearance(.dark)
         XCTAssertEqual(manager.activeAppearanceSnapshot, darkSnapshot)
         XCTAssertEqual(defaults.string(forKey: persistenceKeys.activeBackgroundCache), "#010203")
+    }
+
+    func testInjectedThemePortsOwnFilesCatalogAndCustomPaletteResolution() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let theme = TerminalTheme(
+            name: "Port Theme",
+            content: "background = #102030\nforeground = #A0B0C0\n"
+        )
+        defaults.set(try JSONEncoder().encode([theme]), forKey: persistenceKeys.customThemes)
+        defaults.set(theme.name, forKey: persistenceKeys.darkTheme)
+        defaults.set(false, forKey: persistenceKeys.usesPerAppearanceTheme)
+        let themeFiles = TerminalThemeFilesSpy()
+        let catalog = BuiltInTerminalThemeCatalogStub(
+            names: ["Aizen Dark", "Aizen Light", "Reserved"]
+        )
+        let customPalette = TerminalThemePalette(
+            backgroundHex: "#010203",
+            foregroundHex: "#040506",
+            cursorHex: "#070809",
+            cursorTextHex: "#0A0B0C"
+        )
+        let paletteResolver = TerminalThemePaletteResolverSpy(
+            contentPalette: customPalette
+        )
+
+        let manager = makeManager(
+            defaults: defaults,
+            themeFiles: themeFiles,
+            builtInThemeCatalog: catalog,
+            paletteResolver: paletteResolver
+        )
+
+        XCTAssertEqual(themeFiles.synchronizedThemes, [[theme]])
+        XCTAssertEqual(paletteResolver.cacheInvalidationCount, 1)
+        XCTAssertEqual(paletteResolver.resolvedContents, [theme.content])
+        XCTAssertTrue(paletteResolver.resolvedNames.isEmpty)
+        XCTAssertEqual(manager.activeAppearanceSnapshot.darkTheme.palette, customPalette)
+        XCTAssertEqual(manager.suggestThemeName(from: "Reserved"), "Reserved 2")
+    }
+
+    func testInjectedPaletteResolverHandlesBuiltInTheme() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set("Catalog Theme", forKey: persistenceKeys.darkTheme)
+        defaults.set(false, forKey: persistenceKeys.usesPerAppearanceTheme)
+        let namedPalette = TerminalThemePalette(
+            backgroundHex: "#111111",
+            foregroundHex: "#222222",
+            cursorHex: "#333333",
+            cursorTextHex: "#444444"
+        )
+        let paletteResolver = TerminalThemePaletteResolverSpy(
+            namedPalette: namedPalette
+        )
+
+        let manager = makeManager(
+            defaults: defaults,
+            builtInThemeCatalog: BuiltInTerminalThemeCatalogStub(
+                names: ["Aizen Dark", "Aizen Light", "Catalog Theme"]
+            ),
+            paletteResolver: paletteResolver
+        )
+
+        XCTAssertEqual(paletteResolver.resolvedNames, ["Catalog Theme"])
+        XCTAssertTrue(paletteResolver.resolvedContents.isEmpty)
+        XCTAssertEqual(manager.activeAppearanceSnapshot.darkTheme.palette, namedPalette)
     }
 
     func testInjectedClockAndPersistenceKeysOwnThemeMutation() throws {
@@ -628,7 +746,9 @@ final class TerminalThemePersistenceTests: XCTestCase {
         queue: TerminalThemeMutationQueueSpy? = nil,
         lifecycle: TerminalThemeSyncLifecycleStub? = nil,
         preferenceChanges: TerminalThemePreferenceChangeSourceStub? = nil,
-        fileStore: TerminalThemeFileStore? = nil,
+        themeFiles: (any TerminalThemeFileSynchronizing)? = nil,
+        builtInThemeCatalog: (any BuiltInTerminalThemeCatalog)? = nil,
+        paletteResolver: (any TerminalThemePaletteResolving)? = nil,
         isSyncEnabled: @escaping () -> Bool = { false },
         now: @escaping () -> Date = Date.init,
         waitForPreferenceSyncDebounce: @escaping () async throws -> Void = {},
@@ -638,6 +758,11 @@ final class TerminalThemePersistenceTests: XCTestCase {
         let queue = queue ?? TerminalThemeMutationQueueSpy()
         let lifecycle = lifecycle ?? TerminalThemeSyncLifecycleStub()
         let preferenceChanges = preferenceChanges ?? TerminalThemePreferenceChangeSourceStub()
+        let themeFiles = themeFiles ?? TerminalThemeFileStore(directoryURL: temporaryDirectory)
+        let builtInThemeCatalog = builtInThemeCatalog ?? BuiltInTerminalThemeCatalogStub(
+            names: ["Aizen Dark", "Aizen Light"]
+        )
+        let paletteResolver = paletteResolver ?? ThemeColorParserPaletteResolver()
         return TerminalThemeManager(
             dependencies: TerminalThemeManagerDependencies(
                 defaults: defaults,
@@ -645,7 +770,9 @@ final class TerminalThemePersistenceTests: XCTestCase {
                 mutationQueue: queue,
                 syncLifecycle: lifecycle,
                 preferenceChanges: preferenceChanges,
-                fileStore: fileStore ?? TerminalThemeFileStore(directoryURL: temporaryDirectory),
+                themeFiles: themeFiles,
+                builtInThemeCatalog: builtInThemeCatalog,
+                paletteResolver: paletteResolver,
                 persistenceKeys: persistenceKeys,
                 isSyncEnabled: isSyncEnabled,
                 now: now,

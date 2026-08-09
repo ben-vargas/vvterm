@@ -251,3 +251,18 @@ struct ThemeColorParser {
         return trimmed
     }
 }
+
+@MainActor
+struct ThemeColorParserPaletteResolver: TerminalThemePaletteResolving {
+    func palette(forThemeNamed name: String) -> TerminalThemePalette {
+        ThemeColorParser.appearancePalette(for: name)
+    }
+
+    func palette(forThemeContent content: String) -> TerminalThemePalette {
+        ThemeColorParser.appearancePalette(themeContent: content)
+    }
+
+    func invalidateCache() {
+        ThemeColorParser.invalidateCache()
+    }
+}
