@@ -32,7 +32,6 @@ extension TerminalSettingsView {
     var keyboardAccessorySection: some View {
         TerminalKeyboardSettingsSection(
             optionAsAltMode: optionAsAltModeBinding,
-            accessoryCustomizationEnabled: terminalAccessoryCustomizationEnabled,
             keyboardDismissButtonEnabled: $terminalKeyboardDismissButtonEnabled
         )
     }
@@ -40,7 +39,6 @@ extension TerminalSettingsView {
 
 private struct TerminalKeyboardSettingsSection: View {
     @Binding var optionAsAltMode: TerminalOptionAsAltMode
-    let accessoryCustomizationEnabled: Bool
     @Binding var keyboardDismissButtonEnabled: Bool
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) private var preserveTerminalSizeForKeyboard = false
 
@@ -54,20 +52,18 @@ private struct TerminalKeyboardSettingsSection: View {
 
             Toggle("Keep terminal size when keyboard opens", isOn: $preserveTerminalSizeForKeyboard)
 
-            if accessoryCustomizationEnabled {
-                Toggle("Show keyboard dismiss button", isOn: $keyboardDismissButtonEnabled)
+            Toggle("Show keyboard dismiss button", isOn: $keyboardDismissButtonEnabled)
 
-                NavigationLink {
-                    TerminalAccessoryCustomizationView()
-                } label: {
-                    Text("Customize Accessory Bar")
-                }
+            NavigationLink {
+                TerminalAccessoryCustomizationView()
+            } label: {
+                Text("Customize Accessory Bar")
+            }
 
-                NavigationLink {
-                    TerminalCustomActionLibraryView()
-                } label: {
-                    Text("Manage Custom Actions")
-                }
+            NavigationLink {
+                TerminalCustomActionLibraryView()
+            } label: {
+                Text("Manage Custom Actions")
             }
         } header: {
             Text("Keyboard")
