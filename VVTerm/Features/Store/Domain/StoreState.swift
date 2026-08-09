@@ -115,19 +115,8 @@ nonisolated enum VVTermProducts {
     static let allProducts = [proMonthly, proYearly, proLifetime]
 }
 
-nonisolated enum StoreError: LocalizedError {
+nonisolated enum StoreError: Error {
     case verificationFailed
     case productNotFound
     case purchaseFailed(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .verificationFailed:
-            return String(localized: "Purchase verification failed")
-        case .productNotFound:
-            return String(localized: "Product not found")
-        case .purchaseFailed(let message):
-            return String(format: String(localized: "Purchase failed: %@"), message)
-        }
-    }
 }
