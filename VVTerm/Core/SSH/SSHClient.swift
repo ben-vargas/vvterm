@@ -559,7 +559,11 @@ actor SSHClient {
 
     // MARK: - Command Execution
 
-    func execute(_ command: String, timeout: Duration? = nil) async throws -> String {
+    func execute(
+        _ command: String,
+        timeout: Duration? = nil,
+        maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes
+    ) async throws -> String {
         guard !isAborted else {
             throw SSHError.notConnected
         }
@@ -569,7 +573,7 @@ actor SSHClient {
         let effectiveTimeout = timeout ?? execTimeout
         return try await SSHClient.runWithTimeout(effectiveTimeout) {
             try Task.checkCancellation()
-            return try await session.execute(command)
+            return try await session.execute(command, maxOutputBytes: maxOutputBytes)
         }
     }
 
@@ -1585,11 +1589,18 @@ actor SSHSession {
         var channel: OpaquePointer?
         var output = Data()
         var stderr = Data()
+        var outputBudget: SSHExecOutputBudget
         var isStarted = false
 
-        init(id: UUID, command: String, continuation: CheckedContinuation<String, Error>) {
+        init(
+            id: UUID,
+            command: String,
+            maximumOutputBytes: Int,
+            continuation: CheckedContinuation<String, Error>
+        ) {
             self.id = id
             self.command = command
+            self.outputBudget = SSHExecOutputBudget(maximumBytes: maximumOutputBytes)
             self.continuation = continuation
         }
     }
@@ -2872,7 +2883,12 @@ actor SSHSession {
 
                     let bytesRead = libssh2_channel_read_ex(execChannel, 0, &buffer, buffer.count)
                     if bytesRead > 0 {
-                        request.output.append(Data(bytes: buffer, count: Int(bytesRead)))
+                        let readCount = Int(bytesRead)
+                        guard request.outputBudget.reserve(readCount) else {
+                            finishExecRequest(requestId, error: SSHError.outputLimitExceeded)
+                            continue
+                        }
+                        request.output.append(Data(bytes: buffer, count: readCount))
                         didWork = true
                     } else if bytesRead == Int(LIBSSH2_ERROR_EAGAIN) {
                         // No data yet
@@ -2883,7 +2899,12 @@ actor SSHSession {
 
                     let stderrRead = libssh2_channel_read_ex(execChannel, 1, &buffer, buffer.count)
                     if stderrRead > 0 {
-                        request.stderr.append(Data(bytes: buffer, count: Int(stderrRead)))
+                        let readCount = Int(stderrRead)
+                        guard request.outputBudget.reserve(readCount) else {
+                            finishExecRequest(requestId, error: SSHError.outputLimitExceeded)
+                            continue
+                        }
+                        request.stderr.append(Data(bytes: buffer, count: readCount))
                         didWork = true
                     } else if stderrRead == Int(LIBSSH2_ERROR_EAGAIN) {
                         // No stderr data yet
@@ -3451,7 +3472,10 @@ actor SSHSession {
 
     // MARK: - Execute Command
 
-    func execute(_ command: String) async throws -> String {
+    func execute(
+        _ command: String,
+        maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes
+    ) async throws -> String {
         guard libssh2Session != nil else {
             throw SSHError.notConnected
         }
@@ -3460,7 +3484,12 @@ actor SSHSession {
         let requestId = UUID()
         return try await withTaskCancellationHandler(operation: {
             try await withCheckedThrowingContinuation { continuation in
-                let request = ExecRequest(id: requestId, command: command, continuation: continuation)
+                let request = ExecRequest(
+                    id: requestId,
+                    command: command,
+                    maximumOutputBytes: maxOutputBytes,
+                    continuation: continuation
+                )
                 execRequests[request.id] = request
             }
         }, onCancel: { [weak self] in
@@ -3811,6 +3840,7 @@ enum SSHError: LocalizedError {
     case timeout
     case channelOpenFailed
     case shellRequestFailed
+    case outputLimitExceeded
     case hostKeyVerificationFailed
     case socketError(String)
     case unknown(String)
@@ -3837,6 +3867,7 @@ enum SSHError: LocalizedError {
              .moshBootstrapFailed,
              .moshInvalidEndpoint,
              .hostKeyVerificationFailed,
+             .outputLimitExceeded,
              .unknown:
             return false
         }
@@ -3872,6 +3903,8 @@ enum SSHError: LocalizedError {
         case .timeout: return String(localized: "Connection timed out")
         case .channelOpenFailed: return "Failed to open channel"
         case .shellRequestFailed: return "Failed to request shell"
+        case .outputLimitExceeded:
+            return String(localized: "The remote command produced too much output.")
         case .hostKeyVerificationFailed:
             return "Host key verification failed. The saved SSH host fingerprint does not match the server's current key."
         case .socketError(let msg): return "Socket error: \(msg)"
