@@ -59,6 +59,10 @@ private final class ServerMutationRepositoryGate: ServerMutationRepository {
 
     func validate(_ mutation: ServerMutation, hasProAccess: Bool) throws {}
 
+    func server(id: UUID) -> Server? {
+        nil
+    }
+
     func apply(_ mutation: ServerMutation) async throws -> Server {
         let waiters = startWaiters
         startWaiters.removeAll(keepingCapacity: false)
@@ -82,8 +86,14 @@ private final class ServerMutationRepositoryGate: ServerMutationRepository {
 }
 
 @MainActor
-private final class ServerCredentialStoreStub: ServerCredentialStoring {
+private final class ServerCredentialStoreStub: ServerCredentialTransactionRepository {
     func storeCredentials(_ credentials: ServerCredentials, for server: Server) throws {}
+
+    func getCredentials(for server: Server) throws -> ServerCredentials {
+        ServerCredentials(serverId: server.id)
+    }
+
+    func deleteCredentials(for serverID: UUID) throws {}
 }
 
 @Suite(.serialized)
@@ -186,6 +196,19 @@ struct ServerFormOperationControllerTests {
 
         #expect(controller.approveHostKeyChallenge())
         #expect(hostKeys.approvedAt == fixedNow)
+        #expect(controller.phase == .idle)
+    }
+
+    @Test
+    func credentialEndpointApprovalIsAnExplicitDismissiblePhase() {
+        let controller = makeController(connectionTester: ServerConnectionTesterFake())
+
+        controller.requireCredentialApproval()
+
+        #expect(controller.phase == .credentialApprovalRequired)
+        #expect(controller.credentialApprovalRequired)
+
+        controller.clearPresentation()
         #expect(controller.phase == .idle)
     }
 

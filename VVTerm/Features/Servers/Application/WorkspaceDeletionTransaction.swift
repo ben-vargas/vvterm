@@ -6,32 +6,39 @@ struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable {
     let deletedServers: [Server]
     let remainingServers: [Server]
     let remainingWorkspaces: [Workspace]
-    let pendingMutations: [PendingCloudKitMutation]
+    let pendingMutations: [ServerPendingMutation]
 
     init?(
         workspaceID: UUID,
         servers: [Server],
         workspaces: [Workspace],
-        id: UUID = UUID(),
-        mutationDate: Date = Date()
+        id: UUID,
+        mutationIDs: [UUID],
+        mutationDate: Date
     ) {
         guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else {
             return nil
         }
 
         let deletedServers = servers.filter { $0.workspaceId == workspaceID }
+        guard let workspaceMutationID = mutationIDs.last,
+              mutationIDs.dropLast().count == deletedServers.count else {
+            return nil
+        }
         self.id = id
         self.workspace = workspace
         self.deletedServers = deletedServers
         self.remainingServers = servers.filter { $0.workspaceId != workspaceID }
         self.remainingWorkspaces = workspaces.filter { $0.id != workspaceID }
         self.pendingMutations = deletedServers.enumerated().map { index, server in
-            PendingCloudKitMutation(
+            ServerPendingMutation(
+                id: mutationIDs[index],
                 payload: .serverDelete(server),
                 createdAt: mutationDate.addingTimeInterval(TimeInterval(index))
             )
         } + [
-            PendingCloudKitMutation(
+            ServerPendingMutation(
+                id: workspaceMutationID,
                 payload: .workspaceDelete(workspace),
                 createdAt: mutationDate.addingTimeInterval(TimeInterval(deletedServers.count))
             )
@@ -105,7 +112,7 @@ protocol WorkspaceDeletionJournalStoring {
 
 @MainActor
 protocol WorkspaceDeletionMutationEnqueuing {
-    func enqueueWorkspaceDeletionMutations(_ mutations: [PendingCloudKitMutation]) throws
+    func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws
 }
 
 @MainActor
@@ -207,18 +214,11 @@ struct WorkspaceDeletionTransaction {
 }
 
 extension CloudKitSyncCoordinator: WorkspaceDeletionMutationEnqueuing {
-    func enqueueWorkspaceDeletionMutations(_ mutations: [PendingCloudKitMutation]) throws {
-        guard mutations.allSatisfy({ mutation in
-            switch mutation.payload {
-            case .serverDelete, .workspaceDelete:
-                return true
-            default:
-                return false
-            }
-        }) else {
+    func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws {
+        guard mutations.allSatisfy(\.payload.isDeletion) else {
             throw WorkspaceDeletionTransactionError.invalidPendingMutation
         }
-        try enqueueMutationsAtomically(mutations)
+        try enqueueMutationsAtomically(mutations.map(PendingCloudKitMutation.init))
     }
 }
 
@@ -231,7 +231,35 @@ extension KeychainManager: WorkspaceDeletionCredentialCleaning {
     }
 }
 
-enum WorkspaceDeletionTransactionError: LocalizedError {
+private extension ServerPendingMutation.Payload {
+    var isDeletion: Bool {
+        switch self {
+        case .serverDelete, .workspaceDelete:
+            return true
+        case .serverUpsert, .workspaceUpsert:
+            return false
+        }
+    }
+}
+
+private extension PendingCloudKitMutation {
+    init(_ mutation: ServerPendingMutation) {
+        let payload: PendingCloudKitMutationPayload
+        switch mutation.payload {
+        case .serverUpsert(let server):
+            payload = .serverUpsert(server)
+        case .serverDelete(let server):
+            payload = .serverDelete(server)
+        case .workspaceUpsert(let workspace):
+            payload = .workspaceUpsert(workspace)
+        case .workspaceDelete(let workspace):
+            payload = .workspaceDelete(workspace)
+        }
+        self.init(id: mutation.id, payload: payload, createdAt: mutation.createdAt)
+    }
+}
+
+private enum WorkspaceDeletionTransactionError: LocalizedError {
     case invalidPendingMutation
     case credentialCleanupIncomplete
 

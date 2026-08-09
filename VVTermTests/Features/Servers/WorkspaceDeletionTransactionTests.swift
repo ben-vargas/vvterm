@@ -5,6 +5,39 @@ import Testing
 @MainActor
 struct WorkspaceDeletionTransactionTests {
     @Test
+    func serverMutationValueDecodesTheExistingDurableQueueShape() throws {
+        let fixture = WorkspaceDeletionFixture()
+        let id = UUID(uuidString: "30000000-0000-0000-0000-000000000010")!
+        let createdAt = Date(timeIntervalSinceReferenceDate: 1_500)
+        let existingQueueMutation = PendingCloudKitMutation(
+            id: id,
+            payload: .serverDelete(fixture.firstServer),
+            createdAt: createdAt,
+            retryCount: 4,
+            lastErrorDescription: "retry"
+        )
+
+        let decoded = try JSONDecoder().decode(
+            ServerPendingMutation.self,
+            from: JSONEncoder().encode(existingQueueMutation)
+        )
+
+        #expect(
+            decoded == ServerPendingMutation(
+                id: id,
+                payload: .serverDelete(fixture.firstServer),
+                createdAt: createdAt
+            )
+        )
+        #expect(
+            try JSONDecoder().decode(
+                ServerPendingMutation.self,
+                from: JSONEncoder().encode(decoded)
+            ) == decoded
+        )
+    }
+
+    @Test
     func secondCredentialFailureKeepsOneAtomicVisibleDeletionAndDurableRetry() throws {
         let fixture = WorkspaceDeletionFixture()
         let store = TestWorkspaceDeletionStore()
@@ -145,7 +178,10 @@ struct WorkspaceDeletionTransactionTests {
         let unchangedPlan = try #require(WorkspaceDeletionPlan(
             workspaceID: fixture.workspace.id,
             servers: fixture.allServers,
-            workspaces: fixture.allWorkspaces
+            workspaces: fixture.allWorkspaces,
+            id: UUID(),
+            mutationIDs: [UUID(), UUID(), UUID()],
+            mutationDate: Date(timeIntervalSinceReferenceDate: 2_000)
         ))
         #expect(fixture.plan.hasSameDeletionSnapshot(as: unchangedPlan))
 
@@ -160,7 +196,10 @@ struct WorkspaceDeletionTransactionTests {
         let changedPlan = try #require(WorkspaceDeletionPlan(
             workspaceID: fixture.workspace.id,
             servers: fixture.allServers + [newlyProtectedServer],
-            workspaces: fixture.allWorkspaces
+            workspaces: fixture.allWorkspaces,
+            id: UUID(),
+            mutationIDs: [UUID(), UUID(), UUID(), UUID()],
+            mutationDate: Date(timeIntervalSinceReferenceDate: 2_000)
         ))
 
         #expect(!fixture.plan.hasSameDeletionSnapshot(as: changedPlan))
@@ -201,13 +240,13 @@ private final class TestWorkspaceDeletionStore: WorkspaceDeletionJournalStoring 
 @MainActor
 private final class TestWorkspaceDeletionQueue: WorkspaceDeletionMutationEnqueuing {
     private let shouldFail: Bool
-    private(set) var enqueuedMutations: [PendingCloudKitMutation] = []
+    private(set) var enqueuedMutations: [ServerPendingMutation] = []
 
     init(shouldFail: Bool = false) {
         self.shouldFail = shouldFail
     }
 
-    func enqueueWorkspaceDeletionMutations(_ mutations: [PendingCloudKitMutation]) throws {
+    func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws {
         guard !shouldFail else { throw TestWorkspaceDeletionError.queueFailed }
         enqueuedMutations.append(contentsOf: mutations)
     }
@@ -286,6 +325,11 @@ private struct WorkspaceDeletionFixture {
             servers: [firstServer, secondServer, otherServer],
             workspaces: [workspace, otherWorkspace],
             id: UUID(uuidString: "30000000-0000-0000-0000-000000000001")!,
+            mutationIDs: [
+                UUID(uuidString: "30000000-0000-0000-0000-000000000002")!,
+                UUID(uuidString: "30000000-0000-0000-0000-000000000003")!,
+                UUID(uuidString: "30000000-0000-0000-0000-000000000004")!
+            ],
             mutationDate: Date(timeIntervalSinceReferenceDate: 1_000)
         )!
     }
