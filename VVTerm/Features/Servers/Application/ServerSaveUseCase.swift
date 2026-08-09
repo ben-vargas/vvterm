@@ -105,20 +105,12 @@ private enum CredentialRollback {
     case restore(server: Server, credentials: ServerCredentials)
 }
 
-struct ServerSaveTransactionError: LocalizedError {
+nonisolated struct ServerSaveTransactionError: Error, Equatable, Sendable {
     let originalErrorDescription: String
     let rollbackErrorDescription: String
 
     init(originalError: Error, rollbackError: Error) {
         originalErrorDescription = originalError.localizedDescription
         rollbackErrorDescription = rollbackError.localizedDescription
-    }
-
-    var errorDescription: String? {
-        String(
-            format: String(localized: "The server was not saved, and its credentials could not be restored (%@). Retry the save. Original error: %@"),
-            rollbackErrorDescription,
-            originalErrorDescription
-        )
     }
 }

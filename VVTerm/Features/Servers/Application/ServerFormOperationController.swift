@@ -1,8 +1,13 @@
 import Combine
 import Foundation
 
+nonisolated enum ServerConnectionTestFailureReason: Equatable, Sendable {
+    case message(String)
+    case hostKeyApprovalExpired
+}
+
 nonisolated struct ServerConnectionTestFailure: Equatable, Sendable {
-    let message: String
+    let reason: ServerConnectionTestFailureReason
     let requiresCloudflareOverrides: Bool
     let hostKeyChallenge: KnownHostsManager.Challenge?
 }
@@ -176,7 +181,7 @@ final class ServerFormOperationController: ObservableObject {
             phase = .testFailed(
                 snapshot: snapshot,
                 failure: ServerConnectionTestFailure(
-                    message: String(localized: "SSH host key approval expired. Try again."),
+                    reason: .hostKeyApprovalExpired,
                     requiresCloudflareOverrides: false,
                     hostKeyChallenge: nil
                 )

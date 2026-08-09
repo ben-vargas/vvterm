@@ -166,7 +166,7 @@ nonisolated final class AppServerConnectionTester: ServerConnectionTesting, @unc
         }
 
         return ServerConnectionTestFailure(
-            message: message,
+            reason: .message(message),
             requiresCloudflareOverrides: requiresCloudflareOverrides,
             hostKeyChallenge: hostKeyChallenge
         )

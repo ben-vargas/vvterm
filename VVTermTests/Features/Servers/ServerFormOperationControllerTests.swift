@@ -27,11 +27,16 @@ private actor ServerConnectionTesterFake: ServerConnectionTesting {
 private final class ServerHostKeyRepositoryFake: ServerHostKeyRepository, @unchecked Sendable {
     private let lock = NSLock()
     private let challenge: KnownHostsManager.Challenge?
+    private let approvalResult: Bool
     private var approvedAtStorage: Date?
     private var rejectedStorage: KnownHostsManager.Challenge?
 
-    init(challenge: KnownHostsManager.Challenge? = nil) {
+    init(
+        challenge: KnownHostsManager.Challenge? = nil,
+        approvalResult: Bool = true
+    ) {
         self.challenge = challenge
+        self.approvalResult = approvalResult
     }
 
     var approvedAt: Date? {
@@ -44,7 +49,7 @@ private final class ServerHostKeyRepositoryFake: ServerHostKeyRepository, @unche
 
     func approve(_ challenge: KnownHostsManager.Challenge, now: Date) -> Bool {
         lock.withLock { approvedAtStorage = now }
-        return true
+        return approvalResult
     }
 
     func reject(_ challenge: KnownHostsManager.Challenge) {
@@ -130,7 +135,7 @@ struct ServerFormOperationControllerTests {
         #expect(activeSnapshot == second.snapshot)
 
         let failure = ServerConnectionTestFailure(
-            message: "Second failed",
+            reason: .message("Second failed"),
             requiresCloudflareOverrides: false,
             hostKeyChallenge: nil
         )
@@ -180,7 +185,7 @@ struct ServerFormOperationControllerTests {
         )
         let input = makeInput(host: challenge.host)
         let failure = ServerConnectionTestFailure(
-            message: "Approval required",
+            reason: .message("Approval required"),
             requiresCloudflareOverrides: false,
             hostKeyChallenge: challenge
         )
@@ -197,6 +202,48 @@ struct ServerFormOperationControllerTests {
         #expect(controller.approveHostKeyChallenge())
         #expect(hostKeys.approvedAt == fixedNow)
         #expect(controller.phase == .idle)
+    }
+
+    @Test
+    func expiredHostKeyApprovalStoresASemanticFailureReason() async {
+        let challenge = KnownHostsManager.Challenge(
+            id: UUID(),
+            host: "expired.example.com",
+            port: 22,
+            fingerprint: "SHA256:expired",
+            keyType: 0,
+            keyTypeName: "ssh-ed25519",
+            kind: .firstUse,
+            createdAt: .distantPast
+        )
+        let tester = ServerConnectionTesterFake()
+        let controller = makeController(
+            connectionTester: tester,
+            hostKeys: ServerHostKeyRepositoryFake(
+                challenge: challenge,
+                approvalResult: false
+            )
+        )
+        let input = makeInput(host: challenge.host)
+        let approvalRequired = ServerConnectionTestFailure(
+            reason: .message("Approval required"),
+            requiresCloudflareOverrides: false,
+            hostKeyChallenge: challenge
+        )
+
+        controller.startConnectionTest(
+            server: input.server,
+            credentials: input.credentials,
+            snapshot: input.snapshot
+        )
+        #expect(await tester.waitForCallCount(1))
+        await tester.complete(call: 0, with: .failure(approvalRequired))
+        #expect(await waitUntil { controller.hostKeyChallenge == challenge })
+
+        #expect(!controller.approveHostKeyChallenge())
+        #expect(
+            controller.connectionTestFailure?.reason == .hostKeyApprovalExpired
+        )
     }
 
     @Test
