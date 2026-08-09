@@ -1037,28 +1037,10 @@ struct ThemeBuilderSheet: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var name: String
-    @State private var background: String
-    @State private var foreground: String
-    @State private var cursorColor: String
-    @State private var cursorText: String
-    @State private var selectionBackground: String
-    @State private var selectionForeground: String
-    @State private var paletteColors: [String]
-    @State private var advancedLines: String
+    @State private var draft: TerminalThemeDraft
     @State private var applyTarget: CustomThemeApplyTarget
     @State private var errorMessage: String?
     @State var showingDeleteConfirmation = false
-
-    private struct ParsedThemeValues {
-        var background = "#101418"
-        var foreground = "#D8E0EA"
-        var cursorColor = "#F8B26A"
-        var cursorText = "#101418"
-        var selectionBackground = "#2E3A46"
-        var selectionForeground = "#D8E0EA"
-        var paletteColors = Array(repeating: "", count: 16)
-        var extraLines: [String] = []
-    }
 
     init(
         usePerAppearanceTheme: Bool,
@@ -1076,53 +1058,38 @@ struct ThemeBuilderSheet: View {
         self.onDeleteRequest = onDeleteRequest
         self.onSave = onSave
 
-        let parsed = Self.parseThemeValues(from: initialContent)
         _name = State(initialValue: initialName)
-        _background = State(initialValue: parsed.background)
-        _foreground = State(initialValue: parsed.foreground)
-        _cursorColor = State(initialValue: parsed.cursorColor)
-        _cursorText = State(initialValue: parsed.cursorText)
-        _selectionBackground = State(initialValue: parsed.selectionBackground)
-        _selectionForeground = State(initialValue: parsed.selectionForeground)
-        _paletteColors = State(initialValue: parsed.paletteColors)
-        _advancedLines = State(initialValue: parsed.extraLines.joined(separator: "\n"))
+        _draft = State(initialValue: TerminalThemeDraft.decode(initialContent))
         _applyTarget = State(initialValue: initialApplyTarget)
     }
 
     var canSave: Bool {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
-        guard TerminalThemeValidator.isValidHexColor(background) else { return false }
-        guard TerminalThemeValidator.isValidHexColor(foreground) else { return false }
-        guard cursorColor.isEmpty || TerminalThemeValidator.isValidHexColor(cursorColor) else { return false }
-        guard cursorText.isEmpty || TerminalThemeValidator.isValidHexColor(cursorText) else { return false }
-        guard selectionBackground.isEmpty || TerminalThemeValidator.isValidHexColor(selectionBackground) else { return false }
-        guard selectionForeground.isEmpty || TerminalThemeValidator.isValidHexColor(selectionForeground) else { return false }
-        guard paletteColors.allSatisfy({ $0.isEmpty || TerminalThemeValidator.isValidHexColor($0) }) else { return false }
-        return true
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && draft.hasValidBuilderValues
     }
 
     private var previewBackground: Color {
-        previewColor(for: background, fallback: Color.fromHex("#101418"))
+        previewColor(for: draft.background, fallback: Color.fromHex("#101418"))
     }
 
     private var previewForeground: Color {
-        previewColor(for: foreground, fallback: Color.fromHex("#D8E0EA"))
+        previewColor(for: draft.foreground, fallback: Color.fromHex("#D8E0EA"))
     }
 
     private var previewCursorColor: Color {
-        previewColor(for: cursorColor, fallback: Color.fromHex("#F8B26A"))
+        previewColor(for: draft.cursorColor, fallback: Color.fromHex("#F8B26A"))
     }
 
     private var previewCursorText: Color {
-        previewColor(for: cursorText, fallback: previewBackground)
+        previewColor(for: draft.cursorText, fallback: previewBackground)
     }
 
     private var previewSelectionBackground: Color {
-        previewColor(for: selectionBackground, fallback: Color.fromHex("#2E3A46"))
+        previewColor(for: draft.selectionBackground, fallback: Color.fromHex("#2E3A46"))
     }
 
     private var previewSelectionForeground: Color {
-        previewColor(for: selectionForeground, fallback: previewForeground)
+        previewColor(for: draft.selectionForeground, fallback: previewForeground)
     }
 
     var body: some View {
@@ -1156,17 +1123,17 @@ struct ThemeBuilderSheet: View {
                 }
 
                 Section {
-                    colorField(String(localized: "Background"), text: $background, placeholder: "#101418", fallback: Color.fromHex("#101418"))
-                    colorField(String(localized: "Foreground"), text: $foreground, placeholder: "#D8E0EA", fallback: Color.fromHex("#D8E0EA"))
+                    colorField(String(localized: "Background"), text: $draft.background, placeholder: "#101418", fallback: Color.fromHex("#101418"))
+                    colorField(String(localized: "Foreground"), text: $draft.foreground, placeholder: "#D8E0EA", fallback: Color.fromHex("#D8E0EA"))
                 } header: {
                     sectionHeader("Required Colors")
                 }
 
                 Section {
-                    colorField(String(localized: "Cursor"), text: $cursorColor, placeholder: "#F8B26A", fallback: Color.fromHex("#F8B26A"))
-                    colorField(String(localized: "Cursor Text"), text: $cursorText, placeholder: "#101418", fallback: previewBackground)
-                    colorField(String(localized: "Selection Background"), text: $selectionBackground, placeholder: "#2E3A46", fallback: Color.fromHex("#2E3A46"))
-                    colorField(String(localized: "Selection Foreground"), text: $selectionForeground, placeholder: "#D8E0EA", fallback: Color.fromHex("#D8E0EA"))
+                    colorField(String(localized: "Cursor"), text: $draft.cursorColor, placeholder: "#F8B26A", fallback: Color.fromHex("#F8B26A"))
+                    colorField(String(localized: "Cursor Text"), text: $draft.cursorText, placeholder: "#101418", fallback: previewBackground)
+                    colorField(String(localized: "Selection Background"), text: $draft.selectionBackground, placeholder: "#2E3A46", fallback: Color.fromHex("#2E3A46"))
+                    colorField(String(localized: "Selection Foreground"), text: $draft.selectionForeground, placeholder: "#D8E0EA", fallback: Color.fromHex("#D8E0EA"))
                 } header: {
                     sectionHeader("Optional Colors")
                 } footer: {
@@ -1196,7 +1163,7 @@ struct ThemeBuilderSheet: View {
                 }
 
                 Section {
-                    TextEditor(text: $advancedLines)
+                    TextEditor(text: $draft.advancedLines)
                         .font(.system(.body, design: .monospaced))
                         .frame(minHeight: 88)
                 } header: {
@@ -1353,8 +1320,8 @@ struct ThemeBuilderSheet: View {
 
     private func paletteColorBinding(_ index: Int) -> Binding<String> {
         Binding(
-            get: { paletteColors[index] },
-            set: { paletteColors[index] = $0 }
+            get: { draft.paletteColors[index] },
+            set: { draft.paletteColors[index] = $0 }
         )
     }
 
@@ -1370,11 +1337,11 @@ struct ThemeBuilderSheet: View {
     }
 
     private func palettePreviewColor(_ index: Int) -> Color {
-        guard paletteColors.indices.contains(index) else {
+        guard draft.paletteColors.indices.contains(index) else {
             return Color.fromHex(paletteFallbackHex(index))
         }
         return previewColor(
-            for: paletteColors[index],
+            for: draft.paletteColors[index],
             fallback: Color.fromHex(paletteFallbackHex(index))
         )
     }
@@ -1390,94 +1357,11 @@ struct ThemeBuilderSheet: View {
         #endif
     }
 
-    private static func parseThemeValues(from content: String?) -> ParsedThemeValues {
-        guard let content, !content.isEmpty else {
-            return ParsedThemeValues()
-        }
-
-        var parsed = ParsedThemeValues()
-        for rawLine in content.components(separatedBy: .newlines) {
-            let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-
-            let parts = trimmed.split(separator: "=", maxSplits: 1)
-            guard parts.count == 2 else {
-                parsed.extraLines.append(trimmed)
-                continue
-            }
-
-            let key = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
-            let value = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if key == "palette" {
-                let paletteParts = value.split(separator: "=", maxSplits: 1)
-                guard
-                    paletteParts.count == 2,
-                    let paletteIndex = Int(paletteParts[0].trimmingCharacters(in: .whitespacesAndNewlines)),
-                    (0..<16).contains(paletteIndex),
-                    let paletteColor = TerminalThemeValidator.normalizeHexColor(String(paletteParts[1]))
-                else {
-                    parsed.extraLines.append(trimmed)
-                    continue
-                }
-                parsed.paletteColors[paletteIndex] = paletteColor
-                continue
-            }
-
-            let normalized = TerminalThemeValidator.normalizeHexColor(value) ?? value
-
-            switch key {
-            case "background":
-                parsed.background = normalized
-            case "foreground":
-                parsed.foreground = normalized
-            case "cursor-color":
-                parsed.cursorColor = normalized
-            case "cursor-text":
-                parsed.cursorText = normalized
-            case "selection-background":
-                parsed.selectionBackground = normalized
-            case "selection-foreground":
-                parsed.selectionForeground = normalized
-            default:
-                parsed.extraLines.append("\(key) = \(value)")
-            }
-        }
-
-        return parsed
-    }
-
     func save() {
         do {
-            var lines: [String] = []
-            lines.append("background = \(TerminalThemeValidator.normalizeHexColor(background) ?? background)")
-            lines.append("foreground = \(TerminalThemeValidator.normalizeHexColor(foreground) ?? foreground)")
-
-            if let value = TerminalThemeValidator.normalizeHexColor(cursorColor) {
-                lines.append("cursor-color = \(value)")
-            }
-            if let value = TerminalThemeValidator.normalizeHexColor(cursorText) {
-                lines.append("cursor-text = \(value)")
-            }
-            if let value = TerminalThemeValidator.normalizeHexColor(selectionBackground) {
-                lines.append("selection-background = \(value)")
-            }
-            if let value = TerminalThemeValidator.normalizeHexColor(selectionForeground) {
-                lines.append("selection-foreground = \(value)")
-            }
-            for index in 0..<paletteColors.count {
-                if let value = TerminalThemeValidator.normalizeHexColor(paletteColors[index]) {
-                    lines.append("palette = \(index)=\(value)")
-                }
-            }
-
-            lines.append(contentsOf: advancedLines.components(separatedBy: .newlines))
-
-            let content = lines.joined(separator: "\n") + "\n"
-            let normalized = try TerminalThemeValidator.validateAndNormalizeThemeContent(content)
             try onSave(
                 name.trimmingCharacters(in: .whitespacesAndNewlines),
-                normalized,
+                try draft.encodedContent(),
                 showApplyTarget ? applyTarget : .dark
             )
             dismiss()
