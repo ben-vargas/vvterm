@@ -155,11 +155,3 @@ final class BiometricAuthService: BiometricAuthServing {
         }
     }
 }
-
-extension AppLockManager {
-    static let shared = AppLockManager()
-
-    convenience init() {
-        self.init(defaults: .standard, authService: BiometricAuthService.shared)
-    }
-}

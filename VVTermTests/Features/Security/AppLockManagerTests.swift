@@ -5,6 +5,12 @@ import XCTest
 
 @MainActor
 final class AppLockManagerTests: XCTestCase {
+    private final class AppLockPreferencesFake: AppLockPreferences {
+        var fullAppLockEnabled: Bool?
+        var lockOnBackground: Bool?
+        var authGraceSeconds: Int?
+    }
+
     private final class StubBiometricAuthService: BiometricAuthServing {
         var availabilityResult: BiometricAvailability
         var authenticateError: Error?
@@ -94,6 +100,62 @@ final class AppLockManagerTests: XCTestCase {
             String(localized: "Biometric authentication is unavailable on this device.")
         )
         XCTAssertTrue(authService.authenticateReasons.isEmpty)
+    }
+
+    func testInjectedPreferencesClockAndIDOwnInitialAndUnlockedState() async {
+        let preferences = AppLockPreferencesFake()
+        preferences.fullAppLockEnabled = true
+        preferences.lockOnBackground = false
+        preferences.authGraceSeconds = 45
+        let authService = StubBiometricAuthService(
+            availabilityResult: .available(.faceID)
+        )
+        let generation = UUID(uuidString: "10000000-0000-0000-0000-000000000001")!
+        let now = Date(timeIntervalSinceReferenceDate: 12_345)
+        let manager = AppLockManager(
+            dependencies: AppLockManagerDependencies(
+                preferences: preferences,
+                authService: authService,
+                now: { now },
+                makeID: { generation }
+            )
+        )
+
+        XCTAssertEqual(manager.lockState, .locked(generation: generation))
+        XCTAssertFalse(manager.lockOnBackground)
+        XCTAssertEqual(manager.authGraceSeconds, 45)
+
+        let didUnlock = await manager.ensureAppUnlocked()
+
+        XCTAssertTrue(didUnlock)
+        XCTAssertEqual(manager.lockState, .unlocked(at: now))
+        manager.lockOnBackground = true
+        XCTAssertEqual(preferences.lockOnBackground, true)
+    }
+
+    func testUserDefaultsPreferencesRoundTripAndRemoveValues() {
+        let defaults = makeDefaults()
+        let preferences = UserDefaultsAppLockPreferences(defaults: defaults)
+
+        XCTAssertNil(preferences.fullAppLockEnabled)
+        XCTAssertNil(preferences.lockOnBackground)
+        XCTAssertNil(preferences.authGraceSeconds)
+
+        preferences.fullAppLockEnabled = true
+        preferences.lockOnBackground = false
+        preferences.authGraceSeconds = 120
+
+        XCTAssertEqual(preferences.fullAppLockEnabled, true)
+        XCTAssertEqual(preferences.lockOnBackground, false)
+        XCTAssertEqual(preferences.authGraceSeconds, 120)
+
+        preferences.fullAppLockEnabled = nil
+        preferences.lockOnBackground = nil
+        preferences.authGraceSeconds = nil
+
+        XCTAssertNil(preferences.fullAppLockEnabled)
+        XCTAssertNil(preferences.lockOnBackground)
+        XCTAssertNil(preferences.authGraceSeconds)
     }
 
     func testEnableFullAppLockAuthenticatesAndUnlocksApp() async {

@@ -3,12 +3,6 @@ import Combine
 
 @MainActor
 final class AppLockManager: ObservableObject {
-    private enum Keys {
-        static let fullAppLockEnabled = "security.fullAppLockEnabled"
-        static let lockOnBackground = "security.lockOnBackground"
-        static let authGraceSeconds = "security.authGraceSeconds"
-    }
-
     @Published private(set) var lockState: AppLockState
     @Published private(set) var authenticationState: AppLockAuthenticationState = .idle
     @Published private(set) var lastFailure: AppLockFailure?
@@ -16,7 +10,7 @@ final class AppLockManager: ObservableObject {
 
     @Published private(set) var fullAppLockEnabled: Bool {
         didSet {
-            defaults.set(fullAppLockEnabled, forKey: Keys.fullAppLockEnabled)
+            dependencies.preferences.fullAppLockEnabled = fullAppLockEnabled
             if !fullAppLockEnabled {
                 invalidateAuthentication()
                 unlockedServers.removeAll()
@@ -27,7 +21,7 @@ final class AppLockManager: ObservableObject {
 
     @Published var lockOnBackground: Bool {
         didSet {
-            defaults.set(lockOnBackground, forKey: Keys.lockOnBackground)
+            dependencies.preferences.lockOnBackground = lockOnBackground
         }
     }
 
@@ -38,7 +32,7 @@ final class AppLockManager: ObservableObject {
                 authGraceSeconds = clamped
                 return
             }
-            defaults.set(authGraceSeconds, forKey: Keys.authGraceSeconds)
+            dependencies.preferences.authGraceSeconds = authGraceSeconds
         }
     }
 
@@ -59,27 +53,25 @@ final class AppLockManager: ObservableObject {
         return .none
     }
 
-    private let defaults: UserDefaults
-    private let authService: any BiometricAuthServing
+    private let dependencies: AppLockManagerDependencies
     private var unlockedServers: [UUID: Date] = [:]
 
-    init(defaults: UserDefaults, authService: any BiometricAuthServing) {
-        self.defaults = defaults
-        self.authService = authService
-        self.biometricAvailability = authService.availability()
+    init(dependencies: AppLockManagerDependencies) {
+        self.dependencies = dependencies
+        self.biometricAvailability = dependencies.authService.availability()
 
-        let fullLockEnabled = defaults.object(forKey: Keys.fullAppLockEnabled) as? Bool ?? false
+        let fullLockEnabled = dependencies.preferences.fullAppLockEnabled ?? false
         self.fullAppLockEnabled = fullLockEnabled
-        self.lockOnBackground = defaults.object(forKey: Keys.lockOnBackground) as? Bool ?? true
-        let storedGrace = defaults.object(forKey: Keys.authGraceSeconds) as? Int ?? 30
+        self.lockOnBackground = dependencies.preferences.lockOnBackground ?? true
+        let storedGrace = dependencies.preferences.authGraceSeconds ?? 30
         self.authGraceSeconds = max(0, min(storedGrace, 300))
         self.lockState = fullLockEnabled
-            ? .locked(generation: UUID())
+            ? .locked(generation: dependencies.makeID())
             : .unlocked(at: nil)
     }
 
     func refreshBiometryAvailability() {
-        let nextAvailability = authService.availability()
+        let nextAvailability = dependencies.authService.availability()
         if biometricAvailability != nextAvailability {
             biometricAvailability = nextAvailability
         }
@@ -113,7 +105,7 @@ final class AppLockManager: ObservableObject {
         ) else { return }
 
         fullAppLockEnabled = true
-        lockState = .unlocked(at: Date())
+        lockState = .unlocked(at: dependencies.now())
     }
 
     func ensureAppUnlocked() async -> Bool {
@@ -126,7 +118,7 @@ final class AppLockManager: ObservableObject {
         ) else { return false }
         guard lockState == .locked(generation: lockGeneration) else { return false }
 
-        lockState = .unlocked(at: Date())
+        lockState = .unlocked(at: dependencies.now())
         lastFailure = nil
         return true
     }
@@ -173,7 +165,7 @@ final class AppLockManager: ObservableObject {
             purpose: .unlockServer(serverID: server.id)
         ) else { return false }
 
-        unlockedServers[server.id] = Date()
+        unlockedServers[server.id] = dependencies.now()
         lastFailure = nil
         return true
     }
@@ -189,7 +181,7 @@ final class AppLockManager: ObservableObject {
 
     func lockAppNow() {
         guard fullAppLockEnabled else { return }
-        lockState = .locked(generation: UUID())
+        lockState = .locked(generation: dependencies.makeID())
         invalidateAuthentication()
         unlockedServers.removeAll()
     }
@@ -197,7 +189,7 @@ final class AppLockManager: ObservableObject {
     private func hasValidGrant(_ date: Date?) -> Bool {
         guard let date else { return false }
         guard authGraceSeconds > 0 else { return false }
-        return Date().timeIntervalSince(date) <= TimeInterval(authGraceSeconds)
+        return dependencies.now().timeIntervalSince(date) <= TimeInterval(authGraceSeconds)
     }
 
     private func purgeExpiredUnlocks() {
@@ -206,7 +198,7 @@ final class AppLockManager: ObservableObject {
             return
         }
 
-        let threshold = Date().addingTimeInterval(-TimeInterval(authGraceSeconds))
+        let threshold = dependencies.now().addingTimeInterval(-TimeInterval(authGraceSeconds))
         unlockedServers = unlockedServers.filter { $0.value >= threshold }
     }
 
@@ -216,7 +208,7 @@ final class AppLockManager: ObservableObject {
     ) async -> Bool {
         guard authenticationState == .idle else { return false }
 
-        let attemptID = UUID()
+        let attemptID = dependencies.makeID()
         authenticationState = .authenticating(attemptID: attemptID, purpose: purpose)
         defer {
             if authenticationState.accepts(attemptID: attemptID, purpose: purpose) {
@@ -225,7 +217,10 @@ final class AppLockManager: ObservableObject {
         }
 
         do {
-            try await authService.authenticate(reason: reason, allowPasscodeFallback: true)
+            try await dependencies.authService.authenticate(
+                reason: reason,
+                allowPasscodeFallback: true
+            )
             return authenticationState.accepts(attemptID: attemptID, purpose: purpose)
         } catch let failure as BiometricAuthenticationFailure {
             guard authenticationState.accepts(attemptID: attemptID, purpose: purpose) else {
