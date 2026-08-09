@@ -78,8 +78,7 @@ final class TerminalThemeManager: ObservableObject {
     private var startupSyncTask: Task<Void, Never>?
     private var lifecycleSyncTask: Task<Void, Never>?
 
-    private var defaults: UserDefaults { dependencies.defaults }
-    private var persistenceKeys: TerminalThemePersistenceKeys { dependencies.persistenceKeys }
+    private var persistence: any TerminalThemePersistence { dependencies.persistence }
 
     init(dependencies: TerminalThemeManagerDependencies) {
         self.dependencies = dependencies
@@ -88,13 +87,7 @@ final class TerminalThemeManager: ObservableObject {
             syncLifecycle: dependencies.syncLifecycle
         )
         self.observerCleanupRequest = observerCleanup.request
-        let defaults = dependencies.defaults
-        let keys = dependencies.persistenceKeys
-        let initialSelection = TerminalThemeSelection(
-            darkThemeName: defaults.string(forKey: keys.darkTheme) ?? "Aizen Dark",
-            lightThemeName: defaults.string(forKey: keys.lightTheme) ?? "Aizen Light",
-            usePerAppearanceTheme: defaults.object(forKey: keys.usesPerAppearanceTheme) as? Bool ?? true
-        )
+        let initialSelection = dependencies.persistence.loadSelection()
         self.themeSelection = initialSelection
         self.lastKnownPreferenceSnapshot = initialSelection
 
@@ -121,6 +114,10 @@ final class TerminalThemeManager: ObservableObject {
             .filter { !$0.isDeleted && $0.canApply }
             .map(\.name)
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    var builtInThemeNames: [String] {
+        dependencies.builtInThemeCatalog.themeNames()
     }
 
     func applicationThemeName(preferred: String, fallback: String) -> String {
@@ -163,9 +160,7 @@ final class TerminalThemeManager: ObservableObject {
         }
 
         let backgroundHex = snapshot.activeTheme.palette.backgroundHex
-        if defaults.string(forKey: persistenceKeys.activeBackgroundCache) != backgroundHex {
-            defaults.set(backgroundHex, forKey: persistenceKeys.activeBackgroundCache)
-        }
+        persistence.cacheActiveBackgroundHex(backgroundHex)
         return snapshot
     }
 
@@ -266,24 +261,19 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     private func loadThemes() {
-        guard let data = defaults.data(forKey: persistenceKeys.customThemes) else {
-            customThemes = []
-            return
-        }
         do {
-            customThemes = try JSONDecoder().decode([TerminalTheme].self, from: data)
+            customThemes = try persistence.loadCustomThemes()
         } catch {
             customThemes = []
-            logger.error("Failed to decode custom themes: \(error.localizedDescription)")
+            logger.error("Failed to load custom themes: \(error.localizedDescription)")
         }
     }
 
     private func saveThemes() {
         do {
-            let data = try JSONEncoder().encode(customThemes)
-            defaults.set(data, forKey: persistenceKeys.customThemes)
+            try persistence.saveCustomThemes(customThemes)
         } catch {
-            logger.error("Failed to encode custom themes: \(error.localizedDescription)")
+            logger.error("Failed to save custom themes: \(error.localizedDescription)")
         }
     }
 
@@ -303,21 +293,20 @@ final class TerminalThemeManager: ObservableObject {
         let fallbackDark = "Aizen Dark"
         let fallbackLight = "Aizen Light"
 
-        let darkTheme = defaults.string(forKey: persistenceKeys.darkTheme) ?? fallbackDark
-        let lightTheme = defaults.string(forKey: persistenceKeys.lightTheme) ?? fallbackLight
+        let selection = currentPreferenceSnapshot()
+        let correctedSelection = TerminalThemeSelection(
+            darkThemeName: available.contains(selection.darkThemeName)
+                ? selection.darkThemeName
+                : fallbackDark,
+            lightThemeName: available.contains(selection.lightThemeName)
+                ? selection.lightThemeName
+                : fallbackLight,
+            usePerAppearanceTheme: selection.usePerAppearanceTheme
+        )
 
-        var changed = false
-        if !available.contains(darkTheme) {
-            defaults.set(fallbackDark, forKey: persistenceKeys.darkTheme)
-            changed = true
-        }
-        if !available.contains(lightTheme) {
-            defaults.set(fallbackLight, forKey: persistenceKeys.lightTheme)
-            changed = true
-        }
-
-        if changed {
-            lastKnownPreferenceSnapshot = currentPreferenceSnapshot()
+        if correctedSelection != selection {
+            persistence.saveSelection(correctedSelection)
+            lastKnownPreferenceSnapshot = correctedSelection
         }
     }
 
@@ -373,18 +362,22 @@ final class TerminalThemeManager: ObservableObject {
 
     private func migrateSelectionsForRenamedTheme(from oldName: String, to newName: String) {
         guard oldName != newName else { return }
-
-        if defaults.string(forKey: persistenceKeys.darkTheme) == oldName {
-            defaults.set(newName, forKey: persistenceKeys.darkTheme)
-        }
-
-        if defaults.string(forKey: persistenceKeys.lightTheme) == oldName {
-            defaults.set(newName, forKey: persistenceKeys.lightTheme)
-        }
+        let selection = currentPreferenceSnapshot()
+        let migratedSelection = TerminalThemeSelection(
+            darkThemeName: selection.darkThemeName == oldName
+                ? newName
+                : selection.darkThemeName,
+            lightThemeName: selection.lightThemeName == oldName
+                ? newName
+                : selection.lightThemeName,
+            usePerAppearanceTheme: selection.usePerAppearanceTheme
+        )
+        guard migratedSelection != selection else { return }
+        persistence.saveSelection(migratedSelection)
     }
 
     private func observeThemePreferenceChanges(cleanup: TerminalThemeObserverCleanup) {
-        let observer = dependencies.preferenceChanges.observeChanges(to: defaults) { [weak self] in
+        let observer = dependencies.preferenceChanges.observeChanges { [weak self] in
             Task { @MainActor [weak self] in
                 self?.handleThemePreferenceChange()
             }
@@ -407,7 +400,7 @@ final class TerminalThemeManager: ObservableObject {
         refreshActiveAppearance()
 
         let now = dependencies.now()
-        defaults.set(now.timeIntervalSince1970, forKey: persistenceKeys.preferenceUpdatedAt)
+        persistence.savePreferenceUpdatedAt(now)
         schedulePreferenceCloudSync(
             TerminalThemePreference(
                 darkThemeName: snapshot.darkThemeName,
@@ -419,17 +412,11 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     private func currentPreferenceSnapshot() -> TerminalThemeSelection {
-        TerminalThemeSelection(
-            darkThemeName: defaults.string(forKey: persistenceKeys.darkTheme) ?? "Aizen Dark",
-            lightThemeName: defaults.string(forKey: persistenceKeys.lightTheme) ?? "Aizen Light",
-            usePerAppearanceTheme: defaults.object(forKey: persistenceKeys.usesPerAppearanceTheme) as? Bool ?? true
-        )
+        persistence.loadSelection()
     }
 
     private func localPreferenceUpdatedAt() -> Date {
-        let value = defaults.double(forKey: persistenceKeys.preferenceUpdatedAt)
-        guard value > 0 else { return .distantPast }
-        return Date(timeIntervalSince1970: value)
+        persistence.loadPreferenceUpdatedAt()
     }
 
     private func schedulePreferenceCloudSync(_ preference: TerminalThemePreference) {
@@ -544,7 +531,7 @@ final class TerminalThemeManager: ObservableObject {
         let seedUpdatedAt: Date
         if localUpdatedAt == .distantPast {
             seedUpdatedAt = dependencies.now()
-            defaults.set(seedUpdatedAt.timeIntervalSince1970, forKey: persistenceKeys.preferenceUpdatedAt)
+            persistence.savePreferenceUpdatedAt(seedUpdatedAt)
         } else {
             seedUpdatedAt = localUpdatedAt
         }
@@ -590,10 +577,14 @@ final class TerminalThemeManager: ObservableObject {
         guard preference.updatedAt > localUpdatedAt else { return }
 
         isApplyingRemotePreference = true
-        defaults.set(preference.darkThemeName, forKey: persistenceKeys.darkTheme)
-        defaults.set(preference.lightThemeName, forKey: persistenceKeys.lightTheme)
-        defaults.set(preference.usePerAppearanceTheme, forKey: persistenceKeys.usesPerAppearanceTheme)
-        defaults.set(preference.updatedAt.timeIntervalSince1970, forKey: persistenceKeys.preferenceUpdatedAt)
+        persistence.saveSelection(
+            TerminalThemeSelection(
+                darkThemeName: preference.darkThemeName,
+                lightThemeName: preference.lightThemeName,
+                usePerAppearanceTheme: preference.usePerAppearanceTheme
+            )
+        )
+        persistence.savePreferenceUpdatedAt(preference.updatedAt)
         isApplyingRemotePreference = false
 
         ensureThemeSelectionIsValid()

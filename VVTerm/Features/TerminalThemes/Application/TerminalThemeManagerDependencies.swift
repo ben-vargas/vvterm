@@ -24,10 +24,20 @@ protocol TerminalThemeSyncLifecycle: AnyObject {
 @MainActor
 protocol TerminalThemePreferenceChangeSource: AnyObject {
     func observeChanges(
-        to defaults: UserDefaults,
         _ observer: @escaping () -> Void
     ) -> NSObjectProtocol
     func removeObserver(_ observer: NSObjectProtocol)
+}
+
+@MainActor
+protocol TerminalThemePersistence: AnyObject {
+    func loadCustomThemes() throws -> [TerminalTheme]
+    func saveCustomThemes(_ themes: [TerminalTheme]) throws
+    func loadSelection() -> TerminalThemeSelection
+    func saveSelection(_ selection: TerminalThemeSelection)
+    func loadPreferenceUpdatedAt() -> Date
+    func savePreferenceUpdatedAt(_ date: Date)
+    func cacheActiveBackgroundHex(_ hex: String)
 }
 
 @MainActor
@@ -47,18 +57,9 @@ protocol TerminalThemePaletteResolving {
     func invalidateCache()
 }
 
-nonisolated struct TerminalThemePersistenceKeys: Equatable, Sendable {
-    let customThemes: String
-    let darkTheme: String
-    let lightTheme: String
-    let usesPerAppearanceTheme: String
-    let preferenceUpdatedAt: String
-    let activeBackgroundCache: String
-}
-
 @MainActor
 struct TerminalThemeManagerDependencies {
-    let defaults: UserDefaults
+    let persistence: any TerminalThemePersistence
     let cloud: any TerminalThemeCloudClient
     let mutationQueue: any TerminalThemeMutationQueue
     let syncLifecycle: any TerminalThemeSyncLifecycle
@@ -66,7 +67,6 @@ struct TerminalThemeManagerDependencies {
     let themeFiles: any TerminalThemeFileSynchronizing
     let builtInThemeCatalog: any BuiltInTerminalThemeCatalog
     let paletteResolver: any TerminalThemePaletteResolving
-    let persistenceKeys: TerminalThemePersistenceKeys
     let isSyncEnabled: () -> Bool
     let now: () -> Date
     let waitForPreferenceSyncDebounce: () async throws -> Void

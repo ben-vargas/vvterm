@@ -90,7 +90,6 @@ private final class TerminalThemePreferenceChangeSourceStub: TerminalThemePrefer
     var onRemove: (() -> Void)?
 
     func observeChanges(
-        to defaults: UserDefaults,
         _ observer: @escaping () -> Void
     ) -> NSObjectProtocol {
         let token = ObserverToken()
@@ -109,6 +108,58 @@ private final class TerminalThemePreferenceChangeSourceStub: TerminalThemePrefer
         for observer in observers.values {
             observer()
         }
+    }
+}
+
+@MainActor
+private final class TerminalThemePersistenceSpy: TerminalThemePersistence {
+    var themes: [TerminalTheme]
+    var selection: TerminalThemeSelection
+    var preferenceUpdatedAt: Date
+    private(set) var savedThemeSnapshots: [[TerminalTheme]] = []
+    private(set) var cachedBackgroundHexes: [String] = []
+
+    init(
+        themes: [TerminalTheme] = [],
+        selection: TerminalThemeSelection = TerminalThemeSelection(
+            darkThemeName: "Aizen Dark",
+            lightThemeName: "Aizen Light",
+            usePerAppearanceTheme: true
+        ),
+        preferenceUpdatedAt: Date = .distantPast
+    ) {
+        self.themes = themes
+        self.selection = selection
+        self.preferenceUpdatedAt = preferenceUpdatedAt
+    }
+
+    func loadCustomThemes() throws -> [TerminalTheme] {
+        themes
+    }
+
+    func saveCustomThemes(_ themes: [TerminalTheme]) throws {
+        self.themes = themes
+        savedThemeSnapshots.append(themes)
+    }
+
+    func loadSelection() -> TerminalThemeSelection {
+        selection
+    }
+
+    func saveSelection(_ selection: TerminalThemeSelection) {
+        self.selection = selection
+    }
+
+    func loadPreferenceUpdatedAt() -> Date {
+        preferenceUpdatedAt
+    }
+
+    func savePreferenceUpdatedAt(_ date: Date) {
+        preferenceUpdatedAt = date
+    }
+
+    func cacheActiveBackgroundHex(_ hex: String) {
+        cachedBackgroundHexes.append(hex)
     }
 }
 
@@ -215,7 +266,7 @@ private final class TerminalThemeCloudGate {
 @MainActor
 final class TerminalThemePersistenceTests: XCTestCase {
     private var temporaryDirectory: URL!
-    private let persistenceKeys = TerminalThemePersistenceKeys(
+    private let persistenceKeys = TerminalThemeUserDefaultsKeys(
         customThemes: "test.terminal-themes",
         darkTheme: "test.terminal-theme.dark",
         lightTheme: "test.terminal-theme.light",
@@ -270,6 +321,19 @@ final class TerminalThemePersistenceTests: XCTestCase {
             manager.appearanceSnapshot(for: .dark).activeTheme.name,
             "Aizen Dark"
         )
+    }
+
+    func testMalformedPersistedThemesLoadAsEmptyWithoutReplacingTheStoredData() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let malformedData = Data("not-json".utf8)
+        defaults.set(malformedData, forKey: persistenceKeys.customThemes)
+
+        let manager = makeManager(defaults: defaults)
+
+        XCTAssertTrue(manager.customThemes.isEmpty)
+        XCTAssertEqual(defaults.data(forKey: persistenceKeys.customThemes), malformedData)
     }
 
     func testValidThemeWriteDoesNotDeleteUnrelatedThemeFiles() throws {
@@ -474,7 +538,7 @@ final class TerminalThemePersistenceTests: XCTestCase {
         XCTAssertEqual(manager.activeAppearanceSnapshot.darkTheme.palette, namedPalette)
     }
 
-    func testInjectedClockAndPersistenceKeysOwnThemeMutation() throws {
+    func testInjectedClockAndPersistenceAdapterOwnThemeMutation() throws {
         let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -488,6 +552,76 @@ final class TerminalThemePersistenceTests: XCTestCase {
 
         XCTAssertEqual(theme.updatedAt, now)
         XCTAssertNotNil(defaults.data(forKey: persistenceKeys.customThemes))
+    }
+
+    func testInjectedPersistencePortOwnsThemeLoadAndSave() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let existingTheme = TerminalTheme(
+            name: "Existing",
+            content: "background = #010203\nforeground = #FFFFFF\n"
+        )
+        let persistence = TerminalThemePersistenceSpy(themes: [existingTheme])
+        let manager = makeManager(
+            defaults: defaults,
+            persistence: persistence,
+            themeFiles: TerminalThemeFilesSpy()
+        )
+
+        XCTAssertEqual(manager.customThemes, [existingTheme])
+
+        let createdTheme = try manager.createCustomTheme(
+            name: "Created",
+            content: "background = #112233\nforeground = #FFFFFF\n"
+        )
+
+        XCTAssertEqual(
+            persistence.savedThemeSnapshots.last,
+            [existingTheme, createdTheme]
+        )
+        XCTAssertEqual(persistence.cachedBackgroundHexes.last, "#101418")
+    }
+
+    func testRenamedThemeMigratesBothSelectionsThroughPersistencePort() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let themeID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        let existingTheme = TerminalTheme(
+            id: themeID,
+            name: "Old Name",
+            content: "background = #010203\nforeground = #FFFFFF\n"
+        )
+        let persistence = TerminalThemePersistenceSpy(
+            themes: [existingTheme],
+            selection: TerminalThemeSelection(
+                darkThemeName: existingTheme.name,
+                lightThemeName: existingTheme.name,
+                usePerAppearanceTheme: true
+            )
+        )
+        let manager = makeManager(
+            defaults: defaults,
+            persistence: persistence,
+            themeFiles: TerminalThemeFilesSpy()
+        )
+
+        _ = try manager.updateCustomTheme(
+            id: themeID,
+            name: "New Name",
+            content: existingTheme.content
+        )
+
+        XCTAssertEqual(
+            persistence.selection,
+            TerminalThemeSelection(
+                darkThemeName: "New Name",
+                lightThemeName: "New Name",
+                usePerAppearanceTheme: true
+            )
+        )
+        XCTAssertEqual(manager.themeSelection, persistence.selection)
     }
 
     func testForegroundAndSyncEnabledUseInjectedStateAndFeatureMergePolicy() async throws {
@@ -742,6 +876,7 @@ final class TerminalThemePersistenceTests: XCTestCase {
 
     private func makeManager(
         defaults: UserDefaults,
+        persistence: (any TerminalThemePersistence)? = nil,
         cloud: TerminalThemeCloudStub? = nil,
         queue: TerminalThemeMutationQueueSpy? = nil,
         lifecycle: TerminalThemeSyncLifecycleStub? = nil,
@@ -765,7 +900,10 @@ final class TerminalThemePersistenceTests: XCTestCase {
         let paletteResolver = paletteResolver ?? ThemeColorParserPaletteResolver()
         return TerminalThemeManager(
             dependencies: TerminalThemeManagerDependencies(
-                defaults: defaults,
+                persistence: persistence ?? UserDefaultsTerminalThemePersistence(
+                    defaults: defaults,
+                    keys: persistenceKeys
+                ),
                 cloud: cloud,
                 mutationQueue: queue,
                 syncLifecycle: lifecycle,
@@ -773,7 +911,6 @@ final class TerminalThemePersistenceTests: XCTestCase {
                 themeFiles: themeFiles,
                 builtInThemeCatalog: builtInThemeCatalog,
                 paletteResolver: paletteResolver,
-                persistenceKeys: persistenceKeys,
                 isSyncEnabled: isSyncEnabled,
                 now: now,
                 waitForPreferenceSyncDebounce: waitForPreferenceSyncDebounce,

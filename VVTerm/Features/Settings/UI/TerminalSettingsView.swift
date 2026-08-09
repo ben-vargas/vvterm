@@ -614,7 +614,7 @@ struct TerminalSettingsView: View {
                 )
             }
             if builtInThemeNames.isEmpty {
-                builtInThemeNames = TerminalThemeManager.builtInThemeNames()
+                builtInThemeNames = terminalThemeManager.builtInThemeNames
             }
             ensureThemeSelectionIsValid()
             refreshKnownHostCount()
