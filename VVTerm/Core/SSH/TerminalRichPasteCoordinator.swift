@@ -72,7 +72,7 @@ actor TerminalRichPasteCoordinator {
 
         let upload = try await transferService.uploadImage(image, using: sshClient)
         logger.info(
-            "Attempting remote clipboard seeding [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(upload.remotePath, privacy: .public)]"
+            "Attempting remote clipboard seeding [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(upload.remotePath, privacy: .private(mask: .hash))]"
         )
         let seededRemoteClipboard = await seedRemoteClipboardIfSupported(upload: upload, sshClient: sshClient)
 
@@ -108,7 +108,7 @@ actor TerminalRichPasteCoordinator {
             return output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) == sentinel
         } catch {
             logger.warning(
-                "Remote clipboard seeding failed [session: \(self.sessionId.uuidString, privacy: .public)] [error: \(error.localizedDescription, privacy: .public)]"
+                "Remote clipboard seeding failed [session: \(self.sessionId.uuidString, privacy: .public)] [error: \(LogPrivacy.errorClass(error), privacy: .public)]"
             )
             return false
         }

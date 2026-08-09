@@ -276,7 +276,7 @@ final class RemoteFileBrowserStore: ObservableObject {
             applyDirectorySnapshot(snapshot, to: tab, requestID: requestID)
         } catch {
             guard failDirectoryRequest(requestID, for: tab, error: error) else { return }
-            logger.error("Initial file browser load failed for \(server.name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.error("Initial file browser load failed [server: \(server.name, privacy: .private(mask: .hash))] [error: \(LogPrivacy.errorClass(error), privacy: .public)]")
         }
     }
 
@@ -403,7 +403,7 @@ final class RemoteFileBrowserStore: ObservableObject {
             applyDirectorySnapshot(snapshot, to: tab, requestID: requestID)
         } catch {
             guard failDirectoryRequest(requestID, for: tab, error: error) else { return }
-            logger.error("Directory load failed for \(normalizedPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.error("Directory load failed [path: \(normalizedPath, privacy: .private(mask: .hash))] [error: \(LogPrivacy.errorClass(error), privacy: .public)]")
         }
     }
 
@@ -416,7 +416,7 @@ final class RemoteFileBrowserStore: ObservableObject {
             do {
                 return try await directorySnapshot(path: path, for: server)
             } catch {
-                logger.debug("Skipping initial browser path \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                logger.debug("Skipping initial browser path [path: \(path, privacy: .private(mask: .hash))] [error: \(LogPrivacy.errorClass(error), privacy: .public)]")
             }
         }
 

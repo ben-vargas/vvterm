@@ -88,3 +88,9 @@ enum DebugLogConfiguration {
         value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
+
+enum LogPrivacy {
+    nonisolated static func errorClass(_ error: Error) -> String {
+        String(reflecting: type(of: error))
+    }
+}

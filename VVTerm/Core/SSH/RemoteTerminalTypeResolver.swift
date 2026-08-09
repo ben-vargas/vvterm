@@ -109,7 +109,7 @@ enum RemoteTerminalTypeResolver {
             let output = try await execute(probeCommand(), probeTimeout)
             return output.contains(probeMarker)
         } catch {
-            logger.debug("Ghostty terminfo probe failed: \(error.localizedDescription, privacy: .public)")
+            logger.debug("Ghostty terminfo probe failed [error: \(LogPrivacy.errorClass(error), privacy: .public)]")
             return false
         }
     }
@@ -128,7 +128,7 @@ enum RemoteTerminalTypeResolver {
             }
             return .failed
         } catch {
-            logger.debug("Ghostty terminfo installation command failed: \(error.localizedDescription, privacy: .public)")
+            logger.debug("Ghostty terminfo installation command failed [error: \(LogPrivacy.errorClass(error), privacy: .public)]")
             return .failed
         }
     }

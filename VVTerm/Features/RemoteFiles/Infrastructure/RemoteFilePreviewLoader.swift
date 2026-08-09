@@ -31,7 +31,7 @@ struct RemoteFilePreviewLoader {
                 let videoTracks = try await asset.loadTracks(withMediaType: .video)
                 return isPlayable && !hasProtectedContent && !videoTracks.isEmpty
             } catch {
-                logger.error("Failed to validate remote video preview at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                logger.error("Failed to validate remote video preview [path: \(url.path, privacy: .private(mask: .hash))] [error: \(LogPrivacy.errorClass(error), privacy: .public)]")
                 return false
             }
         }

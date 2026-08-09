@@ -29,7 +29,7 @@ actor RemoteClipboardTransferService {
             )
         } catch {
             logger.error(
-                "Remote temp path creation failed [session: \(self.sessionId.uuidString, privacy: .public)] [error: \(error.localizedDescription, privacy: .public)]"
+                "Remote temp path creation failed [session: \(self.sessionId.uuidString, privacy: .public)] [error: \(LogPrivacy.errorClass(error), privacy: .public)]"
             )
             if let sshError = error as? SSHError, case .timeout = sshError {
                 throw TerminalRichPasteError.remoteUploadFailed(String(localized: "timed out while creating remote temporary file"))
@@ -47,7 +47,7 @@ actor RemoteClipboardTransferService {
             throw error
         }
         logger.info(
-            "Uploading remote clipboard image [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .public)] [sftp: \(plan.usesSFTP)]"
+            "Uploading remote clipboard image [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .private(mask: .hash))] [sftp: \(plan.usesSFTP)]"
         )
 
         do {
@@ -67,7 +67,7 @@ actor RemoteClipboardTransferService {
                 )
             }
             logger.info(
-                "Remote upload completed [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .public)]"
+                "Remote upload completed [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .private(mask: .hash))]"
             )
             scheduleStaleFileSweepIfNeeded(plan: plan, using: sshClient)
             return RemoteClipboardUpload(
@@ -78,7 +78,7 @@ actor RemoteClipboardTransferService {
             )
         } catch {
             logger.error(
-                "Remote upload failed [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .public)] [error: \(error.localizedDescription, privacy: .public)]"
+                "Remote upload failed [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .private(mask: .hash))] [error: \(LogPrivacy.errorClass(error), privacy: .public)]"
             )
             await deleteRemoteFileIfNeeded(at: remotePath, plan: plan, using: sshClient)
             if let sshError = error as? SSHError, case .timeout = sshError {
@@ -98,7 +98,7 @@ actor RemoteClipboardTransferService {
         )
         let path = try plan.parseTemporaryPath(output)
         logger.info(
-            "Created remote temp path [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(path, privacy: .public)]"
+            "Created remote temp path [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(path, privacy: .private(mask: .hash))]"
         )
         return path
     }
@@ -124,7 +124,7 @@ actor RemoteClipboardTransferService {
                 logger.debug("Finished stale clipboard temp file sweep [session: \(sessionId.uuidString, privacy: .public)]")
             } catch {
                 logger.debug(
-                    "Skipping stale clipboard temp file sweep result [session: \(sessionId.uuidString, privacy: .public)] [error: \(error.localizedDescription, privacy: .public)]"
+                    "Skipping stale clipboard temp file sweep result [session: \(sessionId.uuidString, privacy: .public)] [error: \(LogPrivacy.errorClass(error), privacy: .public)]"
                 )
             }
         }
@@ -137,7 +137,7 @@ actor RemoteClipboardTransferService {
     ) async {
         guard !path.isEmpty else { return }
         logger.debug(
-            "Deleting remote clipboard temp file [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(path, privacy: .public)]"
+            "Deleting remote clipboard temp file [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(path, privacy: .private(mask: .hash))]"
         )
         _ = try? await sshClient.execute(plan.deleteCommand(for: path))
     }

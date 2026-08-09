@@ -438,7 +438,7 @@ actor RemoteTmuxManager {
         do {
             sessions = try await listSessions(using: client, backend: backend)
         } catch {
-            logger.warning("Unable to list detached tmux sessions during cleanup: \(error.localizedDescription, privacy: .public)")
+            logger.warning("Unable to list detached tmux sessions during cleanup [error: \(LogPrivacy.errorClass(error), privacy: .public)]")
             return
         }
 

@@ -148,7 +148,7 @@ extension RemoteFileBrowserStore {
                 )
             }) else { return }
             guard didFail else { return }
-            logger.error("Remote file preview failed for \(entry.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.error("Remote file preview failed [path: \(entry.path, privacy: .private(mask: .hash))] [error: \(LogPrivacy.errorClass(error), privacy: .public)]")
         }
     }
 

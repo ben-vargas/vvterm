@@ -129,7 +129,7 @@ actor RemoteMoshManager {
             logger.info("Requested cleanup for remote mosh-server [pid: \(pid, privacy: .public)]")
         } catch {
             logger.warning(
-                "Could not clean up remote mosh-server [pid: \(pid, privacy: .public)]: \(error.localizedDescription, privacy: .public)"
+                "Could not clean up remote mosh-server [pid: \(pid, privacy: .public)] [error: \(LogPrivacy.errorClass(error), privacy: .public)]"
             )
         }
     }

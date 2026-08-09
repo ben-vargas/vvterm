@@ -67,11 +67,11 @@ extension DiscoveredSSHHost {
         "\(host):\(port)"
     }
 
-    func visibleDisplayName(privacyModeEnabled _: Bool) -> String {
-        return displayName
+    func visibleDisplayName(privacyModeEnabled: Bool) -> String {
+        SensitiveContentMask.value(displayName, privacyModeEnabled: privacyModeEnabled)
     }
 
-    func visibleEndpoint(privacyModeEnabled _: Bool) -> String {
-        displayEndpoint
+    func visibleEndpoint(privacyModeEnabled: Bool) -> String {
+        SensitiveContentMask.value(displayEndpoint, privacyModeEnabled: privacyModeEnabled)
     }
 }

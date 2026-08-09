@@ -318,7 +318,7 @@ actor SSHClient {
         startupTrace: SSHStartupTrace
     ) async throws -> SSHSession {
         logger.info(
-            "Connecting to \(server.host, privacy: .private(mask: .hash)):\(server.port) [mode: \(server.connectionMode.rawValue, privacy: .public)]"
+            "Connecting to \(server.host, privacy: .private(mask: .hash)):\(server.port, privacy: .private(mask: .hash)) [mode: \(server.connectionMode.rawValue, privacy: .public)]"
         )
         logger.info("Auth method: \(String(describing: server.authMethod)), password present: \(credentials.password != nil)")
         let transportToken = startupTrace.begin(.transportPreparation)
@@ -587,7 +587,7 @@ actor SSHClient {
         }
 
         logger.info(
-            "Starting SSH upload [path: \(remotePath, privacy: .public)] [bytes: \(data.count)] [strategy: \(String(describing: strategy), privacy: .public)]"
+            "Starting SSH upload [path: \(remotePath, privacy: .private(mask: .hash))] [bytes: \(data.count)] [strategy: \(String(describing: strategy), privacy: .public)]"
         )
         try await SSHClient.runWithTimeout(uploadTimeout) {
             try Task.checkCancellation()
@@ -623,7 +623,7 @@ actor SSHClient {
             lifecycle = .connected(state)
         }
         logger.info(
-            "Resolved remote environment [platform: \(environment.platform.rawValue, privacy: .public), shell: \(environment.shellProfile.family.rawValue, privacy: .public), active: \(environment.activeShellName ?? "unknown", privacy: .public)]"
+            "Resolved remote environment [platform: \(environment.platform.rawValue, privacy: .public), shell: \(environment.shellProfile.family.rawValue, privacy: .public), active: \(environment.activeShellName ?? "unknown", privacy: .private(mask: .hash))]"
         )
         return environment
     }
@@ -725,7 +725,7 @@ actor SSHClient {
         }
 
         logger.info(
-            "Starting SSH download [remote: \(path, privacy: .public)] [local: \(localURL.path, privacy: .private(mask: .hash))]"
+            "Starting SSH download [remote: \(path, privacy: .private(mask: .hash))] [local: \(localURL.path, privacy: .private(mask: .hash))]"
         )
         try await SSHClient.runWithTimeout(downloadTimeout) {
             try Task.checkCancellation()
@@ -3017,7 +3017,7 @@ actor SSHSession {
                let stderr = String(data: request.stderr, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines),
                !stderr.isEmpty {
-                logger.debug("Exec command stderr: \(stderr, privacy: .public)")
+                logger.debug("Exec command produced stderr [bytes: \(stderr.utf8.count)]")
             }
             let output = String(data: request.output, encoding: .utf8) ?? ""
             request.continuation.resume(returning: output)
@@ -3118,18 +3118,18 @@ actor SSHSession {
         strategy: SSHUploadStrategy = .automatic
     ) async throws {
         if strategy == .execPreferred {
-            logger.info("Using exec-preferred upload strategy [path: \(remotePath, privacy: .public)]")
+            logger.info("Using exec-preferred upload strategy [path: \(remotePath, privacy: .private(mask: .hash))]")
             try await uploadViaExec(data, to: remotePath)
             return
         }
 
         do {
-            logger.info("Trying SCP upload [path: \(remotePath, privacy: .public)]")
+            logger.info("Trying SCP upload [path: \(remotePath, privacy: .private(mask: .hash))]")
             try await uploadViaSCP(data, to: remotePath, permissions: permissions)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            logger.warning("SCP upload failed, retrying with exec channel: \(error.localizedDescription, privacy: .public)")
+            logger.warning("SCP upload failed, retrying with exec channel [error: \(LogPrivacy.errorClass(error), privacy: .public)]")
             try await uploadViaExec(data, to: remotePath)
         }
     }
@@ -3141,7 +3141,7 @@ actor SSHSession {
         guard !remotePath.isEmpty else {
             throw SSHError.unknown("Upload path is empty")
         }
-        logger.info("Opening SCP upload channel [path: \(remotePath, privacy: .public)]")
+        logger.info("Opening SCP upload channel [path: \(remotePath, privacy: .private(mask: .hash))]")
 
         var scpChannel: OpaquePointer?
         do {
@@ -3194,7 +3194,7 @@ actor SSHSession {
             }
 
             _ = try await finishUploadChannel(scpChannel)
-            logger.info("SCP upload finished [path: \(remotePath, privacy: .public)]")
+            logger.info("SCP upload finished [path: \(remotePath, privacy: .private(mask: .hash))]")
         } catch {
             if let scpChannel {
                 libssh2_channel_close(scpChannel)
@@ -3211,7 +3211,7 @@ actor SSHSession {
         guard !remotePath.isEmpty else {
             throw SSHError.unknown("Upload path is empty")
         }
-        logger.info("Opening exec upload channel [path: \(remotePath, privacy: .public)]")
+        logger.info("Opening exec upload channel [path: \(remotePath, privacy: .private(mask: .hash))]")
 
         let command = "cat > \(RemoteTerminalBootstrap.shellQuoted(remotePath))"
 
@@ -3292,7 +3292,7 @@ actor SSHSession {
             guard exitStatus == 0 else {
                 throw SSHError.socketError("Exec upload failed with exit status \(exitStatus)")
             }
-            logger.info("Exec upload finished [path: \(remotePath, privacy: .public)]")
+            logger.info("Exec upload finished [path: \(remotePath, privacy: .private(mask: .hash))]")
         } catch {
             if let execChannel {
                 libssh2_channel_close(execChannel)
