@@ -9,6 +9,7 @@ struct RemoteFileBrowserScreen: View {
     let onCurrentPathChange: @MainActor (String?) -> Void
 
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var appLockManager: AppLockManager
     @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) var terminalThemeName = "Aizen Dark"
     @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) var terminalThemeNameLight = "Aizen Light"
     @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) var usePerAppearanceTheme = true
@@ -38,6 +39,9 @@ struct RemoteFileBrowserScreen: View {
     @State var isPermissionSubmitting = false
     @State var permissionErrorMessage: String?
     @State var operationErrorMessage: String?
+    @State var securityApprovalRequest: ServerSecurityApprovalRequest?
+    @State var securityApprovalRetry: (@MainActor () -> Void)?
+    @State var securityApprovalCancellation: (@MainActor () -> Void)?
     @State var transferCancellationRequest: TransferCancellationRequest?
     @State var transferTasks: [UUID: Task<Void, Never>] = [:]
     @State var activeTransferKinds: [UUID: TransferKind] = [:]
@@ -283,6 +287,7 @@ struct RemoteFileBrowserScreen: View {
         }
         .task(id: initialLoadTaskID) {
             await browser.loadInitialPath(for: server, tab: fileTab, initialPath: initialPath)
+            presentDirectorySecurityApprovalIfNeeded()
         }
         .onAppear {
             onCurrentPathChange(browser.lastVisitedPath(for: fileTab))
@@ -349,7 +354,18 @@ struct RemoteFileBrowserScreen: View {
             handlePendingToolbarCommand()
         }
 
-        platformSelectionTrackingPresentation(withToolbarCommands, snapshot: snapshot)
+        let withSecurityObservation = platformSelectionTrackingPresentation(
+            withToolbarCommands,
+            snapshot: snapshot
+        )
+            .onChange(of: snapshot.directoryError) { _ in
+                presentDirectorySecurityApprovalIfNeeded()
+            }
+            .onChange(of: snapshot.viewerError) { _ in
+                presentViewerSecurityApprovalIfNeeded()
+            }
+
+        securityApprovalPresentation(withSecurityObservation)
     }
 
     @ViewBuilder
@@ -453,15 +469,6 @@ struct RemoteFileBrowserScreen: View {
                 }
             }
         )
-    }
-
-    func remoteOperationErrorMessage(for error: Error) -> String {
-        RemoteFileBrowserError.map(error).errorDescription ?? error.localizedDescription
-    }
-
-    @MainActor
-    func presentOperationError(_ error: Error) {
-        operationErrorMessage = remoteOperationErrorMessage(for: error)
     }
 
     @MainActor
@@ -598,6 +605,7 @@ struct RemoteFileBrowserScreen: View {
         successFilePath: String? = nil,
         completionLifetime: NoticeLifetime = .autoDismiss(.seconds(2)),
         onSuccess: (@MainActor () -> Void)? = nil,
+        allowsSecurityRetry: Bool = true,
         operation: @escaping (@escaping @MainActor (RemoteFileBrowserStore.TransferProgress) -> Void) async throws -> Void
     ) {
         let transferID = id
@@ -670,6 +678,31 @@ struct RemoteFileBrowserScreen: View {
                         return
                     }
 
+                    if allowsSecurityRetry,
+                       presentSecurityApproval(
+                           for: error,
+                           retry: {
+                               performTransfer(
+                                   id: transferID,
+                                   cancellationKind: cancellationKind,
+                                   title: title,
+                                   initialMessage: initialMessage,
+                                   successMessage: successMessage,
+                                   successFileURL: successFileURL,
+                                   successFileName: successFileName,
+                                   successFilePath: successFilePath,
+                                   completionLifetime: completionLifetime,
+                                   onSuccess: onSuccess,
+                                   allowsSecurityRetry: false,
+                                   operation: operation
+                               )
+                           }
+                       ) {
+                        noticeHost.dismiss(id: transferID.uuidString)
+                        finishTransfer(id: transferID)
+                        return
+                    }
+
                     noticeHost.show(
                         NoticeItem(
                             id: transferID.uuidString,
@@ -700,6 +733,7 @@ struct RemoteFileBrowserScreen: View {
         successFilePath: String? = nil,
         completionLifetime: NoticeLifetime = .autoDismiss(.seconds(2)),
         onSuccess: (@MainActor () -> Void)? = nil,
+        allowsSecurityRetry: Bool = true,
         operation: @escaping () async throws -> Void
     ) {
         performTransfer(
@@ -712,7 +746,8 @@ struct RemoteFileBrowserScreen: View {
             successFileName: successFileName,
             successFilePath: successFilePath,
             completionLifetime: completionLifetime,
-            onSuccess: onSuccess
+            onSuccess: onSuccess,
+            allowsSecurityRetry: allowsSecurityRetry
         ) { _ in
             try await operation()
         }
@@ -750,6 +785,7 @@ struct RemoteFileBrowserScreen: View {
 
     func performOperation(
         onFailure: (@MainActor (Error) -> Void)? = nil,
+        allowsSecurityRetry: Bool = true,
         operation: @escaping () async throws -> Void
     ) {
         Task {
@@ -757,6 +793,30 @@ struct RemoteFileBrowserScreen: View {
                 try await operation()
             } catch {
                 await MainActor.run {
+                    if !allowsSecurityRetry, isSecurityApprovalError(error) {
+                        if let onFailure {
+                            onFailure(ServerSecurityApprovalError.unavailable)
+                        } else {
+                            operationErrorMessage = ServerSecurityApprovalError.unavailable.localizedDescription
+                        }
+                        return
+                    }
+                    if allowsSecurityRetry,
+                       presentSecurityApproval(
+                           for: error,
+                           retry: {
+                               performOperation(
+                                   onFailure: onFailure,
+                                   allowsSecurityRetry: false,
+                                   operation: operation
+                               )
+                           },
+                           onCancellation: {
+                               onFailure?(ServerSecurityApprovalError.cancelled)
+                           }
+                       ) {
+                        return
+                    }
                     if let onFailure {
                         onFailure(error)
                     } else {
@@ -770,7 +830,8 @@ struct RemoteFileBrowserScreen: View {
     func performOperation<Result>(
         operation: @escaping () async throws -> Result,
         onSuccess: @escaping @MainActor (Result) -> Void,
-        onFailure: (@MainActor (Error) -> Void)? = nil
+        onFailure: (@MainActor (Error) -> Void)? = nil,
+        allowsSecurityRetry: Bool = true
     ) {
         Task {
             do {
@@ -780,6 +841,31 @@ struct RemoteFileBrowserScreen: View {
                 }
             } catch {
                 await MainActor.run {
+                    if !allowsSecurityRetry, isSecurityApprovalError(error) {
+                        if let onFailure {
+                            onFailure(ServerSecurityApprovalError.unavailable)
+                        } else {
+                            operationErrorMessage = ServerSecurityApprovalError.unavailable.localizedDescription
+                        }
+                        return
+                    }
+                    if allowsSecurityRetry,
+                       presentSecurityApproval(
+                           for: error,
+                           retry: {
+                               performOperation(
+                                   operation: operation,
+                                   onSuccess: onSuccess,
+                                   onFailure: onFailure,
+                                   allowsSecurityRetry: false
+                               )
+                           },
+                           onCancellation: {
+                               onFailure?(ServerSecurityApprovalError.cancelled)
+                           }
+                       ) {
+                        return
+                    }
                     if let onFailure {
                         onFailure(error)
                     } else {

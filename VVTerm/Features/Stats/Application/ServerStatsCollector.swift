@@ -9,13 +9,14 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
         case idle
         case starting(attemptID: UUID)
         case collecting(attemptID: UUID)
+        case approvalRequired(ServerSecurityApprovalRequest)
         case failed(message: String)
 
         var attemptID: UUID? {
             switch self {
             case .starting(let attemptID), .collecting(let attemptID):
                 return attemptID
-            case .idle, .failed:
+            case .idle, .approvalRequired, .failed:
                 return nil
             }
         }
@@ -26,8 +27,21 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     var isCollecting: Bool { phase.attemptID != nil }
 
     var errorMessage: String? {
-        guard case .failed(let message) = phase else { return nil }
-        return message
+        switch phase {
+        case .approvalRequired(.credentialEndpoint):
+            return String(localized: "Credential endpoint approval is required.")
+        case .approvalRequired(.hostKey):
+            return SSHError.hostKeyApprovalRequired.localizedDescription
+        case .failed(let message):
+            return message
+        case .idle, .starting, .collecting:
+            return nil
+        }
+    }
+
+    var securityApproval: ServerSecurityApprovalRequest? {
+        guard case .approvalRequired(let request) = phase else { return nil }
+        return request
     }
 
     mutating func start(attemptID: UUID) {
@@ -54,6 +68,30 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
 
     mutating func stop() {
         phase = .idle
+    }
+
+    @discardableResult
+    mutating func requireApproval(
+        attemptID: UUID,
+        request: ServerSecurityApprovalRequest
+    ) -> Bool {
+        guard phase.attemptID == attemptID else { return false }
+        phase = .approvalRequired(request)
+        return true
+    }
+
+    @discardableResult
+    mutating func resolveApproval(
+        _ request: ServerSecurityApprovalRequest,
+        message: String? = nil
+    ) -> Bool {
+        guard phase == .approvalRequired(request) else { return false }
+        if let message {
+            phase = .failed(message: message)
+        } else {
+            phase = .idle
+        }
+        return true
     }
 }
 
@@ -95,6 +133,7 @@ final class ServerStatsCollector: ObservableObject {
 
     var isCollecting: Bool { collectionState.isCollecting }
     var connectionError: String? { collectionState.errorMessage }
+    var securityApproval: ServerSecurityApprovalRequest? { collectionState.securityApproval }
 
     // MARK: - Collection Control
 
@@ -123,8 +162,14 @@ final class ServerStatsCollector: ObservableObject {
         let credentials: ServerCredentials
         do {
             credentials = try KeychainManager.shared.getCredentials(for: server)
+        } catch ServerCredentialAccessError.approvalRequired {
+            finishCollection(
+                attemptID: attempt.id,
+                requiring: .credentialEndpoint(serverID: server.id)
+            )
+            return
         } catch {
-            finishCollection(attemptID: attempt.id, withError: "No credentials found")
+            finishCollection(attemptID: attempt.id, withError: error.localizedDescription)
             return
         }
 
@@ -153,6 +198,13 @@ final class ServerStatsCollector: ObservableObject {
             } catch is CancellationError {
                 // A stopped or superseded attempt must not publish an error.
             } catch {
+                if let request = ServerSecurityApprovalRequest.detect(error, server: server) {
+                    await self?.finishCollection(
+                        attemptID: attemptID,
+                        requiring: request
+                    )
+                    return
+                }
                 failureMessage = error.localizedDescription
             }
 
@@ -179,6 +231,16 @@ final class ServerStatsCollector: ObservableObject {
                 await client.disconnect()
             }
         }
+    }
+
+    func resolveSecurityApproval(
+        _ request: ServerSecurityApprovalRequest,
+        error: ServerSecurityApprovalError? = nil
+    ) {
+        _ = collectionState.resolveApproval(
+            request,
+            message: error?.localizedDescription
+        )
     }
 
     func terminateProcess(_ process: ProcessInfo) async throws {
@@ -471,6 +533,18 @@ final class ServerStatsCollector: ObservableObject {
     private func finishCollection(attemptID: UUID, withError error: String? = nil) {
         guard currentCollectionAttempt(attemptID) != nil,
               collectionState.finish(attemptID: attemptID, errorMessage: error) else { return }
+        activeAttempt = nil
+    }
+
+    private func finishCollection(
+        attemptID: UUID,
+        requiring request: ServerSecurityApprovalRequest
+    ) {
+        guard currentCollectionAttempt(attemptID) != nil,
+              collectionState.requireApproval(
+                  attemptID: attemptID,
+                  request: request
+              ) else { return }
         activeAttempt = nil
     }
 

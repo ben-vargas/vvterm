@@ -43,6 +43,47 @@ final class ServerStatsDomainTests: XCTestCase {
         XCTAssertEqual(state.phase, .starting(attemptID: secondAttemptID))
     }
 
+    func testCredentialApprovalRemainsTypedAndDoesNotReportMissingCredentials() {
+        let attemptID = UUID()
+        let serverID = UUID()
+        let request = ServerSecurityApprovalRequest.credentialEndpoint(
+            serverID: serverID
+        )
+        var state = ServerStatsCollectionState()
+
+        state.start(attemptID: attemptID)
+
+        XCTAssertTrue(state.requireApproval(attemptID: attemptID, request: request))
+        XCTAssertEqual(state.securityApproval, request)
+        XCTAssertEqual(
+            state.errorMessage,
+            String(localized: "Credential endpoint approval is required.")
+        )
+        XCTAssertNotEqual(state.errorMessage, "No credentials found")
+    }
+
+    func testApprovalCancellationBecomesClearFailure() {
+        let attemptID = UUID()
+        let request = ServerSecurityApprovalRequest.credentialEndpoint(
+            serverID: UUID()
+        )
+        var state = ServerStatsCollectionState()
+        state.start(attemptID: attemptID)
+        XCTAssertTrue(state.requireApproval(attemptID: attemptID, request: request))
+
+        XCTAssertTrue(
+            state.resolveApproval(
+                request,
+                message: ServerSecurityApprovalError.cancelled.localizedDescription
+            )
+        )
+        XCTAssertNil(state.securityApproval)
+        XCTAssertEqual(
+            state.errorMessage,
+            ServerSecurityApprovalError.cancelled.localizedDescription
+        )
+    }
+
     func testMemoryPercentReturnsZeroWhenTotalIsZero() {
         var stats = ServerStats()
         stats.memoryUsed = 512
