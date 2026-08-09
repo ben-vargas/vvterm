@@ -60,6 +60,7 @@ struct TerminalConnectionStatusPresentationTests {
         #expect(SSHError.moshUDPTimeout.allowsAutomaticReconnectRetry)
         #expect(!SSHError.authenticationFailed.allowsAutomaticReconnectRetry)
         #expect(!SSHError.hostKeyVerificationFailed.allowsAutomaticReconnectRetry)
+        #expect(!SSHError.hostKeyApprovalRequired.allowsAutomaticReconnectRetry)
         #expect(!SSHError.moshServerMissing.allowsAutomaticReconnectRetry)
     }
 

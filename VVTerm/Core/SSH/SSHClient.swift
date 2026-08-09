@@ -1915,30 +1915,22 @@ actor SSHSession {
         let host = config.hostKeyHost
         let port = config.hostKeyPort
 
-        if let entry = KnownHostsManager.shared.entry(for: host, port: port) {
-            if entry.fingerprint != fingerprint {
-                logger.error(
-                    "Host key mismatch for \(host, privacy: .private(mask: .hash)):\(port). Known: \(entry.fingerprint, privacy: .private(mask: .hash)), Presented: \(fingerprint, privacy: .private(mask: .hash))"
-                )
-                throw SSHError.hostKeyVerificationFailed
-            }
-            KnownHostsManager.shared.updateSeen(host: host, port: port)
-            logger.info("Host key verified for \(host, privacy: .private(mask: .hash)):\(port)")
-            return
-        }
-
-        let entry = KnownHostsManager.Entry(
+        let result = KnownHostsManager.shared.evaluate(
             host: host,
             port: port,
             fingerprint: fingerprint,
             keyType: keyType,
-            addedAt: Date(),
-            lastSeenAt: Date()
+            keyTypeName: hostKeyTypeName(keyType)
         )
-        KnownHostsManager.shared.save(entry: entry)
-        logger.info(
-            "Trusted new host key for \(host, privacy: .private(mask: .hash)):\(port) (\(fingerprint, privacy: .private(mask: .hash)))"
-        )
+        switch result {
+        case .trusted:
+            logger.info("Host key verified for \(host, privacy: .private(mask: .hash)):\(port)")
+        case .approvalRequired:
+            logger.notice(
+                "SSH host key needs user approval for \(host, privacy: .private(mask: .hash)):\(port)"
+            )
+            throw SSHError.hostKeyApprovalRequired
+        }
     }
 
     private func hostKeyFingerprint(for session: OpaquePointer) throws -> (String, Int) {
@@ -1955,6 +1947,25 @@ actor SSHSession {
         _ = libssh2_session_hostkey(session, &keyLen, &keyType)
 
         return (fingerprint, Int(keyType))
+    }
+
+    private func hostKeyTypeName(_ keyType: Int) -> String {
+        switch keyType {
+        case Int(LIBSSH2_HOSTKEY_TYPE_RSA):
+            return "RSA"
+        case Int(LIBSSH2_HOSTKEY_TYPE_DSS):
+            return "DSA"
+        case Int(LIBSSH2_HOSTKEY_TYPE_ECDSA_256):
+            return "ECDSA P-256"
+        case Int(LIBSSH2_HOSTKEY_TYPE_ECDSA_384):
+            return "ECDSA P-384"
+        case Int(LIBSSH2_HOSTKEY_TYPE_ECDSA_521):
+            return "ECDSA P-521"
+        case Int(LIBSSH2_HOSTKEY_TYPE_ED25519):
+            return "ED25519"
+        default:
+            return String(localized: "Unknown")
+        }
     }
 
     func disconnect() async {
@@ -3841,6 +3852,7 @@ enum SSHError: LocalizedError {
     case channelOpenFailed
     case shellRequestFailed
     case outputLimitExceeded
+    case hostKeyApprovalRequired
     case hostKeyVerificationFailed
     case socketError(String)
     case unknown(String)
@@ -3866,6 +3878,7 @@ enum SSHError: LocalizedError {
              .moshServerRuntimeBroken,
              .moshBootstrapFailed,
              .moshInvalidEndpoint,
+             .hostKeyApprovalRequired,
              .hostKeyVerificationFailed,
              .outputLimitExceeded,
              .unknown:
@@ -3905,6 +3918,8 @@ enum SSHError: LocalizedError {
         case .shellRequestFailed: return "Failed to request shell"
         case .outputLimitExceeded:
             return String(localized: "The remote command produced too much output.")
+        case .hostKeyApprovalRequired:
+            return String(localized: "SSH host key approval is required before authentication.")
         case .hostKeyVerificationFailed:
             return "Host key verification failed. The saved SSH host fingerprint does not match the server's current key."
         case .socketError(let msg): return "Socket error: \(msg)"
