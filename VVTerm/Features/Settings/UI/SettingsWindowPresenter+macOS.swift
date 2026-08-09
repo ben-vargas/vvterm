@@ -28,7 +28,8 @@ final class SettingsWindowPresenter {
         terminalThemeManager: TerminalThemeManager,
         terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager,
         viewTabConfigurationManager: ViewTabConfigurationManager,
-        storeManager: StoreManager
+        storeManager: StoreManager,
+        statsPreferencesStore: PreferencesStore
     ) {
         makeWindow = {
             let settingsView = LocalizedSettingsView(
@@ -37,7 +38,8 @@ final class SettingsWindowPresenter {
                 terminalThemeManager: terminalThemeManager,
                 terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
                 viewTabConfigurationManager: viewTabConfigurationManager,
-                storeManager: storeManager
+                storeManager: storeManager,
+                statsPreferencesStore: statsPreferencesStore
             )
             return Self.makeSettingsWindow(rootView: settingsView)
         }
@@ -90,11 +92,12 @@ private struct LocalizedSettingsView: View {
     @ObservedObject var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @ObservedObject var viewTabConfigurationManager: ViewTabConfigurationManager
     @ObservedObject var storeManager: StoreManager
+    let statsPreferencesStore: PreferencesStore
 
     var body: some View {
         let locale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
         AppLockContainer {
-            SettingsView()
+            SettingsView(statsPreferencesStore: statsPreferencesStore)
                 .modifier(AppearanceModifier())
                 .adaptiveSoftScrollEdges()
                 .environment(\.locale, locale)

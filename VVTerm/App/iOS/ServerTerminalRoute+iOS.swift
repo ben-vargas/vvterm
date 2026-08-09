@@ -22,6 +22,7 @@ struct ServerTerminalRoute: View {
     @ObservedObject var serverManager: ServerManager
     @ObservedObject var fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
+    let statsDependencies: ServerStatsScreenDependencies
     let route: ServerTerminalNavigationRoute
     let onBack: () -> Void
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
@@ -50,6 +51,7 @@ struct ServerTerminalRoute: View {
         serverManager: ServerManager,
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore,
+        statsDependencies: ServerStatsScreenDependencies,
         route: ServerTerminalNavigationRoute,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         onBack: @escaping () -> Void
@@ -58,6 +60,7 @@ struct ServerTerminalRoute: View {
         self.serverManager = serverManager
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
+        self.statsDependencies = statsDependencies
         self.route = route
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onBack = onBack
@@ -160,7 +163,7 @@ struct ServerTerminalRoute: View {
             .sheet(item: $presentedRouteSheet, onDismiss: updateTerminalRouteActivation) { sheet in
                 switch sheet {
                 case .settings:
-                    SettingsView()
+                    SettingsView(statsPreferencesStore: statsDependencies.preferencesStore)
                         .modifier(AppearanceModifier())
                         .adaptiveSoftScrollEdges()
                 case .editServer(let server):
@@ -256,6 +259,7 @@ struct ServerTerminalRoute: View {
                 serverManager: serverManager,
                 fileBrowser: fileBrowser,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
+                statsDependencies: statsDependencies,
                 server: server,
                 isZenModeEnabled: $isZenModeEnabled,
                 isSidebarVisible: false,

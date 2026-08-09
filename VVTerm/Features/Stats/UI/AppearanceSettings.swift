@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct StatsAppearanceSettingsSheet: View {
+    let store: PreferencesStore
+
     var body: some View {
         #if os(macOS)
         StatsDetailShell(
@@ -8,11 +10,11 @@ struct StatsAppearanceSettingsSheet: View {
             systemImage: "slider.horizontal.3",
             tint: .blue
         ) {
-            AppearanceSettings()
+            AppearanceSettings(store: store)
         }
         #else
         NavigationStack {
-            AppearanceSettings()
+            AppearanceSettings(store: store)
                 .navigationTitle(Text("Stats Appearance"))
                 .navigationBarTitleDisplayMode(.inline)
                 .statsSheetCloseToolbar(placement: .leading)
@@ -24,14 +26,15 @@ struct StatsAppearanceSettingsSheet: View {
 }
 
 struct AppearanceSettings: View {
-    @StateObject private var store = PreferencesStore.shared
+    @ObservedObject private var store: PreferencesStore
     @State private var preferences: StatsPreferences
     #if os(iOS)
     @State private var editMode: EditMode = .inactive
     #endif
 
-    init() {
-        _preferences = State(initialValue: PreferencesStore.shared.preferences)
+    init(store: PreferencesStore) {
+        _store = ObservedObject(wrappedValue: store)
+        _preferences = State(initialValue: store.preferences)
     }
 
     var body: some View {

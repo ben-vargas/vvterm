@@ -29,6 +29,8 @@ struct VVTermApp: App {
         let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager(
             dependencies: .live
         )
+        let statsPreferencesStore = PreferencesStore(dependencies: .live)
+        let serverVolumeVisibilityStore = ServerVolumeVisibilityStore(defaults: .standard)
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: .standard)
         _tabManager = StateObject(wrappedValue: tabManager)
         _storeManager = StateObject(wrappedValue: storeManager)
@@ -38,6 +40,11 @@ struct VVTermApp: App {
         _terminalThemeManager = StateObject(wrappedValue: terminalThemeManager)
         _terminalAccessoryPreferencesManager = StateObject(
             wrappedValue: terminalAccessoryPreferencesManager
+        )
+        _statsPreferencesStore = StateObject(wrappedValue: statsPreferencesStore)
+        _serverVolumeVisibilityStore = StateObject(wrappedValue: serverVolumeVisibilityStore)
+        statsSecurityApprovalActions = Self.makeStatsSecurityApprovalActions(
+            appLockManager: appLockManager
         )
         _viewTabConfigurationManager = StateObject(
             wrappedValue: viewTabConfigurationManager
@@ -55,7 +62,8 @@ struct VVTermApp: App {
             terminalThemeManager: terminalThemeManager,
             terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
             viewTabConfigurationManager: viewTabConfigurationManager,
-            storeManager: storeManager
+            storeManager: storeManager,
+            statsPreferencesStore: statsPreferencesStore
         )
         #endif
         appDelegate.configure(
@@ -94,7 +102,10 @@ struct VVTermApp: App {
     @StateObject private var remoteFileBrowserStore: RemoteFileBrowserStore
     @StateObject private var terminalThemeManager: TerminalThemeManager
     @StateObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
+    @StateObject private var statsPreferencesStore: PreferencesStore
+    @StateObject private var serverVolumeVisibilityStore: ServerVolumeVisibilityStore
     @StateObject private var viewTabConfigurationManager: ViewTabConfigurationManager
+    private let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
     #if os(macOS)
     private let settingsWindowPresenter: SettingsWindowPresenter
     #endif
@@ -123,6 +134,15 @@ struct VVTermApp: App {
         #else
         ""
         #endif
+    }
+
+    private var statsDependencies: ServerStatsScreenDependencies {
+        ServerStatsScreenDependencies(
+            makeCollector: { ServerStatsCollector() },
+            preferencesStore: statsPreferencesStore,
+            volumeVisibilityStore: serverVolumeVisibilityStore,
+            securityApprovalActions: statsSecurityApprovalActions
+        )
     }
 
     #if os(iOS) && DEBUG
@@ -188,6 +208,7 @@ struct VVTermApp: App {
             tabManager: tabManager,
             fileTabs: remoteFileTabManager,
             fileBrowser: remoteFileBrowserStore,
+            statsDependencies: statsDependencies,
             onOpenSettings: { settingsWindowPresenter.show() }
         )
             .environmentObject(ghosttyApp)
@@ -231,7 +252,8 @@ struct VVTermApp: App {
             TerminalReconnectUITestHarness(
                 tabManager: tabManager,
                 serverManager: serverManager,
-                engagementTracker: engagementTracker
+                engagementTracker: engagementTracker,
+                statsDependencies: statsDependencies
             )
                 .environmentObject(ghosttyApp)
                 .environmentObject(terminalThemeManager)
@@ -263,7 +285,8 @@ struct VVTermApp: App {
             engagementTracker: engagementTracker,
             tabManager: tabManager,
             fileTabs: remoteFileTabManager,
-            fileBrowser: remoteFileBrowserStore
+            fileBrowser: remoteFileBrowserStore,
+            statsDependencies: statsDependencies
         )
             .environmentObject(ghosttyApp)
             .environmentObject(terminalThemeManager)
@@ -339,6 +362,39 @@ private enum VVTermLauncherWidgetRefresh {
 #endif
 
 extension VVTermApp {
+    static func makeStatsSecurityApprovalActions(
+        appLockManager: AppLockManager
+    ) -> ServerStatsSecurityApprovalActions {
+        ServerStatsSecurityApprovalActions(
+            approve: { request, server in
+                switch request {
+                case .credentialEndpoint(let serverID):
+                    guard serverID == server.id else { return .failed(.expired) }
+                    guard await appLockManager.authorizeProtectedServerAction(
+                        server,
+                        action: .approveCredentialEndpoint
+                    ) else {
+                        return .failed(.cancelled)
+                    }
+                    do {
+                        try KeychainManager.shared.approveCredentialUse(for: server)
+                        return .approved
+                    } catch {
+                        return .failed(.unavailable)
+                    }
+                case .hostKey(let challenge):
+                    return KnownHostsManager.shared.approve(challenge)
+                        ? .approved
+                        : .failed(.expired)
+                }
+            },
+            reject: { request in
+                guard case .hostKey(let challenge) = request else { return }
+                KnownHostsManager.shared.reject(challenge)
+            }
+        )
+    }
+
     static func makeRemoteFileBrowserStore(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,

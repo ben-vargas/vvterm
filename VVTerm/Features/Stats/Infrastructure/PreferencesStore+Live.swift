@@ -40,11 +40,3 @@ extension PreferencesStoreDependencies {
         )
     }
 }
-
-extension PreferencesStore {
-    static let shared = PreferencesStore(dependencies: .live)
-}
-
-extension ServerVolumeVisibilityStore {
-    static let shared = ServerVolumeVisibilityStore(defaults: .standard)
-}

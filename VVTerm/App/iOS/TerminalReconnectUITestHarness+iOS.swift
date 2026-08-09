@@ -37,6 +37,7 @@ struct TerminalReconnectUITestHarness: View {
     @ObservedObject private var tabManager: TerminalTabManager
     @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var engagementTracker: EngagementTracker
+    private let statsDependencies: ServerStatsScreenDependencies
     @StateObject private var fileTabs: RemoteFileTabManager
     @StateObject private var fileBrowser: RemoteFileBrowserStore
     @State private var fixtureState = FixtureState.preparing
@@ -44,11 +45,13 @@ struct TerminalReconnectUITestHarness: View {
     init(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
-        engagementTracker: EngagementTracker
+        engagementTracker: EngagementTracker,
+        statsDependencies: ServerStatsScreenDependencies
     ) {
         _tabManager = ObservedObject(wrappedValue: tabManager)
         _serverManager = ObservedObject(wrappedValue: serverManager)
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
+        self.statsDependencies = statsDependencies
         _fileTabs = StateObject(
             wrappedValue: RemoteFileTabManager(defaults: Self.fixtureDefaults)
         )
@@ -133,7 +136,8 @@ struct TerminalReconnectUITestHarness: View {
                     engagementTracker: engagementTracker,
                     tabManager: tabManager,
                     fileTabs: fileTabs,
-                    fileBrowser: fileBrowser
+                    fileBrowser: fileBrowser,
+                    statsDependencies: statsDependencies
                 )
             } else {
                 NavigationStack {
@@ -142,6 +146,7 @@ struct TerminalReconnectUITestHarness: View {
                         serverManager: serverManager,
                         fileTabs: fileTabs,
                         fileBrowser: fileBrowser,
+                        statsDependencies: statsDependencies,
                         route: .active(serverId: server.id),
                         makeLocalDiscoveryManager: { LocalSSHDiscoveryManager() },
                         onBack: {}

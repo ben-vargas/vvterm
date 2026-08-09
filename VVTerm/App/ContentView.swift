@@ -12,6 +12,7 @@ import AppKit
 struct ContentView: View {
     let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
+    let statsDependencies: ServerStatsScreenDependencies
     let onOpenSettings: () -> Void
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
         LocalSSHDiscoveryManager()
@@ -53,6 +54,7 @@ struct ContentView: View {
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore,
+        statsDependencies: ServerStatsScreenDependencies,
         onOpenSettings: @escaping () -> Void
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
@@ -60,6 +62,7 @@ struct ContentView: View {
         _tabManager = ObservedObject(wrappedValue: tabManager)
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
+        self.statsDependencies = statsDependencies
         self.onOpenSettings = onOpenSettings
     }
 
@@ -128,6 +131,7 @@ struct ContentView: View {
                     serverManager: serverManager,
                     fileBrowser: fileBrowser,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
+                    statsDependencies: statsDependencies,
                     server: server,
                     isZenModeEnabled: $isZenModeEnabled,
                     isSidebarVisible: isSidebarVisible,
@@ -380,6 +384,15 @@ struct ContentView: View {
         startsAutomatically: false
     )
     let engagementTracker = EngagementTracker(dependencies: .live)
+    let statsPreferencesStore = PreferencesStore(dependencies: .live)
+    let statsDependencies = ServerStatsScreenDependencies(
+        makeCollector: { ServerStatsCollector() },
+        preferencesStore: statsPreferencesStore,
+        volumeVisibilityStore: ServerVolumeVisibilityStore(defaults: .standard),
+        securityApprovalActions: VVTermApp.makeStatsSecurityApprovalActions(
+            appLockManager: appLockManager
+        )
+    )
     let tabManager = TerminalTabManagerLiveComposition.makeManager(
         appLockManager: appLockManager,
         serverManager: serverManager,
@@ -394,6 +407,7 @@ struct ContentView: View {
             tabManager: tabManager,
             serverManager: serverManager
         ),
+        statsDependencies: statsDependencies,
         onOpenSettings: {}
     )
     .environmentObject(appLockManager)

@@ -34,6 +34,8 @@ enum SettingsSelection: Hashable {
 // MARK: - Settings View
 
 struct SettingsView: View {
+    let statsPreferencesStore: PreferencesStore
+
     @AppStorage(TerminalDefaults.fontNameKey) private var terminalFontName = TerminalDefaults.defaultFontName
     @AppStorage(TerminalDefaults.fontSizeKey) private var terminalFontSize = TerminalDefaults.defaultFontSize
 
@@ -135,7 +137,7 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
-                        GeneralSettingsView()
+                        GeneralSettingsView(statsPreferencesStore: statsPreferencesStore)
                             .navigationTitle("General")
                             .navigationBarTitleDisplayMode(.inline)
                             .adaptiveSoftScrollEdges()
@@ -220,7 +222,7 @@ struct SettingsView: View {
                                     : String(localized: "Upgrade for unlimited features")
                                 )
         case .general:
-                            GeneralSettingsView()
+                            GeneralSettingsView(statsPreferencesStore: statsPreferencesStore)
                                 .navigationTitle("General")
                                 .navigationSubtitle(String(localized: "Appearance and preferences"))
         case .terminal:
@@ -313,7 +315,7 @@ struct SettingsView: View {
         dependencies: .live(actionAuthorizer: appLockManager),
         startsAutomatically: false
     )
-    SettingsView()
+    SettingsView(statsPreferencesStore: PreferencesStore(dependencies: .live))
         .environmentObject(serverManager)
         .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
 }

@@ -13,6 +13,7 @@ struct ConnectionTerminalContainer: View {
     let serverManager: ServerManager
     let fileBrowser: RemoteFileBrowserStore
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    let statsDependencies: ServerStatsScreenDependencies
     let server: Server
     @Binding var isZenModeEnabled: Bool
     let isSidebarVisible: Bool
@@ -260,7 +261,8 @@ struct ConnectionTerminalContainer: View {
                 isVisible: true,
                 backgroundColor: liveTerminalBackgroundColor,
                 sharedClientProvider: { tabManager.sharedStatsClient(for: server.id) },
-                statsCollector: ServerStatsCollector()
+                dependencies: statsDependencies,
+                isDockerUnlocked: storeManager.isPro
             )
             .zIndex(1)
         }
@@ -272,7 +274,8 @@ struct ConnectionTerminalContainer: View {
             isVisible: selectedView == .stats,
             backgroundColor: liveTerminalBackgroundColor,
             sharedClientProvider: { tabManager.sharedStatsClient(for: server.id) },
-            statsCollector: ServerStatsCollector()
+            dependencies: statsDependencies,
+            isDockerUnlocked: storeManager.isPro
         )
             .opacity(selectedView == .stats ? 1 : 0)
             .allowsHitTesting(selectedView == .stats)

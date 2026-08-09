@@ -265,6 +265,8 @@ struct AppearancePreviewCard: View {
 }
 
 struct GeneralSettingsView: View {
+    let statsPreferencesStore: PreferencesStore
+
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.system.rawValue
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.system.rawValue
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
@@ -440,7 +442,7 @@ struct GeneralSettingsView: View {
             isPresented: $isShowingStatsAppearance,
             size: StatsPresentationSize.large
         ) {
-            StatsAppearanceSettingsSheet()
+            StatsAppearanceSettingsSheet(store: statsPreferencesStore)
         }
         .formStyle(.grouped)
         .onAppear {
@@ -475,7 +477,7 @@ struct GeneralSettingsView: View {
 }
 
 #Preview {
-    GeneralSettingsView()
+    GeneralSettingsView(statsPreferencesStore: PreferencesStore(dependencies: .live))
         .environmentObject(ViewTabConfigurationManager(defaults: .standard))
         .frame(width: 500, height: 400)
 }

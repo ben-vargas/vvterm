@@ -1,8 +1,6 @@
 import SwiftUI
 
 struct ServerStatsDashboard: View {
-    @EnvironmentObject private var appLockManager: AppLockManager
-
     let server: Server
     let isVisible: Bool
     let backgroundColor: Color
@@ -10,9 +8,11 @@ struct ServerStatsDashboard: View {
     @ObservedObject var statsCollector: ServerStatsCollector
     let preferences: StatsPreferences
     @ObservedObject var volumeVisibilityStore: ServerVolumeVisibilityStore
+    let securityApprovalActions: ServerStatsSecurityApprovalActions
     let isDockerUnlocked: Bool
     let showAppearanceSettings: () -> Void
     let showDockerUpgrade: () -> Void
+    @State private var approvalRequestInFlight: ServerSecurityApprovalRequest?
 
     var body: some View {
         let style = StatsVisualStyle(preferencesStyle: preferences.style)
@@ -93,7 +93,11 @@ struct ServerStatsDashboard: View {
                 statsCollector.stopCollecting()
             }
         }
+        .task(id: approvalRequestInFlight?.id) {
+            await performSecurityApprovalIfNeeded()
+        }
         .onDisappear {
+            approvalRequestInFlight = nil
             statsCollector.stopCollecting()
         }
         .alert(
@@ -104,7 +108,7 @@ struct ServerStatsDashboard: View {
                 cancelCredentialApproval()
             }
             Button(credentialApprovalPresentation.approvalButtonTitle) {
-                approveCredentialEndpointAndRetry()
+                beginCredentialApproval()
             }
         } message: {
             Text(credentialApprovalPresentation.message)
@@ -118,14 +122,14 @@ struct ServerStatsDashboard: View {
             }
             if hostKeyPresentation?.isDestructive == false {
                 Button(hostKeyPresentation?.approvalButtonTitle ?? String(localized: "Trust and Reconnect")) {
-                    approveHostKeyAndRetry()
+                    beginHostKeyApproval()
                 }
             } else {
                 Button(
                     hostKeyPresentation?.approvalButtonTitle ?? String(localized: "Replace and Reconnect"),
                     role: .destructive
                 ) {
-                    approveHostKeyAndRetry()
+                    beginHostKeyApproval()
                 }
             }
         } message: {
@@ -149,20 +153,23 @@ struct ServerStatsDashboard: View {
         )
     }
 
-    private var hostKeyChallenge: KnownHostsManager.Challenge? {
-        guard case .hostKey(let challenge) = statsCollector.securityApproval else {
+    private var hostKeyRequest: ServerSecurityApprovalRequest? {
+        guard let request = statsCollector.securityApproval,
+              case .hostKey = request else {
             return nil
         }
-        return challenge
+        return request
     }
 
     private var hostKeyPresentation: SSHHostKeyTrustPresentation? {
-        hostKeyChallenge.map(SSHHostKeyTrustPresentation.init)
+        guard let hostKeyRequest,
+              case .hostKey(let challenge) = hostKeyRequest else { return nil }
+        return SSHHostKeyTrustPresentation(challenge: challenge)
     }
 
     private var hostKeyApprovalBinding: Binding<Bool> {
         Binding(
-            get: { hostKeyChallenge != nil },
+            get: { hostKeyRequest != nil },
             set: { _ in }
         )
     }
@@ -170,49 +177,54 @@ struct ServerStatsDashboard: View {
     private func cancelCredentialApproval() {
         guard let request = statsCollector.securityApproval,
               case .credentialEndpoint = request else { return }
+        approvalRequestInFlight = nil
+        securityApprovalActions.reject(request)
         statsCollector.resolveSecurityApproval(request, error: .cancelled)
     }
 
-    private func approveCredentialEndpointAndRetry() {
+    private func beginCredentialApproval() {
         guard let request = statsCollector.securityApproval,
               case .credentialEndpoint(let serverID) = request,
               serverID == server.id else { return }
-
-        Task {
-            guard await appLockManager.authorizeProtectedServerAction(
-                server,
-                action: .approveCredentialEndpoint
-            ) else {
-                statsCollector.resolveSecurityApproval(request, error: .cancelled)
-                return
-            }
-
-            do {
-                try KeychainManager.shared.approveCredentialUse(for: server)
-                statsCollector.resolveSecurityApproval(request)
-                await retryCollection()
-            } catch {
-                statsCollector.resolveSecurityApproval(request, error: .unavailable)
-            }
-        }
+        approvalRequestInFlight = request
     }
 
     private func cancelHostKeyApproval() {
         guard let request = statsCollector.securityApproval,
-              case .hostKey(let challenge) = request else { return }
-        KnownHostsManager.shared.reject(challenge)
+              case .hostKey = request else { return }
+        approvalRequestInFlight = nil
+        securityApprovalActions.reject(request)
         statsCollector.resolveSecurityApproval(request, error: .cancelled)
     }
 
-    private func approveHostKeyAndRetry() {
+    private func beginHostKeyApproval() {
         guard let request = statsCollector.securityApproval,
-              case .hostKey(let challenge) = request else { return }
-        guard KnownHostsManager.shared.approve(challenge) else {
-            statsCollector.resolveSecurityApproval(request, error: .expired)
+              case .hostKey = request else { return }
+        approvalRequestInFlight = request
+    }
+
+    private func performSecurityApprovalIfNeeded() async {
+        guard let request = approvalRequestInFlight else { return }
+        let outcome = await securityApprovalActions.approve(request, server)
+
+        guard !Task.isCancelled else { return }
+        guard approvalRequestInFlight == request,
+              statsCollector.securityApproval == request else {
+            if approvalRequestInFlight == request {
+                approvalRequestInFlight = nil
+            }
             return
         }
-        statsCollector.resolveSecurityApproval(request)
-        Task { await retryCollection() }
+
+        switch outcome {
+        case .approved:
+            statsCollector.resolveSecurityApproval(request)
+            await retryCollection()
+            guard !Task.isCancelled, approvalRequestInFlight == request else { return }
+        case .failed(let error):
+            statsCollector.resolveSecurityApproval(request, error: error)
+        }
+        approvalRequestInFlight = nil
     }
 
     private func retryCollection() async {

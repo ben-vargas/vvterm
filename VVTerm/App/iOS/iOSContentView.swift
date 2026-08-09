@@ -15,6 +15,7 @@ struct iOSContentView: View {
 
     let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
+    let statsDependencies: ServerStatsScreenDependencies
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
         LocalSSHDiscoveryManager()
     }
@@ -36,13 +37,15 @@ struct iOSContentView: View {
         engagementTracker: EngagementTracker,
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
-        fileBrowser: RemoteFileBrowserStore
+        fileBrowser: RemoteFileBrowserStore,
+        statsDependencies: ServerStatsScreenDependencies
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         _tabManager = ObservedObject(wrappedValue: tabManager)
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
+        self.statsDependencies = statsDependencies
     }
 
     private var preferredConnectView: ConnectionViewTabID {
@@ -67,6 +70,7 @@ struct iOSContentView: View {
                 tabManager: tabManager,
                 fileTabs: fileTabs,
                 fileBrowser: fileBrowser,
+                statsDependencies: statsDependencies,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 selectedWorkspace: $selectedWorkspace,
                 selectedEnvironment: $selectedEnvironment,
@@ -87,6 +91,7 @@ struct iOSContentView: View {
                         serverManager: serverManager,
                         fileTabs: fileTabs,
                         fileBrowser: fileBrowser,
+                        statsDependencies: statsDependencies,
                         route: terminalRoute,
                         makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                         onBack: { self.terminalRoute = nil }

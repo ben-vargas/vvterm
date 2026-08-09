@@ -11,6 +11,7 @@ struct ServerListScreen: View {
     @ObservedObject var tabManager: TerminalTabManager
     @ObservedObject var fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
+    let statsDependencies: ServerStatsScreenDependencies
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedEnvironment: ServerEnvironment?
@@ -103,7 +104,7 @@ struct ServerListScreen: View {
             .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView()
+            SettingsView(statsPreferencesStore: statsDependencies.preferencesStore)
                 .modifier(AppearanceModifier())
                 .adaptiveSoftScrollEdges()
         }
