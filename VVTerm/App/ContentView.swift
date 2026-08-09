@@ -206,9 +206,10 @@ struct ContentView: View {
     private func withSplitLifecycle<Content: View>(_ content: Content) -> some View {
         content
             .onAppear {
-                if selectedWorkspace == nil {
-                    selectedWorkspace = serverManager.workspaces.first
-                }
+                selectedWorkspace = WorkspaceSelectionPolicy.workspace(
+                    current: selectedWorkspace,
+                    available: serverManager.workspaces
+                )
                 if !canUseZenMode {
                     setZenMode(false)
                 } else if isZenModeEnabled {
@@ -216,9 +217,10 @@ struct ContentView: View {
                 }
             }
             .onChange(of: serverManager.workspaces) { workspaces in
-                if selectedWorkspace == nil {
-                    selectedWorkspace = workspaces.first
-                }
+                selectedWorkspace = WorkspaceSelectionPolicy.workspace(
+                    current: selectedWorkspace,
+                    available: workspaces
+                )
             }
             .onChange(of: columnVisibility) { newValue in
                 if !isZenModeEnabled && newValue != .detailOnly {

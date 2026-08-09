@@ -31,7 +31,8 @@ struct ServerSidebarView: View {
     @State private var addServerPrefill: ServerFormPrefill?
     @State private var queuedDiscoveryPrefill: ServerFormPrefill?
 
-    @AppStorage("environmentFilters") private var storedEnvironmentFilters: String = ""
+    @AppStorage("environmentFilters.v2") private var storedEnvironmentFilters: String = ""
+    @AppStorage("environmentFilters") private var legacyEnvironmentFilters: String = ""
 
     // MARK: - Filter State
 
@@ -40,8 +41,10 @@ struct ServerSidebarView: View {
     }
 
     private var selectedEnvironmentIds: Set<UUID> {
-        guard !storedEnvironmentFilters.isEmpty else { return [] }
-        return Set(storedEnvironmentFilters.split(separator: ",").compactMap { UUID(uuidString: String($0)) })
+        return WorkspaceSelectionPolicy.environmentFilterIDs(
+            stored: storedEnvironmentFilters,
+            workspace: selectedWorkspace
+        )
     }
 
     private var allEnvironmentIds: Set<UUID> {
@@ -61,7 +64,29 @@ struct ServerSidebarView: View {
     }
 
     private func updateEnvironmentFilters(_ ids: Set<UUID>) {
-        storedEnvironmentFilters = ids.map(\.uuidString).joined(separator: ",")
+        storedEnvironmentFilters = WorkspaceSelectionPolicy.updatingEnvironmentFilterIDs(
+            ids,
+            for: selectedWorkspace,
+            stored: storedEnvironmentFilters
+        )
+    }
+
+    private func reconcileEnvironmentFilters() {
+        let migrated = WorkspaceSelectionPolicy.migratingLegacyEnvironmentFilters(
+            legacyEnvironmentFilters,
+            to: selectedWorkspace,
+            stored: storedEnvironmentFilters
+        )
+        let reconciled = WorkspaceSelectionPolicy.reconciledEnvironmentFilters(
+            stored: migrated,
+            workspaces: serverManager.workspaces
+        )
+        if reconciled != storedEnvironmentFilters {
+            storedEnvironmentFilters = reconciled
+        }
+        if !legacyEnvironmentFilters.isEmpty {
+            legacyEnvironmentFilters = ""
+        }
     }
 
     private func toggleEnvironmentFilter(_ env: ServerEnvironment) {
@@ -339,8 +364,15 @@ struct ServerSidebarView: View {
             presentAddServer(prefill: queued)
         }
         .onChange(of: selectedWorkspace?.id) { _ in
+            reconcileEnvironmentFilters()
             guard showingWorkspaceSwitcher else { return }
             dismissWorkspacePickerForPendingPrefilledAddServerIfNeeded()
+        }
+        .onChange(of: serverManager.workspaces) { _ in
+            reconcileEnvironmentFilters()
+        }
+        .onAppear {
+            reconcileEnvironmentFilters()
         }
         .onChange(of: showingWorkspaceSwitcher) { isPresented in
             guard !isPresented else { return }
@@ -471,7 +503,7 @@ struct ServerSidebarView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    storedEnvironmentFilters = ""
+                    updateEnvironmentFilters([])
                 } label: {
                     Label("Clear", systemImage: "xmark.circle")
                         .font(.caption)
@@ -483,7 +515,7 @@ struct ServerSidebarView: View {
             VStack(alignment: .leading, spacing: 4) {
                 // "All Environments" option (no filter)
                 Button {
-                    storedEnvironmentFilters = ""
+                    updateEnvironmentFilters([])
                 } label: {
                     HStack(spacing: 7) {
                         if !isEnvironmentFiltering {
@@ -675,12 +707,11 @@ struct ServerSidebarView: View {
            let destinationWorkspace = serverManager.workspace(withId: server.workspaceId) {
             selectedWorkspace = destinationWorkspace
             selectedServer = server
-            storedEnvironmentFilters = ""
             return
         }
 
         if isEnvironmentFiltering && !selectedEnvironmentIds.contains(server.environment.id) {
-            storedEnvironmentFilters = ""
+            updateEnvironmentFilters([])
         }
 
         if selectedServer?.id == server.id {
@@ -700,7 +731,7 @@ struct ServerSidebarView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Button {
-                    storedEnvironmentFilters = ""
+                    updateEnvironmentFilters([])
                 } label: {
                     Text("Clear Filters")
                 }

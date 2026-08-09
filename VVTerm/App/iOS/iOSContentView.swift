@@ -78,15 +78,16 @@ struct iOSContentView: View {
         .navigationBarAppearance(backgroundColor: .clear, isTranslucent: true, shadowColor: .clear)
         .adaptiveSoftScrollEdges()
         .onAppear {
-            // Select first workspace on appear
-            if selectedWorkspace == nil {
-                selectedWorkspace = serverManager.workspaces.first
-            }
+            reconcileWorkspaceSelection(serverManager.workspaces)
         }
         .onChange(of: serverManager.workspaces) { workspaces in
-            if selectedWorkspace == nil {
-                selectedWorkspace = workspaces.first
-            }
+            reconcileWorkspaceSelection(workspaces)
+        }
+        .onChange(of: selectedWorkspace?.id) { _ in
+            selectedEnvironment = WorkspaceSelectionPolicy.environment(
+                current: selectedEnvironment,
+                workspace: selectedWorkspace
+            )
         }
         .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
         .onChange(of: terminalRoute?.serverId) { serverId in
@@ -106,6 +107,17 @@ struct iOSContentView: View {
                 get: { lockedServerName != nil },
                 set: { if !$0 { lockedServerName = nil } }
             )
+        )
+    }
+
+    private func reconcileWorkspaceSelection(_ workspaces: [Workspace]) {
+        selectedWorkspace = WorkspaceSelectionPolicy.workspace(
+            current: selectedWorkspace,
+            available: workspaces
+        )
+        selectedEnvironment = WorkspaceSelectionPolicy.environment(
+            current: selectedEnvironment,
+            workspace: selectedWorkspace
         )
     }
 
