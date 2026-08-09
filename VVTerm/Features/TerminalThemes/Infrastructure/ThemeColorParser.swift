@@ -25,7 +25,7 @@ struct ThemeColorParser {
     /// Extracts background color from a Ghostty theme file
     /// - Parameter themeName: The name of the theme (e.g., "Aizen Dark")
     /// - Returns: The background Color if found, nil otherwise
-    nonisolated static func backgroundColor(for themeName: String) -> Color? {
+    static func backgroundColor(for themeName: String) -> Color? {
         guard let content = themeContent(for: themeName),
               let colorHex = value(for: "background", in: content) else {
             return nil
@@ -34,7 +34,7 @@ struct ThemeColorParser {
         return Color.fromHex(colorHex)
     }
 
-    nonisolated static func previewPalette(for themeName: String) -> TerminalThemePreviewPalette {
+    static func previewPalette(for themeName: String) -> TerminalThemePreviewPalette {
         guard let content = themeContent(for: themeName) else {
             return .fallback
         }
@@ -55,7 +55,7 @@ struct ThemeColorParser {
 
     /// Computes the split divider color based on the background color
     /// Uses Ghostty's algorithm: darken by 8% for light backgrounds, 40% for dark
-    nonisolated static func splitDividerColor(for themeName: String) -> Color {
+    static func splitDividerColor(for themeName: String) -> Color {
         guard let content = themeContent(for: themeName),
               let backgroundHex = value(for: "background", in: content),
               let components = splitDividerComponents(for: backgroundHex) else {
@@ -140,14 +140,14 @@ struct ThemeColorParser {
         return "fg=#\(fg),bg=#\(bg)"
     }
 
-    private struct CachedThemeContent {
+    private nonisolated struct CachedThemeContent: Sendable {
         let path: String
         let modificationDate: Date?
         let content: String
     }
 
     private nonisolated(unsafe) static var contentCache: [String: CachedThemeContent] = [:]
-    private static let contentCacheLock = NSLock()
+    private nonisolated static let contentCacheLock = NSLock()
 
     nonisolated static func invalidateCache() {
         contentCacheLock.lock()
@@ -233,7 +233,7 @@ struct ThemeColorParser {
         return nil
     }
 
-    private nonisolated static func color(for key: String, in content: String) -> Color? {
+    private static func color(for key: String, in content: String) -> Color? {
         guard let colorHex = value(for: key, in: content) else { return nil }
         return Color.fromHex(colorHex)
     }

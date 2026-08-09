@@ -1205,12 +1205,10 @@ struct TerminalPaneView: View {
 
     private func updateTerminalBackgroundColor() {
         let resolvedThemeName = themeName
-        Task.detached(priority: .utility) {
+        Task { @MainActor in
             let resolved = ThemeColorParser.previewPalette(for: resolvedThemeName).background
-            await MainActor.run {
-                terminalBackgroundColor = resolved
-                UserDefaults.standard.set(resolved.toHex(), forKey: "terminalBackgroundColor")
-            }
+            terminalBackgroundColor = resolved
+            UserDefaults.standard.set(resolved.toHex(), forKey: "terminalBackgroundColor")
         }
     }
 

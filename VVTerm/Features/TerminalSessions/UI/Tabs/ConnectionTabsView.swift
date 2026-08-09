@@ -522,11 +522,9 @@ struct ConnectionTerminalContainer: View {
 
     private func updateTerminalBackgroundColor() {
         let themeName = effectiveThemeName
-        Task.detached(priority: .utility) {
+        Task { @MainActor in
             let resolved = ThemeColorParser.previewPalette(for: themeName).background
-            await MainActor.run {
-                UserDefaults.standard.set(resolved.toHex(), forKey: "terminalBackgroundColor")
-            }
+            UserDefaults.standard.set(resolved.toHex(), forKey: "terminalBackgroundColor")
         }
     }
 
