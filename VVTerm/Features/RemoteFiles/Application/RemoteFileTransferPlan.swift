@@ -7,6 +7,7 @@ struct RemoteFileTransferLimits: Sendable {
     let maxFileBytes: UInt64
     let maxAggregateBytes: UInt64
     let maxElapsed: Duration
+    let minimumFreeBytes: UInt64
 
     static let standard = RemoteFileTransferLimits(
         maxDepth: 64,
@@ -14,7 +15,8 @@ struct RemoteFileTransferLimits: Sendable {
         maxEntriesPerDirectory: 2_000,
         maxFileBytes: 256 * 1_024 * 1_024,
         maxAggregateBytes: 1 * 1_024 * 1_024 * 1_024,
-        maxElapsed: .seconds(600)
+        maxElapsed: .seconds(600),
+        minimumFreeBytes: 64 * 1_024 * 1_024
     )
 }
 
@@ -70,11 +72,24 @@ struct RemoteFileTransferByteBudget {
         self.limits = limits
     }
 
-    func downloadLimit(reportedBytes: UInt64?) throws -> UInt64 {
+    func downloadLimit(
+        reportedBytes: UInt64?,
+        availableCapacity: UInt64
+    ) throws -> UInt64 {
         let remaining = limits.maxAggregateBytes - min(consumedBytes, limits.maxAggregateBytes)
-        let limit = min(limits.maxFileBytes, remaining)
-        guard limit > 0,
-              reportedBytes.map({ $0 <= limit }) ?? true else {
+        let storageCapacity = availableCapacity > limits.minimumFreeBytes
+            ? availableCapacity - limits.minimumFreeBytes
+            : 0
+        let limit = min(limits.maxFileBytes, remaining, storageCapacity)
+
+        if let reportedBytes {
+            guard reportedBytes <= limit else {
+                throw RemoteFileBrowserError.resourceLimitExceeded
+            }
+            return reportedBytes
+        }
+
+        guard limit > 0 else {
             throw RemoteFileBrowserError.resourceLimitExceeded
         }
         return limit

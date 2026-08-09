@@ -723,15 +723,7 @@ actor SSHClient {
         return try await session.fileSystemStatus(at: path)
     }
 
-    func downloadFile(at path: String, to localURL: URL) async throws {
-        try await downloadFile(at: path, to: localURL, maxBytes: nil)
-    }
-
     func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
-        try await downloadFile(at: path, to: localURL, maxBytes: maxBytes as UInt64?)
-    }
-
-    private func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64?) async throws {
         guard !isAborted, let session = session else {
             throw RemoteFileBrowserError.disconnected
         }
@@ -2174,7 +2166,7 @@ actor SSHSession {
         return data
     }
 
-    func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64? = nil) async throws {
+    func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = RemoteFilePath.normalize(path)
         let handle = try await openFileHandle(
@@ -2217,8 +2209,7 @@ actor SSHSession {
 
                 if bytesRead > 0 {
                     let chunkBytes = UInt64(bytesRead)
-                    if let maxBytes,
-                       chunkBytes > maxBytes - min(totalBytesWritten, maxBytes) {
+                    if chunkBytes > maxBytes - min(totalBytesWritten, maxBytes) {
                         throw RemoteFileBrowserError.resourceLimitExceeded
                     }
                     try localFileHandle.write(contentsOf: Data(buffer.prefix(bytesRead)))

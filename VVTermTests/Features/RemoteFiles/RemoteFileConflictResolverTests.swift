@@ -99,7 +99,7 @@ private struct FakeRemoteFileService: RemoteFileService {
         Data()
     }
 
-    func downloadFile(at path: String, to localURL: URL) async throws {}
+    func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {}
 
     func upload(
         _ data: Data,

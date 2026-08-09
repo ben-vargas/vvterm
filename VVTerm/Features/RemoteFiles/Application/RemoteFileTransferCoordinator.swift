@@ -404,7 +404,18 @@ extension RemoteFileBrowserStore {
         server: Server
     ) async throws {
         try await withRemoteFileService(for: server) { service in
-            try await service.downloadFile(at: remotePath, to: localURL)
+            let entry = try await service.stat(at: remotePath)
+            guard entry.type != .directory else {
+                throw RemoteFileBrowserError.resourceLimitExceeded
+            }
+            var byteBudget = RemoteFileTransferByteBudget()
+            let limit = try self.downloadLimit(
+                reportedBytes: entry.size,
+                to: localURL,
+                byteBudget: byteBudget
+            )
+            try await service.downloadFile(at: remotePath, to: localURL, maxBytes: limit)
+            try byteBudget.record(try self.downloadedFileSize(at: localURL))
         }
     }
 
@@ -653,7 +664,11 @@ extension RemoteFileBrowserStore {
             return
         }
 
-        let limit = try byteBudget.downloadLimit(reportedBytes: plan.entry.size)
+        let limit = try downloadLimit(
+            reportedBytes: plan.entry.size,
+            to: localURL,
+            byteBudget: byteBudget
+        )
         try await service.downloadFile(at: plan.entry.path, to: localURL, maxBytes: limit)
         try byteBudget.record(try downloadedFileSize(at: localURL))
     }
@@ -697,7 +712,11 @@ extension RemoteFileBrowserStore {
 
         let temporaryURL = try temporaryStorage.makeTransferFileURL(for: plan.entry)
         defer { temporaryStorage.removeItem(at: temporaryURL) }
-        let limit = try byteBudget.downloadLimit(reportedBytes: plan.entry.size)
+        let limit = try downloadLimit(
+            reportedBytes: plan.entry.size,
+            to: temporaryURL,
+            byteBudget: byteBudget
+        )
         try await sourceService.downloadFile(at: plan.entry.path, to: temporaryURL, maxBytes: limit)
         let downloadedBytes = try downloadedFileSize(at: temporaryURL)
         try byteBudget.record(downloadedBytes)
@@ -802,6 +821,36 @@ extension RemoteFileBrowserStore {
     func downloadedFileSize(at url: URL) throws -> UInt64 {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         return (attributes[.size] as? NSNumber)?.uint64Value ?? 0
+    }
+
+    func downloadLimit(
+        reportedBytes: UInt64?,
+        to localURL: URL,
+        byteBudget: RemoteFileTransferByteBudget
+    ) throws -> UInt64 {
+        try byteBudget.downloadLimit(
+            reportedBytes: reportedBytes,
+            availableCapacity: availableDownloadCapacity(at: localURL)
+        )
+    }
+
+    func availableDownloadCapacity(at localURL: URL) throws -> UInt64 {
+        let directoryURL = localURL.deletingLastPathComponent()
+        let values = try directoryURL.resourceValues(
+            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+        )
+        if let capacity = values.volumeAvailableCapacityForImportantUsage,
+           let exactCapacity = UInt64(exactly: capacity) {
+            return exactCapacity
+        }
+
+        let attributes = try FileManager.default.attributesOfFileSystem(
+            forPath: directoryURL.path
+        )
+        guard let capacity = (attributes[.systemFreeSize] as? NSNumber)?.uint64Value else {
+            throw RemoteFileBrowserError.resourceLimitExceeded
+        }
+        return capacity
     }
 
     func ensureRemoteDirectoryExists(

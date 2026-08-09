@@ -104,7 +104,8 @@ struct RemoteFileTransferCoordinatorTests {
                 maxEntriesPerDirectory: 10,
                 maxFileBytes: 10,
                 maxAggregateBytes: 10,
-                maxElapsed: .seconds(10)
+                maxElapsed: .seconds(10),
+                minimumFreeBytes: 2
             )
         )
 
@@ -133,6 +134,44 @@ struct RemoteFileTransferCoordinatorTests {
             try await service.downloadFile(at: "/remote/file", to: localURL, maxBytes: 4)
         }
         #expect(!FileManager.default.fileExists(atPath: localURL.path))
+    }
+
+    @Test
+    func downloadLimitUsesDeclaredSizeInsteadOfTheAbsoluteCap() throws {
+        let budget = RemoteFileTransferByteBudget(
+            limits: RemoteFileTransferLimits(
+                maxDepth: 1,
+                maxEntries: 1,
+                maxEntriesPerDirectory: 1,
+                maxFileBytes: 100,
+                maxAggregateBytes: 200,
+                maxElapsed: .seconds(10),
+                minimumFreeBytes: 20
+            )
+        )
+
+        #expect(
+            try budget.downloadLimit(reportedBytes: 7, availableCapacity: 200) == 7
+        )
+    }
+
+    @Test
+    func downloadLimitKeepsTheFreeSpaceReserve() {
+        let budget = RemoteFileTransferByteBudget(
+            limits: RemoteFileTransferLimits(
+                maxDepth: 1,
+                maxEntries: 1,
+                maxEntriesPerDirectory: 1,
+                maxFileBytes: 100,
+                maxAggregateBytes: 200,
+                maxElapsed: .seconds(10),
+                minimumFreeBytes: 20
+            )
+        )
+
+        #expect(throws: RemoteFileBrowserError.self) {
+            try budget.downloadLimit(reportedBytes: 11, availableCapacity: 30)
+        }
     }
 
     @Test
@@ -283,7 +322,11 @@ private final class RecordingRemoteFileService: RemoteFileService {
         Data()
     }
 
-    func downloadFile(at path: String, to localURL: URL) async throws {
+    func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
+        guard UInt64(downloadData.count) <= maxBytes else {
+            try? FileManager.default.removeItem(at: localURL)
+            throw RemoteFileBrowserError.resourceLimitExceeded
+        }
         try downloadData.write(to: localURL)
     }
 

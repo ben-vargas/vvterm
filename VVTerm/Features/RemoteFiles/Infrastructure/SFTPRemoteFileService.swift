@@ -19,10 +19,6 @@ struct SFTPRemoteFileService: RemoteFileService {
         try await client.readFile(at: path, maxBytes: maxBytes)
     }
 
-    func downloadFile(at path: String, to localURL: URL) async throws {
-        try await client.downloadFile(at: path, to: localURL)
-    }
-
     func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
         try await client.downloadFile(at: path, to: localURL, maxBytes: maxBytes)
     }
