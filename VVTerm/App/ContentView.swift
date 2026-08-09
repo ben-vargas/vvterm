@@ -16,8 +16,9 @@ struct ContentView: View {
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
         LocalSSHDiscoveryManager()
     }
-    @StateObject private var serverManager = ServerManager.shared
+    @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var tabManager: TerminalTabManager
+    @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var storeManager: StoreManager
     @StateObject private var engagementTracker = EngagementTracker.shared
     @Environment(\.requestReview) private var requestReview
@@ -30,7 +31,6 @@ struct ContentView: View {
     // values do not cross an NSHostingController boundary automatically.
     @EnvironmentObject private var ghosttyApp: Ghostty.App
     @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
-    @EnvironmentObject private var appLockManager: AppLockManager
     @Environment(\.locale) private var locale
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
     // Republishes the hosted detail pane's command actions as scene focus
@@ -48,11 +48,13 @@ struct ContentView: View {
     @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
 
     init(
+        serverManager: ServerManager,
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore,
         onOpenSettings: @escaping () -> Void
     ) {
+        _serverManager = ObservedObject(wrappedValue: serverManager)
         _tabManager = ObservedObject(wrappedValue: tabManager)
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
@@ -161,7 +163,7 @@ struct ContentView: View {
 
     private func connectToServer(_ server: Server) {
         Task {
-            guard await AppLockManager.shared.ensureServerUnlocked(server) else { return }
+            guard await appLockManager.ensureServerUnlocked(server) else { return }
             do {
                 let tab = try await tabManager.openTab(for: server)
                 await MainActor.run {
@@ -330,6 +332,7 @@ struct ContentView: View {
             .environmentObject(terminalThemeManager)
             .environmentObject(terminalAccessoryPreferencesManager)
             .environmentObject(appLockManager)
+            .environmentObject(serverManager)
             .environmentObject(storeManager)
             .environmentObject(viewTabConfigurationManager)
             .environmentObject(commandBridge)
@@ -369,13 +372,27 @@ struct ContentView: View {
 // MARK: - Preview
 
 #Preview {
-    let tabManager = TerminalTabManagerLiveComposition.makeManager()
+    let appLockManager = AppLockManager()
+    let serverManager = ServerManager(
+        dependencies: .live(actionAuthorizer: appLockManager),
+        startsAutomatically: false
+    )
+    let tabManager = TerminalTabManagerLiveComposition.makeManager(
+        appLockManager: appLockManager,
+        serverManager: serverManager
+    )
     ContentView(
+        serverManager: serverManager,
         tabManager: tabManager,
         fileTabs: RemoteFileTabManager(),
-        fileBrowser: VVTermApp.makeRemoteFileBrowserStore(tabManager: tabManager),
+        fileBrowser: VVTermApp.makeRemoteFileBrowserStore(
+            tabManager: tabManager,
+            serverManager: serverManager
+        ),
         onOpenSettings: {}
     )
+    .environmentObject(appLockManager)
+    .environmentObject(serverManager)
     .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
     .environmentObject(ViewTabConfigurationManager(defaults: .standard))
 }

@@ -257,8 +257,13 @@ extension Color {
 // MARK: - Preview
 
 #Preview {
+    let appLockManager = AppLockManager()
+    let serverManager = ServerManager(
+        dependencies: .live(actionAuthorizer: appLockManager),
+        startsAutomatically: false
+    )
     WorkspaceFormSheet(
-        serverManager: ServerManager.shared,
+        serverManager: serverManager,
         onSave: { _ in }
     )
 }

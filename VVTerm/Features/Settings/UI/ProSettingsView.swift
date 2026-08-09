@@ -8,7 +8,7 @@ import StoreKit
 
 struct ProSettingsView: View {
     @EnvironmentObject private var storeManager: StoreManager
-    @ObservedObject private var serverManager = ServerManager.shared
+    @EnvironmentObject private var serverManager: ServerManager
     @State private var showingPlans = false
     @State private var showingManageSubscription = false
 
@@ -246,6 +246,12 @@ extension View {
 // MARK: - Preview
 
 #Preview {
+    let appLockManager = AppLockManager()
+    let serverManager = ServerManager(
+        dependencies: .live(actionAuthorizer: appLockManager),
+        startsAutomatically: false
+    )
     ProSettingsView()
+        .environmentObject(serverManager)
         .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
 }

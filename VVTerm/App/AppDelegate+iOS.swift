@@ -23,12 +23,26 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private let foregroundSyncMinimumInterval: TimeInterval = 20
     private var resumableTerminalLifecycleTask: Task<Void, Never>?
     private weak var tabManager: TerminalTabManager?
+    private weak var serverManager: ServerManager?
+    private weak var appLockManager: AppLockManager?
 
-    func configure(tabManager: TerminalTabManager) {
+    func configure(
+        tabManager: TerminalTabManager,
+        serverManager: ServerManager,
+        appLockManager: AppLockManager
+    ) {
         if let currentManager = self.tabManager {
             precondition(currentManager === tabManager, "AppDelegate received a different terminal manager")
         }
+        if let currentManager = self.serverManager {
+            precondition(currentManager === serverManager, "AppDelegate received a different server manager")
+        }
+        if let currentManager = self.appLockManager {
+            precondition(currentManager === appLockManager, "AppDelegate received a different app lock manager")
+        }
         self.tabManager = tabManager
+        self.serverManager = serverManager
+        self.appLockManager = appLockManager
     }
 
     private var configuredTabManager: TerminalTabManager {
@@ -36,6 +50,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             preconditionFailure("AppDelegate must be configured with a terminal manager")
         }
         return tabManager
+    }
+
+    private var configuredServerManager: ServerManager {
+        guard let serverManager else {
+            preconditionFailure("AppDelegate must be configured with a server manager")
+        }
+        return serverManager
+    }
+
+    private var configuredAppLockManager: AppLockManager {
+        guard let appLockManager else {
+            preconditionFailure("AppDelegate must be configured with an app lock manager")
+        }
+        return appLockManager
     }
 
     func application(
@@ -84,7 +112,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         lastForegroundSyncAt = now
 
         Task {
-            await ServerManager.shared.loadData()
+            await configuredServerManager.loadData()
         }
     }
 
@@ -107,7 +135,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
 
         Task {
-            await ServerManager.shared.loadData()
+            await configuredServerManager.loadData()
             completionHandler(.newData)
         }
     }
@@ -150,7 +178,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         let sceneStates = UIApplication.shared.connectedScenes.map(\.activationState)
         handleSceneDidEnterBackground(
             connectedSceneStates: sceneStates,
-            lock: { AppLockManager.shared.lockIfNeededForBackground() }
+            lock: { configuredAppLockManager.lockIfNeededForBackground() }
         )
         guard AppSceneLifecyclePolicy.shouldHandleBackgroundTransition(
             connectedSceneStates: sceneStates

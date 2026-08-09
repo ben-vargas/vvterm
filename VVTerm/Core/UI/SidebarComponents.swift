@@ -12,6 +12,7 @@ struct ServerRow: View {
     let onConnect: (Server) -> Void
     var onLockedTap: (() -> Void)? = nil
 
+    @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var tabManager: TerminalTabManager
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
     #if os(macOS)
@@ -19,6 +20,7 @@ struct ServerRow: View {
     #endif
 
     init(
+        serverManager: ServerManager,
         tabManager: TerminalTabManager,
         server: Server,
         isSelected: Bool,
@@ -29,6 +31,7 @@ struct ServerRow: View {
         onConnect: @escaping (Server) -> Void,
         onLockedTap: (() -> Void)? = nil
     ) {
+        _serverManager = ObservedObject(wrappedValue: serverManager)
         _tabManager = ObservedObject(wrappedValue: tabManager)
         self.server = server
         self.isSelected = isSelected
@@ -94,7 +97,7 @@ struct ServerRow: View {
                         Label("Server Settings", systemImage: "slider.horizontal.3")
                     }
                     Button(role: .destructive) {
-                        Task { try? await ServerManager.shared.deleteServer(server) }
+                        Task { try? await serverManager.deleteServer(server) }
                     } label: {
                         Label("Delete Server", systemImage: "trash")
                     }
@@ -114,7 +117,7 @@ struct ServerRow: View {
                     }
                     Divider()
                     Button(role: .destructive) {
-                        Task { try? await ServerManager.shared.deleteServer(server) }
+                        Task { try? await serverManager.deleteServer(server) }
                     } label: {
                         Label("Delete Server", systemImage: "trash")
                     }

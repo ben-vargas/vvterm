@@ -24,6 +24,7 @@ final class SettingsWindowPresenter {
 
     init(
         appLockManager: AppLockManager,
+        serverManager: ServerManager,
         terminalThemeManager: TerminalThemeManager,
         terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager,
         viewTabConfigurationManager: ViewTabConfigurationManager,
@@ -32,6 +33,7 @@ final class SettingsWindowPresenter {
         makeWindow = {
             let settingsView = LocalizedSettingsView(
                 appLockManager: appLockManager,
+                serverManager: serverManager,
                 terminalThemeManager: terminalThemeManager,
                 terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
                 viewTabConfigurationManager: viewTabConfigurationManager,
@@ -83,6 +85,7 @@ final class SettingsWindowPresenter {
 private struct LocalizedSettingsView: View {
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.system.rawValue
     @ObservedObject var appLockManager: AppLockManager
+    @ObservedObject var serverManager: ServerManager
     @ObservedObject var terminalThemeManager: TerminalThemeManager
     @ObservedObject var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @ObservedObject var viewTabConfigurationManager: ViewTabConfigurationManager
@@ -98,6 +101,7 @@ private struct LocalizedSettingsView: View {
                 .environmentObject(terminalThemeManager)
                 .environmentObject(terminalAccessoryPreferencesManager)
                 .environmentObject(viewTabConfigurationManager)
+                .environmentObject(serverManager)
                 .environmentObject(storeManager)
         }
         .environmentObject(appLockManager)

@@ -50,7 +50,9 @@ extension KnownHostsManager: ServerKnownHostRepository {}
 extension AnalyticsTracker: FreePlanAssignmentTracking {}
 
 extension ServerManagerDependencies {
-    static var live: Self {
+    static func live(
+        actionAuthorizer: any ProtectedServerActionAuthorizing
+    ) -> Self {
         let stateStore = ServerStateStore(
             dependencies: ServerStateStoreDependencies(
                 localRepository: ServerLocalStore(),
@@ -65,12 +67,12 @@ extension ServerManagerDependencies {
                 }
             )
         )
-        Self(
+        return Self(
             stateStore: stateStore,
             remoteRepository: CloudKitManager.shared,
             syncRepository: CloudKitSyncCoordinator.shared,
             credentialRepository: KeychainManager.shared,
-            actionAuthorizer: AppLockManager.shared,
+            actionAuthorizer: actionAuthorizer,
             knownHosts: KnownHostsManager.shared,
             isRemoteSchemaError: CloudKitManager.isSchemaError,
             now: Date.init,
@@ -80,7 +82,11 @@ extension ServerManagerDependencies {
 }
 
 extension ServerManager {
-    static let shared = ServerManager(dependencies: .live)
+    /// Compatibility composition for the Remote Files default initializer.
+    /// App roots must construct and inject their own manager instead.
+    static let shared = ServerManager(
+        dependencies: .live(actionAuthorizer: AppLockManager.shared)
+    )
 }
 
 private extension ServerPendingMutation {

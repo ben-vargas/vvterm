@@ -18,7 +18,7 @@ struct iOSContentView: View {
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
         LocalSSHDiscoveryManager()
     }
-    @StateObject private var serverManager = ServerManager.shared
+    @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var tabManager: TerminalTabManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @StateObject private var engagementTracker = EngagementTracker.shared
@@ -32,10 +32,12 @@ struct iOSContentView: View {
     @State private var lockedServerName: String?
 
     init(
+        serverManager: ServerManager,
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore
     ) {
+        _serverManager = ObservedObject(wrappedValue: serverManager)
         _tabManager = ObservedObject(wrappedValue: tabManager)
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser

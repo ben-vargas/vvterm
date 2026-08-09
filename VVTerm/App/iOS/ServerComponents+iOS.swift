@@ -9,13 +9,13 @@ import SwiftUI
 // MARK: - Server List Row
 
 struct ServerListRow: View {
+    @ObservedObject var serverManager: ServerManager
     let server: Server
     let onTap: () -> Void
     let onEdit: () -> Void
     var onMove: (() -> Void)? = nil
     var onLockedTap: (() -> Void)? = nil
 
-    @ObservedObject private var serverManager = ServerManager.shared
     @EnvironmentObject private var storeManager: StoreManager
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
 
@@ -90,7 +90,7 @@ struct ServerListRow: View {
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
-                Task { try? await ServerManager.shared.deleteServer(server) }
+                Task { try? await serverManager.deleteServer(server) }
             } label: {
                 Label("Remove", systemImage: "trash")
             }
@@ -118,7 +118,7 @@ struct ServerListRow: View {
                 }
 
                 Button(role: .destructive) {
-                    Task { try? await ServerManager.shared.deleteServer(server) }
+                    Task { try? await serverManager.deleteServer(server) }
                 } label: {
                     Label("Remove", systemImage: "trash")
                 }

@@ -11,18 +11,25 @@ import WidgetKit
 @main
 struct VVTermApp: App {
     init() {
-        let tabManager = TerminalTabManagerLiveComposition.makeManager()
+        let appLockManager = AppLockManager()
+        let serverManager = ServerManager(
+            dependencies: .live(actionAuthorizer: appLockManager)
+        )
+        let tabManager = TerminalTabManagerLiveComposition.makeManager(
+            appLockManager: appLockManager,
+            serverManager: serverManager
+        )
         let storeManager = StoreManager(
             client: AppStoreKitClient(),
             effects: .live
         )
-        let appLockManager = AppLockManager.shared
         let terminalThemeManager = TerminalThemeManager.shared
         let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager.shared
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: .standard)
         _tabManager = StateObject(wrappedValue: tabManager)
         _storeManager = StateObject(wrappedValue: storeManager)
         _appLockManager = StateObject(wrappedValue: appLockManager)
+        _serverManager = StateObject(wrappedValue: serverManager)
         _terminalThemeManager = StateObject(wrappedValue: terminalThemeManager)
         _terminalAccessoryPreferencesManager = StateObject(
             wrappedValue: terminalAccessoryPreferencesManager
@@ -31,18 +38,26 @@ struct VVTermApp: App {
             wrappedValue: viewTabConfigurationManager
         )
         _remoteFileBrowserStore = StateObject(
-            wrappedValue: Self.makeRemoteFileBrowserStore(tabManager: tabManager)
+            wrappedValue: Self.makeRemoteFileBrowserStore(
+                tabManager: tabManager,
+                serverManager: serverManager
+            )
         )
         #if os(macOS)
         settingsWindowPresenter = SettingsWindowPresenter(
             appLockManager: appLockManager,
+            serverManager: serverManager,
             terminalThemeManager: terminalThemeManager,
             terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
             viewTabConfigurationManager: viewTabConfigurationManager,
             storeManager: storeManager
         )
         #endif
-        appDelegate.configure(tabManager: tabManager)
+        appDelegate.configure(
+            tabManager: tabManager,
+            serverManager: serverManager,
+            appLockManager: appLockManager
+        )
         #if os(macOS)
         MacConnectionToolbarController.shared.configure(tabManager: tabManager)
         #endif
@@ -66,6 +81,7 @@ struct VVTermApp: App {
     @StateObject private var screenAwakeCoordinator = TerminalScreenAwakeCoordinator()
     #endif
     @StateObject private var appLockManager: AppLockManager
+    @StateObject private var serverManager: ServerManager
     @StateObject private var tabManager: TerminalTabManager
     @StateObject private var storeManager: StoreManager
     @StateObject private var remoteFileTabManager = RemoteFileTabManager()
@@ -161,6 +177,7 @@ struct VVTermApp: App {
 
     private var macOSAppContent: some View {
         ContentView(
+            serverManager: serverManager,
             tabManager: tabManager,
             fileTabs: remoteFileTabManager,
             fileBrowser: remoteFileBrowserStore,
@@ -204,7 +221,10 @@ struct VVTermApp: App {
             TerminalScreenAwakeUITestHarness()
                 .modifier(AppearanceModifier())
         } else if usesTerminalReconnectUITestHarness {
-            TerminalReconnectUITestHarness(tabManager: tabManager)
+            TerminalReconnectUITestHarness(
+                tabManager: tabManager,
+                serverManager: serverManager
+            )
                 .environmentObject(ghosttyApp)
                 .environmentObject(terminalThemeManager)
                 .environmentObject(terminalAccessoryPreferencesManager)
@@ -231,6 +251,7 @@ struct VVTermApp: App {
 
     private var iOSAppContent: some View {
         iOSContentView(
+            serverManager: serverManager,
             tabManager: tabManager,
             fileTabs: remoteFileTabManager,
             fileBrowser: remoteFileBrowserStore
@@ -270,15 +291,16 @@ struct VVTermApp: App {
                     .environment(\.privacyModeEnabled, privacyModeEnabled)
                     .onAppear {
                         AppLanguage.applySelection(appLanguage)
-                        ServerManager.shared.handleAppLanguageChange()
+                        serverManager.handleAppLanguageChange()
                     }
                     .onChange(of: appLanguage) { newValue in
                         AppLanguage.applySelection(newValue)
-                        ServerManager.shared.handleAppLanguageChange()
+                        serverManager.handleAppLanguageChange()
                     }
                 }
             }
             .environmentObject(appLockManager)
+            .environmentObject(serverManager)
             .environmentObject(storeManager)
             .environmentObject(viewTabConfigurationManager)
         }
@@ -310,6 +332,7 @@ private enum VVTermLauncherWidgetRefresh {
 extension VVTermApp {
     static func makeRemoteFileBrowserStore(
         tabManager: TerminalTabManager,
+        serverManager: ServerManager,
         defaults: UserDefaults = .standard
     ) -> RemoteFileBrowserStore {
         let adapter = SSHSFTPAdapter(borrowedClientProvider: { serverId in
@@ -320,7 +343,7 @@ extension VVTermApp {
             defaults: defaults,
             remoteFileServiceAdapter: adapter,
             serverProvider: { serverId in
-                ServerManager.shared.servers.first { $0.id == serverId }
+                serverManager.servers.first { $0.id == serverId }
             },
             workingDirectoryProvider: { serverId in
                 tabManager.workingDirectoryCandidate(for: serverId)

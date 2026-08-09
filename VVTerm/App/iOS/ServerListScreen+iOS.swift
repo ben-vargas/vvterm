@@ -18,6 +18,7 @@ struct ServerListScreen: View {
     let onActiveConnectionSelected: (Server) -> Void
 
     @EnvironmentObject private var storeManager: StoreManager
+    @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @State private var showingAddServer = false
     @State private var showingAddWorkspace = false
@@ -307,6 +308,7 @@ struct ServerListScreen: View {
             } else {
                 ForEach(filteredServers) { server in
                     ServerListRow(
+                        serverManager: serverManager,
                         server: server,
                         onTap: { onServerSelected(server) },
                         onEdit: { serverToEdit = server },
@@ -443,7 +445,7 @@ struct ServerListScreen: View {
     private func openActiveConnection(_ connection: ActiveServerSummary) {
         Task {
             guard let serverToUnlock = server(for: connection.id) else { return }
-            guard await AppLockManager.shared.ensureServerUnlocked(serverToUnlock) else { return }
+            guard await appLockManager.ensureServerUnlocked(serverToUnlock) else { return }
             guard let currentConnection = activeConnections.first(where: {
                 $0.id == connection.id
             }), let currentServer = server(for: connection.id) else {

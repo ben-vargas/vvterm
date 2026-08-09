@@ -6,16 +6,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastForegroundSyncAt: Date = .distantPast
     private let foregroundSyncMinimumInterval: TimeInterval = 20
     private weak var tabManager: TerminalTabManager?
+    private weak var serverManager: ServerManager?
+    private weak var appLockManager: AppLockManager?
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.VivyTerm",
         category: "Lifecycle"
     )
 
-    func configure(tabManager: TerminalTabManager) {
+    func configure(
+        tabManager: TerminalTabManager,
+        serverManager: ServerManager,
+        appLockManager: AppLockManager
+    ) {
         if let currentManager = self.tabManager {
             precondition(currentManager === tabManager, "AppDelegate received a different terminal manager")
         }
+        if let currentManager = self.serverManager {
+            precondition(currentManager === serverManager, "AppDelegate received a different server manager")
+        }
+        if let currentManager = self.appLockManager {
+            precondition(currentManager === appLockManager, "AppDelegate received a different app lock manager")
+        }
         self.tabManager = tabManager
+        self.serverManager = serverManager
+        self.appLockManager = appLockManager
     }
 
     private var configuredTabManager: TerminalTabManager {
@@ -23,6 +37,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             preconditionFailure("AppDelegate must be configured with a terminal manager")
         }
         return tabManager
+    }
+
+    private var configuredServerManager: ServerManager {
+        guard let serverManager else {
+            preconditionFailure("AppDelegate must be configured with a server manager")
+        }
+        return serverManager
+    }
+
+    private var configuredAppLockManager: AppLockManager {
+        guard let appLockManager else {
+            preconditionFailure("AppDelegate must be configured with an app lock manager")
+        }
+        return appLockManager
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -71,14 +99,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         lastForegroundSyncAt = now
 
         Task {
-            await ServerManager.shared.loadData()
+            await configuredServerManager.loadData()
         }
     }
 
     func applicationDidResignActive(_ notification: Notification) {
         logger.info("Application resigned active")
         Task { @MainActor in
-            AppLockManager.shared.lockIfNeededForBackground()
+            configuredAppLockManager.lockIfNeededForBackground()
         }
     }
 
@@ -100,7 +128,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
         guard SyncSettings.isEnabled else { return }
         Task {
-            await ServerManager.shared.loadData()
+            await configuredServerManager.loadData()
         }
     }
 

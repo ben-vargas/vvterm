@@ -32,7 +32,11 @@ extension ProUpgradePresentationModifier {
     }
 
     private func presentWindow() {
-        ProUpgradeWindowPresenter.shared.show(storeManager: storeManager, source: source) {
+        ProUpgradeWindowPresenter.shared.show(
+            storeManager: storeManager,
+            serverManager: serverManager,
+            source: source
+        ) {
             isPresented = false
         }
     }
@@ -100,7 +104,12 @@ final class ProUpgradeWindowPresenter: NSObject, NSWindowDelegate {
 
     private override init() {}
 
-    func show(storeManager: StoreManager, source: PaywallSource = .general, onClose: @escaping () -> Void) {
+    func show(
+        storeManager: StoreManager,
+        serverManager: ServerManager,
+        source: PaywallSource = .general,
+        onClose: @escaping () -> Void
+    ) {
         if let window, window.isVisible {
             self.onClose = onClose
             ProUpgradeWindowChrome.configure(window, setInitialSize: false, source: source)
@@ -114,6 +123,7 @@ final class ProUpgradeWindowPresenter: NSObject, NSWindowDelegate {
             self?.close()
         }
         .environmentObject(storeManager)
+        .environmentObject(serverManager)
 
         let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)

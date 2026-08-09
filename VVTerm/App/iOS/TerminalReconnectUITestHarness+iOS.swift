@@ -35,19 +35,24 @@ struct TerminalReconnectUITestHarness: View {
     private static let fixtureUsernameDefaultsKey = "sshUsername"
 
     @ObservedObject private var tabManager: TerminalTabManager
-    @ObservedObject private var serverManager = ServerManager.shared
+    @ObservedObject private var serverManager: ServerManager
     @StateObject private var fileTabs: RemoteFileTabManager
     @StateObject private var fileBrowser: RemoteFileBrowserStore
     @State private var fixtureState = FixtureState.preparing
 
-    init(tabManager: TerminalTabManager) {
+    init(
+        tabManager: TerminalTabManager,
+        serverManager: ServerManager
+    ) {
         _tabManager = ObservedObject(wrappedValue: tabManager)
+        _serverManager = ObservedObject(wrappedValue: serverManager)
         _fileTabs = StateObject(
             wrappedValue: RemoteFileTabManager(defaults: Self.fixtureDefaults)
         )
         _fileBrowser = StateObject(
             wrappedValue: VVTermApp.makeRemoteFileBrowserStore(
                 tabManager: tabManager,
+                serverManager: serverManager,
                 defaults: Self.fixtureDefaults
             )
         )
@@ -121,6 +126,7 @@ struct TerminalReconnectUITestHarness: View {
         case .ready(let server):
             if usesNavigationHarness {
                 iOSContentView(
+                    serverManager: serverManager,
                     tabManager: tabManager,
                     fileTabs: fileTabs,
                     fileBrowser: fileBrowser

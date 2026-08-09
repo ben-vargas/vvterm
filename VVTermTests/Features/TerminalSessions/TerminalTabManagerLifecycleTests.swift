@@ -1608,7 +1608,16 @@ struct TerminalTabManagerLifecycleTests {
             installTab(tab, in: manager, connectionState: .connected)
 
             let appDelegate = AppDelegate()
-            appDelegate.configure(tabManager: manager)
+            let appLockManager = AppLockManager()
+            let serverManager = ServerManager(
+                dependencies: .live(actionAuthorizer: appLockManager),
+                startsAutomatically: false
+            )
+            appDelegate.configure(
+                tabManager: manager,
+                serverManager: serverManager,
+                appLockManager: appLockManager
+            )
             #expect(appDelegate.handleApplicationWillTerminate())
 
             #expect(manager.tabs(for: tab.serverId).map(\.id) == [tab.id])

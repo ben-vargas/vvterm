@@ -58,7 +58,12 @@ final class TerminalTabManager: ObservableObject {
         case indeterminate
     }
 
-    static let shared = TerminalTabManagerLiveComposition.makeManager()
+    /// Compatibility composition for the Remote Files default initializer.
+    /// App roots construct and inject their own manager instead.
+    static let shared = TerminalTabManagerLiveComposition.makeManager(
+        appLockManager: .shared,
+        serverManager: .shared
+    )
 
     // MARK: - Session State
 

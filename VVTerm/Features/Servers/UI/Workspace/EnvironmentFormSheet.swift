@@ -164,8 +164,13 @@ struct EnvironmentFormSheet: View {
 }
 
 #Preview {
+    let appLockManager = AppLockManager()
+    let serverManager = ServerManager(
+        dependencies: .live(actionAuthorizer: appLockManager),
+        startsAutomatically: false
+    )
     EnvironmentFormSheet(
-        serverManager: ServerManager.shared,
+        serverManager: serverManager,
         workspace: Workspace(name: "Default"),
         onSave: { _, _ in }
     )

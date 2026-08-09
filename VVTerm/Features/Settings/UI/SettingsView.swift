@@ -308,6 +308,12 @@ struct SettingsView: View {
 // MARK: - Preview
 
 #Preview {
+    let appLockManager = AppLockManager()
+    let serverManager = ServerManager(
+        dependencies: .live(actionAuthorizer: appLockManager),
+        startsAutomatically: false
+    )
     SettingsView()
+        .environmentObject(serverManager)
         .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
 }

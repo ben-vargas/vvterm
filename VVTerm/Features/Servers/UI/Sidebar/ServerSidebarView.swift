@@ -11,6 +11,7 @@ struct ServerSidebarView: View {
     @Binding var selectedServer: Server?
 
     @EnvironmentObject private var storeManager: StoreManager
+    @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @ObservedObject private var tabManager: TerminalTabManager
     #if os(macOS)
@@ -211,6 +212,7 @@ struct ServerSidebarView: View {
                     LazyVStack(spacing: 4) {
                         ForEach(filteredServers) { server in
                             ServerRow(
+                                serverManager: serverManager,
                                 tabManager: tabManager,
                                 server: server,
                                 isSelected: selectedServer?.id == server.id,
@@ -716,14 +718,14 @@ struct ServerSidebarView: View {
 
     private func selectServer(_ server: Server) {
         Task { @MainActor in
-            guard await AppLockManager.shared.ensureServerUnlocked(server) else { return }
+            guard await appLockManager.ensureServerUnlocked(server) else { return }
             selectedServer = server
         }
     }
 
     private func connectToServer(_ server: Server) {
         Task {
-            guard await AppLockManager.shared.ensureServerUnlocked(server) else { return }
+            guard await appLockManager.ensureServerUnlocked(server) else { return }
             do {
                 let tab = try await tabManager.openTab(for: server)
                 await MainActor.run {

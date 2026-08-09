@@ -9,7 +9,10 @@ import UIKit
 enum TerminalTabManagerLiveComposition {
     private static let persistenceKey = "terminalTabsSnapshot.v1"
 
-    static func makeManager() -> TerminalTabManager {
+    static func makeManager(
+        appLockManager: AppLockManager,
+        serverManager: ServerManager
+    ) -> TerminalTabManager {
         let defaults = UserDefaults.standard
         let networkMonitor = NetworkMonitor.shared
         let dependencies = TerminalTabManagerDependencies(
@@ -29,7 +32,7 @@ enum TerminalTabManagerLiveComposition {
             },
             effects: TerminalSessionApplicationEffects(
                 authorizeServer: { server in
-                    await AppLockManager.shared.ensureServerUnlocked(server)
+                    await appLockManager.ensureServerUnlocked(server)
                 },
                 refreshLiveActivity: { connectionStates in
                     LiveActivityManager.shared.refresh(with: connectionStates)
@@ -66,7 +69,7 @@ enum TerminalTabManagerLiveComposition {
                     return TmuxStartupBehavior(rawValue: rawValue) ?? .askEveryTime
                 },
                 serverSettings: { serverId in
-                    ServerManager.shared.servers
+                    serverManager.servers
                         .first(where: { $0.id == serverId })
                         .map {
                             TerminalTmuxConfiguration.ServerSettings(

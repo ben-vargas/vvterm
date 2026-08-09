@@ -5,7 +5,7 @@ import SwiftUI
 struct ProUpgradeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var storeManager: StoreManager
-    @ObservedObject private var serverManager = ServerManager.shared
+    @EnvironmentObject private var serverManager: ServerManager
     private let source: PaywallSource
     private let onDismiss: (() -> Void)?
 
@@ -655,6 +655,7 @@ struct ProUpgradePresentationModifier: ViewModifier {
     @Binding var isPresented: Bool
     let source: PaywallSource
     @EnvironmentObject var storeManager: StoreManager
+    @EnvironmentObject var serverManager: ServerManager
 
     func body(content: Content) -> some View {
         platformBody(content: content)
@@ -1005,5 +1006,12 @@ private struct NativeSectionCard<Content: View>: View {
 // MARK: - Preview
 
 #Preview {
+    let appLockManager = AppLockManager()
+    let serverManager = ServerManager(
+        dependencies: .live(actionAuthorizer: appLockManager),
+        startsAutomatically: false
+    )
     ProUpgradeSheet()
+        .environmentObject(serverManager)
+        .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
 }

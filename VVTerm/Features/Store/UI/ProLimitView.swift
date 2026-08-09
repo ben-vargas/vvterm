@@ -71,7 +71,7 @@ struct ProFeatureLock: View {
 struct LimitReachedAlert: ViewModifier {
     let limitType: LimitType
     @Binding var isPresented: Bool
-    @ObservedObject private var serverManager = ServerManager.shared
+    @EnvironmentObject private var serverManager: ServerManager
     @State private var showUpgrade = false
 
     enum LimitType {
@@ -292,7 +292,7 @@ struct LockedItemAlert: ViewModifier {
     let itemType: ItemType
     let itemName: String
     @Binding var isPresented: Bool
-    @ObservedObject private var serverManager = ServerManager.shared
+    @EnvironmentObject private var serverManager: ServerManager
     @State private var showUpgrade = false
 
     enum ItemType {
