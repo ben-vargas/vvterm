@@ -168,8 +168,25 @@ struct ServerFormSheet: View {
     @State private var connectionTestSucceeded = false
     @State private var lastTestSnapshot: ConnectionTestSnapshot?
     @State private var showingLocalDiscoverySheet = false
+    @State private var showingCredentialEndpointApproval = false
+    @State private var showingHostKeyTrustConfirmation = false
+    @State private var hostKeyTrustChallenge: KnownHostsManager.Challenge?
+    @State private var hasAuthorizedInitialEdit: Bool
 
     var isEditing: Bool { server != nil }
+
+    private var credentialEndpointApprovalMessage: String {
+        guard let server else { return "" }
+        return String(
+            format: String(localized: "Stored credentials were saved for another endpoint. Use them with %@:%lld only if you trust this change."),
+            server.host,
+            Int64(server.port)
+        )
+    }
+
+    private var hostKeyTrustPresentation: SSHHostKeyTrustPresentation? {
+        hostKeyTrustChallenge.map(SSHHostKeyTrustPresentation.init)
+    }
 
     init(
         serverManager: ServerManager,
@@ -186,6 +203,7 @@ struct ServerFormSheet: View {
 
         let initialWorkspaceId = server?.workspaceId ?? workspace?.id
         _selectedWorkspaceId = State(initialValue: initialWorkspaceId)
+        _hasAuthorizedInitialEdit = State(initialValue: server?.requiresBiometricUnlock != true)
 
         if let server = server {
             _name = State(initialValue: server.name)
@@ -322,7 +340,17 @@ struct ServerFormSheet: View {
     }
 
     var body: some View {
-        platformBody
+        ZStack {
+            platformBody
+                .opacity(hasAuthorizedInitialEdit ? 1 : 0)
+                .allowsHitTesting(hasAuthorizedInitialEdit)
+                .accessibilityHidden(!hasAuthorizedInitialEdit)
+
+            if !hasAuthorizedInitialEdit {
+                ProgressView("Authorizing…")
+                    .controlSize(.large)
+            }
+        }
     }
 
     var formContent: some View {
@@ -352,51 +380,17 @@ struct ServerFormSheet: View {
         #endif
         .interactiveDismissDisabled(isSaving)
         .task {
-            storedKeys = KeychainManager.shared.getStoredSSHKeys()
-
-            // Load credentials from keychain when editing
-            guard let server = server else { return }
-            isLoadingCredentials = true
-            defer { isLoadingCredentials = false }
-
-            do {
-                let credentials = try KeychainManager.shared.getCredentials(for: server)
-
-                if server.connectionMode != .tailscale {
-                    switch server.authMethod {
-                    case .password:
-                        if let pwd = credentials.password {
-                            password = pwd
-                        }
-                    case .sshKey:
-                        if let keyData = credentials.privateKey,
-                           let keyString = String(data: keyData, encoding: .utf8) {
-                            sshKey = keyString
-                        }
-                    case .sshKeyWithPassphrase:
-                        if let keyData = credentials.privateKey,
-                           let keyString = String(data: keyData, encoding: .utf8) {
-                            sshKey = keyString
-                        }
-                        if let phrase = credentials.passphrase {
-                            sshPassphrase = phrase
-                        }
-                    }
-                }
-                if let publicKeyData = credentials.publicKey,
-                   let publicKeyString = String(data: publicKeyData, encoding: .utf8) {
-                    sshPublicKey = publicKeyString
-                } else {
-                    sshPublicKey = ""
-                }
-
-                cloudflareClientID = credentials.cloudflareClientID ?? ""
-                cloudflareClientSecret = credentials.cloudflareClientSecret ?? ""
-                selectMatchingStoredKeyIfAvailable()
-            } catch {
-                self.error = String(format: String(localized: "Failed to load credentials: %@"), error.localizedDescription)
+            guard let server = server else {
+                storedKeys = KeychainManager.shared.getStoredSSHKeys()
+                return
             }
-
+            guard await appLockManager.authorizeProtectedServerAction(server, action: .edit) else {
+                dismiss()
+                return
+            }
+            hasAuthorizedInitialEdit = true
+            storedKeys = KeychainManager.shared.getStoredSSHKeys()
+            loadStoredCredentials(for: server)
         }
         #if os(iOS)
             .toolbar {
@@ -445,8 +439,37 @@ struct ServerFormSheet: View {
                 .adaptiveSoftScrollEdges()
             }
             .limitReachedAlert(.servers, isPresented: $showingServerLimitAlert)
+            .alert("Approve Credential Endpoint?", isPresented: $showingCredentialEndpointApproval) {
+                Button("Cancel", role: .cancel) { }
+                Button("Approve") {
+                    approveCredentialEndpoint()
+                }
+            } message: {
+                Text(credentialEndpointApprovalMessage)
+            }
+            .alert(
+                hostKeyTrustPresentation?.title ?? String(localized: "Trust SSH Host?"),
+                isPresented: $showingHostKeyTrustConfirmation
+            ) {
+                Button("Cancel", role: .cancel) {
+                    rejectHostKeyChallenge()
+                }
+                if hostKeyTrustPresentation?.isDestructive == false {
+                    Button(hostKeyTrustPresentation?.approvalButtonTitle ?? String(localized: "Trust and Reconnect")) {
+                        approveHostKeyChallengeAndRetest()
+                    }
+                } else {
+                    Button(
+                        hostKeyTrustPresentation?.approvalButtonTitle ?? String(localized: "Replace and Reconnect"),
+                        role: .destructive
+                    ) {
+                        approveHostKeyChallengeAndRetest()
+                    }
+                }
+            } message: {
+                Text(hostKeyTrustPresentation?.message ?? "")
+            }
             .onAppear {
-                storedKeys = KeychainManager.shared.getStoredSSHKeys()
                 selectMatchingStoredKeyIfAvailable()
                 reconcileAssignmentWorkspace()
             }
@@ -1042,6 +1065,67 @@ struct ServerFormSheet: View {
         )
     }
 
+    private func loadStoredCredentials(for server: Server) {
+        isLoadingCredentials = true
+        defer { isLoadingCredentials = false }
+
+        do {
+            let credentials = try KeychainManager.shared.getCredentials(for: server)
+
+            if server.connectionMode != .tailscale {
+                switch server.authMethod {
+                case .password:
+                    password = credentials.password ?? ""
+                case .sshKey, .sshKeyWithPassphrase:
+                    if let keyData = credentials.privateKey,
+                       let keyString = String(data: keyData, encoding: .utf8) {
+                        sshKey = keyString
+                    }
+                    if server.authMethod == .sshKeyWithPassphrase {
+                        sshPassphrase = credentials.passphrase ?? ""
+                    }
+                }
+            }
+
+            if let publicKeyData = credentials.publicKey,
+               let publicKeyString = String(data: publicKeyData, encoding: .utf8) {
+                sshPublicKey = publicKeyString
+            } else {
+                sshPublicKey = ""
+            }
+
+            cloudflareClientID = credentials.cloudflareClientID ?? ""
+            cloudflareClientSecret = credentials.cloudflareClientSecret ?? ""
+            selectMatchingStoredKeyIfAvailable()
+            error = nil
+        } catch ServerCredentialAccessError.approvalRequired {
+            error = nil
+            showingCredentialEndpointApproval = true
+        } catch {
+            self.error = String(
+                format: String(localized: "Failed to load credentials: %@"),
+                error.localizedDescription
+            )
+        }
+    }
+
+    private func approveCredentialEndpoint() {
+        guard let server else { return }
+        Task {
+            guard await appLockManager.authorizeProtectedServerAction(
+                server,
+                action: .approveCredentialEndpoint
+            ) else { return }
+
+            do {
+                try KeychainManager.shared.approveCredentialUse(for: server)
+                loadStoredCredentials(for: server)
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
     private func normalizedCloudflareOverride(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
@@ -1072,6 +1156,13 @@ struct ServerFormSheet: View {
     }
 
     private func runConnectionTest(force: Bool) async -> Bool {
+        if let server {
+            guard await appLockManager.authorizeProtectedServerAction(
+                server,
+                action: .testConnection
+            ) else { return false }
+        }
+
         let snapshot = await MainActor.run { connectionSnapshot }
         let shouldSkip = await MainActor.run { !force && hasValidConnectionTest }
         if shouldSkip {
@@ -1166,6 +1257,13 @@ struct ServerFormSheet: View {
                 if let sshError = error as? SSHError, case .cloudflareConfigurationRequired = sshError {
                     showCloudflareOverrides = true
                 }
+                if let sshError = error as? SSHError, case .hostKeyApprovalRequired = sshError {
+                    hostKeyTrustChallenge = KnownHostsManager.shared.pendingChallenge(
+                        for: testServer.host,
+                        port: testServer.port
+                    )
+                    showingHostKeyTrustConfirmation = hostKeyTrustChallenge != nil
+                }
                 connectionTestSucceeded = false
                 success = false
             }
@@ -1174,12 +1272,43 @@ struct ServerFormSheet: View {
         return success
     }
 
+    private func rejectHostKeyChallenge() {
+        if let hostKeyTrustChallenge {
+            KnownHostsManager.shared.reject(hostKeyTrustChallenge)
+        }
+        self.hostKeyTrustChallenge = nil
+    }
+
+    private func approveHostKeyChallengeAndRetest() {
+        guard let hostKeyTrustChallenge,
+              KnownHostsManager.shared.approve(hostKeyTrustChallenge) else {
+            connectionTestError = String(localized: "SSH host key approval expired. Try again.")
+            self.hostKeyTrustChallenge = nil
+            return
+        }
+
+        self.hostKeyTrustChallenge = nil
+        Task {
+            _ = await runConnectionTest(force: true)
+        }
+    }
+
     func saveServer() {
         isSaving = true
         error = nil
 
         Task {
             do {
+                if let server {
+                    guard await appLockManager.authorizeProtectedServerAction(
+                        server,
+                        action: .save
+                    ) else {
+                        await MainActor.run { isSaving = false }
+                        return
+                    }
+                }
+
                 let (newServer, credentials) = await MainActor.run { () -> (Server, ServerCredentials) in
                     let serverId = server?.id ?? UUID()
                     let server = buildServer(id: serverId, createdAt: server?.createdAt ?? Date())
@@ -1188,35 +1317,8 @@ struct ServerFormSheet: View {
                 }
 
                 if isEditing {
+                    try KeychainManager.shared.storeCredentials(credentials, for: newServer)
                     try await serverManager.updateServer(newServer)
-                    // Store credentials based on auth method
-                    let publicKeyData = sshPublicKey.isEmpty ? nil : sshPublicKey.data(using: .utf8)
-                    if transportSelection != .tailscale {
-                        switch selectedAuthMethod {
-                        case .password:
-                            if !password.isEmpty {
-                                try KeychainManager.shared.storePassword(for: newServer.id, password: password)
-                            }
-                        case .sshKey:
-                            if !sshKey.isEmpty, let keyData = sshKey.data(using: .utf8) {
-                                try KeychainManager.shared.storeSSHKey(for: newServer.id, privateKey: keyData, passphrase: nil, publicKey: publicKeyData)
-                            }
-                        case .sshKeyWithPassphrase:
-                            if !sshKey.isEmpty, let keyData = sshKey.data(using: .utf8) {
-                                try KeychainManager.shared.storeSSHKey(for: newServer.id, privateKey: keyData, passphrase: sshPassphrase.isEmpty ? nil : sshPassphrase, publicKey: publicKeyData)
-                            }
-                        }
-                    }
-
-                    if transportSelection == .cloudflare, selectedCloudflareAccessMode == .serviceToken {
-                        try KeychainManager.shared.storeCloudflareServiceToken(
-                            for: newServer.id,
-                            clientID: cloudflareClientID,
-                            clientSecret: cloudflareClientSecret
-                        )
-                    } else {
-                        KeychainManager.shared.deleteCloudflareServiceToken(for: newServer.id)
-                    }
                 } else {
                     try await serverManager.addServer(newServer, credentials: credentials)
                 }

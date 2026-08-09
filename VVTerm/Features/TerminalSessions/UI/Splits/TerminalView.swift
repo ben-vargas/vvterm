@@ -500,6 +500,7 @@ struct TerminalPaneView: View {
     let onVoiceTrigger: () -> Void
 
     @EnvironmentObject var ghosttyApp: Ghostty.App
+    @EnvironmentObject private var appLockManager: AppLockManager
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -514,7 +515,9 @@ struct TerminalPaneView: View {
     @State private var automaticReconnectRetryTask: Task<Void, Never>?
     @State private var terminalBackgroundColor: Color = Self.initialTerminalBackgroundColor()
     @State private var connectWatchdogToken = UUID()
-    @State private var showingRetrustHostConfirmation = false
+    @State private var showingHostKeyTrustConfirmation = false
+    @State private var hostKeyTrustChallenge: KnownHostsManager.Challenge?
+    @State private var showingCredentialEndpointApproval = false
     @StateObject private var richPasteUI = TerminalRichPasteUIModel()
     @ObservedObject private var networkMonitor: NetworkMonitor = .shared
 
@@ -543,18 +546,22 @@ struct TerminalPaneView: View {
         tabManager.terminalConnectionGeneration(for: paneId)
     }
 
-    private var isHostKeyVerificationFailure: Bool {
+    private var isHostKeyApprovalRequired: Bool {
         guard case .failed(let error) = connectionState else { return false }
-        return error == SSHError.hostKeyVerificationFailed.localizedDescription
-            || error.contains("Host key verification failed")
+        return error == SSHError.hostKeyApprovalRequired.localizedDescription
+            || error.contains("host key approval is required")
     }
 
-    private var retrustHostConfirmationMessage: String {
-        let endpoint = "\(server.host):\(server.port)"
-        return String(
-            format: String(localized: "VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host."),
-            endpoint
-        )
+    private var hostKeyTrustConfirmationTitle: String {
+        hostKeyTrustPresentation?.title ?? String(localized: "Trust SSH Host?")
+    }
+
+    private var hostKeyTrustPresentation: SSHHostKeyTrustPresentation? {
+        hostKeyTrustChallenge.map(SSHHostKeyTrustPresentation.init)
+    }
+
+    private var hostKeyTrustConfirmationMessage: String {
+        hostKeyTrustPresentation?.message ?? ""
     }
 
     /// Should this pane actually have focus (both tab selected AND pane focused)
@@ -663,7 +670,7 @@ struct TerminalPaneView: View {
             terminalExists: terminalExists,
             isReady: isReady,
             disconnectedMessage: disconnectedStatusMessage,
-            isHostKeyVerificationFailure: isHostKeyVerificationFailure
+            isHostKeyVerificationFailure: isHostKeyApprovalRequired
         )
     }
 
@@ -761,7 +768,7 @@ struct TerminalPaneView: View {
                     surfaceStyle: noticeSurfaceStyle,
                     isActive: shouldFocus,
                     onRetry: retryConnection,
-                    onTrustNewHostKey: { showingRetrustHostConfirmation = true }
+                    onTrustNewHostKey: presentHostKeyTrustConfirmation
                 )
 
                 if shouldShowFloatingVoiceButton {
@@ -781,12 +788,7 @@ struct TerminalPaneView: View {
             if terminalExists {
                 isReady = true
             }
-            do {
-                credentials = try KeychainManager.shared.getCredentials(for: server)
-                credentialLoadErrorMessage = nil
-            } catch {
-                credentialLoadErrorMessage = String(localized: "Failed to load credentials")
-            }
+            loadCredentials()
 
             showingTmuxInstallPrompt = TmuxInstallPromptPolicy.shouldPresent(
                 for: paneState?.tmuxStatus
@@ -889,13 +891,32 @@ struct TerminalPaneView: View {
         } message: {
             Text(moshServerPromptMessage)
         }
-        .alert("Replace Trusted Host?", isPresented: $showingRetrustHostConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Replace and Reconnect", role: .destructive) {
-                retrustHostAndRetry()
+        .alert(hostKeyTrustConfirmationTitle, isPresented: $showingHostKeyTrustConfirmation) {
+            Button("Cancel", role: .cancel) {
+                rejectHostKeyChallenge()
+            }
+            if hostKeyTrustPresentation?.isDestructive == false {
+                Button(hostKeyTrustPresentation?.approvalButtonTitle ?? String(localized: "Trust and Reconnect")) {
+                    approveHostKeyChallengeAndRetry()
+                }
+            } else {
+                Button(
+                    hostKeyTrustPresentation?.approvalButtonTitle ?? String(localized: "Replace and Reconnect"),
+                    role: .destructive
+                ) {
+                    approveHostKeyChallengeAndRetry()
+                }
             }
         } message: {
-            Text(retrustHostConfirmationMessage)
+            Text(hostKeyTrustConfirmationMessage)
+        }
+        .alert("Approve Credential Endpoint?", isPresented: $showingCredentialEndpointApproval) {
+            Button("Cancel", role: .cancel) { }
+            Button("Approve") {
+                approveCredentialEndpoint()
+            }
+        } message: {
+            Text(credentialEndpointApprovalMessage)
         }
         .terminalRichPastePrompt(using: richPasteUI)
     }
@@ -960,9 +981,68 @@ struct TerminalPaneView: View {
         TerminalTabManager.shared.disableTmux(for: server.id)
     }
 
-    private func retrustHostAndRetry() {
-        KnownHostsManager.shared.remove(host: server.host, port: server.port)
+    private func presentHostKeyTrustConfirmation() {
+        hostKeyTrustChallenge = KnownHostsManager.shared.pendingChallenge(
+            for: server.host,
+            port: server.port
+        )
+        showingHostKeyTrustConfirmation = hostKeyTrustChallenge != nil
+    }
+
+    private func rejectHostKeyChallenge() {
+        if let hostKeyTrustChallenge {
+            KnownHostsManager.shared.reject(hostKeyTrustChallenge)
+        }
+        self.hostKeyTrustChallenge = nil
+    }
+
+    private func approveHostKeyChallengeAndRetry() {
+        guard let hostKeyTrustChallenge,
+              KnownHostsManager.shared.approve(hostKeyTrustChallenge) else {
+            credentialLoadErrorMessage = String(localized: "SSH host key approval expired. Try again.")
+            self.hostKeyTrustChallenge = nil
+            return
+        }
+        self.hostKeyTrustChallenge = nil
         retryConnection()
+    }
+
+    private var credentialEndpointApprovalMessage: String {
+        String(
+            format: String(localized: "Stored credentials were saved for another endpoint. Use them with %@:%lld only if you trust this change."),
+            server.host,
+            Int64(server.port)
+        )
+    }
+
+    private func loadCredentials() {
+        do {
+            credentials = try KeychainManager.shared.getCredentials(for: server)
+            credentialLoadErrorMessage = nil
+        } catch ServerCredentialAccessError.approvalRequired {
+            credentials = nil
+            credentialLoadErrorMessage = String(localized: "Credential endpoint approval is required")
+            showingCredentialEndpointApproval = true
+        } catch {
+            credentials = nil
+            credentialLoadErrorMessage = String(localized: "Failed to load credentials")
+        }
+    }
+
+    private func approveCredentialEndpoint() {
+        Task {
+            guard await appLockManager.authorizeProtectedServerAction(
+                server,
+                action: .approveCredentialEndpoint
+            ) else { return }
+
+            do {
+                try KeychainManager.shared.approveCredentialUse(for: server)
+                loadCredentials()
+            } catch {
+                credentialLoadErrorMessage = String(localized: "Failed to approve credentials")
+            }
+        }
     }
 
     private func attemptAutoReconnectIfNeeded() {
@@ -996,13 +1076,8 @@ struct TerminalPaneView: View {
         credentialLoadErrorMessage = nil
         operationNotice = nil
         if credentials == nil {
-            do {
-                credentials = try KeychainManager.shared.getCredentials(for: server)
-                credentialLoadErrorMessage = nil
-            } catch {
-                credentialLoadErrorMessage = String(localized: "Failed to load credentials")
-                return
-            }
+            loadCredentials()
+            guard credentials != nil else { return }
         }
         tabManager.clearMoshFallbackDiagnostics(for: paneId)
         connectWatchdogToken = UUID()
