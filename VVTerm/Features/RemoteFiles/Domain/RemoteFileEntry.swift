@@ -1,6 +1,6 @@
 import Foundation
 
-struct RemoteFileEntry: Identifiable, Hashable, Codable, Sendable {
+nonisolated struct RemoteFileEntry: Identifiable, Hashable, Codable, Sendable {
     let name: String
     let path: String
     let type: RemoteFileType

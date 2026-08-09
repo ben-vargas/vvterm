@@ -1,6 +1,6 @@
 import Foundation
 
-enum RemoteFileType: String, Codable, CaseIterable, Sendable {
+nonisolated enum RemoteFileType: String, Codable, CaseIterable, Sendable {
     case file
     case directory
     case symlink

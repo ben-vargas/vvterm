@@ -117,6 +117,38 @@ struct RemoteFileBrowserStoreTests {
         #expect(store.states[tab.id] == nil)
     }
 
+    @Test(arguments: [1_999, 2_000, 2_001])
+    func directoryListingTruncatesOnlyWhenAnExtraEntryExists(entryCount: Int) {
+        let entries = (0..<entryCount).map { index in
+            makeEntry(
+                name: "entry-\(index)",
+                path: "/tmp/entry-\(index)",
+                type: .file
+            )
+        }
+
+        let listing = RemoteFileBrowserStore.cappedDirectoryListing(entries)
+
+        #expect(listing.entries.count == min(entryCount, 2_000))
+        #expect(listing.isTruncated == (entryCount > 2_000))
+    }
+
+    @Test
+    func bulkDirectoryListingKeepsSymlinkTargetUnresolved() {
+        var attributes = LIBSSH2_SFTP_ATTRIBUTES()
+        attributes.flags = UInt(LIBSSH2_SFTP_ATTR_PERMISSIONS)
+        attributes.permissions = UInt(LIBSSH2_SFTP_S_IFLNK | LIBSSH2_SFTP_S_IRUSR)
+
+        let entry = SSHSession.directoryListingEntry(
+            name: "current",
+            path: "/srv/current",
+            attributes: attributes
+        )
+
+        #expect(entry.type == .symlink)
+        #expect(entry.symlinkTarget == nil)
+    }
+
     private func makeEntry(name: String, path: String, type: RemoteFileType) -> RemoteFileEntry {
         RemoteFileEntry(
             name: name,

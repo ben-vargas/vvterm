@@ -88,7 +88,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     let workingDirectoryProvider: WorkingDirectoryProvider
 
     var persistedStates: [String: RemoteFileBrowserPersistedState] = [:]
-    static let directoryEntryLimit = 2_000
+    nonisolated static let directoryEntryLimit = 2_000
     static let defaultPreviewBytes = 512 * 1_024
     static let hardPreviewBytes = 2 * 1_024 * 1_024
     static let previewConfirmationBytes = 1 * 1_024 * 1_024
@@ -426,18 +426,30 @@ final class RemoteFileBrowserStore: ObservableObject {
 
     private func directorySnapshot(path: String, for server: Server) async throws -> DirectorySnapshot {
         let normalizedPath = RemoteFilePath.normalize(path)
-        let entries = try await withRemoteFileService(for: server) { service in
-            try await service.listDirectory(at: normalizedPath, maxEntries: Self.directoryEntryLimit)
+        let listedEntries = try await withRemoteFileService(for: server) { service in
+            try await service.listDirectory(at: normalizedPath, maxEntries: Self.directoryEntryLimit + 1)
         }
+        let listing = Self.cappedDirectoryListing(listedEntries)
         let filesystemStatus = try? await withRemoteFileService(for: server) { service in
             try await service.fileSystemCapacity(at: normalizedPath).status
         }
         return DirectorySnapshot(
             path: normalizedPath,
-            entries: entries,
-            isTruncated: entries.count >= Self.directoryEntryLimit,
+            entries: listing.entries,
+            isTruncated: listing.isTruncated,
             filesystemStatus: filesystemStatus
         )
+    }
+
+    static func cappedDirectoryListing(
+        _ entries: [RemoteFileEntry],
+        limit: Int = directoryEntryLimit
+    ) -> (entries: [RemoteFileEntry], isTruncated: Bool) {
+        guard limit > 0 else {
+            return ([], !entries.isEmpty)
+        }
+
+        return (Array(entries.prefix(limit)), entries.count > limit)
     }
 
     func applyDirectorySnapshot(_ snapshot: DirectorySnapshot, to tab: RemoteFileTab, requestID: UUID) {

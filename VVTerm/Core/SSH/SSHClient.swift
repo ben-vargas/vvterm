@@ -2139,18 +2139,12 @@ actor SSHSession {
 
                 let leaf = try RemoteFileLeaf(validating: name)
                 let entryPath = RemoteFilePath.appending(leaf, to: normalizedPath)
-                let baseEntry = RemoteFileEntry.from(
-                    name: name,
-                    path: entryPath,
-                    attributes: attributes
-                )
-                let symlinkTarget = baseEntry.type == .symlink ? (try? await readlink(at: entryPath)) : nil
+                // Resolve link targets only when an operation needs one.
                 entries.append(
-                    RemoteFileEntry.from(
+                    Self.directoryListingEntry(
                         name: name,
                         path: entryPath,
-                        attributes: attributes,
-                        symlinkTarget: symlinkTarget
+                        attributes: attributes
                     )
                 )
                 continue
@@ -2169,6 +2163,19 @@ actor SSHSession {
         }
 
         return entries
+    }
+
+    nonisolated static func directoryListingEntry(
+        name: String,
+        path: String,
+        attributes: LIBSSH2_SFTP_ATTRIBUTES
+    ) -> RemoteFileEntry {
+        RemoteFileEntry.from(
+            name: name,
+            path: path,
+            attributes: attributes,
+            symlinkTarget: nil
+        )
     }
 
     func stat(at path: String) async throws -> RemoteFileEntry {
