@@ -9,7 +9,7 @@ struct ServerRow: View {
     let onSelect: () -> Void
     let onEdit: (Server) -> Void
     var onMove: ((Server) -> Void)? = nil
-    var onConnect: ((Server) -> Void)? = nil
+    let onConnect: (Server) -> Void
     var onLockedTap: (() -> Void)? = nil
 
     @ObservedObject private var tabManager = TerminalTabManager.shared
@@ -78,12 +78,7 @@ struct ServerRow: View {
                     }
                 } else {
                     Button {
-                        if let onConnect {
-                            onConnect(server)
-                        } else {
-                            tabManager.selectedViewByServer[server.id] = ViewTabConfigurationManager.shared.effectiveDefaultTab()
-                            tabManager.connectedServerIds.insert(server.id)
-                        }
+                        onConnect(server)
                     } label: {
                         Label("Open Connection", systemImage: "point.forward.to.point.capsulepath.fill")
                     }

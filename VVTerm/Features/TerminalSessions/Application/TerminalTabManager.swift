@@ -69,6 +69,8 @@ nonisolated enum TerminalVoicePresentationState: Equatable, Sendable {
 
 @MainActor
 final class TerminalTabManager: ObservableObject {
+    private static let persistenceKey = "terminalTabsSnapshot.v1"
+
     private struct ConnectionCleanup {
         let client: SSHClient
         let task: Task<Void, Never>
@@ -80,7 +82,20 @@ final class TerminalTabManager: ObservableObject {
         case indeterminate
     }
 
-    static let shared = TerminalTabManager()
+    static let shared = TerminalTabManager(
+        snapshotStore: UserDefaultsTerminalTabSnapshotStore(
+            key: persistenceKey
+        ),
+        networkReadinessPublisher: NetworkMonitor.shared.$snapshot
+            .map(\.readiness)
+            .removeDuplicates()
+            .eraseToAnyPublisher(),
+        liveActivityRefresh: { connectionStates in
+            LiveActivityManager.shared.refresh(with: connectionStates)
+        },
+        eternalTerminalResumeStore: EternalTerminalResumeStore.shared,
+        moshResumeStore: MoshResumeStore.shared
+    )
 
     // MARK: - Published State
 
@@ -102,7 +117,16 @@ final class TerminalTabManager: ObservableObject {
     @Published private(set) var splitZoomedTabIds: Set<UUID> = []
 
     /// Servers with at least one live terminal shell.
-    @Published var connectedServerIds: Set<UUID> = []
+    var connectedServerIds: Set<UUID> {
+        Set(paneStates.values.compactMap { state in
+            guard state.connectionState.isConnected,
+                  shellRegistry.shellId(for: state.paneId) != nil
+                    || eternalTerminalRuntimes[state.paneId] != nil else {
+                return nil
+            }
+            return state.serverId
+        })
+    }
 
     /// Selected view type per server.
     @Published var selectedViewByServer: [UUID: ConnectionViewTabID] = [:] {
@@ -116,8 +140,10 @@ final class TerminalTabManager: ObservableObject {
     private var shellRegistry = SSHShellRegistry(staleThreshold: 120)
     private let sshConnectionTasks = TerminalConnectionTaskStore()
     private var eternalTerminalRuntimes: [UUID: EternalTerminalRuntime] = [:]
-    private var eternalTerminalResumeStore: any EternalTerminalResumeStoring = EternalTerminalResumeStore.shared
-    private var moshResumeStore: any MoshResumeStoring = MoshResumeStore.shared
+    private var eternalTerminalResumeStore: any EternalTerminalResumeStoring
+    private let defaultEternalTerminalResumeStore: any EternalTerminalResumeStoring
+    private var moshResumeStore: any MoshResumeStoring
+    private let defaultMoshResumeStore: any MoshResumeStoring
     private var connectionCleanupsInFlight: [UUID: ConnectionCleanup] = [:]
     lazy var reconnectCoordinator = TerminalReconnectCoordinator(
         onEvent: { [weak self] event in
@@ -143,9 +169,7 @@ final class TerminalTabManager: ObservableObject {
     /// Pane state keyed by pane ID
     @Published var paneStates: [UUID: TerminalPaneState] = [:] {
         didSet {
-            LiveActivityManager.shared.refresh(
-                with: paneStates.values.map(\.connectionState)
-            )
+            liveActivityRefresh(paneStates.values.map(\.connectionState))
         }
     }
     @Published private(set) var runtimeTitleByPane: [UUID: String] = [:]
@@ -168,19 +192,30 @@ final class TerminalTabManager: ObservableObject {
 
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "TerminalTabManager")
 
-    private let persistenceKey = "terminalTabsSnapshot.v1"
+    private let snapshotStore: any TerminalTabSnapshotStoring
+    private let liveActivityRefresh: ([ConnectionState]) -> Void
     private var persistTask: Task<Void, Never>?
     private var isRestoring = false
 
-    private init() {
+    init(
+        snapshotStore: any TerminalTabSnapshotStoring,
+        networkReadinessPublisher: AnyPublisher<NetworkMonitor.Readiness, Never>?,
+        liveActivityRefresh: @escaping ([ConnectionState]) -> Void,
+        eternalTerminalResumeStore: any EternalTerminalResumeStoring,
+        moshResumeStore: any MoshResumeStoring
+    ) {
+        self.snapshotStore = snapshotStore
+        self.liveActivityRefresh = liveActivityRefresh
+        self.eternalTerminalResumeStore = eternalTerminalResumeStore
+        self.defaultEternalTerminalResumeStore = eternalTerminalResumeStore
+        self.moshResumeStore = moshResumeStore
+        self.defaultMoshResumeStore = moshResumeStore
         #if os(iOS)
         keyboardCoordinator.terminalProvider = { [weak self] paneId in
             self?.terminalViews[paneId]
         }
         #endif
-        networkReadinessCancellable = NetworkMonitor.shared.$snapshot
-            .map(\.readiness)
-            .removeDuplicates()
+        networkReadinessCancellable = networkReadinessPublisher?
             .sink { [weak self] readiness in
                 #if os(macOS)
                 self?.handleMacRecoverySignal(.networkChanged(readiness))
@@ -189,9 +224,7 @@ final class TerminalTabManager: ObservableObject {
                 #endif
             }
         restoreSnapshot()
-        LiveActivityManager.shared.refresh(
-            with: paneStates.values.map(\.connectionState)
-        )
+        liveActivityRefresh(paneStates.values.map(\.connectionState))
     }
 
     private func paneTmuxStatus(for paneId: UUID) -> TmuxStatus? {
@@ -272,19 +305,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func hasLiveTerminalShell(for serverId: UUID) -> Bool {
-        paneStates.contains { _, state in
-            state.serverId == serverId
-                && state.connectionState.isConnected
-                && (shellId(for: state.paneId) != nil || eternalTerminalRuntimes[state.paneId] != nil)
-        }
-    }
-
-    private func refreshConnectedServerState(for serverId: UUID) {
-        if hasLiveTerminalShell(for: serverId) {
-            connectedServerIds.insert(serverId)
-        } else {
-            connectedServerIds.remove(serverId)
-        }
+        connectedServerIds.contains(serverId)
     }
 
     /// Open a new tab for a server
@@ -375,7 +396,6 @@ final class TerminalTabManager: ObservableObject {
                 }
             }
 
-            refreshConnectedServerState(for: currentTab.serverId)
         }
 
         EngagementTracker.shared.noteTerminalSessionEnded(
@@ -406,7 +426,6 @@ final class TerminalTabManager: ObservableObject {
         tabsByServer.removeValue(forKey: serverId)
         selectedTabByServer.removeValue(forKey: serverId)
         selectedViewByServer.removeValue(forKey: serverId)
-        connectedServerIds.remove(serverId)
         persistSnapshot()
         logger.info("Disconnected all terminal tabs for server \(serverId.uuidString, privacy: .public)")
     }
@@ -417,7 +436,6 @@ final class TerminalTabManager: ObservableObject {
         for serverId in serverIds {
             disconnectServer(serverId)
         }
-        connectedServerIds.removeAll()
         persistSnapshot()
         logger.info("Disconnected all terminal tabs")
     }
@@ -452,7 +470,6 @@ final class TerminalTabManager: ObservableObject {
                 paneStates[paneId]?.connectionState = .disconnected
             }
         }
-        connectedServerIds.removeAll()
         runtimeTitleByPane.removeAll()
 
         logger.info("Preserved terminal tabs while releasing application runtime state")
@@ -893,7 +910,6 @@ final class TerminalTabManager: ObservableObject {
 
         // Now clean up the pane (after layout is updated)
         cleanupPane(paneId, intent: intent)
-        refreshConnectedServerState(for: tab.serverId)
         logger.info("Closed pane \(paneId)")
     }
 
@@ -1954,7 +1970,6 @@ final class TerminalTabManager: ObservableObject {
 
     /// Update connection state for a pane
     func updatePaneState(_ paneId: UUID, connectionState: ConnectionState) {
-        let serverId = paneStates[paneId]?.serverId
         paneStates[paneId]?.connectionState = connectionState
         #if os(iOS)
         if connectionState.isConnecting,
@@ -1988,23 +2003,14 @@ final class TerminalTabManager: ObservableObject {
             if paneTmuxStatus(for: paneId) == .foreground {
                 setPaneTmuxStatus(.background, for: paneId)
             }
-            if let serverId {
-                refreshConnectedServerState(for: serverId)
-            }
         case .connected:
             reconnectCoordinator.complete(for: paneId)
-            if let serverId {
-                refreshConnectedServerState(for: serverId)
-            }
             EngagementTracker.shared.recordSuccessfulConnection(
                 id: paneId,
                 transport: paneStates[paneId]?.activeTransport.rawValue ?? ShellTransport.ssh.rawValue
             )
         case .idle:
             reconnectCoordinator.complete(for: paneId)
-            if let serverId {
-                refreshConnectedServerState(for: serverId)
-            }
         }
     }
 
@@ -2977,7 +2983,6 @@ final class TerminalTabManager: ObservableObject {
             from: restoredTabsByServer,
             snapshotsByTabId: snapshotsByTabId
         )
-        connectedServerIds = []
     }
 
     private func schedulePersist() {
@@ -2994,14 +2999,14 @@ final class TerminalTabManager: ObservableObject {
     private func persistSnapshot() {
         do {
             let data = try JSONEncoder().encode(makeSnapshot())
-            UserDefaults.standard.set(data, forKey: persistenceKey)
+            snapshotStore.saveSnapshotData(data)
         } catch {
             logger.error("Failed to persist tabs snapshot: \(error.localizedDescription)")
         }
     }
 
     private func restoreSnapshot() {
-        guard let data = UserDefaults.standard.data(forKey: persistenceKey) else { return }
+        guard let data = snapshotStore.loadSnapshotData() else { return }
         do {
             let snapshot = try JSONDecoder().decode(TerminalTabsSnapshot.self, from: data)
             isRestoring = true
@@ -3170,7 +3175,6 @@ extension TerminalTabManager {
         tabsByServer = [:]
         selectedTabByServer = [:]
         splitZoomedTabIds = []
-        connectedServerIds = []
         selectedViewByServer = [:]
         paneStates = [:]
         runtimeTitleByPane = [:]
@@ -3200,11 +3204,11 @@ extension TerminalTabManager {
         #endif
         tabOpensInFlight.removeAll()
         tmuxCleanupServers.removeAll()
-        eternalTerminalResumeStore = EternalTerminalResumeStore.shared
-        moshResumeStore = MoshResumeStore.shared
+        eternalTerminalResumeStore = defaultEternalTerminalResumeStore
+        moshResumeStore = defaultMoshResumeStore
         isRestoring = false
 
-        UserDefaults.standard.removeObject(forKey: persistenceKey)
+        snapshotStore.removeSnapshotData()
         for terminal in terminals {
             terminal.cleanup()
         }
