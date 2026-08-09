@@ -683,7 +683,7 @@ struct TerminalAccessoryProfile: Codable, Equatable {
         layout = try container.decodeIfPresent(TerminalAccessoryLayout.self, forKey: .layout)
             ?? TerminalAccessoryLayout(version: 1, activeItems: Self.defaultActiveItems, updatedAt: .distantPast)
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast
-        lastWriterDeviceId = try container.decodeIfPresent(String.self, forKey: .lastWriterDeviceId) ?? DeviceIdentity.id
+        lastWriterDeviceId = try container.decodeIfPresent(String.self, forKey: .lastWriterDeviceId) ?? ""
 
         if let actions = try container.decodeIfPresent([TerminalAccessoryCustomAction].self, forKey: .customActions) {
             customActions = actions
@@ -707,7 +707,6 @@ extension TerminalAccessoryProfile {
     static let schemaVersion = 2
     static let recordType = "UserPreference"
     static let recordName = "terminalAccessory.v1"
-    static let defaultsKey = CloudKitSyncConstants.terminalAccessoryProfileStorageKey
 
     static let minActiveItems = 4
     static let maxActiveItems = 28
@@ -733,7 +732,7 @@ extension TerminalAccessoryProfile {
         .system(.pageDown)
     ]
 
-    static var defaultValue: TerminalAccessoryProfile {
+    static func defaultValue(lastWriterDeviceId: String) -> TerminalAccessoryProfile {
         TerminalAccessoryProfile(
             schemaVersion: schemaVersion,
             layout: TerminalAccessoryLayout(
@@ -743,7 +742,7 @@ extension TerminalAccessoryProfile {
             ),
             customActions: [],
             updatedAt: .distantPast,
-            lastWriterDeviceId: DeviceIdentity.id
+            lastWriterDeviceId: lastWriterDeviceId
         )
     }
 
@@ -817,7 +816,7 @@ extension TerminalAccessoryProfile {
             ),
             customActions: Array(normalizedAndLimitedActions),
             updatedAt: updatedAt,
-            lastWriterDeviceId: lastWriterDeviceId.isEmpty ? DeviceIdentity.id : lastWriterDeviceId
+            lastWriterDeviceId: lastWriterDeviceId
         )
     }
 

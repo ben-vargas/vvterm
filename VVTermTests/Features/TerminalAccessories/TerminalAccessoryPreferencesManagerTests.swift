@@ -46,7 +46,7 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
         XCTAssertEqual(manager.customActions.map(\.id), [action.id])
         XCTAssertEqual(manager.profile.lastWriterDeviceId, DeviceIdentity.id)
         XCTAssertEqual(manager.profile.customActions.first?.commandContent, "ls -la")
-        XCTAssertNotNil(defaults.data(forKey: TerminalAccessoryProfile.defaultsKey))
+        XCTAssertNotNil(defaults.data(forKey: TerminalAccessoryPreferencesManager.defaultsKey))
     }
 
     func testResetToDefaultLayoutRestoresActiveItems() {
@@ -58,6 +58,23 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
         manager.resetToDefaultLayout()
 
         XCTAssertEqual(manager.activeItems, TerminalAccessoryProfile.defaultActiveItems)
+        XCTAssertEqual(manager.profile.lastWriterDeviceId, DeviceIdentity.id)
+    }
+
+    func testLegacyProfileWithoutWriterReceivesApplicationWriterIdentity() throws {
+        let profile = TerminalAccessoryProfile.defaultValue(lastWriterDeviceId: "legacy")
+        let encoded = try JSONEncoder().encode(profile)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "lastWriterDeviceId")
+        defaults.set(
+            try JSONSerialization.data(withJSONObject: object),
+            forKey: TerminalAccessoryPreferencesManager.defaultsKey
+        )
+
+        let manager = TerminalAccessoryPreferencesManager(defaults: defaults)
+
         XCTAssertEqual(manager.profile.lastWriterDeviceId, DeviceIdentity.id)
     }
 }

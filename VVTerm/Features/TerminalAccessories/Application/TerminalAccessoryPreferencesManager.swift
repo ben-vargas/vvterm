@@ -10,6 +10,7 @@ import AppKit
 @MainActor
 final class TerminalAccessoryPreferencesManager: ObservableObject {
     static let shared = TerminalAccessoryPreferencesManager()
+    static let defaultsKey = CloudKitSyncConstants.terminalAccessoryProfileStorageKey
 
     @Published private(set) var profile: TerminalAccessoryProfile
 
@@ -299,32 +300,39 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
     private func persistProfile() {
         do {
             let encoded = try JSONEncoder().encode(profile)
-            defaults.set(encoded, forKey: TerminalAccessoryProfile.defaultsKey)
+            defaults.set(encoded, forKey: Self.defaultsKey)
         } catch {
             logger.error("Failed to encode terminal accessory profile: \(error.localizedDescription)")
         }
     }
 
     private static func loadProfile(from defaults: UserDefaults) -> TerminalAccessoryProfile {
-        guard let data = defaults.data(forKey: TerminalAccessoryProfile.defaultsKey) else {
-            let defaultProfile = TerminalAccessoryProfile.defaultValue.normalized()
+        guard let data = defaults.data(forKey: Self.defaultsKey) else {
+            let defaultProfile = TerminalAccessoryProfile
+                .defaultValue(lastWriterDeviceId: DeviceIdentity.id)
+                .normalized()
             if let encoded = try? JSONEncoder().encode(defaultProfile) {
-                defaults.set(encoded, forKey: TerminalAccessoryProfile.defaultsKey)
+                defaults.set(encoded, forKey: Self.defaultsKey)
             }
             return defaultProfile
         }
 
         do {
-            let decoded = try JSONDecoder().decode(TerminalAccessoryProfile.self, from: data)
+            var decoded = try JSONDecoder().decode(TerminalAccessoryProfile.self, from: data)
+            if decoded.lastWriterDeviceId.isEmpty {
+                decoded.lastWriterDeviceId = DeviceIdentity.id
+            }
             let normalized = decoded.normalized()
             if normalized != decoded, let encoded = try? JSONEncoder().encode(normalized) {
-                defaults.set(encoded, forKey: TerminalAccessoryProfile.defaultsKey)
+                defaults.set(encoded, forKey: Self.defaultsKey)
             }
             return normalized
         } catch {
-            let defaultProfile = TerminalAccessoryProfile.defaultValue.normalized()
+            let defaultProfile = TerminalAccessoryProfile
+                .defaultValue(lastWriterDeviceId: DeviceIdentity.id)
+                .normalized()
             if let encoded = try? JSONEncoder().encode(defaultProfile) {
-                defaults.set(encoded, forKey: TerminalAccessoryProfile.defaultsKey)
+                defaults.set(encoded, forKey: Self.defaultsKey)
             }
             return defaultProfile
         }
