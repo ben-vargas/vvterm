@@ -145,8 +145,6 @@ struct TerminalSettingsView: View {
     @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var themeNameLight = "Aizen Light"
     @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     @AppStorage("appearanceMode") private var appearanceMode = "system"
-    @AppStorage("terminalNotificationsEnabled") private var terminalNotificationsEnabled = true
-    @AppStorage("terminalProgressEnabled") private var terminalProgressEnabled = true
     @AppStorage("terminalAccessoryCustomizationEnabled") var terminalAccessoryCustomizationEnabled = true
     @AppStorage("terminalKeyboardDismissButtonEnabled") var terminalKeyboardDismissButtonEnabled = true
     @AppStorage("terminalTmuxEnabledDefault") private var tmuxEnabledDefault = true
@@ -166,8 +164,8 @@ struct TerminalSettingsView: View {
     private var remoteClipboardReadPolicyRaw = TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
 
     // SSH settings
-    @AppStorage("sshKeepAliveEnabled") private var keepAliveEnabled = true
-    @AppStorage("sshKeepAliveInterval") private var keepAliveInterval = 30
+    @AppStorage(SSHRuntimeSettings.keepAliveEnabledKey) private var keepAliveEnabled = true
+    @AppStorage(SSHRuntimeSettings.keepAliveIntervalKey) private var keepAliveInterval = 30
     @AppStorage(TerminalDefaults.sshAutoReconnectKey) private var autoReconnect = true
 
     // Cursor settings
@@ -399,14 +397,13 @@ struct TerminalSettingsView: View {
         }
     }
 
+    @ViewBuilder
     private var terminalBehaviorSection: some View {
+        #if os(iOS)
         Section("Terminal Behavior") {
-            #if os(iOS)
             TerminalScreenAwakeSettingRow()
-            #endif
-            Toggle("Enable terminal notifications", isOn: $terminalNotificationsEnabled)
-            Toggle("Show progress overlays", isOn: $terminalProgressEnabled)
         }
+        #endif
     }
 
     private var sessionPersistenceSection: some View {

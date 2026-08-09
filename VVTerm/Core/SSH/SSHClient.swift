@@ -140,9 +140,14 @@ actor SSHClient {
     private let disconnectTimeout: Duration = .seconds(4)
     private let execTimeout: Duration = .seconds(20)
     private let uploadTimeout: Duration = .seconds(60)
+    private let runtimeSettings: SSHRuntimeSettings
 
-    init(connectTimeout: Duration = .seconds(30)) {
+    init(
+        connectTimeout: Duration = .seconds(30),
+        runtimeSettings: SSHRuntimeSettings = SSHRuntimeSettings()
+    ) {
         self.connectTimeout = connectTimeout
+        self.runtimeSettings = runtimeSettings
     }
 
     /// Check if the client has been aborted
@@ -359,7 +364,8 @@ actor SSHClient {
             username: server.username,
             connectionMode: server.connectionMode,
             authMethod: server.authMethod,
-            credentials: credentials
+            credentials: credentials,
+            keepAlive: runtimeSettings.keepAlive
         )
         let pendingSession = SSHSession(config: config, startupTrace: startupTrace)
 
@@ -435,7 +441,7 @@ actor SSHClient {
                         startupTrace: state.startupTrace
                     )
                 )
-                startKeepAlive()
+                startKeepAlive(policy: connectedSession.config.keepAlive)
                 logger.info("Connected to \(server.host, privacy: .private(mask: .hash))")
                 return connectedSession
             case .connected(var state)
@@ -1058,10 +1064,15 @@ actor SSHClient {
 
     // MARK: - Keep Alive
 
-    private func startKeepAlive(interval: TimeInterval = 30) {
+    private func startKeepAlive(policy: SSHKeepAlivePolicy) {
+        keepAliveTask?.cancel()
+        keepAliveTask = nil
+
+        guard case .enabled(let intervalSeconds) = policy else { return }
+
         keepAliveTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(interval))
+                try? await Task.sleep(for: .seconds(intervalSeconds))
                 guard !Task.isCancelled else { break }
                 await session?.sendKeepAlive()
             }
@@ -3984,7 +3995,7 @@ struct SSHSessionConfig {
     let credentials: ServerCredentials
 
     var connectionTimeout: TimeInterval = 30
-    var keepAliveInterval: TimeInterval = 30
+    let keepAlive: SSHKeepAlivePolicy
 
     init(
         host: String,
@@ -3998,7 +4009,9 @@ struct SSHSessionConfig {
         authMethod: AuthMethod,
         credentials: ServerCredentials,
         connectionTimeout: TimeInterval = 30,
-        keepAliveInterval: TimeInterval = 30
+        keepAlive: SSHKeepAlivePolicy = .enabled(
+            intervalSeconds: SSHRuntimeSettings.defaultKeepAliveIntervalSeconds
+        )
     ) {
         self.host = host
         self.port = port
@@ -4011,7 +4024,7 @@ struct SSHSessionConfig {
         self.authMethod = authMethod
         self.credentials = credentials
         self.connectionTimeout = connectionTimeout
-        self.keepAliveInterval = keepAliveInterval
+        self.keepAlive = keepAlive
     }
 }
 
