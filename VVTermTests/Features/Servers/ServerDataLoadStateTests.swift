@@ -5,7 +5,8 @@ import XCTest
 final class ServerDataLoadStateTests: XCTestCase {
     func testFailureRemainsVisibleAfterLoadFinishes() {
         var state = ServerDataLoadState()
-        let operationID = state.start()
+        let operationID = UUID()
+        state.start(operationID: operationID)
 
         XCTAssertTrue(state.fail(operationID: operationID, message: "CloudKit unavailable"))
 
@@ -15,8 +16,10 @@ final class ServerDataLoadStateTests: XCTestCase {
 
     func testStaleCompletionCannotFinishNewLoad() {
         var state = ServerDataLoadState()
-        let firstOperationID = state.start()
-        let secondOperationID = state.start()
+        let firstOperationID = UUID()
+        let secondOperationID = UUID()
+        state.start(operationID: firstOperationID)
+        state.start(operationID: secondOperationID)
 
         XCTAssertFalse(state.finish(operationID: firstOperationID))
         XCTAssertTrue(state.isLoading)
@@ -28,10 +31,11 @@ final class ServerDataLoadStateTests: XCTestCase {
 
     func testNewLoadClearsPreviousFailure() {
         var state = ServerDataLoadState()
-        let failedOperationID = state.start()
+        let failedOperationID = UUID()
+        state.start(operationID: failedOperationID)
         state.fail(operationID: failedOperationID, message: "Failed")
 
-        _ = state.start()
+        state.start(operationID: UUID())
 
         XCTAssertTrue(state.isLoading)
         XCTAssertNil(state.errorMessage)
