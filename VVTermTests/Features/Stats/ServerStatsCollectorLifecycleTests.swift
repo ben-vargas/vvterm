@@ -9,6 +9,7 @@ private enum StatsConnectionTestError: Error {
 private actor StatsConnectionGate {
     struct Start: Equatable {
         let serverID: UUID
+        let credentialServerID: UUID
         let disconnectWhenDone: Bool
     }
 
@@ -23,11 +24,13 @@ private actor StatsConnectionGate {
     func run(
         client: SSHClient,
         serverID: UUID,
+        credentialServerID: UUID,
         disconnectWhenDone: Bool
     ) async throws {
         let clientID = ObjectIdentifier(client)
         starts[clientID] = Start(
             serverID: serverID,
+            credentialServerID: credentialServerID,
             disconnectWhenDone: disconnectWhenDone
         )
         startWaiters.removeValue(forKey: clientID)?.forEach { $0.resume() }
@@ -204,6 +207,34 @@ final class ServerStatsCollectorLifecycleTests: XCTestCase {
         await gate.succeed(client)
     }
 
+    func testOwnedCollectionUsesInjectedCredentialLoaderAndConnectionRunner() async throws {
+        let gate = StatsConnectionGate()
+        let factory = StatsClientFactory()
+        var loadedServerIDs: [UUID] = []
+        let collector = makeCollector(
+            factory: factory,
+            gate: gate,
+            loadCredentials: { server in
+                loadedServerIDs.append(server.id)
+                return Self.credentials(for: server)
+            }
+        )
+        let server = makeServer()
+
+        await collector.startCollecting(for: server)
+        let client = try XCTUnwrap(factory.clients.first)
+        await gate.waitUntilStarted(client)
+
+        XCTAssertEqual(loadedServerIDs, [server.id])
+        let start = await gate.start(for: client)
+        XCTAssertEqual(start?.credentialServerID, server.id)
+        XCTAssertEqual(start?.disconnectWhenDone, true)
+
+        collector.stopCollecting()
+        await gate.waitUntilCancelled(client)
+        await gate.succeed(client)
+    }
+
     func testStaleCompletionCannotMutateReplacementAttempt() async throws {
         let gate = StatsConnectionGate()
         let factory = StatsClientFactory()
@@ -237,17 +268,38 @@ final class ServerStatsCollectorLifecycleTests: XCTestCase {
 
     private func makeCollector(
         factory: StatsClientFactory,
-        gate: StatsConnectionGate
+        gate: StatsConnectionGate,
+        loadCredentials: ((Server) throws -> ServerCredentials)? = nil
     ) -> ServerStatsCollector {
-        ServerStatsCollector(
-            makeClient: { factory.makeClient() },
-            runWithConnection: { client, server, _, disconnectWhenDone, _ in
-                try await gate.run(
-                    client: client,
-                    serverID: server.id,
-                    disconnectWhenDone: disconnectWhenDone
-                )
-            }
+        let loadCredentials = loadCredentials ?? { Self.credentials(for: $0) }
+        return ServerStatsCollector(
+            dependencies: ServerStatsCollectorDependencies(
+                makeClient: { factory.makeClient() },
+                loadCredentials: loadCredentials,
+                runWithConnection: { client, server, credentials, disconnectWhenDone, _ in
+                    try await gate.run(
+                        client: client,
+                        serverID: server.id,
+                        credentialServerID: credentials.serverId,
+                        disconnectWhenDone: disconnectWhenDone
+                    )
+                },
+                makeAttemptID: UUID.init,
+                now: Date.init
+            )
+        )
+    }
+
+    nonisolated private static func credentials(for server: Server) -> ServerCredentials {
+        ServerCredentials(
+            serverId: server.id,
+            credentialBinding: nil,
+            password: nil,
+            privateKey: nil,
+            publicKey: nil,
+            passphrase: nil,
+            cloudflareClientID: nil,
+            cloudflareClientSecret: nil
         )
     }
 

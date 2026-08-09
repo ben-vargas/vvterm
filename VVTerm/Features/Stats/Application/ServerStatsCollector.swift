@@ -98,14 +98,6 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
 /// Main stats collector that uses a shared SSH connection when available
 @MainActor
 final class ServerStatsCollector: ObservableObject {
-    typealias ConnectionRunner = (
-        _ client: SSHClient,
-        _ server: Server,
-        _ credentials: ServerCredentials,
-        _ disconnectWhenDone: Bool,
-        _ operation: @escaping (SSHClient) async throws -> Void
-    ) async throws -> Void
-
     @Published var stats = ServerStats()
     @Published var cpuHistory: [StatsPoint] = []
     @Published var memoryHistory: [StatsPoint] = []
@@ -116,10 +108,9 @@ final class ServerStatsCollector: ObservableObject {
     @Published var dockerMemoryHistory: [StatsPoint] = []
     @Published private(set) var collectionState = ServerStatsCollectionState()
 
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "Stats")
+    private let logger = Logger(subsystem: "app.vivy.vvterm", category: "Stats")
     private let dockerCollector = DockerStatsCollector()
-    private let makeClient: @MainActor () -> SSHClient
-    private let runWithConnection: ConnectionRunner
+    private let dependencies: ServerStatsCollectorDependencies
 
     private enum ClientOwnership: Equatable {
         case owned
@@ -175,20 +166,8 @@ final class ServerStatsCollector: ObservableObject {
     var securityApproval: ServerSecurityApprovalRequest? { collectionState.securityApproval }
     var isDockerCollectionEnabled: Bool { activeAttempt?.collectDocker ?? false }
 
-    init(
-        makeClient: @escaping @MainActor () -> SSHClient = { SSHClient() },
-        runWithConnection: @escaping ConnectionRunner = { client, server, credentials, disconnectWhenDone, operation in
-            try await SSHConnectionOperationService.shared.runWithConnection(
-                using: client,
-                server: server,
-                credentials: credentials,
-                disconnectWhenDone: disconnectWhenDone,
-                operation: operation
-            )
-        }
-    ) {
-        self.makeClient = makeClient
-        self.runWithConnection = runWithConnection
+    init(dependencies: ServerStatsCollectorDependencies) {
+        self.dependencies = dependencies
     }
 
     // MARK: - Collection Control
@@ -216,7 +195,7 @@ final class ServerStatsCollector: ObservableObject {
         supersedeActiveAttempt()
 
         let attempt = CollectionAttempt(
-            id: UUID(),
+            id: dependencies.makeAttemptID(),
             serverID: server.id,
             client: client,
             ownership: ownership,
@@ -229,7 +208,7 @@ final class ServerStatsCollector: ObservableObject {
         // Get credentials
         let credentials: ServerCredentials
         do {
-            credentials = try KeychainManager.shared.getCredentials(for: server)
+            credentials = try dependencies.loadCredentials(server)
         } catch ServerCredentialAccessError.approvalRequired {
             finishCollection(
                 attemptID: attempt.id,
@@ -244,7 +223,18 @@ final class ServerStatsCollector: ObservableObject {
         // Connect in background
         let attemptID = attempt.id
         let disconnectWhenDone = attempt.ownership.disconnectWhenDone
-        let runWithConnection = self.runWithConnection
+        let runWithConnection = dependencies.runWithConnection
+        let collectConnection: ServerStatsConnectionOperation = { [weak self] connectedClient in
+            guard await self?.markCollectionConnected(attemptID: attemptID) == true else { return }
+
+            while !Task.isCancelled {
+                let shouldContinue = await self?.isCurrentCollectionAttempt(attemptID) == true
+                guard shouldContinue else { break }
+
+                await self?.collectStats(attemptID: attemptID, client: connectedClient)
+                try await Task.sleep(for: .seconds(2))
+            }
+        }
         let task = Task.detached(priority: .utility) { [weak self] in
             var failureMessage: String?
             do {
@@ -252,18 +242,9 @@ final class ServerStatsCollector: ObservableObject {
                     client,
                     server,
                     credentials,
-                    disconnectWhenDone
-                ) { connectedClient in
-                    guard await self?.markCollectionConnected(attemptID: attemptID) == true else { return }
-
-                    while !Task.isCancelled {
-                        let shouldContinue = await self?.isCurrentCollectionAttempt(attemptID) == true
-                        guard shouldContinue else { break }
-
-                        await self?.collectStats(attemptID: attemptID, client: connectedClient)
-                        try await Task.sleep(for: .seconds(2))
-                    }
-                }
+                    disconnectWhenDone,
+                    collectConnection
+                )
             } catch is CancellationError {
                 // A stopped or superseded attempt must not publish an error.
             } catch {
@@ -569,7 +550,7 @@ final class ServerStatsCollector: ObservableObject {
                 cpuThreads: systemInfo.cpuCores,
                 memoryTotal: 0,
                 gpus: [],
-                collectedAt: Date()
+                collectedAt: dependencies.now()
             )
         }
 
@@ -590,7 +571,7 @@ final class ServerStatsCollector: ObservableObject {
             return (activeAttempt.client, .owned)
         }
 
-        return (makeClient(), .owned)
+        return (dependencies.makeClient(), .owned)
     }
 
     private func supersedeActiveAttempt() {
