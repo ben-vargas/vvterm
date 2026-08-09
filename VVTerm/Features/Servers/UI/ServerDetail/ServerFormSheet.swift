@@ -43,6 +43,7 @@ struct ServerFormSheet: View {
     let workspace: Workspace?
     let server: Server?
     let prefill: ServerFormPrefill?
+    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     let onSave: (Server) -> Void
 
     @Environment(\.dismiss) var dismiss
@@ -57,7 +58,7 @@ struct ServerFormSheet: View {
     @State private var storedKeys: [SSHKeyEntry] = []
     @State private var selectedStoredKey: SSHKeyEntry?
     @State private var programmaticSSHKeyValue: String?
-    @State private var showingLocalDiscoverySheet = false
+    @State private var localDiscoveryPresentation: LocalDeviceDiscoveryPresentation?
     @State private var hasAuthorizedInitialEdit: Bool
 
     private let credentials: any ServerCredentialRepository
@@ -83,6 +84,7 @@ struct ServerFormSheet: View {
         server: Server? = nil,
         prefill: ServerFormPrefill? = nil,
         dependencies: ServerFormDependencies,
+        makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         onSave: @escaping (Server) -> Void
     ) {
         self.serverManager = serverManager
@@ -90,6 +92,7 @@ struct ServerFormSheet: View {
         self.workspace = workspace
         self.server = server
         self.prefill = prefill
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.credentials = dependencies.credentials
         let saveUseCase = ServerSaveUseCase(
             mutations: serverManager,
@@ -315,8 +318,8 @@ struct ServerFormSheet: View {
                 )
                 .adaptiveSoftScrollEdges()
             }
-            .sheet(isPresented: $showingLocalDiscoverySheet) {
-                LocalDeviceDiscoverySheet(manager: LocalSSHDiscoveryManager()) { discoveredHost in
+            .sheet(item: $localDiscoveryPresentation) { presentation in
+                LocalDeviceDiscoverySheet(manager: presentation.manager) { discoveredHost in
                     applyPrefill(ServerFormPrefill(discoveredHost: discoveredHost))
                 }
                 .adaptiveSoftScrollEdges()
@@ -533,7 +536,7 @@ struct ServerFormSheet: View {
                 #endif
 
             Button {
-                showingLocalDiscoverySheet = true
+                presentLocalDiscovery()
             } label: {
                 Label(String(localized: "Pick from Local Discovery..."), systemImage: "dot.radiowaves.left.and.right")
             }
@@ -990,6 +993,13 @@ struct ServerFormSheet: View {
             }
         )
     }
+
+    private func presentLocalDiscovery() {
+        guard localDiscoveryPresentation == nil else { return }
+        localDiscoveryPresentation = LocalDeviceDiscoveryPresentation(
+            makeManager: makeLocalDiscoveryManager
+        )
+    }
 }
 
 struct MoveServerSheet: View {
@@ -1270,15 +1280,4 @@ struct MoveServerSheet: View {
         Text(title)
         #endif
     }
-}
-
-// MARK: - Preview
-
-#Preview {
-    ServerFormSheet(
-        serverManager: ServerManager.shared,
-        workspace: nil,
-        dependencies: .live,
-        onSave: { _ in }
-    )
 }

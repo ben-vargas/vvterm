@@ -15,6 +15,9 @@ struct iOSContentView: View {
 
     let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
+    private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
+        LocalSSHDiscoveryManager()
+    }
     @StateObject private var serverManager = ServerManager.shared
     @ObservedObject private var tabManager: TerminalTabManager
     @StateObject private var viewTabConfig = ViewTabConfigurationManager.shared
@@ -60,6 +63,7 @@ struct iOSContentView: View {
                 tabManager: tabManager,
                 fileTabs: fileTabs,
                 fileBrowser: fileBrowser,
+                makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 selectedWorkspace: $selectedWorkspace,
                 selectedEnvironment: $selectedEnvironment,
                 onServerSelected: { server in
@@ -80,6 +84,7 @@ struct iOSContentView: View {
                         fileTabs: fileTabs,
                         fileBrowser: fileBrowser,
                         route: terminalRoute,
+                        makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                         onBack: { self.terminalRoute = nil }
                     )
                 }

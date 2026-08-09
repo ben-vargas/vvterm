@@ -11,6 +11,7 @@ struct ServerListScreen: View {
     @ObservedObject var tabManager: TerminalTabManager
     @ObservedObject var fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
+    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedEnvironment: ServerEnvironment?
     let onServerSelected: (Server) -> Void
@@ -82,6 +83,7 @@ struct ServerListScreen: View {
                     workspace: selectedWorkspace,
                     prefill: addServerPrefill,
                     dependencies: .live,
+                    makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     onSave: { _ in showingAddServer = false }
                 )
             }
@@ -121,6 +123,7 @@ struct ServerListScreen: View {
                     workspace: selectedWorkspace,
                     server: server,
                     dependencies: .live,
+                    makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     onSave: { updatedServer in
                         handleSavedServer(updatedServer, originalServer: server)
                         serverToEdit = nil

@@ -12,6 +12,9 @@ import AppKit
 struct ContentView: View {
     let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
+    private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
+        LocalSSHDiscoveryManager()
+    }
     @StateObject private var serverManager = ServerManager.shared
     @ObservedObject private var tabManager: TerminalTabManager
     @EnvironmentObject private var storeManager: StoreManager
@@ -116,6 +119,7 @@ struct ContentView: View {
                     fileTabManager: fileTabs,
                     serverManager: serverManager,
                     fileBrowser: fileBrowser,
+                    makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     server: server,
                     isZenModeEnabled: $isZenModeEnabled,
                     isSidebarVisible: isSidebarVisible,
@@ -259,6 +263,7 @@ struct ContentView: View {
                 ServerSidebarView(
                     serverManager: serverManager,
                     tabManager: tabManager,
+                    makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     selectedWorkspace: $selectedWorkspace,
                     selectedServer: $selectedServer
                 )
@@ -293,6 +298,7 @@ struct ContentView: View {
                         ServerSidebarView(
                             serverManager: serverManager,
                             tabManager: tabManager,
+                            makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                             selectedWorkspace: $selectedWorkspace,
                             selectedServer: $selectedServer
                         )

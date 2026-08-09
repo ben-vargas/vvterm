@@ -180,6 +180,7 @@ extension ConnectionTerminalContainer {
                     workspace: serverManager.workspaces.first { $0.id == editingServer.workspaceId },
                     server: editingServer,
                     dependencies: .live,
+                    makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     onSave: { _ in
                         serverToEdit = nil
                     }

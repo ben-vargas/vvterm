@@ -12,6 +12,7 @@ struct ConnectionTerminalContainer: View {
     @ObservedObject var fileTabManager: RemoteFileTabManager
     let serverManager: ServerManager
     let fileBrowser: RemoteFileBrowserStore
+    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     let server: Server
     @Binding var isZenModeEnabled: Bool
     let isSidebarVisible: Bool

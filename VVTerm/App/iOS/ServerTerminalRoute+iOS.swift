@@ -24,6 +24,7 @@ struct ServerTerminalRoute: View {
     let fileBrowser: RemoteFileBrowserStore
     let route: ServerTerminalNavigationRoute
     let onBack: () -> Void
+    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
 
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
@@ -50,6 +51,7 @@ struct ServerTerminalRoute: View {
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore,
         route: ServerTerminalNavigationRoute,
+        makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         onBack: @escaping () -> Void
     ) {
         self.tabManager = tabManager
@@ -57,6 +59,7 @@ struct ServerTerminalRoute: View {
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
         self.route = route
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onBack = onBack
         self._keyboardCoordinator = ObservedObject(wrappedValue: tabManager.keyboardCoordinator)
     }
@@ -167,6 +170,7 @@ struct ServerTerminalRoute: View {
                             workspace: serverManager.workspaces.first { $0.id == server.workspaceId },
                             server: server,
                             dependencies: .live,
+                            makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                             onSave: { _ in presentedRouteSheet = nil }
                         )
                     }
@@ -251,6 +255,7 @@ struct ServerTerminalRoute: View {
                 fileTabManager: fileTabs,
                 serverManager: serverManager,
                 fileBrowser: fileBrowser,
+                makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 server: server,
                 isZenModeEnabled: $isZenModeEnabled,
                 isSidebarVisible: false,

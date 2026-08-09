@@ -133,6 +133,7 @@ struct TerminalReconnectUITestHarness: View {
                         fileTabs: fileTabs,
                         fileBrowser: fileBrowser,
                         route: .active(serverId: server.id),
+                        makeLocalDiscoveryManager: { LocalSSHDiscoveryManager() },
                         onBack: {}
                     )
                 }

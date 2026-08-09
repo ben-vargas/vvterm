@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ServerSidebarView: View {
     let serverManager: ServerManager
+    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var stateStore: ServerStateStore
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedServer: Server?
@@ -16,7 +17,7 @@ struct ServerSidebarView: View {
 
     @State private var showingWorkspaceSwitcher = false
     @State private var showingAddServer = false
-    @State private var showingLocalDiscovery = false
+    @State private var localDiscoveryPresentation: LocalDeviceDiscoveryPresentation?
     @State private var showingSupport = false
     @State private var showingProUpgrade = false
     @State private var showingServerSearch = false
@@ -38,10 +39,12 @@ struct ServerSidebarView: View {
     init(
         serverManager: ServerManager,
         tabManager: TerminalTabManager,
+        makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         selectedWorkspace: Binding<Workspace?>,
         selectedServer: Binding<Server?>
     ) {
         self.serverManager = serverManager
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
         _tabManager = ObservedObject(wrappedValue: tabManager)
         _selectedWorkspace = selectedWorkspace
@@ -247,6 +250,7 @@ struct ServerSidebarView: View {
                 workspace: selectedWorkspace,
                 prefill: addServerPrefill,
                 dependencies: .live,
+                makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 onSave: { _ in showingAddServer = false }
             )
             .adaptiveSoftScrollEdges()
@@ -261,10 +265,9 @@ struct ServerSidebarView: View {
             )
             #endif
         }
-        .sheet(isPresented: $showingLocalDiscovery) {
-            LocalDeviceDiscoverySheet(manager: LocalSSHDiscoveryManager()) { discoveredHost in
+        .sheet(item: $localDiscoveryPresentation, onDismiss: resumeDiscoveredServerCreation) { presentation in
+            LocalDeviceDiscoverySheet(manager: presentation.manager) { discoveredHost in
                 queuedDiscoveryPrefill = ServerFormPrefill(discoveredHost: discoveredHost)
-                showingLocalDiscovery = false
             }
             .adaptiveSoftScrollEdges()
         }
@@ -274,6 +277,7 @@ struct ServerSidebarView: View {
                 workspace: selectedWorkspace,
                 server: server,
                 dependencies: .live,
+                makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 onSave: { updatedServer in
                     handleSavedServer(updatedServer, originalServer: server)
                     serverToEdit = nil
@@ -379,11 +383,6 @@ struct ServerSidebarView: View {
             source: .customEnvironment,
             isPresented: $showingCustomEnvironmentAlert
         )
-        .onChange(of: showingLocalDiscovery) { isPresented in
-            guard !isPresented, let queued = queuedDiscoveryPrefill else { return }
-            queuedDiscoveryPrefill = nil
-            presentAddServer(prefill: queued)
-        }
         .onChange(of: selectedWorkspace?.id) { _ in
             reconcileEnvironmentFilters()
             guard showingWorkspaceSwitcher else { return }
@@ -406,13 +405,13 @@ struct ServerSidebarView: View {
         }
         #if os(macOS)
         .focusedValue(\.openLocalSSHDiscovery, {
-            showingLocalDiscovery = true
+            presentLocalDiscovery()
         })
         // The sidebar is hosted in its own NSHostingController, so the
         // focusedValue above can't reach the scene Commands. Register the action
         // on the shell command bridge too; ContentView republishes it.
         .onAppear {
-            commandBridge.openLocalDiscovery = { showingLocalDiscovery = true }
+            commandBridge.openLocalDiscovery = presentLocalDiscovery
         }
         .onDisappear {
             commandBridge.openLocalDiscovery = nil
@@ -426,6 +425,19 @@ struct ServerSidebarView: View {
                 set: { if !$0 { lockedServerAlert = nil } }
             )
         )
+    }
+
+    private func presentLocalDiscovery() {
+        guard localDiscoveryPresentation == nil else { return }
+        localDiscoveryPresentation = LocalDeviceDiscoveryPresentation(
+            makeManager: makeLocalDiscoveryManager
+        )
+    }
+
+    private func resumeDiscoveredServerCreation() {
+        guard let queued = queuedDiscoveryPrefill else { return }
+        queuedDiscoveryPrefill = nil
+        presentAddServer(prefill: queued)
     }
 
     // MARK: - Server Controls (Filter + Search)
