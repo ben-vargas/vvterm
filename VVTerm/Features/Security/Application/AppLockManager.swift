@@ -17,10 +17,20 @@ nonisolated enum AppLockState: Equatable, Sendable {
 }
 
 nonisolated enum AppLockAuthenticationState: Equatable, Sendable {
+    nonisolated enum ProtectedServerAction: Equatable, Sendable {
+        case edit
+        case testConnection
+        case save
+        case delete
+        case approveCredentialEndpoint
+    }
+
     enum Purpose: Equatable, Sendable {
         case enableFullAppLock
+        case disableFullAppLock
         case unlockApp(lockGeneration: UUID)
         case unlockServer(serverID: UUID)
+        case protectedServerAction(serverID: UUID, action: ProtectedServerAction)
     }
 
     case idle
@@ -51,7 +61,7 @@ final class AppLockManager: ObservableObject {
     @Published private(set) var lastErrorMessage: String?
     @Published private(set) var biometricAvailability: BiometricAvailability
 
-    @Published var fullAppLockEnabled: Bool {
+    @Published private(set) var fullAppLockEnabled: Bool {
         didSet {
             defaults.set(fullAppLockEnabled, forKey: Keys.fullAppLockEnabled)
             if !fullAppLockEnabled {
@@ -143,6 +153,8 @@ final class AppLockManager: ObservableObject {
         guard enabled != fullAppLockEnabled else { return }
 
         if !enabled {
+            let reason = String(localized: "Authenticate to disable the VVTerm app lock")
+            guard await authenticate(reason: reason, purpose: .disableFullAppLock) else { return }
             fullAppLockEnabled = false
             return
         }
@@ -172,6 +184,40 @@ final class AppLockManager: ObservableObject {
         guard lockState == .locked(generation: lockGeneration) else { return false }
 
         lockState = .unlocked(at: Date())
+        lastErrorMessage = nil
+        return true
+    }
+
+    func authorizeProtectedServerAction(
+        _ server: Server,
+        action: AppLockAuthenticationState.ProtectedServerAction
+    ) async -> Bool {
+        guard server.requiresBiometricUnlock else { return true }
+
+        let actionName: String
+        switch action {
+        case .edit:
+            actionName = String(localized: "edit")
+        case .testConnection:
+            actionName = String(localized: "test")
+        case .save:
+            actionName = String(localized: "save")
+        case .delete:
+            actionName = String(localized: "delete")
+        case .approveCredentialEndpoint:
+            actionName = String(localized: "approve credentials for")
+        }
+
+        let reason = String(
+            format: String(localized: "Authenticate to %@ server %@"),
+            actionName,
+            server.name
+        )
+        guard await authenticate(
+            reason: reason,
+            purpose: .protectedServerAction(serverID: server.id, action: action)
+        ) else { return false }
+
         lastErrorMessage = nil
         return true
     }

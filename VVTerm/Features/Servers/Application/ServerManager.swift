@@ -1051,6 +1051,18 @@ final class ServerManager: ObservableObject {
     }
 
     func deleteServer(_ server: Server) async throws {
+        guard let storedServer = servers.first(where: { $0.id == server.id }) else { return }
+        guard await AppLockManager.shared.authorizeProtectedServerAction(
+            storedServer,
+            action: .delete
+        ) else {
+            throw VVTermError.authorizationRequired
+        }
+
+        try await deleteServerData(storedServer)
+    }
+
+    private func deleteServerData(_ server: Server) async throws {
         try keychain.deleteCredentials(for: server.id)
 
         removeKnownHostIfUnused(for: server)
@@ -1113,10 +1125,18 @@ final class ServerManager: ObservableObject {
     }
 
     func deleteWorkspace(_ workspace: Workspace) async throws {
-        // Delete all servers in workspace
         let workspaceServers = servers.filter { $0.workspaceId == workspace.id }
+        for server in workspaceServers where server.requiresBiometricUnlock {
+            guard await AppLockManager.shared.authorizeProtectedServerAction(
+                server,
+                action: .delete
+            ) else {
+                throw VVTermError.authorizationRequired
+            }
+        }
+
         for server in workspaceServers {
-            try await deleteServer(server)
+            try await deleteServerData(server)
         }
 
         if pendingBootstrapWorkspaceID == workspace.id {
@@ -1513,6 +1533,7 @@ enum VVTermError: LocalizedError {
     case moveNotAllowed(String)
     case connectionFailed(String)
     case authenticationFailed
+    case authorizationRequired
     case timeout
 
     var errorDescription: String? {
@@ -1528,6 +1549,8 @@ enum VVTermError: LocalizedError {
             return String(format: String(localized: "Connection failed: %@"), message)
         case .authenticationFailed:
             return String(localized: "Authentication failed")
+        case .authorizationRequired:
+            return String(localized: "Authorization is required")
         case .timeout:
             return String(localized: "Connection timed out")
         }

@@ -100,6 +100,78 @@ final class AppLockManagerTests: XCTestCase {
         XCTAssertEqual(authService.authenticateReasons.count, 1)
     }
 
+    func testDisableFullAppLockRequiresFreshAuthentication() async {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: "security.fullAppLockEnabled")
+        let authService = StubBiometricAuthService(
+            availabilityResult: .available(.faceID)
+        )
+        let manager = AppLockManager(defaults: defaults, authService: authService)
+
+        await manager.requestSetFullAppLockEnabled(false)
+
+        XCTAssertFalse(manager.fullAppLockEnabled)
+        XCTAssertEqual(authService.authenticateReasons.count, 1)
+    }
+
+    func testDisableFullAppLockDenialKeepsItEnabled() async {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: "security.fullAppLockEnabled")
+        let authService = StubBiometricAuthService(
+            availabilityResult: .available(.faceID)
+        )
+        authService.authenticateError = BiometricAuthError.cancelled
+        let manager = AppLockManager(defaults: defaults, authService: authService)
+
+        await manager.requestSetFullAppLockEnabled(false)
+
+        XCTAssertTrue(manager.fullAppLockEnabled)
+        XCTAssertEqual(authService.authenticateReasons.count, 1)
+    }
+
+    func testProtectedServerActionsAlwaysRequireFreshAuthentication() async {
+        let defaults = makeDefaults()
+        let authService = StubBiometricAuthService(
+            availabilityResult: .available(.touchID)
+        )
+        let manager = AppLockManager(defaults: defaults, authService: authService)
+        let server = Server(
+            workspaceId: UUID(),
+            name: "Protected",
+            host: "example.com",
+            username: "root",
+            requiresBiometricUnlock: true
+        )
+
+        let didAuthorizeEdit = await manager.authorizeProtectedServerAction(server, action: .edit)
+        let didAuthorizeSave = await manager.authorizeProtectedServerAction(server, action: .save)
+
+        XCTAssertTrue(didAuthorizeEdit)
+        XCTAssertTrue(didAuthorizeSave)
+        XCTAssertEqual(authService.authenticateReasons.count, 2)
+    }
+
+    func testProtectedServerActionDenialReturnsFalse() async {
+        let defaults = makeDefaults()
+        let authService = StubBiometricAuthService(
+            availabilityResult: .available(.faceID)
+        )
+        authService.authenticateError = BiometricAuthError.cancelled
+        let manager = AppLockManager(defaults: defaults, authService: authService)
+        let server = Server(
+            workspaceId: UUID(),
+            name: "Protected",
+            host: "example.com",
+            username: "root",
+            requiresBiometricUnlock: true
+        )
+
+        let didAuthorize = await manager.authorizeProtectedServerAction(server, action: .delete)
+
+        XCTAssertFalse(didAuthorize)
+        XCTAssertEqual(authService.authenticateReasons.count, 1)
+    }
+
     func testNewBackgroundLockRejectsPendingAuthenticationSuccess() async {
         let defaults = makeDefaults()
         defaults.set(true, forKey: "security.fullAppLockEnabled")

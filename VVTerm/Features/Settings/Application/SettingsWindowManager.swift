@@ -21,13 +21,15 @@ private struct LocalizedSettingsView: View {
 
     var body: some View {
         let locale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
-        SettingsView()
-            .modifier(AppearanceModifier())
-            .adaptiveSoftScrollEdges()
-            .environment(\.locale, locale)
-            .environmentObject(appLockManager)
-            .environmentObject(terminalThemeManager)
-            .environmentObject(terminalAccessoryPreferencesManager)
+        AppLockContainer {
+            SettingsView()
+                .modifier(AppearanceModifier())
+                .adaptiveSoftScrollEdges()
+                .environment(\.locale, locale)
+                .environmentObject(terminalThemeManager)
+                .environmentObject(terminalAccessoryPreferencesManager)
+        }
+        .environmentObject(appLockManager)
     }
 }
 
