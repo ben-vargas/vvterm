@@ -989,26 +989,7 @@ final class ServerManager: ObservableObject {
             updatedAt: Date()
         )
 
-        // Store credentials
-        if let password = credentials.password {
-            try keychain.storePassword(for: newServer.id, password: password)
-        }
-        if let sshKey = credentials.sshKey {
-            try keychain.storeSSHKey(
-                for: newServer.id,
-                privateKey: sshKey,
-                passphrase: credentials.sshPassphrase,
-                publicKey: credentials.publicKey
-            )
-        }
-        if let cloudflareClientID = credentials.cloudflareClientID,
-           let cloudflareClientSecret = credentials.cloudflareClientSecret {
-            try keychain.storeCloudflareServiceToken(
-                for: newServer.id,
-                clientID: cloudflareClientID,
-                clientSecret: cloudflareClientSecret
-            )
-        }
+        try keychain.storeCredentials(credentials, for: newServer)
 
         promotePendingBootstrapWorkspaceIfNeeded(for: newServer.workspaceId, reason: "adding a server")
         servers.append(newServer)

@@ -18,7 +18,7 @@ final class KeychainManager {
 
     // MARK: - Password Operations
 
-    func storePassword(for serverId: UUID, password: String) throws {
+    private func storePassword(for serverId: UUID, password: String) throws {
         let key = passwordKey(for: serverId)
         guard let data = password.data(using: .utf8) else {
             throw KeychainError.encodingFailed
@@ -27,7 +27,7 @@ final class KeychainManager {
         logger.info("Stored password for server \(serverId.uuidString)")
     }
 
-    func getPassword(for serverId: UUID) throws -> String? {
+    private func getPassword(for serverId: UUID) throws -> String? {
         let key = passwordKey(for: serverId)
 
         // Try store first
@@ -43,7 +43,7 @@ final class KeychainManager {
 
     // MARK: - SSH Key Operations
 
-    func storeSSHKey(for serverId: UUID, privateKey: Data, passphrase: String?, publicKey: Data? = nil) throws {
+    private func storeSSHKey(for serverId: UUID, privateKey: Data, passphrase: String?, publicKey: Data? = nil) throws {
         let keyKey = sshKeyKey(for: serverId)
         try store.set(privateKey, forKey: keyKey, iCloudSync: isSyncEnabled)
 
@@ -65,7 +65,7 @@ final class KeychainManager {
         logger.info("Stored SSH key for server \(serverId.uuidString)")
     }
 
-    func getSSHKey(for serverId: UUID) throws -> (key: Data, passphrase: String?, publicKey: Data?)? {
+    private func getSSHKey(for serverId: UUID) throws -> (key: Data, passphrase: String?, publicKey: Data?)? {
         let keyKey = sshKeyKey(for: serverId)
         let passphraseKey = sshPassphraseKey(for: serverId)
         let publicKeyKey = sshPublicKeyKey(for: serverId)
@@ -95,6 +95,11 @@ final class KeychainManager {
             return credentials
         }
 
+        guard try credentialBindingStatus(for: server) != .approvalRequired else {
+            logger.warning("Blocked credentials for a changed server endpoint: \(server.id.uuidString)")
+            throw ServerCredentialAccessError.approvalRequired
+        }
+
         switch server.authMethod {
         case .password:
             credentials.password = try getPassword(for: server.id)
@@ -121,9 +126,83 @@ final class KeychainManager {
         return credentials
     }
 
+    func storeCredentials(_ credentials: ServerCredentials, for server: Server) throws {
+        guard credentials.serverId == server.id else {
+            throw KeychainError.credentialServerMismatch
+        }
+
+        if server.connectionMode != .tailscale {
+            switch server.authMethod {
+            case .password:
+                if let password = credentials.password {
+                    try storePassword(for: server.id, password: password)
+                }
+            case .sshKey, .sshKeyWithPassphrase:
+                if let privateKey = credentials.privateKey {
+                    try storeSSHKey(
+                        for: server.id,
+                        privateKey: privateKey,
+                        passphrase: credentials.passphrase,
+                        publicKey: credentials.publicKey
+                    )
+                }
+            }
+        }
+
+        if server.connectionMode == .cloudflare,
+           server.cloudflareAccessMode == .serviceToken,
+           let clientID = credentials.cloudflareClientID,
+           let clientSecret = credentials.cloudflareClientSecret {
+            try storeCloudflareServiceToken(
+                for: server.id,
+                clientID: clientID,
+                clientSecret: clientSecret
+            )
+        } else {
+            deleteCloudflareServiceToken(for: server.id)
+        }
+
+        try approveCredentialUse(for: server)
+    }
+
+    func credentialBindingStatus(for server: Server) throws -> ServerCredentialBindingStatus {
+        let hasCredentials = try credentialKeys(for: server.id).contains { key in
+            try store.contains(key)
+        }
+        guard hasCredentials else { return .noCredentials }
+
+        let storedBinding: ServerCredentialBinding?
+        if let data = try store.get(credentialBindingKey(for: server.id)) {
+            storedBinding = try? JSONDecoder().decode(ServerCredentialBinding.self, from: data)
+        } else {
+            storedBinding = nil
+        }
+
+        return ServerCredentialBindingStatus.resolve(
+            storedBinding: storedBinding,
+            currentBinding: ServerCredentialBinding(server: server),
+            hasStoredCredentials: true
+        )
+    }
+
+    func approveCredentialUse(for server: Server) throws {
+        let hasCredentials = try credentialKeys(for: server.id).contains { key in
+            try store.contains(key)
+        }
+        guard hasCredentials else {
+            try? store.delete(credentialBindingKey(for: server.id))
+            return
+        }
+
+        let binding = ServerCredentialBinding(server: server)
+        let data = try JSONEncoder().encode(binding)
+        try store.set(data, forKey: credentialBindingKey(for: server.id), iCloudSync: isSyncEnabled)
+        logger.info("Approved credential endpoint for server \(server.id.uuidString)")
+    }
+
     // MARK: - Cloudflare Service Token
 
-    func storeCloudflareServiceToken(for serverId: UUID, clientID: String, clientSecret: String) throws {
+    private func storeCloudflareServiceToken(for serverId: UUID, clientID: String, clientSecret: String) throws {
         let idKey = cloudflareClientIDKey(for: serverId)
         let secretKey = cloudflareClientSecretKey(for: serverId)
 
@@ -137,7 +216,7 @@ final class KeychainManager {
         logger.info("Stored Cloudflare service token for server \(serverId.uuidString)")
     }
 
-    func getCloudflareServiceToken(for serverId: UUID) throws -> (clientID: String, clientSecret: String)? {
+    private func getCloudflareServiceToken(for serverId: UUID) throws -> (clientID: String, clientSecret: String)? {
         let idKey = cloudflareClientIDKey(for: serverId)
         let secretKey = cloudflareClientSecretKey(for: serverId)
 
@@ -151,7 +230,7 @@ final class KeychainManager {
         return (clientID: clientID, clientSecret: clientSecret)
     }
 
-    func deleteCloudflareServiceToken(for serverId: UUID) {
+    private func deleteCloudflareServiceToken(for serverId: UUID) {
         try? store.delete(cloudflareClientIDKey(for: serverId))
         try? store.delete(cloudflareClientSecretKey(for: serverId))
     }
@@ -165,6 +244,7 @@ final class KeychainManager {
         let publicKeyKey = sshPublicKeyKey(for: serverId)
         let cloudflareIDKey = cloudflareClientIDKey(for: serverId)
         let cloudflareSecretKey = cloudflareClientSecretKey(for: serverId)
+        let bindingKey = credentialBindingKey(for: serverId)
 
         try? store.delete(passwordKey)
         try? store.delete(keyKey)
@@ -172,6 +252,7 @@ final class KeychainManager {
         try? store.delete(publicKeyKey)
         try? store.delete(cloudflareIDKey)
         try? store.delete(cloudflareSecretKey)
+        try? store.delete(bindingKey)
 
         logger.info("Deleted credentials for server \(serverId.uuidString)")
     }
@@ -207,6 +288,21 @@ final class KeychainManager {
 
     private func cloudflareClientSecretKey(for serverId: UUID) -> String {
         "server.\(serverId.uuidString).cloudflare.clientsecret"
+    }
+
+    private func credentialBindingKey(for serverId: UUID) -> String {
+        "server.\(serverId.uuidString).credential-binding.v1"
+    }
+
+    private func credentialKeys(for serverId: UUID) -> [String] {
+        [
+            passwordKey(for: serverId),
+            sshKeyKey(for: serverId),
+            sshPassphraseKey(for: serverId),
+            sshPublicKeyKey(for: serverId),
+            cloudflareClientIDKey(for: serverId),
+            cloudflareClientSecretKey(for: serverId)
+        ]
     }
 
     // MARK: - Reusable SSH Keys (Keychain Library)

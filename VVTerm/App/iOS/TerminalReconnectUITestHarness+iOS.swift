@@ -255,11 +255,9 @@ struct TerminalReconnectUITestHarness: View {
             if !usesColdRelaunchHarness || seedsColdRelaunchHarness {
                 try KeychainManager.shared.deleteCredentials(for: server.id)
             }
-            try KeychainManager.shared.storeSSHKey(
-                for: server.id,
-                privateKey: privateKey,
-                passphrase: nil
-            )
+            var credentials = ServerCredentials(serverId: server.id)
+            credentials.privateKey = privateKey
+            try KeychainManager.shared.storeCredentials(credentials, for: server)
             if usesNavigationHarness {
                 serverManager.workspaces = [
                     Workspace(

@@ -70,6 +70,25 @@ final class KeychainStore: @unchecked Sendable {
         return item as? Data
     }
 
+    nonisolated func contains(_ key: String) throws -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
+        ]
+
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        if status == errSecItemNotFound {
+            return false
+        }
+        guard status == errSecSuccess else {
+            throw KeychainError.unhandled(status)
+        }
+        return true
+    }
+
     nonisolated func delete(_ key: String) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -110,6 +129,7 @@ enum KeychainError: LocalizedError {
     case encodingFailed
     case decodingFailed
     case itemNotFound
+    case credentialServerMismatch
 
     var errorDescription: String? {
         switch self {
@@ -121,6 +141,8 @@ enum KeychainError: LocalizedError {
             return "Failed to decode data from keychain"
         case .itemNotFound:
             return "Item not found in keychain"
+        case .credentialServerMismatch:
+            return "Credentials do not belong to this server"
         }
     }
 }
