@@ -7,7 +7,6 @@ struct KeychainSettingsView: View {
     @State private var storedKeys: [SSHKeyEntry] = []
     @State private var showingAddKey = false
     @State private var showingGenerateKey = false
-    @State private var showingDeleteConfirmation = false
     @State private var keyToDelete: SSHKeyEntry?
     @State var keyToShowDetails: SSHKeyEntry?
     @State private var error: String?
@@ -81,7 +80,10 @@ struct KeychainSettingsView: View {
         }
         .alert(
             "Delete SSH Key",
-            isPresented: $showingDeleteConfirmation,
+            isPresented: Binding(
+                get: { keyToDelete != nil },
+                set: { if !$0 { keyToDelete = nil } }
+            ),
             presenting: keyToDelete
         ) { key in
             Button("Cancel", role: .cancel) {}
@@ -168,7 +170,6 @@ struct KeychainSettingsView: View {
 
         Button(role: .destructive) {
             keyToDelete = key
-            showingDeleteConfirmation = true
         } label: {
             Label("Delete", systemImage: "trash")
         }
