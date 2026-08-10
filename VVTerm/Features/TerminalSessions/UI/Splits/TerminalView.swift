@@ -342,7 +342,8 @@ struct TerminalTabView: View {
     private var shouldShowVoiceOverlay: Bool {
         guard isSelected, hasFocusedTerminal, showingVoiceRecording else { return false }
         #if os(iOS)
-        return tabManager.paneState(for: tab.focusedPaneId)?.connectionState.isConnected == true
+        return tabManager.sessionState
+            .paneState(for: tab.focusedPaneId)?.connectionState.isConnected == true
         #else
         return true
         #endif
@@ -563,7 +564,7 @@ struct TerminalPaneView: View {
     @AppStorage(TerminalDefaults.sshAutoReconnectKey) private var autoReconnectEnabled = true
 
     private var paneState: TerminalPaneState? {
-        tabManager.paneState(for: paneId)
+        tabManager.sessionState.paneState(for: paneId)
     }
 
     private var connectionState: ConnectionState {

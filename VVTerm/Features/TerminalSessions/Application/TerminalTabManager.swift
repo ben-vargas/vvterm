@@ -9,15 +9,8 @@
 //
 
 import Foundation
-import SwiftUI
 import Combine
 import os.log
-
-#if os(macOS)
-import AppKit
-#elseif os(iOS)
-import UIKit
-#endif
 
 nonisolated enum TerminalVoicePresentationState: Equatable, Sendable {
     nonisolated enum Event: Equatable, Sendable {
@@ -394,8 +387,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func selectView(_ view: ConnectionViewTabID, for serverId: UUID) {
-        connectionViewSelections.setSelection(view, for: serverId)
-        sessionState.requestPersistence()
+        sessionState.selectView(view, for: serverId)
     }
 
     func paneState(for paneId: UUID) -> TerminalPaneState? {
@@ -407,7 +399,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func workingDirectoryCandidate(for serverId: UUID) -> String? {
-        if let selectedTab = selectedTab(for: serverId),
+        if let selectedTab = sessionState.selectedTab(for: serverId),
            let directory = workingDirectory(for: selectedTab.focusedPaneId) {
             return directory
         }
@@ -436,7 +428,7 @@ final class TerminalTabManager: ObservableObject {
             throw VVTermError.authenticationFailed
         }
 
-        let sourcePaneId = selectedTab(for: server.id)?.focusedPaneId
+        let sourcePaneId = sessionState.selectedTab(for: server.id)?.focusedPaneId
         let sourceWorkingDirectory = sourcePaneId
             .flatMap { sessionState.paneState(for: $0)?.workingDirectory }
         let tab = sessionState.createTab(
@@ -460,7 +452,7 @@ final class TerminalTabManager: ObservableObject {
         _ tab: TerminalTab,
         intent: TerminalTeardownIntent
     ) {
-        guard let currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }) else {
+        guard let currentTab = sessionState.tab(id: tab.id, for: tab.serverId) else {
             logger.warning("closeTab: tab not found \(tab.id.uuidString, privacy: .public)")
             return
         }
@@ -488,7 +480,7 @@ final class TerminalTabManager: ObservableObject {
         for serverId: UUID,
         intent: TerminalTeardownIntent
     ) {
-        let serverTabs = tabs(for: serverId)
+        let serverTabs = sessionState.tabs(for: serverId)
         for tab in serverTabs {
             closeTab(tab, intent: intent)
         }
@@ -498,7 +490,7 @@ final class TerminalTabManager: ObservableObject {
     func disconnectServer(_ serverId: UUID) {
         closeAllTabs(for: serverId, intent: .explicitServerDisconnect)
         sessionState.removeServer(serverId)
-        connectionViewSelections.setSelection(nil, for: serverId)
+        sessionState.selectView(nil, for: serverId)
         sessionState.persistNow()
         logger.info("Disconnected all terminal tabs for server \(serverId.uuidString, privacy: .public)")
     }
@@ -702,15 +694,6 @@ final class TerminalTabManager: ObservableObject {
         splitRight(tab: tab, paneId: paneId, hasProAccess: hasProAccess)
     }
 
-    /// Split a pane vertically (top / bottom)
-    func splitVertical(
-        tab: TerminalTab,
-        paneId: UUID,
-        hasProAccess: Bool
-    ) -> UUID? {
-        splitDown(tab: tab, paneId: paneId, hasProAccess: hasProAccess)
-    }
-
     func splitRight(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
         splitPane(
             tab: tab,
@@ -807,15 +790,6 @@ final class TerminalTabManager: ObservableObject {
         }
     }
 
-    /// Update a tab in the tabs array
-    func updateTab(_ tab: TerminalTab) {
-        guard sessionState.replaceTab(tab) else { return }
-        if !tab.hasSplits {
-            splitZoomedTabIds.remove(tab.id)
-        }
-        tmuxCoordinator.updateFocus(for: tab)
-    }
-
     func focusPane(in tab: TerminalTab, paneId: UUID) {
         guard let updatedTab = sessionState.focusPane(in: tab, paneId: paneId) else { return }
         tmuxCoordinator.updateFocus(for: updatedTab)
@@ -841,7 +815,7 @@ final class TerminalTabManager: ObservableObject {
 
     func isSplitZoomed(in tab: TerminalTab) -> Bool {
         guard splitZoomedTabIds.contains(tab.id),
-              let currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }) else {
+              let currentTab = sessionState.tab(id: tab.id, for: tab.serverId) else {
             return false
         }
         return currentTab.hasSplits
@@ -851,7 +825,7 @@ final class TerminalTabManager: ObservableObject {
         _ command: TerminalSplitCommand,
         in tab: TerminalTab
     ) -> Bool {
-        guard let currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }),
+        guard let currentTab = sessionState.tab(id: tab.id, for: tab.serverId),
               currentTab.allPaneIds.contains(currentTab.focusedPaneId) else {
             return false
         }
@@ -911,7 +885,7 @@ final class TerminalTabManager: ObservableObject {
         hasProAccess: Bool
     ) -> TerminalSplitCommandOutcome {
         guard canPerformSplitCommand(command, in: tab),
-              let currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }) else {
+              let currentTab = sessionState.tab(id: tab.id, for: tab.serverId) else {
             return .unavailable
         }
 
@@ -988,7 +962,7 @@ final class TerminalTabManager: ObservableObject {
         in tab: TerminalTab,
         direction: TerminalSplitFocusDirection
     ) -> TerminalSplitCommandOutcome {
-        guard let currentTab = tabs(for: tab.serverId).first(where: { $0.id == tab.id }),
+        guard let currentTab = sessionState.tab(id: tab.id, for: tab.serverId),
               let paneId = currentTab.layout?.neighboringPane(
                   from: currentTab.focusedPaneId,
                   direction: direction
@@ -1673,7 +1647,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func preferredSSHClient(for serverId: UUID, allowPendingStart: Bool) -> SSHClient? {
-        if let selectedTab = selectedTab(for: serverId) {
+        if let selectedTab = sessionState.selectedTab(for: serverId) {
             let preferredPaneIds = [selectedTab.focusedPaneId, selectedTab.rootPaneId] + selectedTab.allPaneIds
             for paneId in preferredPaneIds {
                 if let client = transportRegistry.registeredClient(for: paneId) {
@@ -1682,7 +1656,7 @@ final class TerminalTabManager: ObservableObject {
             }
         }
 
-        let serverTabs = tabs(for: serverId)
+        let serverTabs = sessionState.tabs(for: serverId)
         for tab in serverTabs {
             for paneId in tab.allPaneIds {
                 if let client = transportRegistry.registeredClient(for: paneId) {
@@ -1732,7 +1706,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func selectedTransport(for serverId: UUID) -> ShellTransport {
-        if let selectedTab = selectedTab(for: serverId),
+        if let selectedTab = sessionState.selectedTab(for: serverId),
            let state = sessionState.paneState(for: selectedTab.focusedPaneId) {
             return state.activeTransport
         }
@@ -1891,7 +1865,10 @@ final class TerminalTabManager: ObservableObject {
 
         switch reason {
         case .tmuxEnded(.managed):
-            guard let tab = tabs(for: paneState.serverId).first(where: { $0.id == paneState.tabId }) else {
+            guard let tab = sessionState.tab(
+                id: paneState.tabId,
+                for: paneState.serverId
+            ) else {
                 return
             }
             closePane(tab: tab, paneId: paneId, intent: .remoteSessionEnded)

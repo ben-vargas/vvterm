@@ -414,7 +414,7 @@ extension ConnectionTerminalContainer {
             selectedTerminalTabId: selectedTabIdBinding,
             terminalTabTitle: { tabManager.displayTitle(for: $0) },
             paneState: { tab in
-                tabManager.paneState(for: tab.focusedPaneId)
+                tabManager.sessionState.paneState(for: tab.focusedPaneId)
             },
             fileTabs: serverFileTabs,
             selectedFileTabId: selectedFileTabIdBinding,
@@ -557,7 +557,9 @@ extension ConnectionTerminalContainer {
     }
 
     private var zenIndicatorColor: Color {
-        guard let state = selectedTab.flatMap({ tabManager.paneState(for: $0.focusedPaneId) }) else {
+        guard let state = selectedTab.flatMap({
+            tabManager.sessionState.paneState(for: $0.focusedPaneId)
+        }) else {
             if selectedView == .files {
                 return serverFileTabs.isEmpty ? .secondary : .green
             }

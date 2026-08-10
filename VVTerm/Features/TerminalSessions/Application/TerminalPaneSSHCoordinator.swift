@@ -109,7 +109,8 @@ final class TerminalPaneSSHCoordinator {
         let failureOutput = self.failureOutput
         let transport = SSHConnectionRunnerTransport.live(client: sshClient)
         let initialTerminalState = Self.initialTerminalState(for: terminal)
-        let hasEstablishedConnection = tabManager.paneState(for: paneId)?.hasEstablishedConnection == true
+        let hasEstablishedConnection = tabManager.sessionState
+            .paneState(for: paneId)?.hasEstablishedConnection == true
         guard tabManager.startSSHConnectionTask(
             for: paneId,
             server: server,

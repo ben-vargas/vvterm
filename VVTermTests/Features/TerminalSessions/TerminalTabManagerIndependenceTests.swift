@@ -89,8 +89,8 @@ struct TerminalTabManagerIndependenceTests {
         )
         first.registerTerminalSurface(terminal, for: tab.rootPaneId)
 
-        #expect(first.paneState(for: tab.rootPaneId)?.connectionState == .connected)
-        #expect(second.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
+        #expect(first.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .connected)
+        #expect(second.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
         #expect(first.activeSSHRoute(for: tab.rootPaneId)?.client === client)
         #expect(second.activeSSHRoute(for: tab.rootPaneId) == nil)
         #expect(first.tmuxCoordinator.attachment(for: tab.rootPaneId)?.sessionName == "vvterm-isolated")
@@ -116,7 +116,7 @@ struct TerminalTabManagerIndependenceTests {
         let secondTab = TerminalTab(serverId: serverId, title: "Second")
 
         install(firstTab, in: first)
-        first.selectView(.files, for: serverId)
+        first.sessionState.selectView(.files, for: serverId)
         first.tmuxCoordinator.setAttachment(
             for: firstTab.rootPaneId,
             sessionName: "first-session",
@@ -124,7 +124,7 @@ struct TerminalTabManagerIndependenceTests {
         )
 
         install(secondTab, in: second)
-        second.selectView(.stats, for: serverId)
+        second.sessionState.selectView(.stats, for: serverId)
 
         first.persistAndRestoreSnapshotForTesting()
         second.persistAndRestoreSnapshotForTesting()
@@ -132,16 +132,16 @@ struct TerminalTabManagerIndependenceTests {
         let restoredFirst = makeManager(snapshotStore: firstStore)
         let restoredSecond = makeManager(snapshotStore: secondStore)
 
-        #expect(restoredFirst.selectedTabId(for: serverId) == firstTab.id)
-        #expect(restoredFirst.selectedView(for: serverId) == .files)
-        #expect(restoredFirst.paneState(for: firstTab.rootPaneId) != nil)
-        #expect(restoredFirst.paneState(for: secondTab.rootPaneId) == nil)
+        #expect(restoredFirst.sessionState.selectedTabId(for: serverId) == firstTab.id)
+        #expect(restoredFirst.connectionViewSelections.selection(for: serverId) == .files)
+        #expect(restoredFirst.sessionState.paneState(for: firstTab.rootPaneId) != nil)
+        #expect(restoredFirst.sessionState.paneState(for: secondTab.rootPaneId) == nil)
         #expect(restoredFirst.tmuxCoordinator.attachment(for: firstTab.rootPaneId)?.sessionName == "first-session")
 
-        #expect(restoredSecond.selectedTabId(for: serverId) == secondTab.id)
-        #expect(restoredSecond.selectedView(for: serverId) == .stats)
-        #expect(restoredSecond.paneState(for: secondTab.rootPaneId) != nil)
-        #expect(restoredSecond.paneState(for: firstTab.rootPaneId) == nil)
+        #expect(restoredSecond.sessionState.selectedTabId(for: serverId) == secondTab.id)
+        #expect(restoredSecond.connectionViewSelections.selection(for: serverId) == .stats)
+        #expect(restoredSecond.sessionState.paneState(for: secondTab.rootPaneId) != nil)
+        #expect(restoredSecond.sessionState.paneState(for: firstTab.rootPaneId) == nil)
         #expect(restoredSecond.tmuxCoordinator.attachment(for: firstTab.rootPaneId) == nil)
     }
 

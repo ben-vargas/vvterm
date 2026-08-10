@@ -168,6 +168,12 @@ final class TerminalSessionStateStore: ObservableObject {
         }
     }
 
+    func selectView(_ selection: ConnectionViewTabID?, for serverId: UUID) {
+        guard connectionViewSelections.selection(for: serverId) != selection else { return }
+        connectionViewSelections.setSelection(selection, for: serverId)
+        schedulePersist()
+    }
+
     @discardableResult
     func removeTab(_ tab: TerminalTab) -> TerminalTab? {
         guard let currentTab = self.tab(id: tab.id, for: tab.serverId),
@@ -303,7 +309,8 @@ final class TerminalSessionStateStore: ObservableObject {
         node: TerminalSplitNode,
         ratio: Double
     ) -> TerminalTab? {
-        guard var currentTab = self.tab(id: tab.id, for: tab.serverId),
+        guard ratio.isFinite,
+              var currentTab = self.tab(id: tab.id, for: tab.serverId),
               let currentLayout = currentTab.layout else { return nil }
         currentTab.layout = currentLayout.replacingNode(
             node,

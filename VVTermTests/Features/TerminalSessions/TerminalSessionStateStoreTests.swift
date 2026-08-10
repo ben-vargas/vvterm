@@ -39,7 +39,7 @@ struct TerminalSessionStateStoreTests {
         pane.connectionState = .connected
 
         first.install(tab, paneState: pane, select: true)
-        firstSelections.setSelection(.files, for: tab.serverId)
+        first.selectView(.files, for: tab.serverId)
         first.persistNow()
 
         #expect(first.tabs(for: tab.serverId) == [tab])
@@ -70,8 +70,7 @@ struct TerminalSessionStateStoreTests {
 
         source.install(tab, paneState: pane, select: true)
         source.selectTab(staleSelectedTabId, for: tab.serverId)
-        sourceSelections.setSelection(.stats, for: tab.serverId)
-        source.requestPersistence()
+        source.selectView(.stats, for: tab.serverId)
         source.persistNow()
 
         let restoredSelections = ConnectionViewSelectionStore()
@@ -154,6 +153,45 @@ struct TerminalSessionStateStoreTests {
         #expect(paneState?.paneId == splitPaneId)
         #expect(store.paneState(for: splitPaneId) == nil)
         #expect(updatedTab.allPaneIds == [tab.rootPaneId])
+    }
+
+    @Test
+    func nonFiniteSplitRatioCannotReplaceValidLayout() throws {
+        let store = makeStore(
+            snapshot: StateStoreSnapshotMemory(),
+            selections: ConnectionViewSelectionStore()
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Split")
+        store.install(
+            tab,
+            paneState: TerminalPaneState(
+                paneId: tab.rootPaneId,
+                tabId: tab.id,
+                serverId: tab.serverId
+            ),
+            select: true
+        )
+        let splitPaneId = try #require(store.createSplitPane(
+            in: tab,
+            paneId: tab.rootPaneId,
+            placement: .right,
+            tmuxStatus: .off
+        ))
+        let splitTab = try #require(store.tab(id: tab.id, for: tab.serverId))
+        let layout = try #require(splitTab.layout)
+
+        #expect(store.updateSplitRatio(
+            in: splitTab,
+            node: layout,
+            ratio: .infinity
+        ) == nil)
+        #expect(store.updateSplitRatio(
+            in: splitTab,
+            node: layout,
+            ratio: .nan
+        ) == nil)
+        #expect(store.tab(id: tab.id, for: tab.serverId)?.layout == layout)
+        #expect(store.paneState(for: splitPaneId) != nil)
     }
 
     private func makeStore(

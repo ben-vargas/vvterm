@@ -217,7 +217,7 @@ struct TerminalTabManagerDependencyIsolationTests {
         } catch {
             #expect(firstEffects.authorizationRequests.count == 1)
         }
-        #expect(first.serverIdsWithTabs().isEmpty)
+        #expect(first.sessionState.serverIdsWithTabs.isEmpty)
         #expect(secondEffects.authorizationRequests.isEmpty)
 
         let tab = TerminalTab(serverId: UUID(), title: "First manager")

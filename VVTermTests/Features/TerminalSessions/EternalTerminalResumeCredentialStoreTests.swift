@@ -168,7 +168,7 @@ struct EternalTerminalResumeCredentialStoreTests {
             await manager.beginApplicationTermination().value
 
             #expect(try store.credentials(for: secondTab.rootPaneId) == savedCredentials)
-            #expect(manager.tabs(for: serverId).map(\.id) == [secondTab.id])
+            #expect(manager.sessionState.tabs(for: serverId).map(\.id) == [secondTab.id])
 
             manager.persistAndRestoreSnapshotForTesting()
             #expect(

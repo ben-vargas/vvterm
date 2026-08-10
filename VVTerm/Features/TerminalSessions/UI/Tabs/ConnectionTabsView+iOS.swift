@@ -107,7 +107,7 @@ extension ConnectionTerminalContainer {
                 tabs: serverTabs,
                 selectedTabId: selectedTabIdBinding,
                 titleForTab: { tabManager.displayTitle(for: $0) },
-                paneState: { tabManager.paneState(for: $0.focusedPaneId) },
+                paneState: { tabManager.sessionState.paneState(for: $0.focusedPaneId) },
                 onClose: { tabManager.closeTab($0) }
             )
         }
@@ -144,7 +144,7 @@ extension ConnectionTerminalContainer {
                 terminalTabs: serverTabs,
                 selectedTerminalTabId: selectedTabIdBinding,
                 terminalTabTitle: { tabManager.displayTitle(for: $0) },
-                paneState: { tabManager.paneState(for: $0.focusedPaneId) },
+                paneState: { tabManager.sessionState.paneState(for: $0.focusedPaneId) },
                 onCloseTerminalTab: { tabManager.closeTab($0) },
                 fileTabs: serverFileTabs,
                 selectedFileTabId: selectedFileTabIdBinding,

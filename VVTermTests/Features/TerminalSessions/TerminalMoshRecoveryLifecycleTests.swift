@@ -87,7 +87,7 @@ struct TerminalMoshRecoveryLifecycleTests {
         await manager.beginApplicationTermination().value
 
         #expect(recovery.deletedPaneIds == [closedTab.rootPaneId])
-        #expect(manager.tabs(for: serverId).map(\.id) == [preservedTab.id])
+        #expect(manager.sessionState.tabs(for: serverId).map(\.id) == [preservedTab.id])
     }
 
     private func install(_ tab: TerminalTab, in manager: TerminalTabManager) {
