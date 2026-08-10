@@ -8,6 +8,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var tabManager: TerminalTabManager?
     private weak var serverManager: ServerManager?
     private weak var appLockManager: AppLockManager?
+    private var lifecycleDependencies: AppLifecycleDependencies?
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.VivyTerm",
         category: "Lifecycle"
@@ -16,7 +17,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func configure(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
-        appLockManager: AppLockManager
+        appLockManager: AppLockManager,
+        lifecycleDependencies: AppLifecycleDependencies
     ) {
         if let currentManager = self.tabManager {
             precondition(currentManager === tabManager, "AppDelegate received a different terminal manager")
@@ -30,6 +32,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.tabManager = tabManager
         self.serverManager = serverManager
         self.appLockManager = appLockManager
+        self.lifecycleDependencies = lifecycleDependencies
     }
 
     private var configuredTabManager: TerminalTabManager {
@@ -53,9 +56,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return appLockManager
     }
 
+    private var configuredLifecycleDependencies: AppLifecycleDependencies {
+        guard let lifecycleDependencies else {
+            preconditionFailure("AppDelegate must be configured with lifecycle dependencies")
+        }
+        return lifecycleDependencies
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let subscribeToRemoteChanges = configuredLifecycleDependencies.subscribeToRemoteChanges
         Task {
-            await CloudKitManager.shared.subscribeToChanges()
+            await subscribeToRemoteChanges()
         }
         NSApplication.shared.registerForRemoteNotifications()
 
@@ -90,7 +101,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info(
             "Application became active monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
         )
-        NetworkMonitor.shared.refreshCurrentPath()
+        configuredLifecycleDependencies.refreshNetwork()
         configuredTabManager.handleMacRecoverySignal(.applicationActivated)
         guard SyncSettings.isEnabled else { return }
 
@@ -161,7 +172,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshNetworkAndHandleWake() {
-        NetworkMonitor.shared.refreshCurrentPath()
+        configuredLifecycleDependencies.refreshNetwork()
         configuredTabManager.handleMacRecoverySignal(.wake)
     }
 }

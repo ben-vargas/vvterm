@@ -32,6 +32,31 @@ struct VVTermApp: App {
         let statsPreferencesStore = PreferencesStore(dependencies: .live)
         let serverVolumeVisibilityStore = ServerVolumeVisibilityStore.live
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: .standard)
+        let cloudKitManager = CloudKitManager.shared
+        let networkMonitor = NetworkMonitor.shared
+        #if os(iOS)
+        let liveActivityManager = LiveActivityManager.shared
+        let appLifecycleDependencies = AppLifecycleDependencies(
+            subscribeToRemoteChanges: {
+                await cloudKitManager.subscribeToChanges()
+            },
+            refreshNetwork: {
+                networkMonitor.refreshCurrentPath()
+            },
+            endLiveActivitiesForApplicationTermination: {
+                liveActivityManager.endForApplicationTermination()
+            }
+        )
+        #else
+        let appLifecycleDependencies = AppLifecycleDependencies(
+            subscribeToRemoteChanges: {
+                await cloudKitManager.subscribeToChanges()
+            },
+            refreshNetwork: {
+                networkMonitor.refreshCurrentPath()
+            }
+        )
+        #endif
         _tabManager = StateObject(wrappedValue: tabManager)
         _storeManager = StateObject(wrappedValue: storeManager)
         _appLockManager = StateObject(wrappedValue: appLockManager)
@@ -69,7 +94,8 @@ struct VVTermApp: App {
         appDelegate.configure(
             tabManager: tabManager,
             serverManager: serverManager,
-            appLockManager: appLockManager
+            appLockManager: appLockManager,
+            lifecycleDependencies: appLifecycleDependencies
         )
         #if os(macOS)
         MacConnectionToolbarController.shared.configure(tabManager: tabManager)

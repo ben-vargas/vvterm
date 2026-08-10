@@ -1616,7 +1616,12 @@ struct TerminalTabManagerLifecycleTests {
             appDelegate.configure(
                 tabManager: manager,
                 serverManager: serverManager,
-                appLockManager: appLockManager
+                appLockManager: appLockManager,
+                lifecycleDependencies: AppLifecycleDependencies(
+                    subscribeToRemoteChanges: {},
+                    refreshNetwork: {},
+                    endLiveActivitiesForApplicationTermination: { true }
+                )
             )
             #expect(appDelegate.handleApplicationWillTerminate())
 

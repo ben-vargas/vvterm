@@ -25,11 +25,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private weak var tabManager: TerminalTabManager?
     private weak var serverManager: ServerManager?
     private weak var appLockManager: AppLockManager?
+    private var lifecycleDependencies: AppLifecycleDependencies?
 
     func configure(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
-        appLockManager: AppLockManager
+        appLockManager: AppLockManager,
+        lifecycleDependencies: AppLifecycleDependencies
     ) {
         if let currentManager = self.tabManager {
             precondition(currentManager === tabManager, "AppDelegate received a different terminal manager")
@@ -43,6 +45,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         self.tabManager = tabManager
         self.serverManager = serverManager
         self.appLockManager = appLockManager
+        self.lifecycleDependencies = lifecycleDependencies
     }
 
     private var configuredTabManager: TerminalTabManager {
@@ -66,12 +69,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         return appLockManager
     }
 
+    private var configuredLifecycleDependencies: AppLifecycleDependencies {
+        guard let lifecycleDependencies else {
+            preconditionFailure("AppDelegate must be configured with lifecycle dependencies")
+        }
+        return lifecycleDependencies
+    }
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        let subscribeToRemoteChanges = configuredLifecycleDependencies.subscribeToRemoteChanges
         Task {
-            await CloudKitManager.shared.subscribeToChanges()
+            await subscribeToRemoteChanges()
         }
         application.registerForRemoteNotifications()
         NotificationCenter.default.addObserver(
@@ -101,7 +112,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         guard notificationBelongsToConnectedApplicationScene(notification) else { return }
 
         handleSceneDidBecomeActive(
-            refreshNetwork: { NetworkMonitor.shared.refreshCurrentPath() },
+            refreshNetwork: configuredLifecycleDependencies.refreshNetwork,
             resume: { queueResumableTerminalResume() }
         )
 
@@ -147,7 +158,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     @discardableResult
     func handleApplicationWillTerminate() -> Bool {
         configuredTabManager.beginApplicationTermination()
-        return LiveActivityManager.shared.endForApplicationTermination()
+        return configuredLifecycleDependencies.endLiveActivitiesForApplicationTermination()
     }
 
     @objc
