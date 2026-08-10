@@ -74,11 +74,11 @@ struct MacTerminalRecoveryPolicyTests {
         (ConnectionState.connecting, false, true),
         (.reconnecting(attempt: 1), true, true),
         (.disconnected, true, true),
-        (.failed("stale"), true, true),
+        (.failed(terminalExternalFailure("stale")), true, true),
         (.connected, true, false),
         (.idle, true, false),
         (.disconnected, false, false),
-        (.failed("initial"), false, false),
+        (.failed(terminalExternalFailure("initial")), false, false),
     ])
     func offlinePreparationCoversRecoverableStates(
         connectionState: ConnectionState,
@@ -98,7 +98,7 @@ struct MacTerminalRecoveryPolicyTests {
         for state in [
             ConnectionState.connected,
             .reconnecting(attempt: 1),
-            .failed("unrecoverable"),
+            .failed(terminalExternalFailure("unrecoverable")),
         ] {
             #expect(
                 MacTerminalRecoveryPolicy.readyStrategy(
@@ -191,7 +191,7 @@ struct MacTerminalRecoveryPolicyTests {
         )
         #expect(
             !MacTerminalRecoveryPolicy.hasVerifiedLiveTransport(
-                connectionState: .failed("stale"),
+                connectionState: .failed(terminalExternalFailure("stale")),
                 activeTransport: .mosh,
                 hasEternalTerminalRuntime: false,
                 hasShellOwnership: true,

@@ -107,7 +107,11 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
         case .connected:
             .connected
         case .failed:
-            .failed("Connection timed out")
+            .failed(.external(
+                message: "Connection timed out",
+                retryDisposition: .automatic,
+                requiredAction: nil
+            ))
         }
     }
 

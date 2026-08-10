@@ -586,12 +586,6 @@ struct TerminalPaneView: View {
         ServerCredentialBinding(server: server)
     }
 
-    private var isHostKeyApprovalRequired: Bool {
-        guard case .failed(let error) = connectionState else { return false }
-        return error == SSHError.hostKeyApprovalRequired.localizedDescription
-            || error.contains("host key approval is required")
-    }
-
     private var showingSecurityApproval: Binding<Bool> {
         Binding(
             get: { securityApprovalRequest != nil },
@@ -703,8 +697,7 @@ struct TerminalPaneView: View {
             isAwaitingTmuxSelection: isAwaitingTmuxSelection,
             terminalExists: terminalExists,
             isReady: isReady,
-            disconnectedMessage: disconnectedStatusMessage,
-            isHostKeyVerificationFailure: isHostKeyApprovalRequired
+            disconnectedMessage: disconnectedStatusMessage
         )
     }
 
@@ -1206,7 +1199,7 @@ struct TerminalPaneView: View {
 
             tabManager.updatePaneState(
                 paneId,
-                connectionState: .failed(String(localized: "Connection timed out. Please retry."))
+                connectionState: .failed(.reconnectTimedOut)
             )
         }
     }

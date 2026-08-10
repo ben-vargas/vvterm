@@ -136,19 +136,17 @@ nonisolated final class AppServerConnectionTester: ServerConnectionTesting, @unc
     }
 
     private func failure(for error: Error, server: Server) -> ServerConnectionTestFailure {
-        let baseMessage = server.connectionMode == .eternalTerminal
-            ? EternalTerminalErrorPresentation.message(
-                for: error,
+        let reason: ServerConnectionTestFailureReason
+        if server.connectionMode == .eternalTerminal {
+            reason = .eternalTerminal(
+                failure: EternalTerminalVendorErrorMapper.failure(for: error),
                 host: server.host,
                 port: server.eternalTerminalPort
             )
-            : error.localizedDescription
-        let message: String
-        if server.connectionMode == .tailscale {
-            let reminder = String(localized: "This app currently supports direct tailnet connections only (no userspace proxy fallback).")
-            message = baseMessage.contains(reminder) ? baseMessage : "\(baseMessage)\n\(reminder)"
+        } else if server.connectionMode == .tailscale {
+            reason = .tailscale(error.localizedDescription)
         } else {
-            message = baseMessage
+            reason = .message(error.localizedDescription)
         }
 
         let requiresCloudflareOverrides: Bool
@@ -171,7 +169,7 @@ nonisolated final class AppServerConnectionTester: ServerConnectionTesting, @unc
         }
 
         return ServerConnectionTestFailure(
-            reason: .message(message),
+            reason: reason,
             requiresCloudflareOverrides: requiresCloudflareOverrides,
             hostKeyChallenge: hostKeyChallenge
         )

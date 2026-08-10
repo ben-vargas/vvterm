@@ -290,15 +290,7 @@ nonisolated enum EternalTerminalVendorErrorMapper {
     }
 }
 
-extension EternalTerminalErrorPresentation {
-    nonisolated static func message(for error: Error, host: String, port: Int) -> String {
-        message(
-            for: EternalTerminalVendorErrorMapper.failure(for: error),
-            host: host,
-            port: port
-        )
-    }
-
+extension EternalTerminalFailureAnalytics {
     nonisolated static func analyticsCategory(for error: Error) -> String {
         analyticsCategory(
             for: EternalTerminalVendorErrorMapper.failure(for: error)

@@ -34,7 +34,8 @@ enum ActiveConnectionPresentationStatus: Equatable {
         case .connecting: .connecting
         case .connected: .connected
         case .reconnecting(let attempt): .reconnecting(attempt: attempt)
-        case .failed(let message): .failed(message)
+        case .failed(let failure):
+            .failed(TerminalConnectionFailurePresentation.message(for: failure))
         }
     }
 

@@ -7,6 +7,6 @@ final class ConnectionStateDomainTests: XCTestCase {
         XCTAssertFalse(ConnectionState.disconnected.isConnected)
         XCTAssertTrue(ConnectionState.connecting.isConnecting)
         XCTAssertTrue(ConnectionState.reconnecting(attempt: 2).isConnecting)
-        XCTAssertFalse(ConnectionState.failed("boom").isConnecting)
+        XCTAssertFalse(ConnectionState.failed(terminalExternalFailure("boom")).isConnecting)
     }
 }

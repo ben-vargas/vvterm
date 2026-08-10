@@ -190,7 +190,10 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
             server: server,
             credentials: credentials,
             tabManager: tabManager,
-            richPasteUIModel: richPasteUIModel
+            richPasteUIModel: richPasteUIModel,
+            sshFailureOutput: { failure in
+                TerminalConnectionFailurePresentation.ansiSSHErrorData(for: failure)
+            }
         )
     }
 }

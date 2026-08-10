@@ -427,9 +427,7 @@ final class TerminalTabManager: ObservableObject {
     @discardableResult
     func openTab(for server: Server) async throws -> TerminalTab {
         if tabOpensInFlight.contains(server.id) {
-            throw VVTermError.connectionFailed(
-                String(localized: "A tab is already opening for this server.")
-            )
+            throw TerminalTabOpeningError.alreadyOpening
         }
         tabOpensInFlight.insert(server.id)
         defer { tabOpensInFlight.remove(server.id) }
@@ -679,7 +677,7 @@ final class TerminalTabManager: ObservableObject {
         }
         updatePaneState(
             paneId,
-            connectionState: .failed(String(localized: "Connection timed out. Please retry."))
+            connectionState: .failed(.reconnectTimedOut)
         )
     }
 
@@ -1625,9 +1623,9 @@ final class TerminalTabManager: ObservableObject {
                     reason: reason
                 )
             },
-            handleFailure: { [weak self] error in
+            handleFailure: { [weak self] failure in
                 guard ownsConnection() else { return }
-                self?.handleConnectionFailure(for: paneId, error: error)
+                self?.handleConnectionFailure(for: paneId, failure: failure)
             },
             workingDirectory: { [weak self] in
                 guard let self, ownsConnection(), self.shouldApplyWorkingDirectory(for: paneId) else {
@@ -1852,14 +1850,15 @@ final class TerminalTabManager: ObservableObject {
         reconnectCoordinator.connectionStateDidChange(for: paneId)
     }
 
-    func handleConnectionFailure(for paneId: UUID, error: Error) {
-        let requiresUserAction = (error as? SSHError).map {
-            !$0.allowsAutomaticReconnectRetry
-        } ?? false
+    func handleConnectionFailure(
+        for paneId: UUID,
+        failure: TerminalConnectionFailure
+    ) {
+        let requiresUserAction = !failure.allowsAutomaticReconnectRetry
         if requiresUserAction, sessionState.paneState(for: paneId)?.disconnectReason != nil {
             sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = nil }
         }
-        updatePaneState(paneId, connectionState: .failed(error.localizedDescription))
+        updatePaneState(paneId, connectionState: .failed(failure))
     }
 
     func handleShellEnd(
@@ -1911,7 +1910,7 @@ final class TerminalTabManager: ObservableObject {
             tmuxCoordinator.updateStatus(.unknown, for: paneId)
             updatePaneState(
                 paneId,
-                connectionState: .failed(String(localized: "Unable to start tmux session."))
+                connectionState: .failed(.tmuxStartupFailed)
             )
 
         case .tmuxEnded(.external):

@@ -5,7 +5,7 @@ struct TerminalLiveActivityPolicyTests {
     @Test
     func inactiveSessionsEndTheActivity() {
         let snapshot = TerminalLiveActivityPolicy.snapshot(
-            for: [.disconnected, .failed("Timed out"), .idle]
+            for: [.disconnected, .failed(terminalExternalFailure("Timed out")), .idle]
         )
 
         #expect(snapshot == nil)
@@ -14,7 +14,7 @@ struct TerminalLiveActivityPolicyTests {
     @Test
     func activeSessionCountExcludesInactiveSessions() {
         let snapshot = TerminalLiveActivityPolicy.snapshot(
-            for: [.connected, .connecting, .disconnected, .failed("Closed")]
+            for: [.connected, .connecting, .disconnected, .failed(terminalExternalFailure("Closed"))]
         )
 
         #expect(

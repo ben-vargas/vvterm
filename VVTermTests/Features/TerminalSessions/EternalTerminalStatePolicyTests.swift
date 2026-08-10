@@ -67,14 +67,18 @@ struct EternalTerminalStatePolicyTests {
     @Test
     func permanentRecoveryFailureRequiresANewSession() {
         let state = EternalTerminalStatePolicy.connectionState(
-            for: .failed(.sessionUnrecoverable("history expired")),
+            for: .failed(.sessionUnrecoverable),
             host: "example.com",
             port: 2022
         )
 
-        #expect(state == .failed("The Eternal Terminal session can no longer recover. Reconnect to start a new session."))
+        #expect(state == .failed(.eternalTerminal(
+            failure: .sessionUnrecoverable,
+            host: "example.com",
+            port: 2022
+        )))
         #expect(
-            EternalTerminalErrorPresentation.analyticsCategory(
+            EternalTerminalFailureAnalytics.analyticsCategory(
                 for: EternalTerminalSessionFailure.sessionUnrecoverable
             ) == "recovery"
         )
@@ -82,7 +86,7 @@ struct EternalTerminalStatePolicyTests {
 
     @Test
     func transportFailureIncludesTheConfiguredEndpoint() {
-        let message = EternalTerminalErrorPresentation.message(
+        let message = eternalTerminalFailureMessage(
             for: EternalTerminalSessionFailure.transport,
             host: "et.example.com",
             port: 22022
@@ -113,7 +117,7 @@ struct EternalTerminalStatePolicyTests {
 
     @Test
     func missingBootstrapMarkerIncludesTheSanitizedHostResponse() {
-        let message = EternalTerminalErrorPresentation.message(
+        let message = eternalTerminalFailureMessage(
             for: EternalTerminalSessionFailure.bootstrapResponse(
                 "sh: etterminal: command not found"
             ),
@@ -127,7 +131,7 @@ struct EternalTerminalStatePolicyTests {
 
     @Test
     func unavailableETDaemonHasActionableServiceGuidance() {
-        let message = EternalTerminalErrorPresentation.message(
+        let message = eternalTerminalFailureMessage(
             for: EternalTerminalSessionFailure.bootstrapResponse(
                 "Error: Connection error communicating with et daemon: No such file or directory."
             ),
@@ -163,7 +167,7 @@ struct EternalTerminalStatePolicyTests {
             powerShellExecutable: "pwsh"
         )
         let compatibility = EternalTerminalHostCompatibility(environment: environment)
-        let message = EternalTerminalErrorPresentation.message(
+        let message = eternalTerminalFailureMessage(
             for: EternalTerminalSessionFailure.bootstrapResponse(
                 compatibility.bootstrapDiagnostic ?? ""
             ),
@@ -186,7 +190,7 @@ struct EternalTerminalStatePolicyTests {
             powerShellExecutable: nil
         )
         let compatibility = EternalTerminalHostCompatibility(environment: environment)
-        let message = EternalTerminalErrorPresentation.message(
+        let message = eternalTerminalFailureMessage(
             for: EternalTerminalSessionFailure.bootstrapResponse(
                 compatibility.bootstrapDiagnostic ?? ""
             ),
@@ -216,4 +220,18 @@ struct EternalTerminalStatePolicyTests {
         #expect(!invocation.contains(command))
         #expect(invocation.count < 100)
     }
+}
+
+private nonisolated func eternalTerminalFailureMessage(
+    for failure: EternalTerminalSessionFailure,
+    host: String,
+    port: Int
+) -> String {
+    TerminalConnectionFailurePresentation.message(
+        for: .eternalTerminal(
+            failure: failure,
+            host: host,
+            port: port
+        )
+    )
 }

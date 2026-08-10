@@ -10,6 +10,7 @@ final class TerminalPaneSSHCoordinator {
     let tabManager: TerminalTabManager
 
     private let richPasteRuntime: TerminalRichPasteRuntime
+    private let failureOutput: @MainActor @Sendable (TerminalConnectionFailure) -> Data?
     private let transportWriteQueue = TerminalTransportWriteQueue()
     private var lastTerminalSize: (cols: Int, rows: Int, pixels: TerminalPixelSize?) = (0, 0, nil)
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "SSHPane")
@@ -20,13 +21,15 @@ final class TerminalPaneSSHCoordinator {
         credentials: ServerCredentials,
         sshClient: SSHClient,
         tabManager: TerminalTabManager,
-        richPasteUIModel: TerminalRichPasteUIModel
+        richPasteUIModel: TerminalRichPasteUIModel,
+        failureOutput: @escaping @MainActor @Sendable (TerminalConnectionFailure) -> Data?
     ) {
         self.paneId = paneId
         self.server = server
         self.credentials = credentials
         self.sshClient = sshClient
         self.tabManager = tabManager
+        self.failureOutput = failureOutput
         self.richPasteRuntime = .terminalPane(
             paneId: paneId,
             sshClient: sshClient,
@@ -103,6 +106,7 @@ final class TerminalPaneSSHCoordinator {
         let server = self.server
         let credentials = self.credentials
         let logger = self.logger
+        let failureOutput = self.failureOutput
         let transport = SSHConnectionRunnerTransport.live(client: sshClient)
         let initialTerminalState = Self.initialTerminalState(for: terminal)
         let hasEstablishedConnection = tabManager.paneState(for: paneId)?.hasEstablishedConnection == true
@@ -125,10 +129,9 @@ final class TerminalPaneSSHCoordinator {
                         terminal.receiveTerminalOutput(data)
                         return true
                     },
-                    reportFailure: { [weak terminal] error in
+                    reportFailure: { [weak terminal] failure in
                         guard context.isCurrent() else { return }
-                        let message = "\r\n\u{001B}[31mSSH Error: \(error.localizedDescription)\u{001B}[0m\r\n"
-                        if let data = message.data(using: .utf8) {
+                        if let data = failureOutput(failure) {
                             terminal?.receiveTerminalOutput(data)
                         }
                     }
@@ -153,7 +156,7 @@ final class TerminalPaneSSHCoordinator {
         hasEstablishedConnection: Bool,
         logger: Logger,
         writeOutput: @MainActor @escaping @Sendable (Data) -> Bool,
-        reportFailure: @MainActor @escaping @Sendable (Error) -> Void
+        reportFailure: @MainActor @escaping @Sendable (TerminalConnectionFailure) -> Void
     ) async {
         await SSHConnectionRunner.run(
             server: server,
@@ -204,8 +207,9 @@ final class TerminalPaneSSHCoordinator {
             onProcessExit: context.handleShellEnd,
             onFailure: { error in
                 guard context.isCurrent() else { return }
-                reportFailure(error)
-                context.handleFailure(error)
+                let failure = TerminalConnectionFailure.transport(error)
+                reportFailure(failure)
+                context.handleFailure(failure)
             }
         )
     }

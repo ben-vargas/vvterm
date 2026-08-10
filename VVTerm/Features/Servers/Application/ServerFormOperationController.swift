@@ -3,6 +3,12 @@ import Foundation
 
 nonisolated enum ServerConnectionTestFailureReason: Equatable, Sendable {
     case message(String)
+    case tailscale(String)
+    case eternalTerminal(
+        failure: EternalTerminalSessionFailure,
+        host: String,
+        port: Int
+    )
     case hostKeyApprovalExpired
 }
 

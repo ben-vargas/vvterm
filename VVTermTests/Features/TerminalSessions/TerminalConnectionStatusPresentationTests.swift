@@ -43,7 +43,7 @@ struct TerminalConnectionStatusPresentationTests {
     @Test
     func automaticReconnectHidesTransientFailedActionSheetBetweenRetryBatches() {
         let presentation = resolve(
-            connectionState: .failed("Connection timed out"),
+            connectionState: .failed(terminalExternalFailure("Connection timed out")),
             hasEstablishedConnection: true,
             automaticReconnectAllowed: true,
             terminalExists: true,
@@ -69,12 +69,12 @@ struct TerminalConnectionStatusPresentationTests {
         #expect(TerminalAutoReconnectPolicy.shouldScheduleRetry(
             automaticReconnectAllowed: true,
             hasEstablishedConnection: true,
-            connectionState: .failed("Temporary transport failure")
+            connectionState: .failed(terminalExternalFailure("Temporary transport failure"))
         ))
         #expect(!TerminalAutoReconnectPolicy.shouldScheduleRetry(
             automaticReconnectAllowed: false,
             hasEstablishedConnection: true,
-            connectionState: .failed("Authentication failed")
+            connectionState: .failed(terminalExternalFailure("Authentication failed"))
         ))
     }
 
@@ -99,7 +99,7 @@ struct TerminalConnectionStatusPresentationTests {
     @Test
     func reconnectPreparationHidesPreviousFailureSheet() {
         let presentation = resolve(
-            connectionState: .failed("Connection timed out"),
+            connectionState: .failed(terminalExternalFailure("Connection timed out")),
             hasEstablishedConnection: true,
             isReconnectPreparationInFlight: true,
             terminalExists: true,
@@ -209,7 +209,7 @@ struct TerminalConnectionStatusPresentationTests {
             automaticReconnectAllowed: true,
             reconnectInFlight: false,
             hasEstablishedConnection: true,
-            connectionState: .failed("Network path was not ready")
+            connectionState: .failed(terminalExternalFailure("Network path was not ready"))
         )
 
         #expect(shouldReconnect)
@@ -225,7 +225,7 @@ struct TerminalConnectionStatusPresentationTests {
             automaticReconnectAllowed: true,
             reconnectInFlight: false,
             hasEstablishedConnection: false,
-            connectionState: .failed("Authentication failed")
+            connectionState: .failed(terminalExternalFailure("Authentication failed"))
         )
 
         #expect(!shouldReconnect)
@@ -376,8 +376,11 @@ struct TerminalConnectionStatusPresentationTests {
     @Test
     func hostKeyFailureEnablesReplacementAction() {
         let presentation = resolve(
-            connectionState: .failed("Host key verification failed"),
-            isHostKeyVerificationFailure: true
+            connectionState: .failed(terminalExternalFailure(
+                "Host key verification failed",
+                retryDisposition: .manual,
+                requiredAction: .approveHostKey
+            ))
         )
 
         #expect(
@@ -521,8 +524,7 @@ struct TerminalConnectionStatusPresentationTests {
         isAwaitingTmuxSelection: Bool = false,
         terminalExists: Bool = true,
         isReady: Bool = true,
-        disconnectedMessage: String? = nil,
-        isHostKeyVerificationFailure: Bool = false
+        disconnectedMessage: String? = nil
     ) -> TerminalConnectionStatusPresentation {
         .resolve(
             credentialLoadErrorMessage: credentialLoadErrorMessage,
@@ -534,8 +536,7 @@ struct TerminalConnectionStatusPresentationTests {
             isAwaitingTmuxSelection: isAwaitingTmuxSelection,
             terminalExists: terminalExists,
             isReady: isReady,
-            disconnectedMessage: disconnectedMessage,
-            isHostKeyVerificationFailure: isHostKeyVerificationFailure
+            disconnectedMessage: disconnectedMessage
         )
     }
 }

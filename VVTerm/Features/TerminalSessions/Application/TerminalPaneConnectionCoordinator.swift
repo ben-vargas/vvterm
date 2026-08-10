@@ -23,7 +23,8 @@ final class TerminalPaneConnectionCoordinator {
         server: Server,
         credentials: ServerCredentials,
         tabManager: TerminalTabManager,
-        richPasteUIModel: TerminalRichPasteUIModel
+        richPasteUIModel: TerminalRichPasteUIModel,
+        sshFailureOutput: @escaping @MainActor @Sendable (TerminalConnectionFailure) -> Data?
     ) {
         self.tabManager = tabManager
         if server.connectionMode == .eternalTerminal {
@@ -40,7 +41,8 @@ final class TerminalPaneConnectionCoordinator {
                 credentials: credentials,
                 sshClient: SSHClient(),
                 tabManager: tabManager,
-                richPasteUIModel: richPasteUIModel
+                richPasteUIModel: richPasteUIModel,
+                failureOutput: sshFailureOutput
             ))
         }
     }

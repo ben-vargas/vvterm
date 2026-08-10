@@ -1239,7 +1239,7 @@ struct TerminalTabManagerLifecycleTests {
             #expect(manager.tabs(for: tab.serverId) == [tab])
             #expect(
                 manager.paneState(for: tab.rootPaneId)?.connectionState
-                    == .failed(String(localized: "Unable to start tmux session."))
+                    == .failed(.tmuxStartupFailed)
             )
             #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .unknown)
             #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == nil)
@@ -1292,7 +1292,10 @@ struct TerminalTabManagerLifecycleTests {
                 tab.rootPaneId,
                 connectionState: .reconnecting(attempt: 1)
             )
-            manager.handleConnectionFailure(for: tab.rootPaneId, error: SSHError.timeout)
+            manager.handleConnectionFailure(
+                for: tab.rootPaneId,
+                failure: .transport(SSHError.timeout)
+            )
 
             #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
             guard case .failed = manager.paneState(for: tab.rootPaneId)?.connectionState else {
@@ -1319,7 +1322,7 @@ struct TerminalTabManagerLifecycleTests {
             )
             manager.handleConnectionFailure(
                 for: tab.rootPaneId,
-                error: UnclassifiedReconnectError()
+                failure: .transport(UnclassifiedReconnectError())
             )
 
             #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
@@ -1339,7 +1342,7 @@ struct TerminalTabManagerLifecycleTests {
             manager.handleShellEnd(for: tab.rootPaneId, reason: .transportEnded)
             manager.handleConnectionFailure(
                 for: tab.rootPaneId,
-                error: SSHError.authenticationFailed
+                failure: .transport(SSHError.authenticationFailed)
             )
 
             #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == nil)

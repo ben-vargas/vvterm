@@ -40,7 +40,7 @@ struct LiveActivityManagerTests {
 
         manager.refresh(with: [.connected, .idle])
         await waitUntil { controller.reconciledTargets.count == 1 }
-        manager.refresh(with: [.disconnected, .failed("offline")])
+        manager.refresh(with: [.disconnected, .failed(terminalExternalFailure("offline"))])
         await waitUntil { controller.reconciledTargets.count == 2 }
 
         #expect(

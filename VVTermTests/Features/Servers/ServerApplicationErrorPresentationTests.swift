@@ -27,6 +27,45 @@ struct ServerApplicationErrorPresentationTests {
     }
 
     @Test
+    func tailscaleReminderIsAppendedExactlyOnce() {
+        let reminder = String(localized: "This app currently supports direct tailnet connections only (no userspace proxy fallback).")
+        let withoutReminder = ServerConnectionTestFailure(
+            reason: .tailscale("Authentication failed"),
+            requiresCloudflareOverrides: false,
+            hostKeyChallenge: nil
+        )
+        let withReminder = ServerConnectionTestFailure(
+            reason: .tailscale("Authentication failed\n\(reminder)"),
+            requiresCloudflareOverrides: false,
+            hostKeyChallenge: nil
+        )
+
+        #expect(withoutReminder.message == "Authentication failed\n\(reminder)")
+        #expect(withReminder.message == "Authentication failed\n\(reminder)")
+    }
+
+    @Test
+    func eternalTerminalFailureUsesTheTerminalPresentationCatalog() {
+        let failure = ServerConnectionTestFailure(
+            reason: .eternalTerminal(
+                failure: .transport,
+                host: "et.example.com",
+                port: 22022
+            ),
+            requiresCloudflareOverrides: false,
+            hostKeyChallenge: nil
+        )
+
+        let expected = String(
+            format: String(localized: "Could not reach etserver at %@:%d. Verify etserver is running and TCP port %d is open."),
+            "et.example.com",
+            22022,
+            22022
+        )
+        #expect(failure.message == expected)
+    }
+
+    @Test
     func mapsEveryVVTermErrorToItsExactDescription() {
         let mappings: [(VVTermError, String)] = [
             (

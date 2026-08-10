@@ -281,7 +281,7 @@ struct TerminalReconnectCoordinatorTests {
             automaticReconnectAllowed: true
         )
         fixture.facts[paneId] = .init(
-            connectionState: .failed("temporary"),
+            connectionState: .failed(terminalExternalFailure("temporary")),
             hasEstablishedConnection: true
         )
         coordinator?.connectionStateDidChange(for: paneId)

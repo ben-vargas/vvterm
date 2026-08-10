@@ -64,6 +64,33 @@ struct TerminalSSHConnectionContext {
     let updateTitle: @MainActor @Sendable (String) -> Void
     let hasOtherRegistrations: @MainActor @Sendable () async -> Bool
     let handleShellEnd: @MainActor @Sendable (_ shellId: UUID, _ reason: TerminalShellEndReason) -> Void
-    let handleFailure: @MainActor @Sendable (Error) -> Void
+    let handleFailure: @MainActor @Sendable (TerminalConnectionFailure) -> Void
     let workingDirectory: @MainActor @Sendable () -> String?
+}
+
+extension TerminalConnectionFailure {
+    static func transport(_ error: Error) -> Self {
+        let message = error.localizedDescription
+        guard let sshError = error as? SSHError else {
+            return .external(
+                message: message,
+                retryDisposition: .automatic,
+                requiredAction: message.contains("host key approval is required")
+                    ? .approveHostKey
+                    : nil
+            )
+        }
+
+        let requiredAction: TerminalConnectionRequiredAction? = switch sshError {
+        case .hostKeyApprovalRequired:
+            .approveHostKey
+        default:
+            nil
+        }
+        return .external(
+            message: message,
+            retryDisposition: sshError.allowsAutomaticReconnectRetry ? .automatic : .manual,
+            requiredAction: requiredAction
+        )
+    }
 }
