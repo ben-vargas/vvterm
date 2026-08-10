@@ -69,6 +69,7 @@ class GhosttyRenderingSetup {
     func setupSurface(
         view: NSView,
         ghosttyApp: ghostty_app_t,
+        callbackContext: Ghostty.CallbackContext<GhosttyTerminalView>,
         worktreePath: String,
         initialBounds: NSRect,
         window: NSWindow?,
@@ -84,7 +85,7 @@ class GhosttyRenderingSetup {
         surfaceConfig.platform.macos.nsview = Unmanaged.passUnretained(view).toOpaque()
 
         // Set userdata
-        surfaceConfig.userdata = Unmanaged.passUnretained(view).toOpaque()
+        surfaceConfig.userdata = callbackContext.userdata
 
         // Set scale factor for retina displays
         surfaceConfig.scale_factor = Double(window?.backingScaleFactor ?? 2.0)
@@ -159,6 +160,7 @@ class GhosttyRenderingSetup {
     func setupSurface(
         view: UIView,
         ghosttyApp: ghostty_app_t,
+        callbackContext: Ghostty.CallbackContext<GhosttyTerminalView>,
         worktreePath: String,
         initialBounds: CGRect,
         paneId: String? = nil,
@@ -173,7 +175,7 @@ class GhosttyRenderingSetup {
         surfaceConfig.platform.ios.uiview = Unmanaged.passUnretained(view).toOpaque()
 
         // Set userdata
-        surfaceConfig.userdata = Unmanaged.passUnretained(view).toOpaque()
+        surfaceConfig.userdata = callbackContext.userdata
 
         // Set scale factor for retina displays
         // Use contentScaleFactor which we set in GhosttyTerminalView.init to UIScreen.main.scale

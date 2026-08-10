@@ -70,6 +70,9 @@ extension Ghostty {
         private var activeSurfaces: [Ghostty.SurfaceReference] = []
         private var surfaceConfigCache: [SurfaceConfigCacheKey: ghostty_config_t] = [:]
 
+        /// Keeps runtime callback userdata valid for the native app lifetime.
+        private var runtimeCallbackContext: Ghostty.CallbackContext<App>?
+
         // MARK: - Initialization
 
         private var didStart = false
@@ -138,11 +141,16 @@ extension Ghostty {
             #endif
 
             // Create runtime config with callbacks
+            let callbackContext = Ghostty.CallbackContext(owner: self)
+            runtimeCallbackContext = callbackContext
             var runtime_cfg = ghostty_runtime_config_s(
-                userdata: Unmanaged.passUnretained(self).toOpaque(),
+                userdata: callbackContext.userdata,
                 supports_selection_clipboard: supportsSelectionClipboard,
                 wakeup_cb: { userdata in App.wakeup(userdata) },
-                action_cb: { app, target, action in App.action(app!, target: target, action: action) },
+                action_cb: { app, target, action in
+                    guard let app else { return false }
+                    return App.action(app, target: target, action: action)
+                },
                 read_clipboard_cb: { userdata, loc, state in App.readClipboard(userdata, location: loc, state: state) },
                 confirm_read_clipboard_cb: { userdata, str, state, request in App.confirmReadClipboard(userdata, string: str, state: state, request: request) },
                 write_clipboard_cb: { userdata, loc, content, count, confirm in
@@ -154,6 +162,8 @@ extension Ghostty {
             // Create config and load Aizen terminal settings
             guard let config = ghostty_config_new() else {
                 Ghostty.logger.critical("ghostty_config_new failed")
+                callbackContext.invalidate()
+                runtimeCallbackContext = nil
                 readiness = .error
                 return
             }
@@ -168,6 +178,8 @@ extension Ghostty {
             guard let app = ghostty_app_new(&runtime_cfg, config) else {
                 Ghostty.logger.critical("ghostty_app_new failed")
                 ghostty_config_free(config)
+                callbackContext.invalidate()
+                runtimeCallbackContext = nil
                 readiness = .error
                 return
             }
@@ -209,9 +221,7 @@ extension Ghostty {
         }
 
         deinit {
-            // Note: Cannot access @MainActor isolated properties in deinit
-            // The app will be freed when the instance is deallocated
-            // For proper cleanup, call a cleanup method before deinitialization
+            // Native app cleanup is explicit because its surfaces must be freed first.
         }
 
         // MARK: - App Operations
@@ -219,11 +229,14 @@ extension Ghostty {
         /// Clean up the ghostty app resources
         func cleanup() {
             clearSurfaceConfigCache()
+            runtimeCallbackContext?.invalidate()
 
             if let app = self.app {
                 ghostty_app_free(app)
                 self.app = nil
             }
+
+            runtimeCallbackContext = nil
         }
 
         func appTick() {
@@ -521,8 +534,7 @@ extension Ghostty {
         // MARK: - Callbacks (macOS)
 
         static func wakeup(_ userdata: UnsafeMutableRawPointer?) {
-            guard let userdata = userdata else { return }
-            let state = Unmanaged<App>.fromOpaque(userdata).takeUnretainedValue()
+            guard let state = Ghostty.CallbackContext<App>.resolve(userdata) else { return }
             DispatchQueue.main.async {
                 state.appTick()
             }
@@ -537,14 +549,14 @@ extension Ghostty {
                 guard let surface = target.target.surface else { return nil }
                 titleTargetDescription = String(describing: surface)
                 if let appUserdata = ghostty_app_userdata(app) {
-                    let state = Unmanaged<App>.fromOpaque(appUserdata).takeUnretainedValue()
-                    activeSurfaceCount = state.activeSurfaceCount()
-                    if let registeredView = state.terminalView(for: surface) {
+                    let state = Ghostty.CallbackContext<App>.resolve(appUserdata)
+                    activeSurfaceCount = state?.activeSurfaceCount() ?? 0
+                    if let registeredView = state?.terminalView(for: surface) {
                         return registeredView
                     }
                 }
                 guard let surfaceUserdata = ghostty_surface_userdata(surface) else { return nil }
-                return Unmanaged<GhosttyTerminalView>.fromOpaque(surfaceUserdata).takeUnretainedValue()
+                return Ghostty.CallbackContext<GhosttyTerminalView>.resolve(surfaceUserdata)
             }()
 
             switch action.tag {
@@ -707,9 +719,7 @@ extension Ghostty {
         }
 
         static func readClipboard(_ userdata: UnsafeMutableRawPointer?, location: ghostty_clipboard_e, state: UnsafeMutableRawPointer?) {
-            // userdata is the GhosttyTerminalView instance
-            guard let userdata = userdata else { return }
-            let terminalView = Unmanaged<GhosttyTerminalView>.fromOpaque(userdata).takeUnretainedValue()
+            guard let terminalView = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata) else { return }
             guard let surface = terminalView.surface?.unsafeCValue else { return }
 
             // Read from macOS clipboard
@@ -729,10 +739,9 @@ extension Ghostty {
             state: UnsafeMutableRawPointer?,
             request: ghostty_clipboard_request_e
         ) {
-            guard let userdata, let string, let state else { return }
-            let terminalView = Unmanaged<GhosttyTerminalView>
-                .fromOpaque(userdata)
-                .takeUnretainedValue()
+            guard let terminalView = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata),
+                  let string,
+                  let state else { return }
             let clipboardString = String(cString: string)
             terminalView.handleClipboardConfirmation(
                 clipboardString,
@@ -764,11 +773,8 @@ extension Ghostty {
             count: Int,
             confirm: Bool
         ) {
-            guard let userdata else { return }
             guard let contents = contents, count > 0 else { return }
-            let terminalView = Unmanaged<GhosttyTerminalView>
-                .fromOpaque(userdata)
-                .takeUnretainedValue()
+            guard let terminalView = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata) else { return }
             #if os(iOS)
             guard location != GHOSTTY_CLIPBOARD_SELECTION else { return }
             #endif
@@ -800,9 +806,7 @@ extension Ghostty {
         }
 
         static func closeSurface(_ userdata: UnsafeMutableRawPointer?, processAlive: Bool) {
-            // userdata is the GhosttyTerminalView instance
-            guard let userdata = userdata else { return }
-            let terminalView = Unmanaged<GhosttyTerminalView>.fromOpaque(userdata).takeUnretainedValue()
+            guard let terminalView = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata) else { return }
 
             Ghostty.logger.info("Close surface: processAlive=\(processAlive)")
 

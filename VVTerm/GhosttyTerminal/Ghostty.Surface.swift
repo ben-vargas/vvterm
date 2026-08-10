@@ -8,6 +8,9 @@ extension Ghostty {
         private var surface: ghostty_surface_t?
         private let lock = NSLock()
 
+        /// Keeps surface callback userdata valid until native teardown completes.
+        let callbackContext: Ghostty.CallbackContext<GhosttyTerminalView>
+
         /// Track if surface has been explicitly freed
         private var hasBeenFreed = false
 
@@ -20,8 +23,12 @@ extension Ghostty {
         }
 
         /// Initialize from the C structure.
-        init(cSurface: ghostty_surface_t) {
+        init(
+            cSurface: ghostty_surface_t,
+            callbackContext: Ghostty.CallbackContext<GhosttyTerminalView>
+        ) {
             self.surface = cSurface
+            self.callbackContext = callbackContext
         }
 
         /// Explicitly free the surface. Call this from cleanup() on main actor.
@@ -37,7 +44,10 @@ extension Ghostty {
             surface = nil
             lock.unlock()
 
-            ghostty_surface_free(surf)
+            callbackContext.invalidate()
+            withExtendedLifetime(callbackContext) {
+                ghostty_surface_free(surf)
+            }
         }
 
         deinit {
@@ -51,11 +61,16 @@ extension Ghostty {
             surface = nil
             lock.unlock()
 
+            callbackContext.invalidate()
+            let callbackContext = self.callbackContext
+
             // Fallback: schedule free on main actor
             // This is a safety net - prefer calling free() explicitly
             // MainActor.run used to avoid Sendable warning on raw pointer
             DispatchQueue.main.async {
-                ghostty_surface_free(surf)
+                withExtendedLifetime(callbackContext) {
+                    ghostty_surface_free(surf)
+                }
             }
         }
 

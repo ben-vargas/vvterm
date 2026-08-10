@@ -246,9 +246,11 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
             return
         }
 
+        let callbackContext = Ghostty.CallbackContext(owner: self)
         guard let cSurface = renderingSetup.setupSurface(
             view: self,
             ghosttyApp: app,
+            callbackContext: callbackContext,
             worktreePath: worktreePath,
             initialBounds: bounds,
             window: window,
@@ -256,11 +258,15 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
             command: initialCommand,
             useCustomIO: useCustomIO
         ) else {
+            callbackContext.invalidate()
             return
         }
 
         // Wrap in Swift Surface class
-        self.surface = Ghostty.Surface(cSurface: cSurface)
+        self.surface = Ghostty.Surface(
+            cSurface: cSurface,
+            callbackContext: callbackContext
+        )
 
         // Update handlers with surface
         imeHandler.updateSurface(self.surface)
@@ -1114,12 +1120,10 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     /// Call this after the surface is created to start receiving input
     func setupWriteCallback() {
         guard let surface = surface?.unsafeCValue else { return }
+        guard let userdata = ghostty_surface_userdata(surface) else { return }
 
-        // Pass self as userdata - we'll use it to call the Swift callback
-        let userdata = Unmanaged.passUnretained(self).toOpaque()
         ghostty_surface_set_write_callback(surface, { userdata, data, len in
-            guard let userdata = userdata else { return }
-            let view = Unmanaged<GhosttyTerminalView>.fromOpaque(userdata).takeUnretainedValue()
+            guard let view = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata) else { return }
             guard let data = data, len > 0 else { return }
             let swiftData = Data(bytes: data, count: len)
             // Call directly - Ghostty calls this from main thread, no queue hop needed

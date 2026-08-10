@@ -39,14 +39,20 @@ struct GhosttySurfaceRegistryTests {
             app.cleanup()
         }
 
-        let surface = try #require(terminal.surface?.unsafeCValue)
+        let surfaceWrapper = try #require(terminal.surface)
+        let surface = try #require(surfaceWrapper.unsafeCValue)
+        let callbackContext = surfaceWrapper.callbackContext
+        let surfaceUserdata = try #require(ghostty_surface_userdata(surface))
         #expect(app.activeSurfaceCount() == 1)
         #expect(app.terminalView(for: surface) === terminal)
+        #expect(surfaceUserdata == callbackContext.userdata)
+        #expect(Ghostty.CallbackContext<GhosttyTerminalView>.resolve(surfaceUserdata) === terminal)
 
         terminal.cleanup()
 
         #expect(app.activeSurfaceCount() == 0)
         #expect(app.terminalView(for: surface) == nil)
+        #expect(callbackContext.resolve() == nil)
     }
 
     @Test
