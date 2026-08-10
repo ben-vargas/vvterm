@@ -248,7 +248,7 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
             .offset(y: preservesTerminalSize ? model.layout.verticalOffset : 0)
             .clipped()
             .modifier(
-                TerminalKeyboardSafeAreaOverride(
+                TerminalKeyboardSafeAreaModifier(
                     isEnabled: preservesTerminalSize
                 )
             )
@@ -298,19 +298,6 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
             keyboardFrame: keyboardCoordinator.softwareKeyboardEndFrame,
             animation: animation
         )
-    }
-}
-
-private struct TerminalKeyboardSafeAreaOverride: ViewModifier {
-    let isEnabled: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if isEnabled {
-            content.ignoresSafeArea(.keyboard, edges: .bottom)
-        } else {
-            content
-        }
     }
 }
 
