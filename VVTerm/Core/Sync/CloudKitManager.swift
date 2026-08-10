@@ -27,15 +27,6 @@ final class CloudKitManager: ObservableObject {
     private var changeTokenKey: String { CloudKitSyncConstants.changeTokenKey(for: recordZoneName) }
     private var zoneReadyKey: String { CloudKitSyncConstants.zoneReadyKey(for: recordZoneName) }
 
-    // Record types
-    private enum RecordType {
-        static let server = "Server"
-        static let workspace = "Workspace"
-        static let terminalTheme = "TerminalTheme"
-        static let terminalThemePreference = "TerminalThemePreference"
-        static let userPreference = "UserPreference"
-    }
-
     private var accountStatusChecked = false
     private var isSyncEnabled: Bool { SyncSettings.isEnabled }
     private struct InFlightRecordChanges {
@@ -670,72 +661,6 @@ final class CloudKitManager: ObservableObject {
         accountStatusChecked = false
         clearChangeToken()
         await checkAccountStatus()
-    }
-
-    // MARK: - Cleanup
-
-    /// Delete all records from CloudKit (use with caution!)
-    func deleteAllRecords() async throws {
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-
-        try await performSyncOperation {
-            try await deleteAllTrackedRecords()
-        }
-    }
-
-    private func deleteAllTrackedRecords() async throws {
-        let records = try await withZoneRetry {
-            try await fetchAllRecordsFromCloudKit(desiredKeys: [])
-        }
-        let trackedRecordTypes: Set<String> = [
-            RecordType.server,
-            RecordType.workspace,
-            RecordType.terminalTheme,
-            RecordType.terminalThemePreference,
-            RecordType.userPreference
-        ]
-        let recordIDs = records
-            .filter { trackedRecordTypes.contains($0.recordType) }
-            .map(\.recordID)
-
-        // Batch delete
-        if !recordIDs.isEmpty {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: recordIDs)
-                operation.qualityOfService = .userInitiated
-
-                operation.modifyRecordsResultBlock = { result in
-                    switch result {
-                    case .success:
-                        continuation.resume()
-                    case .failure(let error):
-                        continuation.resume(throwing: error)
-                    }
-                }
-
-                self.database.add(operation)
-            }
-        }
-
-        let deletedServers = records.filter { $0.recordType == RecordType.server }.count
-        let deletedWorkspaces = records.filter { $0.recordType == RecordType.workspace }.count
-        let deletedThemes = records.filter {
-            $0.recordType == RecordType.terminalTheme
-        }.count
-        let deletedThemePreferences = records.filter {
-            $0.recordType == RecordType.terminalThemePreference
-        }.count
-        let deletedUserPreferences = records.filter {
-            $0.recordType == RecordType.userPreference
-        }.count
-        logger.info(
-            "Deleted \(deletedServers) servers, \(deletedWorkspaces) workspaces, \(deletedThemes) themes, \(deletedThemePreferences) theme preferences, \(deletedUserPreferences) user preferences from CloudKit"
-        )
-        lastSyncDate = Date()
     }
 
     // MARK: - Record Zone
