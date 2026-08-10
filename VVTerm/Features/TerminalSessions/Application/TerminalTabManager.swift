@@ -87,24 +87,7 @@ final class TerminalTabManager: ObservableObject {
     private var eternalTerminalResumeStore: any EternalTerminalResumeStoring
     private let defaultEternalTerminalResumeStore: any EternalTerminalResumeStoring
     private let moshRecovery: any TerminalMoshRecoveryServicing
-    lazy var reconnectCoordinator = TerminalReconnectCoordinator(
-        onEvent: { [weak self] event in
-            self?.logReconnectEvent(event)
-        },
-        onChange: { [weak self] in
-            self?.objectWillChange.send()
-        }
-    )
-    private var terminalConnectionGenerations: [UUID: UUID] = [:]
-    private var networkReadinessCancellable: AnyCancellable?
-    #if os(macOS)
-    var macRecoveryGate = MacTerminalRecoveryGate()
-    var activeMacRecoveryGeneration: UUID?
-    var activeMacRecoveryReconciliationID: UUID?
-    var macRecoveryTask: Task<Void, Never>?
-    #elseif os(iOS)
-    var iosNetworkRecoveryGate = TerminalNetworkRecoveryGate()
-    #endif
+    lazy var reconnectCoordinator = makeReconnectCoordinator()
     /// Server IDs with an in-flight tab-open request to avoid queued duplicates.
     private var tabOpensInFlight: Set<UUID> = []
 
@@ -121,7 +104,6 @@ final class TerminalTabManager: ObservableObject {
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "TerminalTabManager")
 
     private let dependencies: TerminalTabManagerDependencies
-    private(set) var currentNetworkReadiness: TerminalNetworkReadiness
     private var stateCancellables: Set<AnyCancellable> = []
 
     init(
@@ -133,7 +115,6 @@ final class TerminalTabManager: ObservableObject {
         moshRecovery: any TerminalMoshRecoveryServicing
     ) {
         self.dependencies = dependencies
-        self.currentNetworkReadiness = dependencies.networkReadiness.initial
         let connectionViewSelections = ConnectionViewSelectionStore()
         self.tmuxCoordinator = tmuxCoordinator
         self.connectionViewSelections = connectionViewSelections
@@ -222,17 +203,88 @@ final class TerminalTabManager: ObservableObject {
                 self?.dependencies.effects.refreshLiveActivity(connectionStates)
             }
             .store(in: &stateCancellables)
-        networkReadinessCancellable = dependencies.networkReadiness.updates
-            .sink { [weak self] readiness in
-                self?.currentNetworkReadiness = readiness
-                #if os(macOS)
-                self?.handleMacRecoverySignal(.networkChanged(readiness))
-                #elseif os(iOS)
-                self?.handleIOSNetworkReadinessChange(readiness)
-                #endif
-            }
+        _ = reconnectCoordinator
         dependencies.effects.refreshLiveActivity(
             sessionState.connectionStates
+        )
+    }
+
+    private func makeReconnectCoordinator() -> TerminalReconnectCoordinator {
+        let access: TerminalReconnectAccess
+        #if os(macOS)
+        access = TerminalReconnectAccess(
+            paneFacts: { [weak self] paneId in
+                self?.reconnectPaneFacts(for: paneId)
+            },
+            paneIDs: { [weak self] in
+                self.map { Array($0.sessionState.paneIds) } ?? []
+            },
+            paneIDsForServer: { [weak self] serverId in
+                self?.sessionState.paneStates(forServer: serverId).map(\.paneId) ?? []
+            },
+            prepareTransport: { [weak self] paneId in
+                await self?.prepareTransportForReconnect(paneId)
+            },
+            startConnection: { [weak self] paneId in
+                self?.startReconnectConnection(paneId) == true
+            },
+            failConnection: { [weak self] paneId in
+                self?.failReconnect(paneId)
+            },
+            offlineMacRecoveryPaneIDs: { [weak self] in
+                self?.offlineMacRecoveryPaneIDs ?? []
+            },
+            macRecoveryCandidates: { [weak self] in
+                self?.macRecoveryCandidates ?? []
+            },
+            beginEternalTerminalProbe: { [weak self] paneId in
+                await self?.beginEternalTerminalNetworkRecoveryProbe(for: paneId)
+            },
+            hasVerifiedLiveTransport: { [weak self] paneId, probeID in
+                await self?.hasVerifiedLiveTransport(
+                    for: paneId,
+                    eternalTerminalProbeID: probeID
+                ) == true
+            },
+            markMoshConnected: { [weak self] paneId in
+                self?.markMoshConnectedAfterRecoveryIfNeeded(for: paneId)
+            }
+        )
+        #else
+        access = TerminalReconnectAccess(
+            paneFacts: { [weak self] paneId in
+                self?.reconnectPaneFacts(for: paneId)
+            },
+            paneIDs: { [weak self] in
+                self.map { Array($0.sessionState.paneIds) } ?? []
+            },
+            paneIDsForServer: { [weak self] serverId in
+                self?.sessionState.paneStates(forServer: serverId).map(\.paneId) ?? []
+            },
+            prepareTransport: { [weak self] paneId in
+                await self?.prepareTransportForReconnect(paneId)
+            },
+            startConnection: { [weak self] paneId in
+                self?.startReconnectConnection(paneId) == true
+            },
+            failConnection: { [weak self] paneId in
+                self?.failReconnect(paneId)
+            }
+        )
+        #endif
+        return TerminalReconnectCoordinator(
+            access: access,
+            initialNetworkReadiness: dependencies.networkReadiness.initial,
+            networkUpdates: dependencies.networkReadiness.updates,
+            initialApplicationIsActive: dependencies.applicationIsActive(),
+            initialAppIsLocked: dependencies.appLock.initialIsLocked,
+            appLockUpdates: dependencies.appLock.updates,
+            onEvent: { [weak self] event in
+                self?.logReconnectEvent(event)
+            },
+            onChange: { [weak self] in
+                self?.objectWillChange.send()
+            }
         )
     }
 
@@ -473,15 +525,7 @@ final class TerminalTabManager: ObservableObject {
         for paneId in paneIds {
             transportRegistry.cancelConnectionTask(for: paneId)
         }
-        reconnectCoordinator.invalidateAll()
-        #if os(macOS)
-        macRecoveryTask?.cancel()
-        macRecoveryTask = nil
-        activeMacRecoveryGeneration = nil
-        activeMacRecoveryReconciliationID = nil
-        #elseif os(iOS)
-        iosNetworkRecoveryGate = TerminalNetworkRecoveryGate()
-        #endif
+        reconnectCoordinator.prepareForApplicationTermination()
         tabOpensInFlight.removeAll()
         for paneId in paneIds {
             detachTerminalRegistration(for: paneId)
@@ -499,20 +543,13 @@ final class TerminalTabManager: ObservableObject {
         }
     }
 
-    func invalidateReconnectPreparations(for serverId: UUID) {
-        // Keep route departure synchronous. Suspended preparation may finish
-        // its bounded wait, but cannot mutate the preserved pane afterward.
-        for paneState in sessionState.paneStates(forServer: serverId) {
-            reconnectCoordinator.invalidate(for: paneState.paneId)
+    private func reconnectPaneFacts(for paneId: UUID) -> TerminalReconnectPaneFacts? {
+        sessionState.paneState(for: paneId).map {
+            TerminalReconnectPaneFacts(
+                connectionState: $0.connectionState,
+                hasEstablishedConnection: $0.hasEstablishedConnection
+            )
         }
-    }
-
-    func reconnectAttempt(for paneId: UUID) -> TerminalReconnectCoordinator.Attempt? {
-        reconnectCoordinator.attempt(for: paneId)
-    }
-
-    func terminalConnectionGeneration(for paneId: UUID) -> UUID {
-        terminalConnectionGenerations[paneId] ?? paneId
     }
 
     #if os(macOS)
@@ -553,98 +590,41 @@ final class TerminalTabManager: ObservableObject {
             transportIsLive: transportIsLive
         )
     }
+
+    private var offlineMacRecoveryPaneIDs: [UUID] {
+        sessionState.allPaneStates.compactMap { paneState in
+            MacTerminalRecoveryPolicy.shouldPrepareWhileOffline(
+                connectionState: paneState.connectionState,
+                hasEstablishedConnection: paneState.hasEstablishedConnection
+            ) ? paneState.paneId : nil
+        }
+    }
+
+    private var macRecoveryCandidates: [MacTerminalRecoveryCandidate] {
+        sessionState.allPaneStates.compactMap { paneState in
+            let strategy = MacTerminalRecoveryPolicy.readyStrategy(
+                connectionState: paneState.connectionState,
+                hasEstablishedConnection: paneState.hasEstablishedConnection,
+                activeTransport: paneState.activeTransport,
+                hasEternalTerminalRuntime: hasEternalTerminalRuntime(for: paneState.paneId)
+            )
+            return strategy == .ignore
+                ? nil
+                : MacTerminalRecoveryCandidate(paneId: paneState.paneId, strategy: strategy)
+        }
+    }
+
+    private func markMoshConnectedAfterRecoveryIfNeeded(for paneId: UUID) {
+        guard sessionState.paneState(for: paneId)?.activeTransport == .mosh,
+              sessionState.paneState(for: paneId)?.connectionState.isConnected != true else {
+            return
+        }
+        updatePaneState(paneId, connectionState: .connected)
+    }
     #endif
 
-    @discardableResult
-    func requestReconnect(
-        for paneId: UUID,
-        requiresReadyNetwork: Bool,
-        generation: UUID = UUID(),
-        replacingCurrent: Bool = false
-    ) -> Bool {
-        requestReconnect(
-            for: paneId,
-            requiresReadyNetwork: requiresReadyNetwork,
-            generation: generation,
-            replacingCurrent: replacingCurrent,
-            networkReadiness: currentNetworkReadiness
-        )
-    }
-
-    @discardableResult
-    func requestReconnect(
-        for paneId: UUID,
-        requiresReadyNetwork: Bool,
-        generation: UUID,
-        replacingCurrent: Bool,
-        networkReadiness: TerminalNetworkReadiness
-    ) -> Bool {
-        guard sessionState.containsPane(paneId) else { return false }
-        let networkIsReady = networkReadiness == .ready
-        guard !requiresReadyNetwork || networkIsReady else { return false }
-
-        #if os(iOS)
-        if networkReadiness == .unavailable {
-            return queueIOSReconnectUntilNetworkReady(
-                for: paneId,
-                replacingCurrent: replacingCurrent
-            )
-        }
-        #endif
-
-        return makeReconnectAttempt(
-            for: paneId,
-            generation: generation,
-            networkIsReady: !requiresReadyNetwork || networkIsReady,
-            replacingCurrent: replacingCurrent
-        )
-    }
-
-    @discardableResult
-    func requestReconnectWaitingForNetwork(
-        for paneId: UUID,
-        generation: UUID,
-        replacingCurrent: Bool
-    ) -> Bool {
-        guard sessionState.containsPane(paneId) else { return false }
-        return makeReconnectAttempt(
-            for: paneId,
-            generation: generation,
-            networkIsReady: false,
-            replacingCurrent: replacingCurrent
-        )
-    }
-
-    private func makeReconnectAttempt(
-        for paneId: UUID,
-        generation: UUID,
-        networkIsReady: Bool,
-        replacingCurrent: Bool
-    ) -> Bool {
-        reconnectCoordinator.request(
-            paneId: paneId,
-            generation: generation,
-            networkIsReady: networkIsReady,
-            replacingCurrent: replacingCurrent,
-            cleanup: { [weak self] attempt in
-                await self?.cleanupConnectionForReconnect(attempt)
-            },
-            start: { [weak self] attempt in
-                self?.beginConnection(after: attempt)
-            },
-            fail: { [weak self] attempt in
-                self?.failReconnect(attempt)
-            }
-        ) != nil
-    }
-
-    private func cleanupConnectionForReconnect(
-        _ attempt: TerminalReconnectCoordinator.Attempt
-    ) async {
-        let paneId = attempt.paneId
-        logger.info(
-            "Reconnect abort stage pane=\(paneId.uuidString, privacy: .public) attempt=\(attempt.id.uuidString, privacy: .public) generation=\(attempt.generation.uuidString, privacy: .public) monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
-        )
+    private func prepareTransportForReconnect(_ paneId: UUID) async {
+        logger.info("Reconnect transport cleanup pane=\(paneId.uuidString, privacy: .public)")
         transportRegistry.cancelConnectionTask(for: paneId)
         let client = transportRegistry.connectionClient(for: paneId)
         let shellId = transportRegistry.shellId(for: paneId)
@@ -677,51 +657,28 @@ final class TerminalTabManager: ObservableObject {
         _ = await (sshCleanup, eternalTerminalCleanup)
     }
 
-    private func beginConnection(after attempt: TerminalReconnectCoordinator.Attempt) {
-        guard reconnectCoordinator.attempt(for: attempt.paneId)?.id == attempt.id,
-              let paneState = sessionState.paneState(for: attempt.paneId) else {
-            logger.info(
-                "Ignoring stale reconnect preparation result \(attempt.id.uuidString, privacy: .public)"
-            )
-            return
-        }
-        #if os(iOS)
-        if currentNetworkReadiness == .unavailable {
-            queueIOSReconnectUntilNetworkReady(for: attempt.paneId)
-            return
-        }
-        let windowSceneIsActive = terminalSurfaceStore
-            .surface(for: attempt.paneId)?
-            .isHostingSceneActive ?? true
-        guard dependencies.applicationIsActive(),
-              windowSceneIsActive else {
-            reconnectCoordinator.complete(for: attempt.paneId)
-            updatePaneState(attempt.paneId, connectionState: .disconnected)
-            return
-        }
-        #endif
-        terminalConnectionGenerations[attempt.paneId] = UUID()
+    private func startReconnectConnection(_ paneId: UUID) -> Bool {
+        guard let paneState = sessionState.paneState(for: paneId) else { return false }
         updatePaneState(
-            attempt.paneId,
+            paneId,
             connectionState: TerminalConnectionAttemptPolicy.state(
                 attempt: 1,
                 hasEstablishedConnection: paneState.hasEstablishedConnection
             )
         )
+        return true
     }
 
-    private func failReconnect(_ attempt: TerminalReconnectCoordinator.Attempt) {
-        guard sessionState.containsPane(attempt.paneId) else { return }
-        logger.error(
-            "Reconnect deadline exceeded for pane \(attempt.paneId.uuidString, privacy: .public), attempt \(attempt.id.uuidString, privacy: .public)"
-        )
-        if sessionState.paneState(for: attempt.paneId)?.disconnectReason != nil {
-            sessionState.updatePane(attempt.paneId, persist: true) {
+    private func failReconnect(_ paneId: UUID) {
+        guard sessionState.containsPane(paneId) else { return }
+        logger.error("Reconnect deadline exceeded for pane \(paneId.uuidString, privacy: .public)")
+        if sessionState.paneState(for: paneId)?.disconnectReason != nil {
+            sessionState.updatePane(paneId, persist: true) {
                 $0.disconnectReason = nil
             }
         }
         updatePaneState(
-            attempt.paneId,
+            paneId,
             connectionState: .failed(String(localized: "Connection timed out. Please retry."))
         )
     }
@@ -1806,9 +1763,8 @@ final class TerminalTabManager: ObservableObject {
             : nil
 
         tmuxCoordinator.clearRuntimeState(for: paneId)
-        reconnectCoordinator.invalidate(for: paneId)
+        reconnectCoordinator.removePane(paneId)
         transportRegistry.cancelConnectionTask(for: paneId)
-        terminalConnectionGenerations.removeValue(forKey: paneId)
         detachTerminalRegistration(for: paneId)
         runtimeTitleByPane.removeValue(forKey: paneId)
         titleOverrideByPane.removeValue(forKey: paneId)
@@ -1871,13 +1827,6 @@ final class TerminalTabManager: ObservableObject {
             }
         }
         #if os(iOS)
-        if connectionState.isConnecting,
-           sessionState.paneState(for: paneId)?.hasEstablishedConnection == true,
-           currentNetworkReadiness == .unavailable {
-            queueIOSReconnectUntilNetworkReady(for: paneId)
-        }
-        #endif
-        #if os(iOS)
         publishTerminalInputAvailability(for: paneId)
         #endif
         switch connectionState {
@@ -1886,22 +1835,21 @@ final class TerminalTabManager: ObservableObject {
                 setPaneTransport(.ssh, for: paneId)
             }
         case .disconnected, .failed:
-            reconnectCoordinator.complete(for: paneId)
             setPanePresentationOverrides(.empty, for: paneId)
             terminalSurfaceStore.surface(for: paneId)?.applyPresentationOverrides(.empty)
             if tmuxCoordinator.status(for: paneId) == .foreground {
                 tmuxCoordinator.updateStatus(.background, for: paneId)
             }
         case .connected:
-            reconnectCoordinator.complete(for: paneId)
             dependencies.effects.recordSuccessfulConnection(
                 paneId,
                 sessionState.paneState(for: paneId)?.activeTransport.rawValue
                     ?? ShellTransport.ssh.rawValue
             )
         case .idle:
-            reconnectCoordinator.complete(for: paneId)
+            break
         }
+        reconnectCoordinator.connectionStateDidChange(for: paneId)
     }
 
     func handleConnectionFailure(for paneId: UUID, error: Error) {
@@ -2126,17 +2074,7 @@ extension TerminalTabManager {
         keyboardCoordinator.setViewActive(false)
         #endif
         drainTerminalSurfaces()
-        reconnectCoordinator.invalidateAll()
-        terminalConnectionGenerations.removeAll()
-        #if os(macOS)
-        macRecoveryTask?.cancel()
-        macRecoveryTask = nil
-        activeMacRecoveryGeneration = nil
-        activeMacRecoveryReconciliationID = nil
-        macRecoveryGate = MacTerminalRecoveryGate()
-        #elseif os(iOS)
-        iosNetworkRecoveryGate = TerminalNetworkRecoveryGate()
-        #endif
+        reconnectCoordinator.reset()
         tabOpensInFlight.removeAll()
         eternalTerminalResumeStore = defaultEternalTerminalResumeStore
         for client in drainedTransports.clients {

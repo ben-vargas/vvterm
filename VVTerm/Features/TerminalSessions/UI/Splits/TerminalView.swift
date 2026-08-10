@@ -552,7 +552,6 @@ struct TerminalPaneView: View {
     @State private var isInstallingMosh = false
     @State private var operationNotice: NoticeItem?
     @State private var dismissFallbackBanner = false
-    @State private var automaticReconnectRetryTask: Task<Void, Never>?
     @StateObject private var connectWatchdog = TerminalConnectionWatchdog()
     @State private var showingHostKeyTrustConfirmation = false
     @State private var hostKeyTrustChallenge: KnownHostsManager.Challenge?
@@ -575,11 +574,11 @@ struct TerminalPaneView: View {
     }
 
     private var reconnectAttempt: TerminalReconnectCoordinator.Attempt? {
-        tabManager.reconnectAttempt(for: paneId)
+        tabManager.reconnectCoordinator.attempt(for: paneId)
     }
 
     private var connectionGeneration: UUID {
-        tabManager.terminalConnectionGeneration(for: paneId)
+        tabManager.reconnectCoordinator.connectionGeneration(for: paneId)
     }
 
     private var credentialBinding: ServerCredentialBinding {
@@ -831,32 +830,32 @@ struct TerminalPaneView: View {
                 showingMoshInstallPrompt = true
             }
             startConnectWatchdog()
-            attemptAutoReconnectIfNeeded()
+            reconcileAutomaticReconnect()
         }
-        .onChange(of: scenePhase) { phase in
-            if phase == .active {
-                attemptAutoReconnectIfNeeded()
-            }
+        .onChange(of: scenePhase) { _ in
+            reconcileAutomaticReconnect()
         }
         .onChange(of: networkMonitor.readiness) { readiness in
             if readiness == .ready {
                 tabManager.notifyEternalTerminalNetworkPathChanged(for: paneId)
-                attemptAutoReconnectIfNeeded()
             }
+            reconcileAutomaticReconnect()
+        }
+        .onChange(of: autoReconnectEnabled) { _ in
+            reconcileAutomaticReconnect()
         }
         .onChange(of: isReady) { _ in
             startConnectWatchdog()
         }
         .onChange(of: connectionState) { state in
             if state.isConnecting || state.isConnected {
-                cancelScheduledAutomaticReconnect()
+                tabManager.reconnectCoordinator.cancelAutomaticRetry(for: paneId)
                 startConnectWatchdog()
             } else if case .disconnected = state {
                 connectWatchdog.cancel()
-                attemptAutoReconnectIfNeeded()
+                reconcileAutomaticReconnect()
             } else if case .failed = state {
                 connectWatchdog.cancel()
-                scheduleAutomaticReconnectAfterFailure()
             }
         }
         .onChange(of: connectionGeneration) { _ in
@@ -899,7 +898,7 @@ struct TerminalPaneView: View {
             dismissFallbackBanner = true
         }
         .onDisappear {
-            cancelScheduledAutomaticReconnect()
+            tabManager.reconnectCoordinator.removeAutomaticReconnectContext(for: paneId)
             connectWatchdog.cancel()
         }
         .alert("Install tmux?", isPresented: $showingTmuxInstallPrompt) {
@@ -979,7 +978,7 @@ struct TerminalPaneView: View {
             onProcessExit: onProcessExit,
             onReady: { isReady = true },
             onVoiceTrigger: voiceTriggerHandlerForTerminal,
-            onSceneActivation: attemptAutoReconnectIfNeeded
+            onSceneActivation: reconcileAutomaticReconnect
         )
         .id(connectionGeneration)
         .allowsHitTesting(connectionState.isConnected)
@@ -1082,22 +1081,18 @@ struct TerminalPaneView: View {
         }
     }
 
-    private func attemptAutoReconnectIfNeeded() {
+    private func reconcileAutomaticReconnect() {
         #if os(iOS)
         let applicationIsActive = UIApplication.shared.applicationState == .active
         #else
         let applicationIsActive = NSApplication.shared.isActive
         #endif
-        guard TerminalAutoReconnectPolicy.shouldAttempt(
+        tabManager.reconnectCoordinator.reconcileAutomaticReconnect(
+            for: paneId,
             sceneIsActive: foregroundSceneIsActive,
             applicationIsActive: applicationIsActive,
-            networkReadiness: networkMonitor.readiness,
-            automaticReconnectAllowed: automaticReconnectAllowed,
-            reconnectInFlight: reconnectInFlight,
-            hasEstablishedConnection: paneState?.hasEstablishedConnection == true,
-            connectionState: connectionState
-        ) else { return }
-        retryConnection(requiresReadyNetwork: true)
+            automaticReconnectAllowed: automaticReconnectAllowed
+        )
     }
 
     private func retryConnection() {
@@ -1105,7 +1100,7 @@ struct TerminalPaneView: View {
     }
 
     private func retryConnection(requiresReadyNetwork: Bool) {
-        cancelScheduledAutomaticReconnect()
+        tabManager.reconnectCoordinator.cancelAutomaticRetry(for: paneId)
         guard !requiresReadyNetwork || networkMonitor.readiness == .ready else { return }
         guard reconnectAttempt == nil else { return }
         guard !connectionState.isConnecting else { return }
@@ -1118,32 +1113,10 @@ struct TerminalPaneView: View {
             guard credentials != nil else { return }
         }
         tabManager.clearMoshFallbackDiagnostics(for: paneId)
-        _ = tabManager.requestReconnect(
+        _ = tabManager.reconnectCoordinator.request(
             for: paneId,
             requiresReadyNetwork: requiresReadyNetwork
         )
-    }
-
-    private func scheduleAutomaticReconnectAfterFailure() {
-        guard automaticReconnectRetryTask == nil else { return }
-        guard TerminalAutoReconnectPolicy.shouldScheduleRetry(
-            automaticReconnectAllowed: automaticReconnectAllowed,
-            hasEstablishedConnection: paneState?.hasEstablishedConnection == true,
-            connectionState: connectionState
-        ) else { return }
-
-        automaticReconnectRetryTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            automaticReconnectRetryTask = nil
-            attemptAutoReconnectIfNeeded()
-            scheduleAutomaticReconnectAfterFailure()
-        }
-    }
-
-    private func cancelScheduledAutomaticReconnect() {
-        automaticReconnectRetryTask?.cancel()
-        automaticReconnectRetryTask = nil
     }
 
     private var foregroundSceneIsActive: Bool {

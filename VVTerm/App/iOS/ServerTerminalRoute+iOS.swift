@@ -194,7 +194,7 @@ struct ServerTerminalRoute: View {
             }
             .onDisappear {
                 isRouteVisible = false
-                tabManager.invalidateReconnectPreparations(for: route.serverId)
+                tabManager.reconnectCoordinator.invalidatePreparations(forServer: route.serverId)
                 keyboardCoordinator.setViewActive(false)
                 keyboardCoordinator.setActivePane(nil)
                 screenAwakeCoordinator.update(isRequested: false, for: screenAwakeRequestID)
@@ -584,7 +584,7 @@ struct ServerTerminalRoute: View {
 
     private func leaveRoute() {
         isZenModeEnabled = false
-        tabManager.invalidateReconnectPreparations(for: route.serverId)
+        tabManager.reconnectCoordinator.invalidatePreparations(forServer: route.serverId)
         keyboardCoordinator.relinquishRouteOwnershipForNavigation()
         onBack()
     }

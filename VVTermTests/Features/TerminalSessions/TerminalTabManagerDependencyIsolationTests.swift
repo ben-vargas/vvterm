@@ -207,8 +207,8 @@ struct TerminalTabManagerDependencyIsolationTests {
         )
 
         firstNetwork.send(.ready)
-        #expect(first.currentNetworkReadiness == .ready)
-        #expect(second.currentNetworkReadiness == .unknown)
+        #expect(first.reconnectCoordinator.currentNetworkReadiness == .ready)
+        #expect(second.reconnectCoordinator.currentNetworkReadiness == .unknown)
 
         firstEffects.authorizeResult = false
         do {
@@ -289,6 +289,10 @@ struct TerminalTabManagerDependencyIsolationTests {
                     updates: network.eraseToAnyPublisher()
                 ),
                 applicationIsActive: { true },
+                appLock: TerminalAppLockSource(
+                    initialIsLocked: false,
+                    updates: Empty<Bool, Never>().eraseToAnyPublisher()
+                ),
                 effects: effects.effects(),
                 remoteMosh: remoteMosh,
                 eternalTerminalRuntime: .testing

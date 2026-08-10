@@ -58,6 +58,12 @@ struct TerminalNetworkReadinessSource {
 }
 
 @MainActor
+struct TerminalAppLockSource {
+    let initialIsLocked: Bool
+    let updates: AnyPublisher<Bool, Never>
+}
+
+@MainActor
 struct TerminalSessionApplicationEffects {
     let authorizeServer: (Server) async -> Bool
     let refreshLiveActivity: ([ConnectionState]) -> Void
@@ -84,6 +90,7 @@ struct TerminalTmuxConfiguration {
 struct TerminalTabManagerDependencies {
     let networkReadiness: TerminalNetworkReadinessSource
     let applicationIsActive: () -> Bool
+    let appLock: TerminalAppLockSource
     let effects: TerminalSessionApplicationEffects
     let remoteMosh: any TerminalRemoteMoshServicing
     let eternalTerminalRuntime: EternalTerminalRuntimeDependencies
@@ -103,6 +110,10 @@ extension TerminalTabManagerDependencies {
                 updates: updates
             ),
             applicationIsActive: { true },
+            appLock: TerminalAppLockSource(
+                initialIsLocked: false,
+                updates: Empty<Bool, Never>().eraseToAnyPublisher()
+            ),
             effects: TerminalSessionApplicationEffects(
                 authorizeServer: { _ in true },
                 refreshLiveActivity: liveActivityRefresh,

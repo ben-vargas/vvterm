@@ -102,7 +102,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "Application became active monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
         )
         configuredLifecycleDependencies.refreshNetwork()
-        configuredTabManager.handleMacRecoverySignal(.applicationActivated)
+        configuredTabManager.reconnectCoordinator.receiveMacRecoverySignal(.applicationActivated)
         guard SyncSettings.isEnabled else { return }
 
         let now = Date()
@@ -147,7 +147,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info(
             "Workspace will sleep monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
         )
-        configuredTabManager.handleMacRecoverySignal(.sleep)
+        configuredTabManager.reconnectCoordinator.receiveMacRecoverySignal(.sleep)
     }
 
     @objc private func workspaceDidWake(_ notification: Notification) {
@@ -161,7 +161,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info(
             "Screens did sleep monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
         )
-        configuredTabManager.handleMacRecoverySignal(.sleep)
+        configuredTabManager.reconnectCoordinator.receiveMacRecoverySignal(.sleep)
     }
 
     @objc private func screensDidWake(_ notification: Notification) {
@@ -173,7 +173,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshNetworkAndHandleWake() {
         configuredLifecycleDependencies.refreshNetwork()
-        configuredTabManager.handleMacRecoverySignal(.wake)
+        configuredTabManager.reconnectCoordinator.receiveMacRecoverySignal(.wake)
     }
 }
 #endif

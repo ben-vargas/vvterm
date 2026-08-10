@@ -3,6 +3,8 @@ import Foundation
 
 #if os(iOS)
 import UIKit
+#elseif os(macOS)
+import AppKit
 #endif
 
 @MainActor
@@ -34,9 +36,16 @@ enum TerminalTabManagerLiveComposition {
                 #if os(iOS)
                 UIApplication.shared.applicationState == .active
                 #else
-                true
+                NSApplication.shared.isActive
                 #endif
             },
+            appLock: TerminalAppLockSource(
+                initialIsLocked: appLockManager.isAppLocked,
+                updates: appLockManager.$lockState
+                    .map(\.isLocked)
+                    .removeDuplicates()
+                    .eraseToAnyPublisher()
+            ),
             effects: TerminalSessionApplicationEffects(
                 authorizeServer: { server in
                     await appLockManager.ensureServerUnlocked(server)

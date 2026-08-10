@@ -24,6 +24,11 @@ nonisolated struct MacTerminalRecoveryGate {
 
     private var state = State.idle
 
+    var recoveringGeneration: UUID? {
+        guard case .recovering(let generation) = state else { return nil }
+        return generation
+    }
+
     mutating func receive(
         _ signal: Signal,
         networkReadiness: TerminalNetworkReadiness
@@ -85,7 +90,7 @@ nonisolated struct MacTerminalRecoveryGate {
 }
 
 enum MacTerminalRecoveryPolicy {
-    enum ReadyStrategy: Equatable {
+    enum ReadyStrategy: Equatable, Sendable {
         case ignore
         case verifyOrReplace
         case allowEternalTerminalSelfRecovery

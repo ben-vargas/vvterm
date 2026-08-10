@@ -172,6 +172,7 @@ struct TerminalConnectionStatusPresentationTests {
         let shouldReconnect = TerminalAutoReconnectPolicy.shouldAttempt(
             sceneIsActive: true,
             applicationIsActive: false,
+            appIsLocked: false,
             networkReadiness: .ready,
             automaticReconnectAllowed: true,
             reconnectInFlight: false,
@@ -187,6 +188,7 @@ struct TerminalConnectionStatusPresentationTests {
         let shouldReconnect = TerminalAutoReconnectPolicy.shouldAttempt(
             sceneIsActive: true,
             applicationIsActive: true,
+            appIsLocked: false,
             networkReadiness: .ready,
             automaticReconnectAllowed: true,
             reconnectInFlight: false,
@@ -202,6 +204,7 @@ struct TerminalConnectionStatusPresentationTests {
         let shouldReconnect = TerminalAutoReconnectPolicy.shouldAttempt(
             sceneIsActive: true,
             applicationIsActive: true,
+            appIsLocked: false,
             networkReadiness: .ready,
             automaticReconnectAllowed: true,
             reconnectInFlight: false,
@@ -217,6 +220,7 @@ struct TerminalConnectionStatusPresentationTests {
         let shouldReconnect = TerminalAutoReconnectPolicy.shouldAttempt(
             sceneIsActive: true,
             applicationIsActive: true,
+            appIsLocked: false,
             networkReadiness: .ready,
             automaticReconnectAllowed: true,
             reconnectInFlight: false,
@@ -232,6 +236,7 @@ struct TerminalConnectionStatusPresentationTests {
         let shouldReconnect = TerminalAutoReconnectPolicy.shouldAttempt(
             sceneIsActive: true,
             applicationIsActive: true,
+            appIsLocked: false,
             networkReadiness: .ready,
             automaticReconnectAllowed: true,
             reconnectInFlight: true,
@@ -242,11 +247,12 @@ struct TerminalConnectionStatusPresentationTests {
         #expect(!shouldReconnect)
     }
 
-    @Test(arguments: [NetworkMonitor.Readiness.unknown, .unavailable])
-    func automaticReconnectWaitsForReadyNetwork(readiness: NetworkMonitor.Readiness) {
+    @Test(arguments: [TerminalNetworkReadiness.unknown, .unavailable])
+    func automaticReconnectWaitsForReadyNetwork(readiness: TerminalNetworkReadiness) {
         let shouldReconnect = TerminalAutoReconnectPolicy.shouldAttempt(
             sceneIsActive: true,
             applicationIsActive: true,
+            appIsLocked: false,
             networkReadiness: readiness,
             automaticReconnectAllowed: true,
             reconnectInFlight: false,

@@ -24,8 +24,49 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
     private let paneId = UUID()
     private let simulatesSuccess: Bool
     private let cleanupBlocker = MacTerminalRecoveryHarnessBlocker()
-    private var recoveryGate = MacTerminalRecoveryGate()
     private lazy var coordinator = TerminalReconnectCoordinator(
+        access: TerminalReconnectAccess(
+            paneFacts: { [weak self] paneId in
+                guard let self, paneId == self.paneId else { return nil }
+                return TerminalReconnectPaneFacts(
+                    connectionState: self.connectionState,
+                    hasEstablishedConnection: true
+                )
+            },
+            paneIDs: { [weak self] in self.map { [$0.paneId] } ?? [] },
+            paneIDsForServer: { _ in [] },
+            prepareTransport: { [weak self] _ in
+                self?.cleanupCount += 1
+                let blocker = self?.cleanupBlocker
+                await blocker?.wait()
+            },
+            startConnection: { [weak self] _ in
+                guard let self else { return false }
+                replacementCount += 1
+                let replacement = replacementCount
+                setOutcome(.reconnecting)
+                guard simulatesSuccess else { return true }
+                Task { [weak self] in
+                    try? await Task.sleep(for: .milliseconds(2))
+                    await self?.completeSimulatedConnection(replacement: replacement)
+                }
+                return true
+            },
+            failConnection: { [weak self] _ in
+                self?.setOutcome(.failed)
+                if let blocker = self?.cleanupBlocker {
+                    Task { await blocker.release() }
+                }
+            },
+            offlineMacRecoveryPaneIDs: { [weak self] in self.map { [$0.paneId] } ?? [] },
+            macRecoveryCandidates: { [] },
+            beginEternalTerminalProbe: { _ in nil },
+            hasVerifiedLiveTransport: { _, _ in false },
+            markMoshConnected: { _ in }
+        ),
+        initialNetworkReadiness: .unavailable,
+        initialApplicationIsActive: true,
+        initialAppIsLocked: false,
         preparationTimeout: .milliseconds(20),
         connectionTimeout: .milliseconds(30),
         now: { Date(timeIntervalSince1970: Self.simulatedSleepInterval) },
@@ -45,68 +86,44 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
         guard outcome == .idle || outcome == .failed else { return }
         setOutcome(.waitingForNetwork)
 
-        _ = recoveryGate.receive(.sleep, networkReadiness: .unavailable)
-        guard case .waitForNetwork(let generation) = recoveryGate.receive(
-            .wake,
-            networkReadiness: .unavailable
-        ) else {
-            setOutcome(.failed)
-            return
-        }
-
-        let attempt = coordinator.request(
-            paneId: paneId,
-            generation: generation,
-            networkIsReady: false,
-            replacingCurrent: true,
-            cleanup: { [weak self] _ in
-                guard let self else { return }
-                cleanupCount += 1
-                await cleanupBlocker.wait()
-            },
-            start: { [weak self] attempt in
-                guard let self else { return }
-                replacementCount += 1
-                setOutcome(.reconnecting)
-                guard simulatesSuccess else { return }
-                Task { [weak self] in
-                    try? await Task.sleep(for: .milliseconds(2))
-                    guard let self,
-                          coordinator.attempt(for: attempt.paneId)?.id == attempt.id else {
-                        return
-                    }
-                    setOutcome(.connected)
-                    coordinator.complete(for: attempt.paneId)
-                    await cleanupBlocker.release()
-                }
-            },
-            fail: { [weak self] _ in
-                guard let self else { return }
-                setOutcome(.failed)
-                Task { await self.cleanupBlocker.release() }
-            }
-        )
-        lastAttemptStartedAt = attempt?.startedAt
-
-        guard recoveryGate.receive(
-            .networkChanged(.ready),
-            networkReadiness: .ready
-        ) == .recover(generation) else {
-            setOutcome(.failed)
-            return
-        }
-        coordinator.networkBecameReady(for: generation)
+        coordinator.receiveMacRecoverySignal(.sleep)
+        coordinator.receiveMacRecoverySignal(.wake)
+        lastAttemptStartedAt = coordinator.attempt(for: paneId)?.startedAt
+        coordinator.receiveNetworkReadiness(.ready)
 
         // Duplicate wake, activation, and ready notifications must not create
         // another replacement for this sleep generation.
-        _ = recoveryGate.receive(.wake, networkReadiness: .ready)
-        _ = recoveryGate.receive(.applicationActivated, networkReadiness: .ready)
-        _ = recoveryGate.receive(.networkChanged(.ready), networkReadiness: .ready)
+        coordinator.receiveMacRecoverySignal(.wake)
+        coordinator.receiveMacRecoverySignal(.applicationActivated)
+        coordinator.receiveNetworkReadiness(.ready)
+    }
+
+    private var connectionState: ConnectionState {
+        switch outcome {
+        case .idle, .waitingForNetwork:
+            .disconnected
+        case .reconnecting:
+            .reconnecting(attempt: 1)
+        case .connected:
+            .connected
+        case .failed:
+            .failed("Connection timed out")
+        }
     }
 
     private func setOutcome(_ outcome: Outcome) {
         self.outcome = outcome
         observedOutcomes.insert(outcome)
+    }
+
+    private func completeSimulatedConnection(replacement: Int) async {
+        guard replacementCount == replacement,
+              coordinator.attempt(for: paneId)?.phase == .connecting else {
+            return
+        }
+        setOutcome(.connected)
+        coordinator.complete(for: paneId)
+        await cleanupBlocker.release()
     }
 }
 

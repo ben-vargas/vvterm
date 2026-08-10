@@ -112,34 +112,34 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: UUID(), title: "Wake recovery")
             installTab(tab, in: manager, connectionState: .connected)
             manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
-            let originalTerminalGeneration = manager.terminalConnectionGeneration(
+            let originalTerminalGeneration = manager.reconnectCoordinator.connectionGeneration(
                 for: tab.rootPaneId
             )
             let recoveryGeneration = UUID()
 
-            #expect(manager.requestReconnect(
+            #expect(manager.reconnectCoordinator.request(
                 for: tab.rootPaneId,
                 requiresReadyNetwork: false,
                 generation: recoveryGeneration,
                 replacingCurrent: true
             ))
-            #expect(!manager.requestReconnect(
+            #expect(!manager.reconnectCoordinator.request(
                 for: tab.rootPaneId,
                 requiresReadyNetwork: false,
                 generation: recoveryGeneration,
                 replacingCurrent: true
             ))
             #expect(await waitUntil {
-                manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .connecting
+                manager.reconnectCoordinator.attempt(for: tab.rootPaneId)?.phase == .connecting
             })
             #expect(manager.paneState(for: tab.rootPaneId)?.connectionState.isConnecting == true)
             #expect(
-                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                manager.reconnectCoordinator.connectionGeneration(for: tab.rootPaneId)
                     != originalTerminalGeneration
             )
 
             manager.updatePaneState(tab.rootPaneId, connectionState: .connected)
-            #expect(manager.reconnectAttempt(for: tab.rootPaneId) == nil)
+            #expect(manager.reconnectCoordinator.attempt(for: tab.rootPaneId) == nil)
         }
     }
 
@@ -150,46 +150,45 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: UUID(), title: "Offline recovery")
             installTab(tab, in: manager, connectionState: .connected)
             manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
-            let originalTerminalGeneration = manager.terminalConnectionGeneration(
+            let originalTerminalGeneration = manager.reconnectCoordinator.connectionGeneration(
                 for: tab.rootPaneId
             )
+            manager.reconnectCoordinator.receiveNetworkReadiness(.unavailable)
 
-            #expect(manager.requestReconnect(
+            #expect(manager.reconnectCoordinator.request(
                 for: tab.rootPaneId,
                 requiresReadyNetwork: false,
                 generation: UUID(),
-                replacingCurrent: false,
-                networkReadiness: .unavailable
+                replacingCurrent: false
             ))
-            #expect(!manager.requestReconnect(
+            #expect(!manager.reconnectCoordinator.request(
                 for: tab.rootPaneId,
                 requiresReadyNetwork: false,
                 generation: UUID(),
-                replacingCurrent: false,
-                networkReadiness: .unavailable
+                replacingCurrent: false
             ))
             #expect(await waitUntil {
-                manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .waitingForNetwork
+                manager.reconnectCoordinator.attempt(for: tab.rootPaneId)?.phase == .waitingForNetwork
             })
             #expect(
-                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                manager.reconnectCoordinator.connectionGeneration(for: tab.rootPaneId)
                     == originalTerminalGeneration
             )
             #expect(manager.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
 
-            manager.handleIOSNetworkReadinessChange(.ready)
+            manager.reconnectCoordinator.receiveNetworkReadiness(.ready)
             #expect(await waitUntil {
-                manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .connecting
+                manager.reconnectCoordinator.attempt(for: tab.rootPaneId)?.phase == .connecting
             })
-            let replacementGeneration = manager.terminalConnectionGeneration(
+            let replacementGeneration = manager.reconnectCoordinator.connectionGeneration(
                 for: tab.rootPaneId
             )
             #expect(replacementGeneration != originalTerminalGeneration)
 
-            manager.handleIOSNetworkReadinessChange(.ready)
+            manager.reconnectCoordinator.receiveNetworkReadiness(.ready)
             await Task.yield()
             #expect(
-                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                manager.reconnectCoordinator.connectionGeneration(for: tab.rootPaneId)
                     == replacementGeneration
             )
         }
@@ -201,39 +200,39 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: UUID(), title: "Mid-cleanup network loss")
             installTab(tab, in: manager, connectionState: .connected)
             manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
-            let originalTerminalGeneration = manager.terminalConnectionGeneration(
+            let originalTerminalGeneration = manager.reconnectCoordinator.connectionGeneration(
                 for: tab.rootPaneId
             )
+            manager.reconnectCoordinator.receiveNetworkReadiness(.ready)
 
-            #expect(manager.requestReconnect(
+            #expect(manager.reconnectCoordinator.request(
                 for: tab.rootPaneId,
                 requiresReadyNetwork: false,
                 generation: UUID(),
-                replacingCurrent: true,
-                networkReadiness: .ready
+                replacingCurrent: true
             ))
-            manager.handleIOSNetworkReadinessChange(.unavailable)
+            manager.reconnectCoordinator.receiveNetworkReadiness(.unavailable)
 
             #expect(await waitUntil {
-                manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .waitingForNetwork
+                manager.reconnectCoordinator.attempt(for: tab.rootPaneId)?.phase == .waitingForNetwork
             })
             #expect(
-                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                manager.reconnectCoordinator.connectionGeneration(for: tab.rootPaneId)
                     == originalTerminalGeneration
             )
 
-            manager.handleIOSNetworkReadinessChange(.ready)
+            manager.reconnectCoordinator.receiveNetworkReadiness(.ready)
             #expect(await waitUntil {
-                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                manager.reconnectCoordinator.connectionGeneration(for: tab.rootPaneId)
                     != originalTerminalGeneration
             })
-            let replacementGeneration = manager.terminalConnectionGeneration(
+            let replacementGeneration = manager.reconnectCoordinator.connectionGeneration(
                 for: tab.rootPaneId
             )
-            manager.handleIOSNetworkReadinessChange(.ready)
+            manager.reconnectCoordinator.receiveNetworkReadiness(.ready)
             await Task.yield()
             #expect(
-                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                manager.reconnectCoordinator.connectionGeneration(for: tab.rootPaneId)
                     == replacementGeneration
             )
         }
@@ -253,7 +252,7 @@ struct TerminalTabManagerLifecycleTests {
                 credentials: credentials
             )
 
-            #expect(manager.requestReconnect(
+            #expect(manager.reconnectCoordinator.request(
                 for: tab.rootPaneId,
                 requiresReadyNetwork: false,
                 generation: UUID(),
@@ -282,29 +281,29 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Mac wake recovery")
             installTab(tab, in: manager, connectionState: .connected)
-            let originalTerminalGeneration = manager.terminalConnectionGeneration(
+            let originalTerminalGeneration = manager.reconnectCoordinator.connectionGeneration(
                 for: tab.rootPaneId
             )
             #expect(await waitUntil { NetworkMonitor.shared.readiness == .ready })
 
-            manager.handleMacRecoverySignal(.sleep)
-            manager.handleMacRecoverySignal(.wake)
-            manager.handleMacRecoverySignal(.applicationActivated)
-            manager.handleMacRecoverySignal(.networkChanged(.ready))
+            manager.reconnectCoordinator.receiveMacRecoverySignal(.sleep)
+            manager.reconnectCoordinator.receiveMacRecoverySignal(.wake)
+            manager.reconnectCoordinator.receiveMacRecoverySignal(.applicationActivated)
+            manager.reconnectCoordinator.receiveMacRecoverySignal(.networkChanged(.ready))
 
             #expect(await waitUntil {
-                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                manager.reconnectCoordinator.connectionGeneration(for: tab.rootPaneId)
                     != originalTerminalGeneration
             })
-            let replacementGeneration = manager.terminalConnectionGeneration(
+            let replacementGeneration = manager.reconnectCoordinator.connectionGeneration(
                 for: tab.rootPaneId
             )
 
-            manager.handleMacRecoverySignal(.wake)
-            manager.handleMacRecoverySignal(.applicationActivated)
+            manager.reconnectCoordinator.receiveMacRecoverySignal(.wake)
+            manager.reconnectCoordinator.receiveMacRecoverySignal(.applicationActivated)
             await Task.yield()
             #expect(
-                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                manager.reconnectCoordinator.connectionGeneration(for: tab.rootPaneId)
                     == replacementGeneration
             )
         }
@@ -316,40 +315,32 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: UUID(), title: "Mac mid-cleanup network loss")
             installTab(tab, in: manager, connectionState: .connected)
             manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
-            let originalTerminalGeneration = manager.terminalConnectionGeneration(
+            let originalTerminalGeneration = manager.reconnectCoordinator.connectionGeneration(
                 for: tab.rootPaneId
             )
 
-            _ = manager.macRecoveryGate.receive(.sleep, networkReadiness: .ready)
-            guard case .recover(let recoveryGeneration) = manager.macRecoveryGate.receive(
-                .wake,
-                networkReadiness: .ready
-            ) else {
-                Issue.record("Expected a Mac recovery generation")
-                return
-            }
-            manager.activeMacRecoveryGeneration = recoveryGeneration
+            manager.reconnectCoordinator.receiveNetworkReadiness(.ready)
+            let recoveryGeneration = UUID()
 
-            #expect(manager.requestReconnect(
+            #expect(manager.reconnectCoordinator.request(
                 for: tab.rootPaneId,
-                requiresReadyNetwork: false,
+                requiresReadyNetwork: true,
                 generation: recoveryGeneration,
-                replacingCurrent: true,
-                networkReadiness: .ready
+                replacingCurrent: true
             ))
-            manager.handleMacRecoverySignal(.networkChanged(.unavailable))
+            manager.reconnectCoordinator.receiveNetworkReadiness(.unavailable)
 
             #expect(await waitUntil {
-                manager.reconnectAttempt(for: tab.rootPaneId)?.phase == .waitingForNetwork
+                manager.reconnectCoordinator.attempt(for: tab.rootPaneId)?.phase == .waitingForNetwork
             })
             #expect(
-                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                manager.reconnectCoordinator.connectionGeneration(for: tab.rootPaneId)
                     == originalTerminalGeneration
             )
 
-            manager.handleMacRecoverySignal(.networkChanged(.ready))
+            manager.reconnectCoordinator.receiveNetworkReadiness(.ready)
             #expect(await waitUntil {
-                manager.terminalConnectionGeneration(for: tab.rootPaneId)
+                manager.reconnectCoordinator.connectionGeneration(for: tab.rootPaneId)
                     != originalTerminalGeneration
             })
         }
