@@ -1054,10 +1054,6 @@ final class TerminalTabManager: ObservableObject {
         }
     }
 
-    func terminalVoicePresentation(for paneId: UUID) -> TerminalVoicePresentationState {
-        terminalVoicePresentationByPane[paneId] ?? .idle
-    }
-
     func applyTerminalVoiceEvent(
         _ event: TerminalVoicePresentationState.Event,
         for paneId: UUID
@@ -1273,14 +1269,6 @@ final class TerminalTabManager: ObservableObject {
         titleStore.setOverride(title.isEmpty ? nil : title, for: paneId)
     }
 
-    func displayTitle(forPane paneId: UUID, fallback: String? = nil) -> String? {
-        titleStore.displayTitle(forPane: paneId, fallback: fallback)
-    }
-
-    func presentationOverrides(for paneId: UUID) -> TerminalPresentationOverrides {
-        sessionState.paneState(for: paneId)?.presentationOverrides ?? .empty
-    }
-
     func handleTerminalZoom(_ action: TerminalZoomAction, for paneId: UUID) -> TerminalZoomResult? {
         guard sessionState.containsPane(paneId) else { return nil }
 
@@ -1299,10 +1287,6 @@ final class TerminalTabManager: ObservableObject {
             presentationOverrides: overrides,
             effectiveFontSize: overrides.resolvedFontSize()
         )
-    }
-
-    func displayTitle(for tab: TerminalTab) -> String {
-        titleStore.displayTitle(for: tab)
     }
 
     func workingDirectory(for paneId: UUID) -> String? {
