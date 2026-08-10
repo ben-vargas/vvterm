@@ -657,7 +657,7 @@ struct ServerTerminalRoute: View {
               tabManager.sessionState.paneState(for: focusedPaneId)?.connectionState.isConnected == true else { return }
         clearPendingVoiceReturnForFocusedPane()
         if focusedTerminal?.triggerVoiceInput() == true {
-            tabManager.applyTerminalVoiceEvent(.recordingStarted, for: focusedPaneId)
+            tabManager.presentationState.applyVoiceEvent(.recordingStarted, for: focusedPaneId)
         }
     }
 
@@ -670,7 +670,7 @@ struct ServerTerminalRoute: View {
 
     private func clearPendingVoiceReturnForFocusedPane() {
         guard let focusedPaneId else { return }
-        tabManager.applyTerminalVoiceEvent(.pendingReturnDismissed, for: focusedPaneId)
+        tabManager.presentationState.applyVoiceEvent(.pendingReturnDismissed, for: focusedPaneId)
     }
 
     @ViewBuilder

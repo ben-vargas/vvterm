@@ -42,6 +42,9 @@ struct TerminalKeyboardUITestHarness: View {
         _keyboardCoordinator = ObservedObject(
             wrappedValue: tabManager.keyboardCoordinator
         )
+        _presentationState = ObservedObject(
+            wrappedValue: tabManager.presentationState
+        )
         _ = Self.clearTerminalBackgroundCacheForUITest
     }
 
@@ -87,8 +90,9 @@ struct TerminalKeyboardUITestHarness: View {
 
     @EnvironmentObject private var ghosttyApp: Ghostty.App
     @EnvironmentObject private var appLockManager: AppLockManager
-    @ObservedObject private var tabManager: TerminalTabManager
+    private let tabManager: TerminalTabManager
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
+    @ObservedObject private var presentationState: TerminalPresentationStateStore
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
     @State private var terminalView: GhosttyTerminalView?
     @State private var terminalReady = false
@@ -152,7 +156,7 @@ struct TerminalKeyboardUITestHarness: View {
     }
 
     private var voicePresentation: TerminalVoicePresentationState {
-        tabManager.terminalVoicePresentation(for: Self.paneId)
+        presentationState.voicePresentation(for: Self.paneId)
     }
 
     private var simulatesStaleLightAccessoryCacheOnResume: Bool {
@@ -244,7 +248,7 @@ struct TerminalKeyboardUITestHarness: View {
 
                         if !voicePresentation.isRecording {
                             Button("Voice input") {
-                                tabManager.applyTerminalVoiceEvent(
+                                presentationState.applyVoiceEvent(
                                     .recordingStarted,
                                     for: Self.paneId
                                 )
@@ -254,7 +258,7 @@ struct TerminalKeyboardUITestHarness: View {
 
                         if voicePresentation.isPendingReturn {
                             Button("Enter") {
-                                tabManager.applyTerminalVoiceEvent(
+                                presentationState.applyVoiceEvent(
                                     .pendingReturnDismissed,
                                     for: Self.paneId
                                 )
@@ -264,7 +268,7 @@ struct TerminalKeyboardUITestHarness: View {
 
                         if voicePresentation.isRecording {
                             Button("Finish voice test") {
-                                tabManager.applyTerminalVoiceEvent(
+                                presentationState.applyVoiceEvent(
                                     .transcriptionSent,
                                     for: Self.paneId
                                 )

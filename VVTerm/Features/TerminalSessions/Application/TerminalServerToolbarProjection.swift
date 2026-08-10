@@ -217,10 +217,10 @@ final class TerminalServerToolbarProjection: ObservableObject {
         selectedView = tabManager.connectionViewSelections.selection(for: serverId)
         runtimeTitles = tabManager.titleStore.runtimeTitles
         titleOverrides = tabManager.titleStore.overrides
-        splitZoomedTabIds = tabManager.splitZoomedTabIds
+        splitZoomedTabIds = tabManager.presentationState.splitZoomedTabIds
         #if os(iOS)
-        findVisibility = tabManager.terminalFindNavigatorVisibleByPane
-        voicePresentation = tabManager.terminalVoicePresentationByPane
+        findVisibility = tabManager.presentationState.terminalFindNavigatorVisibleByPane
+        voicePresentation = tabManager.presentationState.terminalVoicePresentationByPane
         #endif
 
         let initialStates = Self.makeStates(
@@ -273,7 +273,7 @@ final class TerminalServerToolbarProjection: ObservableObject {
             }
             .store(in: &cancellables)
 
-        tabManager.$splitZoomedTabIds
+        tabManager.presentationState.$splitZoomedTabIds
             .sink { [weak self] tabIds in
                 self?.splitZoomedTabIds = tabIds
                 self?.reconcile()
@@ -281,14 +281,14 @@ final class TerminalServerToolbarProjection: ObservableObject {
             .store(in: &cancellables)
 
         #if os(iOS)
-        tabManager.$terminalFindNavigatorVisibleByPane
+        tabManager.presentationState.$terminalFindNavigatorVisibleByPane
             .sink { [weak self] visibility in
                 self?.findVisibility = visibility
                 self?.reconcileFloatingControls()
             }
             .store(in: &cancellables)
 
-        tabManager.$terminalVoicePresentationByPane
+        tabManager.presentationState.$terminalVoicePresentationByPane
             .sink { [weak self] presentation in
                 self?.voicePresentation = presentation
                 self?.reconcileFloatingControls()

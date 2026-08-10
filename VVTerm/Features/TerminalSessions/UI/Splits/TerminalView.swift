@@ -504,7 +504,7 @@ struct TerminalTabView: View {
         terminal.sendText(trimmed)
         #if os(iOS)
         if shouldShowReturnControl {
-            tabManager.applyTerminalVoiceEvent(.transcriptionSent, for: paneId)
+            tabManager.presentationState.applyVoiceEvent(.transcriptionSent, for: paneId)
         }
         #endif
     }
@@ -512,17 +512,17 @@ struct TerminalTabView: View {
     private func publishVoiceRecordingState(_ isRecording: Bool) {
         #if os(iOS)
         for paneId in tab.allPaneIds where !isRecording || paneId != tab.focusedPaneId {
-            tabManager.applyTerminalVoiceEvent(.recordingStopped, for: paneId)
+            tabManager.presentationState.applyVoiceEvent(.recordingStopped, for: paneId)
         }
         if isRecording {
-            tabManager.applyTerminalVoiceEvent(.recordingStarted, for: tab.focusedPaneId)
+            tabManager.presentationState.applyVoiceEvent(.recordingStarted, for: tab.focusedPaneId)
         }
         #endif
     }
 
     private func clearPendingVoiceReturnForFocusedPane() {
         #if os(iOS)
-        tabManager.applyTerminalVoiceEvent(.pendingReturnDismissed, for: tab.focusedPaneId)
+        tabManager.presentationState.applyVoiceEvent(.pendingReturnDismissed, for: tab.focusedPaneId)
         #endif
     }
 }

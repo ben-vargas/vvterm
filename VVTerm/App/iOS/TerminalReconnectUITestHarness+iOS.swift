@@ -34,7 +34,7 @@ struct TerminalReconnectUITestHarness: View {
     private static let fixturePrivateKeyDefaultsKey = "sshPrivateKeyBase64"
     private static let fixtureUsernameDefaultsKey = "sshUsername"
 
-    @ObservedObject private var tabManager: TerminalTabManager
+    private let tabManager: TerminalTabManager
     @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var engagementTracker: EngagementTracker
     private let statsDependencies: ServerStatsScreenDependencies
@@ -59,7 +59,7 @@ struct TerminalReconnectUITestHarness: View {
         voiceInputRuntimeStore: VoiceInputRuntimeStore,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory
     ) {
-        _tabManager = ObservedObject(wrappedValue: tabManager)
+        self.tabManager = tabManager
         _serverManager = ObservedObject(wrappedValue: serverManager)
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         self.statsDependencies = statsDependencies

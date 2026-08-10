@@ -1,12 +1,6 @@
 import Foundation
 
 extension TerminalTabManager {
-    #if os(iOS)
-    func terminalVoicePresentation(for paneId: UUID) -> TerminalVoicePresentationState {
-        terminalVoicePresentationByPane[paneId] ?? .idle
-    }
-    #endif
-
     func displayTitle(forPane paneId: UUID, fallback: String? = nil) -> String? {
         titleStore.displayTitle(forPane: paneId, fallback: fallback)
     }

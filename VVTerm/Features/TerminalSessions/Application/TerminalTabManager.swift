@@ -13,15 +13,12 @@ import Combine
 import os.log
 
 @MainActor
-final class TerminalTabManager: ObservableObject {
+final class TerminalTabManager {
     // MARK: - Session State
 
     let sessionState: TerminalSessionStateStore
     let connectionViewSelections: ConnectionViewSelectionStore
-
-    /// Tabs temporarily presenting only their focused pane. The focused pane is
-    /// still derived from TerminalTab, and this presentation state is not persisted.
-    @Published private(set) var splitZoomedTabIds: Set<UUID> = []
+    let presentationState = TerminalPresentationStateStore()
 
     /// Servers with at least one live terminal shell.
     var connectedServerIds: Set<UUID> {
@@ -46,8 +43,6 @@ final class TerminalTabManager: ObservableObject {
     var runtimeTitleByPane: [UUID: String] { titleStore.runtimeTitles }
     var titleOverrideByPane: [UUID: String] { titleStore.overrides }
     #if os(iOS)
-    @Published private(set) var terminalFindNavigatorVisibleByPane: [UUID: Bool] = [:]
-    @Published private(set) var terminalVoicePresentationByPane: [UUID: TerminalVoicePresentationState] = [:]
     let keyboardCoordinator = TerminalKeyboardCoordinator()
     #endif
 
@@ -429,7 +424,7 @@ final class TerminalTabManager: ObservableObject {
             return
         }
 
-        splitZoomedTabIds.remove(currentTab.id)
+        presentationState.removeTab(currentTab.id)
 
         // Clean up all panes in this tab
         for paneId in currentTab.allPaneIds {
@@ -703,7 +698,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func isSplitZoomed(in tab: TerminalTab) -> Bool {
-        guard splitZoomedTabIds.contains(tab.id),
+        guard presentationState.splitZoomedTabIds.contains(tab.id),
               let currentTab = sessionState.tab(id: tab.id, for: tab.serverId) else {
             return false
         }
@@ -800,11 +795,7 @@ final class TerminalTabManager: ObservableObject {
         case .closeFocusedPane:
             return .requiresCloseConfirmation
         case .toggleZoom:
-            if splitZoomedTabIds.contains(currentTab.id) {
-                splitZoomedTabIds.remove(currentTab.id)
-            } else {
-                splitZoomedTabIds.insert(currentTab.id)
-            }
+            presentationState.toggleSplitZoom(for: currentTab.id)
         case .selectPrevious:
             guard let paneId = currentTab.layout?.pane(before: currentTab.focusedPaneId) else {
                 return .unavailable
@@ -976,8 +967,7 @@ final class TerminalTabManager: ObservableObject {
     ) {
         #if os(iOS)
         terminal.setLifecycleCallbacks(nil)
-        terminalFindNavigatorVisibleByPane.removeValue(forKey: paneId)
-        terminalVoicePresentationByPane.removeValue(forKey: paneId)
+        presentationState.removePane(paneId)
         keyboardCoordinator.setWindowAttached(false, for: paneId)
         keyboardCoordinator.removePane(paneId)
         #endif
@@ -994,24 +984,7 @@ final class TerminalTabManager: ObservableObject {
 
     #if os(iOS)
     private func setTerminalFindNavigatorVisible(_ isVisible: Bool, for paneId: UUID) {
-        if terminalFindNavigatorVisibleByPane[paneId] != isVisible {
-            terminalFindNavigatorVisibleByPane[paneId] = isVisible
-        }
-    }
-
-    func applyTerminalVoiceEvent(
-        _ event: TerminalVoicePresentationState.Event,
-        for paneId: UUID
-    ) {
-        let current = terminalVoicePresentation(for: paneId)
-        let next = current.applying(event)
-        guard next != current else { return }
-
-        if next == .idle {
-            terminalVoicePresentationByPane.removeValue(forKey: paneId)
-        } else {
-            terminalVoicePresentationByPane[paneId] = next
-        }
+        presentationState.setTerminalFindNavigatorVisible(isVisible, for: paneId)
     }
     #endif
 
@@ -1283,11 +1256,9 @@ extension TerminalTabManager {
             .union(transportCoordinator.ownedPaneIds)
         tmuxCoordinator.resetRuntimeState(for: allPaneIds)
         sessionState.resetForTesting()
-        splitZoomedTabIds = []
+        presentationState.reset()
         titleStore.reset()
         #if os(iOS)
-        terminalFindNavigatorVisibleByPane = [:]
-        terminalVoicePresentationByPane = [:]
         keyboardCoordinator.setActivePane(nil)
         keyboardCoordinator.setViewActive(false)
         #endif
