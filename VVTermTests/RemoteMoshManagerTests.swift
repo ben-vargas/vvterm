@@ -115,9 +115,7 @@ struct RemoteMoshManagerTests {
             Issue.record("Unexpected error: \(error.localizedDescription)")
         }
 
-        #expect(MoshFallbackReason.serverRuntimeBroken.shouldOfferServerMaintenance)
         #expect(!MoshFallbackReason.serverRuntimeBroken.bannerMessage.contains("/opt/homebrew"))
-        #expect(!MoshFallbackReason.bootstrapFailed.shouldOfferServerMaintenance)
     }
 
     @Test

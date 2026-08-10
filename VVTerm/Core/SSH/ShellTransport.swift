@@ -37,10 +37,6 @@ nonisolated enum MoshFallbackReason: String, Codable, Hashable, Sendable {
             return String(localized: "Using SSH fallback for this session.")
         }
     }
-
-    var shouldOfferServerMaintenance: Bool {
-        self == .serverMissing || self == .serverRuntimeBroken
-    }
 }
 
 nonisolated enum MoshServerMaintenanceAction: Equatable, Sendable {
