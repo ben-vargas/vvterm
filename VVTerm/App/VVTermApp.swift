@@ -522,7 +522,7 @@ struct VVTermApp: App {
             StatsCardsLayoutUITestHarness()
                 .modifier(AppearanceModifier())
         } else if usesTerminalZenModeUITestHarness {
-            TerminalZenModeUITestHarness()
+            TerminalZenModeUITestHarness(tabManager: tabManager)
                 .environmentObject(ghosttyApp)
                 .modifier(AppearanceModifier())
         } else if usesStatsStorageUITestHarness {

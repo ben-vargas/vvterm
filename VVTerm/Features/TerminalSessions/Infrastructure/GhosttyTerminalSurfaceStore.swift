@@ -1,5 +1,8 @@
 import Combine
 import Foundation
+#if os(iOS)
+import UIKit
+#endif
 
 /// Owns the one current terminal surface identity for each pane.
 @MainActor

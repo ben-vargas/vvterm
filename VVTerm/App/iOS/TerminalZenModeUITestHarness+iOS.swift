@@ -5,6 +5,7 @@ struct TerminalZenModeUITestHarness: View {
     private static let paneId = UUID(uuidString: "5E798DA7-3488-4D78-BEE0-7E01E241A31E")!
 
     @EnvironmentObject private var ghosttyApp: Ghostty.App
+    private let tabManager: TerminalTabManager
     @State private var isZenModeEnabled = false
     @State private var showingZenPanel = false
     @State private var selectedView = ConnectionViewTabID.terminal
@@ -13,9 +14,14 @@ struct TerminalZenModeUITestHarness: View {
     @State private var terminalView: GhosttyTerminalView?
     @State private var terminalReady = false
 
+    init(tabManager: TerminalTabManager) {
+        self.tabManager = tabManager
+    }
+
     var body: some View {
         NavigationStack {
             TerminalKeyboardHarnessRepresentable(
+                tabManager: tabManager,
                 terminalView: $terminalView,
                 terminalReady: $terminalReady,
                 focusRequestID: 0,
