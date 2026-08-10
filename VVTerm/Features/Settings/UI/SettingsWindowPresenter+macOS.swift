@@ -31,7 +31,8 @@ final class SettingsWindowPresenter {
         storeManager: StoreManager,
         statsPreferencesStore: PreferencesStore,
         syncSettingsCoordinator: SyncSettingsCoordinator,
-        sshKeySettingsCoordinator: SSHKeySettingsCoordinator
+        sshKeySettingsCoordinator: SSHKeySettingsCoordinator,
+        knownHostSettingsCoordinator: KnownHostSettingsCoordinator
     ) {
         makeWindow = {
             let settingsView = LocalizedSettingsView(
@@ -43,7 +44,8 @@ final class SettingsWindowPresenter {
                 storeManager: storeManager,
                 statsPreferencesStore: statsPreferencesStore,
                 syncSettingsCoordinator: syncSettingsCoordinator,
-                sshKeySettingsCoordinator: sshKeySettingsCoordinator
+                sshKeySettingsCoordinator: sshKeySettingsCoordinator,
+                knownHostSettingsCoordinator: knownHostSettingsCoordinator
             )
             return Self.makeSettingsWindow(rootView: settingsView)
         }
@@ -98,6 +100,7 @@ private struct LocalizedSettingsView: View {
     @ObservedObject var storeManager: StoreManager
     @ObservedObject var syncSettingsCoordinator: SyncSettingsCoordinator
     @ObservedObject var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
+    @ObservedObject var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
     let statsPreferencesStore: PreferencesStore
 
     var body: some View {
@@ -114,6 +117,7 @@ private struct LocalizedSettingsView: View {
                 .environmentObject(storeManager)
                 .environmentObject(syncSettingsCoordinator)
                 .environmentObject(sshKeySettingsCoordinator)
+                .environmentObject(knownHostSettingsCoordinator)
         }
         .environmentObject(appLockManager)
     }

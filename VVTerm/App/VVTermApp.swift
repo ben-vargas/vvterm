@@ -34,6 +34,7 @@ struct VVTermApp: App {
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: .standard)
         let cloudKitManager = CloudKitManager.shared
         let keychainManager = KeychainManager.shared
+        let knownHostsManager = KnownHostsManager.shared
         let syncSettingsCoordinator = SyncSettingsLiveComposition.makeCoordinator(
             cloudKit: cloudKitManager,
             keychain: keychainManager,
@@ -42,6 +43,9 @@ struct VVTermApp: App {
         )
         let sshKeySettingsCoordinator = SSHKeySettingsLiveComposition.makeCoordinator(
             keychain: keychainManager
+        )
+        let knownHostSettingsCoordinator = KnownHostSettingsLiveComposition.makeCoordinator(
+            knownHosts: knownHostsManager
         )
         let networkMonitor = NetworkMonitor.shared
         #if os(iOS)
@@ -86,6 +90,7 @@ struct VVTermApp: App {
         )
         _syncSettingsCoordinator = StateObject(wrappedValue: syncSettingsCoordinator)
         _sshKeySettingsCoordinator = StateObject(wrappedValue: sshKeySettingsCoordinator)
+        _knownHostSettingsCoordinator = StateObject(wrappedValue: knownHostSettingsCoordinator)
         _remoteFileBrowserStore = StateObject(
             wrappedValue: Self.makeRemoteFileBrowserStore(
                 tabManager: tabManager,
@@ -102,7 +107,8 @@ struct VVTermApp: App {
             storeManager: storeManager,
             statsPreferencesStore: statsPreferencesStore,
             syncSettingsCoordinator: syncSettingsCoordinator,
-            sshKeySettingsCoordinator: sshKeySettingsCoordinator
+            sshKeySettingsCoordinator: sshKeySettingsCoordinator,
+            knownHostSettingsCoordinator: knownHostSettingsCoordinator
         )
         #endif
         appDelegate.configure(
@@ -147,6 +153,7 @@ struct VVTermApp: App {
     @StateObject private var viewTabConfigurationManager: ViewTabConfigurationManager
     @StateObject private var syncSettingsCoordinator: SyncSettingsCoordinator
     @StateObject private var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
+    @StateObject private var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
     private let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
     #if os(macOS)
     private let settingsWindowPresenter: SettingsWindowPresenter
@@ -379,6 +386,7 @@ struct VVTermApp: App {
             .environmentObject(viewTabConfigurationManager)
             .environmentObject(syncSettingsCoordinator)
             .environmentObject(sshKeySettingsCoordinator)
+            .environmentObject(knownHostSettingsCoordinator)
         }
         #if os(macOS)
         .windowToolbarStyle(.unified)

@@ -173,6 +173,7 @@ struct TerminalSettingsView: View {
     @AppStorage(TerminalDefaults.optionAsAltModeKey) private var optionAsAltModeRaw = TerminalOptionAsAltMode.none.rawValue
 
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
+    @EnvironmentObject private var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var availableFonts: [String] = []
@@ -180,7 +181,6 @@ struct TerminalSettingsView: View {
     @State private var customThemeErrorMessage: String?
     @State private var showingCustomThemeManager = false
     @State private var showingResetKnownHostsConfirmation = false
-    @State private var knownHostCount = 0
 
     private var builtInThemeOptions: [String] {
         Set(builtInThemeNames)
@@ -519,7 +519,7 @@ struct TerminalSettingsView: View {
                     .foregroundStyle(.red)
             }
             .tint(.red)
-            .disabled(knownHostCount == 0)
+            .disabled(knownHostSettingsCoordinator.knownHostCount == 0)
         } header: {
             Text("Danger Zone")
         } footer: {
@@ -530,7 +530,7 @@ struct TerminalSettingsView: View {
     }
 
     private var knownHostsFooterText: String {
-        let count = Int64(knownHostCount)
+        let count = Int64(knownHostSettingsCoordinator.knownHostCount)
         if count == 1 {
             return String(localized: "VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection.")
         }
@@ -588,8 +588,7 @@ struct TerminalSettingsView: View {
         .alert("Reset Trusted SSH Hosts", isPresented: $showingResetKnownHostsConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Reset", role: .destructive) {
-                KnownHostsManager.shared.removeAll()
-                refreshKnownHostCount()
+                knownHostSettingsCoordinator.removeAllKnownHosts()
             }
         } message: {
             Text("VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents.")
@@ -617,7 +616,7 @@ struct TerminalSettingsView: View {
                 builtInThemeNames = terminalThemeManager.builtInThemeNames
             }
             ensureThemeSelectionIsValid()
-            refreshKnownHostCount()
+            knownHostSettingsCoordinator.loadCount()
         }
     }
 
@@ -630,10 +629,6 @@ struct TerminalSettingsView: View {
         guard !trimmed.isEmpty else { return systemFonts }
         guard !systemFonts.contains(trimmed) else { return systemFonts }
         return [trimmed] + systemFonts
-    }
-
-    private func refreshKnownHostCount() {
-        knownHostCount = KnownHostsManager.shared.entries().count
     }
 
     private func ensureThemeSelectionIsValid() {
