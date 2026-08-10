@@ -7,15 +7,6 @@ import MoshBootstrap
 // MARK: - SSH Client using libssh2
 
 actor SSHClient {
-    enum LifecyclePhase: Equatable, Sendable {
-        case disconnected
-        case connecting
-        case connected
-        case disconnecting
-        case failed
-        case aborted
-    }
-
     private struct ConnectingState {
         let id: UUID
         let key: String
