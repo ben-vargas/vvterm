@@ -258,7 +258,7 @@ extension Color {
 
 #Preview {
     let appLockManager = AppLockManager()
-    let cloudKitSyncCoordinator = CloudKitSyncLiveComposition.makeLiveCoordinator()
+    let cloudKitSyncCoordinator = CloudKitSyncLiveComposition.makeLive().coordinator
     let serverManager = ServerManager(
         dependencies: .live(
             actionAuthorizer: appLockManager,

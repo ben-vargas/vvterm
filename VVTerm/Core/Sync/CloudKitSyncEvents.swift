@@ -114,35 +114,3 @@ final class CloudKitSyncLifecycleDriver {
         #endif
     }
 }
-
-@MainActor
-enum CloudKitSyncResolution {
-    case terminalAccessoryProfile(TerminalAccessoryProfile)
-    case statsPreferences(StatsPreferences)
-}
-
-@MainActor
-final class CloudKitSyncResolutionHub {
-    static let shared = CloudKitSyncResolutionHub()
-
-    typealias Observer = (CloudKitSyncResolution) -> Void
-
-    private var observers: [UUID: Observer] = [:]
-
-    @discardableResult
-    func observe(_ observer: @escaping Observer) -> UUID {
-        let id = UUID()
-        observers[id] = observer
-        return id
-    }
-
-    func removeObserver(_ id: UUID) {
-        observers.removeValue(forKey: id)
-    }
-
-    func publish(_ resolution: CloudKitSyncResolution) {
-        for observer in Array(observers.values) {
-            observer(resolution)
-        }
-    }
-}

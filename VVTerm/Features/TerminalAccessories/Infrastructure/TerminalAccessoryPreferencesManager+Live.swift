@@ -10,29 +10,10 @@ enum TerminalAccessoryCloudKitLiveComposition {
     )
 }
 
-extension CloudKitSyncResolutionHub: TerminalAccessoryResolutionSource,
-    TerminalAccessoryResolutionPublishing {
-    func observeTerminalAccessoryProfile(
-        _ observer: @escaping (TerminalAccessoryProfile) -> Void
-    ) -> UUID {
-        observe { resolution in
-            guard case .terminalAccessoryProfile(let profile) = resolution else { return }
-            observer(profile)
-        }
-    }
-
-    func removeTerminalAccessoryProfileObserver(_ id: UUID) {
-        removeObserver(id)
-    }
-
-    func publishTerminalAccessoryProfile(_ profile: TerminalAccessoryProfile) {
-        publish(.terminalAccessoryProfile(profile))
-    }
-}
-
 extension TerminalAccessoryPreferencesDependencies {
     static func live(
-        mutationQueue: any TerminalAccessoryMutationQueue
+        mutationQueue: any TerminalAccessoryMutationQueue,
+        resolutionSource: any TerminalAccessoryResolutionSource
     ) -> Self {
         TerminalAccessoryPreferencesDependencies(
             profileStore: UserDefaultsTerminalAccessoryProfileStore(
@@ -42,7 +23,7 @@ extension TerminalAccessoryPreferencesDependencies {
             cloud: TerminalAccessoryCloudKitLiveComposition.client,
             mutationQueue: mutationQueue,
             syncLifecycle: CloudKitSyncLifecycleDriver.shared,
-            resolutionSource: CloudKitSyncResolutionHub.shared,
+            resolutionSource: resolutionSource,
             writerID: DeviceIdentity.id,
             isSyncEnabled: { SyncSettings.isEnabled },
             now: Date.init,

@@ -9,36 +9,48 @@ struct CloudKitSyncClients {
 }
 
 @MainActor
+struct CloudKitSyncComposition {
+    let coordinator: CloudKitSyncCoordinator
+    let terminalAccessoryResolutions: TerminalAccessoryResolutionChannel
+    let statsPreferencesResolutions: StatsPreferencesResolutionChannel
+}
+
+@MainActor
 enum CloudKitSyncLiveComposition {
-    static func makeCoordinator(
+    static func make(
         clients: CloudKitSyncClients,
         queue: PendingCloudKitSyncQueue,
-        resolutionHub: CloudKitSyncResolutionHub,
         isSyncEnabled: @escaping () -> Bool,
         now: @escaping () -> Date
-    ) -> CloudKitSyncCoordinator {
+    ) -> CloudKitSyncComposition {
+        let terminalAccessoryResolutions = TerminalAccessoryResolutionChannel()
+        let statsPreferencesResolutions = StatsPreferencesResolutionChannel()
         let mutationHandler = CloudKitPendingMutationRouter(
             serverCloud: clients.serverCloud,
             terminalThemeCloud: clients.terminalThemeCloud,
             terminalAccessoryHandler: TerminalAccessoryPendingMutationHandler(
                 cloud: clients.terminalAccessoryCloud,
-                resolutionPublisher: resolutionHub
+                resolutionPublisher: terminalAccessoryResolutions
             ),
             statsPreferencesHandler: StatsPreferencesPendingMutationHandler(
                 cloud: clients.statsPreferencesCloud,
-                resolutionPublisher: resolutionHub
+                resolutionPublisher: statsPreferencesResolutions
             )
         )
-        return CloudKitSyncCoordinator(
-            mutationHandler: mutationHandler,
-            queue: queue,
-            isSyncEnabled: isSyncEnabled,
-            now: now
+        return CloudKitSyncComposition(
+            coordinator: CloudKitSyncCoordinator(
+                mutationHandler: mutationHandler,
+                queue: queue,
+                isSyncEnabled: isSyncEnabled,
+                now: now
+            ),
+            terminalAccessoryResolutions: terminalAccessoryResolutions,
+            statsPreferencesResolutions: statsPreferencesResolutions
         )
     }
 
-    static func makeLiveCoordinator() -> CloudKitSyncCoordinator {
-        makeCoordinator(
+    static func makeLive() -> CloudKitSyncComposition {
+        make(
             clients: CloudKitSyncClients(
                 serverCloud: ServerCloudKitLiveComposition.client,
                 terminalThemeCloud: TerminalThemeCloudKitLiveComposition.client,
@@ -46,7 +58,6 @@ enum CloudKitSyncLiveComposition {
                 statsPreferencesCloud: StatsPreferencesCloudKitLiveComposition.client
             ),
             queue: PendingCloudKitSyncQueue(),
-            resolutionHub: CloudKitSyncResolutionHub.shared,
             isSyncEnabled: { SyncSettings.isEnabled },
             now: Date.init
         )
@@ -57,7 +68,7 @@ extension ServerManager {
     /// Compatibility composition for the Remote Files default initializer.
     /// App roots must construct and inject their own manager instead.
     static let shared: ServerManager = {
-        let syncCoordinator = CloudKitSyncLiveComposition.makeLiveCoordinator()
+        let syncCoordinator = CloudKitSyncLiveComposition.makeLive().coordinator
         return ServerManager(
             dependencies: .live(
                 actionAuthorizer: AppLockManager.shared,

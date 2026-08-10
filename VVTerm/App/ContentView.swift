@@ -383,7 +383,8 @@ struct ContentView: View {
 
 #Preview {
     let appLockManager = AppLockManager()
-    let cloudKitSyncCoordinator = CloudKitSyncLiveComposition.makeLiveCoordinator()
+    let cloudKitSync = CloudKitSyncLiveComposition.makeLive()
+    let cloudKitSyncCoordinator = cloudKitSync.coordinator
     let serverManager = ServerManager(
         dependencies: .live(
             actionAuthorizer: appLockManager,
@@ -393,7 +394,10 @@ struct ContentView: View {
     )
     let engagementTracker = EngagementTracker(dependencies: .live)
     let statsPreferencesStore = PreferencesStore(
-        dependencies: .live(mutationQueue: cloudKitSyncCoordinator)
+        dependencies: .live(
+            mutationQueue: cloudKitSyncCoordinator,
+            resolutionSource: cloudKitSync.statsPreferencesResolutions
+        )
     )
     let statsDependencies = ServerStatsScreenDependencies(
         makeCollector: { ServerStatsCollector() },

@@ -480,10 +480,14 @@ struct GeneralSettingsView: View {
 }
 
 #Preview {
-    let cloudKitSyncCoordinator = CloudKitSyncLiveComposition.makeLiveCoordinator()
+    let cloudKitSync = CloudKitSyncLiveComposition.makeLive()
+    let cloudKitSyncCoordinator = cloudKitSync.coordinator
     GeneralSettingsView(
         statsPreferencesStore: PreferencesStore(
-            dependencies: .live(mutationQueue: cloudKitSyncCoordinator)
+            dependencies: .live(
+                mutationQueue: cloudKitSyncCoordinator,
+                resolutionSource: cloudKitSync.statsPreferencesResolutions
+            )
         ),
         analyticsOptOutAction: AnalyticsOptOutAction(emitAnalyticsDisabled: {})
     )

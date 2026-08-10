@@ -78,13 +78,12 @@ struct CloudKitSyncLiveCompositionTests {
             terminalAccessoryCloud: accessory,
             statsPreferencesCloud: stats
         )
-        let coordinator = CloudKitSyncLiveComposition.makeCoordinator(
+        let composition = CloudKitSyncLiveComposition.make(
             clients: clients,
             queue: PendingCloudKitSyncQueue(
                 storageKey: "compositionQueue",
                 defaults: defaults
             ),
-            resolutionHub: CloudKitSyncResolutionHub(),
             isSyncEnabled: { false },
             now: { Date(timeIntervalSinceReferenceDate: 1_000) }
         )
@@ -93,7 +92,7 @@ struct CloudKitSyncLiveCompositionTests {
         #expect(clients.terminalThemeCloud === theme)
         #expect(clients.terminalAccessoryCloud === accessory)
         #expect(clients.statsPreferencesCloud === stats)
-        #expect(coordinator.snapshot().isEmpty)
+        #expect(composition.coordinator.snapshot().isEmpty)
     }
 
     @Test
@@ -105,19 +104,7 @@ struct CloudKitSyncLiveCompositionTests {
         let themeClient = AppThemeMutationClientStub()
         let accessoryClient = AppAccessoryCloudClientStub()
         let statsClient = AppStatsCloudClientStub()
-        let resolutionHub = CloudKitSyncResolutionHub()
-        var publishedProfiles: [TerminalAccessoryProfile] = []
-        var publishedStats: [StatsPreferences] = []
-        let observerID = resolutionHub.observe { resolution in
-            switch resolution {
-            case .terminalAccessoryProfile(let profile):
-                publishedProfiles.append(profile)
-            case .statsPreferences(let preferences):
-                publishedStats.append(preferences)
-            }
-        }
-        defer { resolutionHub.removeObserver(observerID) }
-        let coordinator = CloudKitSyncLiveComposition.makeCoordinator(
+        let composition = CloudKitSyncLiveComposition.make(
             clients: CloudKitSyncClients(
                 serverCloud: serverClient,
                 terminalThemeCloud: themeClient,
@@ -128,10 +115,28 @@ struct CloudKitSyncLiveCompositionTests {
                 storageKey: "dispatchQueue",
                 defaults: defaults
             ),
-            resolutionHub: resolutionHub,
             isSyncEnabled: { true },
             now: { Date(timeIntervalSinceReferenceDate: 10_000) }
         )
+        let terminalAccessoryResolutions = composition.terminalAccessoryResolutions
+        let statsPreferencesResolutions = composition.statsPreferencesResolutions
+        var publishedProfiles: [TerminalAccessoryProfile] = []
+        var publishedStats: [StatsPreferences] = []
+        let accessoryObserverID = terminalAccessoryResolutions
+            .observeTerminalAccessoryProfile { profile in
+                publishedProfiles.append(profile)
+            }
+        let statsObserverID = statsPreferencesResolutions
+            .observeStatsPreferences { preferences in
+                publishedStats.append(preferences)
+            }
+        defer {
+            terminalAccessoryResolutions.removeTerminalAccessoryProfileObserver(
+                accessoryObserverID
+            )
+            statsPreferencesResolutions.removeStatsPreferencesObserver(statsObserverID)
+        }
+        let coordinator = composition.coordinator
         let workspace = makeWorkspace(name: "Saved Workspace")
         let deletedWorkspace = makeWorkspace(name: "Deleted Workspace")
         let server = makeServer(workspaceID: workspace.id, name: "Saved Server")
@@ -150,13 +155,8 @@ struct CloudKitSyncLiveCompositionTests {
             usePerAppearanceTheme: false,
             updatedAt: Date(timeIntervalSinceReferenceDate: 200)
         )
-        let profile = TerminalAccessoryProfile.defaultValue(lastWriterDeviceId: "device")
-        let stats = StatsPreferences(
-            style: .cardsCompact,
-            blocks: StatsPreferences.defaultBlocks,
-            updatedAt: Date(timeIntervalSinceReferenceDate: 300),
-            lastWriterDeviceId: "device"
-        )
+        let profile = makeProfile()
+        let stats = makeStatsPreferences()
 
         coordinator.enqueueServerUpsert(server)
         coordinator.enqueueServerDelete(deletedServer)
@@ -183,6 +183,40 @@ struct CloudKitSyncLiveCompositionTests {
         #expect(coordinator.snapshot().isEmpty)
     }
 
+    @Test
+    func resolutionChannelsAreIsolatedAndRemovedObserversStayRemoved() {
+        let terminalAccessoryResolutions = TerminalAccessoryResolutionChannel()
+        let statsPreferencesResolutions = StatsPreferencesResolutionChannel()
+        let profile = makeProfile()
+        let stats = makeStatsPreferences()
+        var publishedProfiles: [TerminalAccessoryProfile] = []
+        var publishedStats: [StatsPreferences] = []
+        let accessoryObserverID = terminalAccessoryResolutions
+            .observeTerminalAccessoryProfile { publishedProfiles.append($0) }
+        let statsObserverID = statsPreferencesResolutions
+            .observeStatsPreferences { publishedStats.append($0) }
+
+        terminalAccessoryResolutions.publishTerminalAccessoryProfile(profile)
+
+        #expect(publishedProfiles == [profile])
+        #expect(publishedStats.isEmpty)
+
+        statsPreferencesResolutions.publishStatsPreferences(stats)
+
+        #expect(publishedProfiles == [profile])
+        #expect(publishedStats == [stats])
+
+        terminalAccessoryResolutions.removeTerminalAccessoryProfileObserver(
+            accessoryObserverID
+        )
+        statsPreferencesResolutions.removeStatsPreferencesObserver(statsObserverID)
+        terminalAccessoryResolutions.publishTerminalAccessoryProfile(profile)
+        statsPreferencesResolutions.publishStatsPreferences(stats)
+
+        #expect(publishedProfiles == [profile])
+        #expect(publishedStats == [stats])
+    }
+
     private func makeServer(workspaceID: UUID, name: String) -> Server {
         Server(
             workspaceId: workspaceID,
@@ -194,5 +228,18 @@ struct CloudKitSyncLiveCompositionTests {
 
     private func makeWorkspace(name: String) -> Workspace {
         Workspace(name: name)
+    }
+
+    private func makeProfile() -> TerminalAccessoryProfile {
+        TerminalAccessoryProfile.defaultValue(lastWriterDeviceId: "device")
+    }
+
+    private func makeStatsPreferences() -> StatsPreferences {
+        StatsPreferences(
+            style: .cardsCompact,
+            blocks: StatsPreferences.defaultBlocks,
+            updatedAt: Date(timeIntervalSinceReferenceDate: 300),
+            lastWriterDeviceId: "device"
+        )
     }
 }
