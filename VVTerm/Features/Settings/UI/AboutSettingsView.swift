@@ -13,7 +13,6 @@ import UIKit
 // MARK: - Contact Option
 
 private struct ContactOption: Identifiable {
-    let id = UUID()
     let title: String
     let subtitle: String
     let icon: String
@@ -21,6 +20,8 @@ private struct ContactOption: Identifiable {
     let iconText: String?
     let color: Color
     let url: String
+
+    var id: String { url }
 }
 
 private let contactOptions: [ContactOption] = [
@@ -32,6 +33,8 @@ private let contactOptions: [ContactOption] = [
 // MARK: - About Settings View
 
 struct AboutSettingsView: View {
+    @Environment(\.openURL) private var openURL
+
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.1"
     }
@@ -152,7 +155,7 @@ struct AboutSettingsView: View {
             Section("Get in Touch") {
                 ForEach(contactOptions) { option in
                     Button {
-                        openURL(option.url)
+                        openExternalURL(option.url)
                     } label: {
                         HStack(spacing: 14) {
                             Group {
@@ -195,7 +198,7 @@ struct AboutSettingsView: View {
             Section {
                 #if os(iOS)
                 Button {
-                    openURL("https://x.com/vivytech")
+                    openExternalURL("https://x.com/vivytech")
                 } label: {
                     HStack {
                         Text(verbatim: copyrightLine)
@@ -221,12 +224,8 @@ struct AboutSettingsView: View {
         .adaptiveSoftScrollEdges()
     }
 
-    private func openURL(_ urlString: String) {
+    private func openExternalURL(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
-        #if os(macOS)
-        NSWorkspace.shared.open(url)
-        #else
-        UIApplication.shared.open(url)
-        #endif
+        openURL(url)
     }
 }
