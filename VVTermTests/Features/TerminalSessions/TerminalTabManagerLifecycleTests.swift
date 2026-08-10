@@ -811,11 +811,10 @@ struct TerminalTabManagerLifecycleTests {
 
             #expect(manager.sessionState.tabs(for: firstTab.serverId).isEmpty)
             #expect(manager.sessionState.paneState(for: firstTab.rootPaneId) == nil)
-            #expect(!manager.connectedServerIds.contains(firstTab.serverId))
+            #expect(manager.transportCoordinator.activeSSHRoute(for: firstTab.rootPaneId) == nil)
             #expect(manager.sessionState.tabs(for: secondTab.serverId) == [secondTab])
             #expect(manager.sessionState.paneState(for: secondTab.rootPaneId)?.connectionState == .connected)
             #expect(manager.transportCoordinator.activeSSHRoute(for: secondTab.rootPaneId) != nil)
-            #expect(manager.connectedServerIds == [secondTab.serverId])
         }
     }
 
@@ -882,7 +881,6 @@ struct TerminalTabManagerLifecycleTests {
             #expect(manager.sessionState.tabs(for: tab.serverId) == [tab])
             #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
             #expect(manager.transportCoordinator.activeSSHRoute(for: tab.rootPaneId) == nil)
-            #expect(!manager.connectedServerIds.contains(tab.serverId))
             #expect(!TerminalConnectionStartPolicy.shouldStart(connectionState: .disconnected))
         }
     }
@@ -1747,7 +1745,6 @@ struct TerminalTabManagerLifecycleTests {
             #expect(manager.sessionState.tabs(for: tab.serverId).map(\.id) == [tab.id])
             #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
             #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
-            #expect(manager.connectedServerIds.isEmpty)
         }
     }
     #endif

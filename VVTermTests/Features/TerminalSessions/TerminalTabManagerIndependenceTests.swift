@@ -160,8 +160,6 @@ struct TerminalTabManagerIndependenceTests {
             first.terminalSurfaceStore.surface(for: tab.rootPaneId) === terminal
         )
         #expect(second.terminalSurfaceStore.surface(for: tab.rootPaneId) == nil)
-        #expect(first.connectedServerIds == [tab.serverId])
-        #expect(second.connectedServerIds.isEmpty)
 
         await first.transportCoordinator.unregisterSSHClient(for: tab.rootPaneId)
     }

@@ -20,17 +20,6 @@ final class TerminalTabManager {
     let connectionViewSelections: ConnectionViewSelectionStore
     let presentationState = TerminalPresentationStateStore()
 
-    /// Servers with at least one live terminal shell.
-    var connectedServerIds: Set<UUID> {
-        Set(sessionState.allPaneStates.compactMap { state in
-            guard state.connectionState.isConnected,
-                  transportCoordinator.hasLiveTransport(for: state.paneId) else {
-                return nil
-            }
-            return state.serverId
-        })
-    }
-
     // MARK: - Terminal Registry
 
     let terminalSurfaceStore: any TerminalSurfaceStoring
@@ -376,10 +365,6 @@ final class TerminalTabManager {
         sessionState.canOpenNewTab(hasProAccess: hasProAccess)
     }
 
-    private func hasLiveTerminalShell(for serverId: UUID) -> Bool {
-        connectedServerIds.contains(serverId)
-    }
-
     /// Open a new tab for a server
     @discardableResult
     func openTab(for server: Server) async throws -> TerminalTab {
@@ -462,8 +447,7 @@ final class TerminalTabManager {
 
     /// Disconnect every active terminal tab.
     func disconnectAll() {
-        let serverIds = sessionState.serverIdsWithTabs.union(connectedServerIds)
-        for serverId in serverIds {
+        for serverId in sessionState.serverIdsWithTabs {
             disconnectServer(serverId)
         }
         sessionState.persistNow()
