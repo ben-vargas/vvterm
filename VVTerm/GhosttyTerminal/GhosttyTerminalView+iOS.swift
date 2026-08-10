@@ -59,6 +59,7 @@ class GhosttyTerminalView: UIView {
     let initialCommand: String?
     let useCustomIO: Bool
     private(set) var terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
+    private var keyboardToolbar: TerminalInputAccessoryView?
 
     /// Callback invoked when the terminal process exits
     var onProcessExit: (() -> Void)?
@@ -2344,13 +2345,6 @@ private extension TerminalKey {
 // MARK: - Keyboard Accessory View
 
 extension GhosttyTerminalView {
-    private static var keyboardToolbarKey: UInt8 = 0
-
-    private var keyboardToolbar: TerminalInputAccessoryView? {
-        get { objc_getAssociatedObject(self, &Self.keyboardToolbarKey) as? TerminalInputAccessoryView }
-        set { objc_setAssociatedObject(self, &Self.keyboardToolbarKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
-    }
-
     private var shouldHideKeyboardAccessoryBar: Bool {
         shouldSuppressSoftwareKeyboard
             || suppressAccessoryForMissingSoftwareKeyboard
