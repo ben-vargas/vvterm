@@ -2,7 +2,7 @@ import Foundation
 import Cloudflared
 import os.log
 
-struct CloudflareMetadataBodyBudget: Sendable {
+nonisolated struct CloudflareMetadataBodyBudget: Sendable {
     private(set) var receivedBytes = 0
     let maximumBytes: Int
 
@@ -21,7 +21,7 @@ struct CloudflareMetadataBodyBudget: Sendable {
     }
 }
 
-enum CloudflareMetadataRequestError: LocalizedError {
+nonisolated enum CloudflareMetadataRequestError: LocalizedError {
     case nonHTTPResponse
     case responseTooLarge
 
