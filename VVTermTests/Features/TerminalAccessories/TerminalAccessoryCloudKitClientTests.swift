@@ -38,6 +38,15 @@ private final class TerminalAccessoryRecordTransportStub: CloudKitRecordTranspor
         try fetchResult.get()
     }
 
+    func fetchCloudKitRecords(
+        matchingRecordTypes recordTypes: Set<String>,
+        desiredKeys: [String]
+    ) async throws -> [CKRecord] {
+        []
+    }
+
+    func upsertCloudKitRecord(_ record: CKRecord) async throws {}
+
     func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws {
         savedRecords.append(record)
         guard !saveResults.isEmpty else { return }
@@ -84,6 +93,14 @@ private final class StatsPreferencesCloudClientStub: StatsPreferencesCloudClient
     ) async throws -> StatsPreferences {
         localPreferences
     }
+}
+
+@MainActor
+private final class TerminalThemeCloudClientStub: TerminalThemeCloudMutationClient {
+    func saveTerminalTheme(_ theme: TerminalTheme) async throws {}
+    func saveTerminalThemePreference(
+        _ preference: TerminalThemePreference
+    ) async throws {}
 }
 
 @MainActor
@@ -216,6 +233,7 @@ struct TerminalAccessoryCloudKitClientTests {
         defer { resolutionHub.removeObserver(observerID) }
         let coordinator = CloudKitSyncCoordinator(
             cloudKit: CloudKitManager.shared,
+            terminalThemeCloud: TerminalThemeCloudClientStub(),
             terminalAccessoryCloud: client,
             statsPreferencesCloud: StatsPreferencesCloudClientStub(),
             queue: PendingCloudKitSyncQueue(

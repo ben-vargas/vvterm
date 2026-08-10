@@ -38,6 +38,15 @@ private final class StatsPreferencesRecordTransportStub: CloudKitRecordTransport
         try fetchResult.get()
     }
 
+    func fetchCloudKitRecords(
+        matchingRecordTypes recordTypes: Set<String>,
+        desiredKeys: [String]
+    ) async throws -> [CKRecord] {
+        []
+    }
+
+    func upsertCloudKitRecord(_ record: CKRecord) async throws {}
+
     func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws {
         savedRecords.append(record)
         guard !saveResults.isEmpty else { return }

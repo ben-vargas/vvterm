@@ -30,9 +30,15 @@ private final class UserDefaultsTerminalThemePreferenceChangeSource: TerminalThe
     }
 }
 
-extension CloudKitManager: TerminalThemeCloudClient {}
 extension CloudKitSyncCoordinator: TerminalThemeMutationQueue {}
 extension CloudKitSyncLifecycleDriver: TerminalThemeSyncLifecycle {}
+
+@MainActor
+enum TerminalThemeCloudKitLiveComposition {
+    static let client = TerminalThemeCloudKitClient(
+        transport: CloudKitManager.shared
+    )
+}
 
 extension TerminalThemeManagerDependencies {
     static var live: Self {
@@ -50,7 +56,7 @@ extension TerminalThemeManagerDependencies {
                 defaults: defaults,
                 keys: keys
             ),
-            cloud: CloudKitManager.shared,
+            cloud: TerminalThemeCloudKitLiveComposition.client,
             mutationQueue: CloudKitSyncCoordinator.shared,
             syncLifecycle: CloudKitSyncLifecycleDriver.shared,
             preferenceChanges: UserDefaultsTerminalThemePreferenceChangeSource(

@@ -5,6 +5,7 @@ import os.log
 @MainActor
 final class CloudKitSyncCoordinator {
     private let cloudKit: CloudKitManager
+    private let terminalThemeCloud: any TerminalThemeCloudMutationClient
     private let terminalAccessoryCloud: any TerminalAccessoryCloudClient
     private let statsPreferencesCloud: any StatsPreferencesCloudClient
     private let logger = Logger(
@@ -20,6 +21,7 @@ final class CloudKitSyncCoordinator {
 
     init(
         cloudKit: CloudKitManager,
+        terminalThemeCloud: any TerminalThemeCloudMutationClient,
         terminalAccessoryCloud: any TerminalAccessoryCloudClient,
         statsPreferencesCloud: any StatsPreferencesCloudClient,
         queue: PendingCloudKitSyncQueue,
@@ -28,6 +30,7 @@ final class CloudKitSyncCoordinator {
         now: @escaping () -> Date
     ) {
         self.cloudKit = cloudKit
+        self.terminalThemeCloud = terminalThemeCloud
         self.terminalAccessoryCloud = terminalAccessoryCloud
         self.statsPreferencesCloud = statsPreferencesCloud
         self.queue = queue
@@ -161,9 +164,9 @@ final class CloudKitSyncCoordinator {
         case .workspaceDelete(let workspace):
             try await cloudKit.deleteWorkspace(workspace)
         case .terminalThemeUpsert(let theme):
-            try await cloudKit.saveTerminalTheme(theme)
+            try await terminalThemeCloud.saveTerminalTheme(theme)
         case .terminalThemePreferenceUpsert(let preference):
-            try await cloudKit.saveTerminalThemePreference(preference)
+            try await terminalThemeCloud.saveTerminalThemePreference(preference)
         case .terminalAccessoryProfileUpsert(let profile):
             let resolvedProfile = try await terminalAccessoryCloud.syncTerminalAccessoryProfile(
                 profile

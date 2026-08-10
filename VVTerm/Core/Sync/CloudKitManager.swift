@@ -39,6 +39,8 @@ final class CloudKitManager: ObservableObject {
     private enum RecordType {
         static let server = "Server"
         static let workspace = "Workspace"
+        static let terminalTheme = "TerminalTheme"
+        static let terminalThemePreference = "TerminalThemePreference"
         static let userPreference = "UserPreference"
     }
 
@@ -52,15 +54,7 @@ final class CloudKitManager: ObservableObject {
         "environments"
     ]
 
-    private static let fetchedRecordKeys = (
-        serverAndWorkspaceRecordKeys
-            + TerminalThemeCloudKitRecordCodec.recordKeys
-            + TerminalThemePreferenceCloudKitRecordCodec.recordKeys
-    ).reduce(into: [String]()) { keys, key in
-        if !keys.contains(key) {
-            keys.append(key)
-        }
-    }
+    private static let fetchedRecordKeys = serverAndWorkspaceRecordKeys
 
     private var accountStatusChecked = false
     private var isSyncEnabled: Bool { SyncSettings.isEnabled }
@@ -229,7 +223,8 @@ final class CloudKitManager: ObservableObject {
             let batch = try await fetchZoneChanges(
                 zoneID: zoneID,
                 previousToken: token,
-                budget: budget
+                budget: budget,
+                desiredKeys: Self.fetchedRecordKeys
             )
             try budget.recordBatch(
                 records: batch.records.count,
@@ -344,73 +339,6 @@ final class CloudKitManager: ObservableObject {
         }
     }
 
-    // MARK: - Terminal Theme Operations
-
-    func fetchTerminalThemes() async throws -> [TerminalTheme] {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-        let records = try await withZoneRetry {
-            try await fetchAllRecordsFromCloudKit(
-                matchingRecordTypes: [TerminalThemeCloudKitRecordCodec.recordType]
-            )
-        }
-        return records.compactMap(TerminalThemeCloudKitRecordCodec.theme(from:))
-    }
-
-    func saveTerminalTheme(_ theme: TerminalTheme) async throws {
-        try await prepareSyncMutation()
-        let record = TerminalThemeCloudKitRecordCodec.record(for: theme, in: recordZoneID)
-        try await performSyncMutation(
-            successLog: "Saved terminal theme \(theme.name) to CloudKit",
-            failureLog: "Failed to save terminal theme"
-        ) {
-            try await withZoneRetry {
-                try await saveRecordWithUpsert(record)
-            }
-        }
-    }
-
-    func fetchTerminalThemePreference() async throws -> TerminalThemePreference? {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-        let recordID = TerminalThemePreferenceCloudKitRecordCodec.recordID(in: recordZoneID)
-
-        do {
-            let record = try await withZoneRetry {
-                try await database.record(for: recordID)
-            }
-            return TerminalThemePreferenceCloudKitRecordCodec.preference(from: record)
-        } catch let ckError as CKError where ckError.code == .unknownItem || ckError.code == .zoneNotFound {
-            return nil
-        } catch {
-            throw error
-        }
-    }
-
-    func saveTerminalThemePreference(_ preference: TerminalThemePreference) async throws {
-        try await prepareSyncMutation()
-        let record = TerminalThemePreferenceCloudKitRecordCodec.record(
-            for: preference,
-            in: recordZoneID
-        )
-        try await performSyncMutation(
-            successLog: "Saved terminal theme preference to CloudKit",
-            failureLog: "Failed to save terminal theme preference"
-        ) {
-            try await withZoneRetry {
-                try await saveRecordWithUpsert(record)
-            }
-        }
-    }
-
     private func prepareSyncMutation() async throws {
         await ensureAccountStatusChecked()
         guard isAvailable else {
@@ -469,9 +397,37 @@ final class CloudKitManager: ObservableObject {
         return try await performSyncOperation(operation)
     }
 
+    func fetchCloudKitRecords(
+        matchingRecordTypes recordTypes: Set<String>,
+        desiredKeys: [String]
+    ) async throws -> [CKRecord] {
+        await ensureAccountStatusChecked()
+        guard isAvailable else {
+            throw CloudKitError.notAvailable
+        }
+        try await ensureCustomZone()
+        return try await withZoneRetry {
+            try await fetchAllRecordsFromCloudKit(
+                matchingRecordTypes: recordTypes,
+                desiredKeys: desiredKeys
+            )
+        }
+    }
+
     func fetchCloudKitRecord(_ recordID: CKRecord.ID) async throws -> CKRecord {
-        try await withZoneRetry {
+        await ensureAccountStatusChecked()
+        guard isAvailable else {
+            throw CloudKitError.notAvailable
+        }
+        try await ensureCustomZone()
+        return try await withZoneRetry {
             try await database.record(for: recordID)
+        }
+    }
+
+    func upsertCloudKitRecord(_ record: CKRecord) async throws {
+        try await withZoneRetry {
+            try await saveRecordWithUpsert(record)
         }
     }
 
@@ -565,7 +521,8 @@ final class CloudKitManager: ObservableObject {
     }
 
     private func fetchAllRecordsFromCloudKit(
-        matchingRecordTypes recordTypes: Set<String>? = nil
+        matchingRecordTypes recordTypes: Set<String>? = nil,
+        desiredKeys: [String]
     ) async throws -> [CKRecord] {
         try await ensureCustomZone()
         let zoneID = recordZoneID
@@ -579,7 +536,8 @@ final class CloudKitManager: ObservableObject {
             let batch = try await fetchZoneChanges(
                 zoneID: zoneID,
                 previousToken: token,
-                budget: budget
+                budget: budget,
+                desiredKeys: desiredKeys
             )
             try budget.recordBatch(
                 records: batch.records.count,
@@ -604,14 +562,15 @@ final class CloudKitManager: ObservableObject {
     private func fetchZoneChanges(
         zoneID: CKRecordZone.ID,
         previousToken: CKServerChangeToken?,
-        budget: CloudKitSyncBudget
+        budget: CloudKitSyncBudget,
+        desiredKeys: [String]
     ) async throws -> ZoneChangeBatch {
         let logger = logger
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ZoneChangeBatch, Error>) in
             let configuration = CKFetchRecordZoneChangesOperation.ZoneConfiguration(
                 previousServerChangeToken: previousToken,
                 resultsLimit: min(200, budget.remainingRecords, budget.remainingDeletions),
-                desiredKeys: Self.fetchedRecordKeys
+                desiredKeys: desiredKeys
             )
             let operation = CKFetchRecordZoneChangesOperation(
                 recordZoneIDs: [zoneID],
@@ -799,13 +758,13 @@ final class CloudKitManager: ObservableObject {
 
     private func deleteAllTrackedRecords() async throws {
         let records = try await withZoneRetry {
-            try await fetchAllRecordsFromCloudKit()
+            try await fetchAllRecordsFromCloudKit(desiredKeys: [])
         }
         let trackedRecordTypes: Set<String> = [
             RecordType.server,
             RecordType.workspace,
-            TerminalThemeCloudKitRecordCodec.recordType,
-            TerminalThemePreferenceCloudKitRecordCodec.recordType,
+            RecordType.terminalTheme,
+            RecordType.terminalThemePreference,
             RecordType.userPreference
         ]
         let recordIDs = records
@@ -834,10 +793,10 @@ final class CloudKitManager: ObservableObject {
         let deletedServers = records.filter { $0.recordType == RecordType.server }.count
         let deletedWorkspaces = records.filter { $0.recordType == RecordType.workspace }.count
         let deletedThemes = records.filter {
-            $0.recordType == TerminalThemeCloudKitRecordCodec.recordType
+            $0.recordType == RecordType.terminalTheme
         }.count
         let deletedThemePreferences = records.filter {
-            $0.recordType == TerminalThemePreferenceCloudKitRecordCodec.recordType
+            $0.recordType == RecordType.terminalThemePreference
         }.count
         let deletedUserPreferences = records.filter {
             $0.recordType == RecordType.userPreference

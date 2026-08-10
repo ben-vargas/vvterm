@@ -7,6 +7,12 @@ protocol TerminalThemeCloudClient: AnyObject {
 }
 
 @MainActor
+protocol TerminalThemeCloudMutationClient: AnyObject {
+    func saveTerminalTheme(_ theme: TerminalTheme) async throws
+    func saveTerminalThemePreference(_ preference: TerminalThemePreference) async throws
+}
+
+@MainActor
 protocol TerminalThemeMutationQueue: AnyObject {
     func enqueueTerminalThemeUpsert(_ theme: TerminalTheme)
     func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference)
