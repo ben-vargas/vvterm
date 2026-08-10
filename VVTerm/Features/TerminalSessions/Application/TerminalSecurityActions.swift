@@ -1,16 +1,5 @@
 import Foundation
 
-nonisolated enum TerminalSecurityApprovalRequest: Identifiable, Equatable, Sendable {
-    case hostKey(KnownHostsManager.Challenge)
-
-    var id: String {
-        switch self {
-        case .hostKey(let challenge):
-            "host-key:\(challenge.id.uuidString)"
-        }
-    }
-}
-
 nonisolated enum TerminalSecurityApprovalFailure: Equatable, Sendable {
     case expired
 }
@@ -26,13 +15,13 @@ struct TerminalSecurityActions {
     typealias LoadCredentials = @MainActor @Sendable (Server) throws -> ServerCredentials
     typealias PendingHostKeyApproval = @MainActor @Sendable (
         _ server: Server
-    ) -> TerminalSecurityApprovalRequest?
+    ) -> ServerSecurityApprovalRequest?
     typealias Approve = @MainActor @Sendable (
-        _ request: TerminalSecurityApprovalRequest,
+        _ request: ServerSecurityApprovalRequest,
         _ server: Server
     ) -> TerminalSecurityApprovalOutcome
     typealias Reject = @MainActor @Sendable (
-        _ request: TerminalSecurityApprovalRequest
+        _ request: ServerSecurityApprovalRequest
     ) -> Void
 
     let loadCredentials: LoadCredentials

@@ -3,25 +3,22 @@ import XCTest
 
 final class ServerStatsSecurityApprovalActionsTests: XCTestCase {
     @MainActor
-    func testApproveForwardsTheRequestAndServerToInjectedEffect() async {
+    func testApproveForwardsOnlyTheRequestToInjectedEffect() async {
         let server = makeServer()
         let request = makeHostKeyRequest(server: server)
         var receivedRequest: ServerSecurityApprovalRequest?
-        var receivedServer: Server?
         let actions = ServerStatsSecurityApprovalActions(
-            approve: { request, server in
+            approve: { request in
                 receivedRequest = request
-                receivedServer = server
                 return .approved
             },
             reject: { _ in }
         )
 
-        let outcome = await actions.approve(request, server)
+        let outcome = await actions.approve(request)
 
         XCTAssertEqual(outcome, .approved)
         XCTAssertEqual(receivedRequest, request)
-        XCTAssertEqual(receivedServer, server)
     }
 
     @MainActor
@@ -30,11 +27,11 @@ final class ServerStatsSecurityApprovalActionsTests: XCTestCase {
         var firstRejections: [ServerSecurityApprovalRequest] = []
         var secondRejections: [ServerSecurityApprovalRequest] = []
         let first = ServerStatsSecurityApprovalActions(
-            approve: { _, _ in .approved },
+            approve: { _ in .approved },
             reject: { firstRejections.append($0) }
         )
         let second = ServerStatsSecurityApprovalActions(
-            approve: { _, _ in .failed(.unavailable) },
+            approve: { _ in .failed(.unavailable) },
             reject: { secondRejections.append($0) }
         )
 

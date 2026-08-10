@@ -100,28 +100,12 @@ struct ServerStatsDashboard: View {
             approvalRequestInFlight = nil
             statsCollector.stopCollecting()
         }
-        .alert(
-            hostKeyPresentation?.title ?? String(localized: "Trust SSH Host?"),
-            isPresented: hostKeyApprovalBinding
-        ) {
-            Button("Cancel", role: .cancel) {
-                cancelHostKeyApproval()
-            }
-            if hostKeyPresentation?.isDestructive == false {
-                Button(hostKeyPresentation?.approvalButtonTitle ?? String(localized: "Trust and Reconnect")) {
-                    beginHostKeyApproval()
-                }
-            } else {
-                Button(
-                    hostKeyPresentation?.approvalButtonTitle ?? String(localized: "Replace and Reconnect"),
-                    role: .destructive
-                ) {
-                    beginHostKeyApproval()
-                }
-            }
-        } message: {
-            Text(hostKeyPresentation?.message ?? "")
-        }
+        .sshHostKeyTrustAlert(
+            request: hostKeyRequest,
+            isPresented: hostKeyApprovalBinding,
+            onCancel: { _ in cancelHostKeyApproval() },
+            onApprove: { _ in beginHostKeyApproval() }
+        )
     }
 
     private var hostKeyRequest: ServerSecurityApprovalRequest? {
@@ -130,12 +114,6 @@ struct ServerStatsDashboard: View {
             return nil
         }
         return request
-    }
-
-    private var hostKeyPresentation: SSHHostKeyTrustPresentation? {
-        guard let hostKeyRequest,
-              case .hostKey(let challenge) = hostKeyRequest else { return nil }
-        return SSHHostKeyTrustPresentation(challenge: challenge)
     }
 
     private var hostKeyApprovalBinding: Binding<Bool> {
@@ -161,7 +139,7 @@ struct ServerStatsDashboard: View {
 
     private func performSecurityApprovalIfNeeded() async {
         guard let request = approvalRequestInFlight else { return }
-        let outcome = await securityApprovalActions.approve(request, server)
+        let outcome = await securityApprovalActions.approve(request)
 
         guard !Task.isCancelled else { return }
         guard approvalRequestInFlight == request,

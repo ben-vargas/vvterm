@@ -561,7 +561,7 @@ struct TerminalPaneView: View {
     @State private var operationNotice: NoticeItem?
     @State private var dismissFallbackBanner = false
     @StateObject private var connectWatchdog = TerminalConnectionWatchdog()
-    @State private var securityApprovalRequest: TerminalSecurityApprovalRequest?
+    @State private var securityApprovalRequest: ServerSecurityApprovalRequest?
     @StateObject private var richPasteUI = TerminalRichPasteUIModel()
 
     @AppStorage(TerminalDefaults.sshAutoReconnectKey) private var autoReconnectEnabled = true
@@ -979,15 +979,12 @@ struct TerminalPaneView: View {
         } message: {
             Text(moshServerPromptMessage)
         }
-        .alert(
-            securityApprovalTitle,
+        .sshHostKeyTrustAlert(
+            request: securityApprovalRequest,
             isPresented: showingSecurityApproval,
-            presenting: securityApprovalRequest
-        ) { request in
-            securityApprovalActions(for: request)
-        } message: { request in
-            Text(securityApprovalMessage(for: request))
-        }
+            onCancel: rejectHostKeyChallenge,
+            onApprove: approveHostKeyChallengeAndRetry
+        )
         .terminalRichPastePrompt(using: richPasteUI)
     }
 
@@ -1057,55 +1054,14 @@ struct TerminalPaneView: View {
         securityApprovalRequest = securityActions.pendingHostKeyApproval(server)
     }
 
-    private var securityApprovalTitle: String {
-        guard let securityApprovalRequest else { return "" }
-        switch securityApprovalRequest {
-        case .hostKey(let challenge):
-            return SSHHostKeyTrustPresentation(challenge: challenge).title
-        }
-    }
-
-    private func securityApprovalMessage(
-        for request: TerminalSecurityApprovalRequest
-    ) -> String {
-        switch request {
-        case .hostKey(let challenge):
-            SSHHostKeyTrustPresentation(challenge: challenge).message
-        }
-    }
-
-    @ViewBuilder
-    private func securityApprovalActions(
-        for request: TerminalSecurityApprovalRequest
-    ) -> some View {
-        switch request {
-        case .hostKey(let challenge):
-            let presentation = SSHHostKeyTrustPresentation(challenge: challenge)
-            Button("Cancel", role: .cancel) {
-                rejectHostKeyChallenge(request)
-            }
-            if presentation.isDestructive {
-                Button(presentation.approvalButtonTitle, role: .destructive) {
-                    approveHostKeyChallengeAndRetry(request)
-                }
-            } else {
-                Button(presentation.approvalButtonTitle) {
-                    approveHostKeyChallengeAndRetry(request)
-                }
-            }
-        }
-    }
-
-    private func rejectHostKeyChallenge(_ request: TerminalSecurityApprovalRequest) {
+    private func rejectHostKeyChallenge(_ request: ServerSecurityApprovalRequest) {
         securityActions.reject(request)
         if securityApprovalRequest == request {
             securityApprovalRequest = nil
         }
     }
 
-    private func approveHostKeyChallengeAndRetry(
-        _ request: TerminalSecurityApprovalRequest
-    ) {
+    private func approveHostKeyChallengeAndRetry(_ request: ServerSecurityApprovalRequest) {
         switch securityActions.approve(request, server) {
         case .approved:
             if securityApprovalRequest == request {

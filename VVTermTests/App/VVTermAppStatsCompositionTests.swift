@@ -154,7 +154,7 @@ struct VVTermAppStatsCompositionTests {
         )
         let actions = makeActions(knownHosts: firstKnownHosts)
 
-        let outcome = await actions.approve(.hostKey(firstChallenge), server)
+        let outcome = await actions.approve(.hostKey(firstChallenge))
         actions.reject(.hostKey(secondChallenge))
 
         #expect(outcome == .approved)
@@ -181,7 +181,7 @@ struct VVTermAppStatsCompositionTests {
         knownHosts.reject(challenge)
         let actions = makeActions(knownHosts: knownHosts)
 
-        let hostOutcome = await actions.approve(.hostKey(challenge), server)
+        let hostOutcome = await actions.approve(.hostKey(challenge))
 
         #expect(hostOutcome == .failed(.expired))
     }

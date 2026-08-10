@@ -3,28 +3,12 @@ import SwiftUI
 extension RemoteFileBrowserScreen {
     func securityApprovalPresentation<Content: View>(_ content: Content) -> some View {
         content
-            .alert(
-                hostKeyApprovalPresentation?.title ?? String(localized: "Trust SSH Host?"),
-                isPresented: hostKeyApprovalBinding
-            ) {
-                Button("Cancel", role: .cancel) {
-                    cancelSecurityApproval()
-                }
-                if hostKeyApprovalPresentation?.isDestructive == false {
-                    Button(hostKeyApprovalPresentation?.approvalButtonTitle ?? String(localized: "Trust and Reconnect")) {
-                        approveHostKeyAndRetry()
-                    }
-                } else {
-                    Button(
-                        hostKeyApprovalPresentation?.approvalButtonTitle ?? String(localized: "Replace and Reconnect"),
-                        role: .destructive
-                    ) {
-                        approveHostKeyAndRetry()
-                    }
-                }
-            } message: {
-                Text(hostKeyApprovalPresentation?.message ?? "")
-            }
+            .sshHostKeyTrustAlert(
+                request: securityApprovalRequest,
+                isPresented: hostKeyApprovalBinding,
+                onCancel: { _ in cancelSecurityApproval() },
+                onApprove: { _ in approveHostKeyAndRetry() }
+            )
     }
 
     func remoteOperationErrorMessage(for error: Error) -> String {
@@ -52,10 +36,6 @@ extension RemoteFileBrowserScreen {
             return nil
         }
         return challenge
-    }
-
-    var hostKeyApprovalPresentation: SSHHostKeyTrustPresentation? {
-        hostKeyApprovalChallenge.map(SSHHostKeyTrustPresentation.init)
     }
 
     var hostKeyApprovalBinding: Binding<Bool> {

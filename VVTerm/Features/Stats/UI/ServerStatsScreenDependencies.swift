@@ -12,8 +12,7 @@ nonisolated enum ServerStatsSecurityApprovalOutcome: Equatable, Sendable {
 @MainActor
 struct ServerStatsSecurityApprovalActions {
     typealias Approve = @MainActor (
-        _ request: ServerSecurityApprovalRequest,
-        _ server: Server
+        _ request: ServerSecurityApprovalRequest
     ) async -> ServerStatsSecurityApprovalOutcome
     typealias Reject = @MainActor (_ request: ServerSecurityApprovalRequest) -> Void
 

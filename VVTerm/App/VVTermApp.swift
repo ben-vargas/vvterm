@@ -692,7 +692,7 @@ extension VVTermApp {
                 knownHostsManager.pendingChallenge(
                     for: server.host,
                     port: server.port
-                ).map(TerminalSecurityApprovalRequest.hostKey)
+                ).map(ServerSecurityApprovalRequest.hostKey)
             },
             approve: { request, _ in
                 switch request {
@@ -715,7 +715,7 @@ extension VVTermApp {
         knownHostsManager: KnownHostsManager
     ) -> ServerStatsSecurityApprovalActions {
         ServerStatsSecurityApprovalActions(
-            approve: { request, _ in
+            approve: { request in
                 switch request {
                 case .hostKey(let challenge):
                     return knownHostsManager.approve(challenge)

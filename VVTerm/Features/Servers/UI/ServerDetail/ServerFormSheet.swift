@@ -67,8 +67,8 @@ struct ServerFormSheet: View {
 
     var isEditing: Bool { server != nil }
 
-    private var hostKeyTrustPresentation: SSHHostKeyTrustPresentation? {
-        operations.hostKeyChallenge.map(SSHHostKeyTrustPresentation.init)
+    private var hostKeyTrustRequest: ServerSecurityApprovalRequest? {
+        operations.hostKeyChallenge.map(ServerSecurityApprovalRequest.hostKey)
     }
 
     init(
@@ -324,28 +324,12 @@ struct ServerFormSheet: View {
                 .adaptiveSoftScrollEdges()
             }
             .limitReachedAlert(.servers, isPresented: serverLimitAlertBinding)
-            .alert(
-                hostKeyTrustPresentation?.title ?? String(localized: "Trust SSH Host?"),
-                isPresented: hostKeyTrustBinding
-            ) {
-                Button("Cancel", role: .cancel) {
-                    rejectHostKeyChallenge()
-                }
-                if hostKeyTrustPresentation?.isDestructive == false {
-                    Button(hostKeyTrustPresentation?.approvalButtonTitle ?? String(localized: "Trust and Reconnect")) {
-                        approveHostKeyChallengeAndRetest()
-                    }
-                } else {
-                    Button(
-                        hostKeyTrustPresentation?.approvalButtonTitle ?? String(localized: "Replace and Reconnect"),
-                        role: .destructive
-                    ) {
-                        approveHostKeyChallengeAndRetest()
-                    }
-                }
-            } message: {
-                Text(hostKeyTrustPresentation?.message ?? "")
-            }
+            .sshHostKeyTrustAlert(
+                request: hostKeyTrustRequest,
+                isPresented: hostKeyTrustBinding,
+                onCancel: { _ in rejectHostKeyChallenge() },
+                onApprove: { _ in approveHostKeyChallengeAndRetest() }
+            )
     }
 
     private var lifecycleFormContent: some View {
