@@ -1,6 +1,14 @@
 import Foundation
 
-extension CloudKitSyncCoordinator: StatsPreferencesMutationQueue {}
+extension CloudKitSyncCoordinator: StatsPreferencesMutationQueue {
+    func enqueueStatsPreferencesUpsert(_ preferences: StatsPreferences) {
+        enqueue(
+            PendingCloudKitMutation(
+                payload: .statsPreferencesUpsert(preferences)
+            )
+        )
+    }
+}
 extension CloudKitSyncLifecycleDriver: StatsPreferencesSyncLifecycle {}
 
 @MainActor

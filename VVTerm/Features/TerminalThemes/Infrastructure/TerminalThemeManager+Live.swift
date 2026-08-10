@@ -30,7 +30,19 @@ private final class UserDefaultsTerminalThemePreferenceChangeSource: TerminalThe
     }
 }
 
-extension CloudKitSyncCoordinator: TerminalThemeMutationQueue {}
+extension CloudKitSyncCoordinator: TerminalThemeMutationQueue {
+    func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) {
+        enqueue(PendingCloudKitMutation(payload: .terminalThemeUpsert(theme)))
+    }
+
+    func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) {
+        enqueue(
+            PendingCloudKitMutation(
+                payload: .terminalThemePreferenceUpsert(preference)
+            )
+        )
+    }
+}
 extension CloudKitSyncLifecycleDriver: TerminalThemeSyncLifecycle {}
 
 @MainActor

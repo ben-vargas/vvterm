@@ -9,19 +9,47 @@ enum ServerCloudKitLiveComposition {
 }
 
 extension CloudKitSyncCoordinator: ServerSyncRepository {
+    func clearPendingServerAndWorkspaceMutations() {
+        removeAll { mutation in
+            switch mutation.payload {
+            case .serverUpsert, .serverDelete, .workspaceUpsert, .workspaceDelete:
+                return true
+            case .terminalThemeUpsert, .terminalThemePreferenceUpsert,
+                 .terminalAccessoryProfileUpsert, .statsPreferencesUpsert:
+                return false
+            }
+        }
+    }
+
+    func enqueueServerUpsert(_ server: Server) {
+        enqueue(PendingCloudKitMutation(payload: .serverUpsert(server)))
+    }
+
+    func enqueueServerDelete(_ server: Server) {
+        enqueue(PendingCloudKitMutation(payload: .serverDelete(server)))
+    }
+
+    func enqueueWorkspaceUpsert(_ workspace: Workspace) {
+        enqueue(PendingCloudKitMutation(payload: .workspaceUpsert(workspace)))
+    }
+
+    func enqueueWorkspaceDelete(_ workspace: Workspace) {
+        enqueue(PendingCloudKitMutation(payload: .workspaceDelete(workspace)))
+    }
+
     func pendingServerMutations() -> [ServerPendingMutation] {
         snapshot().compactMap(ServerPendingMutation.init)
     }
 
     func removePendingServerMutation(_ mutationID: UUID) {
-        removePendingMutation(mutationID)
+        remove(mutationID)
     }
 
     func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws {
         guard mutations.allSatisfy(\.payload.isDeletion) else {
             throw WorkspaceDeletionTransactionError.invalidPendingMutation
         }
-        try enqueueMutationsAtomically(mutations.map(PendingCloudKitMutation.init))
+        try enqueueAtomically(mutations.map(PendingCloudKitMutation.init))
     }
 }
 

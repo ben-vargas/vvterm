@@ -141,15 +141,6 @@ enum PendingCloudKitMutationPayload: Codable, Equatable {
         }
     }
 
-    var isServerOrWorkspace: Bool {
-        switch self {
-        case .serverUpsert, .serverDelete, .workspaceUpsert, .workspaceDelete:
-            return true
-        default:
-            return false
-        }
-    }
-
     var description: String {
         let operation: String
         switch self {
@@ -218,38 +209,6 @@ struct PendingCloudKitMutation: Codable, Equatable, Identifiable {
         nextRetryAt = try container.decodeIfPresent(Date.self, forKey: .nextRetryAt)
         lastErrorCode = try container.decodeIfPresent(String.self, forKey: .lastErrorCode)
         lastErrorDescription = try container.decodeIfPresent(String.self, forKey: .lastErrorDescription)
-    }
-
-    static func serverUpsert(_ server: Server) -> PendingCloudKitMutation {
-        PendingCloudKitMutation(payload: .serverUpsert(server))
-    }
-
-    static func serverDelete(_ server: Server) -> PendingCloudKitMutation {
-        PendingCloudKitMutation(payload: .serverDelete(server))
-    }
-
-    static func workspaceUpsert(_ workspace: Workspace) -> PendingCloudKitMutation {
-        PendingCloudKitMutation(payload: .workspaceUpsert(workspace))
-    }
-
-    static func workspaceDelete(_ workspace: Workspace) -> PendingCloudKitMutation {
-        PendingCloudKitMutation(payload: .workspaceDelete(workspace))
-    }
-
-    static func terminalThemeUpsert(_ theme: TerminalTheme) -> PendingCloudKitMutation {
-        PendingCloudKitMutation(payload: .terminalThemeUpsert(theme))
-    }
-
-    static func terminalThemePreferenceUpsert(_ preference: TerminalThemePreference) -> PendingCloudKitMutation {
-        PendingCloudKitMutation(payload: .terminalThemePreferenceUpsert(preference))
-    }
-
-    static func terminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile) -> PendingCloudKitMutation {
-        PendingCloudKitMutation(payload: .terminalAccessoryProfileUpsert(profile))
-    }
-
-    static func statsPreferencesUpsert(_ preferences: StatsPreferences) -> PendingCloudKitMutation {
-        PendingCloudKitMutation(payload: .statsPreferencesUpsert(preferences))
     }
 
     var entityKey: String { payload.entityKey }
@@ -374,11 +333,6 @@ final class PendingCloudKitSyncQueue {
 
     func remove(_ mutationID: UUID) {
         items.removeAll { $0.id == mutationID }
-        persist()
-    }
-
-    func removeAll() {
-        items.removeAll()
         persist()
     }
 

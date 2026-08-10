@@ -209,9 +209,11 @@ struct PendingCloudKitSyncTests {
             defaults: storage.defaults
         )
 
-        queue.enqueue(.serverUpsert(fixtures.server))
-        queue.enqueue(.workspaceUpsert(fixtures.workspaceWithServerID))
-        queue.enqueue(.serverDelete(fixtures.deletedServer))
+        queue.enqueue(PendingCloudKitMutation(payload: .serverUpsert(fixtures.server)))
+        queue.enqueue(
+            PendingCloudKitMutation(payload: .workspaceUpsert(fixtures.workspaceWithServerID))
+        )
+        queue.enqueue(PendingCloudKitMutation(payload: .serverDelete(fixtures.deletedServer)))
 
         #expect(
             queue.snapshot().map(\.payload) == [
@@ -220,7 +222,11 @@ struct PendingCloudKitSyncTests {
             ]
         )
 
-        queue.enqueue(.workspaceDelete(fixtures.deletedWorkspaceWithServerID))
+        queue.enqueue(
+            PendingCloudKitMutation(
+                payload: .workspaceDelete(fixtures.deletedWorkspaceWithServerID)
+            )
+        )
         #expect(
             queue.snapshot().map(\.payload) == [
                 .serverDelete(fixtures.deletedServer),
@@ -244,12 +250,16 @@ struct PendingCloudKitSyncTests {
             storageKey: storage.storageKey,
             defaults: storage.defaults
         )
-        queue.enqueue(.serverUpsert(fixtures.server))
-        queue.enqueue(.workspaceUpsert(fixtures.workspaceWithServerID))
+        queue.enqueue(PendingCloudKitMutation(payload: .serverUpsert(fixtures.server)))
+        queue.enqueue(
+            PendingCloudKitMutation(payload: .workspaceUpsert(fixtures.workspaceWithServerID))
+        )
 
         try queue.enqueueAtomically([
-            .serverDelete(fixtures.deletedServer),
-            .workspaceDelete(fixtures.deletedWorkspaceWithServerID)
+            PendingCloudKitMutation(payload: .serverDelete(fixtures.deletedServer)),
+            PendingCloudKitMutation(
+                payload: .workspaceDelete(fixtures.deletedWorkspaceWithServerID)
+            )
         ])
 
         #expect(queue.snapshot().map(\.payload) == [

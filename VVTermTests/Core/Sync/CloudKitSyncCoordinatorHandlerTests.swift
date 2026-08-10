@@ -56,7 +56,9 @@ struct CloudKitSyncCoordinatorHandlerTests {
             updatedAt: Date(timeIntervalSinceReferenceDate: 100)
         )
 
-        coordinator.enqueueTerminalThemeUpsert(theme)
+        coordinator.enqueue(
+            PendingCloudKitMutation(payload: .terminalThemeUpsert(theme))
+        )
         await coordinator.drainPendingMutations()
 
         let failedMutation = try #require(coordinator.snapshot().first)

@@ -35,51 +35,19 @@ final class CloudKitSyncCoordinator {
         queue.quarantineSnapshot()
     }
 
-    func clearPendingMutations() {
-        queue.removeAll()
-    }
-
-    func clearPendingServerAndWorkspaceMutations() {
-        queue.removeAll { $0.payload.isServerOrWorkspace }
-    }
-
-    func removePendingMutation(_ mutationID: UUID) {
+    func remove(_ mutationID: UUID) {
         queue.remove(mutationID)
     }
 
-    func enqueueServerUpsert(_ server: Server) {
-        queue.enqueue(.serverUpsert(server))
+    func removeAll(where shouldRemove: (PendingCloudKitMutation) -> Bool) {
+        queue.removeAll(where: shouldRemove)
     }
 
-    func enqueueServerDelete(_ server: Server) {
-        queue.enqueue(.serverDelete(server))
+    func enqueue(_ mutation: PendingCloudKitMutation) {
+        queue.enqueue(mutation)
     }
 
-    func enqueueWorkspaceUpsert(_ workspace: Workspace) {
-        queue.enqueue(.workspaceUpsert(workspace))
-    }
-
-    func enqueueWorkspaceDelete(_ workspace: Workspace) {
-        queue.enqueue(.workspaceDelete(workspace))
-    }
-
-    func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) {
-        queue.enqueue(.terminalThemeUpsert(theme))
-    }
-
-    func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) {
-        queue.enqueue(.terminalThemePreferenceUpsert(preference))
-    }
-
-    func enqueueTerminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile) {
-        queue.enqueue(.terminalAccessoryProfileUpsert(profile))
-    }
-
-    func enqueueStatsPreferencesUpsert(_ preferences: StatsPreferences) {
-        queue.enqueue(.statsPreferencesUpsert(preferences))
-    }
-
-    func enqueueMutationsAtomically(_ mutations: [PendingCloudKitMutation]) throws {
+    func enqueueAtomically(_ mutations: [PendingCloudKitMutation]) throws {
         try queue.enqueueAtomically(mutations)
     }
 
