@@ -183,7 +183,6 @@ class GhosttyTerminalView: UIView {
         category: "TerminalKeyboardInput"
     )
 
-    var isSelecting = false
     var isScrolling = false
     var isPinchingTerminalZoom = false
     var pinchReferenceScale: CGFloat = 1
@@ -210,15 +209,6 @@ class GhosttyTerminalView: UIView {
             updateNativeFindOverlay()
         }
     }
-    var touchSelectionAnchor: TerminalGridPoint?
-    var touchSelectionSeed: TerminalGridSelection?
-    var touchSelection: TerminalGridSelection? {
-        didSet {
-            updateTouchSelectionOverlay()
-        }
-    }
-    let touchSelectionOverlay = TerminalTouchSelectionOverlayView()
-    let touchSelectionLoupe = TerminalTouchSelectionLoupeView()
     lazy var directTouchTapRecognizer: UITapGestureRecognizer = {
         let recognizer = UITapGestureRecognizer(
             target: self,
@@ -242,44 +232,6 @@ class GhosttyTerminalView: UIView {
         recognizer.delegate = self
         return recognizer
     }()
-    lazy var selectionRecognizer: UILongPressGestureRecognizer = {
-        let recognizer = UILongPressGestureRecognizer(
-            target: self,
-            action: #selector(handleSelectionPress(_:))
-        )
-        recognizer.minimumPressDuration = 0.2
-        recognizer.allowableMovement = 8
-        recognizer.cancelsTouchesInView = true
-        recognizer.allowedTouchTypes = [
-            NSNumber(value: UITouch.TouchType.direct.rawValue)
-        ]
-        return recognizer
-    }()
-
-    private lazy var doubleTapRecognizer: UITapGestureRecognizer = {
-        let recognizer = UITapGestureRecognizer(
-            target: self,
-            action: #selector(handleDoubleTap(_:))
-        )
-        recognizer.numberOfTapsRequired = 2
-        recognizer.allowedTouchTypes = [
-            NSNumber(value: UITouch.TouchType.direct.rawValue)
-        ]
-        return recognizer
-    }()
-
-    private lazy var tripleTapRecognizer: UITapGestureRecognizer = {
-        let recognizer = UITapGestureRecognizer(
-            target: self,
-            action: #selector(handleTripleTap(_:))
-        )
-        recognizer.numberOfTapsRequired = 3
-        recognizer.allowedTouchTypes = [
-            NSNumber(value: UITouch.TouchType.direct.rawValue)
-        ]
-        return recognizer
-    }()
-
     lazy var scrollRecognizer: UIPanGestureRecognizer = {
         let recognizer = UIPanGestureRecognizer(
             target: self,
@@ -310,24 +262,8 @@ class GhosttyTerminalView: UIView {
         ]
         return recognizer
     }()
-    private lazy var selectionStartHandleRecognizer: UIPanGestureRecognizer = {
-        let recognizer = UIPanGestureRecognizer(target: self, action: #selector(handleSelectionHandlePan(_:)))
-        recognizer.maximumNumberOfTouches = 1
-        recognizer.allowedTouchTypes = [
-            NSNumber(value: UITouch.TouchType.direct.rawValue)
-        ]
-        return recognizer
-    }()
-    private lazy var selectionEndHandleRecognizer: UIPanGestureRecognizer = {
-        let recognizer = UIPanGestureRecognizer(target: self, action: #selector(handleSelectionHandlePan(_:)))
-        recognizer.maximumNumberOfTouches = 1
-        recognizer.allowedTouchTypes = [
-            NSNumber(value: UITouch.TouchType.direct.rawValue)
-        ]
-        return recognizer
-    }()
-
     var editMenuInteraction: UIEditMenuInteraction?
+    weak var terminalTitleEditor: UIAlertController?
     var editMenuPresentation: TerminalEditMenuPresentation = .selection
     var activePointerButton: TerminalPointerButton?
 
@@ -429,66 +365,27 @@ class GhosttyTerminalView: UIView {
             zoomIndicatorView.widthAnchor.constraint(greaterThanOrEqualToConstant: TerminalZoomPresentation.indicatorMinimumWidth),
             zoomIndicatorView.heightAnchor.constraint(greaterThanOrEqualToConstant: TerminalZoomPresentation.indicatorMinimumHeight)
         ])
-        if usesNativeTouchSelection {
-            nativeFindOverlay.frame = bounds
-            addSubview(nativeFindOverlay)
-        }
-        if allowsHostTextSelection, usesAppOwnedTouchSelection {
-            touchSelectionOverlay.frame = bounds
-            touchSelectionOverlay.isHidden = true
-            addSubview(touchSelectionOverlay)
-            touchSelectionLoupe.isHidden = true
-            addSubview(touchSelectionLoupe)
-            touchSelectionOverlay.startHandle.addGestureRecognizer(selectionStartHandleRecognizer)
-            touchSelectionOverlay.endHandle.addGestureRecognizer(selectionEndHandleRecognizer)
-        }
+        nativeFindOverlay.frame = bounds
+        addSubview(nativeFindOverlay)
 
         // Setup gesture recognizers with delegate for simultaneous recognition
         directTouchTapRecognizer.delegate = self
         scrollRecognizer.delegate = self
         pinchRecognizer.delegate = self
-        if usesAppOwnedTouchSelection {
-            selectionRecognizer.delegate = self
-            doubleTapRecognizer.delegate = self
-            tripleTapRecognizer.delegate = self
-            selectionStartHandleRecognizer.delegate = self
-            selectionEndHandleRecognizer.delegate = self
-        }
-
-        if usesAppOwnedTouchSelection {
-            // Triple tap should require double tap to fail first
-            doubleTapRecognizer.require(toFail: tripleTapRecognizer)
-            directTouchTapRecognizer.require(toFail: scrollRecognizer)
-            directTouchTapRecognizer.require(toFail: selectionRecognizer)
-            directTouchTapRecognizer.require(toFail: doubleTapRecognizer)
-        } else {
-            if !usesNativeTouchSelection {
-                directTouchTapRecognizer.require(toFail: scrollRecognizer)
-            }
-            directTouchTapRecognizer.require(toFail: directTouchLongPressExclusionRecognizer)
-            addGestureRecognizer(directTouchLongPressExclusionRecognizer)
-        }
+        directTouchTapRecognizer.require(toFail: directTouchLongPressExclusionRecognizer)
+        addGestureRecognizer(directTouchLongPressExclusionRecognizer)
 
         addGestureRecognizer(directTouchTapRecognizer)
         addGestureRecognizer(scrollRecognizer)
         addGestureRecognizer(pointerHoverRecognizer)
         addGestureRecognizer(pinchRecognizer)
-        if usesAppOwnedTouchSelection {
-            addGestureRecognizer(selectionRecognizer)
-            addGestureRecognizer(doubleTapRecognizer)
-            addGestureRecognizer(tripleTapRecognizer)
-        }
         isUserInteractionEnabled = true
 
-        if usesNativeTouchSelection {
-            setupNativeTextSelectionInteractions()
-            setupNativeFindInteraction()
-        } else {
-            // Setup edit menu interaction for copy/paste
-            let interaction = UIEditMenuInteraction(delegate: self)
-            addInteraction(interaction)
-            editMenuInteraction = interaction
-        }
+        setupNativeTextSelectionInteractions()
+        setupNativeFindInteraction()
+        let editMenuInteraction = UIEditMenuInteraction(delegate: self)
+        addInteraction(editMenuInteraction)
+        self.editMenuInteraction = editMenuInteraction
 
         setupConfigReloadObservation()
         setupInputModeObservation()
@@ -923,10 +820,7 @@ class GhosttyTerminalView: UIView {
         super.layoutSubviews()
         imeProxyTextView.frame = bounds
         nativeFindOverlay.frame = bounds
-        touchSelectionOverlay.frame = bounds
         bringSubviewToFront(nativeFindOverlay)
-        bringSubviewToFront(touchSelectionOverlay)
-        bringSubviewToFront(touchSelectionLoupe)
         bringSubviewToFront(zoomIndicatorView)
 
         guard !isShuttingDown else { return }
@@ -1089,10 +983,10 @@ class GhosttyTerminalView: UIView {
             return
         }
         let location = touches.first?.location(in: self)
-        if usesNativeTouchSelection, nativeSelectionLifecycle.interactionIsActive {
+        if nativeSelectionLifecycle.interactionIsActive {
             return
         }
-        if usesNativeTouchSelection, nativeSelectionLifecycle.keepsFirstResponder {
+        if nativeSelectionLifecycle.keepsFirstResponder {
             if let location, isPointOnNativeSelectionHandleHitArea(location) {
                 return
             }
@@ -1100,15 +994,6 @@ class GhosttyTerminalView: UIView {
             guard shouldAutoFocusKeyboard(for: touches) else { return }
             notifyDirectTouchOnTerminal(isFocusTap: true)
             requestKeyboardFocus(for: .directTouch)
-            return
-        }
-        if usesAppOwnedTouchSelection,
-           touchSelection != nil,
-           let location,
-           !isPointOnTouchSelectionHandle(location) {
-            clearTouchSelection()
-        }
-        if let location, isPointOnTouchSelectionHandle(location) {
             return
         }
         // Tap just focuses keyboard - no mouse events (avoids accidental selection).
@@ -1165,30 +1050,21 @@ class GhosttyTerminalView: UIView {
             if let nativeSelectedRange, nativeSelectedRange.length > 0 {
                 return true
             }
-            if touchSelection != nil {
-                return true
-            }
             guard let cSurface = surface?.unsafeCValue else { return false }
             return ghostty_surface_has_selection(cSurface)
         case #selector(selectAll(_:)):
             guard allowsHostTextSelection else { return false }
-            if usesNativeTouchSelection {
-                return nativeSelectionSnapshot.length > 0 || selectionGridMetrics() != nil
-            }
-            return usesAppOwnedTouchSelection && selectionGridMetrics() != nil
+            return nativeSelectionSnapshot.length > 0 || selectionGridMetrics() != nil
         case #selector(find(_:)):
-            return usesNativeTouchSelection
+            return true
         case #selector(findNext(_:)), #selector(findPrevious(_:)):
-            if #available(iOS 16.0, *), usesNativeTouchSelection {
+            if #available(iOS 16.0, *) {
                 return nativeFindInteraction?.isFindNavigatorVisible == true
             }
             return false
         case #selector(useSelectionForFind(_:)):
             guard allowsHostTextSelection else { return false }
-            if usesNativeTouchSelection {
-                return normalizedSelectionMenuText() != nil
-            }
-            return false
+            return normalizedSelectionMenuText() != nil
         case #selector(paste(_:)):
             return true
         default:

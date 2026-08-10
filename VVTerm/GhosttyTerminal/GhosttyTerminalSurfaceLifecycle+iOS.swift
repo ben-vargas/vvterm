@@ -81,6 +81,14 @@ extension GhosttyTerminalView {
         onFindNavigatorVisibilityChange = nil
         richPasteInterceptor = nil
         writeCallback = nil
+        if let editMenuInteraction {
+            editMenuInteraction.dismissMenu()
+            removeInteraction(editMenuInteraction)
+            self.editMenuInteraction = nil
+        }
+        terminalTitleEditor?.dismiss(animated: false)
+        terminalTitleEditor = nil
+        terminalContextMenuActions = nil
 
         // Stop rendering/input callbacks and mark the surface as not visible.
         if let cSurface = surface?.unsafeCValue {

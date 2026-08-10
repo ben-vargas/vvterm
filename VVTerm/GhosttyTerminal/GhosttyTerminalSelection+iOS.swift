@@ -12,11 +12,10 @@ import UIKit
 
 extension GhosttyTerminalView: UITextInteractionDelegate {
     func interactionShouldBegin(_ interaction: UITextInteraction, at point: CGPoint) -> Bool {
-        guard usesNativeTouchSelection,
-              TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
-                  terminalMouseCaptured: surface?.mouseCaptured == true,
-                  interaction: nativeSelectionGestureInteraction
-              ) else {
+        guard TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
+            terminalMouseCaptured: surface?.mouseCaptured == true,
+            interaction: nativeSelectionGestureInteraction
+        ) else {
             return false
         }
         nativeSelectionLifecycle.prepare(restoreTerminalInput: isTerminalTextInputActive)
@@ -69,12 +68,6 @@ extension GhosttyTerminalView: UIEditMenuInteractionDelegate {
             self?.paste(nil)
         })
 
-        if usesAppOwnedTouchSelection {
-            actions.append(UIAction(title: String(localized: "Select All"), image: UIImage(systemName: "selection.pin.in.out")) { [weak self] _ in
-                self?.selectAll(nil)
-            })
-        }
-
         return UIMenu(children: actions)
     }
 
@@ -108,8 +101,6 @@ extension GhosttyTerminalView {
     }
 
     func refreshNativeSelectionSnapshot(resetSelection: Bool = false) {
-        guard usesNativeTouchSelection else { return }
-
         nativeSelectionSnapshot = buildNativeSelectionSnapshot()
         updateNativeFindOverlay()
         if resetSelection {
@@ -214,8 +205,7 @@ extension GhosttyTerminalView {
     }
 
     func isPointOnNativeSelectionHandleHitArea(_ point: CGPoint) -> Bool {
-        guard usesNativeTouchSelection,
-              let nativeSelectedRange = nativeSelectionLifecycle.selection,
+        guard let nativeSelectedRange = nativeSelectionLifecycle.selection,
               nativeSelectedRange.length > 0 else {
             return false
         }
@@ -235,15 +225,9 @@ extension GhosttyTerminalView {
               nativeSelectedRange.length > 0 else { return nil }
         return nativeSelectionSnapshot.text(in: nativeSelectedRange)
     }
-
-
     var usesNativeTouchSelection: Bool {
         return UIDevice.current.userInterfaceIdiom == .phone
             || UIDevice.current.userInterfaceIdiom == .pad
-    }
-
-    var usesAppOwnedTouchSelection: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone && !usesNativeTouchSelection
     }
 
     func selectionGridMetrics() -> (cols: Int, rows: Int, cellSize: CGSize)? {
@@ -255,205 +239,8 @@ extension GhosttyTerminalView {
         return (cols, rows, CGSize(width: resolvedCellWidth, height: resolvedCellHeight))
     }
 
-    private func gridPoint(for location: CGPoint) -> TerminalGridPoint? {
-        guard let metrics = selectionGridMetrics() else { return nil }
-        let column = min(max(Int(floor(location.x / metrics.cellSize.width)), 0), metrics.cols - 1)
-        let row = min(max(Int(floor(location.y / metrics.cellSize.height)), 0), metrics.rows - 1)
-        return TerminalGridPoint(row: row, column: column)
-    }
-
-    private func gridPoint(
-        forLinearOffset offset: Int,
-        metrics: (cols: Int, rows: Int, cellSize: CGSize)
-    ) -> TerminalGridPoint {
-        let clampedOffset = min(max(offset, 0), max(metrics.cols * metrics.rows - 1, 0))
-        return TerminalGridPoint(
-            row: clampedOffset / metrics.cols,
-            column: clampedOffset % metrics.cols
-        )
-    }
-
-    private func selectionFromViewportText(
-        _ text: ghostty_text_s,
-        metrics: (cols: Int, rows: Int, cellSize: CGSize)
-    ) -> TerminalGridSelection? {
-        guard metrics.cols > 0, metrics.rows > 0 else { return nil }
-        let start = gridPoint(forLinearOffset: Int(text.offset_start), metrics: metrics)
-        let end = gridPoint(
-            forLinearOffset: Int(text.offset_start + text.offset_len),
-            metrics: metrics
-        )
-        return TerminalGridSelection(start: start, end: end).normalized
-    }
-
-    private func cellFrame(for point: TerminalGridPoint, metrics: (cols: Int, rows: Int, cellSize: CGSize)) -> CGRect {
-        CGRect(
-            x: CGFloat(point.column) * metrics.cellSize.width,
-            y: CGFloat(point.row) * metrics.cellSize.height,
-            width: metrics.cellSize.width,
-            height: metrics.cellSize.height
-        )
-    }
-
-    func selectionRects(
-        for selection: TerminalGridSelection,
-        metrics: (cols: Int, rows: Int, cellSize: CGSize)
-    ) -> [CGRect] {
-        let normalized = selection.normalized
-        let start = normalized.start
-        let end = normalized.end
-
-        return (start.row...end.row).map { row in
-            let startColumn = row == start.row ? start.column : 0
-            let endColumn = row == end.row ? end.column : max(metrics.cols - 1, 0)
-            let width = CGFloat(max(endColumn - startColumn + 1, 1)) * metrics.cellSize.width
-            return CGRect(
-                x: CGFloat(startColumn) * metrics.cellSize.width,
-                y: CGFloat(row) * metrics.cellSize.height,
-                width: width,
-                height: metrics.cellSize.height
-            )
-        }
-    }
-
-    private func selectionMenuPoint(for selection: TerminalGridSelection) -> CGPoint? {
-        guard let metrics = selectionGridMetrics() else { return nil }
-        let rects = selectionRects(for: selection, metrics: metrics)
-        guard let firstRect = rects.first else { return nil }
-        let bounds = rects.dropFirst().reduce(firstRect) { partialResult, rect in
-            partialResult.union(rect)
-        }
-        return CGPoint(x: bounds.midX, y: min(bounds.maxY + 12, self.bounds.maxY - 1))
-    }
-
-    func updateTouchSelectionOverlay() {
-        guard usesAppOwnedTouchSelection,
-              let touchSelection,
-              let metrics = selectionGridMetrics() else {
-            touchSelectionOverlay.isHidden = true
-            touchSelectionOverlay.clear()
-            return
-        }
-
-        let normalized = touchSelection.normalized
-        let rects = selectionRects(for: normalized, metrics: metrics)
-        let startFrame = cellFrame(for: normalized.start, metrics: metrics)
-        let endFrame = cellFrame(for: normalized.end, metrics: metrics)
-        touchSelectionOverlay.isHidden = false
-        touchSelectionOverlay.update(
-            rects: rects,
-            startAnchor: CGPoint(x: startFrame.minX, y: startFrame.minY),
-            endAnchor: CGPoint(x: endFrame.maxX, y: endFrame.maxY)
-        )
-    }
-
-    func isPointOnTouchSelectionHandle(_ point: CGPoint) -> Bool {
-        guard usesAppOwnedTouchSelection, touchSelection != nil else { return false }
-
-        let startHandlePoint = touchSelectionOverlay.convert(point, from: self)
-        return touchSelectionOverlay.startHandle.frame.insetBy(dx: -22, dy: -22).contains(startHandlePoint) ||
-            touchSelectionOverlay.endHandle.frame.insetBy(dx: -22, dy: -22).contains(startHandlePoint)
-    }
-
     func dismissEditMenuIfNeeded() {
         editMenuInteraction?.dismissMenu()
-    }
-
-    func clearTouchSelection() {
-        touchSelectionAnchor = nil
-        touchSelectionSeed = nil
-        touchSelection = nil
-        touchSelectionLoupe.hideLoupe()
-        stopSelectionAutoscroll()
-        isSelecting = false
-    }
-
-    private func updateTouchSelectionLoupe(at location: CGPoint) {
-        guard usesAppOwnedTouchSelection else { return }
-
-        let previousVisibility = touchSelectionLoupe.isHidden
-        touchSelectionLoupe.isHidden = true
-        touchSelectionLoupe.update(
-            from: self,
-            focusPoint: location,
-            in: bounds,
-            safeAreaInsets: safeAreaInsets
-        )
-        if previousVisibility {
-            bringSubviewToFront(touchSelectionOverlay)
-            bringSubviewToFront(touchSelectionLoupe)
-        }
-    }
-
-    private func quickLookWordSelection(at location: CGPoint) -> TerminalGridSelection? {
-        guard let metrics = selectionGridMetrics(),
-              let surface,
-              let cSurface = surface.unsafeCValue else { return nil }
-
-        let pos = ghosttyPoint(location)
-        surface.sendMousePos(.init(x: pos.x, y: pos.y, mods: []))
-
-        var text = ghostty_text_s()
-        guard ghostty_surface_quicklook_word(cSurface, &text) else { return nil }
-        defer { ghostty_surface_free_text(cSurface, &text) }
-        return selectionFromViewportText(text, metrics: metrics)
-    }
-
-    private func startTouchSelection(at location: CGPoint) {
-        if let wordSelection = quickLookWordSelection(at: location) {
-            let normalized = wordSelection.normalized
-            touchSelectionAnchor = nil
-            touchSelectionSeed = normalized
-            touchSelection = normalized
-            isSelecting = true
-            return
-        }
-
-        guard let point = gridPoint(for: location) else { return }
-        touchSelectionAnchor = point
-        touchSelectionSeed = nil
-        touchSelection = TerminalGridSelection(start: point, end: point)
-        isSelecting = true
-    }
-
-    private func updateTouchSelection(at location: CGPoint) {
-        guard let point = gridPoint(for: location) else { return }
-
-        if touchSelectionAnchor == nil, let seed = touchSelectionSeed?.normalized {
-            if point < seed.start {
-                touchSelectionAnchor = seed.end
-            } else if point > seed.end {
-                touchSelectionAnchor = seed.start
-            } else {
-                touchSelection = seed
-                return
-            }
-        }
-
-        guard let anchor = touchSelectionAnchor else { return }
-        touchSelection = TerminalGridSelection(start: anchor, end: point).normalized
-    }
-
-    private func updateTouchSelectionHandle(_ kind: TerminalTouchSelectionHandleKind, at location: CGPoint) {
-        guard var selection = touchSelection?.normalized,
-              let point = gridPoint(for: location) else { return }
-
-        switch kind {
-        case .start:
-            selection.start = point
-        case .end:
-            selection.end = point
-        }
-
-        touchSelection = selection.normalized
-    }
-
-    private func finishTouchSelection() {
-        isSelecting = false
-        touchSelectionLoupe.hideLoupe()
-        guard let touchSelection,
-              let menuPoint = selectionMenuPoint(for: touchSelection) else { return }
-        showEditMenu(at: menuPoint)
     }
 
     func currentSelectionText() -> String? {
@@ -462,43 +249,7 @@ extension GhosttyTerminalView {
         if let nativeSelectionText = selectedNativeSelectionText() {
             return nativeSelectionText
         }
-        if let touchSelectionText = touchSelectionText() {
-            return touchSelectionText
-        }
         return ghosttySelectionText()
-    }
-
-    private func touchSelectionText() -> String? {
-        guard allowsHostTextSelection else { return nil }
-        guard let touchSelection,
-              let surface = surface?.unsafeCValue else { return nil }
-
-        let normalized = touchSelection.normalized
-        guard let startColumn = UInt32(exactly: normalized.start.column),
-              let startRow = UInt32(exactly: normalized.start.row),
-              let endColumn = UInt32(exactly: normalized.end.column),
-              let endRow = UInt32(exactly: normalized.end.row) else {
-            return nil
-        }
-        var text = ghostty_text_s()
-        let selection = ghostty_selection_s(
-            top_left: ghostty_point_s(
-                tag: GHOSTTY_POINT_VIEWPORT,
-                coord: GHOSTTY_POINT_COORD_EXACT,
-                x: startColumn,
-                y: startRow
-            ),
-            bottom_right: ghostty_point_s(
-                tag: GHOSTTY_POINT_VIEWPORT,
-                coord: GHOSTTY_POINT_COORD_EXACT,
-                x: endColumn,
-                y: endRow
-            ),
-            rectangle: false
-        )
-        guard ghostty_surface_read_text(surface, selection, &text) else { return nil }
-        defer { ghostty_surface_free_text(surface, &text) }
-        return ghosttyTextString(text)
     }
 
     private func ghosttySelectionText() -> String? {
@@ -531,8 +282,7 @@ extension GhosttyTerminalView {
     }
 
     private func selectionMenuSourceRect() -> CGRect {
-        if usesNativeTouchSelection,
-           let selectedTextRange {
+        if let selectedTextRange {
             let rect = firstRect(for: selectedTextRange)
             if !rect.isNull, !rect.isEmpty {
                 return rect
@@ -612,191 +362,14 @@ extension GhosttyTerminalView {
     func selectAllVisibleText() {
         guard allowsHostTextSelection else { return }
 
-        if usesNativeTouchSelection {
-            refreshNativeSelectionSnapshot()
-            guard nativeSelectionSnapshot.length > 0 else { return }
-            setNativeSelectedRange(NSRange(location: 0, length: nativeSelectionSnapshot.length))
-            return
-        }
-
-        guard usesAppOwnedTouchSelection,
-              let metrics = selectionGridMetrics() else { return }
-        touchSelection = TerminalGridSelection(
-            start: TerminalGridPoint(row: 0, column: 0),
-            end: TerminalGridPoint(row: metrics.rows - 1, column: metrics.cols - 1)
-        )
-        finishTouchSelection()
-    }
-
-    // MARK: - Selection Gestures
-
-    /// Double-tap to select word
-    @objc func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
-        guard let surface = surface else { return }
-        let location = recognizer.location(in: self)
-        let pos = ghosttyPoint(location)
-
-        clearTouchSelection()
-        notifyDirectTouchOnTerminal()
-
-        // Double-click to select word (no modifiers)
-        surface.sendMousePos(.init(x: pos.x, y: pos.y, mods: []))
-        surface.sendMouseButton(.init(action: .press, button: .left, mods: []))
-        surface.sendMouseButton(.init(action: .release, button: .left, mods: []))
-        surface.sendMouseButton(.init(action: .press, button: .left, mods: []))
-        surface.sendMouseButton(.init(action: .release, button: .left, mods: []))
-        requestRender()
-
-        // Show edit menu after short delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            guard let self, self.allowsHostTextSelection else { return }
-            self.showEditMenu(at: location)
-        }
-    }
-
-    /// Triple-tap to select line
-    @objc func handleTripleTap(_ recognizer: UITapGestureRecognizer) {
-        guard let surface = surface else { return }
-        let location = recognizer.location(in: self)
-        let pos = ghosttyPoint(location)
-
-        clearTouchSelection()
-        notifyDirectTouchOnTerminal()
-
-        // Triple-click to select line
-        surface.sendMousePos(.init(x: pos.x, y: pos.y, mods: []))
-        for _ in 0..<3 {
-            surface.sendMouseButton(.init(action: .press, button: .left, mods: []))
-            surface.sendMouseButton(.init(action: .release, button: .left, mods: []))
-        }
-        requestRender()
-
-        // Show edit menu after short delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            guard let self, self.allowsHostTextSelection else { return }
-            self.showEditMenu(at: location)
-        }
-    }
-
-    /// Long press + drag for custom selection
-    @objc func handleSelectionPress(_ recognizer: UILongPressGestureRecognizer) {
-        guard allowsHostTextSelection else {
-            if recognizer.state == .began {
-                notifyDirectTouchOnTerminal()
-            }
-            return
-        }
-
-        if usesAppOwnedTouchSelection {
-            let location = recognizer.location(in: self)
-
-            switch recognizer.state {
-            case .began:
-                dismissEditMenuIfNeeded()
-                startTouchSelection(at: location)
-                notifyDirectTouchOnTerminal()
-                updateTouchSelectionLoupe(at: location)
-            case .changed:
-                updateTouchSelection(at: location)
-                updateTouchSelectionLoupe(at: location)
-            case .ended:
-                updateTouchSelection(at: location)
-                finishTouchSelection()
-            case .cancelled, .failed:
-                stopSelectionAutoscroll()
-                clearTouchSelection()
-            default:
-                break
-            }
-            return
-        }
-
-        guard let surface = surface else { return }
-        let location = recognizer.location(in: self)
-        let pos = ghosttyPoint(location)
-
-        switch recognizer.state {
-        case .began:
-            isSelecting = true
-            stopMomentumScrolling()
-            notifyDirectTouchOnTerminal()
-            // Start selection with click (no shift for initial position)
-            surface.sendMousePos(.init(x: pos.x, y: pos.y, mods: []))
-            surface.sendMouseButton(.init(action: .press, button: .left, mods: []))
-            updateSelectionAutoscroll(location: location, mods: [])
-            requestRender()
-        case .changed:
-            // Drag to extend selection
-            surface.sendMousePos(.init(x: pos.x, y: pos.y, mods: []))
-            updateSelectionAutoscroll(location: location, mods: [])
-            requestRender()
-        case .ended, .cancelled, .failed:
-            surface.sendMousePos(.init(x: pos.x, y: pos.y, mods: []))
-            surface.sendMouseButton(.init(action: .release, button: .left, mods: []))
-            isSelecting = false
-            stopSelectionAutoscroll()
-            requestRender()
-            showEditMenu(at: location)
-        default:
-            break
-        }
-    }
-
-    @objc func handleSelectionHandlePan(_ recognizer: UIPanGestureRecognizer) {
-        guard usesAppOwnedTouchSelection, touchSelection != nil else { return }
-
-        let kind: TerminalTouchSelectionHandleKind
-        if recognizer.view === touchSelectionOverlay.startHandle {
-            kind = .start
-        } else {
-            kind = .end
-        }
-
-        let location = recognizer.location(in: self)
-        switch recognizer.state {
-        case .began:
-            dismissEditMenuIfNeeded()
-            isSelecting = true
-            updateTouchSelectionHandle(kind, at: location)
-            updateTouchSelectionLoupe(at: location)
-        case .changed:
-            updateTouchSelectionHandle(kind, at: location)
-            updateTouchSelectionLoupe(at: location)
-        case .ended:
-            updateTouchSelectionHandle(kind, at: location)
-            isSelecting = false
-            finishTouchSelection()
-        case .cancelled, .failed:
-            isSelecting = false
-            touchSelectionLoupe.hideLoupe()
-        default:
-            break
-        }
-    }
-
-    private func showEditMenu(at location: CGPoint) {
-        guard allowsHostTextSelection else { return }
-
-        let hasGhosttySelection: Bool
-        if let surface = surface?.unsafeCValue {
-            hasGhosttySelection = ghostty_surface_has_selection(surface)
-        } else {
-            hasGhosttySelection = false
-        }
-        guard touchSelection != nil || hasGhosttySelection else {
-            return
-        }
-        editMenuPresentation = .selection
-        let config = UIEditMenuConfiguration(identifier: nil, sourcePoint: location)
-        editMenuInteraction?.presentEditMenu(with: config)
+        refreshNativeSelectionSnapshot()
+        guard nativeSelectionSnapshot.length > 0 else { return }
+        setNativeSelectedRange(NSRange(location: 0, length: nativeSelectionSnapshot.length))
     }
 
     func clearSelectionAfterPaste() {
-        if usesNativeTouchSelection, nativeSelectedRange != nil {
+        if nativeSelectedRange != nil {
             setNativeSelectedRange(nil)
-        }
-        if usesAppOwnedTouchSelection, touchSelection != nil {
-            clearTouchSelection()
         }
     }
 }

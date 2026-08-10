@@ -12,8 +12,7 @@ import UIKit
 
 extension GhosttyTerminalView: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        if !usesAppOwnedTouchSelection,
-           gestureRecognizer == directTouchLongPressExclusionRecognizer {
+        if gestureRecognizer == directTouchLongPressExclusionRecognizer {
             return TerminalPointerInputRoutingPolicy.shouldSendDirectTouchClick(
                 terminalMouseCaptured: surface?.mouseCaptured == true,
                 terminalInputAvailable: canRouteTerminalInput && !isPaused && !isShuttingDown,
@@ -34,11 +33,7 @@ extension GhosttyTerminalView: UIGestureRecognizerDelegate {
             guard shouldAllowScrollGesture(gestureRecognizer, touchType: touch.type) else {
                 return false
             }
-            if usesNativeTouchSelection, nativeSelectionInteractionActive || nativeSelectedRange != nil {
-                return false
-            }
-            if touchSelection != nil,
-               isPointOnTouchSelectionHandle(touch.location(in: self)) {
+            if nativeSelectionInteractionActive || nativeSelectedRange != nil {
                 return false
             }
         }
@@ -60,29 +55,15 @@ extension GhosttyTerminalView: UIGestureRecognizerDelegate {
         if gestureRecognizer == directTouchTapRecognizer || otherGestureRecognizer == directTouchTapRecognizer {
             return false
         }
-        if usesNativeTouchSelection,
-           nativeSelectionInteractionActive || nativeSelectedRange != nil,
+        if nativeSelectionInteractionActive || nativeSelectedRange != nil,
            gestureRecognizer == scrollRecognizer || otherGestureRecognizer == scrollRecognizer {
             return false
         }
         if gestureRecognizer == pinchRecognizer || otherGestureRecognizer == pinchRecognizer {
             return false
         }
-        // Allow pan and long press to recognize simultaneously
-        // The handlers check isSelecting/isScrolling to avoid conflicts
+        // Allow the remaining compatible gestures to recognize simultaneously.
         return true
-    }
-
-    func gestureRecognizer(
-        _ gestureRecognizer: UIGestureRecognizer,
-        shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer
-    ) -> Bool {
-        // Long press should win over pan when held long enough
-        if gestureRecognizer == scrollRecognizer && otherGestureRecognizer == selectionRecognizer {
-            // Only require failure if long press is about to recognize
-            return otherGestureRecognizer.state == .began
-        }
-        return false
     }
 }
 
@@ -104,18 +85,14 @@ extension GhosttyTerminalView {
     }
 
     var hasActiveSelectionInteraction: Bool {
-        if usesNativeTouchSelection {
-            return nativeSelectionInteractionActive
-                || nativeSelectedRange != nil
-                || prefersNativeSelectionFirstResponder
-        }
-        return usesAppOwnedTouchSelection && (isSelecting || touchSelection != nil)
+        nativeSelectionInteractionActive
+            || nativeSelectedRange != nil
+            || prefersNativeSelectionFirstResponder
     }
 
     func hasActiveSelectionInteraction(at point: CGPoint) -> Bool {
         hasActiveSelectionInteraction
-            || (usesNativeTouchSelection && isPointOnNativeSelectionHandleHitArea(point))
-            || (usesAppOwnedTouchSelection && isPointOnTouchSelectionHandle(point))
+            || isPointOnNativeSelectionHandleHitArea(point)
     }
 
     func shouldAllowScrollGesture(
@@ -279,15 +256,7 @@ extension GhosttyTerminalView {
     @objc func handlePanGesture(_ recognizer: UIPanGestureRecognizer) {
         guard let surface = surface else { return }
         guard shouldAllowActiveScrollGesture(recognizer) else { return }
-        if isSelecting { return }
         if isPinchingTerminalZoom { return }
-        if touchSelection != nil {
-            if recognizer.state == .began,
-               !isPointOnTouchSelectionHandle(recognizer.location(in: self)) {
-                clearTouchSelection()
-            }
-            return
-        }
 
         let translation = recognizer.translation(in: self)
         let location = recognizer.location(in: self)
@@ -503,10 +472,7 @@ extension GhosttyTerminalView {
     }
 
     var canHandlePinchZoom: Bool {
-        if usesNativeTouchSelection, nativeSelectionLifecycle.shouldRefreshSnapshot {
-            return false
-        }
-        if usesAppOwnedTouchSelection, touchSelection != nil {
+        if nativeSelectionLifecycle.shouldRefreshSnapshot {
             return false
         }
         return true
