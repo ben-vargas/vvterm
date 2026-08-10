@@ -39,6 +39,12 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         return decode(rawChanges, fallbackDate: now())
     }
 
+    func acceptServerChanges(_ checkpoint: ServerRemoteChangeCheckpoint) throws {
+        try transport.commitCloudKitRecordChanges(
+            CloudKitRecordChangeCheckpoint(id: checkpoint.id)
+        )
+    }
+
     func saveServer(_ server: Server) async throws {
         let record = ServerCloudKitRecordCodec.record(
             for: server,
@@ -146,7 +152,8 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
             workspaces: Array(workspacesByID.values),
             deletedServerIDs: Array(deletedServerIDs),
             deletedWorkspaceIDs: Array(deletedWorkspaceIDs),
-            isFullFetch: rawChanges.isFullFetch
+            isFullFetch: rawChanges.isFullFetch,
+            checkpoint: ServerRemoteChangeCheckpoint(id: rawChanges.checkpoint.id)
         )
     }
 

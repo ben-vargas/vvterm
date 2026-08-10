@@ -114,13 +114,25 @@ final class ServerStateStore: ObservableObject {
 
     func persistCurrentCollections() {
         do {
-            try dependencies.localRepository.persist(
-                servers: servers,
-                workspaces: workspaces
-            )
+            try persistCurrentCollectionsForRemoteAcceptance()
         } catch {
             logger.error("Failed to persist local server data: \(error.localizedDescription)")
         }
+    }
+
+    func persistCurrentCollectionsForRemoteAcceptance() throws {
+        try dependencies.localRepository.persist(
+            servers: servers,
+            workspaces: workspaces
+        )
+    }
+
+    func restorePersistedCollections() {
+        applyPersistedCollections(dependencies.localRepository.loadSnapshot())
+    }
+
+    func restorePendingBootstrapWorkspaceID(_ workspaceID: UUID?) {
+        pendingBootstrapWorkspaceID = workspaceID
     }
 
     func clearLocalDataAndState() {
@@ -595,27 +607,7 @@ final class ServerStateStore: ObservableObject {
 
     private func loadLocalData() {
         let persisted = dependencies.localRepository.loadSnapshot()
-        var nextSnapshot = snapshot
-
-        switch persisted.servers {
-        case .missing:
-            break
-        case .loaded(let servers):
-            nextSnapshot.servers = servers
-        case .unreadable(let issue):
-            appendLocalStorageIssue(issue, to: &nextSnapshot)
-        }
-
-        switch persisted.workspaces {
-        case .missing:
-            break
-        case .loaded(let workspaces):
-            nextSnapshot.workspaces = workspaces
-        case .unreadable(let issue):
-            appendLocalStorageIssue(issue, to: &nextSnapshot)
-        }
-
-        snapshot = nextSnapshot
+        applyPersistedCollections(persisted)
         var shouldPersist = reconcilePendingBootstrapWorkspaceState()
         if Self.shouldCreateBootstrapWorkspace(
             didBootstrapDefaultWorkspace: didBootstrapDefaultWorkspace,
@@ -629,6 +621,32 @@ final class ServerStateStore: ObservableObject {
         if shouldPersist {
             persistCurrentCollections()
         }
+    }
+
+    private func applyPersistedCollections(_ persisted: ServerLocalRepositorySnapshot) {
+        var nextSnapshot = snapshot
+
+        switch persisted.servers {
+        case .missing:
+            nextSnapshot.servers = []
+        case .loaded(let servers):
+            nextSnapshot.servers = servers
+        case .unreadable(let issue):
+            nextSnapshot.servers = []
+            appendLocalStorageIssue(issue, to: &nextSnapshot)
+        }
+
+        switch persisted.workspaces {
+        case .missing:
+            nextSnapshot.workspaces = []
+        case .loaded(let workspaces):
+            nextSnapshot.workspaces = workspaces
+        case .unreadable(let issue):
+            nextSnapshot.workspaces = []
+            appendLocalStorageIssue(issue, to: &nextSnapshot)
+        }
+
+        snapshot = nextSnapshot
     }
 
     private func appendLocalStorageIssue(

@@ -141,13 +141,111 @@ struct ServerManagerLoadLifecycleTests {
         manager.handleSyncDisabled()
 
         #expect(await gate.waitUntilCancelled())
-        gate.resolve(makeRemoteChanges(workspaceName: "Late Remote"))
+        let checkpoint = ServerRemoteChangeCheckpoint(
+            id: UUID(uuidString: "80000000-0000-0000-0000-000000000001")!
+        )
+        gate.resolve(
+            makeRemoteChanges(
+                workspaceName: "Late Remote",
+                checkpoint: checkpoint
+            )
+        )
         await loadTask.value
 
         #expect(manager.workspaces.isEmpty)
         #expect(manager.servers.isEmpty)
         #expect(manager.stateStore.loadState.phase == .idle)
         #expect(sync.drainCount == 0)
+        #expect(remote.acceptedCheckpoints.isEmpty)
+    }
+
+    @Test
+    func restartAcceptsCheckpointOnlyAfterRemoteBatchPersists() async {
+        let local = ServerLocalRepositoryFake(servers: [], workspaces: [])
+        local.persistError = TestTransactionError.persistence
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        let checkpoint = ServerRemoteChangeCheckpoint(
+            id: UUID(uuidString: "80000000-0000-0000-0000-000000000002")!
+        )
+        let changes = makeRemoteChanges(
+            workspaceName: "Durable Remote",
+            checkpoint: checkpoint
+        )
+        remote.fetchHandler = { _, _ in changes }
+        let sync = ServerSyncRepositoryFake()
+        let firstManager = makeManager(
+            local: local,
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { true }
+        )
+
+        await firstManager.loadData()
+
+        #expect(remote.acceptedCheckpoints.isEmpty)
+        #expect(local.workspaces.isEmpty)
+        #expect(firstManager.workspaces.isEmpty)
+        #expect(sync.drainCount == 0)
+
+        local.persistError = nil
+        let restartedManager = makeManager(
+            local: local,
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { true }
+        )
+        await restartedManager.loadData()
+
+        #expect(remote.fetchCount == 2)
+        #expect(remote.acceptedCheckpoints == [checkpoint])
+        #expect(local.workspaces.map(\.name) == ["Durable Remote"])
+        #expect(sync.drainCount == 1)
+    }
+
+    @Test
+    func failedFullFetchRestoresBootstrapFetchIdentityUntilCheckpointAcceptance() async {
+        let workspace = makeWorkspace(name: "Bootstrap")
+        let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])
+        local.persistError = TestTransactionError.persistence
+        let preferences = ServerManagerPreferencesFake()
+        preferences.pendingBootstrapWorkspaceID = workspace.id
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        let checkpoint = ServerRemoteChangeCheckpoint(
+            id: UUID(uuidString: "80000000-0000-0000-0000-000000000006")!
+        )
+        let changes = ServerRemoteChanges(
+            servers: [],
+            workspaces: [],
+            deletedServerIDs: [],
+            deletedWorkspaceIDs: [],
+            isFullFetch: true,
+            checkpoint: checkpoint
+        )
+        remote.fetchHandler = { _, _ in changes }
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: sync,
+            preferences: preferences,
+            isSyncEnabled: { true }
+        )
+
+        await manager.loadData()
+
+        #expect(remote.fetchForceFullModes == [true])
+        #expect(manager.stateStore.transientBootstrapWorkspaceID == workspace.id)
+        #expect(manager.workspaces == [workspace])
+        #expect(remote.acceptedCheckpoints.isEmpty)
+        #expect(sync.drainCount == 0)
+
+        local.persistError = nil
+        await manager.loadData()
+
+        #expect(remote.fetchForceFullModes == [true, true])
+        #expect(manager.stateStore.transientBootstrapWorkspaceID == nil)
+        #expect(remote.acceptedCheckpoints == [checkpoint])
+        #expect(sync.drainCount == 1)
     }
 
     @Test
@@ -345,7 +443,10 @@ struct ServerManagerLoadLifecycleTests {
                 workspaces: [workspace],
                 deletedServerIDs: [],
                 deletedWorkspaceIDs: [],
-                isFullFetch: true
+                isFullFetch: true,
+                checkpoint: ServerRemoteChangeCheckpoint(
+                    id: UUID(uuidString: "80000000-0000-0000-0000-000000000003")!
+                )
             )
         }
         let sync = ServerSyncRepositoryFake()
@@ -425,6 +526,7 @@ struct ServerManagerLoadLifecycleTests {
         local: ServerLocalRepositoryFake? = nil,
         remote: ServerRemoteRepositoryFake,
         sync: ServerSyncRepositoryFake,
+        preferences: ServerManagerPreferencesFake = ServerManagerPreferencesFake(),
         isSyncEnabled: @escaping () -> Bool,
         isRemoteSchemaError: @escaping (Error) -> Bool = { _ in false },
         startsAutomatically: Bool = false
@@ -434,6 +536,7 @@ struct ServerManagerLoadLifecycleTests {
                 local: local,
                 remote: remote,
                 sync: sync,
+                preferences: preferences,
                 isSyncEnabled: isSyncEnabled,
                 isRemoteSchemaError: isRemoteSchemaError
             ),
@@ -461,6 +564,7 @@ struct ServerManagerLoadLifecycleTests {
         local: ServerLocalRepositoryFake?,
         remote: ServerRemoteRepositoryFake,
         sync: ServerSyncRepositoryFake,
+        preferences: ServerManagerPreferencesFake = ServerManagerPreferencesFake(),
         isSyncEnabled: @escaping () -> Bool,
         isRemoteSchemaError: @escaping (Error) -> Bool
     ) -> ServerManagerDependencies {
@@ -469,7 +573,7 @@ struct ServerManagerLoadLifecycleTests {
         let stateStore = ServerStateStore(
             dependencies: ServerStateStoreDependencies(
                 localRepository: local ?? ServerLocalRepositoryFake(servers: [], workspaces: []),
-                preferences: ServerManagerPreferencesFake(),
+                preferences: preferences,
                 freePlanTracker: FreePlanAssignmentTrackerFake(),
                 isSyncEnabled: isSyncEnabled,
                 now: now,
@@ -513,7 +617,12 @@ struct ServerManagerLoadLifecycleTests {
         )
     }
 
-    private func makeRemoteChanges(workspaceName: String) -> ServerRemoteChanges {
+    private func makeRemoteChanges(
+        workspaceName: String,
+        checkpoint: ServerRemoteChangeCheckpoint = ServerRemoteChangeCheckpoint(
+            id: UUID(uuidString: "80000000-0000-0000-0000-000000000004")!
+        )
+    ) -> ServerRemoteChanges {
         ServerRemoteChanges(
             servers: [],
             workspaces: [
@@ -526,7 +635,8 @@ struct ServerManagerLoadLifecycleTests {
             ],
             deletedServerIDs: [],
             deletedWorkspaceIDs: [],
-            isFullFetch: true
+            isFullFetch: true,
+            checkpoint: checkpoint
         )
     }
 
@@ -641,8 +751,10 @@ private final class ServerRemoteRepositoryFake: ServerRemoteRepository {
     var saveServerHandler: (@MainActor (Server) async throws -> Void)?
     var saveWorkspaceHandler: (@MainActor (Workspace) async throws -> Void)?
     private(set) var fetchCount = 0
+    private(set) var fetchForceFullModes: [Bool] = []
     private(set) var savedServers: [Server] = []
     private(set) var savedWorkspaces: [Workspace] = []
+    private(set) var acceptedCheckpoints: [ServerRemoteChangeCheckpoint] = []
 
     init(isAvailable: Bool = false) {
         self.isAvailable = isAvailable
@@ -650,6 +762,7 @@ private final class ServerRemoteRepositoryFake: ServerRemoteRepository {
 
     func fetchServerChanges(forceFullFetch: Bool) async throws -> ServerRemoteChanges {
         fetchCount += 1
+        fetchForceFullModes.append(forceFullFetch)
         if let fetchHandler {
             return try await fetchHandler(forceFullFetch, fetchCount)
         }
@@ -658,8 +771,15 @@ private final class ServerRemoteRepositoryFake: ServerRemoteRepository {
             workspaces: [],
             deletedServerIDs: [],
             deletedWorkspaceIDs: [],
-            isFullFetch: forceFullFetch
+            isFullFetch: forceFullFetch,
+            checkpoint: ServerRemoteChangeCheckpoint(
+                id: UUID(uuidString: "80000000-0000-0000-0000-000000000005")!
+            )
         )
+    }
+
+    func acceptServerChanges(_ checkpoint: ServerRemoteChangeCheckpoint) throws {
+        acceptedCheckpoints.append(checkpoint)
     }
 
     func saveServer(_ server: Server) async throws {

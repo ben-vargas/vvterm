@@ -1,11 +1,32 @@
 import Foundation
 
+nonisolated struct ServerRemoteChangeCheckpoint: Equatable, Sendable {
+    let id: UUID
+}
+
 nonisolated struct ServerRemoteChanges: Equatable, Sendable {
     let servers: [Server]
     let workspaces: [Workspace]
     let deletedServerIDs: [UUID]
     let deletedWorkspaceIDs: [UUID]
     let isFullFetch: Bool
+    let checkpoint: ServerRemoteChangeCheckpoint
+
+    init(
+        servers: [Server],
+        workspaces: [Workspace],
+        deletedServerIDs: [UUID],
+        deletedWorkspaceIDs: [UUID],
+        isFullFetch: Bool,
+        checkpoint: ServerRemoteChangeCheckpoint
+    ) {
+        self.servers = servers
+        self.workspaces = workspaces
+        self.deletedServerIDs = deletedServerIDs
+        self.deletedWorkspaceIDs = deletedWorkspaceIDs
+        self.isFullFetch = isFullFetch
+        self.checkpoint = checkpoint
+    }
 }
 
 nonisolated struct ServerPendingMutation: Codable, Equatable, Identifiable, Sendable {

@@ -204,6 +204,19 @@ final class ServerRemoteSyncCoordinator {
         generation: LoadGeneration
     ) async {
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
+        let pendingBootstrapWorkspaceID = stateStore.transientBootstrapWorkspaceID
+        var mustRestorePersistedCollections = true
+        var mustRestorePendingBootstrapWorkspaceID = true
+        defer {
+            if mustRestorePersistedCollections {
+                stateStore.restorePersistedCollections()
+            }
+            if mustRestorePendingBootstrapWorkspaceID {
+                stateStore.restorePendingBootstrapWorkspaceID(
+                    pendingBootstrapWorkspaceID
+                )
+            }
+        }
         resolvePendingBootstrapWorkspaceAgainstAuthoritativeFetch(fetchedChanges)
         guard let backfillResult = await backfillMissingLocalRecordsIfNeeded(
             for: fetchedChanges,
@@ -216,7 +229,7 @@ final class ServerRemoteSyncCoordinator {
             "CloudKit returned \(changes.workspaces.count) workspaces, \(changes.servers.count) servers (full fetch: \(changes.isFullFetch))"
         )
 
-        removeKnownHostsDeletedByIncrementalChanges(changes)
+        let deletedServers = serversDeletedByIncrementalChanges(changes)
         stateStore.applyRemoteChanges(
             changes,
             canReplaceLocalState: backfillResult.canReplaceLocalState
@@ -227,14 +240,37 @@ final class ServerRemoteSyncCoordinator {
         repairOrphanedServers()
 
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
-        await drainPendingMutations()
-        guard !Task.isCancelled, acceptsLoad(generation) else { return }
 
-        stateStore.persistCurrentCollections()
+        do {
+            try stateStore.persistCurrentCollectionsForRemoteAcceptance()
+        } catch {
+            stateStore.restorePersistedCollections()
+            mustRestorePersistedCollections = false
+            await failLoad(error, operationID: operationID, generation: generation)
+            return
+        }
+        mustRestorePersistedCollections = false
+        guard !Task.isCancelled, acceptsLoad(generation) else { return }
         stateStore.refreshFreePlanGeneration(
             persistCurrentIfNeeded: true,
             reason: "cloudkit_load"
         )
+        guard !Task.isCancelled, acceptsLoad(generation) else { return }
+        do {
+            try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
+        } catch {
+            await failLoad(error, operationID: operationID, generation: generation)
+            return
+        }
+        mustRestorePendingBootstrapWorkspaceID = false
+        removeKnownHostsDeletedByIncrementalChanges(
+            changes,
+            deletedServers: deletedServers
+        )
+
+        guard !Task.isCancelled, acceptsLoad(generation) else { return }
+        await drainPendingMutations()
+        guard !Task.isCancelled, acceptsLoad(generation) else { return }
 
         logger.info(
             "Loaded \(self.stateStore.workspaces.count) workspaces and \(self.stateStore.servers.count) servers from CloudKit"
@@ -381,7 +417,8 @@ final class ServerRemoteSyncCoordinator {
                 workspaces: changes.workspaces + uploadedWorkspaces,
                 deletedServerIDs: changes.deletedServerIDs,
                 deletedWorkspaceIDs: changes.deletedWorkspaceIDs,
-                isFullFetch: changes.isFullFetch
+                isFullFetch: changes.isFullFetch,
+                checkpoint: changes.checkpoint
             ),
             canReplaceLocalState: backfillCompleted
         )
@@ -508,12 +545,20 @@ final class ServerRemoteSyncCoordinator {
     }
 
     private func removeKnownHostsDeletedByIncrementalChanges(
-        _ changes: ServerRemoteChanges
+        _ changes: ServerRemoteChanges,
+        deletedServers: [Server]
     ) {
         let deletedServerIDs = Set(changes.deletedServerIDs)
-        for server in stateStore.servers where deletedServerIDs.contains(server.id) {
+        for server in deletedServers {
             removeKnownHostIfUnused(for: server, excluding: deletedServerIDs)
         }
+    }
+
+    private func serversDeletedByIncrementalChanges(
+        _ changes: ServerRemoteChanges
+    ) -> [Server] {
+        let deletedServerIDs = Set(changes.deletedServerIDs)
+        return stateStore.servers.filter { deletedServerIDs.contains($0.id) }
     }
 
     private func repairOrphanedServers() {

@@ -4,6 +4,7 @@ import Foundation
 protocol ServerRemoteRepository: AnyObject {
     var isAvailable: Bool { get }
     func fetchServerChanges(forceFullFetch: Bool) async throws -> ServerRemoteChanges
+    func acceptServerChanges(_ checkpoint: ServerRemoteChangeCheckpoint) throws
     func saveServer(_ server: Server) async throws
     func saveWorkspace(_ workspace: Workspace) async throws
 }

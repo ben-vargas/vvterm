@@ -15,7 +15,11 @@ private final class ServerCloudKitRecordTransportStub: CloudKitRecordChangeTrans
     )
     var isCloudKitAvailable = true
     var changesResult: Result<CloudKitRawRecordChanges, Error> = .success(
-        CloudKitRawRecordChanges(changes: [], isFullFetch: false)
+        CloudKitRawRecordChanges(
+            changes: [],
+            isFullFetch: false,
+            checkpoint: CloudKitRecordChangeCheckpoint(id: UUID())
+        )
     )
     var upsertResult: Result<Void, Error> = .success(())
     var deleteResult: Result<Void, Error> = .success(())
@@ -24,6 +28,7 @@ private final class ServerCloudKitRecordTransportStub: CloudKitRecordChangeTrans
     private(set) var upsertedRecords: [CKRecord] = []
     private(set) var deletedRecordIDs: [CKRecord.ID] = []
     private(set) var synchronizedCount = 0
+    private(set) var committedCheckpoints: [CloudKitRecordChangeCheckpoint] = []
 
     func fetchCloudKitRecordChanges(
         forceFullFetch: Bool,
@@ -31,6 +36,12 @@ private final class ServerCloudKitRecordTransportStub: CloudKitRecordChangeTrans
     ) async throws -> CloudKitRawRecordChanges {
         fetchRequests.append((forceFullFetch, desiredKeys))
         return try changesResult.get()
+    }
+
+    func commitCloudKitRecordChanges(
+        _ checkpoint: CloudKitRecordChangeCheckpoint
+    ) throws {
+        committedCheckpoints.append(checkpoint)
     }
 
     func performCloudKitRecordMutation<T>(
@@ -103,7 +114,8 @@ struct ServerCloudKitClientTests {
                         recordType: WorkspaceCloudKitRecordCodec.recordType
                     )
                 ],
-                isFullFetch: true
+                isFullFetch: true,
+                checkpoint: CloudKitRecordChangeCheckpoint(id: UUID())
             )
         )
         let client = ServerCloudKitClient(transport: transport, now: { fallbackDate })
@@ -115,6 +127,9 @@ struct ServerCloudKitClientTests {
         #expect(Set(changes.deletedServerIDs) == [deletedServerID])
         #expect(Set(changes.deletedWorkspaceIDs) == [deletedWorkspaceID])
         #expect(changes.isFullFetch)
+        let checkpoint = changes.checkpoint
+        try client.acceptServerChanges(checkpoint)
+        #expect(transport.committedCheckpoints.map(\.id) == [checkpoint.id])
         #expect(transport.fetchRequests.map(\.forceFullFetch) == [true])
         #expect(
             Set(transport.fetchRequests[0].desiredKeys)
@@ -151,7 +166,8 @@ struct ServerCloudKitClientTests {
                         )
                     )
                 ],
-                isFullFetch: false
+                isFullFetch: false,
+                checkpoint: CloudKitRecordChangeCheckpoint(id: UUID())
             )
         )
         let client = ServerCloudKitClient(transport: transport, now: Date.init)

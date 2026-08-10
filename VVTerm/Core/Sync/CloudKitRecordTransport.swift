@@ -12,6 +12,12 @@ nonisolated struct CloudKitRecordChangeFetchIdentity: Equatable, Sendable {
 
 nonisolated enum CloudKitRecordChangeStreamError: Error, Equatable, Sendable {
     case incompatibleRequestInFlight
+    case invalidCheckpoint
+    case checkpointPersistenceFailed
+}
+
+nonisolated struct CloudKitRecordChangeCheckpoint: Equatable, Sendable {
+    let id: UUID
 }
 
 nonisolated enum CloudKitRecordChangeRequestDecision: Equatable, Sendable {
@@ -30,6 +36,21 @@ nonisolated enum CloudKitRecordChangeRequestPolicy {
         }
         return .coalesce
     }
+
+    static func requiresCancellationTeardown(activeWaiterCount: Int) -> Bool {
+        activeWaiterCount == 0
+    }
+}
+
+nonisolated enum CloudKitRecordChangeCheckpointPolicy {
+    static func validate(
+        _ checkpoint: CloudKitRecordChangeCheckpoint,
+        pending: CloudKitRecordChangeCheckpoint?
+    ) throws {
+        guard checkpoint == pending else {
+            throw CloudKitRecordChangeStreamError.invalidCheckpoint
+        }
+    }
 }
 
 @MainActor
@@ -39,9 +60,10 @@ enum CloudKitRawRecordChange {
 }
 
 @MainActor
-struct CloudKitRawRecordChanges {
+struct CloudKitRawRecordChanges: @unchecked Sendable {
     let changes: [CloudKitRawRecordChange]
     let isFullFetch: Bool
+    let checkpoint: CloudKitRecordChangeCheckpoint
 }
 
 @MainActor
@@ -69,13 +91,16 @@ extension CloudKitManager: CloudKitRecordTransport {}
 protocol CloudKitRecordChangeTransport: CloudKitRecordTransport {
     var isCloudKitAvailable: Bool { get }
 
-    /// Reads the zone's single primary change stream and advances its shared token.
+    /// Reads the zone's single primary change stream without advancing its shared token.
     /// One consumer owns this stream. Every call must use that consumer's normalized keys.
     /// Concurrent calls coalesce only when their keys and fetch mode match exactly.
     func fetchCloudKitRecordChanges(
         forceFullFetch: Bool,
         desiredKeys: [String]
     ) async throws -> CloudKitRawRecordChanges
+    func commitCloudKitRecordChanges(
+        _ checkpoint: CloudKitRecordChangeCheckpoint
+    ) throws
     func deleteCloudKitRecord(_ recordID: CKRecord.ID) async throws
 }
 
