@@ -75,10 +75,10 @@ struct ActiveServerSummary: Identifiable {
         server: (UUID) -> Server?,
         viewTabConfig: ViewTabConfigurationManager
     ) -> [ActiveServerSummary] {
-        let serverIds = tabManager.serverIdsWithTabs().union(fileTabs.tabsByServer.keys)
+        let serverIds = tabManager.sessionState.serverIdsWithTabs.union(fileTabs.tabsByServer.keys)
 
         return serverIds.compactMap { serverId in
-            let terminalTabs = tabManager.tabs(for: serverId)
+            let terminalTabs = tabManager.sessionState.tabs(for: serverId)
             let remoteFileTabs = fileTabs.tabs(for: serverId)
             guard !terminalTabs.isEmpty || !remoteFileTabs.isEmpty else { return nil }
 
@@ -117,7 +117,7 @@ struct ActiveServerSummary: Identifiable {
                     serverId: serverId,
                     hasTerminalTabs: !terminalTabs.isEmpty,
                     hasFileTabs: !remoteFileTabs.isEmpty,
-                    selectedView: tabManager.selectedView(for: serverId),
+                    selectedView: tabManager.connectionViewSelections.selection(for: serverId),
                     viewTabConfig: viewTabConfig
                 )
             )
@@ -133,7 +133,7 @@ struct ActiveServerSummary: Identifiable {
         tabManager: TerminalTabManager
     ) -> TerminalTab? {
         guard !tabs.isEmpty else { return nil }
-        if let selectedId = tabManager.selectedTabId(for: serverId),
+        if let selectedId = tabManager.sessionState.selectedTabId(for: serverId),
            let match = tabs.first(where: { $0.id == selectedId }) {
             return match
         }
@@ -146,7 +146,7 @@ struct ActiveServerSummary: Identifiable {
     ) -> TerminalPaneState? {
         tabs
             .flatMap { orderedPaneIds(for: $0) }
-            .compactMap { tabManager.paneState(for: $0) }
+            .compactMap { tabManager.sessionState.paneState(for: $0) }
             .min { lhs, rhs in
                 stateSortRank(lhs.connectionState) < stateSortRank(rhs.connectionState)
             }

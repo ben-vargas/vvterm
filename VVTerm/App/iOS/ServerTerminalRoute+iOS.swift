@@ -429,7 +429,11 @@ struct ServerTerminalRoute: View {
 
     private func selectedViewBinding(for serverId: UUID) -> Binding<ConnectionViewTabID> {
         Binding(
-            get: { viewTabConfig.effectiveView(for: tabManager.selectedView(for: serverId)) },
+            get: {
+                viewTabConfig.effectiveView(
+                    for: tabManager.connectionViewSelections.selection(for: serverId)
+                )
+            },
             set: { newValue in
                 tabManager.selectView(viewTabConfig.effectiveView(for: newValue), for: serverId)
             }
@@ -650,7 +654,7 @@ struct ServerTerminalRoute: View {
         guard selectedView == .terminal else { return }
         guard voiceSettingsStore.settings.terminalVoiceButtonEnabled else { return }
         guard let focusedPaneId,
-              tabManager.paneState(for: focusedPaneId)?.connectionState.isConnected == true else { return }
+              tabManager.sessionState.paneState(for: focusedPaneId)?.connectionState.isConnected == true else { return }
         clearPendingVoiceReturnForFocusedPane()
         if focusedTerminal?.triggerVoiceInput() == true {
             tabManager.applyTerminalVoiceEvent(.recordingStarted, for: focusedPaneId)

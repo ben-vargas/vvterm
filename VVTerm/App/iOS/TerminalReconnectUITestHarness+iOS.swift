@@ -222,19 +222,19 @@ struct TerminalReconnectUITestHarness: View {
 
     private var coldRelaunchDiagnostics: String {
         guard let serverId = activeServer?.id else { return "setup=preparing" }
-        let tabs = tabManager.tabs(for: serverId)
+        let tabs = tabManager.sessionState.tabs(for: serverId)
         let paneCount = tabs.reduce(0) { $0 + $1.paneCount }
-        let selected = tabManager.selectedTabId(for: serverId)?.uuidString ?? "none"
-        let focused = tabManager.selectedTab(for: serverId)?.focusedPaneId.uuidString ?? "none"
+        let selected = tabManager.sessionState.selectedTabId(for: serverId)?.uuidString ?? "none"
+        let focused = tabManager.sessionState.selectedTab(for: serverId)?.focusedPaneId.uuidString ?? "none"
         let disconnected = tabs.flatMap(\.allPaneIds).filter {
-            tabManager.paneState(for: $0)?.connectionState == .disconnected
+            tabManager.sessionState.paneState(for: $0)?.connectionState == .disconnected
         }.count
         return "setup=ready tabs=\(tabs.count) panes=\(paneCount) selected=\(selected) focused=\(focused) disconnected=\(disconnected)"
     }
 
     private var focusedTerminal: GhosttyTerminalView? {
         guard let serverId = activeServer?.id,
-              let paneId = tabManager.selectedTab(for: serverId)?.focusedPaneId else {
+              let paneId = tabManager.sessionState.selectedTab(for: serverId)?.focusedPaneId else {
             return nil
         }
         return tabManager.terminalSurfaceStore.ghosttySurface(for: paneId)
@@ -341,7 +341,7 @@ struct TerminalReconnectUITestHarness: View {
                 } else {
                     tabManager.selectTab(firstTab.id, for: server.id)
                 }
-            } else if tabManager.tabs(for: server.id).isEmpty {
+            } else if tabManager.sessionState.tabs(for: server.id).isEmpty {
                 throw VVTermError.connectionFailed("Cold relaunch snapshot was not restored")
             }
             tabManager.selectView(.terminal, for: server.id)
@@ -447,14 +447,14 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
 
         private func refresh() {
             guard let serverId,
-                  let paneId = tabManager.selectedTab(for: serverId)?.focusedPaneId else {
+                  let paneId = tabManager.sessionState.selectedTab(for: serverId)?.focusedPaneId else {
                 publish(fallback)
                 return
             }
 
-            let state = tabManager.paneState(for: paneId)?.connectionState ?? .idle
+            let state = tabManager.sessionState.paneState(for: paneId)?.connectionState ?? .idle
             let title = tabManager.runtimeTitleByPane[paneId] ?? "none"
-            let workingDirectory = tabManager.paneState(for: paneId)?.workingDirectory ?? "none"
+            let workingDirectory = tabManager.sessionState.paneState(for: paneId)?.workingDirectory ?? "none"
             guard let terminal = tabManager.terminalSurfaceStore.ghosttySurface(for: paneId) else {
                 publish("setup=ready state=\(connectionToken(state)) title=\(title) terminal=missing")
                 return
