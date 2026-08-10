@@ -34,6 +34,11 @@ class SpeechRecognitionService: ObservableObject {
     private var recognitionState: SpeechRecognitionOperationState = .idle
     private var recognitionCompletionStream: AsyncStream<Void>?
     private var recognitionCompletionContinuation: AsyncStream<Void>.Continuation?
+    private let selectedLanguageCode: @MainActor () -> String
+
+    init(selectedLanguageCode: @escaping @MainActor () -> String) {
+        self.selectedLanguageCode = selectedLanguageCode
+    }
 
     var isAvailable: Bool {
         resolvedRecognizer()?.isAvailable ?? false
@@ -54,7 +59,7 @@ class SpeechRecognitionService: ObservableObject {
     ]
 
     private func resolvedRecognizer() -> SFSpeechRecognizer? {
-        let languageCode = TranscriptionSettingsStore.currentLanguageCode()
+        let languageCode = selectedLanguageCode()
         if let speechRecognizer, recognizerLanguageCode == languageCode {
             return speechRecognizer
         }

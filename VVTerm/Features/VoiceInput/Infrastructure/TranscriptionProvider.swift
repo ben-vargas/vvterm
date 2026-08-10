@@ -113,28 +113,3 @@ final class UserDefaultsVoiceSettingsPersistence: VoiceSettingsPersisting {
         return defaults.bool(forKey: TranscriptionSettingsKeys.terminalVoiceButtonEnabled)
     }
 }
-
-/// Runtime services read the same persisted snapshot that the settings owner writes.
-/// This has no stored process-wide state.
-@MainActor
-enum TranscriptionSettingsStore {
-    private static func currentSettings() -> VoiceSettings {
-        UserDefaultsVoiceSettingsPersistence(defaults: .standard).loadSettings()
-    }
-
-    static func currentProvider() -> TranscriptionProvider {
-        currentSettings().provider
-    }
-
-    static func currentWhisperModelId() -> String {
-        currentSettings().whisperModelID
-    }
-
-    static func currentLanguageCode() -> String {
-        currentSettings().languageCode
-    }
-
-    static func currentParakeetModelId() -> String {
-        currentSettings().parakeetModelID
-    }
-}

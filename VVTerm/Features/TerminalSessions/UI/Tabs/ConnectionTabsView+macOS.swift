@@ -668,13 +668,17 @@ extension ConnectionTerminalContainer {
     var terminalLayer: some View {
         ForEach(serverTabs, id: \.id) { tab in
             let isVisible = selectedView == .terminal && selectedTabId == tab.id
+            let voiceRuntime = voiceInputRuntimeStore.runtime(for: tab.id)
             TerminalTabView(
                 tab: tab,
                 server: server,
                 tabManager: tabManager,
                 securityActions: terminalSecurityActions,
                 isSelected: isVisible,
-                appearance: terminalAppearanceSnapshot
+                appearance: terminalAppearanceSnapshot,
+                voiceSettingsStore: voiceInputRuntimeStore.settingsStore,
+                audioService: voiceRuntime.audioService,
+                voiceRecordingOperation: voiceRuntime.recordingOperation
             )
             .padding(terminalContentInsets)
             .opacity(isVisible ? 1 : 0)

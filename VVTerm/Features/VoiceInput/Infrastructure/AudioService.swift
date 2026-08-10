@@ -64,28 +64,31 @@ class AudioService: NSObject, ObservableObject {
     @Published var recordingDuration: TimeInterval = 0
     @Published var permissionStatus: AudioPermissionManager.PermissionStatus = .notDetermined
 
-    // Services
-    private let permissionManager = AudioPermissionManager()
-    private let speechRecognitionService = SpeechRecognitionService()
+    private let permissionManager: AudioPermissionManager
+    private let speechRecognitionService: SpeechRecognitionService
     private let audioCaptureService: AudioCaptureService
-    private let mlxWhisperProvider = MLXWhisperProvider.shared
-    private let mlxParakeetProvider = MLXParakeetProvider.shared
+    private let mlxWhisperProvider: MLXWhisperProvider
+    private let mlxParakeetProvider: MLXParakeetProvider
+    private let settingsReader: any VoiceSettingsReading
     private let startupOperation: StartupOperation?
 
     var isRecording: Bool { recordingState.isRecording }
 
-    override init() {
-        audioCaptureService = AudioCaptureService()
-        startupOperation = nil
-        super.init()
-        setupBindings()
-    }
-
     init(
+        permissionManager: AudioPermissionManager,
+        speechRecognitionService: SpeechRecognitionService,
         audioCaptureService: AudioCaptureService,
-        startupOperation: @escaping StartupOperation
+        mlxWhisperProvider: MLXWhisperProvider,
+        mlxParakeetProvider: MLXParakeetProvider,
+        settingsReader: any VoiceSettingsReading,
+        startupOperation: StartupOperation?
     ) {
+        self.permissionManager = permissionManager
+        self.speechRecognitionService = speechRecognitionService
         self.audioCaptureService = audioCaptureService
+        self.mlxWhisperProvider = mlxWhisperProvider
+        self.mlxParakeetProvider = mlxParakeetProvider
+        self.settingsReader = settingsReader
         self.startupOperation = startupOperation
         super.init()
         setupBindings()
@@ -130,8 +133,9 @@ class AudioService: NSObject, ObservableObject {
         lifecycleState: @escaping @MainActor () -> AudioCaptureLifecycleState
     ) async throws {
         try Task.checkCancellation()
-        let requestedProvider = TranscriptionSettingsStore.currentProvider()
-        let effectiveProvider = resolveProvider(for: requestedProvider)
+        let settings = settingsReader.currentSettings
+        let requestedProvider = settings.provider
+        let effectiveProvider = resolveProvider(for: settings)
         if requestedProvider == .mlxWhisper && effectiveProvider == .system {
             logger.warning("MLX Whisper not available; falling back to Apple Speech")
         } else if requestedProvider == .mlxParakeet && effectiveProvider == .system {
@@ -203,6 +207,7 @@ class AudioService: NSObject, ObservableObject {
             speechRecognitionService.resetTranscriptions()
             return finalText
         case .mlxWhisper, .mlxParakeet:
+            let settings = settingsReader.currentSettings
             let text = await Self.runProcessingSequence(
                 operationIsCurrent: { [weak self] in
                     self?.processingIsCurrent(operationID) == true
@@ -210,9 +215,16 @@ class AudioService: NSObject, ObservableObject {
                 transcribe: { [mlxWhisperProvider, mlxParakeetProvider] in
                     switch provider {
                     case .mlxWhisper:
-                        return try await mlxWhisperProvider.transcribe(samples: samples)
+                        return try await mlxWhisperProvider.transcribe(
+                            samples: samples,
+                            modelID: settings.whisperModelID,
+                            languageCode: settings.languageCode
+                        )
                     case .mlxParakeet:
-                        return try await mlxParakeetProvider.transcribe(samples: samples)
+                        return try await mlxParakeetProvider.transcribe(
+                            samples: samples,
+                            modelID: settings.parakeetModelID
+                        )
                     case .system:
                         return ""
                     }
@@ -340,23 +352,27 @@ class AudioService: NSObject, ObservableObject {
 
     // MARK: - Provider Resolution
 
-    private func resolveProvider(for requested: TranscriptionProvider) -> TranscriptionProvider {
-        switch requested {
+    private func resolveProvider(for settings: VoiceSettings) -> TranscriptionProvider {
+        switch settings.provider {
         case .system:
             return .system
         case .mlxWhisper:
-            let modelId = TranscriptionSettingsStore.currentWhisperModelId()
             return TranscriptionProviderResolutionPolicy.resolve(
-                requested: requested,
+                requested: settings.provider,
                 mlxSupported: MLXWhisperProvider.isSupported,
-                requestedModelAvailable: MLXModelManager.isModelAvailable(kind: .whisper, modelId: modelId)
+                requestedModelAvailable: MLXModelManager.isModelAvailable(
+                    kind: .whisper,
+                    modelId: settings.whisperModelID
+                )
             )
         case .mlxParakeet:
-            let modelId = TranscriptionSettingsStore.currentParakeetModelId()
             return TranscriptionProviderResolutionPolicy.resolve(
-                requested: requested,
+                requested: settings.provider,
                 mlxSupported: MLXParakeetProvider.isSupported,
-                requestedModelAvailable: MLXModelManager.isModelAvailable(kind: .parakeetTDT, modelId: modelId)
+                requestedModelAvailable: MLXModelManager.isModelAvailable(
+                    kind: .parakeetTDT,
+                    modelId: settings.parakeetModelID
+                )
             )
         }
     }

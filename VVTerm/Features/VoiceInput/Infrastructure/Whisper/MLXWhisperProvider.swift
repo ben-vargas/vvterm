@@ -1,36 +1,39 @@
 import Foundation
 
 final class MLXWhisperProvider {
-    static let shared = MLXWhisperProvider()
-
     static var isSupported: Bool {
         MLXAudioSupport.isSupported
     }
 
-    private init() {}
+    init() {}
 
-    func transcribe(samples: [Float]) async throws -> String {
+    func transcribe(
+        samples: [Float],
+        modelID: String,
+        languageCode: String
+    ) async throws -> String {
         #if arch(arm64)
-        let modelId = TranscriptionSettingsStore.currentWhisperModelId()
-        let requestedLanguage = Self.requestedLanguage(for: TranscriptionSettingsStore.currentLanguageCode())
         let modelDirectory = await MainActor.run {
-            MLXModelManager.modelDirectory(for: .whisper, modelId: modelId)
+            MLXModelManager.modelDirectory(for: .whisper, modelId: modelID)
         }
-        return try await Task.detached(priority: .userInitiated) {
+        let task = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
             guard !samples.isEmpty else { return "" }
 
             let model = try WhisperModelLoader.shared.loadModel(at: modelDirectory)
+            try Task.checkCancellation()
 
             let mel = try WhisperAudioProcessor.logMelSpectrogram(samples, nMels: model.dims.n_mels, padding: WhisperAudioConstants.nSamples)
             let melSegment = WhisperAudioProcessor.padOrTrim(mel, length: WhisperAudioConstants.nFrames, axis: 0).asType(.float16)
             let melBatch = melSegment.reshaped(1, melSegment.dim(0), melSegment.dim(1))
 
             let audioFeatures = model.encoder(melBatch)
+            try Task.checkCancellation()
 
             let language: String?
             if model.isMultilingual {
-                language = requestedLanguage
-                    ?? Self.detectLanguage(model: model, audioFeatures: audioFeatures, modelId: modelId)
+                language = Self.requestedLanguage(for: languageCode)
+                    ?? Self.detectLanguage(model: model, audioFeatures: audioFeatures, modelId: modelID)
                     ?? "en"
             } else {
                 language = nil
@@ -40,7 +43,7 @@ final class MLXWhisperProvider {
                 multilingual: model.isMultilingual,
                 language: language,
                 task: "transcribe",
-                modelId: modelId
+                modelId: modelID
             )
 
             let promptTokens = tokenizer.initialTokens(withoutTimestamps: true)
@@ -53,6 +56,7 @@ final class MLXWhisperProvider {
 
             let maxTokens = model.dims.n_text_ctx
             while allTokens.count < maxTokens {
+                try Task.checkCancellation()
                 if nextToken == tokenizer.eot { break }
                 let tokenArray = MLXArray([nextToken], [1, 1])
                 let result = model.decoder(tokenArray, audioFeatures: audioFeatures, kvCache: kvCache)
@@ -64,7 +68,12 @@ final class MLXWhisperProvider {
 
             let outputTokens = Array(allTokens.dropFirst(promptTokens.count))
             return tokenizer.decode(outputTokens).trimmingCharacters(in: .whitespacesAndNewlines)
-        }.value
+        }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
         #else
         throw NSError(domain: "MLXWhisper", code: -1, userInfo: [NSLocalizedDescriptionKey: "MLX Whisper not supported on this architecture"])
         #endif

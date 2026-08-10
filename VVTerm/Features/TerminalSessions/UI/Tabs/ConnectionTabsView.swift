@@ -16,6 +16,7 @@ struct ConnectionTerminalContainer: View {
     let statsDependencies: ServerStatsScreenDependencies
     let terminalSecurityActions: TerminalSecurityActions
     let serverFormDependencies: ServerFormDependencies
+    let voiceInputRuntimeStore: VoiceInputRuntimeStore
     let server: Server
     @Binding var isZenModeEnabled: Bool
     let isSidebarVisible: Bool
@@ -188,6 +189,10 @@ struct ConnectionTerminalContainer: View {
             backgroundColor: backgroundColor
         )
             .onAppear {
+                voiceInputRuntimeStore.synchronize(
+                    tabIDs: Set(serverTabs.map(\.id)),
+                    for: server.id
+                )
                 repairSelectedTabSelectionIfNeeded()
                 handleSelectedViewChange(selectedView)
                 ensureInitialFileTabIfNeeded()
@@ -200,7 +205,11 @@ struct ConnectionTerminalContainer: View {
                 handleSelectedViewChange(newValue)
                 ensureInitialFileTabIfNeeded()
             }
-            .onChangeCompat(of: serverTabs.map(\.id)) { _ in
+            .onChangeCompat(of: serverTabs.map(\.id)) { tabIDs in
+                voiceInputRuntimeStore.synchronize(
+                    tabIDs: Set(tabIDs),
+                    for: server.id
+                )
                 repairSelectedTabSelectionIfNeeded()
             }
             .onChange(of: isZenModeEnabled) { newValue in

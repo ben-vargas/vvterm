@@ -26,11 +26,13 @@ struct ServerTerminalRoute: View {
     let terminalSecurityActions: TerminalSecurityActions
     let serverFormDependencies: ServerFormDependencies
     let voiceModelManagers: VoiceSettingsModelManagerOwner
+    let voiceInputRuntimeStore: VoiceInputRuntimeStore
     let analyticsOptOutAction: AnalyticsOptOutAction
     let route: ServerTerminalNavigationRoute
     let onBack: () -> Void
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
 
+    @ObservedObject private var voiceSettingsStore: VoiceSettingsStore
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @EnvironmentObject private var appLockManager: AppLockManager
@@ -46,7 +48,6 @@ struct ServerTerminalRoute: View {
     @SceneStorage("vvterm.zenMode.ios") private var isZenModeEnabled = false
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
     @AppStorage(TerminalDefaults.keepScreenAwakeKey) private var keepScreenAwakeEnabled = TerminalDefaults.defaultKeepScreenAwake
-    @AppStorage("terminalVoiceButtonEnabled") private var terminalVoiceButtonEnabled = true
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -59,6 +60,7 @@ struct ServerTerminalRoute: View {
         terminalSecurityActions: TerminalSecurityActions,
         serverFormDependencies: ServerFormDependencies,
         voiceModelManagers: VoiceSettingsModelManagerOwner,
+        voiceInputRuntimeStore: VoiceInputRuntimeStore,
         analyticsOptOutAction: AnalyticsOptOutAction,
         route: ServerTerminalNavigationRoute,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
@@ -72,6 +74,10 @@ struct ServerTerminalRoute: View {
         self.terminalSecurityActions = terminalSecurityActions
         self.serverFormDependencies = serverFormDependencies
         self.voiceModelManagers = voiceModelManagers
+        self.voiceInputRuntimeStore = voiceInputRuntimeStore
+        self._voiceSettingsStore = ObservedObject(
+            wrappedValue: voiceInputRuntimeStore.settingsStore
+        )
         self.analyticsOptOutAction = analyticsOptOutAction
         self.route = route
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
@@ -150,7 +156,8 @@ struct ServerTerminalRoute: View {
     }
 
     private var shouldShowFloatingVoiceButton: Bool {
-        shouldShowFloatingTerminalControls && terminalVoiceButtonEnabled
+        shouldShowFloatingTerminalControls
+            && voiceSettingsStore.settings.terminalVoiceButtonEnabled
     }
 
     private var shouldShowFloatingReturnButton: Bool {
@@ -278,6 +285,7 @@ struct ServerTerminalRoute: View {
                 statsDependencies: statsDependencies,
                 terminalSecurityActions: terminalSecurityActions,
                 serverFormDependencies: serverFormDependencies,
+                voiceInputRuntimeStore: voiceInputRuntimeStore,
                 server: server,
                 isZenModeEnabled: $isZenModeEnabled,
                 isSidebarVisible: false,
@@ -622,7 +630,7 @@ struct ServerTerminalRoute: View {
 
     private func startVoiceInputForFocusedTerminal() {
         guard selectedView == .terminal else { return }
-        guard terminalVoiceButtonEnabled else { return }
+        guard voiceSettingsStore.settings.terminalVoiceButtonEnabled else { return }
         guard let focusedPaneId,
               tabManager.paneState(for: focusedPaneId)?.connectionState.isConnected == true else { return }
         clearPendingVoiceReturnForFocusedPane()

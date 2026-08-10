@@ -41,6 +41,7 @@ struct TerminalReconnectUITestHarness: View {
     private let terminalSecurityActions: TerminalSecurityActions
     private let serverFormDependencies: ServerFormDependencies
     private let voiceModelManagers: VoiceSettingsModelManagerOwner
+    private let voiceInputRuntimeStore: VoiceInputRuntimeStore
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     private let analyticsOptOutAction = AnalyticsOptOutAction(emitAnalyticsDisabled: {})
     @StateObject private var fileTabs: RemoteFileTabManager
@@ -55,6 +56,7 @@ struct TerminalReconnectUITestHarness: View {
         terminalSecurityActions: TerminalSecurityActions,
         serverFormDependencies: ServerFormDependencies,
         voiceModelManagers: VoiceSettingsModelManagerOwner,
+        voiceInputRuntimeStore: VoiceInputRuntimeStore,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory
     ) {
         _tabManager = ObservedObject(wrappedValue: tabManager)
@@ -64,6 +66,7 @@ struct TerminalReconnectUITestHarness: View {
         self.terminalSecurityActions = terminalSecurityActions
         self.serverFormDependencies = serverFormDependencies
         self.voiceModelManagers = voiceModelManagers
+        self.voiceInputRuntimeStore = voiceInputRuntimeStore
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         _fileTabs = StateObject(
             wrappedValue: RemoteFileTabManager(defaults: Self.fixtureDefaults)
@@ -154,6 +157,7 @@ struct TerminalReconnectUITestHarness: View {
                     terminalSecurityActions: terminalSecurityActions,
                     serverFormDependencies: serverFormDependencies,
                     voiceModelManagers: voiceModelManagers,
+                    voiceInputRuntimeStore: voiceInputRuntimeStore,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     analyticsOptOutAction: analyticsOptOutAction
                 )
@@ -168,6 +172,7 @@ struct TerminalReconnectUITestHarness: View {
                         terminalSecurityActions: terminalSecurityActions,
                         serverFormDependencies: serverFormDependencies,
                         voiceModelManagers: voiceModelManagers,
+                        voiceInputRuntimeStore: voiceInputRuntimeStore,
                         analyticsOptOutAction: analyticsOptOutAction,
                         route: .active(serverId: server.id),
                         makeLocalDiscoveryManager: makeLocalDiscoveryManager,

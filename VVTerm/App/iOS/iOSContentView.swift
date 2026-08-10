@@ -19,6 +19,7 @@ struct iOSContentView: View {
     let terminalSecurityActions: TerminalSecurityActions
     let serverFormDependencies: ServerFormDependencies
     let voiceModelManagers: VoiceSettingsModelManagerOwner
+    let voiceInputRuntimeStore: VoiceInputRuntimeStore
     let analyticsOptOutAction: AnalyticsOptOutAction
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
@@ -44,6 +45,7 @@ struct iOSContentView: View {
         terminalSecurityActions: TerminalSecurityActions,
         serverFormDependencies: ServerFormDependencies,
         voiceModelManagers: VoiceSettingsModelManagerOwner,
+        voiceInputRuntimeStore: VoiceInputRuntimeStore,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         analyticsOptOutAction: AnalyticsOptOutAction
     ) {
@@ -56,6 +58,7 @@ struct iOSContentView: View {
         self.terminalSecurityActions = terminalSecurityActions
         self.serverFormDependencies = serverFormDependencies
         self.voiceModelManagers = voiceModelManagers
+        self.voiceInputRuntimeStore = voiceInputRuntimeStore
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.analyticsOptOutAction = analyticsOptOutAction
     }
@@ -110,6 +113,7 @@ struct iOSContentView: View {
                         terminalSecurityActions: terminalSecurityActions,
                         serverFormDependencies: serverFormDependencies,
                         voiceModelManagers: voiceModelManagers,
+                        voiceInputRuntimeStore: voiceInputRuntimeStore,
                         analyticsOptOutAction: analyticsOptOutAction,
                         route: terminalRoute,
                         makeLocalDiscoveryManager: makeLocalDiscoveryManager,

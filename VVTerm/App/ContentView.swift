@@ -17,6 +17,7 @@ struct ContentView: View {
     let statsDependencies: ServerStatsScreenDependencies
     let terminalSecurityActions: TerminalSecurityActions
     let serverFormDependencies: ServerFormDependencies
+    let voiceInputRuntimeStore: VoiceInputRuntimeStore
     let onOpenSettings: () -> Void
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
@@ -56,6 +57,7 @@ struct ContentView: View {
         statsDependencies: ServerStatsScreenDependencies,
         terminalSecurityActions: TerminalSecurityActions,
         serverFormDependencies: ServerFormDependencies,
+        voiceInputRuntimeStore: VoiceInputRuntimeStore,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         onOpenSettings: @escaping () -> Void
     ) {
@@ -67,6 +69,7 @@ struct ContentView: View {
         self.statsDependencies = statsDependencies
         self.terminalSecurityActions = terminalSecurityActions
         self.serverFormDependencies = serverFormDependencies
+        self.voiceInputRuntimeStore = voiceInputRuntimeStore
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onOpenSettings = onOpenSettings
     }
@@ -134,6 +137,7 @@ struct ContentView: View {
                     statsDependencies: statsDependencies,
                     terminalSecurityActions: terminalSecurityActions,
                     serverFormDependencies: serverFormDependencies,
+                    voiceInputRuntimeStore: voiceInputRuntimeStore,
                     server: server,
                     isZenModeEnabled: $isZenModeEnabled,
                     isSidebarVisible: isSidebarVisible,
@@ -521,6 +525,14 @@ struct ContentView: View {
         keychainManager: keychainManager,
         knownHostsManager: knownHostsManager
     )
+    let voiceSettingsReader = UserDefaultsVoiceSettingsPersistence(defaults: defaults)
+    let voiceSettingsStore = VoiceSettingsStore(persistence: voiceSettingsReader)
+    let voiceInputRuntimeStore = VoiceInputRuntimeStore(
+        settingsStore: voiceSettingsStore,
+        makeRuntime: VoiceInputRuntimeLiveComposition.makeFactory(
+            settingsStore: voiceSettingsStore
+        )
+    )
     ContentView(
         serverManager: serverManager,
         engagementTracker: engagementTracker,
@@ -533,6 +545,7 @@ struct ContentView: View {
         statsDependencies: statsDependencies,
         terminalSecurityActions: terminalSecurityActions,
         serverFormDependencies: serverFormDependencies,
+        voiceInputRuntimeStore: voiceInputRuntimeStore,
         makeLocalDiscoveryManager: {
             LocalSSHDiscoveryManager(
                 dependencies: .live(

@@ -170,9 +170,8 @@ struct VVTermApp: App {
         )
         let serverVolumeVisibilityStore = ServerVolumeVisibilityStore.live
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: defaults)
-        let voiceSettingsStore = VoiceSettingsStore(
-            persistence: UserDefaultsVoiceSettingsPersistence(defaults: defaults)
-        )
+        let voiceSettingsPersistence = UserDefaultsVoiceSettingsPersistence(defaults: defaults)
+        let voiceSettingsStore = VoiceSettingsStore(persistence: voiceSettingsPersistence)
         let voiceModelManagers = VoiceSettingsModelManagerOwner(
             settingsStore: voiceSettingsStore,
             makeManager: { kind, selectedModelID in
@@ -184,6 +183,12 @@ struct VVTermApp: App {
                     operations: .live
                 )
             }
+        )
+        let voiceInputRuntimeStore = VoiceInputRuntimeStore(
+            settingsStore: voiceSettingsStore,
+            makeRuntime: VoiceInputRuntimeLiveComposition.makeFactory(
+                settingsStore: voiceSettingsStore
+            )
         )
         let makeStatsCollector = Self.makeStatsCollectorFactory(
             keychainManager: keychainManager,
@@ -250,6 +255,7 @@ struct VVTermApp: App {
         )
         _statsPreferencesStore = StateObject(wrappedValue: statsPreferencesStore)
         _serverVolumeVisibilityStore = StateObject(wrappedValue: serverVolumeVisibilityStore)
+        self.voiceInputRuntimeStore = voiceInputRuntimeStore
         self.makeStatsCollector = makeStatsCollector
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.serverFormDependencies = serverFormDependencies
@@ -328,6 +334,7 @@ struct VVTermApp: App {
     @StateObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @StateObject private var statsPreferencesStore: PreferencesStore
     @StateObject private var serverVolumeVisibilityStore: ServerVolumeVisibilityStore
+    private let voiceInputRuntimeStore: VoiceInputRuntimeStore
     @StateObject private var viewTabConfigurationManager: ViewTabConfigurationManager
     @StateObject private var syncSettingsCoordinator: SyncSettingsCoordinator
     @StateObject private var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
@@ -445,7 +452,7 @@ struct VVTermApp: App {
             statsDependencies: statsDependencies,
             terminalSecurityActions: terminalSecurityActions,
             serverFormDependencies: serverFormDependencies,
-            voiceModelManagers: voiceModelManagers,
+            voiceInputRuntimeStore: voiceInputRuntimeStore,
             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
             onOpenSettings: { settingsWindowPresenter.show() }
         )
@@ -498,6 +505,7 @@ struct VVTermApp: App {
                 terminalSecurityActions: terminalSecurityActions,
                 serverFormDependencies: serverFormDependencies,
                 voiceModelManagers: voiceModelManagers,
+                voiceInputRuntimeStore: voiceInputRuntimeStore,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager
             )
                 .environmentObject(ghosttyApp)
@@ -535,6 +543,7 @@ struct VVTermApp: App {
             terminalSecurityActions: terminalSecurityActions,
             serverFormDependencies: serverFormDependencies,
             voiceModelManagers: voiceModelManagers,
+            voiceInputRuntimeStore: voiceInputRuntimeStore,
             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
             analyticsOptOutAction: analyticsOptOutAction
         )

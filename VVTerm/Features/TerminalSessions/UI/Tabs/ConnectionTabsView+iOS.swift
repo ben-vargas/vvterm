@@ -79,13 +79,17 @@ extension ConnectionTerminalContainer {
     @ViewBuilder
     var terminalLayer: some View {
         if selectedView == .terminal, let tab = selectedTab {
+            let voiceRuntime = voiceInputRuntimeStore.runtime(for: tab.id)
             TerminalTabView(
                 tab: tab,
                 server: server,
                 tabManager: tabManager,
                 securityActions: terminalSecurityActions,
                 isSelected: true,
-                appearance: terminalAppearanceSnapshot
+                appearance: terminalAppearanceSnapshot,
+                voiceSettingsStore: voiceInputRuntimeStore.settingsStore,
+                audioService: voiceRuntime.audioService,
+                voiceRecordingOperation: voiceRuntime.recordingOperation
             )
             // Per-tab identity: without it SwiftUI reuses the previous tab's
             // representable (and its Ghostty view + SSH coordinator) when the

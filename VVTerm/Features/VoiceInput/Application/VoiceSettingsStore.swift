@@ -1,13 +1,18 @@
 import Combine
 
 @MainActor
+protocol VoiceSettingsReading: AnyObject {
+    var currentSettings: VoiceSettings { get }
+}
+
+@MainActor
 protocol VoiceSettingsPersisting: AnyObject {
     func loadSettings() -> VoiceSettings
     func saveSettings(_ settings: VoiceSettings)
 }
 
 @MainActor
-final class VoiceSettingsStore: ObservableObject {
+final class VoiceSettingsStore: ObservableObject, VoiceSettingsReading {
     @Published private(set) var settings: VoiceSettings
 
     private let persistence: any VoiceSettingsPersisting
@@ -16,6 +21,8 @@ final class VoiceSettingsStore: ObservableObject {
         self.persistence = persistence
         settings = persistence.loadSettings()
     }
+
+    var currentSettings: VoiceSettings { settings }
 
     func setProvider(_ provider: TranscriptionProvider) {
         update { $0.provider = provider }

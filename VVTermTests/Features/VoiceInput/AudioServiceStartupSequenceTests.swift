@@ -9,6 +9,10 @@ struct AudioServiceStartupSequenceTests {
         case staleAttempt
     }
 
+    private final class SettingsReader: VoiceSettingsReading {
+        let currentSettings = TranscriptionSettingsDefaults.settings
+    }
+
     @Test
     func cancellationAfterMicrophonePromptSkipsSpeechPermissionRequest() async {
         let microphoneGate = CancellationIgnoringGate()
@@ -115,7 +119,7 @@ struct AudioServiceStartupSequenceTests {
         let resources = AudioCaptureResources()
         resources.own { resourceReleases += 1 }
         let captureService = AudioCaptureService(captureResources: resources)
-        let service = AudioService(
+        let service = makeAudioService(
             audioCaptureService: captureService,
             startupOperation: { operationID, _ in
                 if operationID == firstID {
@@ -153,7 +157,7 @@ struct AudioServiceStartupSequenceTests {
     @Test
     func wrongOperationCannotStopTheCurrentRecording() async throws {
         let recordingID = UUID()
-        let service = AudioService(
+        let service = makeAudioService(
             audioCaptureService: AudioCaptureService(),
             startupOperation: { _, _ in }
         )
@@ -245,5 +249,25 @@ struct AudioServiceStartupSequenceTests {
 
     private var activeLifecycle: AudioCaptureLifecycleState {
         AudioCaptureLifecycleState(applicationIsActive: true, sceneIsActive: true)
+    }
+
+    private func makeAudioService(
+        audioCaptureService: AudioCaptureService,
+        startupOperation: @escaping AudioService.StartupOperation
+    ) -> AudioService {
+        let settingsReader = SettingsReader()
+        return AudioService(
+            permissionManager: AudioPermissionManager(),
+            speechRecognitionService: SpeechRecognitionService(
+                selectedLanguageCode: {
+                    settingsReader.currentSettings.languageCode
+                }
+            ),
+            audioCaptureService: audioCaptureService,
+            mlxWhisperProvider: MLXWhisperProvider(),
+            mlxParakeetProvider: MLXParakeetProvider(),
+            settingsReader: settingsReader,
+            startupOperation: startupOperation
+        )
     }
 }

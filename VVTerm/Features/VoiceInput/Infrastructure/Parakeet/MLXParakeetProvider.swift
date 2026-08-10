@@ -1,15 +1,13 @@
 import Foundation
 
 final class MLXParakeetProvider {
-    static let shared = MLXParakeetProvider()
-
     static var isSupported: Bool {
         MLXAudioSupport.isSupported
     }
 
-    private init() {}
+    init() {}
 
-    func transcribe(samples: [Float]) async throws -> String {
+    func transcribe(samples: [Float], modelID: String) async throws -> String {
         #if arch(arm64)
         guard Self.isSupported else {
             throw NSError(
@@ -18,19 +16,26 @@ final class MLXParakeetProvider {
                 userInfo: [NSLocalizedDescriptionKey: MLXAudioSupport.unavailableDescription]
             )
         }
-        let modelId = TranscriptionSettingsStore.currentParakeetModelId()
         let modelDirectory = await MainActor.run {
-            MLXModelManager.modelDirectory(for: .parakeetTDT, modelId: modelId)
+            MLXModelManager.modelDirectory(for: .parakeetTDT, modelId: modelID)
         }
 
-        return try await Task.detached(priority: .userInitiated) {
+        let task = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
             guard !samples.isEmpty else { return "" }
 
             let model = try ParakeetModelLoader.shared.loadModel(at: modelDirectory)
+            try Task.checkCancellation()
             let audio = MLXArray(samples, [samples.count])
             let result = try model.transcribe(audioData: audio, dtype: .float32, chunkDuration: nil)
+            try Task.checkCancellation()
             return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        }.value
+        }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
         #else
         throw NSError(
             domain: "MLXParakeet",

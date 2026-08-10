@@ -25,6 +25,9 @@ struct TerminalTabView: View {
     let securityActions: TerminalSecurityActions
     let isSelected: Bool
     let appearance: TerminalAppearanceSnapshot
+    @ObservedObject var voiceSettingsStore: VoiceSettingsStore
+    @ObservedObject var audioService: AudioService
+    @ObservedObject var voiceRecordingOperation: VoiceRecordingOperationCoordinator
 
     @State private var layoutVersion: Int = 0
     @State private var showingCloseConfirmation = false
@@ -33,10 +36,7 @@ struct TerminalTabView: View {
     @EnvironmentObject var ghosttyApp: Ghostty.App
     @EnvironmentObject private var storeManager: StoreManager
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("terminalVoiceButtonEnabled") private var voiceButtonEnabled = true
 
-    @StateObject private var audioService = AudioService()
-    @StateObject private var voiceRecordingOperation = VoiceRecordingOperationCoordinator()
     @State private var showingPermissionError = false
     @State private var permissionErrorMessage = ""
     #if os(macOS)
@@ -212,7 +212,7 @@ struct TerminalTabView: View {
                 onPaneKeyboardShortcut: handleSplitCommand,
                 appearance: appearance,
                 showsVoiceButton: isSelected
-                    && voiceButtonEnabled
+                    && voiceSettingsStore.settings.terminalVoiceButtonEnabled
                     && !showingVoiceRecording
                     && tab.focusedPaneId == paneId
                     && hasFocusedTerminal,
