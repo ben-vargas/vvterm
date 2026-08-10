@@ -8,7 +8,7 @@ struct ServerSidebarView: View {
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     let onOpenSettings: () -> Void
     @ObservedObject private var stateStore: ServerStateStore
-    @StateObject private var workspaceSelectionStore: WorkspaceSelectionStore
+    @ObservedObject private var workspaceSelectionStore: WorkspaceSelectionStore
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedServer: Server?
 
@@ -42,6 +42,7 @@ struct ServerSidebarView: View {
         serverManager: ServerManager,
         tabManager: TerminalTabManager,
         serverFormDependencies: ServerFormDependencies,
+        workspaceSelectionStore: WorkspaceSelectionStore,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         onOpenSettings: @escaping () -> Void,
         selectedWorkspace: Binding<Workspace?>,
@@ -52,8 +53,8 @@ struct ServerSidebarView: View {
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onOpenSettings = onOpenSettings
         _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
-        _workspaceSelectionStore = StateObject(
-            wrappedValue: WorkspaceSelectionLiveComposition.makeStore()
+        _workspaceSelectionStore = ObservedObject(
+            wrappedValue: workspaceSelectionStore
         )
         _tabManager = ObservedObject(wrappedValue: tabManager)
         _selectedWorkspace = selectedWorkspace

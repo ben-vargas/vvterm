@@ -338,6 +338,8 @@ struct SettingsView: View {
             freePlanTracker: AnalyticsTracker.shared,
             actionAuthorizer: appLockManager,
             syncRepository: cloudKitSyncCoordinator,
+            defaultWorkspaceName: { "My Servers" },
+            canonicalDefaultWorkspaceNames: { ["My Servers"] },
             now: Date.init,
             makeID: UUID.init
         ),

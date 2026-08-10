@@ -73,6 +73,8 @@ extension ServerManagerDependencies {
         freePlanTracker: any FreePlanAssignmentTracking,
         actionAuthorizer: any ProtectedServerActionAuthorizing,
         syncRepository: any ServerSyncRepository,
+        defaultWorkspaceName: @escaping () -> String,
+        canonicalDefaultWorkspaceNames: @escaping () -> Set<String>,
         now: @escaping () -> Date,
         makeID: @escaping () -> UUID
     ) -> Self {
@@ -84,10 +86,8 @@ extension ServerManagerDependencies {
                 isSyncEnabled: { SyncSettings.isEnabled(in: defaults) },
                 now: now,
                 makeID: makeID,
-                defaultWorkspaceName: { AppLanguage.localizedString("My Servers") },
-                canonicalDefaultWorkspaceNames: {
-                    Set(AppLanguage.localizedValues(for: "My Servers"))
-                }
+                defaultWorkspaceName: defaultWorkspaceName,
+                canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames
             )
         )
         return Self(

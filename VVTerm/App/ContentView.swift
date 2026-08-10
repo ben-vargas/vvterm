@@ -17,6 +17,7 @@ struct ContentView: View {
     let statsDependencies: ServerStatsScreenDependencies
     let terminalSecurityActions: TerminalSecurityActions
     let serverFormDependencies: ServerFormDependencies
+    let workspaceSelectionStore: WorkspaceSelectionStore
     let voiceInputRuntimeStore: VoiceInputRuntimeStore
     let onOpenSettings: () -> Void
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
@@ -57,6 +58,7 @@ struct ContentView: View {
         statsDependencies: ServerStatsScreenDependencies,
         terminalSecurityActions: TerminalSecurityActions,
         serverFormDependencies: ServerFormDependencies,
+        workspaceSelectionStore: WorkspaceSelectionStore,
         voiceInputRuntimeStore: VoiceInputRuntimeStore,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         onOpenSettings: @escaping () -> Void
@@ -69,6 +71,7 @@ struct ContentView: View {
         self.statsDependencies = statsDependencies
         self.terminalSecurityActions = terminalSecurityActions
         self.serverFormDependencies = serverFormDependencies
+        self.workspaceSelectionStore = workspaceSelectionStore
         self.voiceInputRuntimeStore = voiceInputRuntimeStore
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onOpenSettings = onOpenSettings
@@ -282,6 +285,7 @@ struct ContentView: View {
                     serverManager: serverManager,
                     tabManager: tabManager,
                     serverFormDependencies: serverFormDependencies,
+                    workspaceSelectionStore: workspaceSelectionStore,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     onOpenSettings: onOpenSettings,
                     selectedWorkspace: $selectedWorkspace,
@@ -319,6 +323,7 @@ struct ContentView: View {
                             serverManager: serverManager,
                             tabManager: tabManager,
                             serverFormDependencies: serverFormDependencies,
+                            workspaceSelectionStore: workspaceSelectionStore,
                             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                             onOpenSettings: onOpenSettings,
                             selectedWorkspace: $selectedWorkspace,
@@ -429,6 +434,15 @@ struct ContentView: View {
             freePlanTracker: analyticsTracker,
             actionAuthorizer: appLockManager,
             syncRepository: cloudKitSyncCoordinator,
+            defaultWorkspaceName: {
+                AppLanguage.localizedString(
+                    "My Servers",
+                    rawValue: defaults.string(forKey: AppLanguage.storageKey)
+                )
+            },
+            canonicalDefaultWorkspaceNames: {
+                AppLanguage.localizedValues(for: "My Servers")
+            },
             now: now,
             makeID: makeID
         ),
@@ -527,6 +541,9 @@ struct ContentView: View {
     )
     let voiceSettingsReader = UserDefaultsVoiceSettingsPersistence(defaults: defaults)
     let voiceSettingsStore = VoiceSettingsStore(persistence: voiceSettingsReader)
+    let workspaceSelectionStore = WorkspaceSelectionLiveComposition.makeStore(
+        defaults: defaults
+    )
     let voiceInputRuntimeStore = VoiceInputRuntimeStore(
         settingsStore: voiceSettingsStore,
         makeRuntime: VoiceInputRuntimeLiveComposition.makeFactory(
@@ -545,6 +562,7 @@ struct ContentView: View {
         statsDependencies: statsDependencies,
         terminalSecurityActions: terminalSecurityActions,
         serverFormDependencies: serverFormDependencies,
+        workspaceSelectionStore: workspaceSelectionStore,
         voiceInputRuntimeStore: voiceInputRuntimeStore,
         makeLocalDiscoveryManager: {
             LocalSSHDiscoveryManager(

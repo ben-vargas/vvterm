@@ -19,6 +19,15 @@ struct VVTermApp: App {
         let calendar = Calendar.current
         let now: () -> Date = Date.init
         let makeID: () -> UUID = UUID.init
+        let defaultWorkspaceName: () -> String = {
+            AppLanguage.localizedString(
+                "My Servers",
+                rawValue: defaults.string(forKey: AppLanguage.storageKey)
+            )
+        }
+        let canonicalDefaultWorkspaceNames: () -> Set<String> = {
+            AppLanguage.localizedValues(for: "My Servers")
+        }
         let networkMonitor = NetworkMonitor.shared
         let analyticsTracker = AnalyticsTracker.shared
         let cloudKitManager = CloudKitManager.shared
@@ -68,6 +77,8 @@ struct VVTermApp: App {
                 freePlanTracker: analyticsTracker,
                 actionAuthorizer: appLockManager,
                 syncRepository: cloudKitSyncCoordinator,
+                defaultWorkspaceName: defaultWorkspaceName,
+                canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames,
                 now: now,
                 makeID: makeID
             )
@@ -169,6 +180,11 @@ struct VVTermApp: App {
             )
         )
         let serverVolumeVisibilityStore = ServerVolumeVisibilityStore.live
+        #if os(macOS)
+        let workspaceSelectionStore = WorkspaceSelectionLiveComposition.makeStore(
+            defaults: defaults
+        )
+        #endif
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: defaults)
         let voiceSettingsPersistence = UserDefaultsVoiceSettingsPersistence(defaults: defaults)
         let voiceSettingsStore = VoiceSettingsStore(persistence: voiceSettingsPersistence)
@@ -255,6 +271,9 @@ struct VVTermApp: App {
         )
         _statsPreferencesStore = StateObject(wrappedValue: statsPreferencesStore)
         _serverVolumeVisibilityStore = StateObject(wrappedValue: serverVolumeVisibilityStore)
+        #if os(macOS)
+        _workspaceSelectionStore = StateObject(wrappedValue: workspaceSelectionStore)
+        #endif
         self.voiceInputRuntimeStore = voiceInputRuntimeStore
         self.makeStatsCollector = makeStatsCollector
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
@@ -334,6 +353,9 @@ struct VVTermApp: App {
     @StateObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @StateObject private var statsPreferencesStore: PreferencesStore
     @StateObject private var serverVolumeVisibilityStore: ServerVolumeVisibilityStore
+    #if os(macOS)
+    @StateObject private var workspaceSelectionStore: WorkspaceSelectionStore
+    #endif
     private let voiceInputRuntimeStore: VoiceInputRuntimeStore
     @StateObject private var viewTabConfigurationManager: ViewTabConfigurationManager
     @StateObject private var syncSettingsCoordinator: SyncSettingsCoordinator
@@ -452,6 +474,7 @@ struct VVTermApp: App {
             statsDependencies: statsDependencies,
             terminalSecurityActions: terminalSecurityActions,
             serverFormDependencies: serverFormDependencies,
+            workspaceSelectionStore: workspaceSelectionStore,
             voiceInputRuntimeStore: voiceInputRuntimeStore,
             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
             onOpenSettings: { settingsWindowPresenter.show() }

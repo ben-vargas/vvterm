@@ -5,6 +5,32 @@ import Testing
 @MainActor
 struct ServerStateStoreTests {
     @Test
+    func bootstrapUsesTheInjectedDefaultWorkspaceName() {
+        let repository = ServerStateLocalRepository(servers: [], workspaces: [])
+        let preferences = ServerStatePreferences()
+        preferences.didBootstrapDefaultWorkspace = false
+        preferences.hasSeenWelcome = false
+
+        let store = ServerStateStore(
+            dependencies: ServerStateStoreDependencies(
+                localRepository: repository,
+                preferences: preferences,
+                freePlanTracker: ServerStateFreePlanTracker(),
+                isSyncEnabled: { false },
+                now: { Date(timeIntervalSinceReferenceDate: 1_000) },
+                makeID: {
+                    UUID(uuidString: "90000000-0000-0000-0000-000000000002")!
+                },
+                defaultWorkspaceName: { "Mes serveurs" },
+                canonicalDefaultWorkspaceNames: { ["My Servers", "Mes serveurs"] }
+            )
+        )
+
+        #expect(store.workspaces.map(\.name) == ["Mes serveurs"])
+        #expect(repository.workspaces.map(\.name) == ["Mes serveurs"])
+    }
+
+    @Test
     func twoStoresKeepMutationAndPersistenceIsolated() throws {
         let firstWorkspace = makeWorkspace(id: "10000000-0000-0000-0000-000000000001")
         let secondWorkspace = makeWorkspace(id: "10000000-0000-0000-0000-000000000002")

@@ -9,7 +9,7 @@ struct ServerLocalStore {
     private let workspacesKey: String
 
     init(
-        defaults: UserDefaults = .standard,
+        defaults: UserDefaults,
         serversKey: String = CloudKitSyncConstants.serverStorageKey,
         workspacesKey: String = CloudKitSyncConstants.workspaceStorageKey
     ) {

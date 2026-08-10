@@ -5,6 +5,43 @@ import Testing
 @MainActor
 struct WorkspaceSelectionUserDefaultsPersistenceTests {
     @Test
+    func liveCompositionUsesOnlyTheInjectedDefaultsOwner() {
+        let firstSuite = "WorkspaceSelectionPersistenceTests.owner.first.\(UUID().uuidString)"
+        let secondSuite = "WorkspaceSelectionPersistenceTests.owner.second.\(UUID().uuidString)"
+        let firstDefaults = makeDefaults(named: firstSuite)
+        let secondDefaults = makeDefaults(named: secondSuite)
+        defer {
+            firstDefaults.removePersistentDomain(forName: firstSuite)
+            secondDefaults.removePersistentDomain(forName: secondSuite)
+        }
+        let workspace = Workspace(
+            id: Self.workspaceID,
+            name: "Workspace",
+            environments: [.production]
+        )
+        let firstStore = WorkspaceSelectionLiveComposition.makeStore(
+            defaults: firstDefaults
+        )
+        let secondStore = WorkspaceSelectionLiveComposition.makeStore(
+            defaults: secondDefaults
+        )
+
+        firstStore.updateEnvironmentFilterIDs(
+            [ServerEnvironment.production.id],
+            for: workspace
+        )
+
+        #expect(firstStore.environmentFilterIDs(for: workspace) == [ServerEnvironment.production.id])
+        #expect(secondStore.environmentFilterIDs(for: workspace).isEmpty)
+        #expect(firstDefaults.object(
+            forKey: WorkspaceSelectionUserDefaultsPersistence.environmentFiltersKey
+        ) != nil)
+        #expect(secondDefaults.object(
+            forKey: WorkspaceSelectionUserDefaultsPersistence.environmentFiltersKey
+        ) == nil)
+    }
+
+    @Test
     func readsExistingV2JSONAndWritesCanonicalCompatibleJSON() throws {
         let workspaceID = try #require(UUID(
             uuidString: "11111111-1111-1111-1111-111111111111"

@@ -113,10 +113,10 @@ final class WorkspaceSelectionUserDefaultsPersistence: WorkspaceSelectionPersist
 
 @MainActor
 enum WorkspaceSelectionLiveComposition {
-    static func makeStore() -> WorkspaceSelectionStore {
+    static func makeStore(defaults: UserDefaults) -> WorkspaceSelectionStore {
         WorkspaceSelectionStore(
             persistence: WorkspaceSelectionUserDefaultsPersistence(
-                defaults: .standard
+                defaults: defaults
             )
         )
     }
