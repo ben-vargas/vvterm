@@ -185,11 +185,23 @@ struct TerminalTabManagerLiveCompositionTests {
         #expect(!second.tmuxCoordinator.isEnabled(for: UUID()))
         #expect(!first.reconnectCoordinator.applicationIsActive)
         #expect(second.reconnectCoordinator.applicationIsActive)
-        #expect(first.hasEternalTerminalCheckpoint(for: firstCheckpointPaneID))
-        #expect(!first.hasEternalTerminalCheckpoint(for: secondCheckpointPaneID))
+        #expect(
+            first.transportCoordinator.hasEternalTerminalCheckpoint(
+                for: firstCheckpointPaneID
+            )
+        )
+        #expect(
+            !first.transportCoordinator.hasEternalTerminalCheckpoint(
+                for: secondCheckpointPaneID
+            )
+        )
         #expect(first.transportCoordinator.hasMoshCheckpoint(for: firstCheckpointPaneID))
         #expect(!first.transportCoordinator.hasMoshCheckpoint(for: secondCheckpointPaneID))
-        #expect(second.hasEternalTerminalCheckpoint(for: secondCheckpointPaneID))
+        #expect(
+            second.transportCoordinator.hasEternalTerminalCheckpoint(
+                for: secondCheckpointPaneID
+            )
+        )
         #expect(second.transportCoordinator.hasMoshCheckpoint(for: secondCheckpointPaneID))
 
         await first.tmuxCoordinator.killSession(
@@ -231,7 +243,7 @@ struct TerminalTabManagerLiveCompositionTests {
     ) -> TerminalTabManager {
         let analyticsTracker = AnalyticsTracker.shared
         let applicationIsActiveQuery = { applicationIsActive }
-        TerminalTabManagerLiveComposition.makeManager(
+        return TerminalTabManagerLiveComposition.makeManager(
             defaults: defaults,
             sshClientFactory: .testing(),
             networkMonitor: .shared,

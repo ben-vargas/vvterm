@@ -171,9 +171,11 @@ private final class StatsTestSession: ServerStatsCollectionSession {
         return ServerStats()
     }
 
-    func terminateProcess(_ process: ProcessInfo) async throws {}
+    func terminateProcess(_ process: VVTerm.ProcessInfo) async throws {}
 
-    func loadProcesses(fallback: [ProcessInfo]) async throws -> [ProcessInfo] {
+    func loadProcesses(
+        fallback: [VVTerm.ProcessInfo]
+    ) async throws -> [VVTerm.ProcessInfo] {
         fallback
     }
 
