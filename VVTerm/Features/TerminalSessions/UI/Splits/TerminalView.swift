@@ -296,7 +296,7 @@ struct TerminalTabView: View {
             splitDown: { splitPane(paneId, placement: .down) },
             splitUp: { splitPane(paneId, placement: .up) },
             currentTitle: {
-                tabManager.displayTitle(forPane: paneId, fallback: tab.title) ?? tab.title
+                tabManager.titleStore.displayTitle(forPane: paneId, fallback: tab.title) ?? tab.title
             },
             setTitle: { title in
                 tabManager.setPaneTitleOverride(title, for: paneId)

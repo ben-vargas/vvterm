@@ -94,7 +94,7 @@ struct ActiveServerSummary: Identifiable {
                 id: serverId,
                 terminalTab: tab,
                 title: configuredServer?.name
-                    ?? tab.map { tabManager.displayTitle(for: $0) }
+                    ?? tab.map { tabManager.titleStore.displayTitle(for: $0) }
                     ?? String(localized: "Server"),
                 status: state.map {
                     let hasResumeCheckpoint = switch configuredServer?.connectionMode {

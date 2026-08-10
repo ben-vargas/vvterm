@@ -524,7 +524,9 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         }
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminalView.terminalContextMenuActions = terminalContextMenuActions
-        terminalView.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
+        terminalView.applyPresentationOverrides(
+            tabManager.sessionState.presentationOverrides(for: paneId)
+        )
 
         coordinator.terminal = terminalView
         coordinator.installRichPasteInterception(on: terminalView)
@@ -579,8 +581,9 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         )
 
         terminalView.acceptsTerminalInput = isActive
-        if terminalView.surfacePresentationOverrides != tabManager.presentationOverrides(for: paneId) {
-            terminalView.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
+        let presentationOverrides = tabManager.sessionState.presentationOverrides(for: paneId)
+        if terminalView.surfacePresentationOverrides != presentationOverrides {
+            terminalView.applyPresentationOverrides(presentationOverrides)
         }
         terminalView.onVoiceButtonTapped = onVoiceTrigger
         terminalView.applyTerminalAccessoryInputSnapshot(terminalAccessoryInputSnapshot)
@@ -653,7 +656,9 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         }
         terminal.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminal.terminalContextMenuActions = terminalContextMenuActions
-        terminal.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
+        terminal.applyPresentationOverrides(
+            tabManager.sessionState.presentationOverrides(for: paneId)
+        )
         terminal.writeCallback = { [weak coordinator] data in
             coordinator?.sendToTransport(data)
         }

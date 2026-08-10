@@ -40,8 +40,6 @@ final class TerminalTabManager {
     private var tabOpensInFlight: Set<UUID> = []
 
     let titleStore = TerminalPaneTitleStore()
-    var runtimeTitleByPane: [UUID: String] { titleStore.runtimeTitles }
-    var titleOverrideByPane: [UUID: String] { titleStore.overrides }
     #if os(iOS)
     let keyboardCoordinator = TerminalKeyboardCoordinator()
     #endif
@@ -1190,7 +1188,7 @@ final class TerminalTabManager {
     func handleTerminalZoom(_ action: TerminalZoomAction, for paneId: UUID) -> TerminalZoomResult? {
         guard sessionState.containsPane(paneId) else { return nil }
 
-        let currentOverrides = presentationOverrides(for: paneId)
+        let currentOverrides = sessionState.presentationOverrides(for: paneId)
         let overrides = currentOverrides.applyingZoom(action)
         guard overrides != currentOverrides else {
             return TerminalZoomResult(

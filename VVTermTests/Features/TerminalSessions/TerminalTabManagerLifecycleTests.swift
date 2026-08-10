@@ -375,8 +375,8 @@ struct TerminalTabManagerLifecycleTests {
             let result = manager.handleTerminalZoom(.zoomIn, for: tab.rootPaneId)
 
             #expect(result?.effectiveFontSize == 13.0)
-            #expect(manager.presentationOverrides(for: tab.rootPaneId).fontSize == 13.0)
-            #expect(manager.presentationOverrides(for: siblingPaneId).isEmpty)
+            #expect(manager.sessionState.presentationOverrides(for: tab.rootPaneId).fontSize == 13.0)
+            #expect(manager.sessionState.presentationOverrides(for: siblingPaneId).isEmpty)
             #expect(defaults.double(forKey: TerminalDefaults.fontSizeKey) == 12.0)
         }
     }

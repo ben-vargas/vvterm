@@ -111,7 +111,7 @@ extension ConnectionTerminalContainer {
             SharedTerminalTabsBar(
                 tabs: serverTabs,
                 selectedTabId: selectedTabIdBinding,
-                titleForTab: { tabManager.displayTitle(for: $0) },
+                titleForTab: { tabManager.titleStore.displayTitle(for: $0) },
                 paneState: { tabManager.sessionState.paneState(for: $0.focusedPaneId) },
                 onClose: { tabManager.closeTab($0) }
             )
@@ -148,7 +148,7 @@ extension ConnectionTerminalContainer {
                 viewTabs: visibleViewTabs,
                 terminalTabs: serverTabs,
                 selectedTerminalTabId: selectedTabIdBinding,
-                terminalTabTitle: { tabManager.displayTitle(for: $0) },
+                terminalTabTitle: { tabManager.titleStore.displayTitle(for: $0) },
                 paneState: { tabManager.sessionState.paneState(for: $0.focusedPaneId) },
                 onCloseTerminalTab: { tabManager.closeTab($0) },
                 fileTabs: serverFileTabs,

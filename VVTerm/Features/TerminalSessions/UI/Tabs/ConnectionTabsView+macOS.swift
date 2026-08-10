@@ -234,7 +234,7 @@ extension ConnectionTerminalContainer {
         }
         if selectedView == .terminal {
             guard let selectedTab else { return "" }
-            return tabManager.displayTitle(for: selectedTab)
+            return tabManager.titleStore.displayTitle(for: selectedTab)
         }
         return String(localized: String.LocalizationValue(selectedView.localizedKey))
     }
@@ -412,7 +412,7 @@ extension ConnectionTerminalContainer {
             viewTabs: visibleViewTabs,
             terminalTabs: serverTabs,
             selectedTerminalTabId: selectedTabIdBinding,
-            terminalTabTitle: { tabManager.displayTitle(for: $0) },
+            terminalTabTitle: { tabManager.titleStore.displayTitle(for: $0) },
             paneState: { tab in
                 tabManager.sessionState.paneState(for: tab.focusedPaneId)
             },

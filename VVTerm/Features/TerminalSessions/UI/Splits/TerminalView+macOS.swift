@@ -69,7 +69,9 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
                 tabManager.handleTerminalZoom(action, for: paneId)
             }
             existingTerminal.terminalContextMenuActions = terminalContextMenuActions
-            existingTerminal.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
+            existingTerminal.applyPresentationOverrides(
+                tabManager.sessionState.presentationOverrides(for: paneId)
+            )
             existingTerminal.writeCallback = { [weak coordinator] data in
                 coordinator?.sendToTransport(data)
             }
@@ -118,7 +120,9 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
             tabManager.handleTerminalZoom(action, for: paneId)
         }
         terminalView.terminalContextMenuActions = terminalContextMenuActions
-        terminalView.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
+        terminalView.applyPresentationOverrides(
+            tabManager.sessionState.presentationOverrides(for: paneId)
+        )
 
         // Store terminal reference
         coordinator.terminal = terminalView
@@ -161,8 +165,9 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
             scrollView.shouldOwnFirstResponder = isActive
             let terminalView = scrollView.surfaceView
             terminalView.terminalContextMenuActions = terminalContextMenuActions
-            if terminalView.surfacePresentationOverrides != tabManager.presentationOverrides(for: paneId) {
-                terminalView.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
+            let presentationOverrides = tabManager.sessionState.presentationOverrides(for: paneId)
+            if terminalView.surfacePresentationOverrides != presentationOverrides {
+                terminalView.applyPresentationOverrides(presentationOverrides)
             }
         }
     }

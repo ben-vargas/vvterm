@@ -176,6 +176,10 @@ final class TerminalSessionStateStore: ObservableObject {
         paneStates[paneId]
     }
 
+    func presentationOverrides(for paneId: UUID) -> TerminalPresentationOverrides {
+        paneStates[paneId]?.presentationOverrides ?? .empty
+    }
+
     func containsPane(_ paneId: UUID) -> Bool {
         paneStates[paneId] != nil
     }

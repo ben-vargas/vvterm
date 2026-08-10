@@ -453,7 +453,7 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
             }
 
             let state = tabManager.sessionState.paneState(for: paneId)?.connectionState ?? .idle
-            let title = tabManager.runtimeTitleByPane[paneId] ?? "none"
+            let title = tabManager.titleStore.runtimeTitles[paneId] ?? "none"
             let workingDirectory = tabManager.sessionState.paneState(for: paneId)?.workingDirectory ?? "none"
             guard let terminal = tabManager.terminalSurfaceStore.ghosttySurface(for: paneId) else {
                 publish("setup=ready state=\(connectionToken(state)) title=\(title) terminal=missing")
