@@ -194,7 +194,7 @@ struct TerminalTabManagerLiveCompositionTests {
 
         await first.tmuxCoordinator.killSession(
             named: "first-session",
-            using: SSHClient()
+            using: SSHClient.testing()
         )
         #expect(await firstRemoteTmux.killedSessions() == ["first-session"])
         #expect(await secondRemoteTmux.killedSessions().isEmpty)
@@ -233,6 +233,7 @@ struct TerminalTabManagerLiveCompositionTests {
         let applicationIsActiveQuery = { applicationIsActive }
         TerminalTabManagerLiveComposition.makeManager(
             defaults: defaults,
+            sshClientFactory: .testing(),
             networkMonitor: .shared,
             appLockManager: AppLockManager(
                 defaults: defaults,

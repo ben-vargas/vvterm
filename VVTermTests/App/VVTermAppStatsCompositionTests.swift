@@ -118,6 +118,14 @@ struct VVTermAppStatsCompositionTests {
         let secondBacking = StatsCompositionKeychainBacking()
         let firstKeychain = makeKeychainManager(backing: firstBacking)
         let secondKeychain = makeKeychainManager(backing: secondBacking)
+        let firstKnownHosts = makeKnownHostsManager()
+        let secondKnownHosts = makeKnownHostsManager()
+        let firstSSHClientFactory = SSHClientFactory.testing(
+            hostKeyVerifier: firstKnownHosts
+        )
+        let secondSSHClientFactory = SSHClientFactory.testing(
+            hostKeyVerifier: secondKnownHosts
+        )
         try firstKeychain.storeCredentials(
             ServerCredentials(serverId: server.id, password: "first"),
             for: server
@@ -125,11 +133,19 @@ struct VVTermAppStatsCompositionTests {
         secondBacking.rejectReads()
         let firstFactory = VVTermApp.makeStatsCollectorFactory(
             keychainManager: firstKeychain,
-            connectionOperations: SSHConnectionOperationService.shared
+            knownHostsManager: firstKnownHosts,
+            connectionOperations: SSHConnectionOperationService(
+                clientFactory: firstSSHClientFactory
+            ),
+            sshClientFactory: firstSSHClientFactory
         )
         let secondFactory = VVTermApp.makeStatsCollectorFactory(
             keychainManager: secondKeychain,
-            connectionOperations: SSHConnectionOperationService.shared
+            knownHostsManager: secondKnownHosts,
+            connectionOperations: SSHConnectionOperationService(
+                clientFactory: secondSSHClientFactory
+            ),
+            sshClientFactory: secondSSHClientFactory
         )
         let firstCollector = firstFactory()
         let secondCollector = secondFactory()

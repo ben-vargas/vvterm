@@ -33,9 +33,16 @@ struct VVTermApp: App {
         let cloudKitManager = CloudKitManager.shared
         let keychainManager = KeychainManager.shared
         let knownHostsManager = KnownHostsManager.shared
-        let connectionOperations = SSHConnectionOperationService.shared
         let liveActivityManager = LiveActivityManager.shared
         let remoteMosh = RemoteMoshManager.shared
+        let sshClientFactory = SSHClientLiveComposition.makeFactory(
+            defaults: defaults,
+            knownHostsManager: knownHostsManager,
+            remoteMoshManager: remoteMosh
+        )
+        let connectionOperations = SSHConnectionOperationService(
+            clientFactory: sshClientFactory
+        )
         let remoteTmux = RemoteTmuxManager.shared
         let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
         let moshResumeStore = MoshResumeStore.shared
@@ -125,6 +132,7 @@ struct VVTermApp: App {
         )
         let tabManager = TerminalTabManagerLiveComposition.makeManager(
             defaults: defaults,
+            sshClientFactory: sshClientFactory,
             networkMonitor: networkMonitor,
             appLockManager: appLockManager,
             serverManager: serverManager,
@@ -208,7 +216,9 @@ struct VVTermApp: App {
         )
         let makeStatsCollector = Self.makeStatsCollectorFactory(
             keychainManager: keychainManager,
-            connectionOperations: connectionOperations
+            knownHostsManager: knownHostsManager,
+            connectionOperations: connectionOperations,
+            sshClientFactory: sshClientFactory
         )
         terminalSecurityActions = Self.makeTerminalSecurityActions(
             keychainManager: keychainManager,
@@ -655,11 +665,15 @@ private enum VVTermLauncherWidgetRefresh {
 extension VVTermApp {
     static func makeStatsCollectorFactory(
         keychainManager: KeychainManager,
-        connectionOperations: SSHConnectionOperationService
+        knownHostsManager: KnownHostsManager,
+        connectionOperations: SSHConnectionOperationService,
+        sshClientFactory: SSHClientFactory
     ) -> @MainActor () -> ServerStatsCollector {
         let dependencies = ServerStatsCollectorDependencies.live(
             keychainManager: keychainManager,
-            connectionOperations: connectionOperations
+            knownHostsManager: knownHostsManager,
+            connectionOperations: connectionOperations,
+            sshClientFactory: sshClientFactory
         )
         return {
             ServerStatsCollector(dependencies: dependencies)

@@ -683,7 +683,7 @@ struct RemoteTmuxManagerParserTests {
             _ = try await coordinator.resolveSelection(
                 for: paneId,
                 serverId: serverId,
-                client: SSHClient(),
+                client: SSHClient.testing(),
                 backend: .unixTmux,
                 requestId: UUID(),
                 validateOwner: {}

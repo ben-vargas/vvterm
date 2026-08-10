@@ -27,7 +27,7 @@ nonisolated struct SSHRuntimeSettings: Equatable, Sendable {
         )
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults) {
         let keepAliveEnabled = (defaults.object(forKey: Self.keepAliveEnabledKey) as? NSNumber)?
             .boolValue ?? true
         let storedInterval = (defaults.object(forKey: Self.keepAliveIntervalKey) as? NSNumber)?

@@ -48,9 +48,10 @@ actor SSHETBootstrapExecutor: ETBootstrapExecutor {
     init(
         server: Server,
         credentials: ServerCredentials,
+        client: SSHClient,
         startupPlanProvider: (@Sendable (SSHClient) async throws -> TerminalShellStartupPlan)? = nil
     ) {
-        client = SSHClient()
+        self.client = client
         connection = Connection(server: server, credentials: credentials)
         self.startupPlanProvider = startupPlanProvider
     }

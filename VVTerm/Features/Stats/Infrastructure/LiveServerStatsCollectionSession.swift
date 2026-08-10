@@ -8,6 +8,7 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
     private let credentials: ServerCredentials
     private let client: SSHClient
     private let connectionOperations: SSHConnectionOperationService
+    private let knownHostsManager: KnownHostsManager
     private let context = StatsCollectionContext()
     private let dockerCollector = DockerStatsCollector()
     private var remotePlatform: RemotePlatform = .unknown
@@ -19,13 +20,15 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
         credentials: ServerCredentials,
         client: SSHClient,
         ownership: ServerStatsClientOwnership,
-        connectionOperations: SSHConnectionOperationService
+        connectionOperations: SSHConnectionOperationService,
+        knownHostsManager: KnownHostsManager
     ) {
         self.server = server
         self.credentials = credentials
         self.client = client
         self.ownership = ownership
         self.connectionOperations = connectionOperations
+        self.knownHostsManager = knownHostsManager
     }
 
     var connectionIdentity: ServerStatsConnectionIdentity {
@@ -47,7 +50,11 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
             await disconnect()
         } catch {
             await disconnect()
-            if let request = ServerSecurityApprovalRequest.detect(error, server: server) {
+            if let request = ServerSecurityApprovalRequest.detect(
+                error,
+                server: server,
+                knownHosts: knownHostsManager
+            ) {
                 throw ServerStatsApprovalRequired(
                     reference: LiveServerStatsApprovalReference(
                         request,

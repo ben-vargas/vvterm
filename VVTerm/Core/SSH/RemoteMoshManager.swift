@@ -3,7 +3,7 @@ import MoshBootstrap
 import os
 
 actor RemoteMoshManager {
-    typealias CommandExecutor = @Sendable (_ command: String, _ timeout: Duration) async throws -> String
+    typealias CommandExecutor = SSHMoshCommandExecutor
 
     enum PortClass: String, Equatable, Sendable {
         case privileged

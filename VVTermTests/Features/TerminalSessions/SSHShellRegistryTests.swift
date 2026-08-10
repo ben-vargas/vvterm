@@ -7,7 +7,7 @@ struct SSHShellRegistryTests {
     func shellStartExpiresAtStaleThreshold() {
         let paneId = UUID()
         let serverId = UUID()
-        let client = SSHClient()
+        let client = SSHClient.testing()
         let startedAt = Date(timeIntervalSinceReferenceDate: 1_000)
         var registry = SSHShellRegistry(staleThreshold: 120)
 
@@ -37,7 +37,7 @@ struct SSHShellRegistryTests {
     @Test
     func connectionStartTokenIncludesPendingShellStart() {
         let paneId = UUID()
-        let client = SSHClient()
+        let client = SSHClient.testing()
         var registry = SSHShellRegistry(staleThreshold: 120)
 
         let start = registry.tryBeginStart(
@@ -55,7 +55,7 @@ struct SSHShellRegistryTests {
     func anotherPendingStartProtectsSharedClientFromAbort() {
         let reconnectingPaneId = UUID()
         let pendingPaneId = UUID()
-        let client = SSHClient()
+        let client = SSHClient.testing()
         var registry = SSHShellRegistry(staleThreshold: 120)
 
         _ = registry.tryBeginStart(
@@ -87,7 +87,7 @@ struct SSHShellRegistryTests {
     func staleFinishCannotRemoveReplacementStartUsingSameClient() {
         let paneId = UUID()
         let serverId = UUID()
-        let client = SSHClient()
+        let client = SSHClient.testing()
         let startedAt = Date(timeIntervalSinceReferenceDate: 1_000)
         var registry = SSHShellRegistry(staleThreshold: 120)
 
@@ -144,8 +144,8 @@ struct SSHShellRegistryTests {
     func drainingBackgroundShellsDoesNotOwnReplacementStart() {
         let paneId = UUID()
         let serverId = UUID()
-        let oldClient = SSHClient()
-        let replacementClient = SSHClient()
+        let oldClient = SSHClient.testing()
+        let replacementClient = SSHClient.testing()
         var registry = SSHShellRegistry(staleThreshold: 120)
 
         let oldStart = registry.tryBeginStart(for: paneId, serverId: serverId, client: oldClient)

@@ -77,7 +77,7 @@ struct TerminalMoshRecoveryServiceTests {
 
         let shell = await service.restoreShell(
             for: paneId,
-            using: SSHClient(),
+            using: SSHClient.testing(),
             cols: 80,
             rows: 24
         )
@@ -101,7 +101,7 @@ struct TerminalMoshRecoveryServiceTests {
 
         let shell = await service.restoreShell(
             for: paneId,
-            using: SSHClient(),
+            using: SSHClient.testing(),
             cols: 80,
             rows: 24
         )
@@ -123,7 +123,7 @@ struct TerminalMoshRecoveryServiceTests {
 
         let shell = await service.restoreShell(
             for: paneId,
-            using: SSHClient(),
+            using: SSHClient.testing(),
             cols: 80,
             rows: 24
         )
@@ -144,7 +144,7 @@ struct TerminalMoshRecoveryServiceTests {
             store: store,
             client: client.operations()
         )
-        let sshClient = SSHClient()
+        let sshClient = SSHClient.testing()
 
         await service.prepareForApplicationBackground(
             for: paneId,
@@ -183,7 +183,7 @@ struct TerminalMoshRecoveryServiceTests {
         let task = Task {
             await service.persistCheckpoint(
                 for: paneId,
-                using: SSHClient(),
+                using: SSHClient.testing(),
                 shellId: UUID(),
                 isCurrentOwner: { isCurrentOwner }
             )

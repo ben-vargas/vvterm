@@ -141,14 +141,50 @@ actor SSHClient {
     private let execTimeout: Duration = .seconds(20)
     private let uploadTimeout: Duration = .seconds(60)
     private let runtimeSettings: SSHRuntimeSettings
+    private let hostKeyVerifier: any SSHHostKeyVerifying
+    private let moshBootstrap: any SSHMoshBootstrapping
 
     init(
         connectTimeout: Duration = .seconds(30),
-        runtimeSettings: SSHRuntimeSettings = SSHRuntimeSettings()
+        runtimeSettings: SSHRuntimeSettings,
+        hostKeyVerifier: any SSHHostKeyVerifying,
+        moshBootstrap: any SSHMoshBootstrapping
     ) {
         self.connectTimeout = connectTimeout
         self.runtimeSettings = runtimeSettings
+        self.hostKeyVerifier = hostKeyVerifier
+        self.moshBootstrap = moshBootstrap
     }
+
+    #if DEBUG
+    func runtimeSettingsForTesting() -> SSHRuntimeSettings {
+        runtimeSettings
+    }
+
+    func hostKeyDecisionForTesting(
+        _ candidate: SSHHostKeyCandidate
+    ) -> SSHHostKeyVerificationDecision {
+        hostKeyVerifier.verify(candidate)
+    }
+
+    func bootstrapMoshForTesting(
+        execute: @escaping SSHMoshCommandExecutor
+    ) async throws -> MoshServerConnectInfo {
+        try await moshBootstrap.bootstrapConnectInfo(
+            terminalType: .xterm256Color,
+            startCommand: nil,
+            portRange: 60_001...61_000,
+            execute: execute
+        )
+    }
+
+    func terminateMoshForTesting(
+        pid: Int32,
+        execute: @escaping SSHMoshCommandExecutor
+    ) async {
+        await moshBootstrap.terminateMoshServer(pid: pid, execute: execute)
+    }
+    #endif
 
     /// Check if the client has been aborted
     var isAborted: Bool {
@@ -367,7 +403,11 @@ actor SSHClient {
             credentials: credentials,
             keepAlive: runtimeSettings.keepAlive
         )
-        let pendingSession = SSHSession(config: config, startupTrace: startupTrace)
+        let pendingSession = SSHSession(
+            config: config,
+            hostKeyVerifier: hostKeyVerifier,
+            startupTrace: startupTrace
+        )
 
         guard case .connecting(var connectingState) = lifecycle,
               connectingState.id == operationID else {
@@ -1227,7 +1267,7 @@ actor SSHClient {
         guard !candidateHosts.isEmpty else { throw SSHError.moshInvalidEndpoint }
 
         let terminateServer: @Sendable (Int32) async -> Void = { pid in
-            await RemoteMoshManager.shared.terminateMoshServer(
+            await self.moshBootstrap.terminateMoshServer(
                 pid: pid,
                 execute: { command, timeout in
                     try await SSHClient.runWithDeadline(
@@ -1246,7 +1286,7 @@ actor SSHClient {
         let bootstrapToken = startupTrace?.begin(.moshBootstrap)
         let connectInfo: MoshServerConnectInfo
         do {
-            connectInfo = try await RemoteMoshManager.shared.bootstrapConnectInfo(
+            connectInfo = try await moshBootstrap.bootstrapConnectInfo(
                 terminalType: terminalType,
                 startCommand: startupCommand,
                 portRange: 60001...61000,
@@ -1553,9 +1593,16 @@ actor SSHClient {
 }
 
 actor SSHConnectionOperationService {
-    static let shared = SSHConnectionOperationService()
+    /// DEV-228-only compatibility for Remote Files default composition.
+    static let shared = SSHConnectionOperationService(
+        clientFactory: SSHClientLiveComposition.dev228CompatibilityFactory
+    )
 
-    private init() {}
+    private let clientFactory: SSHClientFactory
+
+    init(clientFactory: SSHClientFactory) {
+        self.clientFactory = clientFactory
+    }
 
     func runWithConnection<T>(
         using client: SSHClient,
@@ -1584,7 +1631,7 @@ actor SSHConnectionOperationService {
         credentials: ServerCredentials,
         operation: @escaping (SSHClient) async throws -> T
     ) async throws -> T {
-        let client = SSHClient()
+        let client = clientFactory.makeClient()
         return try await runWithConnection(
             using: client,
             server: server,
@@ -1715,6 +1762,7 @@ actor SSHSession {
     }
 
     let config: SSHSessionConfig
+    private let hostKeyVerifier: any SSHHostKeyVerifying
     private var libssh2Session: OpaquePointer?
     private var sftpSession: OpaquePointer?
     private var shellChannels: [UUID: ShellChannelState] = [:]
@@ -1741,8 +1789,13 @@ actor SSHSession {
     private var discardedShellStartupChannelCount = 0
     #endif
 
-    init(config: SSHSessionConfig, startupTrace: SSHStartupTrace? = nil) {
+    init(
+        config: SSHSessionConfig,
+        hostKeyVerifier: any SSHHostKeyVerifying,
+        startupTrace: SSHStartupTrace? = nil
+    ) {
         self.config = config
+        self.hostKeyVerifier = hostKeyVerifier
         self.startupTrace = startupTrace
     }
 
@@ -2008,13 +2061,13 @@ actor SSHSession {
         let host = config.hostKeyHost
         let port = config.hostKeyPort
 
-        let result = KnownHostsManager.shared.evaluate(
+        let result = hostKeyVerifier.verify(SSHHostKeyCandidate(
             host: host,
             port: port,
             fingerprint: fingerprint,
             keyType: keyType,
             keyTypeName: hostKeyTypeName(keyType)
-        )
+        ))
         switch result {
         case .trusted:
             logger.info("Host key verified for \(host, privacy: .private(mask: .hash)):\(port)")

@@ -5,7 +5,8 @@ extension EternalTerminalRuntimeDependencies {
     static func live(
         resumeStore: any EternalTerminalResumeStoring,
         analyticsTracker: AnalyticsTracker,
-        remoteTmux: any TerminalRemoteTmuxServicing
+        remoteTmux: any TerminalRemoteTmuxServicing,
+        sshClientFactory: SSHClientFactory
     ) -> Self {
         Self(
             recordEvent: { event in
@@ -29,7 +30,8 @@ extension EternalTerminalRuntimeDependencies {
                 remoteTmux: remoteTmux
             ),
             sessionPreparer: LiveEternalTerminalSessionPreparer(
-                resumeStore: resumeStore
+                resumeStore: resumeStore,
+                sshClientFactory: sshClientFactory
             )
         )
     }

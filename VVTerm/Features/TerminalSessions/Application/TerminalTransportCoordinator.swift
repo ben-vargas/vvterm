@@ -58,6 +58,7 @@ final class TerminalTransportCoordinator {
     }
 
     private let registry: TerminalTransportRegistry<EternalTerminalRuntime>
+    private let sshClientFactory: SSHClientFactory
     #if DEBUG
     private var eternalTerminalResumeStore: any EternalTerminalResumeStoring
     private let defaultEternalTerminalResumeStore: any EternalTerminalResumeStoring
@@ -78,6 +79,7 @@ final class TerminalTransportCoordinator {
 
     init(
         staleShellStartThreshold: TimeInterval = 120,
+        sshClientFactory: SSHClientFactory,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshRecovery: any TerminalMoshRecoveryServicing,
         remoteMosh: any TerminalRemoteMoshServicing,
@@ -88,6 +90,7 @@ final class TerminalTransportCoordinator {
         registry = TerminalTransportRegistry(
             staleShellStartThreshold: staleShellStartThreshold
         )
+        self.sshClientFactory = sshClientFactory
         self.eternalTerminalResumeStore = eternalTerminalResumeStore
         #if DEBUG
         defaultEternalTerminalResumeStore = eternalTerminalResumeStore
@@ -116,6 +119,10 @@ final class TerminalTransportCoordinator {
 
     var ownedPaneIds: Set<UUID> {
         registry.ownedPaneIds
+    }
+
+    func makeSSHClient() -> SSHClient {
+        sshClientFactory.makeClient()
     }
 
     func hasLiveTransport(for paneId: UUID) -> Bool {

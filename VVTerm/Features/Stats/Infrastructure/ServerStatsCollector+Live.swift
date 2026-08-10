@@ -44,11 +44,13 @@ final class LiveServerStatsApprovalReference: ServerStatsApprovalReference {
 extension ServerStatsCollectorDependencies {
     static func live(
         keychainManager: KeychainManager,
-        connectionOperations: SSHConnectionOperationService
+        knownHostsManager: KnownHostsManager,
+        connectionOperations: SSHConnectionOperationService,
+        sshClientFactory: SSHClientFactory
     ) -> Self {
         ServerStatsCollectorDependencies(
             makeOwnedConnection: {
-                LiveServerStatsConnection(client: SSHClient())
+                LiveServerStatsConnection(client: sshClientFactory.makeClient())
             },
             makeSession: { target, connection, ownership in
                 guard let target = target as? LiveServerStatsTarget,
@@ -73,7 +75,8 @@ extension ServerStatsCollectorDependencies {
                     credentials: credentials,
                     client: connection.client,
                     ownership: ownership,
-                    connectionOperations: connectionOperations
+                    connectionOperations: connectionOperations,
+                    knownHostsManager: knownHostsManager
                 )
             },
             makeAttemptID: UUID.init

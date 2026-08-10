@@ -414,6 +414,14 @@ struct ContentView: View {
     let appLockManager = AppLockManager()
     let keychainManager = KeychainManager()
     let knownHostsManager = KnownHostsManager()
+    let sshClientFactory = SSHClientLiveComposition.makeFactory(
+        defaults: defaults,
+        knownHostsManager: knownHostsManager,
+        remoteMoshManager: remoteMosh
+    )
+    let connectionOperations = SSHConnectionOperationService(
+        clientFactory: sshClientFactory
+    )
     let syncLifecycle = CloudKitSyncLifecycleDriver(
         defaults: defaults,
         notificationCenter: notificationCenter,
@@ -486,7 +494,7 @@ struct ContentView: View {
     let serverFormDependencies = ServerFormDependencies.live(
         credentials: keychainManager,
         hostKeys: knownHostsManager,
-        connectionOperations: SSHConnectionOperationService.shared,
+        connectionOperations: connectionOperations,
         remoteMosh: remoteMosh,
         defaultTmuxEnabled: {
             defaults.object(forKey: "terminalTmuxEnabledDefault") == nil
@@ -502,7 +510,9 @@ struct ContentView: View {
     )
     let makeStatsCollector = VVTermApp.makeStatsCollectorFactory(
         keychainManager: keychainManager,
-        connectionOperations: SSHConnectionOperationService.shared
+        knownHostsManager: knownHostsManager,
+        connectionOperations: connectionOperations,
+        sshClientFactory: sshClientFactory
     )
     let statsDependencies = ServerStatsScreenDependencies(
         makeCollector: makeStatsCollector,
@@ -516,6 +526,7 @@ struct ContentView: View {
     )
     let tabManager = TerminalTabManagerLiveComposition.makeManager(
         defaults: defaults,
+        sshClientFactory: sshClientFactory,
         networkMonitor: networkMonitor,
         appLockManager: appLockManager,
         serverManager: serverManager,

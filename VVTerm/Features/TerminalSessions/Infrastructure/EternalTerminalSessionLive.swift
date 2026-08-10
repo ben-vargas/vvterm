@@ -5,9 +5,14 @@ import Foundation
 @MainActor
 struct LiveEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
     private let resumeStore: any EternalTerminalResumeStoring
+    private let sshClientFactory: SSHClientFactory
 
-    init(resumeStore: any EternalTerminalResumeStoring) {
+    init(
+        resumeStore: any EternalTerminalResumeStoring,
+        sshClientFactory: SSHClientFactory
+    ) {
         self.resumeStore = resumeStore
+        self.sshClientFactory = sshClientFactory
     }
 
     func prepareSession(
@@ -18,6 +23,7 @@ struct LiveEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
         let executor = SSHETBootstrapExecutor(
             server: request.server,
             credentials: request.credentials,
+            client: sshClientFactory.makeClient(),
             startupPlanProvider: startupPlanProvider
         )
         let port = UInt16(exactly: request.server.eternalTerminalPort) ?? 2022

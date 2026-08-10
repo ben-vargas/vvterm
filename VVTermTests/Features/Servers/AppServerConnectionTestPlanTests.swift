@@ -24,7 +24,7 @@ private actor ServerConnectionOperationRunnerFake: ServerConnectionOperationRunn
         callCount += 1
         switch behavior {
         case .run:
-            try await operation(SSHClient())
+            try await operation(SSHClient.testing())
         case .cancel:
             throw CancellationError()
         case .hostKeyApprovalRequired:

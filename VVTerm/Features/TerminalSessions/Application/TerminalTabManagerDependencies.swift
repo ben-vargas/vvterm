@@ -88,6 +88,7 @@ struct TerminalTmuxConfiguration {
 
 @MainActor
 struct TerminalTabManagerDependencies {
+    let sshClientFactory: SSHClientFactory
     let networkReadiness: TerminalNetworkReadinessSource
     let applicationIsActive: @MainActor () -> Bool
     let appLock: TerminalAppLockSource
@@ -105,6 +106,7 @@ extension TerminalTabManagerDependencies {
         let updates = networkReadinessPublisher
             ?? Empty<TerminalNetworkReadiness, Never>().eraseToAnyPublisher()
         return Self(
+            sshClientFactory: .testing(),
             networkReadiness: TerminalNetworkReadinessSource(
                 initial: .ready,
                 updates: updates

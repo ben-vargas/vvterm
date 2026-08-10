@@ -395,7 +395,7 @@ struct TerminalTabManagerLifecycleTests {
                 )
             }
 
-            let client = SSHClient()
+            let client = SSHClient.testing()
             #expect(await startAndRegisterShell(
                 client,
                 paneId: tab.rootPaneId,
@@ -463,7 +463,7 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Replacement shell")
             installTab(tab, in: manager)
-            let oldClient = SSHClient()
+            let oldClient = SSHClient.testing()
             let oldShellId = UUID()
 
             #expect(await startAndRegisterShell(
@@ -475,7 +475,7 @@ struct TerminalTabManagerLifecycleTests {
             ))
             await manager.transportCoordinator.unregisterSSHClient(for: tab.rootPaneId)
 
-            let replacementClient = SSHClient()
+            let replacementClient = SSHClient.testing()
             let replacementShellId = UUID()
             #expect(await startAndRegisterShell(
                 replacementClient,
@@ -501,7 +501,7 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Pending surface exit")
             installTab(tab, in: manager)
-            let exitedSurfaceClient = SSHClient()
+            let exitedSurfaceClient = SSHClient.testing()
 
             guard let exitedStartToken = manager.transportCoordinator.beginShellStart(
                 for: tab.rootPaneId,
@@ -551,8 +551,8 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: serverId, title: "Pending")
             installTab(tab, in: manager)
 
-            let activeClient = SSHClient()
-            let staleClient = SSHClient()
+            let activeClient = SSHClient.testing()
+            let staleClient = SSHClient.testing()
             guard let activeStartToken = manager.transportCoordinator.beginShellStart(
                 for: tab.rootPaneId,
                 client: activeClient
@@ -594,7 +594,7 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: UUID(), title: "Pending")
             installTab(tab, in: manager)
 
-            let firstClient = SSHClient()
+            let firstClient = SSHClient.testing()
             #expect(manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: firstClient) != nil)
 
             await manager.transportCoordinator.unregisterSSHClient(for: tab.rootPaneId)
@@ -602,7 +602,7 @@ struct TerminalTabManagerLifecycleTests {
             #expect(!manager.transportCoordinator.isTransportStartInFlight(for: tab.rootPaneId))
             #expect(manager.transportCoordinator.activeSSHRoute(for: tab.rootPaneId) == nil)
 
-            let nextClient = SSHClient()
+            let nextClient = SSHClient.testing()
             guard let nextStartToken = manager.transportCoordinator.beginShellStart(
                 for: tab.rootPaneId,
                 client: nextClient
@@ -623,7 +623,7 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Pending prompt")
             installTab(tab, in: manager)
-            let client = SSHClient()
+            let client = SSHClient.testing()
             guard let startToken = manager.transportCoordinator.beginShellStart(
                 for: tab.rootPaneId,
                 client: client
@@ -667,8 +667,8 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Pending")
             installTab(tab, in: manager)
-            let activeClient = SSHClient()
-            let staleClient = SSHClient()
+            let activeClient = SSHClient.testing()
+            let staleClient = SSHClient.testing()
 
             guard let activeStartToken = manager.transportCoordinator.beginShellStart(
                 for: tab.rootPaneId,
@@ -703,7 +703,7 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let missingPaneId = UUID()
 
-            #expect(manager.transportCoordinator.beginShellStart(for: missingPaneId, client: SSHClient()) == nil)
+            #expect(manager.transportCoordinator.beginShellStart(for: missingPaneId, client: SSHClient.testing()) == nil)
             #expect(!manager.transportCoordinator.isTransportStartInFlight(for: missingPaneId))
         }
     }
@@ -716,8 +716,8 @@ struct TerminalTabManagerLifecycleTests {
             installTab(firstTab, in: manager)
             installTab(secondTab, in: manager)
 
-            let firstClient = SSHClient()
-            let secondClient = SSHClient()
+            let firstClient = SSHClient.testing()
+            let secondClient = SSHClient.testing()
             #expect(await startAndRegisterShell(
                 firstClient,
                 paneId: firstTab.rootPaneId,
@@ -753,7 +753,7 @@ struct TerminalTabManagerLifecycleTests {
             installTab(siblingTab, in: manager)
             installTab(pendingTab, in: manager)
 
-            let sharedClient = SSHClient()
+            let sharedClient = SSHClient.testing()
             #expect(await startAndRegisterShell(
                 sharedClient,
                 paneId: siblingTab.rootPaneId,
@@ -761,7 +761,7 @@ struct TerminalTabManagerLifecycleTests {
                 in: manager
             ))
 
-            let pendingClient = SSHClient()
+            let pendingClient = SSHClient.testing()
             guard let pendingStartToken = manager.transportCoordinator.beginShellStart(
                 for: pendingTab.rootPaneId,
                 client: pendingClient
@@ -793,7 +793,7 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: UUID(), title: "Shell Exit")
             installTab(tab, in: manager)
 
-            let client = SSHClient()
+            let client = SSHClient.testing()
             #expect(await startAndRegisterShell(
                 client,
                 paneId: tab.rootPaneId,
@@ -903,7 +903,7 @@ struct TerminalTabManagerLifecycleTests {
                 )
                 manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
 
-                let disconnectedClient = SSHClient()
+                let disconnectedClient = SSHClient.testing()
                 guard let startToken = manager.transportCoordinator.beginShellStart(
                     for: tab.rootPaneId,
                     client: disconnectedClient
@@ -955,7 +955,7 @@ struct TerminalTabManagerLifecycleTests {
                 )
                 manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
 
-                let client = SSHClient()
+                let client = SSHClient.testing()
                 guard let startToken = manager.transportCoordinator.beginShellStart(
                     for: tab.rootPaneId,
                     client: client
@@ -997,7 +997,7 @@ struct TerminalTabManagerLifecycleTests {
                 )
                 manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
 
-                let client = SSHClient()
+                let client = SSHClient.testing()
                 let gate = TmuxAvailabilityGate()
                 guard let staleStartToken = manager.transportCoordinator.beginShellStart(
                     for: tab.rootPaneId,
@@ -1071,7 +1071,7 @@ struct TerminalTabManagerLifecycleTests {
                 )
                 manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
 
-                let client = SSHClient()
+                let client = SSHClient.testing()
                 let gate = TmuxAvailabilityGate()
                 guard let startToken = manager.transportCoordinator.beginShellStart(
                     for: tab.rootPaneId,
@@ -1358,7 +1358,7 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Replacement")
             installTab(tab, in: manager, connectionState: .connected)
-            let activeClient = SSHClient()
+            let activeClient = SSHClient.testing()
             let activeShellId = UUID()
             #expect(await startAndRegisterShell(
                 activeClient,
@@ -1370,7 +1370,7 @@ struct TerminalTabManagerLifecycleTests {
 
             manager.transportCoordinator.handleShellEnd(
                 for: tab.rootPaneId,
-                client: SSHClient(),
+                client: SSHClient.testing(),
                 shellId: UUID(),
                 reason: .transportEnded
             )
@@ -1422,7 +1422,7 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: server.id, title: server.name)
             installTab(tab, in: manager)
 
-            let client = SSHClient()
+            let client = SSHClient.testing()
             #expect(await startAndRegisterShell(
                 client,
                 paneId: tab.rootPaneId,

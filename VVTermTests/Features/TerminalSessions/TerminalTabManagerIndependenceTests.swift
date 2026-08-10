@@ -80,7 +80,7 @@ struct TerminalTabManagerIndependenceTests {
                 host: "example.com",
                 username: "tester"
             ),
-            client: SSHClient(),
+            client: SSHClient.testing(),
             operation: { _ in await probe.run() }
         ) == true)
         #expect(await probe.waitUntilStarted())
@@ -134,7 +134,7 @@ struct TerminalTabManagerIndependenceTests {
         }
 
         first.updatePaneState(tab.rootPaneId, connectionState: .connected)
-        let client = SSHClient()
+        let client = SSHClient.testing()
         let startToken = try #require(first.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client))
         #expect(await first.transportCoordinator.registerSSHClient(
             client,

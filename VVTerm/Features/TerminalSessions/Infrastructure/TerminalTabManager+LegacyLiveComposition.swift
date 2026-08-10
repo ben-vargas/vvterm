@@ -16,6 +16,7 @@ extension TerminalTabManager {
         let serverManager = ServerManager.shared
         let analyticsTracker = AnalyticsTracker.shared
         let remoteTmux = RemoteTmuxManager.shared
+        let sshClientFactory = SSHClientLiveComposition.dev228CompatibilityFactory
         let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
         let applicationIsActive = {
             #if os(iOS)
@@ -36,6 +37,7 @@ extension TerminalTabManager {
 
         return TerminalTabManagerLiveComposition.makeManager(
             defaults: defaults,
+            sshClientFactory: sshClientFactory,
             networkMonitor: NetworkMonitor.shared,
             appLockManager: appLockManager,
             serverManager: serverManager,

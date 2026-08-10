@@ -105,6 +105,7 @@ final class TerminalTabManager: ObservableObject {
         )
         self.terminalSurfaceStore = terminalSurfaceStore
         transportCoordinator = TerminalTransportCoordinator(
+            sshClientFactory: dependencies.sshClientFactory,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: moshRecovery,
             remoteMosh: dependencies.remoteMosh,

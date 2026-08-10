@@ -7,6 +7,7 @@ enum TerminalTabManagerLiveComposition {
 
     static func makeManager(
         defaults: UserDefaults,
+        sshClientFactory: SSHClientFactory,
         networkMonitor: NetworkMonitor,
         appLockManager: AppLockManager,
         serverManager: ServerManager,
@@ -30,6 +31,7 @@ enum TerminalTabManagerLiveComposition {
             themeStyle: themeStyle
         )
         let dependencies = TerminalTabManagerDependencies(
+            sshClientFactory: sshClientFactory,
             networkReadiness: TerminalNetworkReadinessSource(
                 initial: TerminalNetworkReadiness(networkMonitor.readiness),
                 updates: networkMonitor.$snapshot
@@ -71,7 +73,8 @@ enum TerminalTabManagerLiveComposition {
             eternalTerminalRuntime: .live(
                 resumeStore: eternalTerminalResumeStore,
                 analyticsTracker: analyticsTracker,
-                remoteTmux: remoteTmux
+                remoteTmux: remoteTmux,
+                sshClientFactory: sshClientFactory
             )
         )
         return TerminalTabManager(

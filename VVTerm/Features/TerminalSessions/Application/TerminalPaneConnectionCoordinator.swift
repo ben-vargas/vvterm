@@ -39,7 +39,7 @@ final class TerminalPaneConnectionCoordinator {
                 paneId: paneId,
                 server: server,
                 credentials: credentials,
-                sshClient: SSHClient(),
+                sshClient: tabManager.transportCoordinator.makeSSHClient(),
                 tabManager: tabManager,
                 richPasteUIModel: richPasteUIModel,
                 failureOutput: sshFailureOutput

@@ -85,6 +85,13 @@ struct SSHStartupIntegrationTests {
         case noTerminalData
     }
 
+    private func makeIntegrationSSHClient() -> SSHClient {
+        SSHClient.testing(
+            hostKeyVerifier: KnownHostsManager.shared,
+            moshBootstrap: RemoteMoshManager.shared
+        )
+    }
+
     @Test
     func sshAndMoshReachFirstTerminalByte() async throws {
         guard let configuration = try Configuration.fromEnvironment() else { return }
@@ -160,7 +167,7 @@ struct SSHStartupIntegrationTests {
             serverId: server.id,
             privateKey: configuration.privateKey
         )
-        let client = SSHClient()
+        let client = makeIntegrationSSHClient()
         let sessionName = "vvterm_dev223_\(UUID().uuidString.lowercased())"
 
         do {
@@ -233,7 +240,7 @@ struct SSHStartupIntegrationTests {
             )
         }
 
-        let client = SSHClient()
+        let client = makeIntegrationSSHClient()
         let (server, credentials) = makeStandardConnection(configuration: configuration)
         let sessionName = "vvterm_dev239_\(UUID().uuidString.lowercased())"
 
@@ -328,7 +335,7 @@ struct SSHStartupIntegrationTests {
 
         for testCase in shellStartupCases {
             let stage = testCase.stage
-            let client = SSHClient()
+            let client = makeIntegrationSSHClient()
             let (server, credentials) = makeStandardConnection(configuration: configuration)
             let session = try await client.connect(to: server, credentials: credentials)
             let barrier = ShellStartupBarrier(stage: stage)
@@ -394,7 +401,7 @@ struct SSHStartupIntegrationTests {
 
         for testCase in shellStartupCases {
             let stage = testCase.stage
-            let client = SSHClient()
+            let client = makeIntegrationSSHClient()
             let (server, credentials) = makeStandardConnection(configuration: configuration)
             let session = try await client.connect(to: server, credentials: credentials)
             let barrier = ShellStartupBarrier(stage: stage)
@@ -467,7 +474,7 @@ struct SSHStartupIntegrationTests {
             )
         }
 
-        let client = SSHClient()
+        let client = makeIntegrationSSHClient()
         let (server, credentials) = makeStandardConnection(configuration: rejectedConfiguration)
         do {
             let session = try await client.connect(to: server, credentials: credentials)
@@ -506,8 +513,8 @@ struct SSHStartupIntegrationTests {
             )
         }
 
-        let staleClient = SSHClient()
-        let replacementClient = SSHClient()
+        let staleClient = makeIntegrationSSHClient()
+        let replacementClient = makeIntegrationSSHClient()
         let (server, credentials) = makeStandardConnection(configuration: configuration)
 
         do {
@@ -595,7 +602,7 @@ struct SSHStartupIntegrationTests {
             serverId: server.id,
             privateKey: configuration.privateKey
         )
-        let client = SSHClient()
+        let client = makeIntegrationSSHClient()
         let startedAt = ContinuousClock.now
 
         do {

@@ -9,7 +9,7 @@ struct SSHConnectionDeadlineTests {
     @Test
     func blockedHandshakeIsAbortedAtTheHardDeadline() async throws {
         let listener = try LoopbackListener()
-        let client = SSHClient(connectTimeout: .milliseconds(100))
+        let client = SSHClient.testing(connectTimeout: .milliseconds(100))
         let server = Server(
             workspaceId: UUID(),
             name: "Blocked handshake",
@@ -43,7 +43,7 @@ struct SSHConnectionDeadlineTests {
     @Test
     func abortDuringHandshakeRejectsStaleCompletionAndAllowsCleanup() async throws {
         let listener = try LoopbackListener()
-        let client = SSHClient(connectTimeout: .seconds(10))
+        let client = SSHClient.testing(connectTimeout: .seconds(10))
         let server = Server(
             workspaceId: UUID(),
             name: "Aborted handshake",

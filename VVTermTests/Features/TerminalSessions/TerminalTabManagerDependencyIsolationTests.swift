@@ -158,7 +158,7 @@ struct TerminalTabManagerDependencyIsolationTests {
         )
         let tab = TerminalTab(serverId: UUID(), title: "Skip tmux")
         install(tab, in: manager)
-        let client = SSHClient()
+        let client = SSHClient.testing()
         let startToken = try #require(
             manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
         )
@@ -229,7 +229,7 @@ struct TerminalTabManagerDependencyIsolationTests {
         ) != nil)
         first.updatePaneState(tab.rootPaneId, connectionState: .connected)
 
-        let client = SSHClient()
+        let client = SSHClient.testing()
         let startToken = try #require(
             first.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
         )
@@ -284,6 +284,7 @@ struct TerminalTabManagerDependencyIsolationTests {
         TerminalTabManager(
             snapshotStore: DependencyTestSnapshotStore(),
             dependencies: TerminalTabManagerDependencies(
+                sshClientFactory: .testing(),
                 networkReadiness: TerminalNetworkReadinessSource(
                     initial: .unknown,
                     updates: network.eraseToAnyPublisher()

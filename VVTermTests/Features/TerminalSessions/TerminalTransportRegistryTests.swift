@@ -55,7 +55,7 @@ struct TerminalTransportRegistryTests {
         let runtimePaneId = UUID()
         let taskPaneId = UUID()
         let serverId = UUID()
-        let client = SSHClient()
+        let client = SSHClient.testing()
         let shellId = UUID()
 
         let start = first.beginShellStart(
@@ -107,7 +107,7 @@ struct TerminalTransportRegistryTests {
         )
         let paneId = UUID()
         let serverId = UUID()
-        let client = SSHClient()
+        let client = SSHClient.testing()
         let startedAt = Date(timeIntervalSinceReferenceDate: 1_000)
 
         let firstStart = registry.beginShellStart(
@@ -211,7 +211,7 @@ struct TerminalTransportRegistryTests {
         let pendingPaneId = UUID()
         let taskPaneId = UUID()
         let serverId = UUID()
-        let sharedClient = SSHClient()
+        let sharedClient = SSHClient.testing()
         let sharedRuntime = TerminalTransportTestRuntime()
 
         let start = registry.beginShellStart(

@@ -114,7 +114,7 @@ private actor BlockingEternalTerminalSession: EternalTerminalSession {
     func withBootstrapSSHClient<Result: Sendable>(
         _ operation: @Sendable (SSHClient) async throws -> Result
     ) async throws -> Result {
-        try await operation(SSHClient())
+        try await operation(SSHClient.testing())
     }
 
     func close() async {
@@ -206,7 +206,7 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
         firstDependencies.record(.connectionFailed(reason: "network"))
         await firstDependencies.killTmuxSession(
             named: "first-session",
-            using: SSHClient()
+            using: SSHClient.testing()
         )
 
         #expect(firstEvents.events == [

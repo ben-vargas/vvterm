@@ -77,7 +77,10 @@ final class SSHSFTPAdapter {
             return existing
         }
 
-        let registration = ClientRegistration(client: SSHClient(), ownership: .owned)
+        let registration = ClientRegistration(
+            client: SSHClientLiveComposition.dev228CompatibilityFactory.makeClient(),
+            ownership: .owned
+        )
         clients[server.id] = registration
         return registration
     }
