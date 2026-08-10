@@ -116,6 +116,50 @@ extension GhosttyTerminalView {
 }
 
 extension GhosttyTerminalView {
+    // MARK: - Touch Input
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(touches, with: event)
+        if handleIndirectPointerTouchesBegan(touches, event: event) {
+            return
+        }
+        let location = touches.first?.location(in: self)
+        if nativeSelectionLifecycle.interactionIsActive {
+            return
+        }
+        if nativeSelectionLifecycle.keepsFirstResponder {
+            if let location, isPointOnNativeSelectionHandleHitArea(location) {
+                return
+            }
+            clearNativeSelectionStateForTerminalInput()
+            guard shouldAutoFocusKeyboard(for: touches) else { return }
+            notifyDirectTouchOnTerminal(isFocusTap: true)
+            requestKeyboardFocus(for: .directTouch)
+            return
+        }
+        // Tap just focuses keyboard - no mouse events (avoids accidental selection).
+        notifyDirectTouchOnTerminal(isFocusTap: true)
+        requestKeyboardFocus(for: .directTouch)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesMoved(touches, with: event)
+        if handleIndirectPointerTouchesMoved(touches, event: event) {
+            return
+        }
+        // Pan gesture handles scrolling, long press handles selection
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesEnded(touches, with: event)
+        _ = handleIndirectPointerTouchesEnded(touches, event: event)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesCancelled(touches, with: event)
+        _ = handleIndirectPointerTouchesEnded(touches, event: event)
+    }
+
     @objc func handleDirectTouchTap(_ recognizer: UITapGestureRecognizer) {
         guard recognizer.state == .ended,
               let surface,
