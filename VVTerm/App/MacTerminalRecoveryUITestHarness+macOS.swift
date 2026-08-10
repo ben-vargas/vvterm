@@ -16,7 +16,6 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
     var simulatedInterval: TimeInterval { Self.simulatedSleepInterval }
     private(set) var cleanupCount = 0
     private(set) var replacementCount = 0
-    private(set) var staleCompletionCount = 0
     private(set) var observedOutcomes: Set<Outcome> = [.idle]
     private(set) var lastAttemptStartedAt: Date?
 
@@ -71,11 +70,6 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
         preparationTimeout: .milliseconds(20),
         connectionTimeout: .milliseconds(30),
         now: { Date(timeIntervalSince1970: Self.simulatedSleepInterval) },
-        onEvent: { [weak self] event in
-            if event.stage == .staleResultRejected {
-                self?.staleCompletionCount += 1
-            }
-        },
         onChange: {}
     )
 

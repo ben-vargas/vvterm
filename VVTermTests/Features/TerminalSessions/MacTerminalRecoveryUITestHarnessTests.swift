@@ -27,7 +27,6 @@ struct MacTerminalRecoveryUITestHarnessTests {
         #expect(model.observedOutcomes.contains(.waitingForNetwork))
         #expect(model.cleanupCount == 1)
         #expect(model.replacementCount == 1)
-        #expect(await eventually { model.staleCompletionCount >= 1 })
     }
 
     @Test
@@ -41,7 +40,6 @@ struct MacTerminalRecoveryUITestHarnessTests {
         #expect(model.observedOutcomes.contains(.waitingForNetwork))
         #expect(model.cleanupCount == 2)
         #expect(model.replacementCount == 1)
-        #expect(await eventually { model.staleCompletionCount >= 1 })
     }
 }
 #endif

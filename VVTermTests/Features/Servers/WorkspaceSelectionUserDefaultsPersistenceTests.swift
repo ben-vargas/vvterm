@@ -17,7 +17,7 @@ struct WorkspaceSelectionUserDefaultsPersistenceTests {
         let workspace = Workspace(
             id: Self.workspaceID,
             name: "Workspace",
-            environments: [.production]
+            environments: [.production, .staging]
         )
         let firstStore = WorkspaceSelectionLiveComposition.makeStore(
             defaults: firstDefaults

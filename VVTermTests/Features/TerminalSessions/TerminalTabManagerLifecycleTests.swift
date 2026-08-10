@@ -112,6 +112,7 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: UUID(), title: "Wake recovery")
             installTab(tab, in: manager, connectionState: .connected)
             manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
+            manager.reconnectCoordinator.receiveApplicationActivity(true)
             let originalTerminalGeneration = manager.reconnectCoordinator.connectionGeneration(
                 for: tab.rootPaneId
             )
