@@ -1,6 +1,6 @@
 //
 //  Ghostty.Action.swift
-//  aizen
+//  VVTerm
 //
 //  Action types for Ghostty terminal events
 //
@@ -59,7 +59,7 @@ extension Ghostty.Action {
 extension Notification.Name {
     /// Posted when the terminal scrollbar state changes.
     /// userInfo contains ScrollbarKey with Ghostty.Action.Scrollbar value.
-    static let ghosttyDidUpdateScrollbar = Notification.Name("win.aizen.app.ghostty.didUpdateScrollbar")
+    static let ghosttyDidUpdateScrollbar = Notification.Name("app.vivy.VivyTerm.ghostty.didUpdateScrollbar")
 
     /// Key for scrollbar state in notification userInfo
     static let ScrollbarKey = ghosttyDidUpdateScrollbar.rawValue + ".scrollbar"

@@ -1,6 +1,6 @@
 //
 //  GhosttyProgressState.swift
-//  aizen
+//  VVTerm
 //
 
 import Foundation

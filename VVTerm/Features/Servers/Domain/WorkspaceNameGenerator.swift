@@ -1,6 +1,6 @@
 //
 //  WorkspaceNameGenerator.swift
-//  aizen
+//  VVTerm
 //
 //  Created by Uladzislau Yakauleu on 17.10.25.
 //

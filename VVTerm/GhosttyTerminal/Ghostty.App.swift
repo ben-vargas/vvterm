@@ -173,7 +173,7 @@ extension Ghostty {
                 close_surface_cb: { userdata, processAlive in App.closeSurface(userdata, processAlive: processAlive) }
             )
 
-            // Create config and load Aizen terminal settings
+            // Create config and load VVTerm terminal settings
             guard let config = ghostty_config_new() else {
                 Ghostty.logger.critical("ghostty_config_new failed")
                 callbackContext.invalidate()

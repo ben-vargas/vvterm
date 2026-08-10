@@ -1,6 +1,6 @@
 //
 //  GhosttyInputHandler.swift
-//  aizen
+//  VVTerm
 //
 //  Handles keyboard, mouse, and scroll input forwarding to Ghostty terminal
 //
@@ -18,7 +18,7 @@ class GhosttyInputHandler {
     private weak var surface: Ghostty.Surface?
     private weak var imeHandler: GhosttyIMEHandler?
 
-    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "win.aizen.app", category: "GhosttyInput")
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.VivyTerm", category: "GhosttyInput")
 
     // MARK: - Initialization
 

@@ -1,6 +1,6 @@
 //
 //  TerminalScrollView.swift
-//  aizen
+//  VVTerm
 //
 //  NSScrollView wrapper for terminal with native macOS scrollbar support.
 //  Adapted from Ghostty's SurfaceScrollView.swift
