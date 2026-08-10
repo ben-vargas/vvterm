@@ -4,7 +4,6 @@ enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
     case permissionDenied
     case pathNotFound
     case disconnected
-    case credentialApprovalRequired
     case hostKeyApprovalRequired
     case unsupportedEncoding
     case invalidEntryName
@@ -20,8 +19,6 @@ enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
             return "pathNotFound"
         case .disconnected:
             return "disconnected"
-        case .credentialApprovalRequired:
-            return "credentialApprovalRequired"
         case .hostKeyApprovalRequired:
             return "hostKeyApprovalRequired"
         case .unsupportedEncoding:
@@ -45,8 +42,6 @@ enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
             return String(localized: "The remote path could not be found.")
         case .disconnected:
             return String(localized: "The remote connection was interrupted.")
-        case .credentialApprovalRequired:
-            return String(localized: "Credential endpoint approval is required.")
         case .hostKeyApprovalRequired:
             return SSHError.hostKeyApprovalRequired.localizedDescription
         case .unsupportedEncoding:
@@ -65,9 +60,6 @@ enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
     static func map(_ error: Error) -> RemoteFileBrowserError {
         if let browserError = error as? RemoteFileBrowserError {
             return browserError
-        }
-        if error as? ServerCredentialAccessError == .approvalRequired {
-            return .credentialApprovalRequired
         }
         if let sshError = error as? SSHError,
            case .hostKeyApprovalRequired = sshError {

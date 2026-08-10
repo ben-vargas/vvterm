@@ -5,10 +5,36 @@
 
 import SwiftUI
 
+struct TerminalServerToolbarProjectionHost<Content: View>: View {
+    @StateObject private var projection: TerminalServerToolbarProjection
+    private let content: (TerminalServerToolbarProjection) -> Content
+
+    init(
+        serverId: UUID,
+        tabManager: TerminalTabManager,
+        @ViewBuilder content: @escaping (TerminalServerToolbarProjection) -> Content
+    ) {
+        _projection = StateObject(
+            wrappedValue: TerminalServerToolbarProjection(
+                serverId: serverId,
+                tabManager: tabManager
+            )
+        )
+        self.content = content
+    }
+
+    var body: some View {
+        content(projection)
+    }
+}
+
 // MARK: - Connection Terminal Container
 
 struct ConnectionTerminalContainer: View {
-    @ObservedObject var tabManager: TerminalTabManager
+    let tabManager: TerminalTabManager
+    let terminalToolbarProjection: TerminalServerToolbarProjection
+    @ObservedObject var terminalContent: TerminalServerContentProjection
+    @ObservedObject private var tmuxCoordinator: TerminalTmuxSessionCoordinator
     @ObservedObject var fileTabManager: RemoteFileTabManager
     let serverManager: ServerManager
     let fileBrowser: RemoteFileBrowserStore
@@ -54,10 +80,50 @@ struct ConnectionTerminalContainer: View {
     @State var zenWindowSafeAreaInsets = EdgeInsets()
     #endif
 
+    init(
+        tabManager: TerminalTabManager,
+        terminalToolbarProjection: TerminalServerToolbarProjection,
+        fileTabManager: RemoteFileTabManager,
+        serverManager: ServerManager,
+        fileBrowser: RemoteFileBrowserStore,
+        makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
+        statsDependencies: ServerStatsScreenDependencies,
+        terminalSecurityActions: TerminalSecurityActions,
+        serverFormDependencies: ServerFormDependencies,
+        voiceInputRuntimeStore: VoiceInputRuntimeStore,
+        server: Server,
+        isZenModeEnabled: Binding<Bool>,
+        isSidebarVisible: Bool,
+        onToggleSidebar: @escaping () -> Void,
+        onOpenSettings: (() -> Void)?,
+        onLeaveRoute: (() -> Void)?,
+        onDisconnectRoute: (() -> Void)?
+    ) {
+        self.tabManager = tabManager
+        self.terminalToolbarProjection = terminalToolbarProjection
+        _terminalContent = ObservedObject(wrappedValue: terminalToolbarProjection.content)
+        _tmuxCoordinator = ObservedObject(wrappedValue: tabManager.tmuxCoordinator)
+        self.fileTabManager = fileTabManager
+        self.serverManager = serverManager
+        self.fileBrowser = fileBrowser
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
+        self.statsDependencies = statsDependencies
+        self.terminalSecurityActions = terminalSecurityActions
+        self.serverFormDependencies = serverFormDependencies
+        self.voiceInputRuntimeStore = voiceInputRuntimeStore
+        self.server = server
+        _isZenModeEnabled = isZenModeEnabled
+        self.isSidebarVisible = isSidebarVisible
+        self.onToggleSidebar = onToggleSidebar
+        self.onOpenSettings = onOpenSettings
+        self.onLeaveRoute = onLeaveRoute
+        self.onDisconnectRoute = onDisconnectRoute
+    }
+
     /// Selected view type - persisted per server
     var selectedView: ConnectionViewTabID {
         viewTabConfig.effectiveView(
-            for: tabManager.connectionViewSelections.selection(for: server.id)
+            for: terminalContent.state.selectedView
         )
     }
 
@@ -81,7 +147,7 @@ struct ConnectionTerminalContainer: View {
         Binding(
             get: {
                 viewTabConfig.effectiveView(
-                    for: tabManager.connectionViewSelections.selection(for: server.id)
+                    for: terminalContent.state.selectedView
                 )
             },
             set: { newValue in
@@ -101,12 +167,12 @@ struct ConnectionTerminalContainer: View {
 
     /// Tabs for THIS server only
     var serverTabs: [TerminalTab] {
-        tabManager.sessionState.tabs(for: server.id)
+        terminalContent.state.tabs
     }
 
     /// Effective selected tab ID for this server.
     var selectedTabId: UUID? {
-        if let selectedId = tabManager.sessionState.selectedTabId(for: server.id),
+        if let selectedId = terminalContent.state.selectedTabId,
            serverTabs.contains(where: { $0.id == selectedId }) {
             return selectedId
         }
@@ -162,15 +228,15 @@ struct ConnectionTerminalContainer: View {
     private var tmuxAttachPromptBinding: Binding<TmuxAttachPrompt?> {
         Binding(
             get: {
-                guard let prompt = tabManager.tmuxCoordinator.attachPrompt else { return nil }
+                guard let prompt = tmuxCoordinator.attachPrompt else { return nil }
                 guard tabManager.sessionState.paneState(for: prompt.paneId)?.serverId == server.id else { return nil }
                 return prompt
             },
             set: { newValue in
                 guard newValue == nil,
-                      let prompt = tabManager.tmuxCoordinator.attachPrompt else { return }
+                      let prompt = tmuxCoordinator.attachPrompt else { return }
                 guard tabManager.sessionState.paneState(for: prompt.paneId)?.serverId == server.id else { return }
-                tabManager.tmuxCoordinator.cancelPrompt(requestId: prompt.id)
+                tmuxCoordinator.cancelPrompt(requestId: prompt.id)
             }
         )
     }
@@ -285,7 +351,7 @@ struct ConnectionTerminalContainer: View {
                 backgroundColor: liveTerminalBackgroundColor,
                 sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
                 dependencies: statsDependencies,
-                isDockerUnlocked: storeManager.isPro
+                isDockerUnlocked: storeManager.allowsProFeatures
             )
             .zIndex(1)
         }
@@ -298,7 +364,7 @@ struct ConnectionTerminalContainer: View {
             backgroundColor: liveTerminalBackgroundColor,
             sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
             dependencies: statsDependencies,
-            isDockerUnlocked: storeManager.isPro
+            isDockerUnlocked: storeManager.allowsProFeatures
         )
             .opacity(selectedView == .stats ? 1 : 0)
             .allowsHitTesting(selectedView == .stats)
@@ -339,7 +405,7 @@ struct ConnectionTerminalContainer: View {
             guard let fileTab = fileTabManager.ensureInitialTab(
                 for: server,
                 seedPath: seedPath,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             ) else { return }
             fileBrowser.prepareNewTab(fileTab, duplicating: nil)
         }
@@ -364,7 +430,7 @@ struct ConnectionTerminalContainer: View {
     }
 
     func openNewTab(selectTerminalViewOnSuccess: Bool = false) {
-        guard tabManager.sessionState.canOpenNewTab(hasProAccess: storeManager.isPro) else {
+        guard tabManager.sessionState.canOpenNewTab(hasProAccess: storeManager.allowsProFeatures) else {
             showingTabLimitAlert = true
             return
         }
@@ -390,7 +456,7 @@ struct ConnectionTerminalContainer: View {
     func openNewFileTab(selectFilesViewOnSuccess: Bool = false) {
         guard fileTabManager.canOpenNewTab(
             for: server.id,
-            hasProAccess: storeManager.isPro
+            hasProAccess: storeManager.allowsProFeatures
         ) else {
             showingFileTabLimitAlert = true
             return
@@ -403,12 +469,12 @@ struct ConnectionTerminalContainer: View {
             fileTabManager.duplicateTab(
                 $0,
                 seedPath: seedPath,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             )
         } ?? fileTabManager.openTab(
             for: server,
             seedPath: seedPath,
-            hasProAccess: storeManager.isPro
+            hasProAccess: storeManager.allowsProFeatures
         )
 
         guard let newTab else { return }

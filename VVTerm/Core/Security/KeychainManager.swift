@@ -138,11 +138,10 @@ final class KeychainManager {
         }
 
         let resolution = try credentialStorageResolution(for: server)
-        guard resolution?.status != .approvalRequired else {
-            logger.warning("Blocked credentials for a changed server endpoint: \(server.id.uuidString)")
-            throw ServerCredentialAccessError.approvalRequired
-        }
         let scope = resolution?.scope ?? preferredStorageScope
+        if resolution?.bindingMatches == false {
+            try bindCredentials(to: server, scope: scope)
+        }
 
         switch server.authMethod {
         case .password:
@@ -216,27 +215,15 @@ final class KeychainManager {
             deleteCloudflareServiceToken(for: server.id)
         }
 
-        try approveCredentialUse(for: server, scope: scope)
+        try bindCredentials(to: server, scope: scope)
     }
 
-    func credentialBindingStatus(for server: Server) throws -> ServerCredentialBindingStatus {
-        try credentialStorageResolution(for: server)?.status ?? .noCredentials
+    func hasCredentials(for server: Server) throws -> Bool {
+        try credentialStorageResolution(for: server) != nil
     }
 
-    func approveCredentialUse(for server: Server) throws {
-        guard let resolution = try credentialStorageResolution(for: server) else {
-            try? store.delete(
-                credentialBindingKey(for: server.id),
-                scope: preferredStorageScope
-            )
-            return
-        }
-
-        try approveCredentialUse(for: server, scope: resolution.scope)
-    }
-
-    private func approveCredentialUse(
-        for server: Server,
+    private func bindCredentials(
+        to server: Server,
         scope: KeychainStorageScope
     ) throws {
         let binding = ServerCredentialBinding(server: server)
@@ -246,7 +233,7 @@ final class KeychainManager {
             forKey: credentialBindingKey(for: server.id),
             scope: scope
         )
-        logger.info("Approved credential endpoint for server \(server.id.uuidString)")
+        logger.info("Bound credentials to server \(server.id.uuidString)")
     }
 
     // MARK: - Cloudflare Service Token
@@ -361,7 +348,7 @@ final class KeychainManager {
 
     private struct CredentialStorageResolution {
         let scope: KeychainStorageScope
-        let status: ServerCredentialBindingStatus
+        let bindingMatches: Bool
     }
 
     private var preferredStorageScope: KeychainStorageScope {
@@ -402,13 +389,9 @@ final class KeychainManager {
             }
             let resolution = CredentialStorageResolution(
                 scope: scope,
-                status: ServerCredentialBindingStatus.resolve(
-                    storedBinding: storedBinding,
-                    currentBinding: currentBinding,
-                    hasStoredCredentials: true
-                )
+                bindingMatches: storedBinding == currentBinding
             )
-            if resolution.status == .matches {
+            if resolution.bindingMatches {
                 return resolution
             }
             if firstStoredResolution == nil {

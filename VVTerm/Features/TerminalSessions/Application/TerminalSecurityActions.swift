@@ -1,13 +1,10 @@
 import Foundation
 
 nonisolated enum TerminalSecurityApprovalRequest: Identifiable, Equatable, Sendable {
-    case credentialEndpoint(serverID: UUID)
     case hostKey(KnownHostsManager.Challenge)
 
     var id: String {
         switch self {
-        case .credentialEndpoint(let serverID):
-            "credential:\(serverID.uuidString)"
         case .hostKey(let challenge):
             "host-key:\(challenge.id.uuidString)"
         }
@@ -16,7 +13,6 @@ nonisolated enum TerminalSecurityApprovalRequest: Identifiable, Equatable, Senda
 
 nonisolated enum TerminalSecurityApprovalFailure: Equatable, Sendable {
     case expired
-    case unavailable
 }
 
 nonisolated enum TerminalSecurityApprovalOutcome: Equatable, Sendable {

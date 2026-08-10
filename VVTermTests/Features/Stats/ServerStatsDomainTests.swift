@@ -51,13 +51,12 @@ final class ServerStatsDomainTests: XCTestCase {
         XCTAssertEqual(state.phase, .starting(attemptID: secondAttemptID))
     }
 
-    func testCredentialApprovalRemainsTyped() {
+    func testHostKeyApprovalRemainsTyped() {
         let attemptID = UUID()
         let serverID = UUID()
         let request = ServerStatsApprovalRequest(
-            id: "credential:\(serverID.uuidString)",
-            serverID: serverID,
-            kind: .credentialEndpoint
+            id: "host-key:\(serverID.uuidString)",
+            serverID: serverID
         )
         var state = ServerStatsCollectionState()
 
@@ -70,9 +69,8 @@ final class ServerStatsDomainTests: XCTestCase {
     func testApprovalCancellationBecomesClearFailure() {
         let attemptID = UUID()
         let request = ServerStatsApprovalRequest(
-            id: "credential",
-            serverID: UUID(),
-            kind: .credentialEndpoint
+            id: "host-key",
+            serverID: UUID()
         )
         var state = ServerStatsCollectionState()
         state.start(attemptID: attemptID)

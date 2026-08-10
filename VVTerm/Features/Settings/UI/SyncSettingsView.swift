@@ -63,7 +63,7 @@ struct SyncSettingsView: View {
             } header: {
                 Text("iCloud")
             } footer: {
-                Text("Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain.")
+                Text("Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain.")
             }
 
             if syncEnabled {

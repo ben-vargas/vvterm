@@ -5,7 +5,7 @@ final class ServerStatsSecurityApprovalActionsTests: XCTestCase {
     @MainActor
     func testApproveForwardsTheRequestAndServerToInjectedEffect() async {
         let server = makeServer()
-        let request = ServerSecurityApprovalRequest.credentialEndpoint(serverID: server.id)
+        let request = makeHostKeyRequest(server: server)
         var receivedRequest: ServerSecurityApprovalRequest?
         var receivedServer: Server?
         let actions = ServerStatsSecurityApprovalActions(
@@ -26,8 +26,7 @@ final class ServerStatsSecurityApprovalActionsTests: XCTestCase {
 
     @MainActor
     func testRejectUsesOnlyItsInjectedEffect() {
-        let serverID = UUID()
-        let request = ServerSecurityApprovalRequest.credentialEndpoint(serverID: serverID)
+        let request = makeHostKeyRequest(server: makeServer())
         var firstRejections: [ServerSecurityApprovalRequest] = []
         var secondRejections: [ServerSecurityApprovalRequest] = []
         let first = ServerStatsSecurityApprovalActions(
@@ -51,6 +50,21 @@ final class ServerStatsSecurityApprovalActionsTests: XCTestCase {
             name: "stats-actions-test",
             host: "stats.example.test",
             username: "tester"
+        )
+    }
+
+    private func makeHostKeyRequest(server: Server) -> ServerSecurityApprovalRequest {
+        .hostKey(
+            KnownHostsManager.Challenge(
+                id: UUID(),
+                host: server.host,
+                port: server.port,
+                fingerprint: "SHA256:test",
+                keyType: 1,
+                keyTypeName: "ssh-ed25519",
+                kind: .firstUse,
+                createdAt: .distantPast
+            )
         )
     }
 }

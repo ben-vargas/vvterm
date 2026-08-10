@@ -140,7 +140,7 @@ struct TerminalAccessoryCustomizationView: View {
                     Spacer(minLength: 8)
                     Button {
                         if preferences.isCustomActionCreationProGated(
-                            hasProAccess: storeManager.isPro
+                            hasProAccess: storeManager.allowsProFeatures
                         ) {
                             showingProGateAlert = true
                         } else {

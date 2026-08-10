@@ -8,11 +8,12 @@ final class StoreStateTests: XCTestCase {
     func testEntitlementSnapshotDerivesFreeAndProAccess() {
         let free = StoreEntitlementSnapshot.free
         let paid = StoreEntitlementSnapshot(
-            hasStoreAccess: true,
+            accessState: .pro,
             hasLifetimeAccess: false,
             subscriptionStatus: nil
         )
 
+        XCTAssertEqual(StoreEntitlementSnapshot.checking.accessState, .checking)
         XCTAssertFalse(free.hasStoreAccess)
         XCTAssertTrue(paid.hasStoreAccess)
     }
@@ -99,8 +100,14 @@ final class StoreStateTests: XCTestCase {
         let offer = try XCTUnwrap(subscription.introductoryOffer)
 
         XCTAssertEqual(offer.paymentMode, .freeTrial)
-        XCTAssertEqual(offer.period.value, 7)
-        XCTAssertEqual(offer.period.unit, .day)
+        switch offer.period.unit {
+        case .day:
+            XCTAssertEqual(offer.period.value, 7)
+        case .week:
+            XCTAssertEqual(offer.period.value, 1)
+        default:
+            XCTFail("The introductory offer is not seven days")
+        }
         XCTAssertEqual(offer.periodCount, 1)
         let isEligible = await subscription.isEligibleForIntroOffer
         XCTAssertTrue(isEligible)

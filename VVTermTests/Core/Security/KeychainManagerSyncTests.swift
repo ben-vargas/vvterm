@@ -99,6 +99,29 @@ struct KeychainManagerSyncTests {
     }
 
     @Test
+    func failedEnableVerificationPreservesTheDeviceOnlyCredential() throws {
+        let fixture = Fixture(syncEnabled: false)
+        let key = "server.\(UUID().uuidString).password"
+        let value = Data("local-password".utf8)
+        try fixture.credentialStore.set(value, forKey: key, scope: .deviceOnly)
+        fixture.backing.corruptReads(
+            from: .iCloud,
+            service: KeychainManager.credentialService,
+            key: key
+        )
+
+        do {
+            try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+            Issue.record("Expected copy verification to fail")
+        } catch KeychainError.copyVerificationFailed {
+            // Expected.
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+        #expect(try fixture.credentialStore.get(key, scope: .deviceOnly) == value)
+    }
+
+    @Test
     func failedOAuthCopyPreservesCredentialsAlreadyCopiedToICloud() throws {
         let fixture = Fixture(syncEnabled: false)
         let credentialKey = "server.\(UUID().uuidString).password"
@@ -170,7 +193,7 @@ struct KeychainManagerSyncTests {
         let credentials = try fixture.manager.getCredentials(for: server)
 
         #expect(credentials.password == nil)
-        #expect(try fixture.manager.credentialBindingStatus(for: server) == .noCredentials)
+        #expect(!(try fixture.manager.hasCredentials(for: server)))
     }
 
     @Test
@@ -224,9 +247,11 @@ struct KeychainManagerSyncTests {
     }
 
     @Test
-    func statsAndRemoteFilesCanUseAValidSynchronizedBinding() throws {
+    func loadingCredentialsAutomaticallyRebindsThemToTheCurrentServerEndpoint() throws {
         let fixture = Fixture(syncEnabled: true)
-        let server = makeServer(connectionMode: .standard, authMethod: .password)
+        let originalServer = makeServer(connectionMode: .standard, authMethod: .password)
+        var server = originalServer
+        server.host = "changed.example.com"
         let prefix = "server.\(server.id.uuidString)"
         try fixture.credentialStore.set(
             Data("cloud-password".utf8),
@@ -234,7 +259,7 @@ struct KeychainManagerSyncTests {
             scope: .iCloud
         )
         try fixture.credentialStore.set(
-            try JSONEncoder().encode(ServerCredentialBinding(server: server)),
+            try JSONEncoder().encode(ServerCredentialBinding(server: originalServer)),
             forKey: "\(prefix).credential-binding.v1",
             scope: .iCloud
         )
@@ -243,8 +268,32 @@ struct KeychainManagerSyncTests {
 
         #expect(credentials.password == "cloud-password")
         #expect(credentials.credentialBinding == ServerCredentialBinding(server: server))
-        try credentials.requireAuthorization(for: server)
-        #expect(try fixture.manager.credentialBindingStatus(for: server) == .matches)
+        let storedBindingData = try fixture.credentialStore.get(
+            "\(prefix).credential-binding.v1",
+            scope: .iCloud
+        )
+        let boundData = try #require(storedBindingData)
+        #expect(
+            try JSONDecoder().decode(ServerCredentialBinding.self, from: boundData)
+                == ServerCredentialBinding(server: server)
+        )
+    }
+
+    @Test
+    func differentServerUUIDDoesNotInheritCredentialsFromAnEquivalentServer() throws {
+        let fixture = Fixture(syncEnabled: true)
+        let original = makeServer(connectionMode: .standard, authMethod: .password)
+        let duplicate = makeServer(connectionMode: .standard, authMethod: .password)
+        try fixture.manager.storeCredentials(
+            ServerCredentials(serverId: original.id, password: "original-password"),
+            for: original
+        )
+
+        let duplicateCredentials = try fixture.manager.getCredentials(for: duplicate)
+
+        #expect(original.id != duplicate.id)
+        #expect(duplicateCredentials.password == nil)
+        #expect(!(try fixture.manager.hasCredentials(for: duplicate)))
     }
 
     @Test

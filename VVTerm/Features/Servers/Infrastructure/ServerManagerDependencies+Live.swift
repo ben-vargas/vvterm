@@ -48,7 +48,7 @@ extension CloudKitSyncCoordinator: ServerSyncRepository {
 extension KeychainManager: ServerManagerCredentialRepository {
     func cleanupCredentials(for server: Server) throws {
         try deleteCredentials(for: server.id)
-        guard try credentialBindingStatus(for: server) == .noCredentials else {
+        guard try !hasCredentials(for: server) else {
             throw WorkspaceDeletionTransactionError.credentialCleanupIncomplete
         }
     }

@@ -134,7 +134,7 @@ struct EnvironmentFormSheet: View {
                     let newEnvironment = try stateStore.createCustomEnvironment(
                         name: trimmedName,
                         color: selectedColorHex,
-                        hasProAccess: storeManager.isPro
+                        hasProAccess: storeManager.allowsProFeatures
                     )
                     var updatedWorkspace = workspace
                     updatedWorkspace.environments.append(newEnvironment)

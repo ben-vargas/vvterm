@@ -120,18 +120,6 @@ struct AppServerConnectionTestPlanTests {
     }
 
     @Test
-    func changedCredentialBindingRequiresCredentialEndpointApproval() {
-        let server = makeServer(mode: .cloudflare)
-
-        #expect(
-            ServerConnectionApprovalPolicy.requirement(
-                for: ServerCredentialAccessError.approvalRequired,
-                server: server
-            ) == .credentialEndpoint
-        )
-    }
-
-    @Test
     func unrelatedFailureDoesNotRequestApproval() {
         #expect(
             ServerConnectionApprovalPolicy.requirement(

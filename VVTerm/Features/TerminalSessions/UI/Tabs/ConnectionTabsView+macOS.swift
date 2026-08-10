@@ -151,7 +151,7 @@ extension ConnectionTerminalContainer {
             .onChange(of: selectedTabId) { _ in activateToolbarBridge(); updateCommandBridge() }
             .onChange(of: selectedTab?.focusedPaneId) { _ in updateCommandBridge() }
             .onChange(of: selectedTab?.layout) { _ in updateCommandBridge() }
-            .onChange(of: tabManager.splitZoomedTabIds) { _ in updateCommandBridge() }
+            .onChange(of: terminalContent.state.splitZoomedTabIds) { _ in updateCommandBridge() }
             .onChange(of: isZenModeEnabled) { _ in activateToolbarBridge() }
             .alert(
                 disconnectAlertTitle,
@@ -371,7 +371,7 @@ extension ConnectionTerminalContainer {
                 onDuplicate: { tab in
                     guard fileTabManager.canOpenNewTab(
                         for: server.id,
-                        hasProAccess: storeManager.isPro
+                        hasProAccess: storeManager.allowsProFeatures
                     ) else {
                         showingFileTabLimitAlert = true
                         return
@@ -381,7 +381,7 @@ extension ConnectionTerminalContainer {
                     guard let duplicate = fileTabManager.duplicateTab(
                         tab,
                         seedPath: seedPath,
-                        hasProAccess: storeManager.isPro
+                        hasProAccess: storeManager.allowsProFeatures
                     ) else { return }
                     fileBrowser.prepareNewTab(duplicate, duplicating: tab)
                 },
@@ -393,7 +393,7 @@ extension ConnectionTerminalContainer {
                 selectedTabId: selectedTabIdBinding,
                 onClose: { tab in tabManager.closeTab(tab) },
                 onNew: { openNewTab() },
-                tabManager: tabManager
+                projection: terminalToolbarProjection.tabStrip
             )
         }
     }
@@ -505,7 +505,7 @@ extension ConnectionTerminalContainer {
 
     private func splitFocusedPane(_ placement: TerminalSplitPlacement) {
         guard let selectedTab else { return }
-        guard storeManager.isPro else {
+        guard storeManager.allowsProFeatures else {
             showingZenPanel = false
             showingSplitPaneUpgradeAlert = true
             return
@@ -516,25 +516,25 @@ extension ConnectionTerminalContainer {
             _ = tabManager.splitRight(
                 tab: selectedTab,
                 paneId: selectedTab.focusedPaneId,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             )
         case .left:
             _ = tabManager.splitLeft(
                 tab: selectedTab,
                 paneId: selectedTab.focusedPaneId,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             )
         case .down:
             _ = tabManager.splitDown(
                 tab: selectedTab,
                 paneId: selectedTab.focusedPaneId,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             )
         case .up:
             _ = tabManager.splitUp(
                 tab: selectedTab,
                 paneId: selectedTab.focusedPaneId,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             )
         }
     }
@@ -544,7 +544,7 @@ extension ConnectionTerminalContainer {
         switch tabManager.performSplitCommand(
             command,
             in: selectedTab,
-            hasProAccess: storeManager.isPro
+            hasProAccess: storeManager.allowsProFeatures
         ) {
         case .performed, .unavailable:
             break
@@ -675,6 +675,7 @@ extension ConnectionTerminalContainer {
                 tabManager: tabManager,
                 securityActions: terminalSecurityActions,
                 isSelected: isVisible,
+                isSplitZoomed: terminalContent.state.splitZoomedTabIds.contains(tab.id),
                 appearance: terminalAppearanceSnapshot,
                 voiceSettingsStore: voiceInputRuntimeStore.settingsStore,
                 audioService: voiceRuntime.audioService,

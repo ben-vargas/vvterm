@@ -15,12 +15,20 @@ import Combine
 import SwiftUI
 import AppKit
 
+nonisolated enum MacShellContentReplacementPolicy {
+    static func shouldReplace(current: AnyHashable?, next: AnyHashable) -> Bool {
+        current != next
+    }
+}
+
 /// Wraps an `NSSplitViewController` (sidebar + detail) and bridges it into the
 /// SwiftUI `WindowGroup`. The hosted SwiftUI panes are passed in already
 /// wrapped with the required environment, since environment values do not flow
 /// across an `NSHostingController` boundary automatically.
 struct MacShellSplitHost<Sidebar: View, Detail: View>: NSViewControllerRepresentable {
     let isSidebarCollapsed: Bool
+    let sidebarContentIdentity: AnyHashable
+    let detailContentIdentity: AnyHashable
     var onToggleSidebar: () -> Void = {}
     /// Hides the window toolbar (zen mode) and restores it on exit.
     var isToolbarHidden: Bool = false
@@ -41,6 +49,8 @@ struct MacShellSplitHost<Sidebar: View, Detail: View>: NSViewControllerRepresent
         let detailHC = NSHostingController(rootView: AnyView(detail()))
         coordinator.sidebarHostingController = sidebarHC
         coordinator.detailHostingController = detailHC
+        coordinator.sidebarContentIdentity = sidebarContentIdentity
+        coordinator.detailContentIdentity = detailContentIdentity
 
         let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarHC)
         sidebarItem.minimumThickness = sidebarMinWidth
@@ -71,8 +81,20 @@ struct MacShellSplitHost<Sidebar: View, Detail: View>: NSViewControllerRepresent
 
     func updateNSViewController(_ nsViewController: NSSplitViewController, context: Context) {
         let coordinator = context.coordinator
-        coordinator.sidebarHostingController?.rootView = AnyView(sidebar())
-        coordinator.detailHostingController?.rootView = AnyView(detail())
+        if MacShellContentReplacementPolicy.shouldReplace(
+            current: coordinator.sidebarContentIdentity,
+            next: sidebarContentIdentity
+        ) {
+            coordinator.sidebarContentIdentity = sidebarContentIdentity
+            coordinator.sidebarHostingController?.rootView = AnyView(sidebar())
+        }
+        if MacShellContentReplacementPolicy.shouldReplace(
+            current: coordinator.detailContentIdentity,
+            next: detailContentIdentity
+        ) {
+            coordinator.detailContentIdentity = detailContentIdentity
+            coordinator.detailHostingController?.rootView = AnyView(detail())
+        }
         (nsViewController as? ShellSplitViewController)?.onToggleSidebar = onToggleSidebar
         (nsViewController as? ShellSplitViewController)?.updateToolbarHidden(isToolbarHidden)
 
@@ -87,6 +109,8 @@ final class MacShellSplitHostCoordinator {
     var sidebarHostingController: NSHostingController<AnyView>?
     var detailHostingController: NSHostingController<AnyView>?
     var sidebarItem: NSSplitViewItem?
+    var sidebarContentIdentity: AnyHashable?
+    var detailContentIdentity: AnyHashable?
 }
 
 /// NSSplitViewController that applies an initial sidebar width once, since

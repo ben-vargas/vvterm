@@ -13,7 +13,7 @@ struct ServerRow: View {
     var onLockedTap: (() -> Void)? = nil
 
     @ObservedObject private var serverManager: ServerManager
-    @ObservedObject private var tabManager: TerminalTabManager
+    @ObservedObject private var terminalNavigation: TerminalSessionNavigationProjection
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
     #if os(macOS)
     @Environment(\.controlActiveState) private var controlActiveState
@@ -21,7 +21,7 @@ struct ServerRow: View {
 
     init(
         serverManager: ServerManager,
-        tabManager: TerminalTabManager,
+        terminalNavigation: TerminalSessionNavigationProjection,
         server: Server,
         isSelected: Bool,
         isLocked: Bool,
@@ -32,7 +32,7 @@ struct ServerRow: View {
         onLockedTap: (() -> Void)? = nil
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
-        _tabManager = ObservedObject(wrappedValue: tabManager)
+        _terminalNavigation = ObservedObject(wrappedValue: terminalNavigation)
         self.server = server
         self.isSelected = isSelected
         self.isLocked = isLocked
@@ -44,7 +44,7 @@ struct ServerRow: View {
     }
 
     private var tabCount: Int {
-        tabManager.tabs(for: server.id).count
+        terminalNavigation.state.tabCountsByServer[server.id, default: 0]
     }
 
     private var selectedForegroundColor: Color {

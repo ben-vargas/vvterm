@@ -243,7 +243,7 @@ struct ProGateView<Content: View, LockedContent: View>: View {
     }
 
     var body: some View {
-        if storeManager.isPro {
+        if storeManager.allowsProFeatures {
             content()
         } else {
             lockedContent()

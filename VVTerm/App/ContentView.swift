@@ -23,7 +23,8 @@ struct ContentView: View {
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var engagementTracker: EngagementTracker
-    @ObservedObject private var tabManager: TerminalTabManager
+    private let tabManager: TerminalTabManager
+    @StateObject private var terminalNavigation: TerminalSessionNavigationProjection
     @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var storeManager: StoreManager
     @Environment(\.requestReview) private var requestReview
@@ -65,7 +66,12 @@ struct ContentView: View {
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
-        _tabManager = ObservedObject(wrappedValue: tabManager)
+        self.tabManager = tabManager
+        _terminalNavigation = StateObject(
+            wrappedValue: TerminalSessionNavigationProjection(
+                sessionState: tabManager.sessionState
+            )
+        )
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
         self.statsDependencies = statsDependencies
@@ -85,14 +91,14 @@ struct ContentView: View {
 
     /// Whether any server has an open terminal/file surface.
     private var hasOpenConnectionSurfaces: Bool {
-        !tabManager.serverIdsWithTabs().isEmpty
+        !terminalNavigation.state.serverIdsWithTabs.isEmpty
             || fileTabs.tabsByServer.values.contains { !$0.isEmpty }
-            || !tabManager.connectedServerIds.isEmpty
+            || !terminalNavigation.state.connectedServerIds.isEmpty
     }
 
     private var canUseZenMode: Bool {
         guard let selected = selectedServer else { return false }
-        return tabManager.connectedServerIds.contains(selected.id)
+        return terminalNavigation.state.connectedServerIds.contains(selected.id)
     }
 
     private var effectiveZenModeEnabled: Bool {
@@ -119,6 +125,22 @@ struct ContentView: View {
         guard effectiveZenModeEnabled, let selectedServer else { return "" }
         return selectedServer.name
     }
+
+    private var macSidebarContentIdentity: String {
+        "\(locale.identifier)|\(privacyModeEnabled)"
+    }
+
+    private var macDetailContentIdentity: String {
+        [
+            selectedServer?.id.uuidString ?? "none",
+            String(selectedServerHasOpenConnectionSurface),
+            String(hasOpenConnectionSurfaces),
+            String(describing: storeManager.accessState),
+            colorScheme == .dark ? "dark" : "light",
+            locale.identifier,
+            String(privacyModeEnabled)
+        ].joined(separator: "|")
+    }
     #endif
 
     private var isSidebarVisible: Bool {
@@ -131,31 +153,37 @@ struct ContentView: View {
             // A server is selected
             if selectedServerHasOpenConnectionSurface {
                 // Server has an open connection surface - show its container
-                ConnectionTerminalContainer(
-                    tabManager: tabManager,
-                    fileTabManager: fileTabs,
-                    serverManager: serverManager,
-                    fileBrowser: fileBrowser,
-                    makeLocalDiscoveryManager: makeLocalDiscoveryManager,
-                    statsDependencies: statsDependencies,
-                    terminalSecurityActions: terminalSecurityActions,
-                    serverFormDependencies: serverFormDependencies,
-                    voiceInputRuntimeStore: voiceInputRuntimeStore,
-                    server: server,
-                    isZenModeEnabled: $isZenModeEnabled,
-                    isSidebarVisible: isSidebarVisible,
-                    onToggleSidebar: toggleSidebarInZenMode,
-                    onOpenSettings: onOpenSettings,
-                    onLeaveRoute: nil,
-                    onDisconnectRoute: nil
-                )
+                TerminalServerToolbarProjectionHost(
+                    serverId: server.id,
+                    tabManager: tabManager
+                ) { toolbarProjection in
+                    ConnectionTerminalContainer(
+                        tabManager: tabManager,
+                        terminalToolbarProjection: toolbarProjection,
+                        fileTabManager: fileTabs,
+                        serverManager: serverManager,
+                        fileBrowser: fileBrowser,
+                        makeLocalDiscoveryManager: makeLocalDiscoveryManager,
+                        statsDependencies: statsDependencies,
+                        terminalSecurityActions: terminalSecurityActions,
+                        serverFormDependencies: serverFormDependencies,
+                        voiceInputRuntimeStore: voiceInputRuntimeStore,
+                        server: server,
+                        isZenModeEnabled: $isZenModeEnabled,
+                        isSidebarVisible: isSidebarVisible,
+                        onToggleSidebar: toggleSidebarInZenMode,
+                        onOpenSettings: onOpenSettings,
+                        onLeaveRoute: nil,
+                        onDisconnectRoute: nil
+                    )
+                }
                 .id(server.id) // Ensure isolation per server
             } else if !hasOpenConnectionSurfaces {
                 // No open connection surfaces - can connect freely
                 ServerConnectEmptyState(server: server) {
                     connectToServer(server)
                 }
-            } else if storeManager.isPro {
+            } else if storeManager.allowsProFeatures {
                 // Pro user already has other open connection surfaces - can connect to more
                 ServerConnectEmptyState(server: server) {
                     connectToServer(server)
@@ -171,9 +199,9 @@ struct ContentView: View {
     }
 
     private func hasOpenConnectionSurface(for serverId: UUID) -> Bool {
-        !tabManager.tabs(for: serverId).isEmpty
+        terminalNavigation.state.tabCountsByServer[serverId, default: 0] > 0
             || !fileTabs.tabs(for: serverId).isEmpty
-            || tabManager.connectedServerIds.contains(serverId)
+            || terminalNavigation.state.connectedServerIds.contains(serverId)
     }
 
     private func connectToServer(_ server: Server) {
@@ -284,6 +312,7 @@ struct ContentView: View {
                 ServerSidebarView(
                     serverManager: serverManager,
                     tabManager: tabManager,
+                    terminalNavigation: terminalNavigation,
                     serverFormDependencies: serverFormDependencies,
                     workspaceSelectionStore: workspaceSelectionStore,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
@@ -312,6 +341,8 @@ struct ContentView: View {
         withSplitLifecycle(
             MacShellSplitHost(
                 isSidebarCollapsed: columnVisibility == .detailOnly,
+                sidebarContentIdentity: macSidebarContentIdentity,
+                detailContentIdentity: macDetailContentIdentity,
                 onToggleSidebar: {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         setSidebarVisible(!isSidebarVisible)
@@ -322,6 +353,7 @@ struct ContentView: View {
                         ServerSidebarView(
                             serverManager: serverManager,
                             tabManager: tabManager,
+                            terminalNavigation: terminalNavigation,
                             serverFormDependencies: serverFormDependencies,
                             workspaceSelectionStore: workspaceSelectionStore,
                             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
@@ -521,8 +553,6 @@ struct ContentView: View {
         preferencesStore: statsPreferencesStore,
         volumeVisibilityStore: ServerVolumeVisibilityStore.live,
         securityApprovalActions: VVTermApp.makeStatsSecurityApprovalActions(
-            appLockManager: appLockManager,
-            keychainManager: keychainManager,
             knownHostsManager: knownHostsManager
         )
     )

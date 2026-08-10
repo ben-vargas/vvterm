@@ -16,7 +16,7 @@ struct ProSettingsView: View {
     var body: some View {
         Form {
             // Upgrade banner (only when not Pro)
-            if !storeManager.isPro {
+            if storeManager.accessState == .free {
                 Section {
                     upgradeBanner
                 }
@@ -47,7 +47,7 @@ struct ProSettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                } else {
+                } else if storeManager.accessState == .free {
                     // Show usage for free tier
                     HStack {
                         Text("Servers")
@@ -67,6 +67,13 @@ struct ProSettingsView: View {
                         Text("Simultaneous Connections")
                         Spacer()
                         Text(String(format: String(localized: "%lld max"), Int64(FreeTierLimits.maxTabs)))
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    HStack {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Checking...")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -124,13 +131,23 @@ struct ProSettingsView: View {
 
     @ViewBuilder
     private var statusBadge: some View {
-        Text(storeManager.isPro ? String(localized: "Active") : String(localized: "Free Tier"))
+        let title: String = switch storeManager.accessState {
+        case .checking:
+            String(localized: "Checking...")
+        case .free:
+            String(localized: "Free Tier")
+        case .pro:
+            String(localized: "Active")
+        }
+        let isActive = storeManager.accessState == .pro
+
+        Text(title)
             .font(.caption2)
             .fontWeight(.medium)
-            .foregroundStyle(storeManager.isPro ? .green : .secondary)
+            .foregroundStyle(isActive ? .green : .secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background((storeManager.isPro ? Color.green : Color.secondary).opacity(0.15), in: Capsule())
+            .background((isActive ? Color.green : Color.secondary).opacity(0.15), in: Capsule())
     }
 
     private var planName: String {

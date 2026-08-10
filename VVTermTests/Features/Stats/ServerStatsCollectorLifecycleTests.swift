@@ -276,9 +276,7 @@ final class ServerStatsCollectorLifecycleTests: XCTestCase {
 
         for testCase in cases {
             let target = StatsTestTarget()
-            let request = ServerSecurityApprovalRequest.credentialEndpoint(
-                serverID: target.serverID
-            )
+            let request = makeHostKeyRequest()
             let reference = LiveServerStatsApprovalReference(
                 request,
                 serverID: target.serverID
@@ -308,9 +306,8 @@ final class ServerStatsCollectorLifecycleTests: XCTestCase {
     func testPreparationApprovalKeepsTypedRequestWithoutStartingConnectionTask() async {
         let target = StatsTestTarget()
         let request = ServerStatsApprovalRequest(
-            id: "credential:\(target.serverID.uuidString)",
-            serverID: target.serverID,
-            kind: .credentialEndpoint
+            id: "host-key:\(target.serverID.uuidString)",
+            serverID: target.serverID
         )
         let reference = StatsTestApprovalReference(request: request)
         let collector = ServerStatsCollector(
@@ -501,6 +498,21 @@ final class ServerStatsCollectorLifecycleTests: XCTestCase {
                     )
                 },
                 makeAttemptID: makeAttemptID
+            )
+        )
+    }
+
+    private func makeHostKeyRequest() -> ServerSecurityApprovalRequest {
+        .hostKey(
+            KnownHostsManager.Challenge(
+                id: UUID(),
+                host: "stats.example.test",
+                port: 22,
+                fingerprint: "SHA256:test",
+                keyType: 1,
+                keyTypeName: "ssh-ed25519",
+                kind: .firstUse,
+                createdAt: .distantPast
             )
         )
     }

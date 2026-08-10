@@ -1417,7 +1417,7 @@
 "Support" = "Podpora";
 "Swift Source" = "Rychlý zdroj";
 "Symlink" = "Symbolický odkaz";
-"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "Servery a vybrané přihlašovací údaje se synchronizují mezi vašimi zařízeními Apple. Přihlašovací údaje používají Klíčenku na iCloudu.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Servery, přihlašovací údaje a klíče SSH se synchronizují mezi vašimi zařízeními Apple pomocí iCloudu a Klíčenky na iCloudu.";
 "Credentials could not be copied. Existing credentials were kept." = "Přihlašovací údaje se nepodařilo zkopírovat. Stávající přihlašovací údaje byly zachovány.";
 "Remove credentials from iCloud Keychain" = "Odstranit přihlašovací údaje z Klíčenky na iCloudu";
 "This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "Tímto odstraníte přihlašovací údaje VVTerm z Klíčenky na iCloudu na všech zařízeních Apple. Přihlašovací údaje pouze pro toto zařízení zůstanou v zařízení.";

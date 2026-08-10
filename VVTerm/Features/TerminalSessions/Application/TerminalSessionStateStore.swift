@@ -61,6 +61,82 @@ final class TerminalSessionStateStore: ObservableObject {
             .eraseToAnyPublisher()
     }
 
+    var navigationChanges: AnyPublisher<TerminalSessionNavigationState, Never> {
+        Publishers.CombineLatest($tabsByServer, $paneStates)
+            .map(Self.makeNavigationState)
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
+    var navigationState: TerminalSessionNavigationState {
+        Self.makeNavigationState(tabsByServer: tabsByServer, paneStates: paneStates)
+    }
+
+    private static func makeNavigationState(
+        tabsByServer: [UUID: [TerminalTab]],
+        paneStates: [UUID: TerminalPaneState]
+    ) -> TerminalSessionNavigationState {
+        TerminalSessionNavigationState(
+            tabCountsByServer: tabsByServer.reduce(into: [:]) { result, element in
+                guard !element.value.isEmpty else { return }
+                result[element.key] = element.value.count
+            },
+            connectedServerIds: Set(paneStates.values.compactMap { state in
+                state.connectionState.isConnected ? state.serverId : nil
+            })
+        )
+    }
+
+    func changes(for serverId: UUID) -> AnyPublisher<TerminalServerSessionSnapshot, Never> {
+        Publishers.CombineLatest3($tabsByServer, $selectedTabByServer, $paneStates)
+            .map { tabsByServer, selectedTabByServer, paneStates in
+                Self.makeServerSnapshot(
+                    serverId: serverId,
+                    tabsByServer: tabsByServer,
+                    selectedTabByServer: selectedTabByServer,
+                    paneStates: paneStates
+                )
+            }
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
+    func presentationChanges(for paneId: UUID) -> AnyPublisher<TerminalPanePresentationState?, Never> {
+        $paneStates
+            .map { $0[paneId].map(TerminalPanePresentationState.init) }
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
+    func presentationState(for paneId: UUID) -> TerminalPanePresentationState? {
+        paneStates[paneId].map(TerminalPanePresentationState.init)
+    }
+
+    func snapshot(for serverId: UUID) -> TerminalServerSessionSnapshot {
+        Self.makeServerSnapshot(
+            serverId: serverId,
+            tabsByServer: tabsByServer,
+            selectedTabByServer: selectedTabByServer,
+            paneStates: paneStates
+        )
+    }
+
+    private static func makeServerSnapshot(
+        serverId: UUID,
+        tabsByServer: [UUID: [TerminalTab]],
+        selectedTabByServer: [UUID: UUID],
+        paneStates: [UUID: TerminalPaneState]
+    ) -> TerminalServerSessionSnapshot {
+        TerminalServerSessionSnapshot(
+            tabs: tabsByServer[serverId] ?? [],
+            selectedTabId: selectedTabByServer[serverId],
+            connectionStatesByPane: paneStates.reduce(into: [:]) { result, element in
+                guard element.value.serverId == serverId else { return }
+                result[element.key] = element.value.connectionState
+            }
+        )
+    }
+
     var paneIds: Set<UUID> {
         Set(paneStates.keys)
     }
@@ -358,6 +434,7 @@ final class TerminalSessionStateStore: ObservableObject {
     }
 
     func setPaneState(_ paneState: TerminalPaneState) {
+        guard paneStates[paneState.paneId] != paneState else { return }
         paneStates[paneState.paneId] = paneState
     }
 
@@ -368,7 +445,9 @@ final class TerminalSessionStateStore: ObservableObject {
         _ mutation: (inout TerminalPaneState) -> Void
     ) -> Bool {
         guard var paneState = paneStates[paneId] else { return false }
+        let previousState = paneState
         mutation(&paneState)
+        guard paneState != previousState else { return false }
         paneStates[paneId] = paneState
         if persist {
             schedulePersist()
@@ -546,6 +625,41 @@ final class TerminalSessionStateStore: ObservableObject {
         snapshotStore.removeSnapshotData()
     }
     #endif
+}
+
+struct TerminalServerSessionSnapshot: Equatable {
+    let tabs: [TerminalTab]
+    let selectedTabId: UUID?
+    let connectionStatesByPane: [UUID: ConnectionState]
+}
+
+struct TerminalSessionNavigationState: Equatable {
+    let tabCountsByServer: [UUID: Int]
+    let connectedServerIds: Set<UUID>
+
+    var serverIdsWithTabs: Set<UUID> {
+        Set(tabCountsByServer.keys)
+    }
+}
+
+struct TerminalPanePresentationState: Equatable {
+    let connectionState: ConnectionState
+    let disconnectReason: TerminalDisconnectReason?
+    let hasEstablishedConnection: Bool
+    let tmuxStatus: TmuxStatus
+    let transportState: ShellTransportState
+
+    init(_ state: TerminalPaneState) {
+        connectionState = state.connectionState
+        disconnectReason = state.disconnectReason
+        hasEstablishedConnection = state.hasEstablishedConnection
+        tmuxStatus = state.tmuxStatus
+        transportState = state.transportState
+    }
+
+    var activeTransport: ShellTransport { transportState.transport }
+    var moshFallbackReason: MoshFallbackReason? { transportState.fallbackReason }
+    var moshFallbackDiagnostics: MoshFallbackDiagnostics? { transportState.fallbackDiagnostics }
 }
 
 private struct TerminalTabsSnapshot: Codable {

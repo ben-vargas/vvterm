@@ -175,6 +175,24 @@ final class TerminalKeyboardUITests: XCTestCase {
             "Voice input recovery control disappeared after a repeated dismiss. \(diagnosticsText(in: app))"
         )
 
+        floatingVoiceButton.tap()
+        XCTAssertTrue(
+            floatingVoiceButton.waitForNonExistence(timeout: 2),
+            "Voice control stayed visible while recording. \(diagnosticsText(in: app))"
+        )
+
+        app.buttons["vvterm.keyboardTest.voice.transcriptionSent"].tap()
+        let floatingReturnButton = app.buttons["vvterm.terminal.floating.return"]
+        XCTAssertTrue(
+            floatingReturnButton.waitForExistence(timeout: 2),
+            "Return control did not appear after transcription. \(diagnosticsText(in: app))"
+        )
+        floatingReturnButton.tap()
+        XCTAssertTrue(
+            floatingReturnButton.waitForNonExistence(timeout: 2),
+            "Return control did not clear after use. \(diagnosticsText(in: app))"
+        )
+
         terminal.tap()
         wait(for: diagnostics, labelContaining: "userHidden=true", timeout: 3, diagnostics: diagnosticsText(in: app))
         wait(for: diagnostics, labelContaining: "softwareInputActive=true", timeout: 5, diagnostics: diagnosticsText(in: app))
@@ -415,6 +433,24 @@ final class TerminalKeyboardUITests: XCTestCase {
             labelContaining: "inputHex=78",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
+        )
+    }
+
+    @MainActor
+    func testOpenMenuStaysVisibleDuringTerminalTitleAndWorkingDirectoryUpdates() throws {
+        let app = launchKeyboardHarness(simulatesTerminalMetadataChurn: true)
+        let menu = app.buttons["vvterm.keyboardTest.menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5), diagnosticsText(in: app))
+
+        menu.tap()
+
+        let settingsItem = app.descendants(matching: .any)["vvterm.keyboardTest.menu.settings"]
+        XCTAssertTrue(settingsItem.waitForExistence(timeout: 5), diagnosticsText(in: app))
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+
+        XCTAssertTrue(
+            settingsItem.exists && settingsItem.isHittable,
+            "Open menu closed or blinked during terminal metadata updates. \(diagnosticsText(in: app))"
         )
     }
 
@@ -1894,8 +1930,10 @@ final class TerminalKeyboardUITests: XCTestCase {
         app.buttons["vvterm.keyboardTest.showKeyboard"].tap()
         assertKeyboardAndAccessoryVisible(in: app)
         waitForDiagnosticMetrics(in: app) { metrics in
-            guard let rows = metrics["gridRows"] else { return false }
-            return rows < expandedRows
+            guard let rows = metrics["gridRows"],
+                  let terminalBottom = metrics["terminalBottom"],
+                  let keyboardTop = metrics["keyboardTop"] else { return false }
+            return rows < expandedRows && terminalBottom <= keyboardTop + 1
         }
         assertSingleKeyboardRestore(since: transitionBaseline, in: app)
     }
@@ -2416,7 +2454,8 @@ final class TerminalKeyboardUITests: XCTestCase {
         simulatesDetachedLightAccessoryHost: Bool = false,
         simulatesStaleLightAccessoryCacheOnResume: Bool = false,
         splitPaneFocus: Bool = false,
-        testsAppShortcutInputs: Bool = false
+        testsAppShortcutInputs: Bool = false,
+        simulatesTerminalMetadataChurn: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -2431,6 +2470,9 @@ final class TerminalKeyboardUITests: XCTestCase {
         }
         if testsAppShortcutInputs {
             app.launchArguments.append("--vvterm-ui-test-terminal-app-shortcut-inputs")
+        }
+        if simulatesTerminalMetadataChurn {
+            app.launchArguments.append("--vvterm-ui-test-terminal-metadata-churn")
         }
         if preservesTerminalSize {
             app.launchArguments.append("--vvterm-ui-test-preserve-terminal-size")

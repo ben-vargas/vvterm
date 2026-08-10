@@ -2,18 +2,6 @@ import XCTest
 @testable import VVTerm
 
 final class ServerSecurityApprovalTests: XCTestCase {
-    func testDetectsCredentialEndpointApproval() {
-        let server = makeServer()
-
-        XCTAssertEqual(
-            ServerSecurityApprovalRequest.detect(
-                ServerCredentialAccessError.approvalRequired,
-                server: server
-            ),
-            .credentialEndpoint(serverID: server.id)
-        )
-    }
-
     func testDetectsPendingHostKeyApproval() throws {
         let suiteName = "ServerSecurityApprovalTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

@@ -66,6 +66,11 @@ nonisolated enum SSHConnectionRunner {
         ) -> Void,
         onFailure: @MainActor @escaping @Sendable (_ error: Error) -> Void
     ) async {
+        guard credentials.isAuthorized(for: server) else {
+            await onFailure(KeychainError.credentialServerMismatch)
+            return
+        }
+
         let maxAttempts = 3
         var lastError: Error?
         var titleParser = TerminalTitleSequenceParser()
@@ -76,7 +81,6 @@ nonisolated enum SSHConnectionRunner {
             await onAttempt(attempt)
 
             do {
-                try credentials.requireAuthorization(for: server)
                 logger.info(
                     "Connecting to \(server.host, privacy: .private(mask: .hash))... (attempt \(attempt))"
                 )
@@ -179,10 +183,6 @@ nonisolated enum SSHConnectionRunner {
                 guard await shouldContinueConnection() else { return }
                 lastError = error
                 logger.error("SSH connection failed (attempt \(attempt)): \(error.localizedDescription)")
-
-                if error is ServerCredentialAccessError {
-                    break
-                }
 
                 if attempt < maxAttempts, let sshError = error as? SSHError {
                     let shouldReset = await shouldResetClient(sshError)

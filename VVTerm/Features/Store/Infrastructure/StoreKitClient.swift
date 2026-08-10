@@ -45,7 +45,7 @@ final class AppStoreKitClient: StoreClient {
             }
         }
 
-        guard let product = await firstProduct(for: subscriptionProductIds),
+        guard let product = firstCachedProduct(for: subscriptionProductIds),
               let statuses = try? await product.subscription?.status else {
             return StoreEntitlementResult(
                 verifiedProductIds: verifiedProductIds,
@@ -115,20 +115,7 @@ final class AppStoreKitClient: StoreClient {
         return product
     }
 
-    private func firstProduct(for productIds: [String]) async -> Product? {
-        for productId in productIds {
-            if let product = productsById[productId] {
-                return product
-            }
-        }
-
-        guard let products = try? await Product.products(for: productIds) else {
-            return nil
-        }
-        productsById.merge(
-            Dictionary(uniqueKeysWithValues: products.map { ($0.id, $0) }),
-            uniquingKeysWith: { current, _ in current }
-        )
+    private func firstCachedProduct(for productIds: [String]) -> Product? {
         return productIds.lazy.compactMap { self.productsById[$0] }.first
     }
 }

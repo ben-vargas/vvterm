@@ -96,8 +96,6 @@ final class BiometricAuthService: BiometricAuthServing {
             return String(localized: "save")
         case .delete:
             return String(localized: "delete")
-        case .approveCredentialEndpoint:
-            return String(localized: "approve credentials for")
         }
     }
 

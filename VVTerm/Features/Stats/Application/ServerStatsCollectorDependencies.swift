@@ -16,14 +16,8 @@ nonisolated enum ServerStatsClientOwnership: Equatable, Sendable {
 }
 
 nonisolated struct ServerStatsApprovalRequest: Identifiable, Equatable, Sendable {
-    nonisolated enum Kind: Equatable, Sendable {
-        case credentialEndpoint
-        case hostKey
-    }
-
     let id: String
     let serverID: UUID
-    let kind: Kind
 }
 
 @MainActor

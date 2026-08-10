@@ -1416,7 +1416,7 @@
 "Support" = "Unterstützung";
 "Swift Source" = "Schnelle Quelle";
 "Symlink" = "Symlink";
-"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "Server und ausgewählte Anmeldedaten werden zwischen deinen Apple-Geräten synchronisiert. Anmeldedaten verwenden den iCloud-Schlüsselbund.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Server, Anmeldedaten und SSH-Schlüssel werden über iCloud und den iCloud-Schlüsselbund zwischen deinen Apple-Geräten synchronisiert.";
 "Credentials could not be copied. Existing credentials were kept." = "Anmeldedaten konnten nicht kopiert werden. Vorhandene Anmeldedaten wurden beibehalten.";
 "Remove credentials from iCloud Keychain" = "Anmeldedaten aus dem iCloud-Schlüsselbund entfernen";
 "This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "Dies entfernt VVTerm-Anmeldedaten aus dem iCloud-Schlüsselbund auf allen deinen Apple-Geräten. Nur auf diesem Gerät gespeicherte Anmeldedaten bleiben erhalten.";

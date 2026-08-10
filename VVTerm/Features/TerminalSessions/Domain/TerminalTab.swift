@@ -64,7 +64,7 @@ struct TerminalTab: Identifiable, Equatable, Codable {
 // MARK: - Terminal Pane State
 
 /// State for a single terminal pane (leaf in split tree)
-struct TerminalPaneState {
+struct TerminalPaneState: Equatable {
     let paneId: UUID
     let tabId: UUID
     let serverId: UUID

@@ -1423,7 +1423,7 @@
 "Support" = "Підтримка";
 "Swift Source" = "Swift Source";
 "Symlink" = "Символьне посилання";
-"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "Сервери та вибрані облікові дані синхронізуються між вашими пристроями Apple. Облікові дані використовують В’язку ключів iCloud.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Сервери, облікові дані та ключі SSH синхронізуються між вашими пристроями Apple через iCloud і В’язку ключів iCloud.";
 "Credentials could not be copied. Existing credentials were kept." = "Не вдалося скопіювати облікові дані. Наявні облікові дані збережено.";
 "Remove credentials from iCloud Keychain" = "Видалити облікові дані з В’язки ключів iCloud";
 "This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "Це видалить облікові дані VVTerm із В’язки ключів iCloud на всіх ваших пристроях Apple. Облікові дані лише для пристрою залишаться на ньому.";

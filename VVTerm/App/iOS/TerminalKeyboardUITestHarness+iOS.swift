@@ -4,6 +4,16 @@ import SwiftUI
 import UIKit
 
 struct TerminalKeyboardUITestHarness: View {
+    private final class MetadataChurnCounter: ObservableObject {
+        private(set) var value = 0
+
+        func next() -> Int {
+            guard value < Int.max else { return value }
+            value += 1
+            return value
+        }
+    }
+
     private static let paneId = UUID(uuidString: "B54F29D8-7C3E-4DB8-B3D7-9D9F1604B755")!
     private static let clearTerminalBackgroundCacheForUITest: Void = {
         guard Foundation.ProcessInfo.processInfo.arguments.contains(
@@ -77,7 +87,7 @@ struct TerminalKeyboardUITestHarness: View {
 
     @EnvironmentObject private var ghosttyApp: Ghostty.App
     @EnvironmentObject private var appLockManager: AppLockManager
-    private let tabManager: TerminalTabManager
+    @ObservedObject private var tabManager: TerminalTabManager
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
     @State private var terminalView: GhosttyTerminalView?
@@ -104,6 +114,7 @@ struct TerminalKeyboardUITestHarness: View {
     @State private var paneShortcutActionCount = 0
     @State private var lastPaneShortcutAction = "none"
     @State private var paneFocusActionCount = 0
+    @StateObject private var terminalMetadataChurn = MetadataChurnCounter()
     @State private var showingPaneCloseConfirmation = false
     @State private var lastPaneCloseDialogAction = "none"
     @Environment(\.scenePhase) private var scenePhase
@@ -132,6 +143,16 @@ struct TerminalKeyboardUITestHarness: View {
         Foundation.ProcessInfo.processInfo.arguments.contains(
             "--vvterm-ui-test-terminal-app-shortcut-inputs"
         )
+    }
+
+    private var simulatesTerminalMetadataChurn: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-terminal-metadata-churn"
+        )
+    }
+
+    private var voicePresentation: TerminalVoicePresentationState {
+        tabManager.terminalVoicePresentation(for: Self.paneId)
     }
 
     private var simulatesStaleLightAccessoryCacheOnResume: Bool {
@@ -221,8 +242,35 @@ struct TerminalKeyboardUITestHarness: View {
                         }
                         .accessibilityIdentifier("vvterm.terminal.floating.keyboard")
 
-                        Button("Voice input") { }
+                        if !voicePresentation.isRecording {
+                            Button("Voice input") {
+                                tabManager.applyTerminalVoiceEvent(
+                                    .recordingStarted,
+                                    for: Self.paneId
+                                )
+                            }
                             .accessibilityIdentifier("vvterm.terminal.floating.voiceInput")
+                        }
+
+                        if voicePresentation.isPendingReturn {
+                            Button("Enter") {
+                                tabManager.applyTerminalVoiceEvent(
+                                    .pendingReturnDismissed,
+                                    for: Self.paneId
+                                )
+                            }
+                            .accessibilityIdentifier("vvterm.terminal.floating.return")
+                        }
+
+                        if voicePresentation.isRecording {
+                            Button("Finish voice test") {
+                                tabManager.applyTerminalVoiceEvent(
+                                    .transcriptionSent,
+                                    for: Self.paneId
+                                )
+                            }
+                            .accessibilityIdentifier("vvterm.keyboardTest.voice.transcriptionSent")
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                     .padding(.bottom, 12)
@@ -298,6 +346,7 @@ struct TerminalKeyboardUITestHarness: View {
                         requestPaneCloseConfirmation()
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.closeAlert")
+
                 }
 
                 HStack(spacing: 8) {
@@ -597,6 +646,17 @@ struct TerminalKeyboardUITestHarness: View {
             handleSceneWillDeactivate(notification)
         }
         .onReceive(diagnosticTimer) { _ in
+            if simulatesTerminalMetadataChurn {
+                let updateCount = terminalMetadataChurn.next()
+                tabManager.updatePaneTitle(
+                    Self.paneId,
+                    rawTitle: "Metadata \(updateCount)"
+                )
+                tabManager.updatePaneWorkingDirectory(
+                    Self.paneId,
+                    rawDirectory: "/tmp/metadata-\(updateCount)"
+                )
+            }
             refreshDiagnostics()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
@@ -906,7 +966,7 @@ struct TerminalKeyboardUITestHarness: View {
 
     private func keyboardAvoidanceDiagnostics(for terminal: GhosttyTerminalView) -> String {
         guard let window = terminal.window else {
-            return "preserveSize=\(preservesTerminalSize) terminalTop=unavailable cursorBottom=unavailable keyboardTop=unavailable"
+            return "preserveSize=\(preservesTerminalSize) terminalTop=unavailable terminalBottom=unavailable cursorBottom=unavailable keyboardTop=unavailable"
         }
 
         let terminalFrame = terminal.convert(terminal.bounds, to: window)
@@ -918,6 +978,7 @@ struct TerminalKeyboardUITestHarness: View {
         return [
             "preserveSize=\(preservesTerminalSize)",
             "terminalTop=\(metricText(terminalFrame.minY))",
+            "terminalBottom=\(metricText(terminalFrame.maxY))",
             "terminalHeight=\(metricText(terminalFrame.height))",
             "visibleTerminalHeight=\(metricText(visibleTerminalFrame.isNull ? 0 : visibleTerminalFrame.height))",
             "cursorBottom=\(metricText(cursorFrame.maxY))",

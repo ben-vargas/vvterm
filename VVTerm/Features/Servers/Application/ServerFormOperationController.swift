@@ -48,7 +48,6 @@ struct ServerFormDependencies {
 nonisolated enum ServerFormOperationPhase: Equatable, Sendable {
     case idle
     case loadingCredentials
-    case credentialApprovalRequired
     case testing(id: UUID, snapshot: ServerFormModel.ConnectionSnapshot)
     case testSucceeded(snapshot: ServerFormModel.ConnectionSnapshot)
     case testFailed(snapshot: ServerFormModel.ConnectionSnapshot, failure: ServerConnectionTestFailure)
@@ -102,10 +101,6 @@ final class ServerFormOperationController: ObservableObject {
         return false
     }
 
-    var credentialApprovalRequired: Bool {
-        phase == .credentialApprovalRequired
-    }
-
     var requiresUpgrade: Bool {
         phase == .requiresUpgrade
     }
@@ -138,17 +133,13 @@ final class ServerFormOperationController: ObservableObject {
         phase = .idle
     }
 
-    func requireCredentialApproval() {
-        phase = .credentialApprovalRequired
-    }
-
     func fail(_ message: String) {
         phase = .failed(message: message)
     }
 
     func clearPresentation() {
         switch phase {
-        case .credentialApprovalRequired, .failed, .requiresUpgrade, .testFailed:
+        case .failed, .requiresUpgrade, .testFailed:
             phase = .idle
         default:
             break

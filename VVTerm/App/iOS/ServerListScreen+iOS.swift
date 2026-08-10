@@ -8,7 +8,7 @@ import SwiftUI
 #if os(iOS)
 struct ServerListScreen: View {
     @ObservedObject var serverManager: ServerManager
-    @ObservedObject var tabManager: TerminalTabManager
+    let tabManager: TerminalTabManager
     @ObservedObject var fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     let statsDependencies: ServerStatsScreenDependencies
@@ -24,6 +24,7 @@ struct ServerListScreen: View {
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
+    @ObservedObject private var sessionState: TerminalSessionStateStore
     @State private var showingAddServer = false
     @State private var showingAddWorkspace = false
     @State private var showingSettings = false
@@ -37,6 +38,37 @@ struct ServerListScreen: View {
     @State private var lockedServerAlert: Server?
     @State private var showingCustomEnvironmentAlert = false
     @State private var addServerPrefill: ServerFormPrefill?
+
+    init(
+        serverManager: ServerManager,
+        tabManager: TerminalTabManager,
+        fileTabs: RemoteFileTabManager,
+        fileBrowser: RemoteFileBrowserStore,
+        statsDependencies: ServerStatsScreenDependencies,
+        analyticsOptOutAction: AnalyticsOptOutAction,
+        serverFormDependencies: ServerFormDependencies,
+        voiceModelManagers: VoiceSettingsModelManagerOwner,
+        makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
+        selectedWorkspace: Binding<Workspace?>,
+        selectedEnvironment: Binding<ServerEnvironment?>,
+        onServerSelected: @escaping (Server) -> Void,
+        onActiveConnectionSelected: @escaping (Server) -> Void
+    ) {
+        self.serverManager = serverManager
+        self.tabManager = tabManager
+        self.fileTabs = fileTabs
+        self.fileBrowser = fileBrowser
+        self.statsDependencies = statsDependencies
+        self.analyticsOptOutAction = analyticsOptOutAction
+        self.serverFormDependencies = serverFormDependencies
+        self.voiceModelManagers = voiceModelManagers
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
+        self._selectedWorkspace = selectedWorkspace
+        self._selectedEnvironment = selectedEnvironment
+        self.onServerSelected = onServerSelected
+        self.onActiveConnectionSelected = onActiveConnectionSelected
+        self._sessionState = ObservedObject(wrappedValue: tabManager.sessionState)
+    }
 
     private var canAddServer: Bool {
         !serverManager.workspaces.isEmpty
@@ -79,6 +111,7 @@ struct ServerListScreen: View {
                 } label: {
                     Image(systemName: "gear")
                 }
+                .accessibilityIdentifier("vvterm.serverList.settings")
             }
         }
         .sheet(isPresented: $showingAddServer) {
@@ -340,21 +373,21 @@ struct ServerListScreen: View {
                         environments: environmentOptions,
                         serverCounts: serverCountsByEnvironment,
                         onCreateCustom: {
-                            if storeManager.isPro {
+                            if storeManager.allowsProFeatures {
                                 showingCreateEnvironment = true
                             } else {
                                 showingCustomEnvironmentAlert = true
                             }
                         },
                         onEditCustom: { environment in
-                            if storeManager.isPro {
+                            if storeManager.allowsProFeatures {
                                 editingEnvironment = environment
                             } else {
                                 showingCustomEnvironmentAlert = true
                             }
                         },
                         onDeleteCustom: { environment in
-                            if storeManager.isPro {
+                            if storeManager.allowsProFeatures {
                                 environmentToDelete = environment
                             } else {
                                 showingCustomEnvironmentAlert = true

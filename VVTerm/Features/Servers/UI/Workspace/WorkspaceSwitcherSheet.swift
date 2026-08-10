@@ -43,7 +43,7 @@ struct WorkspaceSwitcherSheet: View {
                             isHovered: hoveredWorkspace?.id == workspace.id,
                             isLocked: stateStore.isWorkspaceLocked(
                                 workspace,
-                                hasProAccess: storeManager.isPro
+                                hasProAccess: storeManager.allowsProFeatures
                             ),
                             serverCount: serverCount(for: workspace),
                             onSelect: {

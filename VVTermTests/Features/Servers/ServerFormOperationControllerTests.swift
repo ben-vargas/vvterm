@@ -276,22 +276,6 @@ struct ServerFormOperationControllerTests {
     }
 
     @Test
-    func credentialEndpointApprovalIsAnExplicitDismissiblePhase() {
-        let controller = makeController(
-            connectionTester: ServerConnectionTesterFake(),
-            operationIDs: []
-        )
-
-        controller.requireCredentialApproval()
-
-        #expect(controller.phase == .credentialApprovalRequired)
-        #expect(controller.credentialApprovalRequired)
-
-        controller.clearPresentation()
-        #expect(controller.phase == .idle)
-    }
-
-    @Test
     func cancellationRejectsALateSaveCompletion() async {
         let operationID = UUID(uuidString: "00000000-0000-0000-0000-000000000006")!
         let tester = ServerConnectionTesterFake()

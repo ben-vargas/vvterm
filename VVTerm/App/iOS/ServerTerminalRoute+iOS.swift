@@ -18,7 +18,7 @@ struct ServerTerminalRoute: View {
         var id: Self { self }
     }
 
-    @ObservedObject var tabManager: TerminalTabManager
+    let tabManager: TerminalTabManager
     @ObservedObject var serverManager: ServerManager
     @ObservedObject var fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
@@ -34,6 +34,7 @@ struct ServerTerminalRoute: View {
 
     @ObservedObject private var voiceSettingsStore: VoiceSettingsStore
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
+    @StateObject private var toolbarProjection: TerminalServerToolbarProjection
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var screenAwakeCoordinator: TerminalScreenAwakeCoordinator
@@ -83,6 +84,23 @@ struct ServerTerminalRoute: View {
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onBack = onBack
         self._keyboardCoordinator = ObservedObject(wrappedValue: tabManager.keyboardCoordinator)
+        let toolbarProjection = TerminalServerToolbarProjection(
+            serverId: route.serverId,
+            tabManager: tabManager
+        )
+        self._toolbarProjection = StateObject(wrappedValue: toolbarProjection)
+    }
+
+    private var terminalContent: TerminalServerContentProjection {
+        toolbarProjection.content
+    }
+
+    private var terminalToolbarMenu: TerminalServerToolbarMenuProjection {
+        toolbarProjection.menu
+    }
+
+    private var floatingControls: TerminalServerFloatingControlProjection {
+        toolbarProjection.floatingControls
     }
 
     private var selectedServer: Server? {
@@ -93,15 +111,15 @@ struct ServerTerminalRoute: View {
     }
 
     private var selectedView: ConnectionViewTabID {
-        guard let server = selectedServer else {
+        guard selectedServer != nil else {
             return viewTabConfig.effectiveDefaultTab()
         }
-        return viewTabConfig.effectiveView(for: tabManager.selectedView(for: server.id))
+        return viewTabConfig.effectiveView(for: terminalContent.state.selectedView)
     }
 
     private var selectedTab: TerminalTab? {
-        guard let server = selectedServer else { return nil }
-        return tabManager.selectedTab(for: server.id)
+        guard let selectedTabId = terminalContent.state.selectedTabId else { return nil }
+        return terminalContent.state.tabs.first { $0.id == selectedTabId }
     }
 
     private var selectedFileTab: RemoteFileTab? {
@@ -127,23 +145,20 @@ struct ServerTerminalRoute: View {
 
     private var hasNavigationContext: Bool {
         route.isConnecting
-            || !tabManager.tabs(for: route.serverId).isEmpty
+            || terminalToolbarMenu.state.availability.hasTerminalTabs
             || !fileTabs.tabs(for: route.serverId).isEmpty
     }
 
     private var isFocusedTerminalFindNavigatorVisible: Bool {
-        guard let focusedPaneId else { return false }
-        return tabManager.terminalFindNavigatorVisibleByPane[focusedPaneId] ?? false
+        floatingControls.state.findNavigatorIsVisible
     }
 
     private var isFocusedTerminalVoiceRecording: Bool {
-        guard let focusedPaneId else { return false }
-        return tabManager.terminalVoicePresentation(for: focusedPaneId).isRecording
+        floatingControls.state.voicePresentation.isRecording
     }
 
     private var isFocusedTerminalPendingVoiceReturn: Bool {
-        guard let focusedPaneId else { return false }
-        return tabManager.terminalVoicePresentation(for: focusedPaneId).isPendingReturn
+        floatingControls.state.voicePresentation.isPendingReturn
     }
 
     private var shouldShowFloatingTerminalControls: Bool {
@@ -230,10 +245,10 @@ struct ServerTerminalRoute: View {
             .onChange(of: focusedPaneId) { _ in
                 updateTerminalRouteActivation()
             }
-            .onChange(of: tabManager.terminalSurfaceStore.latestChange) { _ in
+            .onReceive(tabManager.terminalSurfaceStore.changes) { _ in
                 updateTerminalRouteActivation()
             }
-            .onChangeCompat(of: tabManager.tabs(for: route.serverId)) { _ in
+            .onChangeCompat(of: terminalContent.state.tabs) { _ in
                 dismissIfContextEnded()
                 reconcileZenMode()
                 updateTerminalRouteActivation()
@@ -278,6 +293,7 @@ struct ServerTerminalRoute: View {
         if let server = selectedServer {
             ConnectionTerminalContainer(
                 tabManager: tabManager,
+                terminalToolbarProjection: toolbarProjection,
                 fileTabManager: fileTabs,
                 serverManager: serverManager,
                 fileBrowser: fileBrowser,
@@ -387,6 +403,7 @@ struct ServerTerminalRoute: View {
                     } label: {
                         Label("Settings", systemImage: "gear")
                     }
+                    .accessibilityIdentifier("vvterm.terminal.settings")
 
                     Divider()
 
@@ -401,6 +418,7 @@ struct ServerTerminalRoute: View {
                     } label: {
                         Label("Settings", systemImage: "gear")
                     }
+                    .accessibilityIdentifier("vvterm.terminal.settings")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -746,7 +764,7 @@ struct ServerTerminalRoute: View {
     }
 
     private func openNewTab(for server: Server) {
-        guard tabManager.canOpenNewTab(hasProAccess: storeManager.isPro) else {
+        guard tabManager.canOpenNewTab(hasProAccess: storeManager.allowsProFeatures) else {
             showingTabLimitAlert = true
             return
         }
@@ -765,7 +783,7 @@ struct ServerTerminalRoute: View {
     private func openNewFileTab(for server: Server) {
         guard fileTabs.canOpenNewTab(
             for: server.id,
-            hasProAccess: storeManager.isPro
+            hasProAccess: storeManager.allowsProFeatures
         ) else {
             showingFileTabLimitAlert = true
             return
@@ -778,12 +796,12 @@ struct ServerTerminalRoute: View {
             fileTabs.duplicateTab(
                 $0,
                 seedPath: seedPath,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             )
         } ?? fileTabs.openTab(
             for: server,
             seedPath: seedPath,
-            hasProAccess: storeManager.isPro
+            hasProAccess: storeManager.allowsProFeatures
         )
 
         guard let newTab else { return }

@@ -71,8 +71,9 @@ final class TerminalTabManager: ObservableObject {
     /// Server IDs with an in-flight tab-open request to avoid queued duplicates.
     private var tabOpensInFlight: Set<UUID> = []
 
-    @Published private(set) var runtimeTitleByPane: [UUID: String] = [:]
-    @Published private(set) var titleOverrideByPane: [UUID: String] = [:]
+    let titleStore = TerminalPaneTitleStore()
+    var runtimeTitleByPane: [UUID: String] { titleStore.runtimeTitles }
+    var titleOverrideByPane: [UUID: String] { titleStore.overrides }
     #if os(iOS)
     @Published private(set) var terminalFindNavigatorVisibleByPane: [UUID: Bool] = [:]
     @Published private(set) var terminalVoicePresentationByPane: [UUID: TerminalVoicePresentationState] = [:]
@@ -224,18 +225,6 @@ final class TerminalTabManager: ObservableObject {
             self?.terminalSurfaceStore.surface(for: paneId)?.keyboardInputSession
         }
         #endif
-        terminalSurfaceStore.changes
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &stateCancellables)
-        sessionState.objectWillChange
-            .sink { [weak self] in self?.objectWillChange.send() }
-            .store(in: &stateCancellables)
-        connectionViewSelections.objectWillChange
-            .sink { [weak self] in self?.objectWillChange.send() }
-            .store(in: &stateCancellables)
-        tmuxCoordinator.objectWillChange
-            .sink { [weak self] in self?.objectWillChange.send() }
-            .store(in: &stateCancellables)
         sessionState.selectedTabChanges
             .dropFirst()
             .sink { [weak self] selectedTabs in
@@ -333,9 +322,7 @@ final class TerminalTabManager: ObservableObject {
             onEvent: { [weak self] event in
                 self?.logReconnectEvent(event)
             },
-            onChange: { [weak self] in
-                self?.objectWillChange.send()
-            }
+            onChange: {}
         )
     }
 
@@ -394,9 +381,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func setPaneTitle(_ title: String, for paneId: UUID) {
-        guard runtimeTitleByPane[paneId] != title else { return }
-
-        runtimeTitleByPane[paneId] = title
+        guard titleStore.setRuntimeTitle(title, for: paneId) else { return }
         logger.info("Runtime pane title changed: \(title, privacy: .public)")
     }
 
@@ -558,7 +543,7 @@ final class TerminalTabManager: ObservableObject {
         for paneId in paneIds {
             detachTerminalRegistration(for: paneId)
         }
-        runtimeTitleByPane.removeAll()
+        titleStore.removeAllRuntimeTitles()
 
         logger.info("Preserved terminal tabs while releasing application runtime state")
         return transportCoordinator.beginApplicationTermination(paneIds: paneIds)
@@ -1122,8 +1107,7 @@ final class TerminalTabManager: ObservableObject {
         tmuxCoordinator.clearRuntimeState(for: paneId)
         reconnectCoordinator.removePane(paneId)
         detachTerminalRegistration(for: paneId)
-        runtimeTitleByPane.removeValue(forKey: paneId)
-        titleOverrideByPane.removeValue(forKey: paneId)
+        titleStore.removePane(paneId)
 
         transportCoordinator.removePane(
             paneId,
@@ -1286,15 +1270,11 @@ final class TerminalTabManager: ObservableObject {
     func setPaneTitleOverride(_ rawTitle: String?, for paneId: UUID) {
         guard sessionState.containsPane(paneId) else { return }
         let title = rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if title.isEmpty {
-            titleOverrideByPane.removeValue(forKey: paneId)
-        } else {
-            titleOverrideByPane[paneId] = title
-        }
+        titleStore.setOverride(title.isEmpty ? nil : title, for: paneId)
     }
 
     func displayTitle(forPane paneId: UUID, fallback: String? = nil) -> String? {
-        titleOverrideByPane[paneId] ?? runtimeTitleByPane[paneId] ?? fallback
+        titleStore.displayTitle(forPane: paneId, fallback: fallback)
     }
 
     func presentationOverrides(for paneId: UUID) -> TerminalPresentationOverrides {
@@ -1322,11 +1302,7 @@ final class TerminalTabManager: ObservableObject {
     }
 
     func displayTitle(for tab: TerminalTab) -> String {
-        titleOverrideByPane[tab.focusedPaneId]
-            ?? runtimeTitleByPane[tab.focusedPaneId]
-            ?? titleOverrideByPane[tab.rootPaneId]
-            ?? runtimeTitleByPane[tab.rootPaneId]
-            ?? tab.title
+        titleStore.displayTitle(for: tab)
     }
 
     func workingDirectory(for paneId: UUID) -> String? {
@@ -1379,8 +1355,7 @@ extension TerminalTabManager {
         tmuxCoordinator.resetRuntimeState(for: allPaneIds)
         sessionState.resetForTesting()
         splitZoomedTabIds = []
-        runtimeTitleByPane = [:]
-        titleOverrideByPane = [:]
+        titleStore.reset()
         #if os(iOS)
         terminalFindNavigatorVisibleByPane = [:]
         terminalVoicePresentationByPane = [:]

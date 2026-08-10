@@ -21,7 +21,7 @@ struct WorkspaceFormSheet: View {
     private var isEditing: Bool { workspace != nil }
 
     private var isAtLimit: Bool {
-        !isEditing && !stateStore.canAddWorkspace(hasProAccess: storeManager.isPro)
+        !isEditing && !stateStore.canAddWorkspace(hasProAccess: storeManager.allowsProFeatures)
     }
 
     let availableColors: [Color] = [
@@ -169,7 +169,7 @@ struct WorkspaceFormSheet: View {
                 } else {
                     try await serverManager.addWorkspace(
                         newWorkspace,
-                        hasProAccess: storeManager.isPro
+                        hasProAccess: storeManager.allowsProFeatures
                     )
                 }
 

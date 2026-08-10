@@ -53,34 +53,10 @@ nonisolated struct ServerCredentialBinding: Codable, Equatable, Sendable {
     }
 }
 
-enum ServerCredentialBindingStatus: Equatable, Sendable {
-    case noCredentials
-    case matches
-    case approvalRequired
-
-    static func resolve(
-        storedBinding: ServerCredentialBinding?,
-        currentBinding: ServerCredentialBinding,
-        hasStoredCredentials: Bool
-    ) -> Self {
-        guard hasStoredCredentials else { return .noCredentials }
-        return storedBinding == currentBinding ? .matches : .approvalRequired
-    }
-}
-
-nonisolated enum ServerCredentialAccessError: Error, Equatable, Sendable {
-    case approvalRequired
-}
-
 extension ServerCredentials {
     nonisolated func isAuthorized(for server: Server) -> Bool {
         serverId == server.id
             && credentialBinding == ServerCredentialBinding(server: server)
     }
 
-    nonisolated func requireAuthorization(for server: Server) throws {
-        guard isAuthorized(for: server) else {
-            throw ServerCredentialAccessError.approvalRequired
-        }
-    }
 }

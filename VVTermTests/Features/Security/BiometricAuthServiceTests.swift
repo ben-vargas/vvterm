@@ -35,8 +35,7 @@ final class BiometricAuthServiceTests: XCTestCase {
             (.edit, String(localized: "edit")),
             (.testConnection, String(localized: "test")),
             (.save, String(localized: "save")),
-            (.delete, String(localized: "delete")),
-            (.approveCredentialEndpoint, String(localized: "approve credentials for"))
+            (.delete, String(localized: "delete"))
         ]
         for (action, actionName) in protectedActions {
             XCTAssertEqual(

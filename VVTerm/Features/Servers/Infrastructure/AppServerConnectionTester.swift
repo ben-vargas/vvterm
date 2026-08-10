@@ -74,7 +74,6 @@ nonisolated enum ServerConnectionTestPlan: Equatable, Sendable {
 }
 
 nonisolated enum ServerConnectionApprovalRequirement: Equatable, Sendable {
-    case credentialEndpoint
     case hostKey(host: String, port: Int)
 }
 
@@ -83,10 +82,6 @@ nonisolated enum ServerConnectionApprovalPolicy {
         for error: Error,
         server: Server
     ) -> ServerConnectionApprovalRequirement? {
-        if let credentialError = error as? ServerCredentialAccessError,
-           credentialError == .approvalRequired {
-            return .credentialEndpoint
-        }
         if let sshError = error as? SSHError,
            case .hostKeyApprovalRequired = sshError {
             return .hostKey(host: server.host, port: server.port)

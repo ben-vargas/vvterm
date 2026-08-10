@@ -15,7 +15,8 @@ struct ServerSidebarView: View {
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
-    @ObservedObject private var tabManager: TerminalTabManager
+    private let tabManager: TerminalTabManager
+    @ObservedObject private var terminalNavigation: TerminalSessionNavigationProjection
     #if os(macOS)
     @EnvironmentObject private var commandBridge: MacShellCommandBridge
     #endif
@@ -41,6 +42,7 @@ struct ServerSidebarView: View {
     init(
         serverManager: ServerManager,
         tabManager: TerminalTabManager,
+        terminalNavigation: TerminalSessionNavigationProjection,
         serverFormDependencies: ServerFormDependencies,
         workspaceSelectionStore: WorkspaceSelectionStore,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
@@ -56,7 +58,8 @@ struct ServerSidebarView: View {
         _workspaceSelectionStore = ObservedObject(
             wrappedValue: workspaceSelectionStore
         )
-        _tabManager = ObservedObject(wrappedValue: tabManager)
+        self.tabManager = tabManager
+        _terminalNavigation = ObservedObject(wrappedValue: terminalNavigation)
         _selectedWorkspace = selectedWorkspace
         _selectedServer = selectedServer
     }
@@ -203,12 +206,12 @@ struct ServerSidebarView: View {
                         ForEach(filteredServers) { server in
                             ServerRow(
                                 serverManager: serverManager,
-                                tabManager: tabManager,
+                                terminalNavigation: terminalNavigation,
                                 server: server,
                                 isSelected: selectedServer?.id == server.id,
                                 isLocked: stateStore.isServerLocked(
                                     server,
-                                    hasProAccess: storeManager.isPro
+                                    hasProAccess: storeManager.allowsProFeatures
                                 ),
                                 onSelect: { selectServer(server) },
                                 onEdit: { serverToEdit = $0 },
@@ -226,7 +229,7 @@ struct ServerSidebarView: View {
             }
 
             // Support VVTerm (only when not Pro)
-            if !storeManager.isPro {
+            if !storeManager.allowsProFeatures {
                 supportBanner
             }
 
@@ -599,7 +602,7 @@ struct ServerSidebarView: View {
                         if !env.isBuiltIn {
                             Menu {
                                 Button {
-                                    if storeManager.isPro {
+                                    if storeManager.allowsProFeatures {
                                         editingEnvironment = env
                                     } else {
                                         showingCustomEnvironmentAlert = true
@@ -608,7 +611,7 @@ struct ServerSidebarView: View {
                                     Label("Edit", systemImage: "pencil")
                                 }
                                 Button(role: .destructive) {
-                                    if storeManager.isPro {
+                                    if storeManager.allowsProFeatures {
                                         environmentToDelete = env
                                     } else {
                                         showingCustomEnvironmentAlert = true
@@ -638,7 +641,7 @@ struct ServerSidebarView: View {
 
                 // Create custom environment
                 Button {
-                    if storeManager.isPro {
+                    if storeManager.allowsProFeatures {
                         showingCreateEnvironment = true
                     } else {
                         showingCustomEnvironmentAlert = true
@@ -652,7 +655,7 @@ struct ServerSidebarView: View {
                             .font(.caption)
                             .lineLimit(1)
                         Spacer(minLength: 8)
-                        if !storeManager.isPro {
+                        if !storeManager.allowsProFeatures {
                             Image(systemName: "star.fill")
                                 .foregroundStyle(.orange)
                                 .font(.system(size: 10))

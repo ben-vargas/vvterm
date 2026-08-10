@@ -27,8 +27,6 @@ extension NSToolbarItem.Identifier {
 /// Hosts the SwiftUI tab strip and re-renders as tabs/selection/view change.
 private struct MacTabStripHost: View {
     @ObservedObject var bridge = MacToolbarBridge.shared
-    // Observed so live tab-title changes (which don't bump the bridge) redraw.
-    @ObservedObject var tabManager: TerminalTabManager
 
     var body: some View {
         bridge.tabStrip()
@@ -88,13 +86,6 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
         }
         self.tabManager = tabManager
         reconcile()
-    }
-
-    private var configuredTabManager: TerminalTabManager {
-        guard let tabManager else {
-            preconditionFailure("Mac toolbar must be configured with a terminal manager")
-        }
-        return tabManager
     }
 
     private var desiredIdentifiers: [NSToolbarItem.Identifier] {
@@ -288,7 +279,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
         // scroll internally) rather than collapse to the chevron.
         item.visibilityPriority = NSToolbarItem.VisibilityPriority(rawValue: 2000)
         let host = NSHostingView(
-            rootView: MacTabStripHost(tabManager: configuredTabManager)
+            rootView: MacTabStripHost()
         )
         host.translatesAutoresizingMaskIntoConstraints = false
         // Report only a small minimum to the toolbar (not the greedy

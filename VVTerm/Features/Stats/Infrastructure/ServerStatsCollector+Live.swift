@@ -23,20 +23,10 @@ final class LiveServerStatsApprovalReference: ServerStatsApprovalReference {
 
     init(_ rawValue: ServerSecurityApprovalRequest, serverID: UUID) {
         self.rawValue = rawValue
-        switch rawValue {
-        case .credentialEndpoint:
-            request = ServerStatsApprovalRequest(
-                id: rawValue.id,
-                serverID: serverID,
-                kind: .credentialEndpoint
-            )
-        case .hostKey:
-            request = ServerStatsApprovalRequest(
-                id: rawValue.id,
-                serverID: serverID,
-                kind: .hostKey
-            )
-        }
+        request = ServerStatsApprovalRequest(
+            id: rawValue.id,
+            serverID: serverID
+        )
     }
 }
 
@@ -58,17 +48,7 @@ extension ServerStatsCollectorDependencies {
                     throw LiveServerStatsAdapterError.incompatibleReference
                 }
 
-                let credentials: ServerCredentials
-                do {
-                    credentials = try keychainManager.getCredentials(for: target.server)
-                } catch ServerCredentialAccessError.approvalRequired {
-                    throw ServerStatsApprovalRequired(
-                        reference: LiveServerStatsApprovalReference(
-                            .credentialEndpoint(serverID: target.server.id),
-                            serverID: target.server.id
-                        )
-                    )
-                }
+                let credentials = try keychainManager.getCredentials(for: target.server)
 
                 return LiveServerStatsCollectionSession(
                     server: target.server,

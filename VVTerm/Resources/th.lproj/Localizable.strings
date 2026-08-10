@@ -1416,7 +1416,7 @@
 "Support" = "สนับสนุน";
 "Swift Source" = "ที่มาอย่างรวดเร็ว";
 "Symlink" = "ซิมลิงค์";
-"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "เซิร์ฟเวอร์และข้อมูลประจำตัวที่เลือกจะซิงค์ระหว่างอุปกรณ์ Apple ของคุณ ข้อมูลประจำตัวใช้พวงกุญแจ iCloud";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "เซิร์ฟเวอร์ ข้อมูลประจำตัว และคีย์ SSH จะซิงค์ระหว่างอุปกรณ์ Apple ของคุณโดยใช้ iCloud และพวงกุญแจ iCloud";
 "Credentials could not be copied. Existing credentials were kept." = "ไม่สามารถคัดลอกข้อมูลประจำตัวได้ ระบบเก็บข้อมูลประจำตัวเดิมไว้";
 "Remove credentials from iCloud Keychain" = "ลบข้อมูลประจำตัวออกจากพวงกุญแจ iCloud";
 "This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "การดำเนินการนี้จะลบข้อมูลประจำตัว VVTerm ออกจากพวงกุญแจ iCloud บนอุปกรณ์ Apple ทุกเครื่อง ข้อมูลประจำตัวเฉพาะอุปกรณ์จะยังอยู่บนอุปกรณ์นี้";

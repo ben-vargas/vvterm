@@ -15,6 +15,23 @@ struct ShellTransportStateTests {
     }
 
     @Test
+    func onlyActionableMoshFallbacksOfferServerMaintenance() {
+        #expect(
+            ShellTransportState.sshFallback(reason: .serverMissing, diagnostics: nil)
+                .moshServerMaintenanceAction == .install
+        )
+        #expect(
+            ShellTransportState.sshFallback(reason: .serverRuntimeBroken, diagnostics: nil)
+                .moshServerMaintenanceAction == .repair
+        )
+        #expect(
+            ShellTransportState.sshFallback(reason: .udpTimeout, diagnostics: nil)
+                .moshServerMaintenanceAction == nil
+        )
+        #expect(ShellTransportState.ssh.moshServerMaintenanceAction == nil)
+    }
+
+    @Test
     func clearingDiagnosticsPreservesTheFallbackReason() {
         var state = ShellTransportState.sshFallback(
             reason: .bootstrapFailed,

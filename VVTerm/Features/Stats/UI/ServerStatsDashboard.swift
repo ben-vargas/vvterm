@@ -101,19 +101,6 @@ struct ServerStatsDashboard: View {
             statsCollector.stopCollecting()
         }
         .alert(
-            credentialApprovalPresentation.title,
-            isPresented: credentialApprovalBinding
-        ) {
-            Button("Cancel", role: .cancel) {
-                cancelCredentialApproval()
-            }
-            Button(credentialApprovalPresentation.approvalButtonTitle) {
-                beginCredentialApproval()
-            }
-        } message: {
-            Text(credentialApprovalPresentation.message)
-        }
-        .alert(
             hostKeyPresentation?.title ?? String(localized: "Trust SSH Host?"),
             isPresented: hostKeyApprovalBinding
         ) {
@@ -137,22 +124,6 @@ struct ServerStatsDashboard: View {
         }
     }
 
-    private var credentialApprovalPresentation: ServerCredentialApprovalPresentation {
-        ServerCredentialApprovalPresentation(server: server)
-    }
-
-    private var credentialApprovalBinding: Binding<Bool> {
-        Binding(
-            get: {
-                guard case .credentialEndpoint(let serverID) = statsCollector.securityApproval else {
-                    return false
-                }
-                return serverID == server.id
-            },
-            set: { _ in }
-        )
-    }
-
     private var hostKeyRequest: ServerSecurityApprovalRequest? {
         guard let request = statsCollector.securityApproval,
               case .hostKey = request else {
@@ -172,21 +143,6 @@ struct ServerStatsDashboard: View {
             get: { hostKeyRequest != nil },
             set: { _ in }
         )
-    }
-
-    private func cancelCredentialApproval() {
-        guard let request = statsCollector.securityApproval,
-              case .credentialEndpoint = request else { return }
-        approvalRequestInFlight = nil
-        securityApprovalActions.reject(request)
-        statsCollector.resolveSecurityApproval(request, error: .cancelled)
-    }
-
-    private func beginCredentialApproval() {
-        guard let request = statsCollector.securityApproval,
-              case .credentialEndpoint(let serverID) = request,
-              serverID == server.id else { return }
-        approvalRequestInFlight = request
     }
 
     private func cancelHostKeyApproval() {

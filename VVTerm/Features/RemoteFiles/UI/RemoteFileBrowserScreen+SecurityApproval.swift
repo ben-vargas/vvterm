@@ -4,19 +4,6 @@ extension RemoteFileBrowserScreen {
     func securityApprovalPresentation<Content: View>(_ content: Content) -> some View {
         content
             .alert(
-                credentialApprovalPresentation.title,
-                isPresented: credentialApprovalBinding
-            ) {
-                Button("Cancel", role: .cancel) {
-                    cancelSecurityApproval()
-                }
-                Button(credentialApprovalPresentation.approvalButtonTitle) {
-                    approveCredentialEndpointAndRetry()
-                }
-            } message: {
-                Text(credentialApprovalPresentation.message)
-            }
-            .alert(
                 hostKeyApprovalPresentation?.title ?? String(localized: "Trust SSH Host?"),
                 isPresented: hostKeyApprovalBinding
             ) {
@@ -60,22 +47,6 @@ extension RemoteFileBrowserScreen {
         operationErrorMessage = remoteOperationErrorMessage(for: error)
     }
 
-    var credentialApprovalPresentation: ServerCredentialApprovalPresentation {
-        ServerCredentialApprovalPresentation(server: server)
-    }
-
-    var credentialApprovalBinding: Binding<Bool> {
-        Binding(
-            get: {
-                guard case .credentialEndpoint(let serverID) = securityApprovalRequest else {
-                    return false
-                }
-                return serverID == server.id
-            },
-            set: { _ in }
-        )
-    }
-
     var hostKeyApprovalChallenge: KnownHostsManager.Challenge? {
         guard case .hostKey(let challenge) = securityApprovalRequest else {
             return nil
@@ -105,8 +76,6 @@ extension RemoteFileBrowserScreen {
             request = detected
         } else {
             switch RemoteFileBrowserError.map(error) {
-            case .credentialApprovalRequired:
-                request = .credentialEndpoint(serverID: server.id)
             case .hostKeyApprovalRequired:
                 request = KnownHostsManager.shared.pendingChallenge(
                     for: server.host,
@@ -137,7 +106,7 @@ extension RemoteFileBrowserScreen {
             return true
         }
         switch RemoteFileBrowserError.map(error) {
-        case .credentialApprovalRequired, .hostKeyApprovalRequired:
+        case .hostKeyApprovalRequired:
             return true
         default:
             return false
@@ -175,31 +144,6 @@ extension RemoteFileBrowserScreen {
         clearSecurityApproval()
         operationErrorMessage = ServerSecurityApprovalError.cancelled.localizedDescription
         cancellation?()
-    }
-
-    @MainActor
-    func approveCredentialEndpointAndRetry() {
-        guard let request = securityApprovalRequest,
-              case .credentialEndpoint(let serverID) = request,
-              serverID == server.id else { return }
-
-        Task {
-            guard await appLockManager.authorizeProtectedServerAction(
-                server,
-                action: .approveCredentialEndpoint
-            ) else {
-                cancelSecurityApproval()
-                return
-            }
-
-            do {
-                try KeychainManager.shared.approveCredentialUse(for: server)
-                completeSecurityApprovalAndRetry()
-            } catch {
-                clearSecurityApproval()
-                operationErrorMessage = ServerSecurityApprovalError.unavailable.localizedDescription
-            }
-        }
     }
 
     @MainActor

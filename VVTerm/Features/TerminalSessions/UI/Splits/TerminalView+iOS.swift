@@ -238,16 +238,20 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
         _keyboardCoordinator = ObservedObject(wrappedValue: keyboardCoordinator)
     }
 
-    private var isEnabled: Bool {
+    private var preservesTerminalSize: Bool {
         enabledOverride ?? storedEnabled
     }
 
     func body(content: Content) -> some View {
         content
-            .padding(.bottom, model.layout.bottomInset)
-            .offset(y: model.layout.verticalOffset)
+            .padding(.bottom, preservesTerminalSize ? model.layout.bottomInset : 0)
+            .offset(y: preservesTerminalSize ? model.layout.verticalOffset : 0)
             .clipped()
-            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .modifier(
+                TerminalKeyboardSafeAreaOverride(
+                    isEnabled: preservesTerminalSize
+                )
+            )
             .onAppear {
                 refresh(animation: nil)
             }
@@ -258,7 +262,7 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
                 }
                 model.detach()
             }
-            .onChange(of: isEnabled) { _ in
+            .onChange(of: preservesTerminalSize) { _ in
                 refresh(animation: keyboardAnimation)
             }
             .onChange(of: focusedPaneId) { _ in
@@ -289,11 +293,24 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
     private func refresh(animation: Animation?) {
         let terminal = focusedPaneId.flatMap(terminalProvider)
         model.update(
-            preservesTerminalSize: isEnabled,
+            preservesTerminalSize: preservesTerminalSize,
             terminal: terminal,
             keyboardFrame: keyboardCoordinator.softwareKeyboardEndFrame,
             animation: animation
         )
+    }
+}
+
+private struct TerminalKeyboardSafeAreaOverride: ViewModifier {
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.ignoresSafeArea(.keyboard, edges: .bottom)
+        } else {
+            content
+        }
     }
 }
 
@@ -458,6 +475,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             coordinator.isTerminalReady = true
             coordinator.preservePane = true
             configureExistingTerminal(existingTerminal, coordinator: coordinator)
+            existingTerminal.acceptsTerminalInput = isActive
 
             if existingTerminal.superview != nil {
                 existingTerminal.removeFromSuperview()
@@ -573,6 +591,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             renderingIsPaused: terminalView.isRenderingPaused
         )
 
+        terminalView.acceptsTerminalInput = isActive
         if terminalView.surfacePresentationOverrides != tabManager.presentationOverrides(for: paneId) {
             terminalView.applyPresentationOverrides(tabManager.presentationOverrides(for: paneId))
         }
@@ -616,6 +635,8 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         let paneStillExists = coordinator.tabManager.sessionState
             .paneState(for: coordinator.paneId) != nil
         if paneStillExists {
+            terminalView.acceptsTerminalInput = false
+            terminalView.pauseRendering()
             coordinator.preservePane = true
             return
         }

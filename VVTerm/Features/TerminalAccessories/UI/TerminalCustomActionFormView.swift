@@ -215,7 +215,7 @@ struct TerminalCustomActionFormView: View {
                     commandSendMode: commandSendMode,
                     shortcutKey: shortcutKey,
                     shortcutModifiers: shortcutModifiers,
-                    hasProAccess: storeManager.isPro
+                    hasProAccess: storeManager.allowsProFeatures
                 )
             }
             dismiss()

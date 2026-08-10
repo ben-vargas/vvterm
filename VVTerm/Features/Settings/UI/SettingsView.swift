@@ -44,6 +44,43 @@ struct SettingsView: View {
     @State private var selection: SettingsSelection? = .pro
     @EnvironmentObject private var storeManager: StoreManager
 
+    private var hasConfirmedProAccess: Bool {
+        storeManager.accessState == .pro
+    }
+
+    private var storeStatusLabel: String {
+        switch storeManager.accessState {
+        case .checking:
+            String(localized: "Checking...")
+        case .free:
+            String(localized: "FREE_PLAN")
+        case .pro:
+            String(localized: "PRO")
+        }
+    }
+
+    private var storeSummary: String {
+        switch storeManager.accessState {
+        case .checking:
+            String(localized: "Checking...")
+        case .free:
+            String(localized: "Upgrade for unlimited features")
+        case .pro:
+            String(localized: "Manage subscription")
+        }
+    }
+
+    private var storeNavigationSubtitle: String {
+        switch storeManager.accessState {
+        case .checking:
+            String(localized: "Checking...")
+        case .free:
+            String(localized: "Upgrade for unlimited features")
+        case .pro:
+            String(localized: "Manage your subscription")
+        }
+    }
+
     #if os(iOS)
     @Environment(\.dismiss) private var dismiss
     #endif
@@ -113,21 +150,21 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("VVTerm Pro")
                                     .font(.headline)
-                                Text(storeManager.isPro ? String(localized: "Manage subscription") : String(localized: "Upgrade for unlimited features"))
+                                Text(storeSummary)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
 
                             Spacer()
 
-                            Text(storeManager.isPro ? String(localized: "PRO") : String(localized: "FREE_PLAN"))
+                            Text(storeStatusLabel)
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(storeManager.isPro ? .white : .primary.opacity(0.7))
+                                .foregroundStyle(hasConfirmedProAccess ? .white : .primary.opacity(0.7))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(
                                     Capsule()
-                                        .fill(storeManager.isPro
+                                        .fill(hasConfirmedProAccess
                                             ? Color.orange
                                             : Color.primary.opacity(0.12)
                                         )
@@ -212,6 +249,7 @@ struct SettingsView: View {
             }
         }
         .adaptiveSoftScrollEdges()
+        .accessibilityIdentifier("vvterm.settings.root")
         #endif
     }
 
@@ -222,10 +260,7 @@ struct SettingsView: View {
         case .pro:
                             ProSettingsView()
                                 .navigationTitle("VVTerm Pro")
-                                .navigationSubtitle(storeManager.isPro
-                                    ? String(localized: "Manage your subscription")
-                                    : String(localized: "Upgrade for unlimited features")
-                                )
+                                .navigationSubtitle(storeNavigationSubtitle)
         case .general:
                             GeneralSettingsView(
                                 statsPreferencesStore: statsPreferencesStore,
@@ -256,10 +291,7 @@ struct SettingsView: View {
         case .none:
                             ProSettingsView()
                                 .navigationTitle("VVTerm Pro")
-                                .navigationSubtitle(storeManager.isPro
-                                    ? String(localized: "Manage your subscription")
-                                    : String(localized: "Upgrade for unlimited features")
-                                )
+                                .navigationSubtitle(storeNavigationSubtitle)
         }
     }
 
@@ -283,14 +315,14 @@ struct SettingsView: View {
 
             Spacer()
 
-            Text(storeManager.isPro ? String(localized: "PRO") : String(localized: "FREE_PLAN"))
+            Text(storeStatusLabel)
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(storeManager.isPro ? .white : .primary.opacity(0.7))
+                .foregroundStyle(hasConfirmedProAccess ? .white : .primary.opacity(0.7))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(
                     Capsule()
-                        .fill(storeManager.isPro
+                        .fill(hasConfirmedProAccess
                             ? Color.orange
                             : Color.primary.opacity(0.12)
                         )

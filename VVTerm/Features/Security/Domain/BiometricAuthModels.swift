@@ -73,7 +73,6 @@ nonisolated enum AppLockAuthenticationState: Equatable, Sendable {
         case testConnection
         case save
         case delete
-        case approveCredentialEndpoint
     }
 
     nonisolated enum Purpose: Equatable, Sendable {

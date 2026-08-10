@@ -311,7 +311,7 @@ struct ProUpgradeSheet: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(selectedProduct == nil)
+            .disabled(selectedProduct == nil || storeManager.accessState == .checking)
             .allowsHitTesting(storeManager.purchaseState != .purchasing)
             .accessibilityLabel(selectedPresentation?.purchaseButtonAccessibilityLabel ?? subscribeButtonTitle)
 

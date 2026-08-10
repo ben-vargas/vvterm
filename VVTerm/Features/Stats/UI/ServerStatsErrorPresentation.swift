@@ -3,13 +3,8 @@ import Foundation
 nonisolated extension ServerStatsCollectionState {
     var errorMessage: String? {
         switch phase {
-        case .approvalRequired(let request):
-            switch request.kind {
-            case .credentialEndpoint:
-                return String(localized: "Credential endpoint approval is required.")
-            case .hostKey:
-                return String(localized: "SSH host key approval is required before authentication.")
-            }
+        case .approvalRequired:
+            return String(localized: "SSH host key approval is required before authentication.")
         case .failed(let failure):
             return failure.errorMessage
         case .idle, .starting, .collecting:

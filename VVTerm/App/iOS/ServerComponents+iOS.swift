@@ -20,7 +20,7 @@ struct ServerListRow: View {
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
 
     private var isLocked: Bool {
-        serverManager.isServerLocked(server, hasProAccess: storeManager.isPro)
+        serverManager.isServerLocked(server, hasProAccess: storeManager.allowsProFeatures)
     }
 
     var body: some View {
@@ -245,7 +245,7 @@ struct WorkspacePickerSheet: View {
             ForEach(serverManager.workspaces) { workspace in
                 let isLocked = serverManager.isWorkspaceLocked(
                     workspace,
-                    hasProAccess: storeManager.isPro
+                    hasProAccess: storeManager.allowsProFeatures
                 )
 
                 Button {

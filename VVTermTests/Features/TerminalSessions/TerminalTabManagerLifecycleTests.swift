@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Testing
 @testable import VVTerm
 
@@ -423,6 +424,78 @@ struct TerminalTabManagerLifecycleTests {
             await Task.yield()
         }
         return condition()
+    }
+
+    @Test
+    func toolbarProjectionSeparatesMenuTabTitleAndVoiceInvalidation() async {
+        await withCleanManager { manager in
+            let observedTab = TerminalTab(serverId: UUID(), title: "Observed")
+            let otherTab = TerminalTab(serverId: UUID(), title: "Other")
+            installTab(observedTab, in: manager, connectionState: .connected)
+            installTab(otherTab, in: manager, connectionState: .connected)
+            let projection = TerminalServerToolbarProjection(
+                serverId: observedTab.serverId,
+                tabManager: manager
+            )
+            var contentUpdates = 0
+            var menuUpdates = 0
+            var tabStripUpdates = 0
+            #if os(iOS)
+            var floatingControlUpdates = 0
+            #endif
+            var routeUpdates = 0
+            var cancellations = [
+                projection.objectWillChange.sink { routeUpdates += 1 },
+                projection.content.objectWillChange.sink { contentUpdates += 1 },
+                projection.menu.objectWillChange.sink { menuUpdates += 1 },
+                projection.tabStrip.objectWillChange.sink { tabStripUpdates += 1 }
+            ]
+            #if os(iOS)
+            cancellations.append(
+                projection.floatingControls.objectWillChange.sink { floatingControlUpdates += 1 }
+            )
+            #endif
+            defer {
+                cancellations.forEach { $0.cancel() }
+            }
+
+            manager.updatePaneWorkingDirectory(
+                observedTab.rootPaneId,
+                rawDirectory: "/tmp/output-metadata"
+            )
+            #expect(contentUpdates == 0)
+            #expect(menuUpdates == 0)
+            #expect(tabStripUpdates == 0)
+            #if os(iOS)
+            #expect(floatingControlUpdates == 0)
+            #endif
+            #expect(routeUpdates == 0)
+
+            manager.updatePaneTitle(observedTab.rootPaneId, rawTitle: "Output title")
+            #expect(contentUpdates == 0)
+            #expect(menuUpdates == 0)
+            #expect(tabStripUpdates == 1)
+            #if os(iOS)
+            #expect(floatingControlUpdates == 0)
+            #endif
+            #expect(routeUpdates == 0)
+
+            #if os(iOS)
+            manager.applyTerminalVoiceEvent(.recordingStarted, for: otherTab.rootPaneId)
+            #expect(floatingControlUpdates == 0)
+            #expect(routeUpdates == 0)
+
+            manager.applyTerminalVoiceEvent(.recordingStarted, for: observedTab.rootPaneId)
+            #expect(floatingControlUpdates == 1)
+            #expect(routeUpdates == 1)
+            #expect(manager.terminalVoicePresentation(for: observedTab.rootPaneId) == .recording)
+
+            manager.applyTerminalVoiceEvent(.transcriptionSent, for: observedTab.rootPaneId)
+            #expect(floatingControlUpdates == 2)
+            #expect(routeUpdates == 2)
+            #expect(manager.terminalVoicePresentation(for: observedTab.rootPaneId) == .pendingReturn)
+            #endif
+        }
     }
 
     private func installTab(
@@ -1652,6 +1725,8 @@ struct TerminalTabManagerLifecycleTests {
                     freePlanTracker: AnalyticsTracker.shared,
                     actionAuthorizer: appLockManager,
                     syncRepository: cloudKitSync.coordinator,
+                    defaultWorkspaceName: { "Default" },
+                    canonicalDefaultWorkspaceNames: { ["Default"] },
                     now: Date.init,
                     makeID: UUID.init
                 ),

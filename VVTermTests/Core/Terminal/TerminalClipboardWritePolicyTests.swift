@@ -78,6 +78,24 @@ struct TerminalClipboardWritePolicyTests {
     }
 
     @Test
+    func repeatedRemoteWritesDoNotCreateAnAlertBacklog() throws {
+        let queue = TerminalClipboardConfirmationQueue()
+        var decisions: [TerminalClipboardConfirmationDecision] = []
+
+        queue.enqueue(kind: .remoteWrite) { decisions.append($0) }
+        let first = try #require(queue.requestToPresent)
+        for _ in 0..<32 {
+            queue.enqueue(kind: .remoteWrite) { decisions.append($0) }
+        }
+
+        #expect(decisions == Array(repeating: .cancel, count: 32))
+        #expect(queue.requestToPresent?.id == first.id)
+        #expect(queue.resolve(id: first.id, decision: .allow))
+        #expect(decisions.last == .allow)
+        #expect(queue.requestToPresent?.id == nil)
+    }
+
+    @Test
     func unavailablePresenterRetriesWithABoundThenCancels() {
         #expect(
             TerminalClipboardPresentationRetryPolicy.action(after: 0)

@@ -32,7 +32,6 @@ protocol ServerCredentialTransactionRepository: ServerCredentialStoring {
 
 @MainActor
 protocol ServerCredentialRepository: ServerCredentialTransactionRepository {
-    func approveCredentialUse(for server: Server) throws
     func getStoredSSHKeys() -> [SSHKeyEntry]
     func getStoredSSHKeyData(for id: UUID) throws -> (key: Data, passphrase: String?)?
 }

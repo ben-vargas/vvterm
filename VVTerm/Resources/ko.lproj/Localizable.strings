@@ -1415,7 +1415,7 @@
 "Support" = "지원";
 "Swift Source" = "스위프트 소스";
 "Symlink" = "심링크";
-"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "서버와 선택한 자격 증명이 Apple 기기 간에 동기화됩니다. 자격 증명은 iCloud 키체인을 사용합니다.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "서버, 자격 증명 및 SSH 키는 iCloud와 iCloud 키체인을 사용하여 Apple 기기 간에 동기화됩니다.";
 "Credentials could not be copied. Existing credentials were kept." = "자격 증명을 복사할 수 없습니다. 기존 자격 증명은 유지되었습니다.";
 "Remove credentials from iCloud Keychain" = "iCloud 키체인에서 자격 증명 제거";
 "This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "모든 Apple 기기의 iCloud 키체인에서 VVTerm 자격 증명을 제거합니다. 기기 전용 자격 증명은 이 기기에 남습니다.";

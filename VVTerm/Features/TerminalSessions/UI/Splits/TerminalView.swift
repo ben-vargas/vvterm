@@ -21,9 +21,10 @@ import UIKit
 struct TerminalTabView: View {
     let tab: TerminalTab
     let server: Server
-    @ObservedObject var tabManager: TerminalTabManager
+    let tabManager: TerminalTabManager
     let securityActions: TerminalSecurityActions
     let isSelected: Bool
+    let isSplitZoomed: Bool
     let appearance: TerminalAppearanceSnapshot
     @ObservedObject var voiceSettingsStore: VoiceSettingsStore
     @ObservedObject var audioService: AudioService
@@ -75,7 +76,7 @@ struct TerminalTabView: View {
         return TerminalSplitActions(
             perform: handleSplitCommand,
             isEnabled: { tabManager.canPerformSplitCommand($0, in: tab) },
-            isZoomed: { tabManager.isSplitZoomed(in: tab) }
+            isZoomed: { isSplitZoomed }
         )
     }
 
@@ -103,7 +104,7 @@ struct TerminalTabView: View {
         withTerminalKeyboardAvoidance(ZStack {
             // Refresh when terminals register/unregister so overlays can update immediately.
             let _ = tabManager.terminalSurfaceStore.latestChange
-            if tabManager.isSplitZoomed(in: tab), tab.hasSplits {
+            if isSplitZoomed, tab.hasSplits {
                 renderPane(tab.focusedPaneId)
             } else if let layout = tab.layout {
                 renderNode(layout)
@@ -251,7 +252,7 @@ struct TerminalTabView: View {
     // MARK: - Split Actions
 
     private func splitPane(_ paneId: UUID, placement: TerminalSplitPlacement) {
-        guard storeManager.isPro else {
+        guard storeManager.allowsProFeatures else {
             showingSplitPaneUpgradeAlert = true
             return
         }
@@ -262,25 +263,25 @@ struct TerminalTabView: View {
             newPaneId = tabManager.splitRight(
                 tab: tab,
                 paneId: paneId,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             )
         case .left:
             newPaneId = tabManager.splitLeft(
                 tab: tab,
                 paneId: paneId,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             )
         case .down:
             newPaneId = tabManager.splitDown(
                 tab: tab,
                 paneId: paneId,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             )
         case .up:
             newPaneId = tabManager.splitUp(
                 tab: tab,
                 paneId: paneId,
-                hasProAccess: storeManager.isPro
+                hasProAccess: storeManager.allowsProFeatures
             )
         }
         guard newPaneId != nil else { return }
@@ -311,7 +312,7 @@ struct TerminalTabView: View {
         switch tabManager.performSplitCommand(
             command,
             in: tab,
-            hasProAccess: storeManager.isPro
+            hasProAccess: storeManager.allowsProFeatures
         ) {
         case .performed:
             if command.createsPane {
@@ -532,7 +533,10 @@ struct TerminalTabView: View {
 struct TerminalPaneView: View {
     let paneId: UUID
     let server: Server
-    @ObservedObject var tabManager: TerminalTabManager
+    let tabManager: TerminalTabManager
+    @StateObject private var panePresentation: TerminalPanePresentationProjection
+    @ObservedObject private var reconnectCoordinator: TerminalReconnectCoordinator
+    @ObservedObject private var tmuxCoordinator: TerminalTmuxSessionCoordinator
     let securityActions: TerminalSecurityActions
     let isFocused: Bool
     let isTabSelected: Bool
@@ -552,7 +556,7 @@ struct TerminalPaneView: View {
     @State private var credentials: ServerCredentials?
     @State private var credentialLoadErrorMessage: String?
     @State private var showingTmuxInstallPrompt = false
-    @State private var showingMoshInstallPrompt = false
+    @State private var moshServerMaintenancePrompt: MoshServerMaintenanceAction?
     @State private var isInstallingMosh = false
     @State private var operationNotice: NoticeItem?
     @State private var dismissFallbackBanner = false
@@ -562,8 +566,46 @@ struct TerminalPaneView: View {
 
     @AppStorage(TerminalDefaults.sshAutoReconnectKey) private var autoReconnectEnabled = true
 
-    private var paneState: TerminalPaneState? {
-        tabManager.sessionState.paneState(for: paneId)
+    init(
+        paneId: UUID,
+        server: Server,
+        tabManager: TerminalTabManager,
+        securityActions: TerminalSecurityActions,
+        isFocused: Bool,
+        isTabSelected: Bool,
+        onFocus: @escaping () -> Void,
+        onProcessExit: @escaping () -> Void,
+        terminalContextMenuActions: TerminalContextMenuActions,
+        onPaneKeyboardShortcut: @escaping (TerminalSplitCommand) -> Void,
+        appearance: TerminalAppearanceSnapshot,
+        showsVoiceButton: Bool,
+        onVoiceTrigger: @escaping () -> Void
+    ) {
+        self.paneId = paneId
+        self.server = server
+        self.tabManager = tabManager
+        _panePresentation = StateObject(
+            wrappedValue: TerminalPanePresentationProjection(
+                paneId: paneId,
+                sessionState: tabManager.sessionState
+            )
+        )
+        _reconnectCoordinator = ObservedObject(wrappedValue: tabManager.reconnectCoordinator)
+        _tmuxCoordinator = ObservedObject(wrappedValue: tabManager.tmuxCoordinator)
+        self.securityActions = securityActions
+        self.isFocused = isFocused
+        self.isTabSelected = isTabSelected
+        self.onFocus = onFocus
+        self.onProcessExit = onProcessExit
+        self.terminalContextMenuActions = terminalContextMenuActions
+        self.onPaneKeyboardShortcut = onPaneKeyboardShortcut
+        self.appearance = appearance
+        self.showsVoiceButton = showsVoiceButton
+        self.onVoiceTrigger = onVoiceTrigger
+    }
+
+    private var paneState: TerminalPanePresentationState? {
+        panePresentation.state
     }
 
     private var connectionState: ConnectionState {
@@ -575,11 +617,11 @@ struct TerminalPaneView: View {
     }
 
     private var reconnectAttempt: TerminalReconnectCoordinator.Attempt? {
-        tabManager.reconnectCoordinator.attempt(for: paneId)
+        reconnectCoordinator.attempt(for: paneId)
     }
 
     private var connectionGeneration: UUID {
-        tabManager.reconnectCoordinator.connectionGeneration(for: paneId)
+        reconnectCoordinator.connectionGeneration(for: paneId)
     }
 
     private var credentialBinding: ServerCredentialBinding {
@@ -613,28 +655,48 @@ struct TerminalPaneView: View {
         return paneState?.moshFallbackReason?.bannerMessage ?? String(localized: "Using SSH fallback for this session.")
     }
 
-    private var shouldPromptMoshInstall: Bool {
-        guard server.connectionMode == .mosh else { return false }
-        guard paneState?.activeTransport == .sshFallback else { return false }
-        return paneState?.moshFallbackReason?.shouldOfferServerMaintenance == true
+    private var offeredMoshServerMaintenance: MoshServerMaintenanceAction? {
+        guard server.connectionMode == .mosh else { return nil }
+        guard paneState?.activeTransport == .sshFallback else { return nil }
+        return paneState?.transportState.moshServerMaintenanceAction
+    }
+
+    private var showingMoshServerMaintenancePrompt: Binding<Bool> {
+        Binding(
+            get: { moshServerMaintenancePrompt != nil },
+            set: { isPresented in
+                if !isPresented {
+                    moshServerMaintenancePrompt = nil
+                }
+            }
+        )
     }
 
     private var moshServerPromptTitle: String {
-        paneState?.moshFallbackReason == .serverRuntimeBroken
-            ? String(localized: "Repair mosh-server?")
-            : String(localized: "Install mosh-server?")
+        switch moshServerMaintenancePrompt {
+        case .repair:
+            return String(localized: "Repair mosh-server?")
+        case .install, .none:
+            return String(localized: "Install mosh-server?")
+        }
     }
 
     private var moshServerPromptAction: String {
-        paneState?.moshFallbackReason == .serverRuntimeBroken
-            ? String(localized: "Repair")
-            : String(localized: "Install")
+        switch moshServerMaintenancePrompt ?? offeredMoshServerMaintenance {
+        case .repair:
+            return String(localized: "Repair")
+        case .install, .none:
+            return String(localized: "Install")
+        }
     }
 
     private var moshServerPromptMessage: String {
-        paneState?.moshFallbackReason == .serverRuntimeBroken
-            ? String(localized: "Mosh is selected, but the installed mosh-server cannot run. Repair its package installation and reconnect?")
-            : String(localized: "Mosh is selected for this server, but mosh-server is missing on the host.")
+        switch moshServerMaintenancePrompt {
+        case .repair:
+            return String(localized: "Mosh is selected, but the installed mosh-server cannot run. Repair its package installation and reconnect?")
+        case .install, .none:
+            return String(localized: "Mosh is selected for this server, but mosh-server is missing on the host.")
+        }
     }
 
     private var shouldShowMoshDurabilityHint: Bool {
@@ -660,7 +722,7 @@ struct TerminalPaneView: View {
     }
 
     private var isAwaitingTmuxSelection: Bool {
-        tabManager.tmuxCoordinator.attachPrompt?.paneId == paneId
+        tmuxCoordinator.attachPrompt?.paneId == paneId
     }
 
     private var noticeSurfaceStyle: NoticeSurfaceStyle {
@@ -727,6 +789,13 @@ struct TerminalPaneView: View {
         }
 
         if let fallbackBannerMessage {
+            let maintenanceAction = offeredMoshServerMaintenance.map { action in
+                NoticeAction(
+                    id: "pane-mosh-maintenance-\(paneId.uuidString)",
+                    title: moshServerPromptAction,
+                    handler: { moshServerMaintenancePrompt = action }
+                )
+            }
             return NoticeItem(
                 id: "pane-fallback-\(paneId.uuidString)",
                 lane: .topBanner,
@@ -734,6 +803,7 @@ struct TerminalPaneView: View {
                 leading: .icon("arrow.trianglehead.2.clockwise"),
                 message: fallbackBannerMessage,
                 detail: paneState?.moshFallbackDiagnostics?.copyText,
+                action: maintenanceAction,
                 dismissAction: { dismissFallbackBanner = true }
             )
         }
@@ -819,9 +889,6 @@ struct TerminalPaneView: View {
             showingTmuxInstallPrompt = TmuxInstallPromptPolicy.shouldPresent(
                 for: paneState?.tmuxStatus
             )
-            if shouldPromptMoshInstall {
-                showingMoshInstallPrompt = true
-            }
             startConnectWatchdog()
             reconcileAutomaticReconnect()
         }
@@ -836,7 +903,7 @@ struct TerminalPaneView: View {
         }
         .onChange(of: connectionState) { state in
             if state.isConnecting || state.isConnected {
-                tabManager.reconnectCoordinator.cancelAutomaticRetry(for: paneId)
+                reconnectCoordinator.cancelAutomaticRetry(for: paneId)
                 startConnectWatchdog()
             } else if case .disconnected = state {
                 connectWatchdog.cancel()
@@ -867,14 +934,14 @@ struct TerminalPaneView: View {
             if paneState?.activeTransport == .sshFallback {
                 dismissFallbackBanner = false
             }
-            if shouldPromptMoshInstall {
-                showingMoshInstallPrompt = true
+            if offeredMoshServerMaintenance == nil {
+                moshServerMaintenancePrompt = nil
             }
         }
         .onChange(of: paneState?.activeTransport) { transport in
             dismissFallbackBanner = transport != .sshFallback ? false : dismissFallbackBanner
-            if shouldPromptMoshInstall {
-                showingMoshInstallPrompt = true
+            if transport != .sshFallback {
+                moshServerMaintenancePrompt = nil
             }
         }
         .task(id: paneState?.activeTransport == .sshFallback ? paneState?.moshFallbackReason : nil) {
@@ -885,13 +952,13 @@ struct TerminalPaneView: View {
             dismissFallbackBanner = true
         }
         .onDisappear {
-            tabManager.reconnectCoordinator.removeAutomaticReconnectContext(for: paneId)
+            reconnectCoordinator.removeAutomaticReconnectContext(for: paneId)
             connectWatchdog.cancel()
         }
         .alert("Install tmux?", isPresented: $showingTmuxInstallPrompt) {
             Button("Install") {
                 Task {
-                    await tabManager.tmuxCoordinator.startInstall(for: paneId) {
+                    await tmuxCoordinator.startInstall(for: paneId) {
                         retryConnection()
                     }
                 }
@@ -902,7 +969,7 @@ struct TerminalPaneView: View {
         } message: {
             Text("tmux keeps your terminal session alive across app restarts and disconnects.")
         }
-        .alert(moshServerPromptTitle, isPresented: $showingMoshInstallPrompt) {
+        .alert(moshServerPromptTitle, isPresented: showingMoshServerMaintenancePrompt) {
             Button(moshServerPromptAction) {
                 Task {
                     await installMoshServerAndReconnect()
@@ -983,7 +1050,7 @@ struct TerminalPaneView: View {
     }
 
     private func disableTmuxForServer() {
-        tabManager.tmuxCoordinator.disable(for: server.id)
+        tmuxCoordinator.disable(for: server.id)
     }
 
     private func presentHostKeyTrustConfirmation() {
@@ -993,8 +1060,6 @@ struct TerminalPaneView: View {
     private var securityApprovalTitle: String {
         guard let securityApprovalRequest else { return "" }
         switch securityApprovalRequest {
-        case .credentialEndpoint:
-            return String(localized: "Approve Credential Endpoint?")
         case .hostKey(let challenge):
             return SSHHostKeyTrustPresentation(challenge: challenge).title
         }
@@ -1004,8 +1069,6 @@ struct TerminalPaneView: View {
         for request: TerminalSecurityApprovalRequest
     ) -> String {
         switch request {
-        case .credentialEndpoint:
-            credentialEndpointApprovalMessage
         case .hostKey(let challenge):
             SSHHostKeyTrustPresentation(challenge: challenge).message
         }
@@ -1016,11 +1079,6 @@ struct TerminalPaneView: View {
         for request: TerminalSecurityApprovalRequest
     ) -> some View {
         switch request {
-        case .credentialEndpoint:
-            Button("Cancel", role: .cancel) {}
-            Button("Approve") {
-                approveCredentialEndpoint(request)
-            }
         case .hostKey(let challenge):
             let presentation = SSHHostKeyTrustPresentation(challenge: challenge)
             Button("Cancel", role: .cancel) {
@@ -1064,48 +1122,18 @@ struct TerminalPaneView: View {
         }
     }
 
-    private var credentialEndpointApprovalMessage: String {
-        String(
-            format: String(localized: "Stored credentials were saved for another endpoint. Use them with %@:%lld only if you trust this change."),
-            server.host,
-            Int64(server.port)
-        )
-    }
-
     private func loadCredentials() {
         do {
             credentials = try securityActions.loadCredentials(server)
             credentialLoadErrorMessage = nil
-        } catch ServerCredentialAccessError.approvalRequired {
-            credentials = nil
-            credentialLoadErrorMessage = String(localized: "Credential endpoint approval is required")
-            securityApprovalRequest = .credentialEndpoint(serverID: server.id)
         } catch {
             credentials = nil
             credentialLoadErrorMessage = String(localized: "Failed to load credentials")
         }
     }
 
-    private func approveCredentialEndpoint(_ request: TerminalSecurityApprovalRequest) {
-        Task {
-            guard await appLockManager.authorizeProtectedServerAction(
-                server,
-                action: .approveCredentialEndpoint
-            ) else { return }
-            guard securityApprovalRequest == nil
-                    || securityApprovalRequest == request else { return }
-
-            switch securityActions.approve(request, server) {
-            case .approved:
-                loadCredentials()
-            case .failed:
-                credentialLoadErrorMessage = String(localized: "Failed to approve credentials")
-            }
-        }
-    }
-
     private func reconcileAutomaticReconnect() {
-        tabManager.reconnectCoordinator.reconcileAutomaticReconnect(
+        reconnectCoordinator.reconcileAutomaticReconnect(
             for: paneId,
             sceneIsActive: foregroundSceneIsActive,
             automaticReconnectAllowed: automaticReconnectAllowed
@@ -1113,7 +1141,7 @@ struct TerminalPaneView: View {
     }
 
     private func retryConnection() {
-        tabManager.reconnectCoordinator.cancelAutomaticRetry(for: paneId)
+        reconnectCoordinator.cancelAutomaticRetry(for: paneId)
         guard reconnectAttempt == nil else { return }
         guard !connectionState.isConnecting else { return }
         connectWatchdog.cancel()
@@ -1125,7 +1153,7 @@ struct TerminalPaneView: View {
             guard credentials != nil else { return }
         }
         tabManager.clearMoshFallbackDiagnostics(for: paneId)
-        _ = tabManager.reconnectCoordinator.request(
+        _ = reconnectCoordinator.request(
             for: paneId,
             requiresReadyNetwork: false
         )

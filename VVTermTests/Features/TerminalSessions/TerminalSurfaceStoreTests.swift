@@ -5,6 +5,31 @@ import Testing
 @MainActor
 struct GhosttyTerminalSurfaceStoreTests {
     private final class Surface: TerminalSurface {
+        #if os(iOS)
+        private final class InputSession: TerminalKeyboardInputSession {
+            func keyboardCoordinatorDiagnosticSnapshot() -> TerminalKeyboardCoordinatorDiagnosticSnapshot {
+                TerminalKeyboardCoordinatorDiagnosticSnapshot(
+                    windowAttached: false,
+                    windowIsKey: false,
+                    sceneActivationState: "unattached",
+                    isFirstResponder: false,
+                    isSoftwareInputActive: false
+                )
+            }
+            func acquireTerminalInput() -> Bool { false }
+            func forceSoftwareKeyboardInput() -> Bool { false }
+            func focusTerminalInputWithoutShowingSoftwareKeyboard() -> Bool { false }
+            func releaseTerminalInput() {}
+            func releaseTerminalInputForReacquisition(completion: @escaping () -> Void) {
+                completion()
+            }
+            func setTerminalInputAccessorySuppressed(_ suppressed: Bool) {}
+            func refreshTerminalInputAccessoryAppearance() {}
+        }
+
+        private let inputSession = InputSession()
+        #endif
+
         var terminalGeometry: TerminalSurfaceGeometry?
         var isHostingSceneActive: Bool?
         private(set) var receivedOutput: [Data] = []
@@ -19,31 +44,13 @@ struct GhosttyTerminalSurfaceStoreTests {
         func sendText(_ text: String) {}
 
         #if os(iOS)
-        var keyboardInputSession: any TerminalKeyboardInputSession { self }
+        var keyboardInputSession: any TerminalKeyboardInputSession { inputSession }
         var isAttachedToWindow = false
         var acceptsTerminalInput = true
         var shouldRestoreKeyboardFocusOnReconnect = false
         var isFindNavigatorVisible = false
 
         func setLifecycleCallbacks(_ callbacks: TerminalSurfaceLifecycleCallbacks?) {}
-        func keyboardCoordinatorDiagnosticSnapshot() -> TerminalKeyboardCoordinatorDiagnosticSnapshot {
-            TerminalKeyboardCoordinatorDiagnosticSnapshot(
-                windowAttached: false,
-                windowIsKey: false,
-                sceneActivationState: "unattached",
-                isFirstResponder: false,
-                isSoftwareInputActive: false
-            )
-        }
-        func acquireTerminalInput() -> Bool { false }
-        func forceSoftwareKeyboardInput() -> Bool { false }
-        func focusTerminalInputWithoutShowingSoftwareKeyboard() -> Bool { false }
-        func releaseTerminalInput() {}
-        func releaseTerminalInputForReacquisition(completion: @escaping () -> Void) {
-            completion()
-        }
-        func setTerminalInputAccessorySuppressed(_ suppressed: Bool) {}
-        func refreshTerminalInputAccessoryAppearance() {}
         #endif
     }
 
@@ -65,6 +72,26 @@ struct GhosttyTerminalSurfaceStoreTests {
         #expect(registered.terminalGeometry == surface.terminalGeometry)
         #expect(surface.receivedOutput == [Data("ready".utf8)])
     }
+
+    #if os(iOS)
+    @Test
+    func inactiveTerminalPausesRenderingUntilItBecomesVisibleAgain() {
+        #expect(
+            TerminalRenderingPolicy.transition(
+                terminalIsActive: false,
+                sceneIsActive: true,
+                renderingIsPaused: false
+            ) == .pause
+        )
+        #expect(
+            TerminalRenderingPolicy.transition(
+                terminalIsActive: true,
+                sceneIsActive: true,
+                renderingIsPaused: true
+            ) == .resume
+        )
+    }
+    #endif
 
     @Test
     func replacementPublishesTypedChangeAndKeepsStableIdentity() {

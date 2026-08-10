@@ -1418,7 +1418,7 @@
 "Support" = "Wsparcie";
 "Swift Source" = "Szybkie źródło";
 "Symlink" = "Dowiązanie symboliczne";
-"Servers and selected credentials sync across your Apple devices. Credentials use iCloud Keychain." = "Serwery i wybrane dane uwierzytelniające synchronizują się między urządzeniami Apple. Dane uwierzytelniające używają pęku kluczy iCloud.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Serwery, dane uwierzytelniające i klucze SSH synchronizują się między urządzeniami Apple za pomocą iCloud i pęku kluczy iCloud.";
 "Credentials could not be copied. Existing credentials were kept." = "Nie udało się skopiować danych uwierzytelniających. Zachowano istniejące dane.";
 "Remove credentials from iCloud Keychain" = "Usuń dane uwierzytelniające z pęku kluczy iCloud";
 "This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "Spowoduje to usunięcie danych uwierzytelniających VVTerm z pęku kluczy iCloud na wszystkich urządzeniach Apple. Dane tylko dla urządzenia pozostaną na tym urządzeniu.";

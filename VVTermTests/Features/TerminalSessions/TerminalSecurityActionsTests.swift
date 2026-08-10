@@ -3,10 +3,6 @@ import Testing
 @testable import VVTerm
 
 private nonisolated final class TerminalSecurityKeychainBacking: KeychainStoreBacking, @unchecked Sendable {
-    enum Failure: Error {
-        case writeRejected
-    }
-
     private struct Item: Hashable {
         let service: String
         let key: String
@@ -15,7 +11,6 @@ private nonisolated final class TerminalSecurityKeychainBacking: KeychainStoreBa
 
     private let lock = NSLock()
     private var values: [Item: Data] = [:]
-    private var rejectsWrites = false
 
     func set(
         _ data: Data,
@@ -25,7 +20,6 @@ private nonisolated final class TerminalSecurityKeychainBacking: KeychainStoreBa
     ) throws {
         lock.lock()
         defer { lock.unlock() }
-        guard !rejectsWrites else { throw Failure.writeRejected }
         values[Item(service: service, key: key, scope: scope)] = data
     }
 
@@ -65,17 +59,12 @@ private nonisolated final class TerminalSecurityKeychainBacking: KeychainStoreBa
         }
     }
 
-    func rejectWrites() {
-        lock.lock()
-        rejectsWrites = true
-        lock.unlock()
-    }
 }
 
 @MainActor
 struct TerminalSecurityActionsTests {
     @Test
-    func credentialActionsUseOnlyTheirInjectedKeychainOwner() throws {
+    func credentialLoadsAutomaticallyBindOnlyTheirInjectedKeychainOwner() throws {
         let server = makeServer()
         var changedServer = server
         changedServer.host = "changed.example.com"
@@ -97,21 +86,7 @@ struct TerminalSecurityActionsTests {
             keychainManager: secondKeychain,
             knownHostsManager: makeKnownHostsManager()
         )
-        let request = TerminalSecurityApprovalRequest.credentialEndpoint(
-            serverID: server.id
-        )
-
-        #expect(firstActions.approve(
-            .credentialEndpoint(serverID: UUID()),
-            changedServer
-        ) == .failed(.expired))
-        #expect(firstActions.approve(request, changedServer) == .approved)
         #expect(try firstActions.loadCredentials(changedServer).password == "first")
-        #expect(throws: ServerCredentialAccessError.self) {
-            try secondActions.loadCredentials(changedServer)
-        }
-
-        #expect(secondActions.approve(request, changedServer) == .approved)
         #expect(try secondActions.loadCredentials(changedServer).password == "second")
     }
 
@@ -155,29 +130,6 @@ struct TerminalSecurityActionsTests {
         #expect(secondActions.pendingHostKeyApproval(server) == secondRequest)
         secondActions.reject(secondRequest)
         #expect(secondActions.pendingHostKeyApproval(server) == nil)
-    }
-
-    @Test
-    func credentialApprovalMapsInjectedKeychainFailureToUnavailable() throws {
-        let server = makeServer()
-        var changedServer = server
-        changedServer.host = "changed.example.com"
-        let backing = TerminalSecurityKeychainBacking()
-        let keychain = makeKeychainManager(backing: backing)
-        try keychain.storeCredentials(
-            ServerCredentials(serverId: server.id, password: "password"),
-            for: server
-        )
-        let actions = VVTermApp.makeTerminalSecurityActions(
-            keychainManager: keychain,
-            knownHostsManager: makeKnownHostsManager()
-        )
-        backing.rejectWrites()
-
-        #expect(actions.approve(
-            .credentialEndpoint(serverID: server.id),
-            changedServer
-        ) == .failed(.unavailable))
     }
 
     private func makeKeychainManager(

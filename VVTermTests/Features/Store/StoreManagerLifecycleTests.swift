@@ -265,7 +265,62 @@ final class StoreManagerLifecycleTests: XCTestCase {
         )
     }
 
-    func testStartLoadsProductsThenEntitlementsAndIsIdempotent() async {
+    func testProductLoadingFailureStillGrantsMonthlyAccess() async {
+        await assertProductLoadingFailureStillGrantsAccess(
+            productID: VVTermProducts.proMonthly,
+            expectsLifetime: false
+        )
+    }
+
+    func testProductLoadingFailureStillGrantsLifetimeAccess() async {
+        await assertProductLoadingFailureStillGrantsAccess(
+            productID: VVTermProducts.proLifetime,
+            expectsLifetime: true
+        )
+    }
+
+    func testProductLoadingFailureAppliesFreeOnlyAfterEntitlementsResolve() async {
+        let client = StoreClientFake()
+        let productRetriesFinished = expectation(description: "All product retries finished")
+        let entitlementStarted = expectation(description: "Entitlement request started")
+        let entitlementReturned = expectation(description: "Entitlement request returned")
+        let gate = StoreEntitlementGate()
+        client.productsHandler = { throw StoreProductLoadFailure.unavailable }
+        client.onProductRequest = {
+            if client.productRequestCount == 3 {
+                productRetriesFinished.fulfill()
+            }
+        }
+        client.entitlementsHandler = {
+            entitlementStarted.fulfill()
+            let result = await gate.wait()
+            entitlementReturned.fulfill()
+            return result
+        }
+        var effects: [StoreManagerEffect] = []
+        let manager = StoreManager(
+            client: client,
+            effects: StoreManagerEffects { effects.append($0) }
+        )
+
+        manager.start()
+        await fulfillment(of: [entitlementStarted, productRetriesFinished], timeout: 5)
+
+        XCTAssertEqual(manager.accessState, .checking)
+        XCTAssertTrue(manager.allowsProFeatures)
+        XCTAssertTrue(effects.isEmpty)
+
+        gate.resume(with: .free)
+        await fulfillment(of: [entitlementReturned], timeout: 1)
+        await Task.yield()
+
+        XCTAssertEqual(manager.accessState, .free)
+        XCTAssertFalse(manager.allowsProFeatures)
+        XCTAssertEqual(effects, [.entitlementsUpdated(isPro: false)])
+        manager.stop()
+    }
+
+    func testStartRunsProductsAndEntitlementsOnceAndCreatesOneListener() async {
         let client = StoreClientFake()
         client.loadedProducts = [monthlyProduct]
         client.entitlementResult = entitlementResult(productIds: [VVTermProducts.proMonthly])
@@ -280,7 +335,9 @@ final class StoreManagerLifecycleTests: XCTestCase {
 
         XCTAssertEqual(manager.products, [monthlyProduct])
         XCTAssertTrue(manager.isPro)
-        XCTAssertEqual(client.events, ["updates", "products", "entitlements"])
+        XCTAssertEqual(client.events.first, "updates")
+        XCTAssertEqual(client.productRequestCount, 1)
+        XCTAssertEqual(client.entitlementRequestCount, 1)
         XCTAssertEqual(client.transactionUpdateRequestCount, 1)
         manager.stop()
     }
@@ -364,28 +421,33 @@ final class StoreManagerLifecycleTests: XCTestCase {
         XCTAssertEqual(recordedEffects, [.entitlementsUpdated(isPro: false)])
     }
 
-    func testStopCancelsStartupBeforeEntitlements() async {
+    func testStopRejectsLateStartupEntitlementResult() async {
         let client = StoreClientFake()
-        let productLoadStarted = expectation(description: "Product load started")
-        let productLoadCancelled = expectation(description: "Product load cancelled")
-        client.productsHandler = {
-            productLoadStarted.fulfill()
-            do {
-                try await Task.sleep(nanoseconds: 60_000_000_000)
-                return []
-            } catch {
-                productLoadCancelled.fulfill()
-                throw CancellationError()
-            }
+        let entitlementStarted = expectation(description: "Startup entitlement request started")
+        let entitlementReturned = expectation(description: "Startup entitlement request returned")
+        let gate = StoreEntitlementGate()
+        client.entitlementsHandler = {
+            entitlementStarted.fulfill()
+            let result = await gate.wait()
+            entitlementReturned.fulfill()
+            return result
         }
-        let manager = makeManager(client)
+        var effects: [StoreManagerEffect] = []
+        let manager = StoreManager(
+            client: client,
+            effects: StoreManagerEffects { effects.append($0) }
+        )
 
         manager.start()
-        await fulfillment(of: [productLoadStarted], timeout: 1)
+        await fulfillment(of: [entitlementStarted], timeout: 1)
+        XCTAssertEqual(manager.accessState, .checking)
         manager.stop()
-        await fulfillment(of: [productLoadCancelled], timeout: 1)
+        gate.resume(with: entitlementResult(productIds: [VVTermProducts.proMonthly]))
+        await fulfillment(of: [entitlementReturned], timeout: 1)
+        await Task.yield()
 
-        XCTAssertEqual(client.entitlementRequestCount, 0)
+        XCTAssertEqual(manager.accessState, .checking)
+        XCTAssertTrue(effects.isEmpty)
     }
 
     func testOwnerReleaseCancelsStartupAndTransactionStream() async {
@@ -454,6 +516,40 @@ final class StoreManagerLifecycleTests: XCTestCase {
     private func makeManager(_ client: StoreClientFake) -> StoreManager {
         StoreManager(client: client, effects: .none)
     }
+
+    private func assertProductLoadingFailureStillGrantsAccess(
+        productID: String,
+        expectsLifetime: Bool
+    ) async {
+        let client = StoreClientFake()
+        let productRetriesFinished = expectation(description: "All product retries finished")
+        let entitlementResolved = expectation(description: "Entitlements resolved")
+        client.productsHandler = { throw StoreProductLoadFailure.unavailable }
+        client.onProductRequest = {
+            if client.productRequestCount == 3 {
+                productRetriesFinished.fulfill()
+            }
+        }
+        client.entitlementResult = entitlementResult(productIds: [productID])
+        client.onEntitlementRequest = { entitlementResolved.fulfill() }
+        let manager = makeManager(client)
+
+        manager.start()
+        await fulfillment(of: [entitlementResolved, productRetriesFinished], timeout: 5)
+        await Task.yield()
+
+        XCTAssertEqual(manager.accessState, .pro)
+        XCTAssertTrue(manager.isPro)
+        XCTAssertEqual(manager.isLifetime, expectsLifetime)
+        XCTAssertTrue(manager.products.isEmpty)
+        XCTAssertEqual(client.productRequestCount, 3)
+        XCTAssertEqual(client.entitlementRequestCount, 1)
+        manager.stop()
+    }
+}
+
+private enum StoreProductLoadFailure: Error {
+    case unavailable
 }
 
 @MainActor
@@ -464,6 +560,7 @@ private final class StoreClientFake: StoreClient {
     var entitlementResults: [StoreEntitlementResult] = []
     var introductoryOfferState: ProPlanIntroductoryOfferState = .unavailable
     var onEntitlementRequest: (() -> Void)?
+    var onProductRequest: (() -> Void)?
     var onTransactionStreamTermination: (() -> Void)?
     var productsHandler: (() async throws -> [StoreProduct])?
     var entitlementsHandler: (() async -> StoreEntitlementResult)?
@@ -472,6 +569,7 @@ private final class StoreClientFake: StoreClient {
     private(set) var purchasedProductIds: [String] = []
     private(set) var syncCount = 0
     private(set) var entitlementRequestCount = 0
+    private(set) var productRequestCount = 0
     private(set) var transactionUpdateRequestCount = 0
     private(set) var transactionStreamTerminationCount = 0
 
@@ -479,6 +577,8 @@ private final class StoreClientFake: StoreClient {
 
     func products(for identifiers: [String]) async throws -> [StoreProduct] {
         events.append("products")
+        productRequestCount += 1
+        onProductRequest?()
         if let productsHandler {
             return try await productsHandler()
         }

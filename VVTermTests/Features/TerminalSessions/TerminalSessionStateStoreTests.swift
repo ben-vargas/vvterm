@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Testing
 @testable import VVTerm
 
@@ -192,6 +193,94 @@ struct TerminalSessionStateStoreTests {
         ) == nil)
         #expect(store.tab(id: tab.id, for: tab.serverId)?.layout == layout)
         #expect(store.paneState(for: splitPaneId) != nil)
+    }
+
+    @Test
+    func serverSnapshotPublisherIgnoresOtherServersAndWorkingDirectoryChurn() {
+        let selections = ConnectionViewSelectionStore()
+        let store = makeStore(
+            snapshot: StateStoreSnapshotMemory(),
+            selections: selections
+        )
+        let observedServerId = UUID()
+        let otherServerId = UUID()
+        var updateCount = 0
+        let cancellation = store.changes(for: observedServerId).dropFirst().sink { _ in
+            updateCount += 1
+        }
+        defer { cancellation.cancel() }
+
+        let otherTab = TerminalTab(serverId: otherServerId, title: "Other")
+        store.install(
+            otherTab,
+            paneState: TerminalPaneState(
+                paneId: otherTab.rootPaneId,
+                tabId: otherTab.id,
+                serverId: otherServerId
+            ),
+            select: true
+        )
+        selections.setSelection(.files, for: otherServerId)
+
+        #expect(updateCount == 0)
+
+        let observedTab = TerminalTab(serverId: observedServerId, title: "Observed")
+        store.install(
+            observedTab,
+            paneState: TerminalPaneState(
+                paneId: observedTab.rootPaneId,
+                tabId: observedTab.id,
+                serverId: observedServerId
+            ),
+            select: true
+        )
+
+        #expect(updateCount > 0)
+        let relevantUpdateCount = updateCount
+
+        store.updatePane(otherTab.rootPaneId) { state in
+            state.connectionState = .connected
+        }
+        store.updatePane(observedTab.rootPaneId) { state in
+            state.workingDirectory = "/tmp/output-driven-update"
+        }
+        selections.setSelection(.stats, for: otherServerId)
+
+        #expect(updateCount == relevantUpdateCount)
+
+        store.updatePane(observedTab.rootPaneId) { state in
+            state.connectionState = .connected
+        }
+
+        #expect(updateCount == relevantUpdateCount + 1)
+    }
+
+    @Test
+    func noOpPaneMutationDoesNotPublish() {
+        let store = makeStore(
+            snapshot: StateStoreSnapshotMemory(),
+            selections: ConnectionViewSelectionStore()
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Stable")
+        let pane = TerminalPaneState(
+            paneId: tab.rootPaneId,
+            tabId: tab.id,
+            serverId: tab.serverId
+        )
+        store.install(tab, paneState: pane, select: true)
+        var updateCount = 0
+        let cancellation = store.objectWillChange.sink {
+            updateCount += 1
+        }
+        defer { cancellation.cancel() }
+
+        let didChange = store.updatePane(tab.rootPaneId) { state in
+            state.workingDirectory = state.workingDirectory
+        }
+        store.setPaneState(pane)
+
+        #expect(didChange == false)
+        #expect(updateCount == 0)
     }
 
     private func makeStore(

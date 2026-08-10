@@ -86,6 +86,7 @@ extension ConnectionTerminalContainer {
                 tabManager: tabManager,
                 securityActions: terminalSecurityActions,
                 isSelected: true,
+                isSplitZoomed: terminalContent.state.splitZoomedTabIds.contains(tab.id),
                 appearance: terminalAppearanceSnapshot,
                 voiceSettingsStore: voiceInputRuntimeStore.settingsStore,
                 audioService: voiceRuntime.audioService,

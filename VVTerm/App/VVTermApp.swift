@@ -272,7 +272,7 @@ struct VVTermApp: App {
         self.analyticsOptOutAction = analyticsOptOutAction
         #endif
         self.onWelcomeCompleted = onWelcomeCompleted
-        _tabManager = StateObject(wrappedValue: tabManager)
+        self.tabManager = tabManager
         _storeManager = StateObject(wrappedValue: storeManager)
         _appLockManager = StateObject(wrappedValue: appLockManager)
         _serverManager = StateObject(wrappedValue: serverManager)
@@ -292,8 +292,6 @@ struct VVTermApp: App {
         self.serverFormDependencies = serverFormDependencies
         self.voiceModelManagers = voiceModelManagers
         statsSecurityApprovalActions = Self.makeStatsSecurityApprovalActions(
-            appLockManager: appLockManager,
-            keychainManager: keychainManager,
             knownHostsManager: knownHostsManager
         )
         _viewTabConfigurationManager = StateObject(
@@ -357,7 +355,7 @@ struct VVTermApp: App {
     @StateObject private var appLockManager: AppLockManager
     @StateObject private var serverManager: ServerManager
     @StateObject private var engagementTracker: EngagementTracker
-    @StateObject private var tabManager: TerminalTabManager
+    private let tabManager: TerminalTabManager
     @StateObject private var storeManager: StoreManager
     @StateObject private var remoteFileTabManager = RemoteFileTabManager()
     @StateObject private var remoteFileBrowserStore: RemoteFileBrowserStore
@@ -696,18 +694,8 @@ extension VVTermApp {
                     port: server.port
                 ).map(TerminalSecurityApprovalRequest.hostKey)
             },
-            approve: { request, server in
+            approve: { request, _ in
                 switch request {
-                case .credentialEndpoint(let serverID):
-                    guard serverID == server.id else {
-                        return .failed(.expired)
-                    }
-                    do {
-                        try keychainManager.approveCredentialUse(for: server)
-                        return .approved
-                    } catch {
-                        return .failed(.unavailable)
-                    }
                 case .hostKey(let challenge):
                     return knownHostsManager.approve(challenge)
                         ? .approved
@@ -715,34 +703,20 @@ extension VVTermApp {
                 }
             },
             reject: { request in
-                guard case .hostKey(let challenge) = request else { return }
-                knownHostsManager.reject(challenge)
+                switch request {
+                case .hostKey(let challenge):
+                    knownHostsManager.reject(challenge)
+                }
             }
         )
     }
 
     static func makeStatsSecurityApprovalActions(
-        appLockManager: AppLockManager,
-        keychainManager: KeychainManager,
         knownHostsManager: KnownHostsManager
     ) -> ServerStatsSecurityApprovalActions {
         ServerStatsSecurityApprovalActions(
-            approve: { request, server in
+            approve: { request, _ in
                 switch request {
-                case .credentialEndpoint(let serverID):
-                    guard serverID == server.id else { return .failed(.expired) }
-                    guard await appLockManager.authorizeProtectedServerAction(
-                        server,
-                        action: .approveCredentialEndpoint
-                    ) else {
-                        return .failed(.cancelled)
-                    }
-                    do {
-                        try keychainManager.approveCredentialUse(for: server)
-                        return .approved
-                    } catch {
-                        return .failed(.unavailable)
-                    }
                 case .hostKey(let challenge):
                     return knownHostsManager.approve(challenge)
                         ? .approved
@@ -750,8 +724,10 @@ extension VVTermApp {
                 }
             },
             reject: { request in
-                guard case .hostKey(let challenge) = request else { return }
-                knownHostsManager.reject(challenge)
+                switch request {
+                case .hostKey(let challenge):
+                    knownHostsManager.reject(challenge)
+                }
             }
         )
     }

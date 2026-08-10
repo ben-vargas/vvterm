@@ -24,7 +24,7 @@ struct iOSContentView: View {
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var engagementTracker: EngagementTracker
-    @ObservedObject private var tabManager: TerminalTabManager
+    private let tabManager: TerminalTabManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @Environment(\.requestReview) private var requestReview
 
@@ -51,7 +51,7 @@ struct iOSContentView: View {
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
-        _tabManager = ObservedObject(wrappedValue: tabManager)
+        self.tabManager = tabManager
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
         self.statsDependencies = statsDependencies

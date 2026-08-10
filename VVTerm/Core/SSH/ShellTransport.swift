@@ -43,6 +43,11 @@ nonisolated enum MoshFallbackReason: String, Codable, Hashable, Sendable {
     }
 }
 
+nonisolated enum MoshServerMaintenanceAction: Equatable, Sendable {
+    case install
+    case repair
+}
+
 nonisolated enum ShellTransportState: Equatable, Sendable {
     case ssh
     case mosh
@@ -70,6 +75,19 @@ nonisolated enum ShellTransportState: Equatable, Sendable {
     var fallbackDiagnostics: MoshFallbackDiagnostics? {
         guard case .sshFallback(_, let diagnostics) = self else { return nil }
         return diagnostics
+    }
+
+    var moshServerMaintenanceAction: MoshServerMaintenanceAction? {
+        guard case .sshFallback(let reason, _) = self else { return nil }
+        switch reason {
+        case .serverMissing:
+            return .install
+        case .serverRuntimeBroken:
+            return .repair
+        case .bootstrapFailed, .sessionFailed, .unsupportedRemoteCapabilities,
+             .invalidEndpoint, .udpTimeout, .clientSessionFailed:
+            return nil
+        }
     }
 
     mutating func clearFallbackDiagnostics() {

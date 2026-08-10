@@ -2,25 +2,10 @@ import XCTest
 @testable import VVTerm
 
 final class ServerStatsErrorPresentationTests: XCTestCase {
-    func testCollectionStateMapsCredentialApprovalMessage() {
-        let request = ServerStatsApprovalRequest(
-            id: "credential",
-            serverID: UUID(),
-            kind: .credentialEndpoint
-        )
-        let state = stateRequiringApproval(request)
-
-        XCTAssertEqual(
-            state.errorMessage,
-            String(localized: "Credential endpoint approval is required.")
-        )
-    }
-
     func testCollectionStateMapsHostKeyApprovalMessage() {
         let request = ServerStatsApprovalRequest(
             id: "host-key",
-            serverID: UUID(),
-            kind: .hostKey
+            serverID: UUID()
         )
         let state = stateRequiringApproval(request)
 

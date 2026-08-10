@@ -119,6 +119,11 @@ final class TerminalClipboardConfirmationQueue {
         completion: @escaping (TerminalClipboardConfirmationDecision) -> Void
     ) -> UUID {
         let request = Request(id: UUID(), kind: kind, completion: completion)
+        if kind == .remoteWrite,
+           current?.kind == .remoteWrite || pending.contains(where: { $0.kind == .remoteWrite }) {
+            completion(.cancel)
+            return request.id
+        }
         let requestCount = pending.count + (current == nil ? 0 : 1)
         guard requestCount < Self.maximumRequestCount else {
             completion(.cancel)

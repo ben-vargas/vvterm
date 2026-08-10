@@ -67,15 +67,6 @@ struct ServerFormSheet: View {
 
     var isEditing: Bool { server != nil }
 
-    private var credentialEndpointApprovalMessage: String {
-        guard let server else { return "" }
-        return String(
-            format: String(localized: "Stored credentials were saved for another endpoint. Use them with %@:%lld only if you trust this change."),
-            server.host,
-            Int64(server.port)
-        )
-    }
-
     private var hostKeyTrustPresentation: SSHHostKeyTrustPresentation? {
         operations.hostKeyChallenge.map(SSHHostKeyTrustPresentation.init)
     }
@@ -139,11 +130,11 @@ struct ServerFormSheet: View {
     }
 
     private var isAtLimit: Bool {
-        !isEditing && !stateStore.canAddServer(hasProAccess: storeManager.isPro)
+        !isEditing && !stateStore.canAddServer(hasProAccess: storeManager.allowsProFeatures)
     }
 
     private var assignmentWorkspaces: [Workspace] {
-        stateStore.assignmentWorkspaces(for: server, hasProAccess: storeManager.isPro)
+        stateStore.assignmentWorkspaces(for: server, hasProAccess: storeManager.allowsProFeatures)
     }
 
     private var selectedWorkspace: Workspace? {
@@ -217,13 +208,6 @@ struct ServerFormSheet: View {
         )
     }
 
-    private var credentialApprovalBinding: Binding<Bool> {
-        Binding(
-            get: { operations.credentialApprovalRequired },
-            set: { if !$0 { operations.clearPresentation() } }
-        )
-    }
-
     private var hostKeyTrustBinding: Binding<Bool> {
         Binding(
             get: { operations.hostKeyChallenge != nil },
@@ -273,11 +257,6 @@ struct ServerFormSheet: View {
         .modifier(CompactListSectionSpacingModifier())
         .modifier(TransparentNavigationBarModifier())
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarAppearance(
-                backgroundColor: .clear,
-                isTranslucent: true,
-                shadowColor: .clear
-            )
         .navigationTitle(isEditing ? String(localized: "Edit Server") : String(localized: "Add Server"))
         #endif
     }
@@ -345,14 +324,6 @@ struct ServerFormSheet: View {
                 .adaptiveSoftScrollEdges()
             }
             .limitReachedAlert(.servers, isPresented: serverLimitAlertBinding)
-            .alert("Approve Credential Endpoint?", isPresented: credentialApprovalBinding) {
-                Button("Cancel", role: .cancel) { }
-                Button("Approve") {
-                    approveCredentialEndpoint()
-                }
-            } message: {
-                Text(credentialEndpointApprovalMessage)
-            }
             .alert(
                 hostKeyTrustPresentation?.title ?? String(localized: "Trust SSH Host?"),
                 isPresented: hostKeyTrustBinding
@@ -431,7 +402,7 @@ struct ServerFormSheet: View {
                 Picker("Workspace", selection: $form.workspaceID) {
                     ForEach(assignmentWorkspaces) { workspace in
                         HStack(spacing: 8) {
-                            if stateStore.isWorkspaceLocked(workspace, hasProAccess: storeManager.isPro) {
+                            if stateStore.isWorkspaceLocked(workspace, hasProAccess: storeManager.allowsProFeatures) {
                                 Image(systemName: "lock.fill")
                                     .foregroundStyle(.secondary)
                             } else {
@@ -449,7 +420,7 @@ struct ServerFormSheet: View {
                 LabeledContent("Workspace") {
                     if let selectedWorkspace {
                         HStack(spacing: 8) {
-                            if stateStore.isWorkspaceLocked(selectedWorkspace, hasProAccess: storeManager.isPro) {
+                            if stateStore.isWorkspaceLocked(selectedWorkspace, hasProAccess: storeManager.allowsProFeatures) {
                                 Image(systemName: "lock.fill")
                                     .foregroundStyle(.secondary)
                             } else {
@@ -516,7 +487,7 @@ struct ServerFormSheet: View {
                     showingServerLimitAlert = true
                 }
             }
-        } else if !isEditing && !storeManager.isPro {
+        } else if !isEditing && !storeManager.allowsProFeatures {
             Section {
                 UsageIndicator(
                     current: serverCount,
@@ -906,8 +877,6 @@ struct ServerFormSheet: View {
             form.apply(try credentials.getCredentials(for: server), for: server)
             selectMatchingStoredKeyIfAvailable()
             operations.finishCredentialLoad()
-        } catch ServerCredentialAccessError.approvalRequired {
-            operations.requireCredentialApproval()
         } catch {
             operations.fail(
                 String(
@@ -915,23 +884,6 @@ struct ServerFormSheet: View {
                     error.localizedDescription
                 )
             )
-        }
-    }
-
-    private func approveCredentialEndpoint() {
-        guard let server else { return }
-        Task {
-            guard await appLockManager.authorizeProtectedServerAction(
-                server,
-                action: .approveCredentialEndpoint
-            ) else { return }
-
-            do {
-                try credentials.approveCredentialUse(for: server)
-                loadStoredCredentials(for: server)
-            } catch {
-                operations.fail(error.localizedDescription)
-            }
         }
     }
 
@@ -994,7 +946,7 @@ struct ServerFormSheet: View {
         operations.save(
             mutation: isEditing ? .update(newServer) : .create(newServer),
             credentials: form.makeCredentials(serverID: serverID),
-            hasProAccess: storeManager.isPro,
+            hasProAccess: storeManager.allowsProFeatures,
             authorize: {
                 guard let server else { return true }
                 return await appLockManager.authorizeProtectedServerAction(server, action: .save)
@@ -1053,7 +1005,7 @@ struct MoveServerSheet: View {
     private var destinationWorkspaces: [Workspace] {
         let destinations = stateStore.moveDestinations(
             for: server,
-            hasProAccess: storeManager.isPro
+            hasProAccess: storeManager.allowsProFeatures
         )
         guard let preferredDestination,
               destinations.contains(where: { $0.id == preferredDestination.id }) else {
@@ -1082,7 +1034,7 @@ struct MoveServerSheet: View {
 
     private var destinationAvailabilityNotice: String {
         if stateStore.workspaces.count <= 1 {
-            if storeManager.isPro {
+            if storeManager.allowsProFeatures {
                 return String(localized: "No additional workspaces yet. Create one to move this server.")
             }
 
@@ -1256,7 +1208,7 @@ struct MoveServerSheet: View {
                     server,
                     to: destination,
                     preferredEnvironment: selectedEnvironment,
-                    hasProAccess: storeManager.isPro
+                    hasProAccess: storeManager.allowsProFeatures
                 )
 
                 await MainActor.run {

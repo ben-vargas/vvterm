@@ -110,6 +110,28 @@ final class KeychainStoreTests: XCTestCase {
         XCTAssertNil(try store.get(key, scope: .iCloud))
     }
 
+    func testFailedDestinationVerificationPreservesSource() throws {
+        let backing = InMemoryKeychainStoreBacking()
+        let store = KeychainStore(service: service, backing: backing)
+        let expected = Data("local".utf8)
+        try store.set(expected, forKey: key, scope: .deviceOnly)
+        backing.corruptReads(from: .iCloud, service: service, key: key)
+
+        XCTAssertThrowsError(
+            try store.copyAll(
+                from: .deviceOnly,
+                to: .iCloud,
+                where: { $0 == self.key }
+            )
+        ) { error in
+            guard case KeychainError.copyVerificationFailed = error else {
+                XCTFail("Expected copy verification failure, got \(error)")
+                return
+            }
+        }
+        XCTAssertEqual(try store.get(key, scope: .deviceOnly), expected)
+    }
+
     func testMoveDoesNotDeleteAnySourceUntilEveryCopySucceeds() throws {
         let backing = InMemoryKeychainStoreBacking()
         let store = KeychainStore(service: service, backing: backing)
@@ -149,6 +171,7 @@ nonisolated final class InMemoryKeychainStoreBacking: KeychainStoreBacking, @unc
     private var values: [Item: Data] = [:]
     private var failedWriteScopes: Set<KeychainStorageScope> = []
     private var failedWriteItems: Set<Item> = []
+    private var corruptedReadItems: Set<Item> = []
 
     func set(
         _ data: Data,
@@ -173,7 +196,11 @@ nonisolated final class InMemoryKeychainStoreBacking: KeychainStoreBacking, @unc
     ) throws -> Data? {
         lock.lock()
         defer { lock.unlock() }
-        return values[Item(service: service, key: key, scope: scope)]
+        let item = Item(service: service, key: key, scope: scope)
+        if corruptedReadItems.contains(item), values[item] != nil {
+            return Data("corrupted".utf8)
+        }
+        return values[item]
     }
 
     func contains(
@@ -220,6 +247,16 @@ nonisolated final class InMemoryKeychainStoreBacking: KeychainStoreBacking, @unc
     ) {
         lock.lock()
         failedWriteItems.insert(Item(service: service, key: key, scope: scope))
+        lock.unlock()
+    }
+
+    func corruptReads(
+        from scope: KeychainStorageScope,
+        service: String,
+        key: String
+    ) {
+        lock.lock()
+        corruptedReadItems.insert(Item(service: service, key: key, scope: scope))
         lock.unlock()
     }
 

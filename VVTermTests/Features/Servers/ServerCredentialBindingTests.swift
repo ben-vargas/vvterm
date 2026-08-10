@@ -18,18 +18,17 @@ struct ServerCredentialBindingTests {
     }
 
     @Test(arguments: EndpointChange.allCases)
-    func endpointChangesRequireApproval(change: EndpointChange) {
+    func endpointChangesInvalidateAnInMemoryCredentialBinding(change: EndpointChange) {
         let original = makeServer(connectionMode: .cloudflare)
         var updated = original
         change.apply(to: &updated)
-
-        let status = ServerCredentialBindingStatus.resolve(
-            storedBinding: ServerCredentialBinding(server: original),
-            currentBinding: ServerCredentialBinding(server: updated),
-            hasStoredCredentials: true
+        let credentials = ServerCredentials(
+            serverId: original.id,
+            credentialBinding: ServerCredentialBinding(server: original),
+            password: "secret"
         )
 
-        #expect(status == .approvalRequired)
+        #expect(!credentials.isAuthorized(for: updated))
     }
 
     @Test
@@ -49,29 +48,7 @@ struct ServerCredentialBindingTests {
     }
 
     @Test
-    func missingBindingRequiresApprovalForExistingCredentials() {
-        let status = ServerCredentialBindingStatus.resolve(
-            storedBinding: nil,
-            currentBinding: ServerCredentialBinding(server: makeServer()),
-            hasStoredCredentials: true
-        )
-
-        #expect(status == .approvalRequired)
-    }
-
-    @Test
-    func missingCredentialsNeedNoApproval() {
-        let status = ServerCredentialBindingStatus.resolve(
-            storedBinding: nil,
-            currentBinding: ServerCredentialBinding(server: makeServer()),
-            hasStoredCredentials: false
-        )
-
-        #expect(status == .noCredentials)
-    }
-
-    @Test
-    func inMemoryCredentialsRequireTheirApprovedEndpoint() throws {
+    func inMemoryCredentialsAuthorizeOnlyTheirBoundEndpoint() {
         let original = makeServer()
         let credentials = ServerCredentials(
             serverId: original.id,
@@ -79,15 +56,12 @@ struct ServerCredentialBindingTests {
             password: "secret"
         )
 
-        try credentials.requireAuthorization(for: original)
+        #expect(credentials.isAuthorized(for: original))
 
         var changed = original
         changed.host = "other.example.com"
 
         #expect(!credentials.isAuthorized(for: changed))
-        #expect(throws: ServerCredentialAccessError.approvalRequired) {
-            try credentials.requireAuthorization(for: changed)
-        }
     }
 
     @Test

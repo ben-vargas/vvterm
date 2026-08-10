@@ -2,15 +2,6 @@ import XCTest
 @testable import VVTerm
 
 final class RemoteFileBrowserErrorTests: XCTestCase {
-    func testCredentialApprovalKeepsTypedError() {
-        XCTAssertEqual(
-            RemoteFileBrowserError.map(
-                ServerCredentialAccessError.approvalRequired
-            ),
-            .credentialApprovalRequired
-        )
-    }
-
     func testHostKeyApprovalKeepsTypedError() {
         XCTAssertEqual(
             RemoteFileBrowserError.map(SSHError.hostKeyApprovalRequired),
@@ -18,11 +9,7 @@ final class RemoteFileBrowserErrorTests: XCTestCase {
         )
     }
 
-    func testApprovalErrorsDoNotBecomeMissingCredentials() {
-        XCTAssertNotEqual(
-            RemoteFileBrowserError.credentialApprovalRequired.errorDescription,
-            "No credentials found"
-        )
+    func testHostKeyApprovalDoesNotBecomeMissingCredentials() {
         XCTAssertNotEqual(
             RemoteFileBrowserError.hostKeyApprovalRequired.errorDescription,
             "No credentials found"
@@ -30,12 +17,6 @@ final class RemoteFileBrowserErrorTests: XCTestCase {
     }
 
     func testMappingAlreadyTypedApprovalDoesNotEraseItsType() {
-        XCTAssertEqual(
-            RemoteFileBrowserError.map(
-                RemoteFileBrowserError.credentialApprovalRequired
-            ),
-            .credentialApprovalRequired
-        )
         XCTAssertEqual(
             RemoteFileBrowserError.map(
                 RemoteFileBrowserError.hostKeyApprovalRequired

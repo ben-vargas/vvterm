@@ -2,25 +2,42 @@ import Foundation
 import Combine
 import os.log
 
-struct StoreEntitlementSnapshot {
-    static let free = StoreEntitlementSnapshot(
-        hasStoreAccess: false,
+nonisolated enum StoreAccessState: Equatable, Sendable {
+    case checking
+    case free
+    case pro
+}
+
+nonisolated struct StoreEntitlementSnapshot: Equatable, Sendable {
+    static let checking = StoreEntitlementSnapshot(
+        accessState: .checking,
         hasLifetimeAccess: false,
         subscriptionStatus: nil
     )
 
-    let hasStoreAccess: Bool
+    static let free = StoreEntitlementSnapshot(
+        accessState: .free,
+        hasLifetimeAccess: false,
+        subscriptionStatus: nil
+    )
+
+    let accessState: StoreAccessState
     let hasLifetimeAccess: Bool
     let subscriptionStatus: StoreSubscriptionStatus?
+
+    var hasStoreAccess: Bool {
+        accessState == .pro
+    }
 }
 
 // MARK: - Store Manager
 
 @MainActor
 final class StoreManager: ObservableObject {
+    private final class StartupToken {}
     private final class TransactionListenerToken {}
 
-    @Published private(set) var entitlementSnapshot = StoreEntitlementSnapshot.free
+    @Published private(set) var entitlementSnapshot = StoreEntitlementSnapshot.checking
     @Published var products: [StoreProduct] = []
     @Published var purchaseState: PurchaseState = .idle
     @Published var restoreState: RestoreState = .idle
@@ -29,6 +46,7 @@ final class StoreManager: ObservableObject {
     private(set) var hasPresentedPaywallThisLaunch = false
 
     private var startupTask: Task<Void, Never>?
+    private var startupToken: StartupToken?
     private var updateListenerTask: Task<Void, Never>?
     private var transactionListenerToken: TransactionListenerToken?
     private let client: any StoreClient
@@ -40,6 +58,15 @@ final class StoreManager: ObservableObject {
 
     var isPro: Bool {
         entitlementSnapshot.hasStoreAccess
+    }
+
+    var accessState: StoreAccessState {
+        entitlementSnapshot.accessState
+    }
+
+    /// Do not enforce Free limits before StoreKit resolves entitlements.
+    var allowsProFeatures: Bool {
+        accessState != .free
     }
 
     var isLifetime: Bool {
@@ -77,22 +104,28 @@ final class StoreManager: ObservableObject {
     func start() {
         guard startupTask == nil, updateListenerTask == nil else { return }
         startTransactionListener()
+        let token = StartupToken()
+        startupToken = token
         let client = self.client
         let logger = self.logger
-        startupTask = Task { [weak self, client, logger] in
-            guard let products = await Self.loadProducts(using: client, logger: logger),
-                  !Task.isCancelled else { return }
-            self?.products = products
-
-            let result = await client.entitlements(
+        startupTask = Task { [weak self, client, logger, token] in
+            async let loadedProducts = Self.loadProducts(using: client, logger: logger)
+            async let loadedEntitlements = client.entitlements(
                 subscriptionProductIds: Self.subscriptionProductIds
             )
+
+            let result = await loadedEntitlements
             guard !Task.isCancelled else { return }
-            self?.applyEntitlementResult(result)
+            self?.applyStartupEntitlementResult(result, token: token)
+
+            guard let products = await loadedProducts,
+                  !Task.isCancelled else { return }
+            self?.applyStartupProducts(products, token: token)
         }
     }
 
     func stop() {
+        startupToken = nil
         transactionListenerToken = nil
         startupTask?.cancel()
         updateListenerTask?.cancel()
@@ -254,7 +287,24 @@ final class StoreManager: ObservableObject {
         let result = await client.entitlements(
             subscriptionProductIds: Self.subscriptionProductIds
         )
+        guard !Task.isCancelled else { return }
         applyEntitlementResult(result)
+    }
+
+    private func applyStartupEntitlementResult(
+        _ result: StoreEntitlementResult,
+        token: StartupToken
+    ) {
+        guard startupToken === token else { return }
+        applyEntitlementResult(result)
+    }
+
+    private func applyStartupProducts(
+        _ products: [StoreProduct],
+        token: StartupToken
+    ) {
+        guard startupToken === token else { return }
+        self.products = products
     }
 
     private func applyEntitlementResult(_ result: StoreEntitlementResult) {
@@ -350,7 +400,7 @@ final class StoreManager: ObservableObject {
         status: StoreSubscriptionStatus?
     ) {
         entitlementSnapshot = StoreEntitlementSnapshot(
-            hasStoreAccess: hasAccess,
+            accessState: hasAccess ? .pro : .free,
             hasLifetimeAccess: hasLifetime,
             subscriptionStatus: status
         )

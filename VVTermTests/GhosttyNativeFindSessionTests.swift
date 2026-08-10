@@ -90,8 +90,10 @@ struct GhosttyNativeFindSessionTests {
 
         lifecycle.begin(restoreTerminalFocus: true)
 
-        #expect(lifecycle.end())
-        #expect(!lifecycle.end())
+        let firstEndRestoresFocus = lifecycle.end()
+        let repeatedEndRestoresFocus = lifecycle.end()
+        #expect(firstEndRestoresFocus)
+        #expect(!repeatedEndRestoresFocus)
         #expect(!lifecycle.isActive)
     }
 }

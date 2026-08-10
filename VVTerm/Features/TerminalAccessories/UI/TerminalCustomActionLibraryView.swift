@@ -73,7 +73,7 @@ struct TerminalCustomActionLibraryView: View {
                         Int64(preferences.customActions.count),
                         Int64(max(
                             preferences.customActions.count,
-                            preferences.customActionLimit(hasProAccess: storeManager.isPro)
+                            preferences.customActionLimit(hasProAccess: storeManager.allowsProFeatures)
                         ))
                     )
                 )
@@ -90,7 +90,7 @@ struct TerminalCustomActionLibraryView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     if preferences.isCustomActionCreationProGated(
-                        hasProAccess: storeManager.isPro
+                        hasProAccess: storeManager.allowsProFeatures
                     ) {
                         showingProGateAlert = true
                     } else {

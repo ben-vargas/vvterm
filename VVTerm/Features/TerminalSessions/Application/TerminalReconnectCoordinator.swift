@@ -33,7 +33,7 @@ struct TerminalReconnectAccess {
 }
 
 @MainActor
-final class TerminalReconnectCoordinator {
+final class TerminalReconnectCoordinator: ObservableObject {
     nonisolated enum Phase: Hashable, Sendable {
         case preparing
         case waitingForNetwork
@@ -431,7 +431,7 @@ final class TerminalReconnectCoordinator {
             task: nil
         )
         emit(.preparationStarted, for: attempt)
-        onChange()
+        notifyChange()
         emit(.cleanupStarted, for: attempt)
 
         let prepareTransport = access.prepareTransport
@@ -506,12 +506,12 @@ final class TerminalReconnectCoordinator {
             records.removeValue(forKey: attempt.paneId)
             connectionGenerations[attempt.paneId] = previousGeneration
             emit(.staleResultRejected, for: attempt)
-            onChange()
+            notifyChange()
             return
         }
 
         emit(.connecting, for: record.attempt)
-        onChange()
+        notifyChange()
         let sleep = sleep
         let connectionTimeout = connectionTimeout
         let preparationTimeout = preparationTimeout
@@ -552,7 +552,7 @@ final class TerminalReconnectCoordinator {
         emit(outcome == .completed ? .cleanupCompleted : .cleanupDeadline, for: attempt)
         records.removeValue(forKey: attempt.paneId)
         access.failConnection(attempt.paneId)
-        onChange()
+        notifyChange()
     }
 
     private func wait(_ attempt: Attempt, phase: Phase) {
@@ -561,7 +561,7 @@ final class TerminalReconnectCoordinator {
         record.task = nil
         records[attempt.paneId] = record
         emit(eventStage(for: phase), for: record.attempt)
-        onChange()
+        notifyChange()
     }
 
     private func waitPhase(for record: Record) -> Phase? {
@@ -756,7 +756,7 @@ final class TerminalReconnectCoordinator {
         guard let record = records.removeValue(forKey: paneId) else { return }
         record.task?.cancel()
         emit(event, for: record.attempt)
-        onChange()
+        notifyChange()
     }
 
     private func invalidateAllAttempts() {
@@ -767,7 +767,7 @@ final class TerminalReconnectCoordinator {
             emit(.invalidated, for: record.attempt)
         }
         if !activeRecords.isEmpty {
-            onChange()
+            notifyChange()
         }
     }
 
@@ -788,5 +788,10 @@ final class TerminalReconnectCoordinator {
             stage: stage,
             systemUptime: Foundation.ProcessInfo.processInfo.systemUptime
         ))
+    }
+
+    private func notifyChange() {
+        objectWillChange.send()
+        onChange()
     }
 }
