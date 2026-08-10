@@ -7,6 +7,12 @@ import Foundation
 import Combine
 import os.log
 
+nonisolated enum TerminalThemeSelectionTarget: CaseIterable, Hashable, Sendable {
+    case dark
+    case light
+    case both
+}
+
 nonisolated struct TerminalThemeObserverCleanupRequest: Sendable {
     private let cleanup: @MainActor @Sendable () -> Void
 
@@ -127,6 +133,46 @@ final class TerminalThemeManager: ObservableObject {
             return preferred
         }
         return customTheme.canApply ? preferred : fallback
+    }
+
+    func selectTheme(
+        named themeName: String,
+        for target: TerminalThemeSelectionTarget
+    ) {
+        let current = themeSelection
+        let requested: TerminalThemeSelection
+        switch target {
+        case .dark:
+            requested = TerminalThemeSelection(
+                darkThemeName: themeName,
+                lightThemeName: current.lightThemeName,
+                usePerAppearanceTheme: current.usePerAppearanceTheme
+            )
+        case .light:
+            requested = TerminalThemeSelection(
+                darkThemeName: current.darkThemeName,
+                lightThemeName: themeName,
+                usePerAppearanceTheme: current.usePerAppearanceTheme
+            )
+        case .both:
+            requested = TerminalThemeSelection(
+                darkThemeName: themeName,
+                lightThemeName: themeName,
+                usePerAppearanceTheme: current.usePerAppearanceTheme
+            )
+        }
+
+        applyLocalSelection(requested)
+    }
+
+    func setUsesPerAppearanceTheme(_ enabled: Bool) {
+        applyLocalSelection(
+            TerminalThemeSelection(
+                darkThemeName: themeSelection.darkThemeName,
+                lightThemeName: themeSelection.lightThemeName,
+                usePerAppearanceTheme: enabled
+            )
+        )
     }
 
     func appearanceSnapshot(
@@ -288,21 +334,8 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     private func ensureThemeSelectionIsValid() {
-        let storedThemeNames = customThemes.filter { !$0.isDeleted }.map(\.name)
-        let available = Set(dependencies.builtInThemeCatalog.themeNames() + storedThemeNames)
-        let fallbackDark = "Aizen Dark"
-        let fallbackLight = "Aizen Light"
-
         let selection = currentPreferenceSnapshot()
-        let correctedSelection = TerminalThemeSelection(
-            darkThemeName: available.contains(selection.darkThemeName)
-                ? selection.darkThemeName
-                : fallbackDark,
-            lightThemeName: available.contains(selection.lightThemeName)
-                ? selection.lightThemeName
-                : fallbackLight,
-            usePerAppearanceTheme: selection.usePerAppearanceTheme
-        )
+        let correctedSelection = normalizedSelection(selection)
 
         if correctedSelection != selection {
             persistence.saveSelection(correctedSelection)
@@ -394,9 +427,14 @@ final class TerminalThemeManager: ObservableObject {
 
     private func handleThemePreferenceChange() {
         guard !isApplyingRemotePreference else { return }
-        let snapshot = currentPreferenceSnapshot()
-        guard snapshot != lastKnownPreferenceSnapshot else { return }
+        let storedSelection = currentPreferenceSnapshot()
+        let snapshot = normalizedSelection(storedSelection)
+        let selectionChanged = snapshot != lastKnownPreferenceSnapshot
         lastKnownPreferenceSnapshot = snapshot
+        if snapshot != storedSelection {
+            persistence.saveSelection(snapshot)
+        }
+        guard selectionChanged else { return }
         refreshActiveAppearance()
 
         let now = dependencies.now()
@@ -413,6 +451,44 @@ final class TerminalThemeManager: ObservableObject {
 
     private func currentPreferenceSnapshot() -> TerminalThemeSelection {
         persistence.loadSelection()
+    }
+
+    private func normalizedSelection(
+        _ selection: TerminalThemeSelection
+    ) -> TerminalThemeSelection {
+        let storedThemeNames = customThemes.filter { !$0.isDeleted }.map(\.name)
+        let available = Set(dependencies.builtInThemeCatalog.themeNames() + storedThemeNames)
+        return TerminalThemeSelection(
+            darkThemeName: available.contains(selection.darkThemeName)
+                ? selection.darkThemeName
+                : "Aizen Dark",
+            lightThemeName: available.contains(selection.lightThemeName)
+                ? selection.lightThemeName
+                : "Aizen Light",
+            usePerAppearanceTheme: selection.usePerAppearanceTheme
+        )
+    }
+
+    private func applyLocalSelection(_ requested: TerminalThemeSelection) {
+        let selection = normalizedSelection(requested)
+        guard selection != themeSelection else { return }
+
+        themeSelection = selection
+        lastKnownPreferenceSnapshot = selection
+        persistence.saveSelection(selection)
+        _ = activateAppearance(activeAppearanceSnapshot.activeAppearance)
+
+        guard dependencies.startsSynchronization else { return }
+        let now = dependencies.now()
+        persistence.savePreferenceUpdatedAt(now)
+        schedulePreferenceCloudSync(
+            TerminalThemePreference(
+                darkThemeName: selection.darkThemeName,
+                lightThemeName: selection.lightThemeName,
+                usePerAppearanceTheme: selection.usePerAppearanceTheme,
+                updatedAt: now
+            )
+        )
     }
 
     private func localPreferenceUpdatedAt() -> Date {

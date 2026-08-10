@@ -6,13 +6,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum CustomThemeApplyTarget: String, CaseIterable, Identifiable {
-    case dark
-    case light
-    case both
-
-    var id: String { rawValue }
-
+extension TerminalThemeSelectionTarget {
     var title: String {
         switch self {
         case .dark: return String(localized: "Dark")
@@ -141,9 +135,6 @@ struct TerminalSettingsView: View {
     @Binding var fontName: String
     @Binding var fontSize: Double
 
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var themeName = "Aizen Dark"
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var themeNameLight = "Aizen Light"
-    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     @AppStorage("appearanceMode") private var appearanceMode = "system"
     @AppStorage("terminalKeyboardDismissButtonEnabled") var terminalKeyboardDismissButtonEnabled = true
     @AppStorage("terminalTmuxEnabledDefault") private var tmuxEnabledDefault = true
@@ -177,13 +168,12 @@ struct TerminalSettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var availableFonts: [String] = []
-    @State private var builtInThemeNames: [String] = []
     @State private var customThemeErrorMessage: String?
     @State private var showingCustomThemeManager = false
     @State private var showingResetKnownHostsConfirmation = false
 
     private var builtInThemeOptions: [String] {
-        Set(builtInThemeNames)
+        Set(terminalThemeManager.builtInThemeNames)
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
@@ -200,6 +190,31 @@ struct TerminalSettingsView: View {
 
     private var allThemeNames: [String] {
         builtInThemeOptions + customThemeOptions
+    }
+
+    private var themeSelection: TerminalThemeSelection {
+        terminalThemeManager.themeSelection
+    }
+
+    private var darkThemeNameBinding: Binding<String> {
+        Binding(
+            get: { terminalThemeManager.themeSelection.darkThemeName },
+            set: { terminalThemeManager.selectTheme(named: $0, for: .dark) }
+        )
+    }
+
+    private var lightThemeNameBinding: Binding<String> {
+        Binding(
+            get: { terminalThemeManager.themeSelection.lightThemeName },
+            set: { terminalThemeManager.selectTheme(named: $0, for: .light) }
+        )
+    }
+
+    private var usePerAppearanceThemeBinding: Binding<Bool> {
+        Binding(
+            get: { terminalThemeManager.themeSelection.usePerAppearanceTheme },
+            set: { terminalThemeManager.setUsesPerAppearanceTheme($0) }
+        )
     }
 
     private var customThemeCountLabel: String {
@@ -256,15 +271,19 @@ struct TerminalSettingsView: View {
     }
 
     private var cursorPreviewThemeName: String {
-        guard usePerAppearanceTheme else { return themeName }
+        guard themeSelection.usePerAppearanceTheme else {
+            return themeSelection.darkThemeName
+        }
 
         switch appearanceMode {
         case "light":
-            return themeNameLight
+            return themeSelection.lightThemeName
         case "dark":
-            return themeName
+            return themeSelection.darkThemeName
         default:
-            return colorScheme == .dark ? themeName : themeNameLight
+            return colorScheme == .dark
+                ? themeSelection.darkThemeName
+                : themeSelection.lightThemeName
         }
     }
 
@@ -358,20 +377,23 @@ struct TerminalSettingsView: View {
 
     private var themeSection: some View {
         Section("Theme") {
-            Toggle("Use different themes for Light/Dark mode", isOn: $usePerAppearanceTheme)
+            Toggle(
+                "Use different themes for Light/Dark mode",
+                isOn: usePerAppearanceThemeBinding
+            )
 
-            if usePerAppearanceTheme {
-                Picker("Dark Mode Theme", selection: $themeName) {
+            if themeSelection.usePerAppearanceTheme {
+                Picker("Dark Mode Theme", selection: darkThemeNameBinding) {
                     themePickerRows
                 }
                 .disabled(allThemeNames.isEmpty)
 
-                Picker("Light Mode Theme", selection: $themeNameLight) {
+                Picker("Light Mode Theme", selection: lightThemeNameBinding) {
                     themePickerRows
                 }
                 .disabled(allThemeNames.isEmpty)
             } else {
-                Picker("Theme", selection: $themeName) {
+                Picker("Theme", selection: darkThemeNameBinding) {
                     themePickerRows
                 }
                 .disabled(allThemeNames.isEmpty)
@@ -556,18 +578,18 @@ struct TerminalSettingsView: View {
         .sheet(isPresented: $showingCustomThemeManager) {
             ManageCustomThemesSheet(
                 customThemes: customThemes,
-                darkThemeName: $themeName,
-                lightThemeName: $themeNameLight,
-                usePerAppearanceTheme: usePerAppearanceTheme,
+                themeSelection: themeSelection,
                 onSuggestThemeName: { source in
                     terminalThemeManager.suggestThemeName(from: source)
                 },
                 onCreateTheme: { name, content, applyTarget in
                     try createAndApplyCustomTheme(name: name, content: content, applyTarget: applyTarget)
                 },
+                onApplyTheme: { themeName, applyTarget in
+                    applyThemeSelection(themeName: themeName, applyTarget: applyTarget)
+                },
                 onDelete: { themeID in
                     terminalThemeManager.deleteCustomTheme(id: themeID)
-                    ensureThemeSelectionIsValid()
                 },
                 onSaveEdit: { themeID, name, content in
                     try terminalThemeManager.updateCustomTheme(
@@ -575,7 +597,6 @@ struct TerminalSettingsView: View {
                         name: name,
                         content: content
                     )
-                    ensureThemeSelectionIsValid()
                 }
             )
             .adaptiveSoftScrollEdges()
@@ -593,18 +614,6 @@ struct TerminalSettingsView: View {
         } message: {
             Text("VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents.")
         }
-        .onChange(of: themeName) { _ in
-            ensureThemeSelectionIsValid()
-        }
-        .onChange(of: themeNameLight) { _ in
-            ensureThemeSelectionIsValid()
-        }
-        .onChange(of: usePerAppearanceTheme) { _ in
-            ensureThemeSelectionIsValid()
-        }
-        .onChange(of: terminalThemeManager.customThemes) { _ in
-            ensureThemeSelectionIsValid()
-        }
         .onAppear {
             if availableFonts.isEmpty {
                 availableFonts = Self.fontListEnsuringCurrentFont(
@@ -612,10 +621,6 @@ struct TerminalSettingsView: View {
                     currentFontName: fontName
                 )
             }
-            if builtInThemeNames.isEmpty {
-                builtInThemeNames = terminalThemeManager.builtInThemeNames
-            }
-            ensureThemeSelectionIsValid()
             knownHostSettingsCoordinator.loadCount()
         }
     }
@@ -631,54 +636,38 @@ struct TerminalSettingsView: View {
         return [trimmed] + systemFonts
     }
 
-    private func ensureThemeSelectionIsValid() {
-        let available = Set(builtInThemeOptions + customThemes.map(\.name))
-        if !available.contains(themeName) {
-            themeName = "Aizen Dark"
-        }
-        if !available.contains(themeNameLight) {
-            themeNameLight = "Aizen Light"
-        }
-    }
-
-    private func createAndApplyCustomTheme(name: String, content: String, applyTarget: CustomThemeApplyTarget) throws {
+    private func createAndApplyCustomTheme(
+        name: String,
+        content: String,
+        applyTarget: TerminalThemeSelectionTarget
+    ) throws {
         let theme = try terminalThemeManager.createCustomTheme(name: name, content: content)
         applyThemeSelection(themeName: theme.name, applyTarget: applyTarget)
-        ensureThemeSelectionIsValid()
     }
 
-    private func applyThemeSelection(themeName: String, applyTarget: CustomThemeApplyTarget) {
-        guard usePerAppearanceTheme else {
-            self.themeName = themeName
-            return
-        }
-
-        switch applyTarget {
-        case .dark:
-            self.themeName = themeName
-        case .light:
-            self.themeNameLight = themeName
-        case .both:
-            self.themeName = themeName
-            self.themeNameLight = themeName
-        }
+    private func applyThemeSelection(
+        themeName: String,
+        applyTarget: TerminalThemeSelectionTarget
+    ) {
+        let target = themeSelection.usePerAppearanceTheme ? applyTarget : .dark
+        terminalThemeManager.selectTheme(named: themeName, for: target)
     }
 }
 
 struct CustomThemeSaveSheet: View {
     let suggestedName: String
     let usePerAppearanceTheme: Bool
-    let onSave: (String, CustomThemeApplyTarget) throws -> Void
+    let onSave: (String, TerminalThemeSelectionTarget) throws -> Void
 
     @Environment(\.dismiss) var dismiss
     @State private var name: String
-    @State private var applyTarget: CustomThemeApplyTarget = .dark
+    @State private var applyTarget: TerminalThemeSelectionTarget = .dark
     @State private var errorMessage: String?
 
     init(
         suggestedName: String,
         usePerAppearanceTheme: Bool,
-        onSave: @escaping (String, CustomThemeApplyTarget) throws -> Void
+        onSave: @escaping (String, TerminalThemeSelectionTarget) throws -> Void
     ) {
         self.suggestedName = suggestedName
         self.usePerAppearanceTheme = usePerAppearanceTheme
@@ -714,7 +703,7 @@ struct CustomThemeSaveSheet: View {
             if usePerAppearanceTheme {
                 Section {
                     Picker("Target", selection: $applyTarget) {
-                        ForEach(CustomThemeApplyTarget.allCases) { target in
+                        ForEach(TerminalThemeSelectionTarget.allCases, id: \.self) { target in
                             Text(target.title).tag(target)
                         }
                     }
@@ -760,11 +749,10 @@ struct CustomThemeSaveSheet: View {
 
 struct ManageCustomThemesSheet: View {
     let customThemes: [TerminalTheme]
-    @Binding var darkThemeName: String
-    @Binding var lightThemeName: String
-    let usePerAppearanceTheme: Bool
+    let themeSelection: TerminalThemeSelection
     let onSuggestThemeName: (String) -> String
-    let onCreateTheme: (String, String, CustomThemeApplyTarget) throws -> Void
+    let onCreateTheme: (String, String, TerminalThemeSelectionTarget) throws -> Void
+    let onApplyTheme: (String, TerminalThemeSelectionTarget) -> Void
     let onDelete: (UUID) -> Void
     let onSaveEdit: (UUID, String, String) throws -> Void
 
@@ -844,14 +832,16 @@ struct ManageCustomThemesSheet: View {
         .sheet(item: $pendingCustomThemeSource) { source in
             CustomThemeSaveSheet(
                 suggestedName: source.suggestedName,
-                usePerAppearanceTheme: usePerAppearanceTheme
+                usePerAppearanceTheme: themeSelection.usePerAppearanceTheme
             ) { name, applyTarget in
                 try onCreateTheme(name, source.content, applyTarget)
             }
             .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingThemeBuilder) {
-            ThemeBuilderSheet(usePerAppearanceTheme: usePerAppearanceTheme) { name, content, applyTarget in
+            ThemeBuilderSheet(
+                usePerAppearanceTheme: themeSelection.usePerAppearanceTheme
+            ) { name, content, applyTarget in
                 try onCreateTheme(name, content, applyTarget)
             }
             .adaptiveSoftScrollEdges()
@@ -899,9 +889,9 @@ struct ManageCustomThemesSheet: View {
     }
 
     func assignmentLabel(for theme: String) -> String? {
-        if usePerAppearanceTheme {
-            let usesDark = darkThemeName == theme
-            let usesLight = lightThemeName == theme
+        if themeSelection.usePerAppearanceTheme {
+            let usesDark = themeSelection.darkThemeName == theme
+            let usesLight = themeSelection.lightThemeName == theme
 
             switch (usesDark, usesLight) {
             case (true, true):
@@ -915,7 +905,7 @@ struct ManageCustomThemesSheet: View {
             }
         }
 
-        return darkThemeName == theme ? String(localized: "Active") : nil
+        return themeSelection.darkThemeName == theme ? String(localized: "Active") : nil
     }
 
     @ViewBuilder
@@ -924,7 +914,7 @@ struct ManageCustomThemesSheet: View {
             Button("Repair Theme") {
                 themePendingEdit = theme
             }
-        } else if usePerAppearanceTheme {
+        } else if themeSelection.usePerAppearanceTheme {
             Button("Apply to Dark") {
                 applyThemeSelection(themeName: themeName, applyTarget: .dark)
             }
@@ -1003,21 +993,11 @@ struct ManageCustomThemesSheet: View {
         }
     }
 
-    func applyThemeSelection(themeName: String, applyTarget: CustomThemeApplyTarget) {
-        guard usePerAppearanceTheme else {
-            darkThemeName = themeName
-            return
-        }
-
-        switch applyTarget {
-        case .dark:
-            darkThemeName = themeName
-        case .light:
-            lightThemeName = themeName
-        case .both:
-            darkThemeName = themeName
-            lightThemeName = themeName
-        }
+    func applyThemeSelection(
+        themeName: String,
+        applyTarget: TerminalThemeSelectionTarget
+    ) {
+        onApplyTheme(themeName, applyTarget)
     }
 }
 
@@ -1026,13 +1006,13 @@ struct ThemeBuilderSheet: View {
     let showApplyTarget: Bool
     let title: String
     let onDeleteRequest: (() -> Void)?
-    let onSave: (String, String, CustomThemeApplyTarget) throws -> Void
+    let onSave: (String, String, TerminalThemeSelectionTarget) throws -> Void
 
     @Environment(\.dismiss) var dismiss
 
     @State private var name: String
     @State private var draft: TerminalThemeDraft
-    @State private var applyTarget: CustomThemeApplyTarget
+    @State private var applyTarget: TerminalThemeSelectionTarget
     @State private var errorMessage: String?
     @State var showingDeleteConfirmation = false
 
@@ -1042,9 +1022,9 @@ struct ThemeBuilderSheet: View {
         title: String = "Theme Builder",
         initialName: String = "Custom Theme",
         initialContent: String? = nil,
-        initialApplyTarget: CustomThemeApplyTarget = .dark,
+        initialApplyTarget: TerminalThemeSelectionTarget = .dark,
         onDeleteRequest: (() -> Void)? = nil,
-        onSave: @escaping (String, String, CustomThemeApplyTarget) throws -> Void
+        onSave: @escaping (String, String, TerminalThemeSelectionTarget) throws -> Void
     ) {
         self.usePerAppearanceTheme = usePerAppearanceTheme
         self.showApplyTarget = showApplyTarget ?? usePerAppearanceTheme
@@ -1179,7 +1159,7 @@ struct ThemeBuilderSheet: View {
                 if showApplyTarget {
                     Section {
                         Picker("Target", selection: $applyTarget) {
-                            ForEach(CustomThemeApplyTarget.allCases) { target in
+                            ForEach(TerminalThemeSelectionTarget.allCases, id: \.self) { target in
                                 Text(target.title).tag(target)
                             }
                         }

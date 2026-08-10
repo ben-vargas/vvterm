@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import VVTerm
 
@@ -117,6 +118,7 @@ private final class TerminalThemePersistenceSpy: TerminalThemePersistence {
     var selection: TerminalThemeSelection
     var preferenceUpdatedAt: Date
     private(set) var savedThemeSnapshots: [[TerminalTheme]] = []
+    private(set) var savedSelections: [TerminalThemeSelection] = []
     private(set) var cachedBackgroundHexes: [String] = []
 
     init(
@@ -148,6 +150,7 @@ private final class TerminalThemePersistenceSpy: TerminalThemePersistence {
 
     func saveSelection(_ selection: TerminalThemeSelection) {
         self.selection = selection
+        savedSelections.append(selection)
     }
 
     func loadPreferenceUpdatedAt() -> Date {
@@ -622,6 +625,95 @@ final class TerminalThemePersistenceTests: XCTestCase {
             )
         )
         XCTAssertEqual(manager.themeSelection, persistence.selection)
+    }
+
+    func testUISelectionUpdatePersistsPublishesAndActivatesExactlyOnce() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let persistence = TerminalThemePersistenceSpy()
+        let manager = makeManager(defaults: defaults, persistence: persistence)
+        var publishedSelections: [TerminalThemeSelection] = []
+        let observation = manager.$themeSelection.dropFirst().sink {
+            publishedSelections.append($0)
+        }
+        defer { observation.cancel() }
+        let initialSelectionWriteCount = persistence.savedSelections.count
+        let initialCacheWriteCount = persistence.cachedBackgroundHexes.count
+        let expected = TerminalThemeSelection(
+            darkThemeName: "Aizen Light",
+            lightThemeName: "Aizen Light",
+            usePerAppearanceTheme: true
+        )
+
+        manager.selectTheme(named: "Aizen Light", for: .both)
+
+        XCTAssertEqual(manager.themeSelection, expected)
+        XCTAssertEqual(persistence.selection, expected)
+        XCTAssertEqual(
+            persistence.savedSelections.count,
+            initialSelectionWriteCount + 1
+        )
+        XCTAssertEqual(publishedSelections, [expected])
+        XCTAssertEqual(
+            persistence.cachedBackgroundHexes.count,
+            initialCacheWriteCount + 1
+        )
+    }
+
+    func testSelectionUpdatesAreIdempotent() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let persistence = TerminalThemePersistenceSpy()
+        let manager = makeManager(defaults: defaults, persistence: persistence)
+        var publishedSelectionCount = 0
+        let observation = manager.$themeSelection.dropFirst().sink { _ in
+            publishedSelectionCount += 1
+        }
+        defer { observation.cancel() }
+        let initialSelectionWriteCount = persistence.savedSelections.count
+        let initialCacheWriteCount = persistence.cachedBackgroundHexes.count
+
+        manager.selectTheme(named: "Aizen Dark", for: .dark)
+        manager.selectTheme(named: "Aizen Light", for: .light)
+        manager.setUsesPerAppearanceTheme(true)
+
+        XCTAssertEqual(persistence.savedSelections.count, initialSelectionWriteCount)
+        XCTAssertEqual(publishedSelectionCount, 0)
+        XCTAssertEqual(
+            persistence.cachedBackgroundHexes.count,
+            initialCacheWriteCount
+        )
+    }
+
+    func testInvalidUISelectionIsNormalizedByTheManager() throws {
+        let suiteName = "TerminalThemePersistenceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let persistence = TerminalThemePersistenceSpy(
+            selection: TerminalThemeSelection(
+                darkThemeName: "Aizen Light",
+                lightThemeName: "Aizen Dark",
+                usePerAppearanceTheme: true
+            )
+        )
+        let manager = makeManager(defaults: defaults, persistence: persistence)
+        let initialSelectionWriteCount = persistence.savedSelections.count
+        let expected = TerminalThemeSelection(
+            darkThemeName: "Aizen Dark",
+            lightThemeName: "Aizen Light",
+            usePerAppearanceTheme: true
+        )
+
+        manager.selectTheme(named: "../Missing Theme", for: .both)
+
+        XCTAssertEqual(manager.themeSelection, expected)
+        XCTAssertEqual(persistence.selection, expected)
+        XCTAssertEqual(
+            persistence.savedSelections.count,
+            initialSelectionWriteCount + 1
+        )
     }
 
     func testForegroundAndSyncEnabledUseInjectedStateAndFeatureMergePolicy() async throws {

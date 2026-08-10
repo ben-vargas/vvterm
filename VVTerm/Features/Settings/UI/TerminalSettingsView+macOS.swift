@@ -49,7 +49,7 @@ extension ManageCustomThemesSheet {
                             CustomThemeManagerRow(
                                 theme: theme,
                                 assignment: assignment,
-                                usePerAppearanceTheme: usePerAppearanceTheme,
+                                usePerAppearanceTheme: themeSelection.usePerAppearanceTheme,
                                 isHovered: hoveredThemeID == theme.id,
                                 isSelected: assignment != nil,
                                 onApply: { target in
@@ -179,7 +179,7 @@ struct CustomThemeManagerRow: View {
     let usePerAppearanceTheme: Bool
     let isHovered: Bool
     let isSelected: Bool
-    let onApply: (CustomThemeApplyTarget) -> Void
+    let onApply: (TerminalThemeSelectionTarget) -> Void
     let onEdit: () -> Void
     let onDeleteRequest: () -> Void
 

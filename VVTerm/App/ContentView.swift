@@ -45,9 +45,6 @@ struct ContentView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var restoredColumnVisibility: NavigationSplitViewVisibility = .all
     @SceneStorage("vvterm.zenMode.macos") private var isZenModeEnabled = false
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
-    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
 
     init(
         serverManager: ServerManager,
@@ -91,19 +88,14 @@ struct ContentView: View {
         canUseZenMode && isZenModeEnabled
     }
 
-    private var effectiveTerminalThemeName: String {
-        let fallback = colorScheme == .dark ? "Aizen Dark" : "Aizen Light"
-        let preferred = usePerAppearanceTheme
-            ? (colorScheme == .dark ? terminalThemeName : terminalThemeNameLight)
-            : terminalThemeName
-        return terminalThemeManager.applicationThemeName(
-            preferred: preferred,
-            fallback: fallback
+    private var terminalAppearanceSnapshot: TerminalAppearanceSnapshot {
+        terminalThemeManager.appearanceSnapshot(
+            for: colorScheme == .dark ? .dark : .light
         )
     }
 
     private var macOSWindowBackgroundColor: Color {
-        ThemeColorParser.previewPalette(for: effectiveTerminalThemeName).background
+        Color.fromHex(terminalAppearanceSnapshot.activeTheme.palette.backgroundHex)
     }
 
     #if os(macOS)
