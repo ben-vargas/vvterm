@@ -225,6 +225,46 @@ final class StoreManagerLifecycleTests: XCTestCase {
         XCTAssertEqual(recordedEffects, [.reviewRequestedAfterPurchase])
     }
 
+    func testLimitHitsRecordEachTypedPayloadExactlyOnce() {
+        let inputs: [(
+            source: PaywallSource,
+            generation: FreePlanGeneration,
+            current: Int,
+            limit: Int
+        )] = [
+            (.serverLimit, .legacyThreeServers, Int.max, 3),
+            (.workspaceLimit, .currentOneServer, 1, 1),
+            (.tabLimit, .currentOneServer, 1, 1),
+            (.fileTabLimit, .legacyThreeServers, 1, 1)
+        ]
+        var recordedEffects: [StoreManagerEffect] = []
+        let manager = StoreManager(
+            client: StoreClientFake(),
+            effects: StoreManagerEffects { recordedEffects.append($0) }
+        )
+
+        for input in inputs {
+            manager.noteLimitHit(
+                source: input.source,
+                generation: input.generation,
+                current: input.current,
+                limit: input.limit
+            )
+        }
+
+        XCTAssertEqual(
+            recordedEffects,
+            inputs.map { input in
+                .limitHit(
+                    source: input.source,
+                    generation: input.generation,
+                    current: input.current,
+                    limit: input.limit
+                )
+            }
+        )
+    }
+
     func testStartLoadsProductsThenEntitlementsAndIsIdempotent() async {
         let client = StoreClientFake()
         client.loadedProducts = [monthlyProduct]

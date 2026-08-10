@@ -8,6 +8,12 @@ nonisolated enum StoreManagerEffect: Equatable, Sendable {
     case purchaseCancelled(source: PaywallSource, productID: String)
     case purchasePending(source: PaywallSource, productID: String)
     case purchaseFailed(source: PaywallSource, productID: String, reason: String)
+    case limitHit(
+        source: PaywallSource,
+        generation: FreePlanGeneration,
+        current: Int,
+        limit: Int
+    )
     case entitlementsUpdated(isPro: Bool)
     case reviewRequestedAfterPurchase
 }

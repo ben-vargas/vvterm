@@ -38,6 +38,13 @@ extension StoreManagerEffects {
                     productId: productID,
                     reason: reason
                 )
+            case .limitHit(let source, let generation, let current, let limit):
+                AnalyticsTracker.shared.trackLimitHit(
+                    source: source.rawValue,
+                    generation: generation.rawValue,
+                    current: current,
+                    limit: limit
+                )
             case .entitlementsUpdated(let isPro):
                 AnalyticsTracker.shared.trackAppLaunched(isPro: isPro)
             case .reviewRequestedAfterPurchase:

@@ -162,6 +162,20 @@ final class StoreManager: ObservableObject {
         effects.record(.reviewRequestedAfterPurchase)
     }
 
+    func noteLimitHit(
+        source: PaywallSource,
+        generation: FreePlanGeneration,
+        current: Int,
+        limit: Int
+    ) {
+        effects.record(.limitHit(
+            source: source,
+            generation: generation,
+            current: current,
+            limit: limit
+        ))
+    }
+
     func introductoryOfferState(for product: StoreProduct) async -> ProPlanIntroductoryOfferState {
         await client.introductoryOfferState(productId: product.id)
     }

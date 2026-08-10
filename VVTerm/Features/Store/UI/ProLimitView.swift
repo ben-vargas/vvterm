@@ -72,6 +72,7 @@ struct LimitReachedAlert: ViewModifier {
     let limitType: LimitType
     @Binding var isPresented: Bool
     @EnvironmentObject private var serverManager: ServerManager
+    @EnvironmentObject private var storeManager: StoreManager
     @State private var showUpgrade = false
 
     enum LimitType {
@@ -150,9 +151,9 @@ struct LimitReachedAlert: ViewModifier {
             limit = FreeTierLimits.maxTabs
         }
 
-        AnalyticsTracker.shared.trackLimitHit(
-            source: limitType.paywallSource.rawValue,
-            generation: serverManager.freePlanGeneration.rawValue,
+        storeManager.noteLimitHit(
+            source: limitType.paywallSource,
+            generation: serverManager.freePlanGeneration,
             current: current,
             limit: limit
         )
