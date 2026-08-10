@@ -1463,11 +1463,14 @@ struct TerminalTabManagerLifecycleTests {
             manager.updatePaneWorkingDirectory(firstTab.rootPaneId, rawDirectory: "/srv/first")
 
             let otherServerTab = try await manager.openTab(for: secondServer)
-            #expect(manager.workingDirectory(for: otherServerTab.rootPaneId) == nil)
+            #expect(manager.sessionState.paneState(for: otherServerTab.rootPaneId)?.workingDirectory == nil)
             #expect(manager.sessionState.paneState(for: otherServerTab.rootPaneId)?.seedPaneId == nil)
 
             let secondFirstServerTab = try await manager.openTab(for: firstServer)
-            #expect(manager.workingDirectory(for: secondFirstServerTab.rootPaneId) == "/srv/first")
+            #expect(
+                manager.sessionState.paneState(for: secondFirstServerTab.rootPaneId)?.workingDirectory
+                    == "/srv/first"
+            )
             #expect(manager.sessionState.paneState(for: secondFirstServerTab.rootPaneId)?.seedPaneId == firstTab.rootPaneId)
         }
     }
@@ -1483,7 +1486,7 @@ struct TerminalTabManagerLifecycleTests {
                 rawDirectory: "file://host/C:/safe%0D%0Awhoami"
             )
 
-            #expect(manager.workingDirectory(for: tab.rootPaneId) == nil)
+            #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.workingDirectory == nil)
         }
     }
 

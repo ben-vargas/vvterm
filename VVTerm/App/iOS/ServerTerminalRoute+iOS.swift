@@ -768,7 +768,7 @@ struct ServerTerminalRoute: View {
     }
 
     private func openNewTab(for server: Server) {
-        guard tabManager.canOpenNewTab(hasProAccess: storeManager.allowsProFeatures) else {
+        guard tabManager.sessionState.canOpenNewTab(hasProAccess: storeManager.allowsProFeatures) else {
             showingTabLimitAlert = true
             return
         }
@@ -795,7 +795,9 @@ struct ServerTerminalRoute: View {
 
         let sourceTab = selectedFileTab
         let seedPath = sourceTab.flatMap { fileBrowser.lastVisitedPath(for: $0) }
-            ?? selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
+            ?? selectedTab.flatMap {
+                tabManager.sessionState.paneState(for: $0.focusedPaneId)?.workingDirectory
+            }
         let newTab = sourceTab.flatMap {
             fileTabs.duplicateTab(
                 $0,

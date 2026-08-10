@@ -100,10 +100,10 @@ final class TerminalTabManager {
                     )
                 },
                 workingDirectory: { [weak self] paneId in
-                    self?.workingDirectory(for: paneId)
+                    self?.sessionState.paneState(for: paneId)?.workingDirectory
                 },
                 shouldApplyWorkingDirectory: { [weak self] paneId in
-                    self?.shouldApplyWorkingDirectory(for: paneId) == true
+                    self?.tmuxCoordinator.shouldApplyWorkingDirectory(for: paneId) == true
                 }
             ),
             tmuxAccess: TerminalTransportTmuxAccess(
@@ -303,10 +303,6 @@ final class TerminalTabManager {
     }
     #endif
 
-    private func paneWorkingDirectory(for paneId: UUID) -> String? {
-        sessionState.paneState(for: paneId)?.workingDirectory
-    }
-
     private func setPaneWorkingDirectory(_ workingDirectory: String, for paneId: UUID) {
         sessionState.updatePane(paneId) { $0.workingDirectory = workingDirectory }
     }
@@ -354,15 +350,10 @@ final class TerminalTabManager {
 
     func workingDirectoryCandidate(for serverId: UUID) -> String? {
         if let selectedTab = sessionState.selectedTab(for: serverId),
-           let directory = workingDirectory(for: selectedTab.focusedPaneId) {
+           let directory = sessionState.paneState(for: selectedTab.focusedPaneId)?.workingDirectory {
             return directory
         }
         return sessionState.firstPaneState(for: serverId)?.workingDirectory
-    }
-
-    /// Check if can open new tab (Pro limit check)
-    func canOpenNewTab(hasProAccess: Bool) -> Bool {
-        sessionState.canOpenNewTab(hasProAccess: hasProAccess)
     }
 
     /// Open a new tab for a server
@@ -1187,14 +1178,6 @@ final class TerminalTabManager {
             presentationOverrides: overrides,
             effectiveFontSize: overrides.resolvedFontSize()
         )
-    }
-
-    func workingDirectory(for paneId: UUID) -> String? {
-        paneWorkingDirectory(for: paneId)
-    }
-
-    func shouldApplyWorkingDirectory(for paneId: UUID) -> Bool {
-        tmuxCoordinator.shouldApplyWorkingDirectory(for: paneId)
     }
 
 }

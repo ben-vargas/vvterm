@@ -399,7 +399,9 @@ struct ConnectionTerminalContainer: View {
     private func ensureInitialFileTabIfNeeded() {
         guard selectedView == .files else { return }
 
-        let seedPath = selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
+        let seedPath = selectedTab.flatMap {
+            tabManager.sessionState.paneState(for: $0.focusedPaneId)?.workingDirectory
+        }
         DispatchQueue.main.async {
             guard selectedView == .files else { return }
             guard let fileTab = fileTabManager.ensureInitialTab(
@@ -464,7 +466,9 @@ struct ConnectionTerminalContainer: View {
 
         let sourceTab = selectedFileTab
         let seedPath = sourceTab.flatMap { fileBrowser.lastVisitedPath(for: $0) }
-            ?? selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
+            ?? selectedTab.flatMap {
+                tabManager.sessionState.paneState(for: $0.focusedPaneId)?.workingDirectory
+            }
         let newTab = sourceTab.flatMap {
             fileTabManager.duplicateTab(
                 $0,
