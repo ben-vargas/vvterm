@@ -17,6 +17,7 @@ enum TerminalTabManagerLiveComposition {
         let defaults = UserDefaults.standard
         let networkMonitor = NetworkMonitor.shared
         let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
+        let terminalSurfaceStore = GhosttyTerminalSurfaceStore()
         let dependencies = TerminalTabManagerDependencies(
             networkReadiness: TerminalNetworkReadinessSource(
                 initial: TerminalNetworkReadiness(networkMonitor.readiness),
@@ -101,6 +102,7 @@ enum TerminalTabManagerLiveComposition {
                 key: persistenceKey
             ),
             dependencies: dependencies,
+            terminalSurfaceStore: terminalSurfaceStore,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: TerminalMoshRecoveryService(
                 store: MoshResumeStore.shared

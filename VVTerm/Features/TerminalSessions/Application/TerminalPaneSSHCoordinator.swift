@@ -36,7 +36,7 @@ final class TerminalPaneSSHCoordinator {
     }
 
     @MainActor
-    func installRichPasteInterception(on terminal: GhosttyTerminalView) {
+    func installRichPasteInterception(on terminal: any TerminalSurface) {
         richPasteRuntime.install(on: terminal)
     }
 
@@ -91,7 +91,7 @@ final class TerminalPaneSSHCoordinator {
         tabManager.activeSSHRoute(for: paneId)
     }
 
-    func startSSHConnection(terminal: GhosttyTerminalView) {
+    func startSSHConnection(terminal: any TerminalSurface) {
         let paneId = self.paneId
         if tabManager.activeSSHRoute(for: paneId) != nil {
             tabManager.updatePaneState(paneId, connectionState: .connected)
@@ -122,14 +122,14 @@ final class TerminalPaneSSHCoordinator {
                     logger: logger,
                     writeOutput: { [weak terminal] data in
                         guard context.isCurrent(), let terminal else { return false }
-                        terminal.feedData(data)
+                        terminal.receiveTerminalOutput(data)
                         return true
                     },
                     reportFailure: { [weak terminal] error in
                         guard context.isCurrent() else { return }
                         let message = "\r\n\u{001B}[31mSSH Error: \(error.localizedDescription)\u{001B}[0m\r\n"
                         if let data = message.data(using: .utf8) {
-                            terminal?.feedData(data)
+                            terminal?.receiveTerminalOutput(data)
                         }
                     }
                 )
@@ -211,13 +211,13 @@ final class TerminalPaneSSHCoordinator {
     }
 
     private static func initialTerminalState(
-        for terminal: GhosttyTerminalView
+        for terminal: any TerminalSurface
     ) -> SSHConnectionInitialTerminalState {
-        let size = terminal.terminalSize()
+        let geometry = terminal.terminalGeometry
         return SSHConnectionInitialTerminalState(
-            columns: Int(size?.columns ?? 80),
-            rows: Int(size?.rows ?? 24),
-            pixelSize: terminal.currentTerminalPixelSize
+            columns: geometry?.columns ?? 80,
+            rows: geometry?.rows ?? 24,
+            pixelSize: geometry?.pixelSize
         )
     }
 

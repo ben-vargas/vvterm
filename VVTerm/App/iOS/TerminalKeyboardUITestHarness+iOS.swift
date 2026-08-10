@@ -739,7 +739,7 @@ struct TerminalKeyboardUITestHarness: View {
                 serverId: tab.serverId
             ))
         }
-        manager.registerTerminal(terminalView, for: Self.paneId)
+        manager.registerTerminalSurface(terminalView, for: Self.paneId)
         manager.updatePaneState(Self.paneId, connectionState: .connected)
         manager.keyboardCoordinator.setActivePane(Self.paneId)
         manager.keyboardCoordinator.setViewActive(true)
@@ -1113,7 +1113,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
                     serverId: tab.serverId
                 ))
             }
-            manager.registerTerminal(terminal, for: paneId)
+            manager.registerTerminalSurface(terminal, for: paneId)
             manager.updatePaneState(paneId, connectionState: .connected)
         }
         focus(Self.firstPaneId)
@@ -1223,7 +1223,7 @@ struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
               let tabManager = uiView.tabManager,
               let paneId = uiView.paneId else { return }
         Task { @MainActor in
-            tabManager.unregisterTerminal(terminal, for: paneId)
+            tabManager.unregisterTerminalSurface(terminal, for: paneId)
         }
     }
 }

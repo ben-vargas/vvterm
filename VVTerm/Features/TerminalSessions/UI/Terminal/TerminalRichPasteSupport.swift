@@ -260,16 +260,18 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
                 return nil
             },
             pasteTextFromClipboard: {
-                tabManager.getTerminal(for: paneId)?.pasteTextFromClipboard()
+                tabManager.terminalSurfaceStore
+                    .surface(for: paneId)?
+                    .pasteTextFromClipboard()
             },
             sendText: { text in
-                tabManager.getTerminal(for: paneId)?.sendText(text)
+                tabManager.terminalSurfaceStore.surface(for: paneId)?.sendText(text)
             }
         )
     }
 
-    func install(on terminal: GhosttyTerminalView) {
-        terminal.richPasteInterceptor = { [weak self] _ in
+    func install(on terminal: any TerminalSurface) {
+        terminal.installRichPasteInterceptor { [weak self] in
             self?.controller.interceptPaste() ?? false
         }
     }
@@ -663,7 +665,7 @@ struct TerminalRichPastePromptSheet: View {
                     VStack(spacing: 12) {
                         Image(systemName: "photo.badge.arrow.down")
                             .font(.system(size: 34, weight: .semibold))
-                            .foregroundStyle(.accent)
+                            .foregroundStyle(Color.accentColor)
 
                         Text(String(localized: "Image ready to upload"))
                             .font(.headline)

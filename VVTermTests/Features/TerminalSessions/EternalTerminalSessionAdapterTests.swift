@@ -5,10 +5,10 @@ import Testing
 @testable import VVTerm
 
 @MainActor
-private final class RecordingEternalTerminalOutputSink: EternalTerminalOutputSink {
+private final class RecordingTerminalOutputSink: TerminalOutputSink {
     private(set) var output: [Data] = []
 
-    func receiveEternalTerminalOutput(_ data: Data) {
+    func receiveTerminalOutput(_ data: Data) {
         output.append(data)
     }
 }
@@ -53,10 +53,10 @@ struct EternalTerminalSessionAdapterTests {
 
     @Test @MainActor
     func semanticOutputSinkReceivesTerminalBytesWithoutVendorTypes() {
-        let sink = RecordingEternalTerminalOutputSink()
+        let sink = RecordingTerminalOutputSink()
         let output = Data("ready\r\n".utf8)
 
-        sink.receiveEternalTerminalOutput(output)
+        sink.receiveTerminalOutput(output)
 
         #expect(sink.output == [output])
     }

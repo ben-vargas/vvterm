@@ -259,6 +259,7 @@ struct TerminalTabManagerDependencyIsolationTests {
                 remoteMosh: remoteMosh,
                 eternalTerminalRuntime: .testing
             ),
+            terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
             eternalTerminalResumeStore: DependencyTestETResumeStore(),
             moshRecovery: UnavailableTerminalMoshRecoveryService()
         )

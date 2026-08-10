@@ -83,6 +83,6 @@ protocol EternalTerminalSessionPreparing: Sendable {
 }
 
 @MainActor
-protocol EternalTerminalOutputSink: AnyObject {
-    func receiveEternalTerminalOutput(_ data: Data)
+protocol TerminalOutputSink: AnyObject {
+    func receiveTerminalOutput(_ data: Data)
 }

@@ -35,7 +35,7 @@ extension View {
     func terminalKeyboardAvoidance(
         focusedPaneId: UUID?,
         paneIds: [UUID],
-        terminalSurfaceChange: TerminalSurfaceRegistryChange?,
+        terminalSurfaceChange: TerminalSurfaceStoreChange?,
         terminalProvider: @escaping (UUID) -> GhosttyTerminalView?,
         keyboardCoordinator: TerminalKeyboardCoordinator,
         enabledOverride: Bool? = nil
@@ -214,7 +214,7 @@ private final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
 private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
     let focusedPaneId: UUID?
     let paneIds: [UUID]
-    let terminalSurfaceChange: TerminalSurfaceRegistryChange?
+    let terminalSurfaceChange: TerminalSurfaceStoreChange?
     let terminalProvider: (UUID) -> GhosttyTerminalView?
     let enabledOverride: Bool?
 
@@ -225,7 +225,7 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
     init(
         focusedPaneId: UUID?,
         paneIds: [UUID],
-        terminalSurfaceChange: TerminalSurfaceRegistryChange?,
+        terminalSurfaceChange: TerminalSurfaceStoreChange?,
         terminalProvider: @escaping (UUID) -> GhosttyTerminalView?,
         keyboardCoordinator: TerminalKeyboardCoordinator,
         enabledOverride: Bool?
@@ -352,7 +352,7 @@ struct RemoteTerminalPaneWrapper: View {
         // A SwiftUI wrapper can briefly outlive registry ownership. Never let
         // that stale wrapper resume or reconnect a terminal now hosted by
         // another scene.
-        guard let terminal = tabManager.getTerminal(for: paneId),
+        guard let terminal = tabManager.terminalSurfaceStore.ghosttySurface(for: paneId),
               let terminalScene = terminal.window?.windowScene,
               terminalScene === activatedScene else { return }
 
@@ -450,7 +450,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
 
         let coordinator = context.coordinator
 
-        if let existingTerminal = tabManager.getTerminal(for: paneId) {
+        if let existingTerminal = tabManager.terminalSurfaceStore.ghosttySurface(for: paneId) {
             coordinator.terminal = existingTerminal
             coordinator.isTerminalReady = true
             coordinator.preservePane = true
@@ -520,7 +520,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
 
         coordinator.terminal = terminalView
         coordinator.installRichPasteInterception(on: terminalView)
-        tabManager.registerTerminal(terminalView, for: paneId)
+        tabManager.registerTerminalSurface(terminalView, for: paneId)
 
         terminalView.writeCallback = { [weak coordinator] data in
             coordinator?.sendToTransport(data)
@@ -619,7 +619,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         coordinator.terminal = nil
         let paneId = coordinator.paneId
         Task { @MainActor in
-            coordinator.tabManager.unregisterTerminal(terminalView, for: paneId)
+            coordinator.tabManager.unregisterTerminalSurface(terminalView, for: paneId)
             coordinator.cancelConnection()
         }
     }
@@ -654,7 +654,10 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     private func processExitHandler(for terminal: GhosttyTerminalView) -> () -> Void {
         { [weak terminal] in
             guard let terminal,
-                  tabManager.isCurrentTerminal(terminal, for: paneId) else { return }
+                  tabManager.terminalSurfaceStore.isRegistered(
+                    terminal,
+                    for: paneId
+                  ) else { return }
             onProcessExit()
         }
     }

@@ -184,7 +184,7 @@ final class EternalTerminalRuntime {
     private let dependencies: EternalTerminalRuntimeDependencies
     private weak var tabManager: TerminalTabManager?
     private var session: (any EternalTerminalSession)?
-    private weak var outputSink: (any EternalTerminalOutputSink)?
+    private weak var outputSink: (any TerminalOutputSink)?
     private var outputTask: Task<Void, Never>?
     private var stateTask: Task<Void, Never>?
     private var connectTask: Task<Void, Never>?
@@ -232,7 +232,7 @@ final class EternalTerminalRuntime {
         }
     }
 
-    func attach(to outputSink: any EternalTerminalOutputSink) {
+    func attach(to outputSink: any TerminalOutputSink) {
         self.outputSink = outputSink
     }
 
@@ -553,13 +553,13 @@ final class EternalTerminalRuntime {
             return
         }
         guard var parser = tmuxLifecycleParser else {
-            outputSink?.receiveEternalTerminalOutput(data)
+            outputSink?.receiveTerminalOutput(data)
             return
         }
         let result = parser.consume(data)
         tmuxLifecycleParser = parser
         if !result.output.isEmpty {
-            outputSink?.receiveEternalTerminalOutput(result.output)
+            outputSink?.receiveTerminalOutput(result.output)
         }
         guard let event = result.events.last, let tmuxLifecycle else { return }
         let reason: TerminalShellEndReason

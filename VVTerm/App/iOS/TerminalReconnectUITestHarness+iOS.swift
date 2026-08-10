@@ -210,7 +210,7 @@ struct TerminalReconnectUITestHarness: View {
               let paneId = tabManager.selectedTab(for: serverId)?.focusedPaneId else {
             return nil
         }
-        return tabManager.getTerminal(for: paneId)
+        return tabManager.terminalSurfaceStore.ghosttySurface(for: paneId)
     }
 
     private func beginUnexpectedKeyboardLoss() {
@@ -428,7 +428,7 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
             let state = tabManager.paneState(for: paneId)?.connectionState ?? .idle
             let title = tabManager.runtimeTitleByPane[paneId] ?? "none"
             let workingDirectory = tabManager.paneState(for: paneId)?.workingDirectory ?? "none"
-            guard let terminal = tabManager.getTerminal(for: paneId) else {
+            guard let terminal = tabManager.terminalSurfaceStore.ghosttySurface(for: paneId) else {
                 publish("setup=ready state=\(connectionToken(state)) title=\(title) terminal=missing")
                 return
             }

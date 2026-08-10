@@ -87,7 +87,7 @@ final class TerminalTabManager: ObservableObject {
 
     // MARK: - Terminal Registry
 
-    private let terminalSurfaces = TerminalSurfaceRegistry<GhosttyTerminalView>()
+    let terminalSurfaceStore: any TerminalSurfaceStoring
     private let transportRegistry = TerminalTransportRegistry<EternalTerminalRuntime>(
         staleShellStartThreshold: 120
     )
@@ -139,6 +139,7 @@ final class TerminalTabManager: ObservableObject {
     init(
         snapshotStore: any TerminalTabSnapshotStoring,
         dependencies: TerminalTabManagerDependencies,
+        terminalSurfaceStore: any TerminalSurfaceStoring,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshRecovery: any TerminalMoshRecoveryServicing
     ) {
@@ -156,20 +157,17 @@ final class TerminalTabManager: ObservableObject {
             connectionViewSelections: connectionViewSelections,
             tmuxResolver: tmuxResolver
         )
+        self.terminalSurfaceStore = terminalSurfaceStore
         self.eternalTerminalResumeStore = eternalTerminalResumeStore
         self.defaultEternalTerminalResumeStore = eternalTerminalResumeStore
         self.moshRecovery = moshRecovery
         #if os(iOS)
         keyboardCoordinator.terminalProvider = { [weak self] paneId in
-            self?.terminalSurfaces.surface(for: paneId)
+            self?.terminalSurfaceStore.surface(for: paneId)?.keyboardInputSession
         }
         #endif
-        terminalSurfaces.objectWillChange
-            .sink { [weak self] in
-                Task { @MainActor [weak self] in
-                    self?.objectWillChange.send()
-                }
-            }
+        terminalSurfaceStore.changes
+            .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &stateCancellables)
         sessionState.objectWillChange
             .sink { [weak self] in self?.objectWillChange.send() }
@@ -208,6 +206,7 @@ final class TerminalTabManager: ObservableObject {
         snapshotStore: any TerminalTabSnapshotStoring,
         networkReadinessPublisher: AnyPublisher<TerminalNetworkReadiness, Never>?,
         liveActivityRefresh: @escaping ([ConnectionState]) -> Void,
+        terminalSurfaceStore: any TerminalSurfaceStoring,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshRecovery: any TerminalMoshRecoveryServicing
     ) {
@@ -217,6 +216,7 @@ final class TerminalTabManager: ObservableObject {
                 networkReadinessPublisher: networkReadinessPublisher,
                 liveActivityRefresh: liveActivityRefresh
             ),
+            terminalSurfaceStore: terminalSurfaceStore,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: moshRecovery
         )
@@ -651,12 +651,9 @@ final class TerminalTabManager: ObservableObject {
             queueIOSReconnectUntilNetworkReady(for: attempt.paneId)
             return
         }
-        let windowScene = terminalSurfaces.surface(for: attempt.paneId)?
-            .window?
-            .windowScene
-        let windowSceneIsActive = windowScene.map {
-            $0.activationState == .foregroundActive
-        } ?? true
+        let windowSceneIsActive = terminalSurfaceStore
+            .surface(for: attempt.paneId)?
+            .isHostingSceneActive ?? true
         guard dependencies.applicationIsActive(),
               windowSceneIsActive else {
             reconnectCoordinator.complete(for: attempt.paneId)
@@ -1024,50 +1021,62 @@ final class TerminalTabManager: ObservableObject {
 
     // MARK: - Terminal Registry
 
-    var terminalSurfaceRegistryChange: TerminalSurfaceRegistryChange? {
-        terminalSurfaces.latestChange
-    }
-
-    /// Register a terminal view for a pane
-    func registerTerminal(_ terminal: GhosttyTerminalView, for paneId: UUID) {
+    func registerTerminalSurface(_ terminal: any TerminalSurface, for paneId: UUID) {
         #if os(iOS)
-        terminal.onWindowAttachmentChange = { [weak self, weak terminal] _ in
-            Task { @MainActor [weak self, weak terminal] in
+        terminal.setLifecycleCallbacks(TerminalSurfaceLifecycleCallbacks(
+            windowAttachmentChanged: { [weak self, weak terminal] _ in
+                Task { @MainActor [weak self, weak terminal] in
+                    guard let self, let terminal,
+                          self.terminalSurfaceStore.isRegistered(
+                            terminal,
+                            for: paneId
+                          ) else { return }
+                    self.keyboardCoordinator.setWindowAttached(
+                        terminal.isAttachedToWindow,
+                        for: paneId
+                    )
+                }
+            },
+            directTouch: { [weak self, weak terminal] isFocusTap in
                 guard let self, let terminal,
-                      self.terminalSurfaces.isRegistered(terminal, for: paneId) else { return }
-                self.keyboardCoordinator.setWindowAttached(terminal.window != nil, for: paneId)
+                      self.terminalSurfaceStore.isRegistered(
+                        terminal,
+                        for: paneId
+                      ) else { return }
+                self.keyboardCoordinator.setActivePane(paneId)
+                self.keyboardCoordinator.directTouchOnTerminal(isFocusTap: isFocusTap)
+            },
+            keyboardAccessoryHideRequested: { [weak self] in
+                self?.keyboardCoordinator.userRequestedHide()
+            },
+            findNavigatorVisibilityChanged: { [weak self, weak terminal] isVisible in
+                guard let self, let terminal,
+                      self.terminalSurfaceStore.isRegistered(
+                        terminal,
+                        for: paneId
+                      ) else { return }
+                self.setTerminalFindNavigatorVisible(isVisible, for: paneId)
+                self.keyboardCoordinator.setFindNavigatorActive(isVisible, for: paneId)
             }
-        }
-        terminal.onTerminalDirectTouch = { [weak self, weak terminal] isFocusTap in
-            guard let self, let terminal,
-                  self.terminalSurfaces.isRegistered(terminal, for: paneId) else { return }
-            self.keyboardCoordinator.setActivePane(paneId)
-            self.keyboardCoordinator.directTouchOnTerminal(isFocusTap: isFocusTap)
-        }
-        terminal.onKeyboardAccessoryHideRequested = { [weak self] in
-            self?.keyboardCoordinator.userRequestedHide()
-        }
-        terminal.onFindNavigatorVisibilityChange = { [weak self, weak terminal] isVisible in
-            guard let self, let terminal,
-                  self.terminalSurfaces.isRegistered(terminal, for: paneId) else { return }
-            self.setTerminalFindNavigatorVisible(isVisible, for: paneId)
-            self.keyboardCoordinator.setFindNavigatorActive(isVisible, for: paneId)
-        }
+        ))
         #endif
-        let replacesRegisteredTerminal = terminalSurfaces.register(terminal, for: paneId)
+        let replacesRegisteredTerminal = terminalSurfaceStore.register(terminal, for: paneId)
         #if os(iOS)
         terminal.acceptsTerminalInput = sessionState.paneState(for: paneId)?.connectionState.isConnected == true
         // A replacement is commonly registered before UIKit attaches it.
         // Publish that fact before reconciling its new identity so the
         // coordinator cannot spend an acquisition or repair off-window.
-        keyboardCoordinator.setWindowAttached(terminal.window != nil, for: paneId)
+        keyboardCoordinator.setWindowAttached(terminal.isAttachedToWindow, for: paneId)
         if replacesRegisteredTerminal {
             keyboardCoordinator.terminalProviderIdentityDidChange(for: paneId)
         }
         Task { @MainActor [weak self, weak terminal] in
             guard let self, let terminal,
-                  self.terminalSurfaces.isRegistered(terminal, for: paneId) else { return }
-            self.keyboardCoordinator.setWindowAttached(terminal.window != nil, for: paneId)
+                  self.terminalSurfaceStore.isRegistered(terminal, for: paneId) else { return }
+            self.keyboardCoordinator.setWindowAttached(
+                terminal.isAttachedToWindow,
+                for: paneId
+            )
             self.publishTerminalInputAvailability(for: paneId)
             self.setTerminalFindNavigatorVisible(terminal.isFindNavigatorVisible, for: paneId)
             self.keyboardCoordinator.setFindNavigatorActive(
@@ -1079,8 +1088,10 @@ final class TerminalTabManager: ObservableObject {
     }
 
     @discardableResult
-    private func detachTerminalRegistration(for paneId: UUID) -> GhosttyTerminalView? {
-        terminalSurfaces.remove(for: paneId) { [self] terminal in
+    private func detachTerminalRegistration(
+        for paneId: UUID
+    ) -> (any TerminalSurface)? {
+        terminalSurfaceStore.remove(for: paneId) { [self] terminal in
             prepareTerminalSurfaceRemoval(terminal, for: paneId)
         }
     }
@@ -1088,8 +1099,11 @@ final class TerminalTabManager: ObservableObject {
     /// Unregister a dismantled platform view only if it is still the pane's
     /// registered terminal. SwiftUI may create its replacement before the old
     /// view's deferred teardown runs during window reconstruction.
-    func unregisterTerminal(_ terminal: GhosttyTerminalView, for paneId: UUID) {
-        terminalSurfaces.unregister(
+    func unregisterTerminalSurface(
+        _ terminal: any TerminalSurface,
+        for paneId: UUID
+    ) {
+        terminalSurfaceStore.unregister(
             terminal,
             for: paneId,
             prepareForRemoval: { [self] current in
@@ -1100,14 +1114,11 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func prepareTerminalSurfaceRemoval(
-        _ terminal: GhosttyTerminalView,
+        _ terminal: any TerminalSurface,
         for paneId: UUID
     ) {
         #if os(iOS)
-        terminal.onWindowAttachmentChange = nil
-        terminal.onTerminalDirectTouch = nil
-        terminal.onKeyboardAccessoryHideRequested = nil
-        terminal.onFindNavigatorVisibilityChange = nil
+        terminal.setLifecycleCallbacks(nil)
         terminalFindNavigatorVisibleByPane.removeValue(forKey: paneId)
         terminalVoicePresentationByPane.removeValue(forKey: paneId)
         keyboardCoordinator.setWindowAttached(false, for: paneId)
@@ -1116,20 +1127,12 @@ final class TerminalTabManager: ObservableObject {
     }
 
     private func drainTerminalSurfaces() {
-        terminalSurfaces.drain(
+        terminalSurfaceStore.drain(
             prepareForRemoval: { [self] paneId, terminal in
                 prepareTerminalSurfaceRemoval(terminal, for: paneId)
             },
             cleanup: { $0.cleanup() }
         )
-    }
-
-    func getTerminal(for paneId: UUID) -> GhosttyTerminalView? {
-        terminalSurfaces.surface(for: paneId)
-    }
-
-    func isCurrentTerminal(_ terminal: GhosttyTerminalView, for paneId: UUID) -> Bool {
-        terminalSurfaces.isRegistered(terminal, for: paneId)
     }
 
     #if os(iOS)
@@ -1806,7 +1809,7 @@ final class TerminalTabManager: ObservableObject {
     #if os(iOS)
     private func publishTerminalInputAvailability(for paneId: UUID) {
         let connectionState = sessionState.paneState(for: paneId)?.connectionState ?? .idle
-        let terminal = terminalSurfaces.surface(for: paneId)
+        let terminal = terminalSurfaceStore.surface(for: paneId)
 
         // Routing must be enabled before the coordinator can preserve or
         // reacquire the responder at the connected boundary.
@@ -1850,7 +1853,7 @@ final class TerminalTabManager: ObservableObject {
         case .disconnected, .failed:
             reconnectCoordinator.complete(for: paneId)
             setPanePresentationOverrides(.empty, for: paneId)
-            terminalSurfaces.surface(for: paneId)?.applyPresentationOverrides(.empty)
+            terminalSurfaceStore.surface(for: paneId)?.applyPresentationOverrides(.empty)
             if paneTmuxStatus(for: paneId) == .foreground {
                 setPaneTmuxStatus(.background, for: paneId)
             }
@@ -1998,7 +2001,7 @@ final class TerminalTabManager: ObservableObject {
         }
         setPanePresentationOverrides(overrides, for: paneId)
         sessionState.requestPersistence()
-        terminalSurfaces.surface(for: paneId)?.applyPresentationOverrides(overrides)
+        terminalSurfaceStore.surface(for: paneId)?.applyPresentationOverrides(overrides)
         return TerminalZoomResult(
             presentationOverrides: overrides,
             effectiveFontSize: overrides.resolvedFontSize()

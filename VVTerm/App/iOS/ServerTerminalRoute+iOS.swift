@@ -93,7 +93,7 @@ struct ServerTerminalRoute: View {
 
     private var focusedTerminal: GhosttyTerminalView? {
         guard let paneId = selectedTab?.focusedPaneId else { return nil }
-        return tabManager.getTerminal(for: paneId)
+        return tabManager.terminalSurfaceStore.ghosttySurface(for: paneId)
     }
 
     private var focusedPaneId: UUID? {
@@ -207,7 +207,7 @@ struct ServerTerminalRoute: View {
             .onChange(of: focusedPaneId) { _ in
                 updateTerminalRouteActivation()
             }
-            .onChange(of: tabManager.terminalSurfaceRegistryChange) { _ in
+            .onChange(of: tabManager.terminalSurfaceStore.latestChange) { _ in
                 updateTerminalRouteActivation()
             }
             .onChangeCompat(of: tabManager.tabs(for: route.serverId)) { _ in

@@ -58,7 +58,7 @@ struct TerminalTabView: View {
     }
 
     private var focusedTerminal: GhosttyTerminalView? {
-        tabManager.getTerminal(for: tab.focusedPaneId)
+        tabManager.terminalSurfaceStore.ghosttySurface(for: tab.focusedPaneId)
     }
 
     private var hasFocusedTerminal: Bool {
@@ -84,16 +84,16 @@ struct TerminalTabView: View {
         content.terminalKeyboardAvoidance(
             focusedPaneId: isSelected ? tab.focusedPaneId : nil,
             paneIds: tab.allPaneIds,
-            terminalSurfaceChange: tabManager.terminalSurfaceRegistryChange,
-            terminalProvider: { tabManager.getTerminal(for: $0) },
+            terminalSurfaceChange: tabManager.terminalSurfaceStore.latestChange,
+            terminalProvider: { tabManager.terminalSurfaceStore.ghosttySurface(for: $0) },
             keyboardCoordinator: tabManager.keyboardCoordinator
         )
         #else
         content.terminalKeyboardAvoidance(
             focusedPaneId: isSelected ? tab.focusedPaneId : nil,
             paneIds: tab.allPaneIds,
-            terminalSurfaceChange: tabManager.terminalSurfaceRegistryChange,
-            terminalProvider: { tabManager.getTerminal(for: $0) }
+            terminalSurfaceChange: tabManager.terminalSurfaceStore.latestChange,
+            terminalProvider: { tabManager.terminalSurfaceStore.ghosttySurface(for: $0) }
         )
         #endif
     }
@@ -101,7 +101,7 @@ struct TerminalTabView: View {
     var body: some View {
         withTerminalKeyboardAvoidance(ZStack {
             // Refresh when terminals register/unregister so overlays can update immediately.
-            let _ = tabManager.terminalSurfaceRegistryChange
+            let _ = tabManager.terminalSurfaceStore.latestChange
             if tabManager.isSplitZoomed(in: tab), tab.hasSplits {
                 renderPane(tab.focusedPaneId)
             } else if let layout = tab.layout {
@@ -611,7 +611,7 @@ struct TerminalPaneView: View {
 
     /// Check if terminal already exists (reuse case)
     private var terminalExists: Bool {
-        tabManager.getTerminal(for: paneId) != nil
+        tabManager.terminalSurfaceStore.surface(for: paneId) != nil
     }
 
     private var fallbackBannerMessage: String? {
@@ -1148,13 +1148,9 @@ struct TerminalPaneView: View {
 
     private var foregroundSceneIsActive: Bool {
         #if os(iOS)
-        let windowScene = tabManager
-            .getTerminal(for: paneId)?
-            .window?
-            .windowScene
-        let windowSceneIsActive = windowScene.map {
-            $0.activationState == .foregroundActive
-        }
+        let windowSceneIsActive = tabManager.terminalSurfaceStore
+            .surface(for: paneId)?
+            .isHostingSceneActive
         return TerminalSceneActivityPolicy.isActive(
             environmentIsActive: scenePhase == .active,
             windowSceneIsActive: windowSceneIsActive

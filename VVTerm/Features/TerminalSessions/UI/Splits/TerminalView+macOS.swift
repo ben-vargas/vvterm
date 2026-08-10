@@ -18,7 +18,7 @@ extension View {
     func terminalKeyboardAvoidance(
         focusedPaneId: UUID?,
         paneIds: [UUID],
-        terminalSurfaceChange: TerminalSurfaceRegistryChange?,
+        terminalSurfaceChange: TerminalSurfaceStoreChange?,
         terminalProvider: @escaping (UUID) -> GhosttyTerminalView?
     ) -> some View {
         self
@@ -50,7 +50,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
         let coordinator = context.coordinator
 
         // Check if terminal already exists for this pane (reuse to save memory)
-        if let existingTerminal = tabManager.getTerminal(for: paneId) {
+        if let existingTerminal = tabManager.terminalSurfaceStore.ghosttySurface(for: paneId) {
             coordinator.preservePane = true
             coordinator.terminal = existingTerminal
             existingTerminal.onProcessExit = processExitHandler(for: existingTerminal)
@@ -123,7 +123,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
         // Store terminal reference
         coordinator.terminal = terminalView
         coordinator.installRichPasteInterception(on: terminalView)
-        tabManager.registerTerminal(terminalView, for: paneId)
+        tabManager.registerTerminalSurface(terminalView, for: paneId)
 
         // Route terminal input to the selected remote transport.
         terminalView.writeCallback = { [weak coordinator] data in
@@ -148,7 +148,10 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     private func processExitHandler(for terminal: GhosttyTerminalView) -> () -> Void {
         { [weak terminal] in
             guard let terminal,
-                  tabManager.isCurrentTerminal(terminal, for: paneId) else { return }
+                  tabManager.terminalSurfaceStore.isRegistered(
+                    terminal,
+                    for: paneId
+                  ) else { return }
             onProcessExit()
         }
     }
@@ -176,7 +179,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
         coordinator.terminal = nil
         let paneId = coordinator.paneId
         DispatchQueue.main.async {
-            coordinator.tabManager.unregisterTerminal(terminal, for: paneId)
+            coordinator.tabManager.unregisterTerminalSurface(terminal, for: paneId)
             coordinator.cancelConnection()
         }
     }

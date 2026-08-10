@@ -12,7 +12,7 @@ final class TerminalPaneConnectionCoordinator {
     }
 
     let tabManager: TerminalTabManager
-    weak var terminal: GhosttyTerminalView?
+    weak var terminal: (any TerminalSurface)?
     var isTerminalReady = false
     var preservePane = false
     var lastReportedSize: CGSize = .zero
@@ -60,7 +60,7 @@ final class TerminalPaneConnectionCoordinator {
         tabManager.isTransportStartInFlight(for: paneId)
     }
 
-    func installRichPasteInterception(on terminal: GhosttyTerminalView) {
+    func installRichPasteInterception(on terminal: any TerminalSurface) {
         guard case .ssh(let coordinator) = backend else { return }
         coordinator.installRichPasteInterception(on: terminal)
     }
@@ -73,7 +73,7 @@ final class TerminalPaneConnectionCoordinator {
     }
 
     func handleResize(cols: Int, rows: Int) {
-        let pixelSize = terminal?.currentTerminalPixelSize
+        let pixelSize = terminal?.terminalGeometry?.pixelSize
         switch backend {
         case .ssh(let coordinator):
             coordinator.handleResize(cols: cols, rows: rows, pixelSize: pixelSize)
@@ -82,7 +82,7 @@ final class TerminalPaneConnectionCoordinator {
         }
     }
 
-    func startConnection(terminal: GhosttyTerminalView) {
+    func startConnection(terminal: any TerminalSurface) {
         self.terminal = terminal
         switch backend {
         case .ssh(let coordinator): coordinator.startSSHConnection(terminal: terminal)
@@ -119,18 +119,18 @@ private final class EternalTerminalPaneCoordinator {
         self.tabManager = tabManager
     }
 
-    func start(terminal: GhosttyTerminalView) {
+    func start(terminal: any TerminalSurface) {
         let runtime = tabManager.eternalTerminalRuntime(
             for: paneId,
             server: server,
             credentials: credentials
         )
         runtime.attach(to: terminal)
-        guard let size = terminal.currentTerminalGridSize else { return }
+        guard let geometry = terminal.terminalGeometry else { return }
         runtime.resize(
-            cols: size.cols,
-            rows: size.rows,
-            pixelSize: terminal.currentTerminalPixelSize
+            cols: geometry.columns,
+            rows: geometry.rows,
+            pixelSize: geometry.pixelSize
         )
         runtime.startIfNeeded()
     }

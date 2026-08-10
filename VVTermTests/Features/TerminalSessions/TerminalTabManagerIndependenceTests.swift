@@ -68,7 +68,7 @@ struct TerminalTabManagerIndependenceTests {
         )
         #endif
         defer {
-            first.unregisterTerminal(terminal, for: tab.rootPaneId)
+            first.unregisterTerminalSurface(terminal, for: tab.rootPaneId)
             ghosttyApp.cleanup()
         }
 
@@ -84,7 +84,7 @@ struct TerminalTabManagerIndependenceTests {
         ))
         first.tmuxResolver.sessionNames[tab.rootPaneId] = "vvterm-isolated"
         first.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
-        first.registerTerminal(terminal, for: tab.rootPaneId)
+        first.registerTerminalSurface(terminal, for: tab.rootPaneId)
 
         #expect(first.paneState(for: tab.rootPaneId)?.connectionState == .connected)
         #expect(second.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
@@ -92,8 +92,10 @@ struct TerminalTabManagerIndependenceTests {
         #expect(second.activeSSHRoute(for: tab.rootPaneId) == nil)
         #expect(first.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm-isolated")
         #expect(second.tmuxResolver.sessionNames[tab.rootPaneId] == nil)
-        #expect(first.getTerminal(for: tab.rootPaneId) === terminal)
-        #expect(second.getTerminal(for: tab.rootPaneId) == nil)
+        #expect(
+            first.terminalSurfaceStore.surface(for: tab.rootPaneId) === terminal
+        )
+        #expect(second.terminalSurfaceStore.surface(for: tab.rootPaneId) == nil)
         #expect(first.connectedServerIds == [tab.serverId])
         #expect(second.connectedServerIds.isEmpty)
 
@@ -144,6 +146,7 @@ struct TerminalTabManagerIndependenceTests {
             snapshotStore: snapshotStore,
             networkReadinessPublisher: nil,
             liveActivityRefresh: { _ in },
+            terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
             eternalTerminalResumeStore: IsolatedEternalTerminalResumeStore(),
             moshRecovery: UnavailableTerminalMoshRecoveryService()
         )
