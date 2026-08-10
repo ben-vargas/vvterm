@@ -39,16 +39,49 @@ extension Ghostty {
     @MainActor
     class App: ObservableObject {
         enum Readiness: String {
-            case idle, loading, error, ready
+            case idle, loading, error, ready, stopped
         }
 
-        // MARK: - Published Properties
+        private enum RuntimeState {
+            case idle
+            case loading
+            case failed
+            case ready(
+                app: ghostty_app_t,
+                callbackContext: Ghostty.CallbackContext<App>
+            )
+            case stopped
+
+            var app: ghostty_app_t? {
+                guard case .ready(let app, _) = self else { return nil }
+                return app
+            }
+
+            var readiness: Readiness {
+                switch self {
+                case .idle:
+                    return .idle
+                case .loading:
+                    return .loading
+                case .failed:
+                    return .error
+                case .ready:
+                    return .ready
+                case .stopped:
+                    return .stopped
+                }
+            }
+        }
+
+        // MARK: - Runtime State
 
         /// The ghostty app instance
-        @Published var app: ghostty_app_t? = nil
+        var app: ghostty_app_t? { runtimeState.app }
 
         /// Readiness state
-        @Published var readiness: Readiness = .loading
+        var readiness: Readiness { runtimeState.readiness }
+
+        @Published private var runtimeState: RuntimeState = .idle
 
         /// Resolved appearance supplied by the terminal appearance owner.
         private(set) var appearanceSnapshot: TerminalAppearanceSnapshot
@@ -60,12 +93,7 @@ extension Ghostty {
         private var activeSurfaces: [Ghostty.SurfaceReference] = []
         private var surfaceConfigCache: [SurfaceConfigCacheKey: ghostty_config_t] = [:]
 
-        /// Keeps runtime callback userdata valid for the native app lifetime.
-        private var runtimeCallbackContext: Ghostty.CallbackContext<App>?
-
         // MARK: - Initialization
-
-        private var didStart = false
 
         private struct SurfaceConfigCacheKey: Hashable {
             let fontName: String
@@ -96,8 +124,6 @@ extension Ghostty {
             appearanceSnapshot = appearance
             if autoStart {
                 startIfNeeded()
-            } else {
-                readiness = .idle
             }
         }
 
@@ -105,9 +131,8 @@ extension Ghostty {
             if let appearance {
                 applyAppearance(appearance)
             }
-            guard !didStart else { return }
-            didStart = true
-            readiness = .loading
+            guard case .idle = runtimeState else { return }
+            runtimeState = .loading
             start()
         }
 
@@ -118,7 +143,7 @@ extension Ghostty {
             let initResult = ghostty_init(0, nil)
             if initResult != GHOSTTY_SUCCESS {
                 Ghostty.logger.critical("ghostty_init failed with code: \(initResult)")
-                readiness = .error
+                runtimeState = .failed
                 return
             }
 
@@ -132,7 +157,6 @@ extension Ghostty {
 
             // Create runtime config with callbacks
             let callbackContext = Ghostty.CallbackContext(owner: self)
-            runtimeCallbackContext = callbackContext
             var runtime_cfg = ghostty_runtime_config_s(
                 userdata: callbackContext.userdata,
                 supports_selection_clipboard: supportsSelectionClipboard,
@@ -153,8 +177,7 @@ extension Ghostty {
             guard let config = ghostty_config_new() else {
                 Ghostty.logger.critical("ghostty_config_new failed")
                 callbackContext.invalidate()
-                runtimeCallbackContext = nil
-                readiness = .error
+                runtimeState = .failed
                 return
             }
 
@@ -169,8 +192,7 @@ extension Ghostty {
                 Ghostty.logger.critical("ghostty_app_new failed")
                 ghostty_config_free(config)
                 callbackContext.invalidate()
-                runtimeCallbackContext = nil
-                readiness = .error
+                runtimeState = .failed
                 return
             }
 
@@ -181,8 +203,10 @@ extension Ghostty {
             // If left set, fish will look for config.fish in the temp directory instead of ~/.config
             unsetenv("XDG_CONFIG_HOME")
 
-            self.app = app
-            self.readiness = .ready
+            runtimeState = .ready(
+                app: app,
+                callbackContext: callbackContext
+            )
 
             Ghostty.logger.info("Ghostty app initialized successfully")
         }
@@ -219,14 +243,10 @@ extension Ghostty {
         /// Clean up the ghostty app resources
         func cleanup() {
             clearSurfaceConfigCache()
-            runtimeCallbackContext?.invalidate()
-
-            if let app = self.app {
-                ghostty_app_free(app)
-                self.app = nil
-            }
-
-            runtimeCallbackContext = nil
+            guard case .ready(let app, let callbackContext) = runtimeState else { return }
+            callbackContext.invalidate()
+            ghostty_app_free(app)
+            runtimeState = .stopped
         }
 
         func appTick() {
@@ -296,14 +316,14 @@ extension Ghostty {
         func applyConfiguration(_ configuration: Ghostty.RuntimeConfiguration) {
             guard self.configuration != configuration else { return }
             self.configuration = configuration
-            guard didStart, app != nil else { return }
+            guard case .ready = runtimeState else { return }
             reloadConfig()
         }
 
         func applyAppearance(_ snapshot: TerminalAppearanceSnapshot) {
             guard appearanceSnapshot != snapshot else { return }
             appearanceSnapshot = snapshot
-            guard didStart, app != nil else { return }
+            guard case .ready = runtimeState else { return }
             Ghostty.logger.info(
                 "Terminal appearance changed; reloading theme: \(snapshot.activeTheme.name)"
             )
