@@ -400,22 +400,7 @@ class GhosttyTerminalView: UIView {
     }
 
     isolated deinit {
-        cancelClipboardConfirmations()
-        cancelTrackedHardwareInput()
-        stopSelectionAutoscroll()
-        for observer in hardwareKeyboardObservers {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = inputModeObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        let wrapper = self.ghosttyAppWrapper
-        let ref = self.surfaceReference
-        if let wrapper = wrapper, let ref = ref {
-            Task { @MainActor in
-                wrapper.unregisterSurface(ref)
-            }
-        }
+        cleanup()
     }
 
     /// Explicitly cleanup the terminal before removal from view hierarchy.

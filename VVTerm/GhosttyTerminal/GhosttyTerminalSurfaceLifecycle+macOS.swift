@@ -22,8 +22,9 @@ extension GhosttyTerminalView {
     /// Explicitly cleanup the terminal before removal from view hierarchy.
     /// Call this when closing a session to ensure proper cleanup.
     func cleanup() {
-        cancelClipboardConfirmations()
+        guard !isShuttingDown else { return }
         isShuttingDown = true
+        cancelClipboardConfirmations()
         zoomIndicatorHideWorkItem?.cancel()
         zoomIndicatorHideWorkItem = nil
 
@@ -35,6 +36,8 @@ extension GhosttyTerminalView {
             NotificationCenter.default.removeObserver(observer)
             configReloadObserver = nil
         }
+        appearanceObservation?.invalidate()
+        appearanceObservation = nil
 
         // Clear all callbacks to break retain cycles
         onReady = nil
@@ -43,6 +46,7 @@ extension GhosttyTerminalView {
         onPwdChange = nil
         onProgressReport = nil
         onResize = nil
+        onZoomAction = nil
         richPasteInterceptor = nil
         terminalContextMenuActions = nil
         writeCallback = nil
@@ -52,6 +56,8 @@ extension GhosttyTerminalView {
             ghostty_surface_set_write_callback(cSurface, nil, nil)
             ghostty_surface_set_focus(cSurface, false)
         }
+        imeHandler.updateSurface(nil)
+        inputHandler.updateSurface(nil)
 
         // Unregister surface from app wrapper synchronously
         if let wrapper = ghosttyAppWrapper, let ref = surfaceReference {

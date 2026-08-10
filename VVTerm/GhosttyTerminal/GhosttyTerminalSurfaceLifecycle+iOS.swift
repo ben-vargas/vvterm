@@ -43,9 +43,10 @@ extension GhosttyTerminalView {
     }
 
     func cleanup() {
+        guard !isShuttingDown else { return }
+        isShuttingDown = true
         cancelClipboardConfirmations()
         cancelTrackedHardwareInput()
-        isShuttingDown = true
         isPaused = true
         stopMomentumScrolling()
         stopSelectionAutoscroll()
@@ -71,16 +72,38 @@ extension GhosttyTerminalView {
         onProgressReport = nil
         onResize = nil
         onKeyboardAvoidanceCursorRectChange = nil
+        onKeyboardAvoidanceAccessoryFrameChange = nil
+        onZoomAction = nil
         onPaneKeyboardShortcut = nil
         keyboardAvoidancePreservedSurfaceSize = nil
         keyboardAvoidanceReferenceSurfaceSize = nil
         tracksKeyboardAvoidanceReferenceSize = false
         onWindowAttachmentChange = nil
         onTerminalDirectTouch = nil
+        onKeyboardBrowseModeChange = nil
         onKeyboardAccessoryHideRequested = nil
         onFindNavigatorVisibilityChange = nil
+        onVoiceButtonTapped = nil
         richPasteInterceptor = nil
         writeCallback = nil
+        imeProxyTextView.inputDelegate = nil
+        imeProxyTextView.terminalOwner = nil
+        _ = imeProxyTextView.resignFirstResponder()
+        keyboardToolbar = nil
+        if let nativeTextInteraction {
+            removeInteraction(nativeTextInteraction)
+            self.nativeTextInteraction = nil
+        }
+        if let nativeFindInteraction {
+            if nativeFindInteraction.isFindNavigatorVisible {
+                nativeFindInteraction.dismissFindNavigator()
+            }
+            removeInteraction(nativeFindInteraction)
+            self.nativeFindInteraction = nil
+        }
+        nativeFindSession = nil
+        nativeSelectionLifecycle.cancel()
+        nativeSelectionSnapshot = .empty
         if let editMenuInteraction {
             editMenuInteraction.dismissMenu()
             removeInteraction(editMenuInteraction)

@@ -151,28 +151,8 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
         fatalError("init(coder:) not supported")
     }
 
-    deinit {
-        // Stop display link immediately (CVDisplayLink operations are thread-safe)
-        if let link = displayLink {
-            CVDisplayLinkStop(link)
-        }
-        // Release the retained weak reference to prevent memory leak
-        displayLinkCallbackContext?.release()
-
-        // Surface cleanup happens via Surface's deinit
-        // Note: Cannot access @MainActor properties in deinit
-        // Tracking areas are automatically cleaned up by NSView
-        // Appearance observation is automatically invalidated
-
-        // Surface reference cleanup needs to happen on main actor
-        // We capture the values before the Task to avoid capturing self
-        let wrapper = self.ghosttyAppWrapper
-        let ref = self.surfaceReference
-        if let wrapper = wrapper, let ref = ref {
-            Task { @MainActor in
-                wrapper.unregisterSurface(ref)
-            }
-        }
+    isolated deinit {
+        cleanup()
     }
 
     // MARK: - Setup
