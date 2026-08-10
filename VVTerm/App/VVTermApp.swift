@@ -41,6 +41,9 @@ struct VVTermApp: App {
                 analyticsTracker.trackAnalyticsDisabled()
             }
         )
+        let onWelcomeCompleted: @MainActor () -> Void = {
+            analyticsTracker.trackWelcomeCompleted()
+        }
         let syncSettingsCoordinator = SyncSettingsLiveComposition.makeCoordinator(
             cloudKit: cloudKitManager,
             keychain: keychainManager,
@@ -80,6 +83,7 @@ struct VVTermApp: App {
         #if os(iOS)
         self.analyticsOptOutAction = analyticsOptOutAction
         #endif
+        self.onWelcomeCompleted = onWelcomeCompleted
         _tabManager = StateObject(wrappedValue: tabManager)
         _storeManager = StateObject(wrappedValue: storeManager)
         _appLockManager = StateObject(wrappedValue: appLockManager)
@@ -165,6 +169,7 @@ struct VVTermApp: App {
     @StateObject private var syncSettingsCoordinator: SyncSettingsCoordinator
     @StateObject private var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
     @StateObject private var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
+    private let onWelcomeCompleted: @MainActor () -> Void
     private let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
     #if os(macOS)
     private let settingsWindowPresenter: SettingsWindowPresenter
@@ -282,7 +287,10 @@ struct VVTermApp: App {
                 get: { !hasSeenWelcome },
                 set: { if !$0 { hasSeenWelcome = true } }
             )) {
-                WelcomeView(hasSeenWelcome: $hasSeenWelcome)
+                WelcomeView(
+                    hasSeenWelcome: $hasSeenWelcome,
+                    onCompleted: onWelcomeCompleted
+                )
                     .adaptiveSoftScrollEdges()
             }
     }
@@ -360,7 +368,10 @@ struct VVTermApp: App {
                 get: { !hasSeenWelcome },
                 set: { if !$0 { hasSeenWelcome = true } }
             )) {
-                WelcomeView(hasSeenWelcome: $hasSeenWelcome)
+                WelcomeView(
+                    hasSeenWelcome: $hasSeenWelcome,
+                    onCompleted: onWelcomeCompleted
+                )
                     .adaptiveSoftScrollEdges()
             }
     }

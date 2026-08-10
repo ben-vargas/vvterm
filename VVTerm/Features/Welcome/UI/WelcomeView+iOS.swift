@@ -4,12 +4,16 @@ import UIKit
 
 extension WelcomeView {
     var platformContent: some View {
-        WelcomeContent(hasSeenWelcome: $hasSeenWelcome)
+        WelcomeContent(
+            hasSeenWelcome: $hasSeenWelcome,
+            onCompleted: onCompleted
+        )
     }
 }
 
 private struct WelcomeContent: View {
     @Binding var hasSeenWelcome: Bool
+    let onCompleted: () -> Void
     @State private var showingProUpgrade = false
 
     var body: some View {
@@ -84,7 +88,7 @@ private struct WelcomeContent: View {
             VStack(spacing: 14) {
                 Button {
                     hasSeenWelcome = true
-                    AnalyticsTracker.shared.trackWelcomeCompleted()
+                    onCompleted()
                 } label: {
                     Text("Continue")
                         .font(.headline)
