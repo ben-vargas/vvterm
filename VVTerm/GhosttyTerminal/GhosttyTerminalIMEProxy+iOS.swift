@@ -4,6 +4,11 @@ import UIKit
 
 @MainActor
 final class TerminalIMEProxyTextView: UIView, UITextInput {
+    enum DocumentMode: Equatable {
+        case terminalInput
+        case nativeSelection
+    }
+
     weak var terminalOwner: GhosttyTerminalView?
     /// Local mirror of recently typed input. Committed text stays in the document after
     /// being sent to the terminal (until the session is invalidated by Enter, control
@@ -40,6 +45,12 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
 
     private var currentPrimaryLanguage: String {
         textInputMode?.primaryLanguage ?? "nil"
+    }
+
+    var documentMode: DocumentMode {
+        terminalOwner?.isNativeSelectionTextInputContext == true
+            ? .nativeSelection
+            : .terminalInput
     }
     private lazy var terminalNavigationCommands: [UIKeyCommand] = Self.makeTerminalNavigationCommands(
         action: #selector(handleTerminalNavigationCommand(_:))
@@ -209,14 +220,20 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     var hasText: Bool {
+        if documentMode == .nativeSelection {
+            guard let terminalOwner else { return false }
+            return terminalOwner.nativeSelectionSnapshot.length > 0
+                || (terminalOwner.nativeSelectedRange?.length ?? 0) > 0
+        }
         // The terminal itself can still accept Backspace when the local document is
         // empty, and UIKit uses this value to keep software-keyboard delete
         // active/repeating.
-        !documentBuffer.isEmpty || (terminalOwner?.canRouteProxyDeleteBackward ?? false)
+        return !documentBuffer.isEmpty || (terminalOwner?.canRouteProxyDeleteBackward ?? false)
     }
 
     func insertText(_ text: String) {
         guard !text.isEmpty else { return }
+        guard prepareTerminalInputDocument() else { return }
         Self.dictationLogger.debug("insertText text=\(text, privacy: .public) mode=\(self.currentPrimaryLanguage, privacy: .public) session=\(self.dictationSessionOrigin?.rawValue ?? "none", privacy: .public) doc=\(self.documentBuffer, privacy: .public)")
         beginDictationSessionIfInputModeActive()
         if let origin = dictationSessionOrigin {
@@ -376,6 +393,7 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     func deleteBackward() {
+        guard prepareTerminalInputDocument() else { return }
         Self.dictationLogger.debug("deleteBackward doc=\(self.documentBuffer, privacy: .public) session=\(self.dictationSessionOrigin?.rawValue ?? "none", privacy: .public)")
         let before = terminalOwner?.imeProxySnapshot()
         guard !documentBuffer.isEmpty else {
@@ -433,6 +451,12 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
 
     var selectedTextRange: UITextRange? {
         get {
+            if documentMode == .nativeSelection {
+                guard let terminalOwner else { return nil }
+                return terminalOwner.nativeSelectionSnapshot.nativeRange(
+                    terminalOwner.nativeSelectedRange
+                )
+            }
             let range = effectiveTextInputSelectedRange
             return TerminalNativeTextRange(
                 start: range.location,
@@ -440,6 +464,13 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
             )
         }
         set {
+            if documentMode == .nativeSelection {
+                guard let terminalOwner else { return }
+                terminalOwner.setNativeSelectedRange(
+                    terminalOwner.nativeSelectionSnapshot.nativeRange(from: newValue)
+                )
+                return
+            }
             guard let range = newValue as? TerminalNativeTextRange else { return }
             Self.dictationLogger.debug("setSelectedTextRange range=\(String(describing: range.nsRange), privacy: .public) session=\(self.dictationSessionOrigin?.rawValue ?? "none", privacy: .public)")
             inputDelegate?.selectionWillChange(self)
@@ -450,6 +481,7 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     var markedTextRange: UITextRange? {
+        guard documentMode == .terminalInput else { return nil }
         guard let markedRange, markedRange.length > 0 else { return nil }
         return TerminalNativeTextRange(
             start: markedRange.location,
@@ -462,7 +494,7 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     var endOfDocument: UITextPosition {
-        TerminalNativeTextPosition(offset: textInputDocumentLength)
+        TerminalNativeTextPosition(offset: activeDocumentLength)
     }
 
     var textInputView: UIView {
@@ -470,6 +502,7 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
+        guard prepareTerminalInputDocument() else { return }
         Self.dictationLogger.debug("setMarkedText text=\(markedText ?? "nil", privacy: .public) sel=\(selectedRange.location),\(selectedRange.length) mode=\(self.currentPrimaryLanguage, privacy: .public) session=\(self.dictationSessionOrigin?.rawValue ?? "none", privacy: .public)")
         terminalOwner?.cancelHardwareKeyRepeatForIMEComposition()
         performDocumentEdit {
@@ -499,6 +532,7 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     func unmarkText() {
+        guard prepareTerminalInputDocument() else { return }
         Self.dictationLogger.debug("unmarkText doc=\(self.documentBuffer, privacy: .public) marked=\(String(describing: self.markedRange), privacy: .public) session=\(self.dictationSessionOrigin?.rawValue ?? "none", privacy: .public)")
         guard let marked = markedRange, marked.length > 0 else {
             markedRange = nil
@@ -520,6 +554,13 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     func text(in range: UITextRange) -> String? {
+        if documentMode == .nativeSelection {
+            guard let terminalOwner,
+                  let range = terminalOwner.nativeSelectionSnapshot.nativeRange(from: range) else {
+                return nil
+            }
+            return terminalOwner.nativeSelectionSnapshot.text(in: range)
+        }
         guard let range = range as? TerminalNativeTextRange else { return nil }
         let clamped = clampedTextInputRange(range.nsRange)
         let result: String
@@ -533,6 +574,14 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     func replace(_ range: UITextRange, withText text: String) {
+        if documentMode == .nativeSelection {
+            guard !text.isEmpty,
+                  terminalOwner?.exitNativeSelectionTextInputContextForTerminalInput() == true else {
+                return
+            }
+            _ = terminalOwner?.handleIMEProxyInsertText(text, fromIMEComposition: false)
+            return
+        }
         Self.dictationLogger.debug("replace range=\(String(describing: (range as? TerminalNativeTextRange)?.nsRange), privacy: .public) text=\(text, privacy: .public) doc=\(self.documentBuffer, privacy: .public) session=\(self.dictationSessionOrigin?.rawValue ?? "none", privacy: .public)")
         guard let range = range as? TerminalNativeTextRange else {
             if !text.isEmpty {
@@ -566,21 +615,41 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
 
     func position(from position: UITextPosition, offset: Int) -> UITextPosition? {
         guard let position = position as? TerminalNativeTextPosition else { return nil }
-        return TerminalNativeTextPosition(offset: clampedOffset(position.offset + offset))
+        return TerminalNativeTextPosition(
+            offset: activeClampedOffset(position.offset, adding: offset)
+        )
     }
 
     func position(from position: UITextPosition, in direction: UITextLayoutDirection, offset: Int) -> UITextPosition? {
         guard let position = position as? TerminalNativeTextPosition else { return nil }
-        let delta: Int
         switch direction {
-        case .left, .up:
-            delta = -offset
-        case .right, .down:
-            delta = offset
+        case .left:
+            return TerminalNativeTextPosition(
+                offset: activeClampedOffset(position.offset, subtracting: offset)
+            )
+        case .right:
+            return TerminalNativeTextPosition(
+                offset: activeClampedOffset(position.offset, adding: offset)
+            )
+        case .up:
+            return TerminalNativeTextPosition(
+                offset: activeClampedOffset(
+                    position.offset,
+                    subtracting: saturatingProduct(offset, activeDocumentColumns)
+                )
+            )
+        case .down:
+            return TerminalNativeTextPosition(
+                offset: activeClampedOffset(
+                    position.offset,
+                    adding: saturatingProduct(offset, activeDocumentColumns)
+                )
+            )
         @unknown default:
-            delta = offset
+            return TerminalNativeTextPosition(
+                offset: activeClampedOffset(position.offset, adding: offset)
+            )
         }
-        return TerminalNativeTextPosition(offset: clampedOffset(position.offset + delta))
     }
 
     func compare(_ position: UITextPosition, to other: UITextPosition) -> ComparisonResult {
@@ -594,18 +663,24 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     func offset(from: UITextPosition, to toPosition: UITextPosition) -> Int {
         guard let from = from as? TerminalNativeTextPosition,
               let to = toPosition as? TerminalNativeTextPosition else { return 0 }
-        return to.offset - from.offset
+        return activeClampedOffset(to.offset) - activeClampedOffset(from.offset)
     }
 
     func position(within range: UITextRange, farthestIn direction: UITextLayoutDirection) -> UITextPosition? {
         guard let range = range as? TerminalNativeTextRange else { return nil }
         switch direction {
         case .left, .up:
-            return TerminalNativeTextPosition(offset: range.startPosition.offset)
+            return TerminalNativeTextPosition(
+                offset: activeClampedOffset(range.startPosition.offset)
+            )
         case .right, .down:
-            return TerminalNativeTextPosition(offset: range.endPosition.offset)
+            return TerminalNativeTextPosition(
+                offset: activeClampedOffset(range.endPosition.offset)
+            )
         @unknown default:
-            return TerminalNativeTextPosition(offset: range.endPosition.offset)
+            return TerminalNativeTextPosition(
+                offset: activeClampedOffset(range.endPosition.offset)
+            )
         }
     }
 
@@ -613,11 +688,20 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
         guard let position = position as? TerminalNativeTextPosition else { return nil }
         switch direction {
         case .left, .up:
-            return TerminalNativeTextRange(start: clampedOffset(position.offset - 1), end: position.offset)
+            return TerminalNativeTextRange(
+                start: activeClampedOffset(position.offset, adding: -1),
+                end: activeClampedOffset(position.offset)
+            )
         case .right, .down:
-            return TerminalNativeTextRange(start: position.offset, end: clampedOffset(position.offset + 1))
+            return TerminalNativeTextRange(
+                start: activeClampedOffset(position.offset),
+                end: activeClampedOffset(position.offset, adding: 1)
+            )
         @unknown default:
-            return TerminalNativeTextRange(start: position.offset, end: clampedOffset(position.offset + 1))
+            return TerminalNativeTextRange(
+                start: activeClampedOffset(position.offset),
+                end: activeClampedOffset(position.offset, adding: 1)
+            )
         }
     }
 
@@ -629,22 +713,57 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     func firstRect(for range: UITextRange) -> CGRect {
-        terminalOwner?.imeProxyFirstRect(for: range) ?? .zero
+        if documentMode == .nativeSelection {
+            guard let terminalOwner,
+                  let range = terminalOwner.nativeSelectionSnapshot.nativeRange(from: range) else {
+                return .zero
+            }
+            return terminalOwner.nativeSelectionSnapshot.firstRect(for: range)
+        }
+        return terminalOwner?.imeProxyFirstRect(for: range) ?? .zero
     }
 
     func caretRect(for position: UITextPosition) -> CGRect {
-        terminalOwner?.imeProxyCaretRect(for: position) ?? .zero
+        if documentMode == .nativeSelection {
+            guard let terminalOwner,
+                  let position = position as? TerminalNativeTextPosition else {
+                return .zero
+            }
+            return terminalOwner.nativeSelectionSnapshot.caretRect(for: position.offset)
+        }
+        return terminalOwner?.imeProxyCaretRect(for: position) ?? .zero
     }
 
     func selectionRects(for range: UITextRange) -> [UITextSelectionRect] {
-        []
+        guard documentMode == .nativeSelection,
+              let terminalOwner,
+              let range = terminalOwner.nativeSelectionSnapshot.nativeRange(from: range) else {
+            return []
+        }
+        return terminalOwner.nativeSelectionSnapshot.selectionRects(for: range)
     }
 
     func closestPosition(to point: CGPoint) -> UITextPosition? {
-        TerminalNativeTextPosition(offset: textInputDocumentLength)
+        if documentMode == .nativeSelection, let terminalOwner {
+            return TerminalNativeTextPosition(
+                offset: terminalOwner.nativeSelectionSnapshot.offset(for: point)
+            )
+        }
+        return TerminalNativeTextPosition(offset: textInputDocumentLength)
     }
 
     func closestPosition(to point: CGPoint, within range: UITextRange) -> UITextPosition? {
+        if documentMode == .nativeSelection {
+            guard let terminalOwner,
+                  let range = terminalOwner.nativeSelectionSnapshot.nativeRange(from: range) else {
+                return nil
+            }
+            let offset = terminalOwner.nativeSelectionSnapshot.offset(for: point)
+            let upperBound = terminalOwner.nativeSelectionSnapshot.upperBound(of: range)
+            return TerminalNativeTextPosition(
+                offset: min(max(offset, range.location), upperBound)
+            )
+        }
         guard let range = range as? TerminalNativeTextRange else {
             return closestPosition(to: point)
         }
@@ -652,11 +771,39 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     func characterRange(at point: CGPoint) -> UITextRange? {
-        nil
+        guard documentMode == .nativeSelection,
+              let terminalOwner,
+              let range = terminalOwner.nativeSelectionSnapshot.characterRange(at: point) else {
+            return nil
+        }
+        let upperBound = terminalOwner.nativeSelectionSnapshot.upperBound(of: range)
+        return TerminalNativeTextRange(start: range.location, end: upperBound)
     }
 
     func textStyling(at position: UITextPosition, in direction: UITextStorageDirection) -> [NSAttributedString.Key: Any]? {
         markedTextStyle
+    }
+
+    @available(iOS 16.0, *)
+    func editMenu(for textRange: UITextRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        guard documentMode == .nativeSelection, let terminalOwner else { return nil }
+        return UIMenu(children: terminalOwner.nativeSelectionMenuElements())
+    }
+
+    func position(within range: UITextRange, atCharacterOffset offset: Int) -> UITextPosition? {
+        guard let range = range as? TerminalNativeTextRange else { return nil }
+        return TerminalNativeTextPosition(
+            offset: activeClampedOffset(range.startPosition.offset, adding: offset)
+        )
+    }
+
+    func characterOffset(of position: UITextPosition, within range: UITextRange) -> Int {
+        guard let position = position as? TerminalNativeTextPosition,
+              let range = range as? TerminalNativeTextRange else {
+            return 0
+        }
+        return activeClampedOffset(position.offset)
+            - activeClampedOffset(range.startPosition.offset)
     }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
@@ -738,6 +885,12 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
         terminalOwner?.syncTextInputModelFromIMEProxy()
     }
 
+    private func prepareTerminalInputDocument() -> Bool {
+        guard documentMode == .nativeSelection else { return true }
+        guard terminalOwner?.suppressIMEProxyCallbacks != true else { return true }
+        return terminalOwner?.exitNativeSelectionTextInputContextForTerminalInput() == true
+    }
+
     private var usesDeleteRepeatAnchor: Bool {
         documentBuffer.isEmpty && terminalOwner?.canRouteProxyDeleteBackward == true
     }
@@ -752,6 +905,20 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
 
     private var textInputDocumentLength: Int {
         (textInputDocument as NSString).length
+    }
+
+    private var activeDocumentLength: Int {
+        if documentMode == .nativeSelection {
+            return terminalOwner?.nativeSelectionSnapshot.length ?? 0
+        }
+        return textInputDocumentLength
+    }
+
+    private var activeDocumentColumns: Int {
+        if documentMode == .nativeSelection {
+            return terminalOwner?.nativeSelectionSnapshot.columns ?? 1
+        }
+        return 1
     }
 
     private var effectiveTextInputSelectedRange: NSRange {
@@ -780,6 +947,32 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
 
     private func clampedOffset(_ offset: Int) -> Int {
         min(max(offset, 0), textInputDocumentLength)
+    }
+
+    private func activeClampedOffset(_ offset: Int) -> Int {
+        min(max(offset, 0), activeDocumentLength)
+    }
+
+    private func activeClampedOffset(_ offset: Int, adding delta: Int) -> Int {
+        let addition = activeClampedOffset(offset).addingReportingOverflow(delta)
+        if addition.overflow {
+            return delta >= 0 ? activeDocumentLength : 0
+        }
+        return activeClampedOffset(addition.partialValue)
+    }
+
+    private func activeClampedOffset(_ offset: Int, subtracting delta: Int) -> Int {
+        let subtraction = activeClampedOffset(offset).subtractingReportingOverflow(delta)
+        if subtraction.overflow {
+            return delta >= 0 ? 0 : activeDocumentLength
+        }
+        return activeClampedOffset(subtraction.partialValue)
+    }
+
+    private func saturatingProduct(_ value: Int, _ factor: Int) -> Int {
+        let multiplication = value.multipliedReportingOverflow(by: factor)
+        guard multiplication.overflow else { return multiplication.partialValue }
+        return (value >= 0) == (factor >= 0) ? Int.max : Int.min
     }
 
     private static func makeTerminalNavigationCommands(action: Selector) -> [UIKeyCommand] {

@@ -12,12 +12,11 @@ import UIKit
 
 extension GhosttyTerminalView {
     var shouldHideKeyboardAccessoryBar: Bool {
-        shouldSuppressSoftwareKeyboard
-            || suppressAccessoryForMissingSoftwareKeyboard
+        terminalInputConfiguration != .systemWithAccessory
     }
 
     func resolvedInputAccessoryView() -> UIView? {
-        guard !isFindNavigatorActive, !shouldHideKeyboardAccessoryBar else {
+        guard terminalInputConfiguration == .systemWithAccessory else {
             return nil
         }
         if keyboardToolbar == nil {
@@ -51,11 +50,6 @@ extension GhosttyTerminalView {
     func refreshTerminalInputAccessoryAppearance() {
         keyboardToolbar?.refreshAppearance()
     }
-
-    override var inputAccessoryView: UIView? {
-        resolvedInputAccessoryView()
-    }
-
 
     private func handleToolbarKey(_ key: TerminalKey) {
         sendToolbarKey(key)

@@ -149,7 +149,13 @@ final class TerminalNativeTextRange: UITextRange {
     override var isEmpty: Bool { startPosition.offset == endPosition.offset }
 
     var nsRange: NSRange {
-        NSRange(location: startPosition.offset, length: endPosition.offset - startPosition.offset)
+        let location = max(startPosition.offset, 0)
+        let end = max(endPosition.offset, location)
+        let subtraction = end.subtractingReportingOverflow(location)
+        return NSRange(
+            location: location,
+            length: subtraction.overflow ? Int.max : subtraction.partialValue
+        )
     }
 
     init(start: Int, end: Int) {
@@ -283,8 +289,14 @@ struct TerminalNativeTextSnapshot {
 
     func clampedRange(_ range: NSRange) -> NSRange {
         let location = clampedOffset(range.location)
-        let upperBound = clampedOffset(range.location + range.length)
-        return NSRange(location: location, length: max(upperBound - location, 0))
+        let rangeLength = min(max(range.length, 0), max(length - location, 0))
+        return NSRange(location: location, length: rangeLength)
+    }
+
+    func upperBound(of range: NSRange) -> Int {
+        let clamped = clampedRange(range)
+        let addition = clamped.location.addingReportingOverflow(clamped.length)
+        return addition.overflow ? length : addition.partialValue
     }
 
     func nativeRange(from range: UITextRange?) -> NSRange? {
@@ -295,7 +307,7 @@ struct TerminalNativeTextSnapshot {
     func nativeRange(_ range: NSRange?) -> TerminalNativeTextRange? {
         guard let range else { return nil }
         let clamped = clampedRange(range)
-        return TerminalNativeTextRange(start: clamped.location, end: clamped.location + clamped.length)
+        return TerminalNativeTextRange(start: clamped.location, end: upperBound(of: clamped))
     }
 
     func text(in range: NSRange) -> String? {
@@ -347,7 +359,7 @@ struct TerminalNativeTextSnapshot {
         guard clamped.length > 0, !lines.isEmpty else { return [] }
 
         let lowerBound = clamped.location
-        let upperBound = clamped.location + clamped.length
+        let upperBound = self.upperBound(of: clamped)
         var rects: [TerminalNativeSelectionRect] = []
 
         for (lineIndex, line) in lines.enumerated() {

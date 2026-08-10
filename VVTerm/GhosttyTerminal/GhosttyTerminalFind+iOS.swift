@@ -53,6 +53,10 @@ extension GhosttyTerminalView: UIFindInteractionDelegate {
 
 @available(iOS 16.0, *)
 extension GhosttyTerminalView: UITextSearching {
+    var selectedTextRange: UITextRange? {
+        imeProxyTextView.selectedTextRange
+    }
+
     typealias DocumentIdentifier = String
 
     func compare(_ foundRange: UITextRange, toRange: UITextRange, document: String?) -> ComparisonResult {

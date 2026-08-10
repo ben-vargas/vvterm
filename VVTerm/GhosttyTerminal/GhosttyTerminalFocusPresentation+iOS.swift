@@ -13,6 +13,7 @@ extension GhosttyTerminalView {
         case systemWithAccessory
         case systemWithoutAccessory
         case suppressed
+        case nativeSelection
     }
 
     override var canBecomeFirstResponder: Bool {
@@ -77,6 +78,9 @@ extension GhosttyTerminalView {
     }
 
     var terminalInputConfiguration: TerminalInputConfiguration {
+        if isNativeSelectionTextInputContext {
+            return .nativeSelection
+        }
         if shouldSuppressSoftwareKeyboard {
             return .suppressed
         }
@@ -92,25 +96,27 @@ extension GhosttyTerminalView {
             return hiddenKeyboardInputView
         }
         #endif
-        return shouldSuppressSoftwareKeyboard ? hiddenKeyboardInputView : nil
-    }
-
-    override var inputView: UIView? {
-        resolvedInputView()
+        switch terminalInputConfiguration {
+        case .suppressed, .nativeSelection:
+            return hiddenKeyboardInputView
+        case .systemWithAccessory, .systemWithoutAccessory:
+            return nil
+        }
     }
 
     func reloadTerminalInputViewsIfActive() {
+        guard imeProxyTextView.isFirstResponder else { return }
         #if DEBUG
-        if super.isFirstResponder || imeProxyTextView.isFirstResponder {
-            keyboardInputViewReloadCount += 1
-        }
+        keyboardInputViewReloadCount += 1
         #endif
-        if super.isFirstResponder {
-            reloadInputViews()
-        }
-        if imeProxyTextView.isFirstResponder {
-            imeProxyTextView.reloadInputViews()
-        }
+        imeProxyTextView.reloadInputViews()
+    }
+
+    func reloadTerminalInputViews(
+        ifChangedFrom previousInputConfiguration: TerminalInputConfiguration
+    ) {
+        guard previousInputConfiguration != terminalInputConfiguration else { return }
+        reloadTerminalInputViewsIfActive()
     }
 
     @discardableResult
@@ -197,14 +203,18 @@ extension GhosttyTerminalView {
 
     func clearNativeSelectionStateForTerminalInput() {
         guard usesNativeTouchSelection else { return }
+        let previousInputConfiguration = terminalInputConfiguration
         let hadSelection = nativeSelectionLifecycle.selection != nil
         if hadSelection {
-            nativeTextInputDelegate?.selectionWillChange(self)
+            imeProxyTextView.inputDelegate?.selectionWillChange(imeProxyTextView)
         }
         nativeSelectionLifecycle.cancel()
         if hadSelection {
-            nativeTextInputDelegate?.selectionDidChange(self)
+            imeProxyTextView.inputDelegate?.selectionDidChange(imeProxyTextView)
         }
+        reloadTerminalInputViews(
+            ifChangedFrom: previousInputConfiguration
+        )
     }
 
     func releaseTerminalInput() {
@@ -281,23 +291,12 @@ extension GhosttyTerminalView {
         onTerminalDirectTouch?(isFocusTap)
     }
 
-    override var textInputContextIdentifier: String? {
-        currentTextInputContextIdentifier
-    }
-
     override var isFirstResponder: Bool {
         isTerminalTextInputActive
     }
 
     override func becomeFirstResponder() -> Bool {
         guard isTextInputSessionEligible else { return false }
-        if nativeSelectionLifecycle.keepsFirstResponder {
-            let result = super.becomeFirstResponder()
-            if result || super.isFirstResponder {
-                imeProxyFocusDidChange(isFocused: true)
-            }
-            return result
-        }
         return imeProxyTextView.becomeFirstResponder()
     }
 

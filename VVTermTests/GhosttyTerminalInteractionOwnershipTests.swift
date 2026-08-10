@@ -45,9 +45,40 @@ struct GhosttyTerminalInteractionOwnershipTests {
 
         let nativeSelection = try #require(terminal.nativeTextInteraction)
         let pointerMenu = try #require(terminal.editMenuInteraction)
+        let interactionTextInput = nativeSelection.textInput as AnyObject?
 
         #expect(nativeSelection.view === terminal)
+        #expect(interactionTextInput === terminal.imeProxyTextView)
+        #expect(interactionTextInput !== terminal)
         #expect(pointerMenu.view === terminal)
+
+        terminal.nativeSelectionSnapshot = TerminalNativeTextSnapshot(
+            lines: ["one two"],
+            cellSize: CGSize(width: 10, height: 20),
+            columns: 7
+        )
+        _ = terminal.nativeSelectionLifecycle.setSelection(
+            NSRange(location: 0, length: 3)
+        )
+
+        let textInput = terminal.imeProxyTextView
+        #expect(textInput.documentMode == .nativeSelection)
+        #expect(textInput.text(in: try #require(textInput.selectedTextRange)) == "one")
+
+        let minimumPosition = TerminalNativeTextPosition(offset: Int.min)
+        let maximumPosition = TerminalNativeTextPosition(offset: Int.max)
+        #expect(textInput.offset(from: minimumPosition, to: maximumPosition) == 7)
+        let extremeRange = try #require(
+            textInput.textRange(from: minimumPosition, to: maximumPosition)
+                as? TerminalNativeTextRange
+        )
+        #expect(extremeRange.nsRange == NSRange(location: 0, length: Int.max))
+        #expect(
+            textInput.characterOffset(of: maximumPosition, within: extremeRange) == 7
+        )
+
+        terminal.clearNativeSelectionStateForTerminalInput()
+        #expect(textInput.documentMode == .terminalInput)
 
         let titleEditor = UIAlertController(
             title: "Test",

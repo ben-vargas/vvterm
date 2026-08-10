@@ -47,7 +47,6 @@ enum TerminalSurfaceGeometryPolicy {
 @MainActor
 class GhosttyTerminalView: UIView {
     static let textInputContextID = "app.vivy.VVTerm.GhosttyTerminalView"
-    private static let imeProxyOffscreenFrame = CGRect(x: -10_000, y: -10_000, width: 1, height: 1)
     // MARK: - Properties
 
     var ghosttyApp: ghostty_app_t?
@@ -193,9 +192,6 @@ class GhosttyTerminalView: UIView {
     var nativeSelectedRange: NSRange? { nativeSelectionLifecycle.selection }
     var nativeSelectionInteractionActive: Bool { nativeSelectionLifecycle.interactionIsActive }
     var prefersNativeSelectionFirstResponder: Bool { nativeSelectionLifecycle.keepsFirstResponder }
-    weak var nativeTextInputDelegate: UITextInputDelegate?
-    lazy var nativeSelectionTokenizer = UITextInputStringTokenizer(textInput: self)
-    var nativeSelectionAffinity: UITextStorageDirection = .forward
     var nativeTextInteraction: UITextInteraction?
     var nativeFindInteraction: UIFindInteraction?
     @available(iOS 16.0, *)

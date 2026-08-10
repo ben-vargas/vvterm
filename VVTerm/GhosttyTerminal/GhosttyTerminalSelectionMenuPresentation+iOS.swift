@@ -55,8 +55,8 @@ extension GhosttyTerminalView {
     }
 
     private func selectionMenuSourceRect() -> CGRect {
-        if let selectedTextRange {
-            let rect = firstRect(for: selectedTextRange)
+        if let selectedTextRange = imeProxyTextView.selectedTextRange {
+            let rect = imeProxyTextView.firstRect(for: selectedTextRange)
             if !rect.isNull, !rect.isEmpty {
                 return rect
             }

@@ -148,21 +148,32 @@ extension GhosttyTerminalView {
     func invalidateLocalTextInputSession() {
         resetIMEProxyState()
         let effects = textInputModel.invalidateSession()
-        applyTerminalTextInputEffects(effects)
+        applyTerminalTextInputEffects(effects, notifiesInputDelegate: true)
         syncIMEPreedit(nil)
     }
 
-    func applyTerminalTextInputEffects(_ effects: [TerminalTextInputModel.Effect]) {
+    func applyTerminalTextInputEffects(
+        _ effects: [TerminalTextInputModel.Effect],
+        notifiesInputDelegate: Bool = false
+    ) {
         for effect in effects {
             switch effect {
             case .willTextChange:
-                nativeTextInputDelegate?.textWillChange(self)
+                if notifiesInputDelegate {
+                    imeProxyTextView.inputDelegate?.textWillChange(imeProxyTextView)
+                }
             case .willSelectionChange:
-                nativeTextInputDelegate?.selectionWillChange(self)
+                if notifiesInputDelegate {
+                    imeProxyTextView.inputDelegate?.selectionWillChange(imeProxyTextView)
+                }
             case .didTextChange:
-                nativeTextInputDelegate?.textDidChange(self)
+                if notifiesInputDelegate {
+                    imeProxyTextView.inputDelegate?.textDidChange(imeProxyTextView)
+                }
             case .didSelectionChange:
-                nativeTextInputDelegate?.selectionDidChange(self)
+                if notifiesInputDelegate {
+                    imeProxyTextView.inputDelegate?.selectionDidChange(imeProxyTextView)
+                }
             case let .syncPreedit(text):
                 syncIMEPreedit(text)
             case let .sendText(text):

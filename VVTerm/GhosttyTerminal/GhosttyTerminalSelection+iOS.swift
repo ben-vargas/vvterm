@@ -18,10 +18,18 @@ extension GhosttyTerminalView: UITextInteractionDelegate {
         ) else {
             return false
         }
+        let previousInputConfiguration = terminalInputConfiguration
         nativeSelectionLifecycle.prepare(restoreTerminalInput: isTerminalTextInputActive)
+        reloadTerminalInputViews(
+            ifChangedFrom: previousInputConfiguration
+        )
         refreshNativeSelectionSnapshot()
         guard nativeSelectionSnapshot.length > 0 else {
+            let previousInputConfiguration = terminalInputConfiguration
             nativeSelectionLifecycle.cancel()
+            reloadTerminalInputViews(
+                ifChangedFrom: previousInputConfiguration
+            )
             return false
         }
         return true
@@ -37,7 +45,11 @@ extension GhosttyTerminalView: UITextInteractionDelegate {
     }
 
     func interactionDidEnd(_ interaction: UITextInteraction) {
+        let previousInputConfiguration = terminalInputConfiguration
         let restorationID = nativeSelectionLifecycle.endInteraction()
+        reloadTerminalInputViews(
+            ifChangedFrom: previousInputConfiguration
+        )
         refreshNativeSelectionSnapshot()
         scheduleNativeSelectionTerminalInputRestoration(restorationID)
     }
@@ -47,7 +59,7 @@ extension GhosttyTerminalView {
     func setupNativeTextSelectionInteractions() {
         let interaction = UITextInteraction(for: .nonEditable)
         interaction.delegate = self
-        interaction.textInput = self
+        interaction.textInput = imeProxyTextView
         addInteraction(interaction)
         nativeTextInteraction = interaction
         for gesture in interaction.gesturesForFailureRequirements {
@@ -57,10 +69,10 @@ extension GhosttyTerminalView {
 
     private func notifyNativeSelectionLayoutChange() {
         guard nativeSelectionLifecycle.shouldRefreshSnapshot else { return }
-        nativeTextInputDelegate?.textWillChange(self)
-        nativeTextInputDelegate?.textDidChange(self)
-        nativeTextInputDelegate?.selectionWillChange(self)
-        nativeTextInputDelegate?.selectionDidChange(self)
+        imeProxyTextView.inputDelegate?.textWillChange(imeProxyTextView)
+        imeProxyTextView.inputDelegate?.textDidChange(imeProxyTextView)
+        imeProxyTextView.inputDelegate?.selectionWillChange(imeProxyTextView)
+        imeProxyTextView.inputDelegate?.selectionDidChange(imeProxyTextView)
     }
 
     func refreshNativeSelectionSnapshot(resetSelection: Bool = false) {
@@ -147,9 +159,13 @@ extension GhosttyTerminalView {
             return
         }
 
-        nativeTextInputDelegate?.selectionWillChange(self)
+        let previousInputConfiguration = terminalInputConfiguration
+        imeProxyTextView.inputDelegate?.selectionWillChange(imeProxyTextView)
         let restorationID = nativeSelectionLifecycle.setSelection(clampedRange)
-        nativeTextInputDelegate?.selectionDidChange(self)
+        imeProxyTextView.inputDelegate?.selectionDidChange(imeProxyTextView)
+        reloadTerminalInputViews(
+            ifChangedFrom: previousInputConfiguration
+        )
         scheduleNativeSelectionTerminalInputRestoration(restorationID)
     }
 
@@ -176,7 +192,9 @@ extension GhosttyTerminalView {
         guard clamped.length > 0 else { return false }
 
         let startRect = nativeSelectionSnapshot.caretRect(for: clamped.location)
-        let endRect = nativeSelectionSnapshot.caretRect(for: clamped.location + clamped.length)
+        let endRect = nativeSelectionSnapshot.caretRect(
+            for: nativeSelectionSnapshot.upperBound(of: clamped)
+        )
         let hitSlop = max(28, nativeSelectionSnapshot.cellSize.height * 1.5)
         return startRect.insetBy(dx: -hitSlop, dy: -hitSlop).contains(point)
             || endRect.insetBy(dx: -hitSlop, dy: -hitSlop).contains(point)
