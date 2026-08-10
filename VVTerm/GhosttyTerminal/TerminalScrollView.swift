@@ -258,12 +258,12 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
             if cellHeight > 0, let scrollbar = surfaceView.scrollbar {
                 // Invert coordinate system: terminal offset is from top, AppKit position from bottom
                 let offsetY =
-                    CGFloat(scrollbar.total - scrollbar.offset - scrollbar.len) * cellHeight
+                    CGFloat(scrollbar.rowsBelowViewport) * cellHeight
                 scrollView.contentView.scroll(to: CGPoint(x: 0, y: offsetY))
 
                 // Track the current row position to avoid redundant movements when we
                 // move the scrollbar.
-                lastSentRow = Int(scrollbar.offset)
+                lastSentRow = scrollbar.offsetAsInt
             }
         }
 
@@ -294,7 +294,11 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
         let visibleRect = scrollView.contentView.documentVisibleRect
         let documentHeight = documentView.frame.height
         let scrollOffset = documentHeight - visibleRect.origin.y - visibleRect.height
-        let row = Int(scrollOffset / cellHeight)
+        guard let row = Ghostty.Action.Scrollbar.clampedRowIndex(
+            Double(scrollOffset / cellHeight)
+        ) else {
+            return
+        }
 
         // Only send action if the row changed to avoid action spam
         guard row != lastSentRow else { return }

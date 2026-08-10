@@ -28,15 +28,28 @@ extension Ghostty.Action {
         let len: UInt64
 
         init(c: ghostty_action_scrollbar_s) {
-            total = c.total
-            offset = c.offset
-            len = c.len
+            self.init(total: c.total, offset: c.offset, len: c.len)
         }
 
         init(total: UInt64, offset: UInt64, len: UInt64) {
             self.total = total
-            self.offset = offset
-            self.len = len
+            self.len = min(len, total)
+            self.offset = min(offset, total - self.len)
+        }
+
+        var rowsBelowViewport: UInt64 {
+            total - offset - len
+        }
+
+        var offsetAsInt: Int {
+            Int(clamping: offset)
+        }
+
+        static func clampedRowIndex(_ value: Double) -> Int? {
+            guard value.isFinite else { return nil }
+            let row = floor(value)
+            guard row > 0 else { return 0 }
+            return Int(exactly: row) ?? Int.max
         }
     }
 }
