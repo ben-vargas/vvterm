@@ -7,6 +7,7 @@ import SwiftUI
 import StoreKit
 
 struct ProSettingsView: View {
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var serverManager: ServerManager
     @State private var showingPlans = false
@@ -84,13 +85,7 @@ struct ProSettingsView: View {
             if storeManager.isPro && !storeManager.isLifetime {
                 Section("Billing") {
                     Button("Manage Subscription") {
-                        #if os(iOS)
-                        showingManageSubscription = true
-                        #else
-                        if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
-                            NSWorkspace.shared.open(url)
-                        }
-                        #endif
+                        openSubscriptionManagement()
                     }
                 }
             }
@@ -153,6 +148,26 @@ struct ProSettingsView: View {
             return String(localized: "Pro Yearly")
         default:
             return String(localized: "Pro")
+        }
+    }
+
+    private func openSubscriptionManagement() {
+        let route: SubscriptionManagementRoute
+        #if os(iOS)
+        if #available(iOS 17.0, *) {
+            route = .resolve(nativeSheetAvailable: true)
+        } else {
+            route = .resolve(nativeSheetAvailable: false)
+        }
+        #else
+        route = .resolve(nativeSheetAvailable: false)
+        #endif
+
+        switch route {
+        case .nativeSheet:
+            showingManageSubscription = true
+        case .web(let url):
+            openURL(url)
         }
     }
 
