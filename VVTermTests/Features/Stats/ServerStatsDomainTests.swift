@@ -8,9 +8,14 @@ final class ServerStatsDomainTests: XCTestCase {
 
         state.start(attemptID: attemptID)
         XCTAssertTrue(state.markConnected(attemptID: attemptID))
-        XCTAssertTrue(state.finish(attemptID: attemptID, errorMessage: "Connection failed"))
+        XCTAssertTrue(
+            state.finish(
+                attemptID: attemptID,
+                failure: .external(detail: "Connection failed")
+            )
+        )
 
-        XCTAssertEqual(state.phase, .failed(message: "Connection failed"))
+        XCTAssertEqual(state.phase, .failed(.external(detail: "Connection failed")))
         XCTAssertFalse(state.isCollecting)
     }
 
@@ -23,7 +28,12 @@ final class ServerStatsDomainTests: XCTestCase {
         state.stop()
         state.start(attemptID: secondAttemptID)
 
-        XCTAssertFalse(state.finish(attemptID: firstAttemptID, errorMessage: "Stale failure"))
+        XCTAssertFalse(
+            state.finish(
+                attemptID: firstAttemptID,
+                failure: .external(detail: "Stale failure")
+            )
+        )
         XCTAssertEqual(state.phase, .starting(attemptID: secondAttemptID))
         XCTAssertTrue(state.isCollecting)
     }
@@ -71,11 +81,11 @@ final class ServerStatsDomainTests: XCTestCase {
         XCTAssertTrue(
             state.resolveApproval(
                 request,
-                message: "Approval cancelled"
+                failure: .securityApprovalCancelled
             )
         )
         XCTAssertNil(state.approvalRequest)
-        XCTAssertEqual(state.phase, .failed(message: "Approval cancelled"))
+        XCTAssertEqual(state.phase, .failed(.securityApprovalCancelled))
     }
 
     func testMemoryPercentReturnsZeroWhenTotalIsZero() {

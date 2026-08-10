@@ -238,7 +238,70 @@ private enum StatsTestError: Error {
     case incompatibleConnection
 }
 
+private struct StatsExternalTestError: LocalizedError {
+    var errorDescription: String? { "External stats failure." }
+}
+
 final class ServerStatsCollectorLifecycleTests: XCTestCase {
+    @MainActor
+    func testUnknownSessionCreationFailureKeepsExternalDetail() async {
+        let collector = ServerStatsCollector(
+            dependencies: ServerStatsCollectorDependencies(
+                makeOwnedConnection: { StatsTestConnection() },
+                makeSession: { _, _, _ in throw StatsExternalTestError() },
+                makeAttemptID: UUID.init
+            )
+        )
+
+        await collector.startCollecting(for: StatsTestTarget())
+
+        XCTAssertEqual(
+            collector.collectionState.phase,
+            .failed(.external(detail: "External stats failure."))
+        )
+    }
+
+    @MainActor
+    func testLiveApprovalErrorsMapToSemanticFailures() async {
+        let cases: [(
+            error: ServerSecurityApprovalError,
+            failure: ServerStatsCollectionFailure
+        )] = [
+            (.cancelled, .securityApprovalCancelled),
+            (.expired, .securityApprovalExpired),
+            (.unavailable, .securityApprovalUnavailable)
+        ]
+
+        for testCase in cases {
+            let target = StatsTestTarget()
+            let request = ServerSecurityApprovalRequest.credentialEndpoint(
+                serverID: target.serverID
+            )
+            let reference = LiveServerStatsApprovalReference(
+                request,
+                serverID: target.serverID
+            )
+            let collector = ServerStatsCollector(
+                dependencies: ServerStatsCollectorDependencies(
+                    makeOwnedConnection: { StatsTestConnection() },
+                    makeSession: { _, _, _ in
+                        throw ServerStatsApprovalRequired(reference: reference)
+                    },
+                    makeAttemptID: UUID.init
+                )
+            )
+
+            await collector.startCollecting(for: target)
+            collector.resolveSecurityApproval(request, error: testCase.error)
+
+            XCTAssertEqual(
+                collector.collectionState.phase,
+                .failed(testCase.failure)
+            )
+            XCTAssertNil(collector.approvalReferenceForPresentation)
+        }
+    }
+
     @MainActor
     func testPreparationApprovalKeepsTypedRequestWithoutStartingConnectionTask() async {
         let target = StatsTestTarget()

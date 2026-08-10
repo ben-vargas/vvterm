@@ -30,13 +30,29 @@ final class ServerStatsErrorPresentationTests: XCTestCase {
         )
     }
 
-    func testCollectionStatePassesThroughFailureMessage() {
-        let attemptID = UUID()
-        var state = ServerStatsCollectionState()
-        state.start(attemptID: attemptID)
-        XCTAssertTrue(state.finish(attemptID: attemptID, errorMessage: "Connection failed"))
+    func testCollectionFailuresMapExactMessages() {
+        let cases: [(failure: ServerStatsCollectionFailure, message: String)] = [
+            (
+                .securityApprovalCancelled,
+                String(localized: "Security approval was cancelled.")
+            ),
+            (
+                .securityApprovalExpired,
+                String(localized: "Security approval expired. Try again.")
+            ),
+            (
+                .securityApprovalUnavailable,
+                String(localized: "Security approval is no longer available. Try again.")
+            ),
+            (.external(detail: "Connection failed"), "Connection failed")
+        ]
 
-        XCTAssertEqual(state.errorMessage, "Connection failed")
+        for testCase in cases {
+            XCTAssertEqual(
+                stateFailed(with: testCase.failure).errorMessage,
+                testCase.message
+            )
+        }
     }
 
     func testCollectionStateHasNoMessageOutsideErrors() {
@@ -72,6 +88,16 @@ final class ServerStatsErrorPresentationTests: XCTestCase {
         var state = ServerStatsCollectionState()
         state.start(attemptID: attemptID)
         XCTAssertTrue(state.requireApproval(attemptID: attemptID, request: request))
+        return state
+    }
+
+    private func stateFailed(
+        with failure: ServerStatsCollectionFailure
+    ) -> ServerStatsCollectionState {
+        let attemptID = UUID()
+        var state = ServerStatsCollectionState()
+        state.start(attemptID: attemptID)
+        XCTAssertTrue(state.finish(attemptID: attemptID, failure: failure))
         return state
     }
 }

@@ -105,50 +105,21 @@ extension ServerStatsCollector {
     ) {
         guard let reference = approvalReferenceForPresentation as? LiveServerStatsApprovalReference,
               reference.rawValue == request else { return }
+        let failure: ServerStatsCollectionFailure?
+        switch error {
+        case .some(.cancelled):
+            failure = .securityApprovalCancelled
+        case .some(.expired):
+            failure = .securityApprovalExpired
+        case .some(.unavailable):
+            failure = .securityApprovalUnavailable
+        case nil:
+            failure = nil
+        }
         resolveSecurityApproval(
             reference.request,
-            errorMessage: error?.localizedDescription
+            failure: failure
         )
-    }
-}
-
-// Existing state-focused callers stay concrete at the UI/test boundary. The
-// Application state itself stores only the feature-owned approval DTO.
-nonisolated extension ServerStatsCollectionState {
-    var securityApproval: ServerSecurityApprovalRequest? {
-        guard let request = approvalRequest else { return nil }
-        switch request.kind {
-        case .credentialEndpoint:
-            return .credentialEndpoint(serverID: request.serverID)
-        case .hostKey:
-            return nil
-        }
-    }
-
-    @discardableResult
-    mutating func requireApproval(
-        attemptID: UUID,
-        request: ServerSecurityApprovalRequest
-    ) -> Bool {
-        guard case .credentialEndpoint(let serverID) = request else { return false }
-        return requireApproval(
-            attemptID: attemptID,
-            request: ServerStatsApprovalRequest(
-                id: request.id,
-                serverID: serverID,
-                kind: .credentialEndpoint
-            )
-        )
-    }
-
-    @discardableResult
-    mutating func resolveApproval(
-        _ request: ServerSecurityApprovalRequest,
-        message: String? = nil
-    ) -> Bool {
-        guard approvalRequest?.id == request.id,
-              let approvalRequest else { return false }
-        return resolveApproval(approvalRequest, message: message)
     }
 }
 

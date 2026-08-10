@@ -2,13 +2,20 @@ import Combine
 import Foundation
 import os.log
 
+nonisolated enum ServerStatsCollectionFailure: Equatable, Sendable {
+    case securityApprovalCancelled
+    case securityApprovalExpired
+    case securityApprovalUnavailable
+    case external(detail: String)
+}
+
 nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     nonisolated enum Phase: Equatable, Sendable {
         case idle
         case starting(attemptID: UUID)
         case collecting(attemptID: UUID)
         case approvalRequired(ServerStatsApprovalRequest)
-        case failed(message: String)
+        case failed(ServerStatsCollectionFailure)
 
         var attemptID: UUID? {
             switch self {
@@ -41,10 +48,13 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func finish(attemptID: UUID, errorMessage: String? = nil) -> Bool {
+    mutating func finish(
+        attemptID: UUID,
+        failure: ServerStatsCollectionFailure? = nil
+    ) -> Bool {
         guard phase.attemptID == attemptID else { return false }
-        if let errorMessage {
-            phase = .failed(message: errorMessage)
+        if let failure {
+            phase = .failed(failure)
         } else {
             phase = .idle
         }
@@ -68,11 +78,11 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     @discardableResult
     mutating func resolveApproval(
         _ request: ServerStatsApprovalRequest,
-        message: String? = nil
+        failure: ServerStatsCollectionFailure? = nil
     ) -> Bool {
         guard phase == .approvalRequired(request) else { return false }
-        if let message {
-            phase = .failed(message: message)
+        if let failure {
+            phase = .failed(failure)
         } else {
             phase = .idle
         }
@@ -213,7 +223,7 @@ final class ServerStatsCollector: ObservableObject {
         } catch {
             _ = collectionState.finish(
                 attemptID: attemptID,
-                errorMessage: error.localizedDescription
+                failure: .external(detail: error.localizedDescription)
             )
             return
         }
@@ -258,7 +268,7 @@ final class ServerStatsCollector: ObservableObject {
                 self?.finishCollection(
                     attemptID: attemptID,
                     attemptIdentity: attemptIdentity,
-                    withError: error.localizedDescription
+                    failure: .external(detail: error.localizedDescription)
                 )
             }
         }
@@ -279,9 +289,9 @@ final class ServerStatsCollector: ObservableObject {
 
     func resolveSecurityApproval(
         _ request: ServerStatsApprovalRequest,
-        errorMessage: String? = nil
+        failure: ServerStatsCollectionFailure? = nil
     ) {
-        guard collectionState.resolveApproval(request, message: errorMessage) else { return }
+        guard collectionState.resolveApproval(request, failure: failure) else { return }
         pendingApprovalReference = nil
     }
 
@@ -292,9 +302,10 @@ final class ServerStatsCollector: ObservableObject {
             throw ProcessControlError.protectedProcess
         }
         let attempt = try requireActiveAttempt()
-        let refresh: (stats: ServerStats?, failure: String?) = try await performTrackedOperation(
-            for: attempt
-        ) { session in
+        let refresh: (
+            stats: ServerStats?,
+            failure: ServerStatsCollectionFailure?
+        ) = try await performTrackedOperation(for: attempt) { session in
             try await session.terminateProcess(process)
             do {
                 let stats = try await session.collectStats(
@@ -304,7 +315,7 @@ final class ServerStatsCollector: ObservableObject {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                return (nil, error.localizedDescription)
+                return (nil, .external(detail: error.localizedDescription))
             }
         }
         if let collectedStats = refresh.stats {
@@ -313,7 +324,7 @@ final class ServerStatsCollector: ObservableObject {
             finishCollection(
                 attemptID: attempt.id,
                 attemptIdentity: attempt.attemptIdentity,
-                withError: failure
+                failure: failure
             )
         }
     }
@@ -442,10 +453,10 @@ final class ServerStatsCollector: ObservableObject {
     private func finishCollection(
         attemptID: UUID,
         attemptIdentity: AttemptIdentity,
-        withError error: String? = nil
+        failure: ServerStatsCollectionFailure? = nil
     ) {
         guard let attempt = currentCollectionAttempt(attemptIdentity),
-              collectionState.finish(attemptID: attemptID, errorMessage: error) else { return }
+              collectionState.finish(attemptID: attemptID, failure: failure) else { return }
         activeAttempt = nil
         cancel(attempt)
     }
@@ -496,7 +507,7 @@ final class ServerStatsCollector: ObservableObject {
             finishCollection(
                 attemptID: attempt.id,
                 attemptIdentity: attemptIdentity,
-                withError: error.localizedDescription
+                failure: .external(detail: error.localizedDescription)
             )
         }
     }

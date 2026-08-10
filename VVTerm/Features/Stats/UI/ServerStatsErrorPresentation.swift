@@ -10,10 +10,25 @@ nonisolated extension ServerStatsCollectionState {
             case .hostKey:
                 return String(localized: "SSH host key approval is required before authentication.")
             }
-        case .failed(let message):
-            return message
+        case .failed(let failure):
+            return failure.errorMessage
         case .idle, .starting, .collecting:
             return nil
+        }
+    }
+}
+
+nonisolated extension ServerStatsCollectionFailure {
+    var errorMessage: String {
+        switch self {
+        case .securityApprovalCancelled:
+            String(localized: "Security approval was cancelled.")
+        case .securityApprovalExpired:
+            String(localized: "Security approval expired. Try again.")
+        case .securityApprovalUnavailable:
+            String(localized: "Security approval is no longer available. Try again.")
+        case .external(let detail):
+            detail
         }
     }
 }
