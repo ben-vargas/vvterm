@@ -125,7 +125,7 @@ struct ServerManagerLoadLifecycleTests {
     @Test
     func syncDisableCancelsLoadAndRejectsCancellationIgnoringCompletion() async {
         var syncEnabled = true
-        let gate = CancellationIgnoringGate<ServerRemoteChanges>()
+        let gate = ServerCancellationIgnoringGate<ServerRemoteChanges>()
         let remote = ServerRemoteRepositoryFake()
         remote.fetchHandler = { _, _ in await gate.wait() }
         let sync = ServerSyncRepositoryFake()
@@ -251,7 +251,7 @@ struct ServerManagerLoadLifecycleTests {
     @Test
     func staleLoadGenerationCannotReplaceNewerLoad() async {
         var syncEnabled = true
-        let firstGate = CancellationIgnoringGate<ServerRemoteChanges>()
+        let firstGate = ServerCancellationIgnoringGate<ServerRemoteChanges>()
         let remote = ServerRemoteRepositoryFake()
         remote.fetchHandler = { _, fetchCount in
             if fetchCount == 1 {
@@ -285,7 +285,7 @@ struct ServerManagerLoadLifecycleTests {
 
     @Test
     func blockedAutomaticLoadDoesNotRetainOwnerAndObservesCancellation() async {
-        let gate = CancellationIgnoringGate<ServerRemoteChanges>()
+        let gate = ServerCancellationIgnoringGate<ServerRemoteChanges>()
         let remote = ServerRemoteRepositoryFake()
         remote.fetchHandler = { _, _ in await gate.wait() }
         var manager: ServerManager? = makeManager(
@@ -311,7 +311,7 @@ struct ServerManagerLoadLifecycleTests {
 
     @Test
     func blockedAutomaticLoadDoesNotRetainCoordinator() async {
-        let gate = CancellationIgnoringGate<ServerRemoteChanges>()
+        let gate = ServerCancellationIgnoringGate<ServerRemoteChanges>()
         let remote = ServerRemoteRepositoryFake()
         remote.fetchHandler = { _, _ in await gate.wait() }
         var coordinator: ServerRemoteSyncCoordinator? = makeRemoteSyncCoordinator(
@@ -338,7 +338,7 @@ struct ServerManagerLoadLifecycleTests {
     @Test
     func syncDisableCancelsBlockedStartupRecoveryBeforeRemoteLoad() async throws {
         var syncEnabled = true
-        let drainGate = CancellationIgnoringGate<Void>()
+        let drainGate = ServerCancellationIgnoringGate<Void>()
         let sync = ServerSyncRepositoryFake()
         sync.drainHandler = { await drainGate.wait() }
         let remote = ServerRemoteRepositoryFake()
@@ -367,7 +367,7 @@ struct ServerManagerLoadLifecycleTests {
 
     @Test
     func blockedStartupRecoveryDoesNotRetainOwner() async throws {
-        let drainGate = CancellationIgnoringGate<Void>()
+        let drainGate = ServerCancellationIgnoringGate<Void>()
         let sync = ServerSyncRepositoryFake()
         sync.drainHandler = { await drainGate.wait() }
         let remote = ServerRemoteRepositoryFake()
@@ -399,7 +399,7 @@ struct ServerManagerLoadLifecycleTests {
         var syncEnabled = true
         let workspace = makeWorkspace(name: "Local")
         let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])
-        let saveGate = CancellationIgnoringGate<Void>()
+        let saveGate = ServerCancellationIgnoringGate<Void>()
         let remote = ServerRemoteRepositoryFake(isAvailable: true)
         remote.fetchHandler = { _, _ in throw ServerRemoteTestError.schema }
         remote.saveWorkspaceHandler = { _ in await saveGate.wait() }
@@ -526,7 +526,7 @@ struct ServerManagerLoadLifecycleTests {
         local: ServerLocalRepositoryFake? = nil,
         remote: ServerRemoteRepositoryFake,
         sync: ServerSyncRepositoryFake,
-        preferences: ServerManagerPreferencesFake = ServerManagerPreferencesFake(),
+        preferences: ServerManagerPreferencesFake? = nil,
         isSyncEnabled: @escaping () -> Bool,
         isRemoteSchemaError: @escaping (Error) -> Bool = { _ in false },
         startsAutomatically: Bool = false
@@ -564,7 +564,7 @@ struct ServerManagerLoadLifecycleTests {
         local: ServerLocalRepositoryFake?,
         remote: ServerRemoteRepositoryFake,
         sync: ServerSyncRepositoryFake,
-        preferences: ServerManagerPreferencesFake = ServerManagerPreferencesFake(),
+        preferences: ServerManagerPreferencesFake? = nil,
         isSyncEnabled: @escaping () -> Bool,
         isRemoteSchemaError: @escaping (Error) -> Bool
     ) -> ServerManagerDependencies {
@@ -573,7 +573,7 @@ struct ServerManagerLoadLifecycleTests {
         let stateStore = ServerStateStore(
             dependencies: ServerStateStoreDependencies(
                 localRepository: local ?? ServerLocalRepositoryFake(servers: [], workspaces: []),
-                preferences: preferences,
+                preferences: preferences ?? ServerManagerPreferencesFake(),
                 freePlanTracker: FreePlanAssignmentTrackerFake(),
                 isSyncEnabled: isSyncEnabled,
                 now: now,
@@ -662,7 +662,7 @@ struct ServerManagerLoadLifecycleTests {
 }
 
 @MainActor
-private final class CancellationIgnoringGate<Value> {
+private final class ServerCancellationIgnoringGate<Value> {
     private var continuation: CheckedContinuation<Value, Never>?
     private(set) var isStarted = false
     private(set) var cancellationCount = 0

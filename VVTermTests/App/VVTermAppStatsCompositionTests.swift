@@ -325,11 +325,11 @@ struct VVTermAppStatsCompositionTests {
     }
 
     private func makeAppLockManager(
-        authService: any BiometricAuthServing = StatsCompositionBiometricAuthStub()
+        authService: (any BiometricAuthServing)? = nil
     ) -> AppLockManager {
         AppLockManager(
             defaults: UserDefaults(suiteName: UUID().uuidString)!,
-            authService: authService
+            authService: authService ?? StatsCompositionBiometricAuthStub()
         )
     }
 

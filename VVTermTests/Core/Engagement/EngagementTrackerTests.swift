@@ -182,10 +182,9 @@ struct EngagementTrackerTests {
         persistence: EngagementPersistenceSpy,
         analytics: EngagementAnalyticsSpy,
         clock: EngagementTestClock,
-        applicationState: EngagementApplicationState = EngagementApplicationState(
-            isActive: true
-        )
+        applicationState: EngagementApplicationState? = nil
     ) -> EngagementTracker {
+        let applicationState = applicationState ?? EngagementApplicationState(isActive: true)
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         return EngagementTracker(

@@ -1,4 +1,5 @@
 import Combine
+import Foundation
 import Testing
 @testable import VVTerm
 
@@ -16,10 +17,10 @@ private final class SyncSettingsCloudSpy: SyncSettingsCloudSyncing {
 
     init(
         state: SyncSettingsCloudState = .testValue,
-        actionLog: SyncSettingsActionLog = SyncSettingsActionLog()
+        actionLog: SyncSettingsActionLog? = nil
     ) {
         states = CurrentValueSubject(state)
-        self.actionLog = actionLog
+        self.actionLog = actionLog ?? SyncSettingsActionLog()
     }
 
     var currentState: SyncSettingsCloudState { states.value }
@@ -45,8 +46,8 @@ private final class SyncSettingsCredentialSpy: SyncSettingsCredentialSyncing {
     var prepareError: Error?
     var removalError: Error?
 
-    init(actionLog: SyncSettingsActionLog = SyncSettingsActionLog()) {
-        self.actionLog = actionLog
+    init(actionLog: SyncSettingsActionLog? = nil) {
+        self.actionLog = actionLog ?? SyncSettingsActionLog()
     }
 
     func prepareCredentialStorage(isSyncEnabled: Bool) throws {
@@ -68,8 +69,8 @@ private final class SyncSettingsDataSpy: SyncSettingsDataRefreshing {
     var disabledCount = 0
     var refreshCount = 0
 
-    init(actionLog: SyncSettingsActionLog = SyncSettingsActionLog()) {
-        self.actionLog = actionLog
+    init(actionLog: SyncSettingsActionLog? = nil) {
+        self.actionLog = actionLog ?? SyncSettingsActionLog()
     }
 
     func handleSyncDisabled() {
@@ -204,14 +205,14 @@ struct SyncSettingsCoordinatorTests {
     }
 
     private func makeCoordinator(
-        cloud: SyncSettingsCloudSpy = SyncSettingsCloudSpy(),
-        credentials: SyncSettingsCredentialSpy = SyncSettingsCredentialSpy(),
-        data: SyncSettingsDataSpy = SyncSettingsDataSpy()
+        cloud: SyncSettingsCloudSpy? = nil,
+        credentials: SyncSettingsCredentialSpy? = nil,
+        data: SyncSettingsDataSpy? = nil
     ) -> SyncSettingsCoordinator {
         SyncSettingsCoordinator(
-            cloud: cloud,
-            credentials: credentials,
-            data: data
+            cloud: cloud ?? SyncSettingsCloudSpy(),
+            credentials: credentials ?? SyncSettingsCredentialSpy(),
+            data: data ?? SyncSettingsDataSpy()
         )
     }
 }
