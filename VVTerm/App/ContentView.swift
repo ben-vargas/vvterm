@@ -13,6 +13,7 @@ struct ContentView: View {
     let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     let statsDependencies: ServerStatsScreenDependencies
+    let terminalSecurityActions: TerminalSecurityActions
     let onOpenSettings: () -> Void
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
         LocalSSHDiscoveryManager()
@@ -55,6 +56,7 @@ struct ContentView: View {
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore,
         statsDependencies: ServerStatsScreenDependencies,
+        terminalSecurityActions: TerminalSecurityActions,
         onOpenSettings: @escaping () -> Void
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
@@ -63,6 +65,7 @@ struct ContentView: View {
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
         self.statsDependencies = statsDependencies
+        self.terminalSecurityActions = terminalSecurityActions
         self.onOpenSettings = onOpenSettings
     }
 
@@ -132,6 +135,7 @@ struct ContentView: View {
                     fileBrowser: fileBrowser,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     statsDependencies: statsDependencies,
+                    terminalSecurityActions: terminalSecurityActions,
                     server: server,
                     isZenModeEnabled: $isZenModeEnabled,
                     isSidebarVisible: isSidebarVisible,
@@ -404,6 +408,10 @@ struct ContentView: View {
         serverManager: serverManager,
         engagementTracker: engagementTracker
     )
+    let terminalSecurityActions = VVTermApp.makeTerminalSecurityActions(
+        keychainManager: KeychainManager(),
+        knownHostsManager: KnownHostsManager()
+    )
     ContentView(
         serverManager: serverManager,
         engagementTracker: engagementTracker,
@@ -414,6 +422,7 @@ struct ContentView: View {
             serverManager: serverManager
         ),
         statsDependencies: statsDependencies,
+        terminalSecurityActions: terminalSecurityActions,
         onOpenSettings: {}
     )
     .environmentObject(appLockManager)

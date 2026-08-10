@@ -23,6 +23,7 @@ struct ServerTerminalRoute: View {
     @ObservedObject var fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     let statsDependencies: ServerStatsScreenDependencies
+    let terminalSecurityActions: TerminalSecurityActions
     let analyticsOptOutAction: AnalyticsOptOutAction
     let route: ServerTerminalNavigationRoute
     let onBack: () -> Void
@@ -53,6 +54,7 @@ struct ServerTerminalRoute: View {
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore,
         statsDependencies: ServerStatsScreenDependencies,
+        terminalSecurityActions: TerminalSecurityActions,
         analyticsOptOutAction: AnalyticsOptOutAction,
         route: ServerTerminalNavigationRoute,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
@@ -63,6 +65,7 @@ struct ServerTerminalRoute: View {
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
         self.statsDependencies = statsDependencies
+        self.terminalSecurityActions = terminalSecurityActions
         self.analyticsOptOutAction = analyticsOptOutAction
         self.route = route
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
@@ -266,6 +269,7 @@ struct ServerTerminalRoute: View {
                 fileBrowser: fileBrowser,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 statsDependencies: statsDependencies,
+                terminalSecurityActions: terminalSecurityActions,
                 server: server,
                 isZenModeEnabled: $isZenModeEnabled,
                 isSidebarVisible: false,

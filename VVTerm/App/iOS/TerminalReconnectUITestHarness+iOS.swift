@@ -38,6 +38,7 @@ struct TerminalReconnectUITestHarness: View {
     @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var engagementTracker: EngagementTracker
     private let statsDependencies: ServerStatsScreenDependencies
+    private let terminalSecurityActions: TerminalSecurityActions
     private let analyticsOptOutAction = AnalyticsOptOutAction(emitAnalyticsDisabled: {})
     @StateObject private var fileTabs: RemoteFileTabManager
     @StateObject private var fileBrowser: RemoteFileBrowserStore
@@ -47,12 +48,14 @@ struct TerminalReconnectUITestHarness: View {
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
         engagementTracker: EngagementTracker,
-        statsDependencies: ServerStatsScreenDependencies
+        statsDependencies: ServerStatsScreenDependencies,
+        terminalSecurityActions: TerminalSecurityActions
     ) {
         _tabManager = ObservedObject(wrappedValue: tabManager)
         _serverManager = ObservedObject(wrappedValue: serverManager)
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         self.statsDependencies = statsDependencies
+        self.terminalSecurityActions = terminalSecurityActions
         _fileTabs = StateObject(
             wrappedValue: RemoteFileTabManager(defaults: Self.fixtureDefaults)
         )
@@ -139,6 +142,7 @@ struct TerminalReconnectUITestHarness: View {
                     fileTabs: fileTabs,
                     fileBrowser: fileBrowser,
                     statsDependencies: statsDependencies,
+                    terminalSecurityActions: terminalSecurityActions,
                     analyticsOptOutAction: analyticsOptOutAction
                 )
             } else {
@@ -149,6 +153,7 @@ struct TerminalReconnectUITestHarness: View {
                         fileTabs: fileTabs,
                         fileBrowser: fileBrowser,
                         statsDependencies: statsDependencies,
+                        terminalSecurityActions: terminalSecurityActions,
                         analyticsOptOutAction: analyticsOptOutAction,
                         route: .active(serverId: server.id),
                         makeLocalDiscoveryManager: { LocalSSHDiscoveryManager() },

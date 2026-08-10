@@ -22,6 +22,7 @@ struct TerminalTabView: View {
     let tab: TerminalTab
     let server: Server
     @ObservedObject var tabManager: TerminalTabManager
+    let securityActions: TerminalSecurityActions
     let isSelected: Bool
     let appearance: TerminalAppearanceSnapshot
 
@@ -202,6 +203,7 @@ struct TerminalTabView: View {
                 paneId: paneId,
                 server: server,
                 tabManager: tabManager,
+                securityActions: securityActions,
                 isFocused: tab.focusedPaneId == paneId,
                 isTabSelected: isSelected,
                 onFocus: { focusPane(paneId) },
@@ -530,6 +532,7 @@ struct TerminalPaneView: View {
     let paneId: UUID
     let server: Server
     @ObservedObject var tabManager: TerminalTabManager
+    let securityActions: TerminalSecurityActions
     let isFocused: Bool
     let isTabSelected: Bool
     let onFocus: () -> Void
@@ -553,9 +556,7 @@ struct TerminalPaneView: View {
     @State private var operationNotice: NoticeItem?
     @State private var dismissFallbackBanner = false
     @StateObject private var connectWatchdog = TerminalConnectionWatchdog()
-    @State private var showingHostKeyTrustConfirmation = false
-    @State private var hostKeyTrustChallenge: KnownHostsManager.Challenge?
-    @State private var showingCredentialEndpointApproval = false
+    @State private var securityApprovalRequest: TerminalSecurityApprovalRequest?
     @StateObject private var richPasteUI = TerminalRichPasteUIModel()
     @ObservedObject private var networkMonitor: NetworkMonitor = .shared
 
@@ -591,16 +592,15 @@ struct TerminalPaneView: View {
             || error.contains("host key approval is required")
     }
 
-    private var hostKeyTrustConfirmationTitle: String {
-        hostKeyTrustPresentation?.title ?? String(localized: "Trust SSH Host?")
-    }
-
-    private var hostKeyTrustPresentation: SSHHostKeyTrustPresentation? {
-        hostKeyTrustChallenge.map(SSHHostKeyTrustPresentation.init)
-    }
-
-    private var hostKeyTrustConfirmationMessage: String {
-        hostKeyTrustPresentation?.message ?? ""
+    private var showingSecurityApproval: Binding<Bool> {
+        Binding(
+            get: { securityApprovalRequest != nil },
+            set: { isPresented in
+                if !isPresented {
+                    securityApprovalRequest = nil
+                }
+            }
+        )
     }
 
     /// Should this pane actually have focus (both tab selected AND pane focused)
@@ -925,32 +925,14 @@ struct TerminalPaneView: View {
         } message: {
             Text(moshServerPromptMessage)
         }
-        .alert(hostKeyTrustConfirmationTitle, isPresented: $showingHostKeyTrustConfirmation) {
-            Button("Cancel", role: .cancel) {
-                rejectHostKeyChallenge()
-            }
-            if hostKeyTrustPresentation?.isDestructive == false {
-                Button(hostKeyTrustPresentation?.approvalButtonTitle ?? String(localized: "Trust and Reconnect")) {
-                    approveHostKeyChallengeAndRetry()
-                }
-            } else {
-                Button(
-                    hostKeyTrustPresentation?.approvalButtonTitle ?? String(localized: "Replace and Reconnect"),
-                    role: .destructive
-                ) {
-                    approveHostKeyChallengeAndRetry()
-                }
-            }
-        } message: {
-            Text(hostKeyTrustConfirmationMessage)
-        }
-        .alert("Approve Credential Endpoint?", isPresented: $showingCredentialEndpointApproval) {
-            Button("Cancel", role: .cancel) { }
-            Button("Approve") {
-                approveCredentialEndpoint()
-            }
-        } message: {
-            Text(credentialEndpointApprovalMessage)
+        .alert(
+            securityApprovalTitle,
+            isPresented: showingSecurityApproval,
+            presenting: securityApprovalRequest
+        ) { request in
+            securityApprovalActions(for: request)
+        } message: { request in
+            Text(securityApprovalMessage(for: request))
         }
         .terminalRichPastePrompt(using: richPasteUI)
     }
@@ -1018,29 +1000,81 @@ struct TerminalPaneView: View {
     }
 
     private func presentHostKeyTrustConfirmation() {
-        hostKeyTrustChallenge = KnownHostsManager.shared.pendingChallenge(
-            for: server.host,
-            port: server.port
-        )
-        showingHostKeyTrustConfirmation = hostKeyTrustChallenge != nil
+        securityApprovalRequest = securityActions.pendingHostKeyApproval(server)
     }
 
-    private func rejectHostKeyChallenge() {
-        if let hostKeyTrustChallenge {
-            KnownHostsManager.shared.reject(hostKeyTrustChallenge)
+    private var securityApprovalTitle: String {
+        guard let securityApprovalRequest else { return "" }
+        switch securityApprovalRequest {
+        case .credentialEndpoint:
+            return String(localized: "Approve Credential Endpoint?")
+        case .hostKey(let challenge):
+            return SSHHostKeyTrustPresentation(challenge: challenge).title
         }
-        self.hostKeyTrustChallenge = nil
     }
 
-    private func approveHostKeyChallengeAndRetry() {
-        guard let hostKeyTrustChallenge,
-              KnownHostsManager.shared.approve(hostKeyTrustChallenge) else {
-            credentialLoadErrorMessage = String(localized: "SSH host key approval expired. Try again.")
-            self.hostKeyTrustChallenge = nil
-            return
+    private func securityApprovalMessage(
+        for request: TerminalSecurityApprovalRequest
+    ) -> String {
+        switch request {
+        case .credentialEndpoint:
+            credentialEndpointApprovalMessage
+        case .hostKey(let challenge):
+            SSHHostKeyTrustPresentation(challenge: challenge).message
         }
-        self.hostKeyTrustChallenge = nil
-        retryConnection()
+    }
+
+    @ViewBuilder
+    private func securityApprovalActions(
+        for request: TerminalSecurityApprovalRequest
+    ) -> some View {
+        switch request {
+        case .credentialEndpoint:
+            Button("Cancel", role: .cancel) {}
+            Button("Approve") {
+                approveCredentialEndpoint(request)
+            }
+        case .hostKey(let challenge):
+            let presentation = SSHHostKeyTrustPresentation(challenge: challenge)
+            Button("Cancel", role: .cancel) {
+                rejectHostKeyChallenge(request)
+            }
+            if presentation.isDestructive {
+                Button(presentation.approvalButtonTitle, role: .destructive) {
+                    approveHostKeyChallengeAndRetry(request)
+                }
+            } else {
+                Button(presentation.approvalButtonTitle) {
+                    approveHostKeyChallengeAndRetry(request)
+                }
+            }
+        }
+    }
+
+    private func rejectHostKeyChallenge(_ request: TerminalSecurityApprovalRequest) {
+        securityActions.reject(request)
+        if securityApprovalRequest == request {
+            securityApprovalRequest = nil
+        }
+    }
+
+    private func approveHostKeyChallengeAndRetry(
+        _ request: TerminalSecurityApprovalRequest
+    ) {
+        switch securityActions.approve(request, server) {
+        case .approved:
+            if securityApprovalRequest == request {
+                securityApprovalRequest = nil
+            }
+            retryConnection()
+        case .failed:
+            credentialLoadErrorMessage = String(
+                localized: "SSH host key approval expired. Try again."
+            )
+            if securityApprovalRequest == request {
+                securityApprovalRequest = nil
+            }
+        }
     }
 
     private var credentialEndpointApprovalMessage: String {
@@ -1053,29 +1087,31 @@ struct TerminalPaneView: View {
 
     private func loadCredentials() {
         do {
-            credentials = try KeychainManager.shared.getCredentials(for: server)
+            credentials = try securityActions.loadCredentials(server)
             credentialLoadErrorMessage = nil
         } catch ServerCredentialAccessError.approvalRequired {
             credentials = nil
             credentialLoadErrorMessage = String(localized: "Credential endpoint approval is required")
-            showingCredentialEndpointApproval = true
+            securityApprovalRequest = .credentialEndpoint(serverID: server.id)
         } catch {
             credentials = nil
             credentialLoadErrorMessage = String(localized: "Failed to load credentials")
         }
     }
 
-    private func approveCredentialEndpoint() {
+    private func approveCredentialEndpoint(_ request: TerminalSecurityApprovalRequest) {
         Task {
             guard await appLockManager.authorizeProtectedServerAction(
                 server,
                 action: .approveCredentialEndpoint
             ) else { return }
+            guard securityApprovalRequest == nil
+                    || securityApprovalRequest == request else { return }
 
-            do {
-                try KeychainManager.shared.approveCredentialUse(for: server)
+            switch securityActions.approve(request, server) {
+            case .approved:
                 loadCredentials()
-            } catch {
+            case .failed:
                 credentialLoadErrorMessage = String(localized: "Failed to approve credentials")
             }
         }

@@ -47,6 +47,10 @@ struct VVTermApp: App {
         let cloudKitManager = CloudKitManager.shared
         let keychainManager = KeychainManager.shared
         let knownHostsManager = KnownHostsManager.shared
+        terminalSecurityActions = Self.makeTerminalSecurityActions(
+            keychainManager: keychainManager,
+            knownHostsManager: knownHostsManager
+        )
         let analyticsOptOutAction = AnalyticsOptOutAction(
             emitAnalyticsDisabled: {
                 analyticsTracker.trackAnalyticsDisabled()
@@ -182,6 +186,7 @@ struct VVTermApp: App {
     @StateObject private var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
     private let onWelcomeCompleted: @MainActor () -> Void
     private let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
+    private let terminalSecurityActions: TerminalSecurityActions
     #if os(macOS)
     private let settingsWindowPresenter: SettingsWindowPresenter
     #endif
@@ -285,6 +290,7 @@ struct VVTermApp: App {
             fileTabs: remoteFileTabManager,
             fileBrowser: remoteFileBrowserStore,
             statsDependencies: statsDependencies,
+            terminalSecurityActions: terminalSecurityActions,
             onOpenSettings: { settingsWindowPresenter.show() }
         )
             .environmentObject(ghosttyApp)
@@ -332,7 +338,8 @@ struct VVTermApp: App {
                 tabManager: tabManager,
                 serverManager: serverManager,
                 engagementTracker: engagementTracker,
-                statsDependencies: statsDependencies
+                statsDependencies: statsDependencies,
+                terminalSecurityActions: terminalSecurityActions
             )
                 .environmentObject(ghosttyApp)
                 .environmentObject(terminalThemeManager)
@@ -366,6 +373,7 @@ struct VVTermApp: App {
             fileTabs: remoteFileTabManager,
             fileBrowser: remoteFileBrowserStore,
             statsDependencies: statsDependencies,
+            terminalSecurityActions: terminalSecurityActions,
             analyticsOptOutAction: analyticsOptOutAction
         )
             .environmentObject(ghosttyApp)
@@ -448,6 +456,45 @@ private enum VVTermLauncherWidgetRefresh {
 #endif
 
 extension VVTermApp {
+    static func makeTerminalSecurityActions(
+        keychainManager: KeychainManager,
+        knownHostsManager: KnownHostsManager
+    ) -> TerminalSecurityActions {
+        TerminalSecurityActions(
+            loadCredentials: { server in
+                try keychainManager.getCredentials(for: server)
+            },
+            pendingHostKeyApproval: { server in
+                knownHostsManager.pendingChallenge(
+                    for: server.host,
+                    port: server.port
+                ).map(TerminalSecurityApprovalRequest.hostKey)
+            },
+            approve: { request, server in
+                switch request {
+                case .credentialEndpoint(let serverID):
+                    guard serverID == server.id else {
+                        return .failed(.expired)
+                    }
+                    do {
+                        try keychainManager.approveCredentialUse(for: server)
+                        return .approved
+                    } catch {
+                        return .failed(.unavailable)
+                    }
+                case .hostKey(let challenge):
+                    return knownHostsManager.approve(challenge)
+                        ? .approved
+                        : .failed(.expired)
+                }
+            },
+            reject: { request in
+                guard case .hostKey(let challenge) = request else { return }
+                knownHostsManager.reject(challenge)
+            }
+        )
+    }
+
     static func makeStatsSecurityApprovalActions(
         appLockManager: AppLockManager
     ) -> ServerStatsSecurityApprovalActions {

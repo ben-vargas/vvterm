@@ -670,6 +670,7 @@ extension ConnectionTerminalContainer {
                 tab: tab,
                 server: server,
                 tabManager: tabManager,
+                securityActions: terminalSecurityActions,
                 isSelected: isVisible,
                 appearance: terminalAppearanceSnapshot
             )

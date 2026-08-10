@@ -14,6 +14,7 @@ struct ConnectionTerminalContainer: View {
     let fileBrowser: RemoteFileBrowserStore
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     let statsDependencies: ServerStatsScreenDependencies
+    let terminalSecurityActions: TerminalSecurityActions
     let server: Server
     @Binding var isZenModeEnabled: Bool
     let isSidebarVisible: Bool

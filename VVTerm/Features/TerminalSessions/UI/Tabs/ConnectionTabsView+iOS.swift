@@ -83,6 +83,7 @@ extension ConnectionTerminalContainer {
                 tab: tab,
                 server: server,
                 tabManager: tabManager,
+                securityActions: terminalSecurityActions,
                 isSelected: true,
                 appearance: terminalAppearanceSnapshot
             )
