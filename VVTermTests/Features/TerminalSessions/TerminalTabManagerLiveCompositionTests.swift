@@ -212,15 +212,16 @@ struct TerminalTabManagerLiveCompositionTests {
         #expect(await secondRemoteTmux.killedSessions().isEmpty)
 
         let tab = TerminalTab(serverId: UUID(), title: "First")
-        first.installTabForTesting(
+        first.sessionState.install(
             tab,
             paneState: TerminalPaneState(
                 paneId: tab.rootPaneId,
                 tabId: tab.id,
                 serverId: tab.serverId
-            )
+            ),
+            select: true
         )
-        first.persistAndRestoreSnapshotForTesting()
+        first.sessionState.persistAndRestoreSnapshotForTesting()
         #expect(firstDefaults.data(forKey: "terminalTabsSnapshot.v1") != nil)
         #expect(secondDefaults.data(forKey: "terminalTabsSnapshot.v1") == nil)
         #expect(await waitUntil {

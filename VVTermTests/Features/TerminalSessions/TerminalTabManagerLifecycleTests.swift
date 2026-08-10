@@ -84,7 +84,7 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Fallback")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.updatePaneForTesting(tab.rootPaneId) {
+            manager.sessionState.updatePane(tab.rootPaneId) {
                 $0.transportState = .sshFallback(
                     reason: .udpTimeout,
                     diagnostics: .make(
@@ -366,7 +366,7 @@ struct TerminalTabManagerLifecycleTests {
             let tab = TerminalTab(serverId: UUID(), title: "Pane zoom")
             installTab(tab, in: manager, connectionState: .connected)
             let siblingPaneId = UUID()
-            manager.setPaneStateForTesting(TerminalPaneState(
+            manager.sessionState.setPaneState(TerminalPaneState(
                 paneId: siblingPaneId,
                 tabId: tab.id,
                 serverId: tab.serverId
@@ -386,7 +386,7 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Mosh recovery")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.updatePaneForTesting(tab.rootPaneId) {
+            manager.sessionState.updatePane(tab.rootPaneId) {
                 $0.transportState = .sshFallback(
                     reason: .udpTimeout,
                     diagnostics: .make(
@@ -503,11 +503,11 @@ struct TerminalTabManagerLifecycleTests {
         in manager: TerminalTabManager,
         connectionState: ConnectionState = .connecting
     ) {
-        manager.installTabForTesting(tab, paneState: TerminalPaneState(
+        manager.sessionState.install(tab, paneState: TerminalPaneState(
             paneId: tab.rootPaneId,
             tabId: tab.id,
             serverId: tab.serverId
-        ))
+        ), select: true)
         manager.updatePaneState(tab.rootPaneId, connectionState: connectionState)
     }
 
@@ -919,7 +919,7 @@ struct TerminalTabManagerLifecycleTests {
                 right: .leaf(paneId: secondPaneId)
             ))
             installTab(tab, in: manager, connectionState: .connected)
-            manager.setPaneStateForTesting(TerminalPaneState(
+            manager.sessionState.setPaneState(TerminalPaneState(
                 paneId: secondPaneId,
                 tabId: tab.id,
                 serverId: tab.serverId
@@ -1289,7 +1289,7 @@ struct TerminalTabManagerLifecycleTests {
                 ownership: .managed
             )
 
-            manager.persistAndRestoreSnapshotForTesting()
+            manager.sessionState.persistAndRestoreSnapshotForTesting()
 
             #expect(manager.tmuxCoordinator.shouldReattachManagedSession(for: confirmedTab.rootPaneId))
             #expect(!manager.tmuxCoordinator.shouldReattachManagedSession(for: unconfirmedTab.rootPaneId))
@@ -1325,7 +1325,7 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Installed tmux")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.updatePaneForTesting(tab.rootPaneId) { $0.disconnectReason = .tmuxDetached }
+            manager.sessionState.updatePane(tab.rootPaneId) { $0.disconnectReason = .tmuxDetached }
             var reconnectRequested = false
 
             manager.tmuxCoordinator.completeInstall(
@@ -1684,17 +1684,17 @@ struct TerminalTabManagerLifecycleTests {
 
             #expect(
                 TerminalLiveActivityPolicy.snapshot(
-                    for: manager.allPaneStatesForTesting.map(\.connectionState)
+                    for: manager.sessionState.allPaneStates.map(\.connectionState)
                 )?.activeCount == 2
             )
 
             manager.closeTab(tab)
 
             #expect(manager.sessionState.tabs(for: tab.serverId).isEmpty)
-            #expect(manager.allPaneStatesForTesting.isEmpty)
+            #expect(manager.sessionState.allPaneStates.isEmpty)
             #expect(
                 TerminalLiveActivityPolicy.snapshot(
-                    for: manager.allPaneStatesForTesting.map(\.connectionState)
+                    for: manager.sessionState.allPaneStates.map(\.connectionState)
                 ) == nil
             )
         }

@@ -1217,37 +1217,6 @@ final class TerminalTabManager {
 
 #if DEBUG
 extension TerminalTabManager {
-    func persistAndRestoreSnapshotForTesting() {
-        sessionState.persistAndRestoreSnapshotForTesting()
-    }
-
-    func snapshotDataForTesting() throws -> Data {
-        try sessionState.snapshotDataForTesting()
-    }
-
-    func installTabForTesting(
-        _ tab: TerminalTab,
-        paneState: TerminalPaneState,
-        select: Bool = true
-    ) {
-        sessionState.install(tab, paneState: paneState, select: select)
-    }
-
-    func setPaneStateForTesting(_ paneState: TerminalPaneState) {
-        sessionState.setPaneState(paneState)
-    }
-
-    func updatePaneForTesting(
-        _ paneId: UUID,
-        _ mutation: (inout TerminalPaneState) -> Void
-    ) {
-        sessionState.updatePane(paneId, mutation)
-    }
-
-    var allPaneStatesForTesting: [TerminalPaneState] {
-        sessionState.allPaneStates
-    }
-
     /// Resets manager state for deterministic integration tests.
     func resetForTesting() async {
         let allPaneIds = sessionState.paneIds

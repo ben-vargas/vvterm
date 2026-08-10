@@ -315,11 +315,11 @@ struct TerminalTabManagerDependencyIsolationTests {
     }
 
     private func install(_ tab: TerminalTab, in manager: TerminalTabManager) {
-        manager.installTabForTesting(tab, paneState: TerminalPaneState(
+        manager.sessionState.install(tab, paneState: TerminalPaneState(
             paneId: tab.rootPaneId,
             tabId: tab.id,
             serverId: tab.serverId
-        ))
+        ), select: true)
         manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
     }
 

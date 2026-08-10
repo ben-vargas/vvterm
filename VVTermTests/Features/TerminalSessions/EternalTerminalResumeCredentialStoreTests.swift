@@ -135,11 +135,11 @@ struct EternalTerminalResumeCredentialStoreTests {
 
             let serverId = UUID()
             let firstTab = TerminalTab(serverId: serverId, title: "Close")
-            manager.installTabForTesting(firstTab, paneState: TerminalPaneState(
+            manager.sessionState.install(firstTab, paneState: TerminalPaneState(
                 paneId: firstTab.rootPaneId,
                 tabId: firstTab.id,
                 serverId: serverId
-            ))
+            ), select: true)
             try store.save(credentials(), for: firstTab.rootPaneId)
 
             manager.closeTab(firstTab)
@@ -147,11 +147,11 @@ struct EternalTerminalResumeCredentialStoreTests {
             #expect(try store.credentials(for: firstTab.rootPaneId) == nil)
 
             let secondTab = TerminalTab(serverId: serverId, title: "Terminate")
-            manager.installTabForTesting(secondTab, paneState: TerminalPaneState(
+            manager.sessionState.install(secondTab, paneState: TerminalPaneState(
                 paneId: secondTab.rootPaneId,
                 tabId: secondTab.id,
                 serverId: serverId
-            ))
+            ), select: true)
             let savedCredentials = try credentials()
             try store.save(savedCredentials, for: secondTab.rootPaneId)
             let lifecycle = EternalTerminalTmuxResumeContext(
@@ -162,7 +162,7 @@ struct EternalTerminalResumeCredentialStoreTests {
                 $0.eternalTerminalTmuxResumeContext = lifecycle
             }
 
-            let snapshot = try manager.snapshotDataForTesting()
+            let snapshot = try manager.sessionState.snapshotDataForTesting()
             let snapshotText = String(decoding: snapshot, as: UTF8.self)
             #expect(!snapshotText.contains(savedCredentials.clientID))
             #expect(!snapshotText.contains(savedCredentials.passkey.base64EncodedString()))
@@ -172,7 +172,7 @@ struct EternalTerminalResumeCredentialStoreTests {
             #expect(try store.credentials(for: secondTab.rootPaneId) == savedCredentials)
             #expect(manager.sessionState.tabs(for: serverId).map(\.id) == [secondTab.id])
 
-            manager.persistAndRestoreSnapshotForTesting()
+            manager.sessionState.persistAndRestoreSnapshotForTesting()
             #expect(
                 manager.sessionState.paneState(for: secondTab.rootPaneId)?.eternalTerminalTmuxResumeContext
                     == lifecycle

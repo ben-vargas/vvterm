@@ -797,7 +797,7 @@ struct TerminalKeyboardUITestHarness: View {
         let manager = tabManager
         if manager.sessionState.paneState(for: Self.paneId) == nil {
             let tab = TerminalTab(serverId: UUID(), title: "Keyboard lifecycle test")
-            manager.setPaneStateForTesting(TerminalPaneState(
+            manager.sessionState.setPaneState(TerminalPaneState(
                 paneId: Self.paneId,
                 tabId: tab.id,
                 serverId: tab.serverId
@@ -1172,7 +1172,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
         ] {
             if manager.sessionState.paneState(for: paneId) == nil {
                 let tab = TerminalTab(serverId: UUID(), title: "Split keyboard test")
-                manager.setPaneStateForTesting(TerminalPaneState(
+                manager.sessionState.setPaneState(TerminalPaneState(
                     paneId: paneId,
                     tabId: tab.id,
                     serverId: tab.serverId

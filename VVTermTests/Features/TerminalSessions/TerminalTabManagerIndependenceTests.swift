@@ -187,8 +187,8 @@ struct TerminalTabManagerIndependenceTests {
         install(secondTab, in: second)
         second.sessionState.selectView(.stats, for: serverId)
 
-        first.persistAndRestoreSnapshotForTesting()
-        second.persistAndRestoreSnapshotForTesting()
+        first.sessionState.persistAndRestoreSnapshotForTesting()
+        second.sessionState.persistAndRestoreSnapshotForTesting()
 
         let restoredFirst = makeManager(snapshotStore: firstStore)
         let restoredSecond = makeManager(snapshotStore: secondStore)
@@ -221,11 +221,11 @@ struct TerminalTabManagerIndependenceTests {
     }
 
     private func install(_ tab: TerminalTab, in manager: TerminalTabManager) {
-        manager.installTabForTesting(tab, paneState: TerminalPaneState(
+        manager.sessionState.install(tab, paneState: TerminalPaneState(
             paneId: tab.rootPaneId,
             tabId: tab.id,
             serverId: tab.serverId
-        ))
+        ), select: true)
         manager.updatePaneState(tab.rootPaneId, connectionState: .disconnected)
     }
 }
