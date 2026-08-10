@@ -67,20 +67,45 @@ struct GhosttyTerminalContextMenuTests {
         reportedData.removeAll(keepingCapacity: true)
 
         let rightClick = try mouseEvent(type: .rightMouseDown)
-        #expect(terminal.inputHandler.handleRightMouseDown(with: rightClick))
+        terminal.rightMouseDown(with: rightClick)
         terminal.forceRefresh()
         await Task.yield()
-        #expect(Array(reportedData.prefix(3)) == [0x1B, 0x5B, 0x3C])
+        try assertRightMouseReport(reportedData, actionTerminator: 0x4D)
+        let pressReport = reportedData
 
         let controlClick = try mouseEvent(type: .leftMouseDown, modifiers: .control)
         #expect(terminal.menu(for: controlClick) == nil)
 
         reportedData.removeAll(keepingCapacity: true)
         let rightMouseUp = try mouseEvent(type: .rightMouseUp)
-        #expect(terminal.inputHandler.handleRightMouseUp(with: rightMouseUp))
+        terminal.rightMouseUp(with: rightMouseUp)
         terminal.forceRefresh()
         await Task.yield()
-        #expect(Array(reportedData.prefix(3)) == [0x1B, 0x5B, 0x3C])
+        try assertRightMouseReport(reportedData, actionTerminator: 0x6D)
+
+        var expectedReleaseReport = pressReport
+        let terminatorIndex = expectedReleaseReport.index(
+            before: expectedReleaseReport.endIndex
+        )
+        expectedReleaseReport[terminatorIndex] = 0x6D
+        #expect(reportedData == expectedReleaseReport)
+    }
+
+    private func assertRightMouseReport(
+        _ data: Data,
+        actionTerminator: UInt8
+    ) throws {
+        let report = try #require(String(data: data, encoding: .utf8))
+        try #require(report.hasPrefix("\u{1B}[<2;"))
+        try #require(report.utf8.last == actionTerminator)
+
+        let fields = report.dropFirst(3).dropLast().split(separator: ";")
+        try #require(fields.count == 3)
+        #expect(fields.first == "2")
+
+        let coordinates = fields.dropFirst().compactMap { Int($0) }
+        #expect(coordinates.count == 2)
+        #expect(coordinates.allSatisfy { $0 > 0 })
     }
 
     private func mouseEvent(
