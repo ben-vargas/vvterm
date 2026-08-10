@@ -340,14 +340,6 @@ final class TerminalTabManager {
 
     // MARK: - Tab Management
 
-    func selectTab(_ tabId: UUID?, for serverId: UUID) {
-        sessionState.selectTab(tabId, for: serverId)
-    }
-
-    func selectView(_ view: ConnectionViewTabID, for serverId: UUID) {
-        sessionState.selectView(view, for: serverId)
-    }
-
     func workingDirectoryCandidate(for serverId: UUID) -> String? {
         if let selectedTab = sessionState.selectedTab(for: serverId),
            let directory = sessionState.paneState(for: selectedTab.focusedPaneId)?.workingDirectory {

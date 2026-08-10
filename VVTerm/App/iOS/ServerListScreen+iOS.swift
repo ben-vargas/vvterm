@@ -494,9 +494,9 @@ struct ServerListScreen: View {
             }
 
             if let tab = currentConnection.terminalTab {
-                tabManager.selectTab(tab.id, for: currentServer.id)
+                tabManager.sessionState.selectTab(tab.id, for: currentServer.id)
             }
-            tabManager.selectView(currentConnection.targetView, for: currentServer.id)
+            tabManager.sessionState.selectView(currentConnection.targetView, for: currentServer.id)
             onActiveConnectionSelected(currentServer)
         }
     }

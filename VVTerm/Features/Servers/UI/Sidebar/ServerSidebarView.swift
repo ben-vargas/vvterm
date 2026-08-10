@@ -723,11 +723,11 @@ struct ServerSidebarView: View {
                 let tab = try await tabManager.openTab(for: server)
                 await MainActor.run {
                     selectedServer = server
-                    tabManager.selectView(
+                    tabManager.sessionState.selectView(
                         viewTabConfig.effectiveDefaultTab(),
                         for: server.id
                     )
-                    tabManager.selectTab(tab.id, for: server.id)
+                    tabManager.sessionState.selectTab(tab.id, for: server.id)
                 }
             } catch {
                 // No-op: user cancelled biometric auth or the tab limit blocked the open.

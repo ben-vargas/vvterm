@@ -337,14 +337,14 @@ struct TerminalReconnectUITestHarness: View {
                         throw VVTermError.connectionFailed("Unable to seed split layout")
                     }
                     let secondTab = try await tabManager.openTab(for: server)
-                    tabManager.selectTab(secondTab.id, for: server.id)
+                    tabManager.sessionState.selectTab(secondTab.id, for: server.id)
                 } else {
-                    tabManager.selectTab(firstTab.id, for: server.id)
+                    tabManager.sessionState.selectTab(firstTab.id, for: server.id)
                 }
             } else if tabManager.sessionState.tabs(for: server.id).isEmpty {
                 throw VVTermError.connectionFailed("Cold relaunch snapshot was not restored")
             }
-            tabManager.selectView(.terminal, for: server.id)
+            tabManager.sessionState.selectView(.terminal, for: server.id)
             fixtureState = .ready(server)
         } catch {
             fixtureState = .failed(error.localizedDescription)

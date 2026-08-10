@@ -435,7 +435,7 @@ struct ServerTerminalRoute: View {
                 )
             },
             set: { newValue in
-                tabManager.selectView(viewTabConfig.effectiveView(for: newValue), for: serverId)
+                tabManager.sessionState.selectView(viewTabConfig.effectiveView(for: newValue), for: serverId)
             }
         )
     }
@@ -776,8 +776,8 @@ struct ServerTerminalRoute: View {
         Task {
             do {
                 let tab = try await tabManager.openTab(for: server)
-                tabManager.selectView(viewTabConfig.effectiveView(for: .terminal), for: server.id)
-                tabManager.selectTab(tab.id, for: server.id)
+                tabManager.sessionState.selectView(viewTabConfig.effectiveView(for: .terminal), for: server.id)
+                tabManager.sessionState.selectTab(tab.id, for: server.id)
             } catch {
                 // No-op: user cancelled biometric auth or open failed.
             }
@@ -812,7 +812,7 @@ struct ServerTerminalRoute: View {
 
         guard let newTab else { return }
         fileBrowser.prepareNewTab(newTab, duplicating: sourceTab)
-        tabManager.selectView(viewTabConfig.effectiveView(for: .files), for: server.id)
+        tabManager.sessionState.selectView(viewTabConfig.effectiveView(for: .files), for: server.id)
     }
 
     private func disconnect(_ server: Server) {

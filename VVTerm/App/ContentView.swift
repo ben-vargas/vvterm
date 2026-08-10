@@ -210,11 +210,11 @@ struct ContentView: View {
             do {
                 let tab = try await tabManager.openTab(for: server)
                 await MainActor.run {
-                    tabManager.selectView(
+                    tabManager.sessionState.selectView(
                         viewTabConfigurationManager.effectiveDefaultTab(),
                         for: server.id
                     )
-                    tabManager.selectTab(tab.id, for: server.id)
+                    tabManager.sessionState.selectTab(tab.id, for: server.id)
                 }
             } catch {
                 // No-op: user cancelled biometric auth or the tab limit blocked the open.
