@@ -34,11 +34,6 @@ nonisolated enum ShellStartOrigin: Equatable, Sendable {
     case restored
 }
 
-enum SSHUploadStrategy: Sendable {
-    case automatic
-    case execPreferred
-}
-
 actor SSHClient {
     enum LifecyclePhase: Equatable, Sendable {
         case disconnected
