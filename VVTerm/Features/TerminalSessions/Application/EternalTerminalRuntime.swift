@@ -1,11 +1,9 @@
-import ETBootstrap
-import ETSession
 import Foundation
 import os.log
 
 nonisolated enum EternalTerminalStatePolicy {
     static func connectionState(
-        for state: ETConnectionState,
+        for state: EternalTerminalSessionState,
         host: String,
         port: Int
     ) -> ConnectionState? {
@@ -33,26 +31,15 @@ nonisolated enum EternalTerminalStatePolicy {
 }
 
 nonisolated enum EternalTerminalErrorPresentation {
-    static func message(for error: Error, host: String, port: Int) -> String {
-        if error is EternalTerminalResumeCredentialError {
-            return error.localizedDescription
-        }
-        if let bootstrapError = error as? ETBootstrapError {
-            return message(for: bootstrapError, host: host, port: port)
-        }
-
-        if let clientError = error as? ETClientError {
-            return message(for: clientError, host: host, port: port)
-        }
-
-        return String(localized: "Eternal Terminal could not connect. Verify etserver is running and the configured ET port is reachable.")
-    }
-
-    static func message(for bootstrapError: ETBootstrapError, host: String, port: Int) -> String {
-        switch bootstrapError {
-        case .sshFailed:
+    static func message(
+        for failure: EternalTerminalSessionFailure,
+        host: String,
+        port: Int
+    ) -> String {
+        switch failure {
+        case .bootstrapSSH:
             return String(localized: "Eternal Terminal could not start through SSH. Verify the SSH credentials and that etterminal is installed on the host.")
-        case .markerNotFound(let excerpt):
+        case .bootstrapResponse(let excerpt):
             let excerpt = excerpt.trimmingCharacters(in: .whitespacesAndNewlines)
             if excerpt.contains("VVTERM_ET_UNSUPPORTED_NATIVE_WINDOWS") {
                 return String(localized: "Eternal Terminal does not run as a native Windows PowerShell or Command Prompt service. Configure this SSH connection to open inside WSL with Eternal Terminal installed, or use SSH with psmux instead.")
@@ -70,14 +57,11 @@ nonisolated enum EternalTerminalErrorPresentation {
                 format: String(localized: "etterminal did not return valid connection details. Host response: %@"),
                 excerpt
             )
-        case .malformedCredentials:
+        case .malformedBootstrapCredentials:
             return String(localized: "etterminal returned malformed connection details. Update Eternal Terminal on the host and try again.")
-        }
-    }
-
-    static func message(for clientError: ETClientError, host: String, port: Int) -> String {
-        switch clientError {
-        case .transportFailure:
+        case .resumeState(let message, _):
+            return message
+        case .transport:
             return String(
                 format: String(localized: "Could not reach etserver at %@:%d. Verify etserver is running and TCP port %d is open."),
                 host,
@@ -86,7 +70,7 @@ nonisolated enum EternalTerminalErrorPresentation {
             )
         case .invalidKey:
             return String(localized: "etserver rejected the session key. Reconnect to start a new Eternal Terminal session.")
-        case .mismatchedProtocol:
+        case .protocolMismatch:
             return String(localized: "The Eternal Terminal client and server protocol versions do not match. Update Eternal Terminal on the host.")
         case .disconnectedBufferFull:
             return String(localized: "Eternal Terminal could not buffer more input while offline. Reconnect and try again.")
@@ -98,31 +82,25 @@ nonisolated enum EternalTerminalErrorPresentation {
             return String(localized: "Eternal Terminal input is paused while VVTerm is in the background.")
         case .sessionUnrecoverable:
             return String(localized: "The Eternal Terminal session can no longer recover. Reconnect to start a new session.")
-        case .invalidPasskeyLength, .unexpectedConnectStatus, .initializationFailed,
-             .malformedFrame, .invalidTerminalSize, .invalidTerminalPixels,
-             .invalidTunnelSpecification, .forwardingFailure:
+        case .client:
             return String(localized: "Eternal Terminal could not establish the session. Verify the server installation and try again.")
+        case .unknown:
+            return String(localized: "Eternal Terminal could not connect. Verify etserver is running and the configured ET port is reachable.")
         }
     }
 
-    static func analyticsCategory(for error: Error) -> String {
-        if error is ETBootstrapError { return "bootstrap" }
-        guard let clientError = error as? ETClientError else { return "unknown" }
-        return analyticsCategory(for: clientError)
-    }
-
-    static func analyticsCategory(for clientError: ETClientError) -> String {
-        switch clientError {
-        case .transportFailure: return "network"
+    static func analyticsCategory(for failure: EternalTerminalSessionFailure) -> String {
+        switch failure {
+        case .bootstrapSSH, .bootstrapResponse, .malformedBootstrapCredentials:
+            return "bootstrap"
+        case .transport: return "network"
         case .invalidKey: return "authentication"
-        case .mismatchedProtocol: return "protocol"
+        case .protocolMismatch: return "protocol"
         case .disconnectedBufferFull: return "buffer"
         case .connectionInProgress, .connectionClosed, .applicationSuspended: return "lifecycle"
         case .sessionUnrecoverable: return "recovery"
-        case .invalidPasskeyLength, .unexpectedConnectStatus, .initializationFailed,
-             .malformedFrame, .invalidTerminalSize, .invalidTerminalPixels,
-             .invalidTunnelSpecification, .forwardingFailure:
-            return "client"
+        case .client: return "client"
+        case .resumeState, .unknown: return "unknown"
         }
     }
 }
@@ -145,33 +123,20 @@ nonisolated enum EternalTerminalStartupCommand {
 }
 
 nonisolated enum EternalTerminalResumePolicy {
-    static func shouldDiscardCredentials(after error: Error) -> Bool {
-        guard let clientError = error as? ETClientError else { return false }
-        return shouldDiscardCredentials(after: clientError)
-    }
-
-    static func shouldDiscardCredentials(after clientError: ETClientError) -> Bool {
-        return switch clientError {
+    static func shouldDiscardCredentials(
+        after failure: EternalTerminalSessionFailure
+    ) -> Bool {
+        return switch failure {
         case .invalidKey, .connectionClosed, .sessionUnrecoverable:
             true
-        case .invalidPasskeyLength, .mismatchedProtocol, .unexpectedConnectStatus,
-             .initializationFailed, .malformedFrame, .transportFailure,
-             .disconnectedBufferFull, .connectionInProgress, .applicationSuspended,
-             .invalidTerminalSize,
-             .invalidTerminalPixels, .invalidTunnelSpecification, .forwardingFailure:
+        case .resumeState(_, let discardStoredState):
+            discardStoredState
+        case .bootstrapSSH, .bootstrapResponse, .malformedBootstrapCredentials,
+             .transport, .protocolMismatch, .disconnectedBufferFull,
+             .connectionInProgress, .applicationSuspended, .client, .unknown:
             false
         }
     }
-}
-
-private enum EternalTerminalSessionOrigin: Equatable {
-    case bootstrapped
-    case resumed
-}
-
-private struct PreparedEternalTerminalSession {
-    let session: ETTerminalSession
-    let origin: EternalTerminalSessionOrigin
 }
 
 nonisolated struct EternalTerminalRecoveryProbe {
@@ -215,12 +180,11 @@ final class EternalTerminalRuntime {
     let identityToken = UUID()
 
     private let server: Server
-    private let bootstrapExecutor: SSHETBootstrapExecutor
-    private let resumeStore: any EternalTerminalResumeStoring
+    private let sessionRequest: EternalTerminalSessionRequest
     private let dependencies: EternalTerminalRuntimeDependencies
     private weak var tabManager: TerminalTabManager?
-    private var session: ETTerminalSession?
-    private weak var terminal: GhosttyTerminalView?
+    private var session: (any EternalTerminalSession)?
+    private weak var outputSink: (any EternalTerminalOutputSink)?
     private var outputTask: Task<Void, Never>?
     private var stateTask: Task<Void, Never>?
     private var connectTask: Task<Void, Never>?
@@ -241,29 +205,17 @@ final class EternalTerminalRuntime {
         server: Server,
         credentials: ServerCredentials,
         tabManager: TerminalTabManager,
-        resumeStore: any EternalTerminalResumeStoring,
         dependencies: EternalTerminalRuntimeDependencies
     ) {
         self.paneId = paneId
         self.server = server
         self.tabManager = tabManager
-        self.resumeStore = resumeStore
         self.dependencies = dependencies
-        let runtimeToken = identityToken
-        let executor = SSHETBootstrapExecutor(
+        sessionRequest = EternalTerminalSessionRequest(
+            paneId: paneId,
             server: server,
-            credentials: credentials,
-            startupPlanProvider: { [weak tabManager] client in
-                guard let tabManager else { throw CancellationError() }
-                return try await tabManager.eternalTerminalTmuxStartupPlan(
-                    for: paneId,
-                    serverId: server.id,
-                    client: client,
-                    runtimeToken: runtimeToken
-                )
-            }
+            credentials: credentials
         )
-        bootstrapExecutor = executor
     }
 
     var isStartInFlight: Bool { connectTask != nil }
@@ -273,15 +225,15 @@ final class EternalTerminalRuntime {
     }
 
     func abortConnection() {
-        terminal = nil
+        outputSink = nil
         networkRecoveryProbe.reset()
         if let session = detachActiveSession() {
             Task { await session.close() }
         }
     }
 
-    func attach(to terminal: GhosttyTerminalView) {
-        self.terminal = terminal
+    func attach(to outputSink: any EternalTerminalOutputSink) {
+        self.outputSink = outputSink
     }
 
     func startIfNeeded() {
@@ -337,14 +289,15 @@ final class EternalTerminalRuntime {
     func sendInteractiveScript(_ script: String) async throws {
         let payload = script.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
         guard let data = payload.data(using: .utf8) else { return }
-        guard let session else { throw ETClientError.connectionClosed }
+        guard let session else { throw EternalTerminalSessionFailure.connectionClosed }
         try await session.send(data)
     }
 
     func withBootstrapSSHClient<Result: Sendable>(
         _ operation: @Sendable (SSHClient) async throws -> Result
     ) async throws -> Result {
-        try await bootstrapExecutor.withConnectedClient(operation)
+        guard let session else { throw EternalTerminalSessionFailure.connectionClosed }
+        return try await session.withBootstrapSSHClient(operation)
     }
 
     func killManagedTmuxSession(named sessionName: String) async {
@@ -405,12 +358,12 @@ final class EternalTerminalRuntime {
     func persistCheckpoint() async {
         guard let session else { return }
         do {
-            let checkpoint = try await session.checkpoint()
-            guard isCurrentOwner else {
-                return
+            try await session.persistCheckpoint { [weak self] in
+                self?.isCurrentOwner == true
             }
-            try resumeStore.save(checkpoint, for: paneId)
-        } catch ETClientError.connectionClosed {
+        } catch EternalTerminalSessionFailure.connectionClosed {
+            return
+        } catch is CancellationError {
             return
         } catch {
             logger.warning("Failed to save ET recovery checkpoint: \(error.localizedDescription, privacy: .public)")
@@ -420,12 +373,12 @@ final class EternalTerminalRuntime {
     func prepareForApplicationBackground() async {
         guard let session else { return }
         do {
-            let checkpoint = try await session.prepareForApplicationBackground()
-            guard isCurrentOwner else {
-                return
+            try await session.prepareForApplicationBackground { [weak self] in
+                self?.isCurrentOwner == true
             }
-            try resumeStore.save(checkpoint, for: paneId)
-        } catch ETClientError.connectionClosed {
+        } catch EternalTerminalSessionFailure.connectionClosed {
+            return
+        } catch is CancellationError {
             return
         } catch {
             logger.warning("Failed to save ET background checkpoint: \(error.localizedDescription, privacy: .public)")
@@ -438,11 +391,11 @@ final class EternalTerminalRuntime {
 
     func close() async {
         let session = detachActiveSession()
-        terminal = nil
+        outputSink = nil
         await session?.close()
     }
 
-    private func detachActiveSession() -> ETTerminalSession? {
+    private func detachActiveSession() -> (any EternalTerminalSession)? {
         connectTask?.cancel()
         outputTask?.cancel()
         stateTask?.cancel()
@@ -456,56 +409,31 @@ final class EternalTerminalRuntime {
     }
 
     private func prepareSession() async throws -> PreparedEternalTerminalSession {
-        let port = UInt16(exactly: server.eternalTerminalPort) ?? 2022
-        do {
-            if let credentials = try resumeStore.credentials(for: paneId) {
-                if let checkpoint = try resumeStore.checkpoint(for: paneId) {
-                    let session = try ETTerminalSession(
-                        host: server.host,
-                        port: port,
-                        clientID: credentials.clientID,
-                        passkey: credentials.passkey,
-                        checkpoint: checkpoint
-                    )
-                    return PreparedEternalTerminalSession(session: session, origin: .resumed)
-                }
-                // Versions before protocol checkpointing saved credentials that cannot
-                // safely resume a returning ET stream. Migrate by bootstrapping once.
-                try resumeStore.deleteResumeState(for: paneId)
+        let paneId = paneId
+        let server = server
+        let runtimeToken = identityToken
+        return try await dependencies.sessionPreparer.prepareSession(
+            request: sessionRequest,
+            startupPlanProvider: { [weak tabManager] client in
+                guard let tabManager else { throw CancellationError() }
+                return try await tabManager.eternalTerminalTmuxStartupPlan(
+                    for: paneId,
+                    serverId: server.id,
+                    client: client,
+                    runtimeToken: runtimeToken
+                )
+            },
+            isCurrentOwner: { [weak self] in
+                self?.isCurrentOwner == true
             }
-        } catch let error as EternalTerminalResumeCredentialError {
-            if error.shouldDeleteStoredCredentials {
-                try? resumeStore.deleteResumeState(for: paneId)
-            }
-            throw error
-        }
-
-        let credentials = try await ETBootstrap(
-            options: SSHETBootstrapExecutor.bootstrapOptions
-        ).run(using: bootstrapExecutor)
-        guard isCurrentOwner else {
-            throw CancellationError()
-        }
-        let resumeCredentials = try EternalTerminalResumeCredentials(credentials)
-        try resumeStore.save(resumeCredentials, for: paneId)
-        let terminalType = await bootstrapExecutor.preparedTerminalType()
-        guard isCurrentOwner else {
-            throw CancellationError()
-        }
-        let session = try ETTerminalSession(
-            host: server.host,
-            port: port,
-            clientID: resumeCredentials.clientID,
-            passkey: resumeCredentials.passkey,
-            environmentVariables: RemoteTerminalBootstrap.terminalEnvironmentDictionary(
-                terminalType: terminalType,
-                transport: .eternalTerminal
-            )
         )
-        return PreparedEternalTerminalSession(session: session, origin: .bootstrapped)
     }
 
-    private func observe(_ session: ETTerminalSession, host: String, port: Int) {
+    private func observe(
+        _ session: any EternalTerminalSession,
+        host: String,
+        port: Int
+    ) {
         outputTask = Task { [weak self] in
             for await data in session.output {
                 guard !Task.isCancelled else { return }
@@ -532,8 +460,8 @@ final class EternalTerminalRuntime {
     }
 
     private func handle(
-        _ state: ETConnectionState,
-        session: ETTerminalSession,
+        _ state: EternalTerminalSessionState,
+        session: any EternalTerminalSession,
         host: String,
         port: Int
     ) async {
@@ -559,7 +487,7 @@ final class EternalTerminalRuntime {
                     guard isCurrentOwner else { return }
                     applyStartupPlanIfNeeded()
                 } else {
-                    logger.error("ET connected without a valid Ghostty terminal grid")
+                    logger.error("ET connected without a valid terminal grid")
                     return
                 }
             } catch {
@@ -591,10 +519,9 @@ final class EternalTerminalRuntime {
     private func applyStartupPlanIfNeeded() {
         guard !startupApplied else { return }
         startupApplied = true
-        let executor = bootstrapExecutor
         guard let session else { return }
         Task { [weak self] in
-            let plan = await executor.preparedStartupPlan()
+            let plan = await session.preparedStartupPlan()
             guard let self,
                   self.isCurrentOwner else { return }
             let resumeContext = plan.tmuxLifecycle.map {
@@ -626,13 +553,13 @@ final class EternalTerminalRuntime {
             return
         }
         guard var parser = tmuxLifecycleParser else {
-            terminal?.feedData(data)
+            outputSink?.receiveEternalTerminalOutput(data)
             return
         }
         let result = parser.consume(data)
         tmuxLifecycleParser = parser
         if !result.output.isEmpty {
-            terminal?.feedData(result.output)
+            outputSink?.receiveEternalTerminalOutput(result.output)
         }
         guard let event = result.events.last, let tmuxLifecycle else { return }
         let reason: TerminalShellEndReason
@@ -660,9 +587,10 @@ final class EternalTerminalRuntime {
             )
             return
         }
-        if EternalTerminalResumePolicy.shouldDiscardCredentials(after: error) {
+        let failure = error as? EternalTerminalSessionFailure ?? .unknown
+        if EternalTerminalResumePolicy.shouldDiscardCredentials(after: failure) {
             do {
-                try resumeStore.deleteResumeState(for: paneId)
+                try dependencies.sessionPreparer.discardResumeState(for: paneId)
             } catch {
                 logger.error("Failed to invalidate ET resume credentials: \(error.localizedDescription, privacy: .public)")
             }
@@ -672,7 +600,7 @@ final class EternalTerminalRuntime {
             dependencies.record(
                 .connectionFailed(
                     reason: EternalTerminalErrorPresentation.analyticsCategory(
-                        for: error
+                        for: failure
                     )
                 )
             )
@@ -680,7 +608,7 @@ final class EternalTerminalRuntime {
         tabManager?.updatePaneState(
             paneId,
             connectionState: .failed(EternalTerminalErrorPresentation.message(
-                for: error,
+                for: failure,
                 host: host,
                 port: port
             ))

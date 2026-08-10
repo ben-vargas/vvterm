@@ -2,7 +2,9 @@ import Foundation
 
 @MainActor
 extension EternalTerminalRuntimeDependencies {
-    static var live: Self {
+    static func live(
+        resumeStore: any EternalTerminalResumeStoring
+    ) -> Self {
         Self(
             recordEvent: { event in
                 switch event {
@@ -23,6 +25,9 @@ extension EternalTerminalRuntimeDependencies {
             },
             tmuxSessionKiller: LiveEternalTerminalTmuxSessionKiller(
                 remoteTmux: RemoteTmuxManager.shared
+            ),
+            sessionPreparer: LiveEternalTerminalSessionPreparer(
+                resumeStore: resumeStore
             )
         )
     }

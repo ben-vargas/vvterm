@@ -1,5 +1,4 @@
 import ETBootstrap
-import ETSession
 import Foundation
 import Testing
 @testable import VVTerm
@@ -76,7 +75,7 @@ struct EternalTerminalStatePolicyTests {
         #expect(state == .failed("The Eternal Terminal session can no longer recover. Reconnect to start a new session."))
         #expect(
             EternalTerminalErrorPresentation.analyticsCategory(
-                for: ETClientError.sessionUnrecoverable("history expired")
+                for: EternalTerminalSessionFailure.sessionUnrecoverable
             ) == "recovery"
         )
     }
@@ -84,7 +83,7 @@ struct EternalTerminalStatePolicyTests {
     @Test
     func transportFailureIncludesTheConfiguredEndpoint() {
         let message = EternalTerminalErrorPresentation.message(
-            for: ETClientError.transportFailure("offline"),
+            for: EternalTerminalSessionFailure.transport,
             host: "et.example.com",
             port: 22022
         )
@@ -115,7 +114,9 @@ struct EternalTerminalStatePolicyTests {
     @Test
     func missingBootstrapMarkerIncludesTheSanitizedHostResponse() {
         let message = EternalTerminalErrorPresentation.message(
-            for: ETBootstrapError.markerNotFound("sh: etterminal: command not found"),
+            for: EternalTerminalSessionFailure.bootstrapResponse(
+                "sh: etterminal: command not found"
+            ),
             host: "example.com",
             port: 2022
         )
@@ -127,7 +128,7 @@ struct EternalTerminalStatePolicyTests {
     @Test
     func unavailableETDaemonHasActionableServiceGuidance() {
         let message = EternalTerminalErrorPresentation.message(
-            for: ETBootstrapError.markerNotFound(
+            for: EternalTerminalSessionFailure.bootstrapResponse(
                 "Error: Connection error communicating with et daemon: No such file or directory."
             ),
             host: "example.com",
@@ -163,7 +164,7 @@ struct EternalTerminalStatePolicyTests {
         )
         let compatibility = EternalTerminalHostCompatibility(environment: environment)
         let message = EternalTerminalErrorPresentation.message(
-            for: ETBootstrapError.markerNotFound(
+            for: EternalTerminalSessionFailure.bootstrapResponse(
                 compatibility.bootstrapDiagnostic ?? ""
             ),
             host: "windows.example.com",
@@ -186,7 +187,7 @@ struct EternalTerminalStatePolicyTests {
         )
         let compatibility = EternalTerminalHostCompatibility(environment: environment)
         let message = EternalTerminalErrorPresentation.message(
-            for: ETBootstrapError.markerNotFound(
+            for: EternalTerminalSessionFailure.bootstrapResponse(
                 compatibility.bootstrapDiagnostic ?? ""
             ),
             host: "example.com",

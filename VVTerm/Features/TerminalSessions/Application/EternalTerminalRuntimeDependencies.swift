@@ -13,13 +13,16 @@ nonisolated protocol EternalTerminalTmuxSessionKilling: Sendable {
 nonisolated struct EternalTerminalRuntimeDependencies: Sendable {
     private let recordEvent: @MainActor @Sendable (EternalTerminalRuntimeEvent) -> Void
     private let tmuxSessionKiller: any EternalTerminalTmuxSessionKilling
+    let sessionPreparer: any EternalTerminalSessionPreparing
 
     init(
         recordEvent: @MainActor @Sendable @escaping (EternalTerminalRuntimeEvent) -> Void,
-        tmuxSessionKiller: any EternalTerminalTmuxSessionKilling
+        tmuxSessionKiller: any EternalTerminalTmuxSessionKilling,
+        sessionPreparer: any EternalTerminalSessionPreparing
     ) {
         self.recordEvent = recordEvent
         self.tmuxSessionKiller = tmuxSessionKiller
+        self.sessionPreparer = sessionPreparer
     }
 
     @MainActor
@@ -37,12 +40,26 @@ extension EternalTerminalRuntimeDependencies {
     static var testing: Self {
         Self(
             recordEvent: { _ in },
-            tmuxSessionKiller: NoOpEternalTerminalTmuxSessionKiller()
+            tmuxSessionKiller: NoOpEternalTerminalTmuxSessionKiller(),
+            sessionPreparer: UnavailableEternalTerminalSessionPreparer()
         )
     }
 }
 
 private actor NoOpEternalTerminalTmuxSessionKiller: EternalTerminalTmuxSessionKilling {
     func killSession(named sessionName: String, using client: SSHClient) async {}
+}
+
+@MainActor
+private struct UnavailableEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
+    func prepareSession(
+        request: EternalTerminalSessionRequest,
+        startupPlanProvider: @Sendable @escaping (SSHClient) async throws -> TerminalShellStartupPlan,
+        isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
+    ) async throws -> PreparedEternalTerminalSession {
+        throw CancellationError()
+    }
+
+    func discardResumeState(for paneId: UUID) throws {}
 }
 #endif

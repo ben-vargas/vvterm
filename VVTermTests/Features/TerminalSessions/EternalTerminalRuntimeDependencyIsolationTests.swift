@@ -45,6 +45,22 @@ private final class FailingEternalTerminalResumeStore: EternalTerminalResumeStor
     func deleteResumeState(for paneId: UUID) throws {}
 }
 
+@MainActor
+private struct FailingEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
+    func prepareSession(
+        request: EternalTerminalSessionRequest,
+        startupPlanProvider: @Sendable @escaping (SSHClient) async throws -> TerminalShellStartupPlan,
+        isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
+    ) async throws -> PreparedEternalTerminalSession {
+        throw EternalTerminalSessionFailure.resumeState(
+            message: "Unavailable test session",
+            discardStoredState: false
+        )
+    }
+
+    func discardResumeState(for paneId: UUID) throws {}
+}
+
 @Suite(.serialized)
 @MainActor
 struct EternalTerminalRuntimeDependencyIsolationTests {
@@ -99,7 +115,8 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
             recordEvent: { [events] event in
                 events.record(event)
             },
-            tmuxSessionKiller: tmux
+            tmuxSessionKiller: tmux,
+            sessionPreparer: FailingEternalTerminalSessionPreparer()
         )
     }
 
@@ -118,7 +135,6 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
             server: server,
             credentials: ServerCredentials(serverId: server.id),
             tabManager: manager,
-            resumeStore: FailingEternalTerminalResumeStore(),
             dependencies: dependencies
         )
     }

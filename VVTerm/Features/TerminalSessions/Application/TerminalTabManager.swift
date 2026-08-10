@@ -1312,7 +1312,6 @@ final class TerminalTabManager: ObservableObject {
             server: server,
             credentials: credentials,
             tabManager: self,
-            resumeStore: eternalTerminalResumeStore,
             dependencies: dependencies.eternalTerminalRuntime
         )
         _ = transportRegistry.runtime(for: paneId) { runtime }

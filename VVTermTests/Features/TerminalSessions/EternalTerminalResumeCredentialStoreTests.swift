@@ -185,16 +185,16 @@ struct EternalTerminalResumeCredentialStoreTests {
     @Test
     func onlyPermanentSessionFailuresDiscardResumeCredentials() {
         #expect(EternalTerminalResumePolicy.shouldDiscardCredentials(
-            after: ETClientError.invalidKey("rejected")
+            after: EternalTerminalSessionFailure.invalidKey
         ))
         #expect(EternalTerminalResumePolicy.shouldDiscardCredentials(
-            after: ETClientError.sessionUnrecoverable("expired")
+            after: EternalTerminalSessionFailure.sessionUnrecoverable
         ))
         #expect(EternalTerminalResumePolicy.shouldDiscardCredentials(
-            after: ETClientError.connectionClosed
+            after: EternalTerminalSessionFailure.connectionClosed
         ))
         #expect(!EternalTerminalResumePolicy.shouldDiscardCredentials(
-            after: ETClientError.transportFailure("offline")
+            after: EternalTerminalSessionFailure.transport
         ))
     }
 

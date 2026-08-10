@@ -2,7 +2,7 @@ import ETBootstrap
 import ETSession
 import Foundation
 
-struct EternalTerminalResumeCredentials: Codable, Equatable, Sendable {
+nonisolated struct EternalTerminalResumeCredentials: Codable, Equatable, Sendable {
     let clientID: String
     let passkey: Data
 
@@ -19,7 +19,7 @@ struct EternalTerminalResumeCredentials: Codable, Equatable, Sendable {
     }
 }
 
-enum EternalTerminalResumeCredentialError: LocalizedError {
+nonisolated enum EternalTerminalResumeCredentialError: LocalizedError, Sendable {
     case invalidCredentials
     case corruptStoredCredentials
     case secureStorageUnavailable

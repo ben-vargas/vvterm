@@ -16,6 +16,7 @@ enum TerminalTabManagerLiveComposition {
     ) -> TerminalTabManager {
         let defaults = UserDefaults.standard
         let networkMonitor = NetworkMonitor.shared
+        let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
         let dependencies = TerminalTabManagerDependencies(
             networkReadiness: TerminalNetworkReadinessSource(
                 initial: TerminalNetworkReadiness(networkMonitor.readiness),
@@ -90,7 +91,9 @@ enum TerminalTabManagerLiveComposition {
             ),
             remoteTmux: RemoteTmuxManager.shared,
             remoteMosh: RemoteMoshManager.shared,
-            eternalTerminalRuntime: .live
+            eternalTerminalRuntime: .live(
+                resumeStore: eternalTerminalResumeStore
+            )
         )
         return TerminalTabManager(
             snapshotStore: UserDefaultsTerminalTabSnapshotStore(
@@ -98,7 +101,7 @@ enum TerminalTabManagerLiveComposition {
                 key: persistenceKey
             ),
             dependencies: dependencies,
-            eternalTerminalResumeStore: EternalTerminalResumeStore.shared,
+            eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: TerminalMoshRecoveryService(
                 store: MoshResumeStore.shared
             )
