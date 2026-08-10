@@ -310,8 +310,8 @@ final class PendingCloudKitSyncQueue {
         quarantinedItems
     }
 
-    func enqueue(_ mutation: PendingCloudKitMutation) {
-        try? enqueueAtomically([mutation])
+    func enqueue(_ mutation: PendingCloudKitMutation) throws {
+        try enqueueAtomically([mutation])
     }
 
     func enqueueAtomically(_ mutations: [PendingCloudKitMutation]) throws {
@@ -323,35 +323,37 @@ final class PendingCloudKitSyncQueue {
             updatedItems.append(mutation)
         }
 
-        let data = try JSONEncoder().encode(updatedItems)
-        defaults.set(data, forKey: storageKey)
-        guard defaults.data(forKey: storageKey) == data else {
-            throw PendingCloudKitSyncQueueError.persistenceFailed
-        }
-        items = updatedItems
+        try persistItems(updatedItems)
     }
 
-    func remove(_ mutationID: UUID) {
-        items.removeAll { $0.id == mutationID }
-        persist()
+    func remove(_ mutationID: UUID) throws {
+        var updatedItems = items
+        updatedItems.removeAll { $0.id == mutationID }
+        try persistItems(updatedItems)
     }
 
-    func removeAll(where shouldRemove: (PendingCloudKitMutation) -> Bool) {
-        items.removeAll(where: shouldRemove)
-        persist()
+    func removeAll(where shouldRemove: (PendingCloudKitMutation) -> Bool) throws {
+        var updatedItems = items
+        updatedItems.removeAll(where: shouldRemove)
+        try persistItems(updatedItems)
     }
 
     func canAttempt(_ mutation: PendingCloudKitMutation, at date: Date) -> Bool {
         mutation.canAttempt(at: date)
     }
 
-    func recordFailure(for mutation: PendingCloudKitMutation, error: Error) {
+    func recordFailure(
+        for mutation: PendingCloudKitMutation,
+        error: Error,
+        at date: Date
+    ) throws {
         guard let index = items.firstIndex(where: { $0.id == mutation.id }) else {
             return
         }
 
-        items[index] = items[index].withFailure(error: error)
-        persist()
+        var updatedItems = items
+        updatedItems[index] = updatedItems[index].withFailure(error: error, at: date)
+        try persistItems(updatedItems)
     }
 
     private func load() {
@@ -370,19 +372,33 @@ final class PendingCloudKitSyncQueue {
     private func migrateLegacyQueue(from data: Data) {
         guard let object = try? JSONSerialization.jsonObject(with: data),
               let records = object as? [Any] else {
-            quarantine(data, legacyMutationID: nil, reason: .unreadableLegacyRecord)
-            persistQuarantine()
-            persist()
+            var updatedQuarantinedItems = quarantinedItems
+            quarantine(
+                data,
+                legacyMutationID: nil,
+                reason: .unreadableLegacyRecord,
+                in: &updatedQuarantinedItems
+            )
+            try? persistMigratedState(
+                items: [],
+                quarantinedItems: updatedQuarantinedItems
+            )
             return
         }
 
         var migratedItems: [PendingCloudKitMutation] = []
+        var updatedQuarantinedItems = quarantinedItems
         for record in records {
             guard let recordData = try? JSONSerialization.data(
                 withJSONObject: record,
                 options: [.fragmentsAllowed]
             ) else {
-                quarantine(Data(), legacyMutationID: nil, reason: .unreadableLegacyRecord)
+                quarantine(
+                    Data(),
+                    legacyMutationID: nil,
+                    reason: .unreadableLegacyRecord,
+                    in: &updatedQuarantinedItems
+                )
                 continue
             }
 
@@ -390,7 +406,12 @@ final class PendingCloudKitSyncQueue {
                 LegacyPendingCloudKitMutation.self,
                 from: recordData
             ) else {
-                quarantine(recordData, legacyMutationID: nil, reason: .unreadableLegacyRecord)
+                quarantine(
+                    recordData,
+                    legacyMutationID: nil,
+                    reason: .unreadableLegacyRecord,
+                    in: &updatedQuarantinedItems
+                )
                 continue
             }
 
@@ -401,19 +422,26 @@ final class PendingCloudKitSyncQueue {
                 }
                 migratedItems.append(mutation)
             case .failure(let reason):
-                quarantine(recordData, legacyMutationID: legacyMutation.id, reason: reason)
+                quarantine(
+                    recordData,
+                    legacyMutationID: legacyMutation.id,
+                    reason: reason,
+                    in: &updatedQuarantinedItems
+                )
             }
         }
 
-        items = migratedItems
-        persistQuarantine()
-        persist()
+        try? persistMigratedState(
+            items: migratedItems,
+            quarantinedItems: updatedQuarantinedItems
+        )
     }
 
     private func quarantine(
         _ data: Data,
         legacyMutationID: UUID?,
-        reason: PendingCloudKitMutationQuarantineReason
+        reason: PendingCloudKitMutationQuarantineReason,
+        in quarantinedItems: inout [PendingCloudKitMutationQuarantine]
     ) {
         guard !quarantinedItems.contains(where: {
             $0.legacyMutationID == legacyMutationID &&
@@ -445,18 +473,48 @@ final class PendingCloudKitSyncQueue {
         quarantinedItems = decoded
     }
 
-    private func persist() {
-        guard let data = try? JSONEncoder().encode(items) else {
-            return
-        }
-        defaults.set(data, forKey: storageKey)
+    private func persistItems(_ updatedItems: [PendingCloudKitMutation]) throws {
+        let data = try JSONEncoder().encode(updatedItems)
+        try writeAndVerify(data, forKey: storageKey)
+        items = updatedItems
     }
 
-    private func persistQuarantine() {
-        guard let data = try? JSONEncoder().encode(quarantinedItems) else {
-            return
+    private func persistMigratedState(
+        items updatedItems: [PendingCloudKitMutation],
+        quarantinedItems updatedQuarantinedItems: [PendingCloudKitMutationQuarantine]
+    ) throws {
+        let itemsData = try JSONEncoder().encode(updatedItems)
+        let quarantineData = try JSONEncoder().encode(updatedQuarantinedItems)
+        let previousItemsData = defaults.data(forKey: storageKey)
+        let previousQuarantineData = defaults.data(forKey: quarantineStorageKey)
+
+        do {
+            // Preserve invalid legacy records before replacing the legacy queue.
+            try writeAndVerify(quarantineData, forKey: quarantineStorageKey)
+            try writeAndVerify(itemsData, forKey: storageKey)
+        } catch {
+            restore(previousItemsData, forKey: storageKey)
+            restore(previousQuarantineData, forKey: quarantineStorageKey)
+            throw error
         }
-        defaults.set(data, forKey: quarantineStorageKey)
+
+        items = updatedItems
+        quarantinedItems = updatedQuarantinedItems
+    }
+
+    private func writeAndVerify(_ data: Data, forKey key: String) throws {
+        defaults.set(data, forKey: key)
+        guard defaults.data(forKey: key) == data else {
+            throw PendingCloudKitSyncQueueError.persistenceFailed
+        }
+    }
+
+    private func restore(_ data: Data?, forKey key: String) {
+        if let data {
+            defaults.set(data, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
     }
 }
 

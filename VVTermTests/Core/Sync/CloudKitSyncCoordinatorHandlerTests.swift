@@ -117,4 +117,93 @@ struct CloudKitSyncCoordinatorHandlerTests {
         #expect(handler.received == [mutation, mutation])
         #expect(coordinator.snapshot().isEmpty)
     }
+
+    @Test
+    func removalPersistenceFailureKeepsSuccessfulMutationDurable() async throws {
+        let suiteName = "CloudKitSyncCoordinatorHandlerTests.remove.\(UUID().uuidString)"
+        let defaults = WriteRejectingUserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let storageKey = "handlerRemovalFailureQueue"
+        let handler = PendingMutationHandlerStub(behaviors: [.succeed])
+        let coordinator = CloudKitSyncCoordinator(
+            mutationHandler: handler,
+            queue: PendingCloudKitSyncQueue(
+                storageKey: storageKey,
+                defaults: defaults
+            ),
+            isSyncEnabled: { true },
+            now: { Date(timeIntervalSinceReferenceDate: 40_000) }
+        )
+        let mutation = makeMutation(idSuffix: 2)
+        guard case .success = coordinator.enqueue(mutation) else {
+            Issue.record("Expected the initial enqueue to succeed")
+            return
+        }
+
+        defaults.rejectWrites = true
+        await coordinator.drainPendingMutations()
+
+        #expect(handler.received == [mutation])
+        #expect(coordinator.snapshot() == [mutation])
+        defaults.rejectWrites = false
+        let reloadedQueue = PendingCloudKitSyncQueue(
+            storageKey: storageKey,
+            defaults: defaults
+        )
+        #expect(reloadedQueue.snapshot() == [mutation])
+    }
+
+    @Test
+    func retryPersistenceFailureKeepsOriginalMutationDurable() async throws {
+        let suiteName = "CloudKitSyncCoordinatorHandlerTests.retry.\(UUID().uuidString)"
+        let defaults = WriteRejectingUserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let storageKey = "handlerRetryPersistenceFailureQueue"
+        let handler = PendingMutationHandlerStub(behaviors: [.fail])
+        let coordinator = CloudKitSyncCoordinator(
+            mutationHandler: handler,
+            queue: PendingCloudKitSyncQueue(
+                storageKey: storageKey,
+                defaults: defaults
+            ),
+            isSyncEnabled: { true },
+            now: { Date(timeIntervalSinceReferenceDate: 50_000) }
+        )
+        let mutation = makeMutation(idSuffix: 3)
+        guard case .success = coordinator.enqueue(mutation) else {
+            Issue.record("Expected the initial enqueue to succeed")
+            return
+        }
+
+        defaults.rejectWrites = true
+        await coordinator.drainPendingMutations()
+
+        #expect(handler.received == [mutation])
+        #expect(coordinator.snapshot() == [mutation])
+        defaults.rejectWrites = false
+        let reloadedQueue = PendingCloudKitSyncQueue(
+            storageKey: storageKey,
+            defaults: defaults
+        )
+        #expect(reloadedQueue.snapshot() == [mutation])
+    }
+
+    private func makeMutation(idSuffix: Int) -> PendingCloudKitMutation {
+        PendingCloudKitMutation(
+            id: UUID(
+                uuidString: String(
+                    format: "10000000-0000-0000-0000-%012d",
+                    idSuffix
+                )
+            )!,
+            payload: .terminalThemeUpsert(
+                TerminalTheme(
+                    name: "Durable Theme",
+                    content: "background = #000000\nforeground = #FFFFFF\n",
+                    updatedAt: Date(timeIntervalSinceReferenceDate: 100)
+                )
+            ),
+            createdAt: Date(timeIntervalSinceReferenceDate: 200)
+        )
+    }
 }

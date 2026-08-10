@@ -35,16 +35,27 @@ final class CloudKitSyncCoordinator {
         queue.quarantineSnapshot()
     }
 
-    func remove(_ mutationID: UUID) {
-        queue.remove(mutationID)
+    @discardableResult
+    func remove(_ mutationID: UUID) -> Result<Void, any Error> {
+        performQueueMutation("remove pending mutation") {
+            try queue.remove(mutationID)
+        }
     }
 
-    func removeAll(where shouldRemove: (PendingCloudKitMutation) -> Bool) {
-        queue.removeAll(where: shouldRemove)
+    @discardableResult
+    func removeAll(
+        where shouldRemove: (PendingCloudKitMutation) -> Bool
+    ) -> Result<Void, any Error> {
+        performQueueMutation("remove pending mutations") {
+            try queue.removeAll(where: shouldRemove)
+        }
     }
 
-    func enqueue(_ mutation: PendingCloudKitMutation) {
-        queue.enqueue(mutation)
+    @discardableResult
+    func enqueue(_ mutation: PendingCloudKitMutation) -> Result<Void, any Error> {
+        performQueueMutation("enqueue pending mutation") {
+            try queue.enqueue(mutation)
+        }
     }
 
     func enqueueAtomically(_ mutations: [PendingCloudKitMutation]) throws {
@@ -80,18 +91,21 @@ final class CloudKitSyncCoordinator {
 
                 do {
                     try await mutationHandler.handle(mutation)
-                    queue.remove(mutation.id)
-                    didProgress = true
                 } catch is CancellationError {
                     return
                 } catch {
                     if isIgnorableDeleteSyncError(error, for: mutation) {
-                        queue.remove(mutation.id)
+                        guard removePersistedMutation(mutation) else { return }
                         didProgress = true
                         continue
                     }
 
-                    queue.recordFailure(for: mutation, error: error)
+                    do {
+                        try queue.recordFailure(for: mutation, error: error, at: now())
+                    } catch {
+                        logQueuePersistenceFailure("record pending mutation failure", error: error)
+                        return
+                    }
                     logger.warning(
                         "Pending CloudKit sync failed for \(mutation.entityDescription): \(error.localizedDescription)"
                     )
@@ -99,7 +113,11 @@ final class CloudKitSyncCoordinator {
                     if shouldPausePendingSyncDrain(for: error) {
                         return
                     }
+                    continue
                 }
+
+                guard removePersistedMutation(mutation) else { return }
+                didProgress = true
             }
 
             if !didProgress {
@@ -109,6 +127,33 @@ final class CloudKitSyncCoordinator {
                 return
             }
         }
+    }
+
+    private func performQueueMutation(
+        _ operation: String,
+        mutation: () throws -> Void
+    ) -> Result<Void, any Error> {
+        do {
+            try mutation()
+            return .success(())
+        } catch {
+            logQueuePersistenceFailure(operation, error: error)
+            return .failure(error)
+        }
+    }
+
+    private func removePersistedMutation(_ mutation: PendingCloudKitMutation) -> Bool {
+        do {
+            try queue.remove(mutation.id)
+            return true
+        } catch {
+            logQueuePersistenceFailure("remove synchronized mutation", error: error)
+            return false
+        }
+    }
+
+    private func logQueuePersistenceFailure(_ operation: String, error: Error) {
+        logger.error("Failed to \(operation): \(error.localizedDescription)")
     }
 
     private func isIgnorableDeleteSyncError(_ error: Error, for mutation: PendingCloudKitMutation) -> Bool {

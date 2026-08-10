@@ -200,7 +200,7 @@ struct PendingCloudKitSyncTests {
     }
 
     @Test
-    func enqueueCoalescesOnlyTheSameEntityAndKey() {
+    func enqueueCoalescesOnlyTheSameEntityAndKey() throws {
         let fixtures = PendingSyncFixtures()
         let storage = makeStorage()
         defer { storage.defaults.removePersistentDomain(forName: storage.suiteName) }
@@ -209,11 +209,11 @@ struct PendingCloudKitSyncTests {
             defaults: storage.defaults
         )
 
-        queue.enqueue(PendingCloudKitMutation(payload: .serverUpsert(fixtures.server)))
-        queue.enqueue(
+        try queue.enqueue(PendingCloudKitMutation(payload: .serverUpsert(fixtures.server)))
+        try queue.enqueue(
             PendingCloudKitMutation(payload: .workspaceUpsert(fixtures.workspaceWithServerID))
         )
-        queue.enqueue(PendingCloudKitMutation(payload: .serverDelete(fixtures.deletedServer)))
+        try queue.enqueue(PendingCloudKitMutation(payload: .serverDelete(fixtures.deletedServer)))
 
         #expect(
             queue.snapshot().map(\.payload) == [
@@ -222,7 +222,7 @@ struct PendingCloudKitSyncTests {
             ]
         )
 
-        queue.enqueue(
+        try queue.enqueue(
             PendingCloudKitMutation(
                 payload: .workspaceDelete(fixtures.deletedWorkspaceWithServerID)
             )
@@ -250,8 +250,8 @@ struct PendingCloudKitSyncTests {
             storageKey: storage.storageKey,
             defaults: storage.defaults
         )
-        queue.enqueue(PendingCloudKitMutation(payload: .serverUpsert(fixtures.server)))
-        queue.enqueue(
+        try queue.enqueue(PendingCloudKitMutation(payload: .serverUpsert(fixtures.server)))
+        try queue.enqueue(
             PendingCloudKitMutation(payload: .workspaceUpsert(fixtures.workspaceWithServerID))
         )
 
@@ -271,6 +271,90 @@ struct PendingCloudKitSyncTests {
             defaults: storage.defaults
         )
         #expect(reloadedQueue.snapshot() == queue.snapshot())
+    }
+
+    @Test
+    func enqueuePersistenceFailureLeavesMemoryAndDiskUnchanged() throws {
+        let fixtures = PendingSyncFixtures()
+        let storage = makeRejectingStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suiteName) }
+        let queue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults
+        )
+        let original = PendingCloudKitMutation(payload: .serverUpsert(fixtures.server))
+        try queue.enqueue(original)
+
+        storage.defaults.rejectWrites = true
+        #expect(throws: PendingCloudKitSyncQueueError.self) {
+            try queue.enqueue(
+                PendingCloudKitMutation(payload: .workspaceUpsert(fixtures.workspace))
+            )
+        }
+
+        #expect(queue.snapshot() == [original])
+        storage.defaults.rejectWrites = false
+        let reloadedQueue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults
+        )
+        #expect(reloadedQueue.snapshot() == [original])
+    }
+
+    @Test
+    func removalPersistenceFailureLeavesMemoryAndDiskUnchanged() throws {
+        let fixtures = PendingSyncFixtures()
+        let storage = makeRejectingStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suiteName) }
+        let queue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults
+        )
+        let mutation = PendingCloudKitMutation(payload: .serverUpsert(fixtures.server))
+        try queue.enqueue(mutation)
+
+        storage.defaults.rejectWrites = true
+        #expect(throws: PendingCloudKitSyncQueueError.self) {
+            try queue.remove(mutation.id)
+        }
+
+        #expect(queue.snapshot() == [mutation])
+        storage.defaults.rejectWrites = false
+        let reloadedQueue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults
+        )
+        #expect(reloadedQueue.snapshot() == [mutation])
+    }
+
+    @Test
+    func retryPersistenceFailureLeavesMemoryAndDiskUnchanged() throws {
+        let fixtures = PendingSyncFixtures()
+        let storage = makeRejectingStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suiteName) }
+        let queue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults
+        )
+        let mutation = PendingCloudKitMutation(payload: .serverUpsert(fixtures.server))
+        try queue.enqueue(mutation)
+
+        storage.defaults.rejectWrites = true
+        #expect(throws: PendingCloudKitSyncQueueError.self) {
+            try queue.recordFailure(
+                for: mutation,
+                error: RetryTestError(),
+                at: fixtures.createdAt
+            )
+        }
+
+        #expect(queue.snapshot() == [mutation])
+        storage.defaults.rejectWrites = false
+        let reloadedQueue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults
+        )
+        #expect(reloadedQueue.snapshot() == [mutation])
     }
 
     @Test
@@ -569,6 +653,26 @@ private func jsonObject(_ fixture: LegacyMutationFixture) throws -> Any {
 private func makeStorage() -> (suiteName: String, storageKey: String, defaults: UserDefaults) {
     let suiteName = "PendingCloudKitSyncTests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!
+    defaults.removePersistentDomain(forName: suiteName)
+    return (suiteName, "pending-mutations", defaults)
+}
+
+final class WriteRejectingUserDefaults: UserDefaults {
+    var rejectWrites = false
+
+    override func set(_ value: Any?, forKey defaultName: String) {
+        guard !rejectWrites else { return }
+        super.set(value, forKey: defaultName)
+    }
+}
+
+private func makeRejectingStorage() -> (
+    suiteName: String,
+    storageKey: String,
+    defaults: WriteRejectingUserDefaults
+) {
+    let suiteName = "PendingCloudKitSyncTests.rejecting.\(UUID().uuidString)"
+    let defaults = WriteRejectingUserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return (suiteName, "pending-mutations", defaults)
 }
