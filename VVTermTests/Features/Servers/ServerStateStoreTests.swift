@@ -78,6 +78,89 @@ struct ServerStateStoreTests {
     }
 
     @Test
+    func workspaceCreateCandidateUsesInjectedIdentityAndTime() {
+        let existing = makeWorkspace(id: "10000000-0000-0000-0000-000000000004")
+        let repository = ServerStateLocalRepository(servers: [], workspaces: [existing])
+        let id = UUID(uuidString: "90000000-0000-0000-0000-000000000004")!
+        let date = Date(timeIntervalSinceReferenceDate: 4_000)
+        let store = makeStore(
+            repository: repository,
+            now: { date },
+            makeID: { id }
+        )
+
+        let candidate = store.makeWorkspaceSaveCandidate(
+            editing: nil,
+            name: "Created",
+            colorHex: "#123456"
+        )
+
+        #expect(candidate.id == id)
+        #expect(candidate.name == "Created")
+        #expect(candidate.colorHex == "#123456")
+        #expect(candidate.icon == nil)
+        #expect(candidate.order == 1)
+        #expect(candidate.environments == ServerEnvironment.builtInEnvironments)
+        #expect(candidate.lastSelectedEnvironmentId == nil)
+        #expect(candidate.lastSelectedServerId == nil)
+        #expect(candidate.createdAt == date)
+        #expect(candidate.updatedAt == date)
+    }
+
+    @Test
+    func workspaceEditCandidatePreservesExistingFieldsAndUsesInjectedTime() {
+        let environment = ServerEnvironment(
+            id: UUID(uuidString: "30000000-0000-0000-0000-000000000001")!,
+            name: "Custom",
+            shortName: "Cust",
+            colorHex: "#654321"
+        )
+        let selectedServerID = UUID(uuidString: "20000000-0000-0000-0000-000000000004")!
+        let createdAt = Date(timeIntervalSinceReferenceDate: 400)
+        let existing = Workspace(
+            id: UUID(uuidString: "10000000-0000-0000-0000-000000000005")!,
+            name: "Existing",
+            colorHex: "#000000",
+            icon: "folder",
+            order: 7,
+            environments: [environment],
+            lastSelectedEnvironmentId: environment.id,
+            lastSelectedServerId: selectedServerID,
+            createdAt: createdAt,
+            updatedAt: .distantPast
+        )
+        let repository = ServerStateLocalRepository(servers: [], workspaces: [existing])
+        let updatedAt = Date(timeIntervalSinceReferenceDate: 5_000)
+        var makeIDCount = 0
+        let store = makeStore(
+            repository: repository,
+            now: { updatedAt },
+            makeID: {
+                makeIDCount += 1
+                return UUID(uuidString: "90000000-0000-0000-0000-000000000005")!
+            }
+        )
+
+        let candidate = store.makeWorkspaceSaveCandidate(
+            editing: existing,
+            name: "Edited",
+            colorHex: "#ABCDEF"
+        )
+
+        #expect(candidate.id == existing.id)
+        #expect(candidate.name == "Edited")
+        #expect(candidate.colorHex == "#ABCDEF")
+        #expect(candidate.icon == existing.icon)
+        #expect(candidate.order == existing.order)
+        #expect(candidate.environments == existing.environments)
+        #expect(candidate.lastSelectedEnvironmentId == existing.lastSelectedEnvironmentId)
+        #expect(candidate.lastSelectedServerId == existing.lastSelectedServerId)
+        #expect(candidate.createdAt == createdAt)
+        #expect(candidate.updatedAt == updatedAt)
+        #expect(makeIDCount == 0)
+    }
+
+    @Test
     func unreadableLocalCollectionIssueBelongsToItsStoreAndCanBeDismissed() {
         let issue = ServerLocalStorageIssue(
             collection: .servers,
@@ -100,15 +183,21 @@ struct ServerStateStoreTests {
         #expect(healthyStore.localStorageIssues.isEmpty)
     }
 
-    private func makeStore(repository: ServerStateLocalRepository) -> ServerStateStore {
+    private func makeStore(
+        repository: ServerStateLocalRepository,
+        now: @escaping () -> Date = { Date(timeIntervalSinceReferenceDate: 1_000) },
+        makeID: @escaping () -> UUID = {
+            UUID(uuidString: "90000000-0000-0000-0000-000000000001")!
+        }
+    ) -> ServerStateStore {
         ServerStateStore(
             dependencies: ServerStateStoreDependencies(
                 localRepository: repository,
                 preferences: ServerStatePreferences(),
                 freePlanTracker: ServerStateFreePlanTracker(),
                 isSyncEnabled: { false },
-                now: { Date(timeIntervalSinceReferenceDate: 1_000) },
-                makeID: { UUID(uuidString: "90000000-0000-0000-0000-000000000001")! },
+                now: now,
+                makeID: makeID,
                 defaultWorkspaceName: { "My Servers" },
                 canonicalDefaultWorkspaceNames: { ["My Servers"] }
             )

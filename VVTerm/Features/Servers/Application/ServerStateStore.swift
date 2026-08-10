@@ -491,6 +491,26 @@ final class ServerStateStore: ObservableObject {
         freeTierPolicy.canAddWorkspace(workspaceCount: workspaces.count, hasProAccess: hasProAccess)
     }
 
+    func makeWorkspaceSaveCandidate(
+        editing workspace: Workspace?,
+        name: String,
+        colorHex: String
+    ) -> Workspace {
+        let date = dependencies.now()
+        return Workspace(
+            id: workspace?.id ?? dependencies.makeID(),
+            name: name,
+            colorHex: colorHex,
+            icon: workspace?.icon,
+            order: workspace?.order ?? workspaces.count,
+            environments: workspace?.environments ?? ServerEnvironment.builtInEnvironments,
+            lastSelectedEnvironmentId: workspace?.lastSelectedEnvironmentId,
+            lastSelectedServerId: workspace?.lastSelectedServerId,
+            createdAt: workspace?.createdAt ?? date,
+            updatedAt: date
+        )
+    }
+
     var freeServerLimit: Int { freeTierPolicy.serverLimit }
     var isLegacyFreePlan: Bool { freeTierPolicy.isLegacyPlan }
 

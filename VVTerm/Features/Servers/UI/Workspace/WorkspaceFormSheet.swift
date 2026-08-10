@@ -158,16 +158,10 @@ struct WorkspaceFormSheet: View {
             do {
                 let colorHex = selectedColor.toHex()
 
-                let newWorkspace = Workspace(
-                    id: workspace?.id ?? UUID(),
+                let newWorkspace = stateStore.makeWorkspaceSaveCandidate(
+                    editing: workspace,
                     name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                    colorHex: colorHex,
-                    icon: workspace?.icon,
-                    order: workspace?.order ?? stateStore.workspaces.count,
-                    environments: workspace?.environments ?? ServerEnvironment.builtInEnvironments,
-                    lastSelectedEnvironmentId: workspace?.lastSelectedEnvironmentId,
-                    lastSelectedServerId: workspace?.lastSelectedServerId,
-                    createdAt: workspace?.createdAt ?? Date()
+                    colorHex: colorHex
                 )
 
                 if isEditing {
