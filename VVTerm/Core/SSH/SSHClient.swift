@@ -1592,12 +1592,6 @@ nonisolated(unsafe) private let kbdintCallback: @convention(c) (
 // MARK: - SSH Session using libssh2
 
 actor SSHSession {
-    enum ShellStartupStage: Sendable {
-        case channelOpenRetry
-        case ptyRequest
-        case shellRequest
-    }
-
     #if DEBUG
     struct ShellStartupTestEvent: Sendable {
         let stage: ShellStartupStage
