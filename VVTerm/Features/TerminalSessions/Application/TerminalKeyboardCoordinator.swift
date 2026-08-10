@@ -110,6 +110,15 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         }
     }
 
+    private enum PresentationVerificationLayoutSource {
+        case currentLayoutFrame
+        case observedEventsOnly
+
+        var reconcilesLayoutFrameAtDeadline: Bool {
+            self == .currentLayoutFrame
+        }
+    }
+
     enum ImmediateDeactivationReason: String {
         case contentProtection
         case routeModal
@@ -418,21 +427,6 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         return fillsBottomEdge && fillsWidth
             ? .docked(frame: visibleFrame)
             : .floating(frame: visibleFrame)
-    }
-
-    nonisolated static func keyboardFrameAfterHideNotification(
-        layoutFrame: CGRect?,
-        screenFrame: CGRect?,
-        windowOwnsInput: Bool,
-        softwareInputActive: Bool,
-        minimumHeight: CGFloat = 100
-    ) -> CGRect? {
-        guard windowOwnsInput, softwareInputActive else { return nil }
-        return visibleKeyboardFrame(
-            layoutFrame,
-            in: screenFrame,
-            minimumHeight: minimumHeight
-        )
     }
 
     nonisolated static func keyboardNotificationMatchesActiveScreen(
@@ -835,25 +829,21 @@ final class TerminalKeyboardCoordinator: ObservableObject {
                 setSoftwareKeyboardPresentation(.hidden, terminal: terminal)
                 return
             }
-            if let layoutFrame = Self.keyboardFrameAfterHideNotification(
-                layoutFrame: snapshot.keyboardLayoutFrame,
-                screenFrame: snapshot.screenFrame,
-                windowOwnsInput: snapshot.windowAttached && snapshot.windowIsKey,
-                softwareInputActive: snapshot.isSoftwareInputActive,
-                minimumHeight: softwareKeyboardMinimumHeight
-            ) {
-                setSoftwareKeyboardPresentation(
-                    Self.softwareKeyboardPresentation(
-                        for: layoutFrame,
-                        in: snapshot.screenFrame,
-                        minimumHeight: softwareKeyboardMinimumHeight
-                    ),
-                    terminal: terminal
-                )
-                return
-            }
         }
         clearSoftwareKeyboardObservation()
+        guard let paneId = activePaneId,
+              let terminal = activeTerminal else { return }
+        let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
+        guard Self.desiredKeyboardVisible(inputs: currentInputs),
+              snapshot.windowAttached,
+              snapshot.windowIsKey,
+              snapshot.isSoftwareInputActive,
+              !snapshot.isSoftwareKeyboardSuppressed else { return }
+        schedulePresentationVerify(
+            for: paneId,
+            terminal: terminal,
+            layoutSource: .observedEventsOnly
+        )
     }
 
     private func noteExternalKeyboardOwnership() {
@@ -915,6 +905,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         #if DEBUG
         guard !Self.usesUITestKeyboardFrameSimulation else { return }
         #endif
+        guard presentationVerifyTask == nil else { return }
         if snapshot.isSoftwareKeyboardSuppressed {
             setSoftwareKeyboardPresentation(.hidden, terminal: terminal)
             return
@@ -1503,7 +1494,8 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     private func schedulePresentationVerify(
         for paneId: UUID,
         terminal: any TerminalKeyboardInputSession,
-        retryRequest: PresentationRequest? = nil
+        retryRequest: PresentationRequest? = nil,
+        layoutSource: PresentationVerificationLayoutSource = .currentLayoutFrame
     ) {
         let ownershipGeneration = inputOwnership.generation
         presentationVerifyTask?.cancel()
@@ -1522,10 +1514,12 @@ final class TerminalKeyboardCoordinator: ObservableObject {
                   let activeTerminal = self.terminalProvider?(paneId),
                   activeTerminal === terminal else { return }
             let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
-            self.reconcileSoftwareKeyboardPresentation(
-                terminal: terminal,
-                snapshot: snapshot
-            )
+            if layoutSource.reconcilesLayoutFrameAtDeadline {
+                self.reconcileSoftwareKeyboardPresentation(
+                    terminal: terminal,
+                    snapshot: snapshot
+                )
+            }
             guard !self.isSoftwareKeyboardVisible else { return }
             let inputs = self.currentInputs
             guard Self.desiredKeyboardVisible(inputs: inputs) else { return }
