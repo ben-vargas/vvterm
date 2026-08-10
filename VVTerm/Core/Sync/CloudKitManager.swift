@@ -5,14 +5,6 @@ import os.log
 
 // MARK: - CloudKit Manager
 
-struct CloudKitChanges {
-    let servers: [Server]
-    let workspaces: [Workspace]
-    let deletedServerIDs: [UUID]
-    let deletedWorkspaceIDs: [UUID]
-    let isFullFetch: Bool
-}
-
 @MainActor
 final class CloudKitManager: ObservableObject {
     static let shared = CloudKitManager()
@@ -44,21 +36,15 @@ final class CloudKitManager: ObservableObject {
         static let userPreference = "UserPreference"
     }
 
-    private static let serverAndWorkspaceRecordKeys = [
-        "workspaceId", "name", "host", "port", "eternalTerminalPort", "username",
-        "connectionMode", "authMethod", "cloudflareAccessMode",
-        "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
-        "lastConnected", "isFavorite", "requiresBiometricUnlock", "tmuxEnabledOverride",
-        "tmuxStartupBehaviorOverride", "createdAt", "updatedAt", "environment",
-        "colorHex", "icon", "order", "lastSelectedEnvironmentId", "lastSelectedServerId",
-        "environments"
-    ]
-
-    private static let fetchedRecordKeys = serverAndWorkspaceRecordKeys
-
     private var accountStatusChecked = false
     private var isSyncEnabled: Bool { SyncSettings.isEnabled }
-    private var fetchChangesTask: Task<CloudKitChanges, Error>?
+    private struct InFlightRecordChanges {
+        let id: UUID
+        let identity: CloudKitRecordChangeFetchIdentity
+        let task: Task<CloudKitRawRecordChanges, Error>
+    }
+
+    private var inFlightRecordChanges: InFlightRecordChanges?
     private var ensureZoneTask: Task<Void, Error>?
     private var zoneReady: Bool
 
@@ -146,7 +132,10 @@ final class CloudKitManager: ObservableObject {
 
     // MARK: - Change Fetching (Incremental, No Queries)
 
-    func fetchChanges(forceFullFetch: Bool = false) async throws -> CloudKitChanges {
+    func fetchCloudKitRecordChanges(
+        forceFullFetch: Bool,
+        desiredKeys: [String]
+    ) async throws -> CloudKitRawRecordChanges {
         await ensureAccountStatusChecked()
         guard isAvailable else {
             throw CloudKitError.notAvailable
@@ -154,47 +143,79 @@ final class CloudKitManager: ObservableObject {
 
         try await ensureCustomZone()
 
-        if !forceFullFetch, let task = fetchChangesTask {
-            return try await task.value
+        let fetchIdentity = CloudKitRecordChangeFetchIdentity(
+            forceFullFetch: forceFullFetch,
+            desiredKeys: desiredKeys
+        )
+        let requestDecision = try CloudKitRecordChangeRequestPolicy.decision(
+            for: fetchIdentity,
+            inFlight: inFlightRecordChanges?.identity
+        )
+        if requestDecision == .coalesce, let inFlightRecordChanges {
+            return try await inFlightRecordChanges.task.value
         }
 
-        let task = Task { try await self.withZoneRetry { try await self.fetchChangesFromCloudKit(forceFullFetch: forceFullFetch) } }
-        if !forceFullFetch {
-            fetchChangesTask = task
+        let taskID = UUID()
+        let task = Task {
+            try await self.withZoneRetry {
+                try await self.fetchRecordChangesFromCloudKit(
+                    forceFullFetch: forceFullFetch,
+                    desiredKeys: desiredKeys
+                )
+            }
         }
+        inFlightRecordChanges = InFlightRecordChanges(
+            id: taskID,
+            identity: fetchIdentity,
+            task: task
+        )
         defer {
-            if !forceFullFetch {
-                fetchChangesTask = nil
+            if inFlightRecordChanges?.id == taskID {
+                inFlightRecordChanges = nil
             }
         }
 
         return try await task.value
     }
 
-    private func fetchChangesFromCloudKit(forceFullFetch: Bool) async throws -> CloudKitChanges {
+    private func fetchRecordChangesFromCloudKit(
+        forceFullFetch: Bool,
+        desiredKeys: [String]
+    ) async throws -> CloudKitRawRecordChanges {
         try await performSyncOperation {
-            try await fetchTrackedChangesFromCloudKit(forceFullFetch: forceFullFetch)
+            try await fetchTrackedRecordChangesFromCloudKit(
+                forceFullFetch: forceFullFetch,
+                desiredKeys: desiredKeys
+            )
         }
     }
 
-    private func fetchTrackedChangesFromCloudKit(forceFullFetch: Bool) async throws -> CloudKitChanges {
+    private func fetchTrackedRecordChangesFromCloudKit(
+        forceFullFetch: Bool,
+        desiredKeys: [String]
+    ) async throws -> CloudKitRawRecordChanges {
         let previousToken = forceFullFetch ? nil : loadChangeToken()
 
         do {
-            let changes = try await fetchChangesFromCloudKit(
+            let changes = try await fetchRawRecordChangesFromCloudKit(
                 previousToken: previousToken,
-                isFullFetch: forceFullFetch || previousToken == nil
+                isFullFetch: forceFullFetch || previousToken == nil,
+                desiredKeys: desiredKeys
             )
             lastSyncDate = Date()
             logger.info(
-                "Fetched \(changes.workspaces.count) workspaces, \(changes.servers.count) servers (full fetch: \(changes.isFullFetch))"
+                "Fetched \(changes.changes.count) raw CloudKit changes (full fetch: \(changes.isFullFetch))"
             )
             return changes
         } catch {
             if isChangeTokenExpired(error) {
                 logger.warning("CloudKit change token expired; resetting and performing full fetch")
                 clearChangeToken()
-                let changes = try await fetchChangesFromCloudKit(previousToken: nil, isFullFetch: true)
+                let changes = try await fetchRawRecordChangesFromCloudKit(
+                    previousToken: nil,
+                    isFullFetch: true,
+                    desiredKeys: desiredKeys
+                )
                 lastSyncDate = Date()
                 return changes
             }
@@ -204,19 +225,17 @@ final class CloudKitManager: ObservableObject {
         }
     }
 
-    private func fetchChangesFromCloudKit(
+    private func fetchRawRecordChangesFromCloudKit(
         previousToken: CKServerChangeToken?,
-        isFullFetch: Bool
-    ) async throws -> CloudKitChanges {
+        isFullFetch: Bool,
+        desiredKeys: [String]
+    ) async throws -> CloudKitRawRecordChanges {
         let zoneID = recordZoneID
         var token = previousToken
         var moreComing = true
 
         var budget = CloudKitSyncBudget()
-        var serversByID: [UUID: Server] = [:]
-        var workspacesByID: [UUID: Workspace] = [:]
-        var deletedServerIDs: Set<UUID> = []
-        var deletedWorkspaceIDs: Set<UUID> = []
+        var changes: [CloudKitRawRecordChange] = []
 
         while moreComing {
             try budget.requireCapacityForNextPage()
@@ -224,7 +243,7 @@ final class CloudKitManager: ObservableObject {
                 zoneID: zoneID,
                 previousToken: token,
                 budget: budget,
-                desiredKeys: Self.fetchedRecordKeys
+                desiredKeys: desiredKeys
             )
             try budget.recordBatch(
                 records: batch.records.count,
@@ -233,37 +252,16 @@ final class CloudKitManager: ObservableObject {
             )
 
             for record in batch.records {
-                switch record.recordType {
-                case RecordType.server:
-                    if let server = ServerCloudKitRecordCodec.server(from: record) {
-                        serversByID[server.id] = server
-                        deletedServerIDs.remove(server.id)
-                    }
-                case RecordType.workspace:
-                    if let workspace = WorkspaceCloudKitRecordCodec.workspace(from: record) {
-                        workspacesByID[workspace.id] = workspace
-                        deletedWorkspaceIDs.remove(workspace.id)
-                    }
-                default:
-                    break
-                }
+                changes.append(.record(record))
             }
 
             for deletion in batch.deletions {
-                switch deletion.recordType {
-                case RecordType.server:
-                    if let id = UUID(uuidString: deletion.recordID.recordName) {
-                        serversByID.removeValue(forKey: id)
-                        deletedServerIDs.insert(id)
-                    }
-                case RecordType.workspace:
-                    if let id = UUID(uuidString: deletion.recordID.recordName) {
-                        workspacesByID.removeValue(forKey: id)
-                        deletedWorkspaceIDs.insert(id)
-                    }
-                default:
-                    break
-                }
+                changes.append(
+                    .deletion(
+                        recordID: deletion.recordID,
+                        recordType: deletion.recordType
+                    )
+                )
             }
 
             token = batch.serverChangeToken
@@ -274,69 +272,10 @@ final class CloudKitManager: ObservableObject {
             saveChangeToken(token)
         }
 
-        return CloudKitChanges(
-            servers: Array(serversByID.values),
-            workspaces: Array(workspacesByID.values),
-            deletedServerIDs: Array(deletedServerIDs),
-            deletedWorkspaceIDs: Array(deletedWorkspaceIDs),
+        return CloudKitRawRecordChanges(
+            changes: changes,
             isFullFetch: isFullFetch
         )
-    }
-
-    // MARK: - Server Operations
-
-    func saveServer(_ server: Server) async throws {
-        try await prepareSyncMutation()
-        let record = ServerCloudKitRecordCodec.record(for: server, in: recordZoneID)
-        try await performSyncMutation(
-            successLog: "Saved server \(server.name) to CloudKit",
-            failureLog: "Failed to save server"
-        ) {
-            try await withZoneRetry {
-                try await saveRecordWithUpsert(record)
-            }
-        }
-    }
-
-    func deleteServer(_ server: Server) async throws {
-        try await prepareSyncMutation()
-        let recordID = CKRecord.ID(recordName: server.id.uuidString, zoneID: recordZoneID)
-        _ = try await performSyncMutation(
-            successLog: "Deleted server \(server.name) from CloudKit",
-            failureLog: "Failed to delete server"
-        ) {
-            _ = try await withZoneRetry {
-                try await database.modifyRecords(saving: [], deleting: [recordID])
-            }
-        }
-    }
-
-    // MARK: - Workspace Operations
-
-    func saveWorkspace(_ workspace: Workspace) async throws {
-        try await prepareSyncMutation()
-        let record = WorkspaceCloudKitRecordCodec.record(for: workspace, in: recordZoneID)
-        try await performSyncMutation(
-            successLog: "Saved workspace \(workspace.name) to CloudKit",
-            failureLog: "Failed to save workspace"
-        ) {
-            try await withZoneRetry {
-                try await saveRecordWithUpsert(record)
-            }
-        }
-    }
-
-    func deleteWorkspace(_ workspace: Workspace) async throws {
-        try await prepareSyncMutation()
-        let recordID = CKRecord.ID(recordName: workspace.id.uuidString, zoneID: recordZoneID)
-        _ = try await performSyncMutation(
-            successLog: "Deleted workspace \(workspace.name) from CloudKit",
-            failureLog: "Failed to delete workspace"
-        ) {
-            _ = try await withZoneRetry {
-                try await database.modifyRecords(saving: [], deleting: [recordID])
-            }
-        }
     }
 
     private func prepareSyncMutation() async throws {
@@ -345,24 +284,6 @@ final class CloudKitManager: ObservableObject {
             throw CloudKitError.notAvailable
         }
         try await ensureCustomZone()
-    }
-
-    private func performSyncMutation<T>(
-        successLog: String,
-        failureLog: String,
-        _ operation: () async throws -> T
-    ) async throws -> T {
-        try await performSyncOperation {
-            do {
-                let result = try await operation()
-                lastSyncDate = Date()
-                logger.info("\(successLog)")
-                return result
-            } catch {
-                logger.error("\(failureLog): \(error.localizedDescription)")
-                throw error
-            }
-        }
     }
 
     private func performSyncOperation<T>(
@@ -388,6 +309,10 @@ final class CloudKitManager: ObservableObject {
 
     var cloudKitRecordZoneID: CKRecordZone.ID {
         recordZoneID
+    }
+
+    var isCloudKitAvailable: Bool {
+        isAvailable
     }
 
     func performCloudKitRecordMutation<T>(
@@ -428,6 +353,12 @@ final class CloudKitManager: ObservableObject {
     func upsertCloudKitRecord(_ record: CKRecord) async throws {
         try await withZoneRetry {
             try await saveRecordWithUpsert(record)
+        }
+    }
+
+    func deleteCloudKitRecord(_ recordID: CKRecord.ID) async throws {
+        _ = try await withZoneRetry {
+            try await database.modifyRecords(saving: [], deleting: [recordID])
         }
     }
 
@@ -805,25 +736,6 @@ final class CloudKitManager: ObservableObject {
             "Deleted \(deletedServers) servers, \(deletedWorkspaces) workspaces, \(deletedThemes) themes, \(deletedThemePreferences) theme preferences, \(deletedUserPreferences) user preferences from CloudKit"
         )
         lastSyncDate = Date()
-    }
-
-    // MARK: - Error Helpers
-
-    /// Check if an error is a schema-related error (record type not found)
-    static func isSchemaError(_ error: Error) -> Bool {
-        if let ckError = error as? CKError {
-            switch ckError.code {
-            case .unknownItem, .invalidArguments:
-                // unknownItem: record type doesn't exist
-                // invalidArguments: field/index issues
-                return true
-            default:
-                return false
-            }
-        }
-        // Check error message for schema-related keywords
-        let message = error.localizedDescription.lowercased()
-        return message.contains("record type") || message.contains("field") || message.contains("queryable")
     }
 
     // MARK: - Record Zone

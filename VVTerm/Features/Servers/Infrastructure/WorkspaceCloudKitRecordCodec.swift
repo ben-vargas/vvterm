@@ -2,7 +2,13 @@ import CloudKit
 import Foundation
 
 nonisolated enum WorkspaceCloudKitRecordCodec {
-    static func workspace(from record: CKRecord) -> Workspace? {
+    static let recordType = "Workspace"
+    static let recordKeys = [
+        "name", "colorHex", "icon", "order", "createdAt", "updatedAt",
+        "lastSelectedEnvironmentId", "lastSelectedServerId", "environments"
+    ]
+
+    static func workspace(from record: CKRecord, now: Date) -> Workspace? {
         guard let id = UUID(uuidString: record.recordID.recordName),
               let name = record["name"] as? String,
               let colorHex = record["colorHex"] as? String else {
@@ -28,23 +34,27 @@ nonisolated enum WorkspaceCloudKitRecordCodec {
                 .flatMap(UUID.init(uuidString:)),
             lastSelectedServerId: (record["lastSelectedServerId"] as? String)
                 .flatMap(UUID.init(uuidString:)),
-            createdAt: record["createdAt"] as? Date ?? Date(),
-            updatedAt: record["updatedAt"] as? Date ?? Date()
+            createdAt: record["createdAt"] as? Date ?? now,
+            updatedAt: record["updatedAt"] as? Date ?? now
         )
     }
 
-    static func record(for workspace: Workspace, in zoneID: CKRecordZone.ID? = nil) -> CKRecord {
+    static func record(
+        for workspace: Workspace,
+        in zoneID: CKRecordZone.ID,
+        now: Date
+    ) -> CKRecord {
         let recordID = CKRecord.ID(
             recordName: workspace.id.uuidString,
-            zoneID: zoneID ?? CKRecordZone.default().zoneID
+            zoneID: zoneID
         )
-        let record = CKRecord(recordType: "Workspace", recordID: recordID)
+        let record = CKRecord(recordType: recordType, recordID: recordID)
         record["name"] = workspace.name
         record["colorHex"] = workspace.colorHex
         record["icon"] = workspace.icon
         record["order"] = workspace.order
         record["createdAt"] = workspace.createdAt
-        record["updatedAt"] = Date()
+        record["updatedAt"] = now
         record["lastSelectedEnvironmentId"] = workspace.lastSelectedEnvironmentId?.uuidString
         record["lastSelectedServerId"] = workspace.lastSelectedServerId?.uuidString
         if let environments = try? JSONEncoder().encode(workspace.environments) {

@@ -103,6 +103,14 @@ private final class ThemeReplayStatsCloudClientStub: StatsPreferencesCloudClient
 }
 
 @MainActor
+private final class ThemeReplayServerCloudClientStub: ServerRemoteMutationClient {
+    func saveServer(_ server: Server) async throws {}
+    func deleteServer(_ server: Server) async throws {}
+    func saveWorkspace(_ workspace: Workspace) async throws {}
+    func deleteWorkspace(_ workspace: Workspace) async throws {}
+}
+
+@MainActor
 struct TerminalThemeCloudKitClientTests {
     @Test
     func testFetchThemesRequestsCodecFieldsAndPreservesDeletedThemes() async throws {
@@ -240,7 +248,7 @@ struct TerminalThemeCloudKitClientTests {
         let preference = makePreference(time: 20)
         let client = TerminalThemeCloudClientSpy()
         let coordinator = CloudKitSyncCoordinator(
-            cloudKit: CloudKitManager.shared,
+            serverCloud: ThemeReplayServerCloudClientStub(),
             terminalThemeCloud: client,
             terminalAccessoryCloud: ThemeReplayAccessoryCloudClientStub(),
             statsPreferencesCloud: ThemeReplayStatsCloudClientStub(),

@@ -3,12 +3,21 @@ import Foundation
 import os.log
 
 nonisolated enum ServerCloudKitRecordCodec {
+    static let recordType = "Server"
+    static let recordKeys = [
+        "workspaceId", "name", "host", "port", "eternalTerminalPort", "username",
+        "connectionMode", "authMethod", "cloudflareAccessMode",
+        "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
+        "lastConnected", "isFavorite", "requiresBiometricUnlock", "tmuxEnabledOverride",
+        "tmuxStartupBehaviorOverride", "createdAt", "updatedAt", "environment"
+    ]
+
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm",
         category: "Server.CloudKit"
     )
 
-    static func server(from record: CKRecord) -> Server? {
+    static func server(from record: CKRecord, now: Date) -> Server? {
         guard let id = UUID(uuidString: record.recordID.recordName) else {
             logger.error("Failed to decode server: invalid recordID '\(record.recordID.recordName)'")
             return nil
@@ -69,17 +78,21 @@ nonisolated enum ServerCloudKitRecordCodec {
             tmuxEnabledOverride: record["tmuxEnabledOverride"] as? Bool,
             tmuxStartupBehaviorOverride: (record["tmuxStartupBehaviorOverride"] as? String)
                 .flatMap(TmuxStartupBehavior.init(rawValue:)),
-            createdAt: record["createdAt"] as? Date ?? Date(),
-            updatedAt: record["updatedAt"] as? Date ?? Date()
+            createdAt: record["createdAt"] as? Date ?? now,
+            updatedAt: record["updatedAt"] as? Date ?? now
         )
     }
 
-    static func record(for server: Server, in zoneID: CKRecordZone.ID? = nil) -> CKRecord {
+    static func record(
+        for server: Server,
+        in zoneID: CKRecordZone.ID,
+        now: Date
+    ) -> CKRecord {
         let recordID = CKRecord.ID(
             recordName: server.id.uuidString,
-            zoneID: zoneID ?? CKRecordZone.default().zoneID
+            zoneID: zoneID
         )
-        let record = CKRecord(recordType: "Server", recordID: recordID)
+        let record = CKRecord(recordType: recordType, recordID: recordID)
         record["workspaceId"] = server.workspaceId.uuidString
         record["name"] = server.name
         record["host"] = server.host
@@ -103,7 +116,7 @@ nonisolated enum ServerCloudKitRecordCodec {
         record["tmuxEnabledOverride"] = server.tmuxEnabledOverride
         record["tmuxStartupBehaviorOverride"] = server.tmuxStartupBehaviorOverride?.rawValue
         record["createdAt"] = server.createdAt
-        record["updatedAt"] = Date()
+        record["updatedAt"] = now
         if let environment = try? JSONEncoder().encode(server.environment) {
             record["environment"] = environment
         }

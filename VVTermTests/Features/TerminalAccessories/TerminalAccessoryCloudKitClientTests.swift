@@ -104,6 +104,14 @@ private final class TerminalThemeCloudClientStub: TerminalThemeCloudMutationClie
 }
 
 @MainActor
+private final class AccessoryReplayServerCloudClientStub: ServerRemoteMutationClient {
+    func saveServer(_ server: Server) async throws {}
+    func deleteServer(_ server: Server) async throws {}
+    func saveWorkspace(_ workspace: Workspace) async throws {}
+    func deleteWorkspace(_ workspace: Workspace) async throws {}
+}
+
+@MainActor
 struct TerminalAccessoryCloudKitClientTests {
     @Test
     func testRemoteWinnerCompletesWithoutWriting() async throws {
@@ -232,7 +240,7 @@ struct TerminalAccessoryCloudKitClientTests {
         }
         defer { resolutionHub.removeObserver(observerID) }
         let coordinator = CloudKitSyncCoordinator(
-            cloudKit: CloudKitManager.shared,
+            serverCloud: AccessoryReplayServerCloudClientStub(),
             terminalThemeCloud: TerminalThemeCloudClientStub(),
             terminalAccessoryCloud: client,
             statsPreferencesCloud: StatsPreferencesCloudClientStub(),

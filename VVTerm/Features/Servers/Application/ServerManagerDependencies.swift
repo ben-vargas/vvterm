@@ -9,6 +9,14 @@ protocol ServerRemoteRepository: AnyObject {
 }
 
 @MainActor
+protocol ServerRemoteMutationClient: AnyObject {
+    func saveServer(_ server: Server) async throws
+    func deleteServer(_ server: Server) async throws
+    func saveWorkspace(_ workspace: Workspace) async throws
+    func deleteWorkspace(_ workspace: Workspace) async throws
+}
+
+@MainActor
 protocol ServerSyncRepository: WorkspaceDeletionMutationEnqueuing, AnyObject {
     func pendingServerMutations() -> [ServerPendingMutation]
     func clearPendingServerAndWorkspaceMutations()

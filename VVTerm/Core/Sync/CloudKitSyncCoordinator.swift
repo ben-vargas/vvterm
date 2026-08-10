@@ -4,7 +4,7 @@ import os.log
 
 @MainActor
 final class CloudKitSyncCoordinator {
-    private let cloudKit: CloudKitManager
+    private let serverCloud: any ServerRemoteMutationClient
     private let terminalThemeCloud: any TerminalThemeCloudMutationClient
     private let terminalAccessoryCloud: any TerminalAccessoryCloudClient
     private let statsPreferencesCloud: any StatsPreferencesCloudClient
@@ -20,7 +20,7 @@ final class CloudKitSyncCoordinator {
     private var shouldDrainAgain = false
 
     init(
-        cloudKit: CloudKitManager,
+        serverCloud: any ServerRemoteMutationClient,
         terminalThemeCloud: any TerminalThemeCloudMutationClient,
         terminalAccessoryCloud: any TerminalAccessoryCloudClient,
         statsPreferencesCloud: any StatsPreferencesCloudClient,
@@ -29,7 +29,7 @@ final class CloudKitSyncCoordinator {
         isSyncEnabled: @escaping () -> Bool,
         now: @escaping () -> Date
     ) {
-        self.cloudKit = cloudKit
+        self.serverCloud = serverCloud
         self.terminalThemeCloud = terminalThemeCloud
         self.terminalAccessoryCloud = terminalAccessoryCloud
         self.statsPreferencesCloud = statsPreferencesCloud
@@ -156,13 +156,13 @@ final class CloudKitSyncCoordinator {
     private func syncPendingMutation(_ mutation: PendingCloudKitMutation) async throws {
         switch mutation.payload {
         case .serverUpsert(let server):
-            try await cloudKit.saveServer(server)
+            try await serverCloud.saveServer(server)
         case .serverDelete(let server):
-            try await cloudKit.deleteServer(server)
+            try await serverCloud.deleteServer(server)
         case .workspaceUpsert(let workspace):
-            try await cloudKit.saveWorkspace(workspace)
+            try await serverCloud.saveWorkspace(workspace)
         case .workspaceDelete(let workspace):
-            try await cloudKit.deleteWorkspace(workspace)
+            try await serverCloud.deleteWorkspace(workspace)
         case .terminalThemeUpsert(let theme):
             try await terminalThemeCloud.saveTerminalTheme(theme)
         case .terminalThemePreferenceUpsert(let preference):

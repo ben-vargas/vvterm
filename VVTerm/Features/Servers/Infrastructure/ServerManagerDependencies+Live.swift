@@ -1,16 +1,11 @@
 import Foundation
 
-extension CloudKitManager: ServerRemoteRepository {
-    func fetchServerChanges(forceFullFetch: Bool) async throws -> ServerRemoteChanges {
-        let changes = try await fetchChanges(forceFullFetch: forceFullFetch)
-        return ServerRemoteChanges(
-            servers: changes.servers,
-            workspaces: changes.workspaces,
-            deletedServerIDs: changes.deletedServerIDs,
-            deletedWorkspaceIDs: changes.deletedWorkspaceIDs,
-            isFullFetch: changes.isFullFetch
-        )
-    }
+@MainActor
+enum ServerCloudKitLiveComposition {
+    static let client = ServerCloudKitClient(
+        transport: CloudKitManager.shared,
+        now: Date.init
+    )
 }
 
 extension CloudKitSyncCoordinator: ServerSyncRepository {
@@ -69,12 +64,12 @@ extension ServerManagerDependencies {
         )
         return Self(
             stateStore: stateStore,
-            remoteRepository: CloudKitManager.shared,
+            remoteRepository: ServerCloudKitLiveComposition.client,
             syncRepository: CloudKitSyncCoordinator.shared,
             credentialRepository: KeychainManager.shared,
             actionAuthorizer: actionAuthorizer,
             knownHosts: KnownHostsManager.shared,
-            isRemoteSchemaError: CloudKitManager.isSchemaError,
+            isRemoteSchemaError: ServerCloudKitClient.isSchemaError,
             now: Date.init,
             makeID: UUID.init
         )
