@@ -4,37 +4,25 @@ import os.log
 
 @MainActor
 final class CloudKitSyncCoordinator {
-    private let serverCloud: any ServerRemoteMutationClient
-    private let terminalThemeCloud: any TerminalThemeCloudMutationClient
-    private let terminalAccessoryCloud: any TerminalAccessoryCloudClient
-    private let statsPreferencesCloud: any StatsPreferencesCloudClient
+    private let mutationHandler: any PendingCloudKitMutationHandling
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm",
         category: "CloudKitSyncCoordinator"
     )
     private let queue: PendingCloudKitSyncQueue
-    private let resolutionHub: CloudKitSyncResolutionHub
     private let isSyncEnabled: () -> Bool
     private let now: () -> Date
     private var isDraining = false
     private var shouldDrainAgain = false
 
     init(
-        serverCloud: any ServerRemoteMutationClient,
-        terminalThemeCloud: any TerminalThemeCloudMutationClient,
-        terminalAccessoryCloud: any TerminalAccessoryCloudClient,
-        statsPreferencesCloud: any StatsPreferencesCloudClient,
+        mutationHandler: any PendingCloudKitMutationHandling,
         queue: PendingCloudKitSyncQueue,
-        resolutionHub: CloudKitSyncResolutionHub,
         isSyncEnabled: @escaping () -> Bool,
         now: @escaping () -> Date
     ) {
-        self.serverCloud = serverCloud
-        self.terminalThemeCloud = terminalThemeCloud
-        self.terminalAccessoryCloud = terminalAccessoryCloud
-        self.statsPreferencesCloud = statsPreferencesCloud
+        self.mutationHandler = mutationHandler
         self.queue = queue
-        self.resolutionHub = resolutionHub
         self.isSyncEnabled = isSyncEnabled
         self.now = now
     }
@@ -123,7 +111,7 @@ final class CloudKitSyncCoordinator {
                 }
 
                 do {
-                    try await syncPendingMutation(mutation)
+                    try await mutationHandler.handle(mutation)
                     queue.remove(mutation.id)
                     didProgress = true
                 } catch {
@@ -150,33 +138,6 @@ final class CloudKitSyncCoordinator {
                 }
                 return
             }
-        }
-    }
-
-    private func syncPendingMutation(_ mutation: PendingCloudKitMutation) async throws {
-        switch mutation.payload {
-        case .serverUpsert(let server):
-            try await serverCloud.saveServer(server)
-        case .serverDelete(let server):
-            try await serverCloud.deleteServer(server)
-        case .workspaceUpsert(let workspace):
-            try await serverCloud.saveWorkspace(workspace)
-        case .workspaceDelete(let workspace):
-            try await serverCloud.deleteWorkspace(workspace)
-        case .terminalThemeUpsert(let theme):
-            try await terminalThemeCloud.saveTerminalTheme(theme)
-        case .terminalThemePreferenceUpsert(let preference):
-            try await terminalThemeCloud.saveTerminalThemePreference(preference)
-        case .terminalAccessoryProfileUpsert(let profile):
-            let resolvedProfile = try await terminalAccessoryCloud.syncTerminalAccessoryProfile(
-                profile
-            )
-            resolutionHub.publish(.terminalAccessoryProfile(resolvedProfile))
-        case .statsPreferencesUpsert(let preferences):
-            let resolvedPreferences = try await statsPreferencesCloud.syncStatsPreferences(
-                preferences
-            )
-            resolutionHub.publish(.statsPreferences(resolvedPreferences))
         }
     }
 

@@ -10,7 +10,8 @@ enum StatsPreferencesCloudKitLiveComposition {
     )
 }
 
-extension CloudKitSyncResolutionHub: StatsPreferencesResolutionSource {
+extension CloudKitSyncResolutionHub: StatsPreferencesResolutionSource,
+    StatsPreferencesResolutionPublishing {
     func observeStatsPreferences(
         _ observer: @escaping (StatsPreferences) -> Void
     ) -> UUID {
@@ -22,6 +23,10 @@ extension CloudKitSyncResolutionHub: StatsPreferencesResolutionSource {
 
     func removeStatsPreferencesObserver(_ id: UUID) {
         removeObserver(id)
+    }
+
+    func publishStatsPreferences(_ preferences: StatsPreferences) {
+        publish(.statsPreferences(preferences))
     }
 }
 

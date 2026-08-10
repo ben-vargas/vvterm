@@ -87,28 +87,13 @@ private final class TerminalAccessoryCloudClientSpy: TerminalAccessoryCloudClien
 }
 
 @MainActor
-private final class StatsPreferencesCloudClientStub: StatsPreferencesCloudClient {
-    func syncStatsPreferences(
-        _ localPreferences: StatsPreferences
-    ) async throws -> StatsPreferences {
-        localPreferences
+private final class TerminalAccessoryResolutionPublisherSpy:
+    TerminalAccessoryResolutionPublishing {
+    private(set) var profiles: [TerminalAccessoryProfile] = []
+
+    func publishTerminalAccessoryProfile(_ profile: TerminalAccessoryProfile) {
+        profiles.append(profile)
     }
-}
-
-@MainActor
-private final class TerminalThemeCloudClientStub: TerminalThemeCloudMutationClient {
-    func saveTerminalTheme(_ theme: TerminalTheme) async throws {}
-    func saveTerminalThemePreference(
-        _ preference: TerminalThemePreference
-    ) async throws {}
-}
-
-@MainActor
-private final class AccessoryReplayServerCloudClientStub: ServerRemoteMutationClient {
-    func saveServer(_ server: Server) async throws {}
-    func deleteServer(_ server: Server) async throws {}
-    func saveWorkspace(_ workspace: Workspace) async throws {}
-    func deleteWorkspace(_ workspace: Workspace) async throws {}
 }
 
 @MainActor
@@ -224,41 +209,20 @@ struct TerminalAccessoryCloudKitClientTests {
     }
 
     @Test
-    func testQueuedReplayUsesInjectedClientAndPublishesResolution() async {
-        let suiteName = "TerminalAccessoryReplayTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
+    func testPendingHandlerUsesInjectedClientAndPublishesResolution() async throws {
         let queued = makeProfile(time: 10, writer: "queued")
         let resolved = makeProfile(time: 20, writer: "resolved")
         let client = TerminalAccessoryCloudClientSpy(resolvedProfile: resolved)
-        let resolutionHub = CloudKitSyncResolutionHub()
-        var publishedProfiles: [TerminalAccessoryProfile] = []
-        let observerID = resolutionHub.observe { resolution in
-            guard case .terminalAccessoryProfile(let profile) = resolution else { return }
-            publishedProfiles.append(profile)
-        }
-        defer { resolutionHub.removeObserver(observerID) }
-        let coordinator = CloudKitSyncCoordinator(
-            serverCloud: AccessoryReplayServerCloudClientStub(),
-            terminalThemeCloud: TerminalThemeCloudClientStub(),
-            terminalAccessoryCloud: client,
-            statsPreferencesCloud: StatsPreferencesCloudClientStub(),
-            queue: PendingCloudKitSyncQueue(
-                storageKey: "terminalAccessoryReplayQueue",
-                defaults: defaults
-            ),
-            resolutionHub: resolutionHub,
-            isSyncEnabled: { true },
-            now: { Date(timeIntervalSince1970: 100) }
+        let publisher = TerminalAccessoryResolutionPublisherSpy()
+        let handler = TerminalAccessoryPendingMutationHandler(
+            cloud: client,
+            resolutionPublisher: publisher
         )
 
-        coordinator.enqueueTerminalAccessoryProfileUpsert(queued)
-        await coordinator.drainPendingMutations()
+        try await handler.handle(queued)
 
         #expect(client.receivedProfiles == [queued])
-        #expect(publishedProfiles == [resolved])
-        #expect(coordinator.snapshot().isEmpty)
+        #expect(publisher.profiles == [resolved])
     }
 
     private func record(for profile: TerminalAccessoryProfile) throws -> CKRecord {

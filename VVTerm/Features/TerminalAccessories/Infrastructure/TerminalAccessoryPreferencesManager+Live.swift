@@ -10,7 +10,8 @@ enum TerminalAccessoryCloudKitLiveComposition {
     )
 }
 
-extension CloudKitSyncResolutionHub: TerminalAccessoryResolutionSource {
+extension CloudKitSyncResolutionHub: TerminalAccessoryResolutionSource,
+    TerminalAccessoryResolutionPublishing {
     func observeTerminalAccessoryProfile(
         _ observer: @escaping (TerminalAccessoryProfile) -> Void
     ) -> UUID {
@@ -22,6 +23,10 @@ extension CloudKitSyncResolutionHub: TerminalAccessoryResolutionSource {
 
     func removeTerminalAccessoryProfileObserver(_ id: UUID) {
         removeObserver(id)
+    }
+
+    func publishTerminalAccessoryProfile(_ profile: TerminalAccessoryProfile) {
+        publish(.terminalAccessoryProfile(profile))
     }
 }
 

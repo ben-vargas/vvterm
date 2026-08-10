@@ -70,6 +70,16 @@ private final class StatsPreferencesRecordTransportStub: CloudKitRecordTransport
 }
 
 @MainActor
+private final class StatsPreferencesResolutionPublisherSpy:
+    StatsPreferencesResolutionPublishing {
+    private(set) var preferences: [StatsPreferences] = []
+
+    func publishStatsPreferences(_ preferences: StatsPreferences) {
+        self.preferences.append(preferences)
+    }
+}
+
+@MainActor
 struct StatsPreferencesCloudKitClientTests {
     @Test
     func testRemoteWinnerCompletesWithoutWriting() async throws {
@@ -103,13 +113,18 @@ struct StatsPreferencesCloudKitClientTests {
             .success(())
         ]
         let client = StatsPreferencesCloudKitClient(transport: transport)
+        let publisher = StatsPreferencesResolutionPublisherSpy()
+        let handler = StatsPreferencesPendingMutationHandler(
+            cloud: client,
+            resolutionPublisher: publisher
+        )
 
-        let resolved = try await client.syncStatsPreferences(local)
+        try await handler.handle(local)
 
-        #expect(resolved == local.normalized())
         #expect(transport.savedRecords.count == 2)
         #expect(transport.savedRecords[1] === conflictRecord)
         #expect(transport.synchronizedCount == 1)
+        #expect(publisher.preferences == [local.normalized()])
     }
 
     @Test

@@ -69,48 +69,6 @@ private final class TerminalThemeRecordTransportStub: CloudKitRecordTransport {
 }
 
 @MainActor
-private final class TerminalThemeCloudClientSpy: TerminalThemeCloudMutationClient {
-    private(set) var savedThemes: [TerminalTheme] = []
-    private(set) var savedPreferences: [TerminalThemePreference] = []
-
-    func saveTerminalTheme(_ theme: TerminalTheme) async throws {
-        savedThemes.append(theme)
-    }
-
-    func saveTerminalThemePreference(
-        _ preference: TerminalThemePreference
-    ) async throws {
-        savedPreferences.append(preference)
-    }
-}
-
-@MainActor
-private final class ThemeReplayAccessoryCloudClientStub: TerminalAccessoryCloudClient {
-    func syncTerminalAccessoryProfile(
-        _ localProfile: TerminalAccessoryProfile
-    ) async throws -> TerminalAccessoryProfile {
-        localProfile
-    }
-}
-
-@MainActor
-private final class ThemeReplayStatsCloudClientStub: StatsPreferencesCloudClient {
-    func syncStatsPreferences(
-        _ localPreferences: StatsPreferences
-    ) async throws -> StatsPreferences {
-        localPreferences
-    }
-}
-
-@MainActor
-private final class ThemeReplayServerCloudClientStub: ServerRemoteMutationClient {
-    func saveServer(_ server: Server) async throws {}
-    func deleteServer(_ server: Server) async throws {}
-    func saveWorkspace(_ workspace: Workspace) async throws {}
-    func deleteWorkspace(_ workspace: Workspace) async throws {}
-}
-
-@MainActor
 struct TerminalThemeCloudKitClientTests {
     @Test
     func testFetchThemesRequestsCodecFieldsAndPreservesDeletedThemes() async throws {
@@ -236,38 +194,6 @@ struct TerminalThemeCloudKitClientTests {
         #expect(record.recordID.zoneID == transport.cloudKitRecordZoneID)
         #expect(TerminalThemePreferenceCloudKitRecordCodec.preference(from: record) == preference)
         #expect(transport.synchronizedCount == 1)
-    }
-
-    @Test
-    func testQueuedReplayUsesInjectedThemeClientForBothMutations() async {
-        let suiteName = "TerminalThemeReplayTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let theme = makeTheme(id: UUID(), name: "Queued", time: 10)
-        let preference = makePreference(time: 20)
-        let client = TerminalThemeCloudClientSpy()
-        let coordinator = CloudKitSyncCoordinator(
-            serverCloud: ThemeReplayServerCloudClientStub(),
-            terminalThemeCloud: client,
-            terminalAccessoryCloud: ThemeReplayAccessoryCloudClientStub(),
-            statsPreferencesCloud: ThemeReplayStatsCloudClientStub(),
-            queue: PendingCloudKitSyncQueue(
-                storageKey: "terminalThemeReplayQueue",
-                defaults: defaults
-            ),
-            resolutionHub: CloudKitSyncResolutionHub(),
-            isSyncEnabled: { true },
-            now: { Date(timeIntervalSince1970: 100) }
-        )
-
-        coordinator.enqueueTerminalThemeUpsert(theme)
-        coordinator.enqueueTerminalThemePreferenceUpsert(preference)
-        await coordinator.drainPendingMutations()
-
-        #expect(client.savedThemes == [theme])
-        #expect(client.savedPreferences == [preference])
-        #expect(coordinator.snapshot().isEmpty)
     }
 
     private func makeTheme(

@@ -26,6 +26,45 @@ struct PendingCloudKitSyncTests {
     }
 
     @Test
+    func previouslyPersistedAssociatedPayloadDecodesWithoutMigration() throws {
+        let data = Data(#"""
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "payload": {
+            "kind": "terminalThemeUpsert",
+            "payload": {
+              "id": "20000000-0000-0000-0000-000000000002",
+              "name": "Durable Theme",
+              "content": "background = #000000\nforeground = #FFFFFF\n",
+              "updatedAt": 1234
+            }
+          },
+          "createdAt": 1000,
+          "retryCount": 2,
+          "nextRetryAt": 1060,
+          "lastErrorCode": "networkFailure",
+          "lastErrorDescription": "offline"
+        }
+        """#.utf8)
+
+        let mutation = try JSONDecoder().decode(PendingCloudKitMutation.self, from: data)
+        let expectedTheme = TerminalTheme(
+            id: UUID(uuidString: "20000000-0000-0000-0000-000000000002")!,
+            name: "Durable Theme",
+            content: "background = #000000\nforeground = #FFFFFF\n",
+            updatedAt: Date(timeIntervalSinceReferenceDate: 1_234)
+        )
+
+        #expect(mutation.id == UUID(uuidString: "10000000-0000-0000-0000-000000000001"))
+        #expect(mutation.payload == .terminalThemeUpsert(expectedTheme))
+        #expect(mutation.createdAt == Date(timeIntervalSinceReferenceDate: 1_000))
+        #expect(mutation.retryCount == 2)
+        #expect(mutation.nextRetryAt == Date(timeIntervalSinceReferenceDate: 1_060))
+        #expect(mutation.lastErrorCode == "networkFailure")
+        #expect(mutation.lastErrorDescription == "offline")
+    }
+
+    @Test
     func everyValidLegacyCombinationMigratesWithoutQuarantine() throws {
         let fixtures = PendingSyncFixtures()
         let storage = makeStorage()

@@ -34,6 +34,11 @@ protocol StatsPreferencesResolutionSource: AnyObject {
 }
 
 @MainActor
+protocol StatsPreferencesResolutionPublishing: AnyObject {
+    func publishStatsPreferences(_ preferences: StatsPreferences)
+}
+
+@MainActor
 protocol StatsPreferencesPersisting: AnyObject {
     func loadPreferences(defaultWriterID: String) -> StatsPreferences
     func savePreferences(_ preferences: StatsPreferences)

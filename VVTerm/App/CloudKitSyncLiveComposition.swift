@@ -17,13 +17,21 @@ enum CloudKitSyncLiveComposition {
         isSyncEnabled: @escaping () -> Bool,
         now: @escaping () -> Date
     ) -> CloudKitSyncCoordinator {
-        CloudKitSyncCoordinator(
+        let mutationHandler = CloudKitPendingMutationRouter(
             serverCloud: clients.serverCloud,
             terminalThemeCloud: clients.terminalThemeCloud,
-            terminalAccessoryCloud: clients.terminalAccessoryCloud,
-            statsPreferencesCloud: clients.statsPreferencesCloud,
+            terminalAccessoryHandler: TerminalAccessoryPendingMutationHandler(
+                cloud: clients.terminalAccessoryCloud,
+                resolutionPublisher: resolutionHub
+            ),
+            statsPreferencesHandler: StatsPreferencesPendingMutationHandler(
+                cloud: clients.statsPreferencesCloud,
+                resolutionPublisher: resolutionHub
+            )
+        )
+        return CloudKitSyncCoordinator(
+            mutationHandler: mutationHandler,
             queue: queue,
-            resolutionHub: resolutionHub,
             isSyncEnabled: isSyncEnabled,
             now: now
         )

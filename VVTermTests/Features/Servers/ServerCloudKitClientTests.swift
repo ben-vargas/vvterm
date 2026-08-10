@@ -70,47 +70,6 @@ private final class ServerCloudKitRecordTransportStub: CloudKitRecordChangeTrans
 }
 
 @MainActor
-private final class ServerRemoteMutationClientSpy: ServerRemoteMutationClient {
-    private(set) var events: [String] = []
-
-    func saveServer(_ server: Server) async throws {
-        events.append("saveServer:\(server.id)")
-    }
-
-    func deleteServer(_ server: Server) async throws {
-        events.append("deleteServer:\(server.id)")
-    }
-
-    func saveWorkspace(_ workspace: Workspace) async throws {
-        events.append("saveWorkspace:\(workspace.id)")
-    }
-
-    func deleteWorkspace(_ workspace: Workspace) async throws {
-        events.append("deleteWorkspace:\(workspace.id)")
-    }
-}
-
-@MainActor
-private final class ServerReplayThemeCloudClientStub: TerminalThemeCloudMutationClient {
-    func saveTerminalTheme(_ theme: TerminalTheme) async throws {}
-    func saveTerminalThemePreference(_ preference: TerminalThemePreference) async throws {}
-}
-
-@MainActor
-private final class ServerReplayAccessoryCloudClientStub: TerminalAccessoryCloudClient {
-    func syncTerminalAccessoryProfile(
-        _ localProfile: TerminalAccessoryProfile
-    ) async throws -> TerminalAccessoryProfile { localProfile }
-}
-
-@MainActor
-private final class ServerReplayStatsCloudClientStub: StatsPreferencesCloudClient {
-    func syncStatsPreferences(
-        _ localPreferences: StatsPreferences
-    ) async throws -> StatsPreferences { localPreferences }
-}
-
-@MainActor
 struct ServerCloudKitClientTests {
     @Test
     func rawChangesDecodeAndDedupeWithLastEventWinning() async throws {
@@ -281,54 +240,6 @@ struct ServerCloudKitClientTests {
         #expect(!ServerCloudKitClient.isSchemaError(CKError(.networkFailure)))
         #expect(ServerCloudKitClient.isSchemaError(TestMessageError("Unknown record type")))
         #expect(!ServerCloudKitClient.isSchemaError(TestMessageError("Network failed")))
-    }
-
-    @Test
-    func queuedReplayUsesInjectedServerClientForAllMutationCases() async {
-        let suiteName = "ServerCloudReplayTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let savedWorkspace = makeWorkspace(id: UUID(), name: "Saved Workspace")
-        let deletedWorkspace = makeWorkspace(id: UUID(), name: "Deleted Workspace")
-        let savedServer = makeServer(
-            id: UUID(),
-            workspaceID: savedWorkspace.id,
-            name: "Saved Server"
-        )
-        let deletedServer = makeServer(
-            id: UUID(),
-            workspaceID: deletedWorkspace.id,
-            name: "Deleted Server"
-        )
-        let client = ServerRemoteMutationClientSpy()
-        let coordinator = CloudKitSyncCoordinator(
-            serverCloud: client,
-            terminalThemeCloud: ServerReplayThemeCloudClientStub(),
-            terminalAccessoryCloud: ServerReplayAccessoryCloudClientStub(),
-            statsPreferencesCloud: ServerReplayStatsCloudClientStub(),
-            queue: PendingCloudKitSyncQueue(
-                storageKey: "serverCloudReplayQueue",
-                defaults: defaults
-            ),
-            resolutionHub: CloudKitSyncResolutionHub(),
-            isSyncEnabled: { true },
-            now: { Date(timeIntervalSinceReferenceDate: 10_000) }
-        )
-
-        coordinator.enqueueServerUpsert(savedServer)
-        coordinator.enqueueWorkspaceUpsert(savedWorkspace)
-        coordinator.enqueueServerDelete(deletedServer)
-        coordinator.enqueueWorkspaceDelete(deletedWorkspace)
-        await coordinator.drainPendingMutations()
-
-        #expect(client.events == [
-            "saveWorkspace:\(savedWorkspace.id)",
-            "saveServer:\(savedServer.id)",
-            "deleteServer:\(deletedServer.id)",
-            "deleteWorkspace:\(deletedWorkspace.id)"
-        ])
-        #expect(coordinator.snapshot().isEmpty)
     }
 
     private func serverRecord(

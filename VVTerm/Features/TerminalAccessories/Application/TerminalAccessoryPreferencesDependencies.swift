@@ -34,6 +34,11 @@ protocol TerminalAccessoryResolutionSource: AnyObject {
 }
 
 @MainActor
+protocol TerminalAccessoryResolutionPublishing: AnyObject {
+    func publishTerminalAccessoryProfile(_ profile: TerminalAccessoryProfile)
+}
+
+@MainActor
 protocol TerminalAccessoryProfilePersisting: AnyObject {
     func loadProfile(defaultWriterID: String) -> TerminalAccessoryProfile
     func saveProfile(_ profile: TerminalAccessoryProfile)
