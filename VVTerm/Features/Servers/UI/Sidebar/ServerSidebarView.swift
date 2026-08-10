@@ -7,6 +7,7 @@ struct ServerSidebarView: View {
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     let onOpenSettings: () -> Void
     @ObservedObject private var stateStore: ServerStateStore
+    @StateObject private var workspaceSelectionStore: WorkspaceSelectionStore
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedServer: Server?
 
@@ -36,9 +37,6 @@ struct ServerSidebarView: View {
     @State private var addServerPrefill: ServerFormPrefill?
     @State private var queuedDiscoveryPrefill: ServerFormPrefill?
 
-    @AppStorage("environmentFilters.v2") private var storedEnvironmentFilters: String = ""
-    @AppStorage("environmentFilters") private var legacyEnvironmentFilters: String = ""
-
     init(
         serverManager: ServerManager,
         tabManager: TerminalTabManager,
@@ -51,6 +49,9 @@ struct ServerSidebarView: View {
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onOpenSettings = onOpenSettings
         _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
+        _workspaceSelectionStore = StateObject(
+            wrappedValue: WorkspaceSelectionLiveComposition.makeStore()
+        )
         _tabManager = ObservedObject(wrappedValue: tabManager)
         _selectedWorkspace = selectedWorkspace
         _selectedServer = selectedServer
@@ -63,10 +64,7 @@ struct ServerSidebarView: View {
     }
 
     private var selectedEnvironmentIds: Set<UUID> {
-        return WorkspaceSelectionPolicy.environmentFilterIDs(
-            stored: storedEnvironmentFilters,
-            workspace: selectedWorkspace
-        )
+        workspaceSelectionStore.environmentFilterIDs(for: selectedWorkspace)
     }
 
     private var allEnvironmentIds: Set<UUID> {
@@ -86,29 +84,17 @@ struct ServerSidebarView: View {
     }
 
     private func updateEnvironmentFilters(_ ids: Set<UUID>) {
-        storedEnvironmentFilters = WorkspaceSelectionPolicy.updatingEnvironmentFilterIDs(
+        workspaceSelectionStore.updateEnvironmentFilterIDs(
             ids,
-            for: selectedWorkspace,
-            stored: storedEnvironmentFilters
+            for: selectedWorkspace
         )
     }
 
     private func reconcileEnvironmentFilters() {
-        let migrated = WorkspaceSelectionPolicy.migratingLegacyEnvironmentFilters(
-            legacyEnvironmentFilters,
-            to: selectedWorkspace,
-            stored: storedEnvironmentFilters
+        workspaceSelectionStore.reconcile(
+            workspaces: stateStore.workspaces,
+            legacyMigrationWorkspace: selectedWorkspace
         )
-        let reconciled = WorkspaceSelectionPolicy.reconciledEnvironmentFilters(
-            stored: migrated,
-            workspaces: stateStore.workspaces
-        )
-        if reconciled != storedEnvironmentFilters {
-            storedEnvironmentFilters = reconciled
-        }
-        if !legacyEnvironmentFilters.isEmpty {
-            legacyEnvironmentFilters = ""
-        }
     }
 
     private func toggleEnvironmentFilter(_ env: ServerEnvironment) {

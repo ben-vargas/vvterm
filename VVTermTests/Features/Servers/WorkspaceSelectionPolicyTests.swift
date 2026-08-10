@@ -54,21 +54,21 @@ struct WorkspaceSelectionPolicyTests {
         let secondEnvironment = ServerEnvironment(name: "Second", shortName: "S", colorHex: "#000000")
         let second = Workspace(name: "Second", environments: [secondEnvironment])
 
-        var stored = WorkspaceSelectionPolicy.updatingEnvironmentFilterIDs(
+        var filters = WorkspaceSelectionPolicy.updatingEnvironmentFilterIDs(
             [ServerEnvironment.production.id, foreignID],
             for: first,
-            stored: ""
+            in: .empty
         )
-        stored = WorkspaceSelectionPolicy.updatingEnvironmentFilterIDs(
+        filters = WorkspaceSelectionPolicy.updatingEnvironmentFilterIDs(
             [secondEnvironment.id],
             for: second,
-            stored: stored
+            in: filters
         )
 
-        #expect(WorkspaceSelectionPolicy.environmentFilterIDs(stored: stored, workspace: first) == [
+        #expect(WorkspaceSelectionPolicy.environmentFilterIDs(in: filters, workspace: first) == [
             ServerEnvironment.production.id
         ])
-        #expect(WorkspaceSelectionPolicy.environmentFilterIDs(stored: stored, workspace: second).isEmpty)
+        #expect(WorkspaceSelectionPolicy.environmentFilterIDs(in: filters, workspace: second).isEmpty)
 
         let firstWithoutProduction = Workspace(
             id: first.id,
@@ -76,39 +76,13 @@ struct WorkspaceSelectionPolicyTests {
             environments: [ServerEnvironment.staging]
         )
         let reconciled = WorkspaceSelectionPolicy.reconciledEnvironmentFilters(
-            stored: stored,
+            filters,
             workspaces: [firstWithoutProduction, second]
         )
 
         #expect(WorkspaceSelectionPolicy.environmentFilterIDs(
-            stored: reconciled,
+            in: reconciled,
             workspace: firstWithoutProduction
         ).isEmpty)
-    }
-
-    @Test
-    func migratesLegacyFiltersOnlyToTheCurrentWorkspace() {
-        let first = Workspace(
-            name: "First",
-            environments: [ServerEnvironment.production, ServerEnvironment.staging]
-        )
-        let second = Workspace(name: "Second", environments: [ServerEnvironment.production])
-        let legacy = ServerEnvironment.staging.id.uuidString
-
-        let stored = WorkspaceSelectionPolicy.migratingLegacyEnvironmentFilters(
-            legacy,
-            to: first,
-            stored: ""
-        )
-
-        #expect(WorkspaceSelectionPolicy.environmentFilterIDs(stored: stored, workspace: first) == [
-            ServerEnvironment.staging.id
-        ])
-        #expect(WorkspaceSelectionPolicy.environmentFilterIDs(stored: stored, workspace: second).isEmpty)
-        #expect(WorkspaceSelectionPolicy.migratingLegacyEnvironmentFilters(
-            ServerEnvironment.production.id.uuidString,
-            to: second,
-            stored: stored
-        ) == stored)
     }
 }

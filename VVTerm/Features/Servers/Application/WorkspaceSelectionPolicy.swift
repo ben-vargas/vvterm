@@ -1,5 +1,15 @@
 import Foundation
 
+nonisolated struct WorkspaceEnvironmentFilters: Equatable, Sendable {
+    static let empty = Self()
+
+    let selectionsByWorkspace: [UUID: Set<UUID>]
+
+    init(selectionsByWorkspace: [UUID: Set<UUID>] = [:]) {
+        self.selectionsByWorkspace = selectionsByWorkspace
+    }
+}
+
 enum WorkspaceSelectionPolicy {
     static func workspace(
         current: Workspace?,
@@ -18,81 +28,47 @@ enum WorkspaceSelectionPolicy {
     }
 
     static func environmentFilterIDs(
-        stored: String,
+        in filters: WorkspaceEnvironmentFilters,
         workspace: Workspace?
     ) -> Set<UUID> {
         guard let workspace else { return [] }
-        let selections = decodedEnvironmentFilters(stored)
-        let selected = Set(selections[workspace.id.uuidString] ?? [])
+        let selected = filters.selectionsByWorkspace[workspace.id] ?? []
         return selected.intersection(workspace.environments.map(\.id))
     }
 
     static func updatingEnvironmentFilterIDs(
         _ selected: Set<UUID>,
         for workspace: Workspace?,
-        stored: String
-    ) -> String {
-        guard let workspace else { return stored }
+        in filters: WorkspaceEnvironmentFilters
+    ) -> WorkspaceEnvironmentFilters {
+        guard let workspace else { return filters }
 
-        var selections = decodedEnvironmentFilters(stored)
+        var selections = filters.selectionsByWorkspace
         let available = Set(workspace.environments.map(\.id))
         let normalized = selected.intersection(available)
-        let key = workspace.id.uuidString
 
         if normalized.isEmpty || normalized == available {
-            selections.removeValue(forKey: key)
+            selections.removeValue(forKey: workspace.id)
         } else {
-            selections[key] = normalized.sorted { $0.uuidString < $1.uuidString }
+            selections[workspace.id] = normalized
         }
 
-        return encodedEnvironmentFilters(selections)
+        return WorkspaceEnvironmentFilters(selectionsByWorkspace: selections)
     }
 
     static func reconciledEnvironmentFilters(
-        stored: String,
+        _ filters: WorkspaceEnvironmentFilters,
         workspaces: [Workspace]
-    ) -> String {
-        let availableByWorkspace = Dictionary(
-            uniqueKeysWithValues: workspaces.map { workspace in
-                (workspace.id.uuidString, Set(workspace.environments.map(\.id)))
-            }
-        )
-        let reconciled = decodedEnvironmentFilters(stored).reduce(into: [String: [UUID]]()) { result, item in
+    ) -> WorkspaceEnvironmentFilters {
+        let availableByWorkspace = workspaces.reduce(into: [UUID: Set<UUID>]()) { result, workspace in
+            result[workspace.id] = Set(workspace.environments.map(\.id))
+        }
+        let reconciled = filters.selectionsByWorkspace.reduce(into: [UUID: Set<UUID>]()) { result, item in
             guard let available = availableByWorkspace[item.key] else { return }
-            let normalized = Set(item.value).intersection(available)
+            let normalized = item.value.intersection(available)
             guard !normalized.isEmpty, normalized != available else { return }
-            result[item.key] = normalized.sorted { $0.uuidString < $1.uuidString }
+            result[item.key] = normalized
         }
-        return encodedEnvironmentFilters(reconciled)
-    }
-
-    static func migratingLegacyEnvironmentFilters(
-        _ legacy: String,
-        to workspace: Workspace?,
-        stored: String
-    ) -> String {
-        guard stored.isEmpty, !legacy.isEmpty else { return stored }
-        let selected = Set(
-            legacy
-                .split(separator: ",")
-                .compactMap { UUID(uuidString: String($0)) }
-        )
-        return updatingEnvironmentFilterIDs(selected, for: workspace, stored: stored)
-    }
-
-    private static func decodedEnvironmentFilters(_ stored: String) -> [String: [UUID]] {
-        guard let data = stored.data(using: .utf8),
-              let decoded = try? JSONDecoder().decode([String: [UUID]].self, from: data) else {
-            return [:]
-        }
-        return decoded
-    }
-
-    private static func encodedEnvironmentFilters(_ filters: [String: [UUID]]) -> String {
-        guard !filters.isEmpty else { return "" }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(filters) else { return "" }
-        return String(decoding: data, as: UTF8.self)
+        return WorkspaceEnvironmentFilters(selectionsByWorkspace: reconciled)
     }
 }
