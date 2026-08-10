@@ -58,8 +58,8 @@ class GhosttyTerminalView: UIView {
     let paneId: String?
     let initialCommand: String?
     let useCustomIO: Bool
-    private(set) var terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
-    private(set) var keyboardToolbar: TerminalInputAccessoryView?
+    var terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
+    var keyboardToolbar: TerminalInputAccessoryView?
 
     /// Callback invoked when the terminal process exits
     var onProcessExit: (() -> Void)?
@@ -823,60 +823,6 @@ class GhosttyTerminalView: UIView {
 
     // MARK: - Keyboard Input (Hardware Keyboard)
 
-}
-
-// MARK: - Keyboard Accessory View
-
-extension GhosttyTerminalView {
-    var shouldHideKeyboardAccessoryBar: Bool {
-        shouldSuppressSoftwareKeyboard
-            || suppressAccessoryForMissingSoftwareKeyboard
-    }
-
-    func resolvedInputAccessoryView() -> UIView? {
-        guard !isFindNavigatorActive, !shouldHideKeyboardAccessoryBar else {
-            return nil
-        }
-        if keyboardToolbar == nil {
-            let toolbar = TerminalInputAccessoryView(
-                terminalOwner: self,
-                inputSnapshot: terminalAccessoryInputSnapshot,
-                onKey: { [weak self] key in
-                    self?.handleToolbarKey(key)
-                },
-                onCustomAction: { [weak self] action in
-                    self?.handleToolbarCustomAction(action)
-                },
-                onVoice: onVoiceButtonTapped,
-                onDismissKeyboard: { [weak self] in
-                    self?.dismissKeyboardFromToolbar()
-                }
-            )
-            keyboardToolbar = toolbar
-        } else {
-            keyboardToolbar?.onVoice = onVoiceButtonTapped
-        }
-        return keyboardToolbar
-    }
-
-    func applyTerminalAccessoryInputSnapshot(_ snapshot: TerminalAccessoryInputSnapshot) {
-        guard snapshot != terminalAccessoryInputSnapshot else { return }
-        terminalAccessoryInputSnapshot = snapshot
-        keyboardToolbar?.apply(snapshot)
-    }
-
-    func refreshTerminalInputAccessoryAppearance() {
-        keyboardToolbar?.refreshAppearance()
-    }
-
-    override var inputAccessoryView: UIView? {
-        resolvedInputAccessoryView()
-    }
-
-
-    private func handleToolbarKey(_ key: TerminalKey) {
-        sendToolbarKey(key)
-    }
 }
 
 #endif
