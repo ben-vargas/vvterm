@@ -36,7 +36,7 @@ nonisolated struct TerminalTheme: Identifiable, Codable, Equatable, Sendable {
             _ = try TerminalThemeValidator.validateAndNormalizeThemeName(name)
             return .ready(normalizedContent: content)
         } catch {
-            return .needsRepair(message: error.localizedDescription)
+            return .needsRepair
         }
     }
 
@@ -48,7 +48,7 @@ nonisolated struct TerminalTheme: Identifiable, Codable, Equatable, Sendable {
 
 nonisolated enum TerminalThemeValidationState: Equatable, Sendable {
     case ready(normalizedContent: String)
-    case needsRepair(message: String)
+    case needsRepair
 }
 
 nonisolated enum TerminalThemeMergePolicy {

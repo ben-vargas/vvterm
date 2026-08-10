@@ -67,9 +67,7 @@ final class TerminalThemeValidationTests: XCTestCase {
         let original = "background = #000000\nforeground = #ffffff\ncommand = whoami\n"
         let theme = TerminalTheme(name: "Legacy", content: original)
 
-        guard case .needsRepair = theme.validationState else {
-            return XCTFail("Expected the theme to need repair")
-        }
+        XCTAssertEqual(theme.validationState, .needsRepair)
         XCTAssertEqual(theme.content, original)
         XCTAssertFalse(theme.canApply)
     }
