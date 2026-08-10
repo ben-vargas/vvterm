@@ -83,7 +83,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
 
             DispatchQueue.main.async {
                 onReady()
-                if tabManager.activeSSHRoute(for: paneId) == nil {
+                if tabManager.transportCoordinator.activeSSHRoute(for: paneId) == nil {
                     coordinator.startConnection(terminal: existingTerminal)
                 }
             }

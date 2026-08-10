@@ -187,10 +187,10 @@ struct TerminalTabManagerLiveCompositionTests {
         #expect(second.reconnectCoordinator.applicationIsActive)
         #expect(first.hasEternalTerminalCheckpoint(for: firstCheckpointPaneID))
         #expect(!first.hasEternalTerminalCheckpoint(for: secondCheckpointPaneID))
-        #expect(first.hasMoshCheckpoint(for: firstCheckpointPaneID))
-        #expect(!first.hasMoshCheckpoint(for: secondCheckpointPaneID))
+        #expect(first.transportCoordinator.hasMoshCheckpoint(for: firstCheckpointPaneID))
+        #expect(!first.transportCoordinator.hasMoshCheckpoint(for: secondCheckpointPaneID))
         #expect(second.hasEternalTerminalCheckpoint(for: secondCheckpointPaneID))
-        #expect(second.hasMoshCheckpoint(for: secondCheckpointPaneID))
+        #expect(second.transportCoordinator.hasMoshCheckpoint(for: secondCheckpointPaneID))
 
         await first.tmuxCoordinator.killSession(
             named: "first-session",

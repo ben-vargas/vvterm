@@ -4,18 +4,41 @@ import Foundation
 /// transport, even when an individual write suspends.
 @MainActor
 final class TerminalTransportWriteQueue {
-    private var pendingWrite: Task<Void, Never>?
+    private struct Entry {
+        let task: Task<Void, Never>
+    }
 
-    func enqueue(_ operation: @escaping @Sendable () async -> Void) {
-        let previousWrite = pendingWrite
-        pendingWrite = Task(priority: .userInitiated) {
+    private var entries: [UUID: Entry] = [:]
+    private var tail: Task<Void, Never>?
+
+    func enqueue(_ operation: @escaping @MainActor @Sendable () async -> Void) {
+        let id = UUID()
+        let previousWrite = tail
+        let task = Task(priority: .userInitiated) { [weak self] in
             await previousWrite?.value
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  self?.entries[id] != nil else { return }
             await operation()
+            self?.finish(id)
+        }
+        entries[id] = Entry(task: task)
+        tail = task
+    }
+
+    func cancel() {
+        let tasks = entries.values.map(\.task)
+        entries.removeAll()
+        tail = nil
+        for task in tasks {
+            task.cancel()
         }
     }
 
     func waitForPendingWrites() async {
-        await pendingWrite?.value
+        await tail?.value
+    }
+
+    private func finish(_ id: UUID) {
+        entries.removeValue(forKey: id)
     }
 }

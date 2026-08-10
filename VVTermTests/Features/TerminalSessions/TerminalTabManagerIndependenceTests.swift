@@ -30,9 +30,70 @@ private final class IsolatedEternalTerminalResumeStore: EternalTerminalResumeSto
     func deleteResumeState(for paneId: UUID) throws {}
 }
 
+private actor TerminalOwnerReleaseCancellationProbe {
+    private var didStart = false
+    private var didObserveCancellation = false
+
+    func run() async {
+        didStart = true
+        while !Task.isCancelled {
+            await Task.yield()
+        }
+        didObserveCancellation = true
+    }
+
+    func waitUntilStarted() async -> Bool {
+        for _ in 0..<2_000 {
+            if didStart { return true }
+            await Task.yield()
+        }
+        return didStart
+    }
+
+    func waitUntilCancelled() async -> Bool {
+        for _ in 0..<2_000 {
+            if didObserveCancellation { return true }
+            await Task.yield()
+        }
+        return didObserveCancellation
+    }
+}
+
 @Suite(.serialized)
 @MainActor
 struct TerminalTabManagerIndependenceTests {
+    @Test
+    func ownerReleaseCancelsConnectionWorkWithoutRetainingManagerOrTransportOwner() async {
+        var manager: TerminalTabManager? = makeManager(
+            snapshotStore: InMemoryTerminalTabSnapshotStore()
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Owner release")
+        install(tab, in: manager!)
+        let probe = TerminalOwnerReleaseCancellationProbe()
+
+        #expect(manager?.transportCoordinator.startSSHConnectionTask(
+            for: tab.rootPaneId,
+            server: Server(
+                id: tab.serverId,
+                workspaceId: UUID(),
+                name: "Owner release",
+                host: "example.com",
+                username: "tester"
+            ),
+            client: SSHClient(),
+            operation: { _ in await probe.run() }
+        ) == true)
+        #expect(await probe.waitUntilStarted())
+
+        weak let releasedManager = manager
+        weak let releasedTransportOwner = manager?.transportCoordinator
+        manager = nil
+
+        #expect(releasedManager == nil)
+        #expect(releasedTransportOwner == nil)
+        #expect(await probe.waitUntilCancelled())
+    }
+
     @Test
     func managersDoNotSharePaneShellTmuxOrTerminalRegistrations() async throws {
         let first = makeManager(snapshotStore: InMemoryTerminalTabSnapshotStore())
@@ -74,8 +135,8 @@ struct TerminalTabManagerIndependenceTests {
 
         first.updatePaneState(tab.rootPaneId, connectionState: .connected)
         let client = SSHClient()
-        let startToken = try #require(first.beginShellStart(for: tab.rootPaneId, client: client))
-        #expect(await first.registerSSHClient(
+        let startToken = try #require(first.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client))
+        #expect(await first.transportCoordinator.registerSSHClient(
             client,
             shellId: UUID(),
             startToken: startToken,
@@ -91,8 +152,8 @@ struct TerminalTabManagerIndependenceTests {
 
         #expect(first.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .connected)
         #expect(second.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
-        #expect(first.activeSSHRoute(for: tab.rootPaneId)?.client === client)
-        #expect(second.activeSSHRoute(for: tab.rootPaneId) == nil)
+        #expect(first.transportCoordinator.activeSSHRoute(for: tab.rootPaneId)?.client === client)
+        #expect(second.transportCoordinator.activeSSHRoute(for: tab.rootPaneId) == nil)
         #expect(first.tmuxCoordinator.attachment(for: tab.rootPaneId)?.sessionName == "vvterm-isolated")
         #expect(second.tmuxCoordinator.attachment(for: tab.rootPaneId) == nil)
         #expect(
@@ -102,7 +163,7 @@ struct TerminalTabManagerIndependenceTests {
         #expect(first.connectedServerIds == [tab.serverId])
         #expect(second.connectedServerIds.isEmpty)
 
-        await first.unregisterSSHClient(for: tab.rootPaneId)
+        await first.transportCoordinator.unregisterSSHClient(for: tab.rootPaneId)
     }
 
     @Test

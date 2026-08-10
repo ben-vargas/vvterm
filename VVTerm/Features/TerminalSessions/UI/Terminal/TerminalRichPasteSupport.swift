@@ -249,7 +249,7 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
             sessionId: paneId,
             uiModel: uiModel,
             resolveConnectedSSHClient: {
-                if let route = tabManager.activeSSHRoute(for: paneId) {
+                if let route = tabManager.transportCoordinator.activeSSHRoute(for: paneId) {
                     return route.client
                 }
 

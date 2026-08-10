@@ -34,6 +34,7 @@ private final class TerminalMoshRecoveryStore: MoshResumeStoring {
 private final class TerminalMoshClientRecorder {
     var restoreError: Error?
     var checkpoint: MoshSnapshot?
+    var checkpointOperation: (@MainActor @Sendable () async -> MoshSnapshot?)?
     var backgroundCheckpoint: MoshSnapshot?
     private(set) var resumedShellIds: [UUID] = []
 
@@ -46,7 +47,10 @@ private final class TerminalMoshClientRecorder {
                 throw MoshSessionError.notStarted
             },
             checkpoint: { [weak self] _, _ in
-                self?.checkpoint
+                if let operation = self?.checkpointOperation {
+                    return await operation()
+                }
+                return self?.checkpoint
             },
             prepareForApplicationBackground: { [weak self] _, _ in
                 self?.backgroundCheckpoint
@@ -145,17 +149,51 @@ struct TerminalMoshRecoveryServiceTests {
         await service.prepareForApplicationBackground(
             for: paneId,
             using: sshClient,
-            shellId: shellId
+            shellId: shellId,
+            isCurrentOwner: { true }
         )
         await service.resumeFromApplicationBackground(
             for: paneId,
             using: sshClient,
-            shellId: shellId
+            shellId: shellId,
+            isCurrentOwner: { true }
         )
 
         #expect(client.resumedShellIds == [shellId])
         #expect(store.savedSnapshots.map(\.paneId) == [paneId, paneId])
         #expect(store.savedSnapshots.map(\.snapshot) == [Self.snapshot, Self.resumedSnapshot])
+    }
+
+    @Test
+    func staleCheckpointResultCannotOverwriteCurrentOwnerState() async {
+        let paneId = UUID()
+        let gate = TerminalMoshCheckpointGate()
+        let store = TerminalMoshRecoveryStore(snapshotResult: .success(nil))
+        let client = TerminalMoshClientRecorder()
+        client.checkpointOperation = {
+            await gate.block()
+            return Self.snapshot
+        }
+        let service = TerminalMoshRecoveryService(
+            store: store,
+            client: client.operations()
+        )
+        var isCurrentOwner = true
+
+        let task = Task {
+            await service.persistCheckpoint(
+                for: paneId,
+                using: SSHClient(),
+                shellId: UUID(),
+                isCurrentOwner: { isCurrentOwner }
+            )
+        }
+        await gate.waitUntilBlocked()
+        isCurrentOwner = false
+        await gate.release()
+        await task.value
+
+        #expect(store.savedSnapshots.isEmpty)
     }
 
     private static let snapshot = MoshSnapshot(
@@ -177,4 +215,34 @@ struct TerminalMoshRecoveryServiceTests {
         transportState: Data([4, 5, 6]),
         createdAtMs: 2
     )
+}
+
+private actor TerminalMoshCheckpointGate {
+    private var blocked = false
+    private var blockedWaiters: [CheckedContinuation<Void, Never>] = []
+    private var releaseWaiter: CheckedContinuation<Void, Never>?
+
+    func block() async {
+        blocked = true
+        let waiters = blockedWaiters
+        blockedWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+        await withCheckedContinuation { continuation in
+            releaseWaiter = continuation
+        }
+    }
+
+    func waitUntilBlocked() async {
+        guard !blocked else { return }
+        await withCheckedContinuation { continuation in
+            blockedWaiters.append(continuation)
+        }
+    }
+
+    func release() {
+        releaseWaiter?.resume()
+        releaseWaiter = nil
+    }
 }

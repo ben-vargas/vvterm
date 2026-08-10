@@ -103,12 +103,14 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
     func persistCheckpoint(
         for paneId: UUID,
         using sshClient: SSHClient,
-        shellId: UUID
+        shellId: UUID,
+        isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async {
         do {
             guard let snapshot = try await client.checkpoint(sshClient, shellId) else {
                 return
             }
+            guard isCurrentOwner() else { return }
             try store.save(snapshot, for: paneId)
         } catch {
             logger.warning(
@@ -120,7 +122,8 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
     func prepareForApplicationBackground(
         for paneId: UUID,
         using sshClient: SSHClient,
-        shellId: UUID
+        shellId: UUID,
+        isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async {
         do {
             guard let snapshot = try await client.prepareForApplicationBackground(
@@ -129,6 +132,7 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
             ) else {
                 return
             }
+            guard isCurrentOwner() else { return }
             try store.save(snapshot, for: paneId)
         } catch {
             logger.warning(
@@ -140,7 +144,8 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
     func resumeFromApplicationBackground(
         for paneId: UUID,
         using sshClient: SSHClient,
-        shellId: UUID
+        shellId: UUID,
+        isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async {
         do {
             try await client.resumeFromApplicationBackground(sshClient, shellId)
@@ -150,10 +155,12 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
             )
             return
         }
+        guard isCurrentOwner() else { return }
         await persistCheckpoint(
             for: paneId,
             using: sshClient,
-            shellId: shellId
+            shellId: shellId,
+            isCurrentOwner: isCurrentOwner
         )
     }
 

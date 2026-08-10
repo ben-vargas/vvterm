@@ -117,19 +117,44 @@ nonisolated struct EternalTerminalRecoveryProbe {
 }
 
 @MainActor
+struct EternalTerminalRuntimeOwnerAccess {
+    let isCurrent: @MainActor @Sendable (_ paneId: UUID, _ runtimeToken: UUID) -> Bool
+    let startupPlan: @MainActor @Sendable (
+        _ paneId: UUID,
+        _ serverId: UUID,
+        _ client: SSHClient,
+        _ runtimeToken: UUID
+    ) async throws -> TerminalShellStartupPlan
+    let resumeContext: @MainActor @Sendable (UUID) -> EternalTerminalTmuxResumeContext?
+    let setResumeContext: @MainActor @Sendable (UUID, EternalTerminalTmuxResumeContext?) -> Void
+    let updateConnectionState: @MainActor @Sendable (UUID, ConnectionState) -> Void
+    let markEternalTerminalTransport: @MainActor @Sendable (UUID) -> Void
+    let handleShellEnd: @MainActor @Sendable (UUID, UUID, TerminalShellEndReason) -> Void
+    let unregister: @MainActor @Sendable (UUID, UUID) async -> Void
+}
+
+@MainActor
 final class EternalTerminalRuntime {
+    private struct ConnectedStateWork {
+        let recoveryProbeID: UUID?
+        let cols: Int
+        let rows: Int
+        let pixelSize: TerminalPixelSize?
+    }
+
     let paneId: UUID
     let identityToken = UUID()
 
     private let server: Server
     private let sessionRequest: EternalTerminalSessionRequest
     private let dependencies: EternalTerminalRuntimeDependencies
-    private weak var tabManager: TerminalTabManager?
+    private let ownerAccess: EternalTerminalRuntimeOwnerAccess
     private var session: (any EternalTerminalSession)?
     private weak var outputSink: (any TerminalOutputSink)?
     private var outputTask: Task<Void, Never>?
     private var stateTask: Task<Void, Never>?
     private var connectTask: Task<Void, Never>?
+    private var connectAttemptID: UUID?
     private var reconnectEventActive = false
     private var failureReported = false
     private var networkRecoveryProbe = EternalTerminalRecoveryProbe()
@@ -146,12 +171,12 @@ final class EternalTerminalRuntime {
         paneId: UUID,
         server: Server,
         credentials: ServerCredentials,
-        tabManager: TerminalTabManager,
+        ownerAccess: EternalTerminalRuntimeOwnerAccess,
         dependencies: EternalTerminalRuntimeDependencies
     ) {
         self.paneId = paneId
         self.server = server
-        self.tabManager = tabManager
+        self.ownerAccess = ownerAccess
         self.dependencies = dependencies
         sessionRequest = EternalTerminalSessionRequest(
             paneId: paneId,
@@ -163,7 +188,7 @@ final class EternalTerminalRuntime {
     var isStartInFlight: Bool { connectTask != nil }
 
     private var isCurrentOwner: Bool {
-        tabManager?.isCurrentEternalTerminalRuntime(self, for: paneId) == true
+        ownerAccess.isCurrent(paneId, identityToken)
     }
 
     func abortConnection() {
@@ -181,40 +206,66 @@ final class EternalTerminalRuntime {
     func startIfNeeded() {
         guard connectTask == nil, stateTask == nil else { return }
 
+        let attemptID = UUID()
         let paneId = paneId
+        let serverId = server.id
         let host = server.host
         let port = server.eternalTerminalPort
+        let runtimeToken = identityToken
+        let sessionRequest = sessionRequest
+        let dependencies = dependencies
+        let ownerAccess = ownerAccess
 
         dependencies.record(.connectionAttempted)
-
+        connectAttemptID = attemptID
         connectTask = Task { [weak self] in
             do {
-                guard let self else { return }
-                let prepared = try await self.prepareSession()
+                let prepared = try await dependencies.sessionPreparer.prepareSession(
+                    request: sessionRequest,
+                    startupPlanProvider: { client in
+                        try await ownerAccess.startupPlan(
+                            paneId,
+                            serverId,
+                            client,
+                            runtimeToken
+                        )
+                    },
+                    isCurrentOwner: {
+                        ownerAccess.isCurrent(paneId, runtimeToken)
+                    }
+                )
                 guard !Task.isCancelled,
-                      self.isCurrentOwner else {
+                      self?.acceptPreparedSession(
+                        prepared,
+                        attemptID: attemptID,
+                        host: host,
+                        port: port
+                      ) == true else {
                     await prepared.session.close()
                     return
                 }
-                self.session = prepared.session
-                self.configureLifecycle(for: prepared.origin)
-                self.observe(prepared.session, host: host, port: port)
                 try await prepared.session.connect()
-                guard self.isCurrentOwner else {
-                    await prepared.session.close()
-                    return
+                guard ownerAccess.isCurrent(paneId, runtimeToken),
+                      self?.ownsConnectAttempt(
+                        attemptID
+                      ) == true else { return }
+                try? await prepared.session.persistCheckpoint {
+                    ownerAccess.isCurrent(paneId, runtimeToken)
                 }
-                await self.persistCheckpoint()
             } catch is CancellationError {
-                return
+                // The accepted session is closed by the owner that detached it.
             } catch {
-                guard let self else { return }
-                self.publishFailure(error, host: host, port: port)
+                self?.publishFailure(
+                    error,
+                    forConnectAttempt: attemptID,
+                    host: host,
+                    port: port
+                )
             }
-            self?.connectTask = nil
+            self?.finishConnectAttempt(attemptID)
         }
 
-        tabManager?.markEternalTerminalTransport(for: paneId)
+        ownerAccess.markEternalTerminalTransport(paneId)
     }
 
     func send(_ data: Data) {
@@ -342,6 +393,7 @@ final class EternalTerminalRuntime {
         outputTask?.cancel()
         stateTask?.cancel()
         connectTask = nil
+        connectAttemptID = nil
         outputTask = nil
         stateTask = nil
         networkRecoveryProbe.reset()
@@ -350,25 +402,41 @@ final class EternalTerminalRuntime {
         return activeSession
     }
 
-    private func prepareSession() async throws -> PreparedEternalTerminalSession {
-        let paneId = paneId
-        let server = server
-        let runtimeToken = identityToken
-        return try await dependencies.sessionPreparer.prepareSession(
-            request: sessionRequest,
-            startupPlanProvider: { [weak tabManager] client in
-                guard let tabManager else { throw CancellationError() }
-                return try await tabManager.tmuxCoordinator.eternalTerminalStartupPlan(
-                    for: paneId,
-                    serverId: server.id,
-                    client: client,
-                    runtimeToken: runtimeToken
-                )
-            },
-            isCurrentOwner: { [weak self] in
-                self?.isCurrentOwner == true
-            }
-        )
+    private func acceptPreparedSession(
+        _ prepared: PreparedEternalTerminalSession,
+        attemptID: UUID,
+        host: String,
+        port: Int
+    ) -> Bool {
+        guard connectAttemptID == attemptID, isCurrentOwner else { return false }
+        session = prepared.session
+        configureLifecycle(for: prepared.origin)
+        observe(prepared.session, host: host, port: port)
+        return true
+    }
+
+    private func ownsConnectAttempt(
+        _ attemptID: UUID
+    ) -> Bool {
+        connectAttemptID == attemptID
+            && session != nil
+            && isCurrentOwner
+    }
+
+    private func finishConnectAttempt(_ attemptID: UUID) {
+        guard connectAttemptID == attemptID else { return }
+        connectAttemptID = nil
+        connectTask = nil
+    }
+
+    private func publishFailure(
+        _ error: Error,
+        forConnectAttempt attemptID: UUID,
+        host: String,
+        port: Int
+    ) {
+        guard connectAttemptID == attemptID else { return }
+        publishFailure(error, host: host, port: port)
     }
 
     private func observe(
@@ -385,8 +453,23 @@ final class EternalTerminalRuntime {
 
         stateTask = Task { [weak self] in
             for await state in session.stateChanges {
-                guard !Task.isCancelled, let self else { return }
-                await self.handle(state, session: session, host: host, port: port)
+                guard !Task.isCancelled else { return }
+                guard let work = self?.beginHandling(
+                    state,
+                    host: host,
+                    port: port
+                ) else { continue }
+                do {
+                    try await session.resize(
+                        rows: work.rows,
+                        cols: work.cols,
+                        pixelWidth: work.pixelSize?.width,
+                        pixelHeight: work.pixelSize?.height
+                    )
+                    self?.finishConnectedState(work)
+                } catch {
+                    self?.publishFailure(error, host: host, port: port)
+                }
             }
         }
     }
@@ -394,21 +477,20 @@ final class EternalTerminalRuntime {
     private func configureLifecycle(for origin: EternalTerminalSessionOrigin) {
         guard origin == .resumed else { return }
         startupApplied = true
-        let context = tabManager?.eternalTerminalTmuxResumeContext(for: paneId)
+        let context = ownerAccess.resumeContext(paneId)
         tmuxLifecycle = context
         tmuxLifecycleParser = context.map {
             TmuxLifecycleStreamParser(markerToken: $0.markerToken)
         }
     }
 
-    private func handle(
+    private func beginHandling(
         _ state: EternalTerminalSessionState,
-        session: any EternalTerminalSession,
         host: String,
         port: Int
-    ) async {
+    ) -> ConnectedStateWork? {
         guard isCurrentOwner else {
-            return
+            return nil
         }
         let recoveryProbeIDAtEvent = networkRecoveryProbe.pendingID
         if state == .reconnecting || state == .disconnected {
@@ -418,76 +500,77 @@ final class EternalTerminalRuntime {
             }
         } else if state == .connected {
             reconnectEventActive = false
-            do {
-                if lastTerminalSize.cols > 0, lastTerminalSize.rows > 0 {
-                    try await session.resize(
-                        rows: lastTerminalSize.rows,
-                        cols: lastTerminalSize.cols,
-                        pixelWidth: lastTerminalSize.pixels?.width,
-                        pixelHeight: lastTerminalSize.pixels?.height
-                    )
-                    guard isCurrentOwner else { return }
-                    applyStartupPlanIfNeeded()
-                } else {
-                    logger.error("ET connected without a valid terminal grid")
-                    return
-                }
-            } catch {
-                publishFailure(error, host: host, port: port)
-                return
+            guard lastTerminalSize.cols > 0, lastTerminalSize.rows > 0 else {
+                logger.error("ET connected without a valid terminal grid")
+                return nil
             }
+            return ConnectedStateWork(
+                recoveryProbeID: recoveryProbeIDAtEvent,
+                cols: lastTerminalSize.cols,
+                rows: lastTerminalSize.rows,
+                pixelSize: lastTerminalSize.pixels
+            )
         }
 
         if case .failed(let error) = state {
             publishFailure(error, host: host, port: port)
-            return
+            return nil
         }
 
         guard let connectionState = EternalTerminalStatePolicy.connectionState(
             for: state,
             host: host,
             port: port
-        ) else { return }
+        ) else { return nil }
         guard isCurrentOwner else {
-            return
+            return nil
         }
-        if state == .connected {
-            networkRecoveryProbe.recordConnected(eventProbeID: recoveryProbeIDAtEvent)
-        }
-        tabManager?.updatePaneState(paneId, connectionState: connectionState)
-        tabManager?.markEternalTerminalTransport(for: paneId)
+        ownerAccess.updateConnectionState(paneId, connectionState)
+        ownerAccess.markEternalTerminalTransport(paneId)
+        return nil
+    }
+
+    private func finishConnectedState(_ work: ConnectedStateWork) {
+        guard isCurrentOwner else { return }
+        applyStartupPlanIfNeeded()
+        networkRecoveryProbe.recordConnected(eventProbeID: work.recoveryProbeID)
+        ownerAccess.updateConnectionState(paneId, .connected)
+        ownerAccess.markEternalTerminalTransport(paneId)
     }
 
     private func applyStartupPlanIfNeeded() {
         guard !startupApplied else { return }
         startupApplied = true
         guard let session else { return }
+        let host = server.host
+        let port = server.eternalTerminalPort
         Task { [weak self] in
             let plan = await session.preparedStartupPlan()
-            guard let self,
-                  self.isCurrentOwner else { return }
-            let resumeContext = plan.tmuxLifecycle.map {
-                EternalTerminalTmuxResumeContext(
-                    ownership: $0.ownership,
-                    markerToken: $0.markerToken
-                )
-            }
-            tmuxLifecycle = resumeContext
-            tmuxLifecycleParser = resumeContext.map {
-                TmuxLifecycleStreamParser(markerToken: $0.markerToken)
-            }
-            tabManager?.setEternalTerminalTmuxResumeContext(
-                resumeContext,
-                for: paneId
-            )
-            guard let command = plan.command,
-                  let data = "\(command)\r".data(using: .utf8) else { return }
+            guard let data = self?.acceptStartupPlan(plan) else { return }
             do {
                 try await session.send(data)
             } catch {
-                publishFailure(error, host: server.host, port: server.eternalTerminalPort)
+                self?.publishFailure(error, host: host, port: port)
             }
         }
+    }
+
+    private func acceptStartupPlan(_ plan: TerminalShellStartupPlan) -> Data? {
+        guard isCurrentOwner else { return nil }
+        let resumeContext = plan.tmuxLifecycle.map {
+            EternalTerminalTmuxResumeContext(
+                ownership: $0.ownership,
+                markerToken: $0.markerToken
+            )
+        }
+        tmuxLifecycle = resumeContext
+        tmuxLifecycleParser = resumeContext.map {
+            TmuxLifecycleStreamParser(markerToken: $0.markerToken)
+        }
+        ownerAccess.setResumeContext(paneId, resumeContext)
+        guard let command = plan.command,
+              let data = "\(command)\r".data(using: .utf8) else { return nil }
+        return data
     }
 
     private func consumeOutput(_ data: Data) {
@@ -513,12 +596,11 @@ final class EternalTerminalRuntime {
         case .creationFailed:
             reason = .tmuxCreationFailed
         }
-        tabManager?.handleShellEnd(for: paneId, reason: reason)
-        Task { [weak tabManager] in
-            await tabManager?.unregisterEternalTerminalRuntime(
-                for: paneId,
-                ifOwnedBy: self
-            )
+        ownerAccess.handleShellEnd(paneId, identityToken, reason)
+        let runtimeToken = identityToken
+        let ownerAccess = ownerAccess
+        Task {
+            await ownerAccess.unregister(paneId, runtimeToken)
         }
     }
 
@@ -547,14 +629,14 @@ final class EternalTerminalRuntime {
                 )
             )
         }
-        tabManager?.updatePaneState(
+        ownerAccess.updateConnectionState(
             paneId,
-            connectionState: .failed(.eternalTerminal(
+            .failed(.eternalTerminal(
                 failure: failure,
                 host: host,
                 port: port
             ))
         )
-        tabManager?.markEternalTerminalTransport(for: paneId)
+        ownerAccess.markEternalTerminalTransport(paneId)
     }
 }

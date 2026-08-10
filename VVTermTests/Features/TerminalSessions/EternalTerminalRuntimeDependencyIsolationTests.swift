@@ -4,15 +4,6 @@ import Testing
 @testable import VVTerm
 
 @MainActor
-private final class EternalTerminalDependencySnapshotStore: TerminalTabSnapshotStoring {
-    private var data: Data?
-
-    func loadSnapshotData() -> Data? { data }
-    func saveSnapshotData(_ data: Data) { self.data = data }
-    func removeSnapshotData() { data = nil }
-}
-
-@MainActor
 private final class EternalTerminalEventRecorder {
     private(set) var events: [EternalTerminalRuntimeEvent] = []
 
@@ -61,9 +52,139 @@ private struct FailingEternalTerminalSessionPreparer: EternalTerminalSessionPrep
     func discardResumeState(for paneId: UUID) throws {}
 }
 
+private actor EternalTerminalConnectGate {
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func waitIgnoringCancellation() async {
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func waitForCount(_ count: Int) async -> Bool {
+        for _ in 0..<2_000 {
+            if continuations.count >= count { return true }
+            await Task.yield()
+        }
+        return continuations.count >= count
+    }
+
+    func release(at index: Int) {
+        continuations[index].resume()
+    }
+}
+
+private actor BlockingEternalTerminalSession: EternalTerminalSession {
+    nonisolated let output = AsyncStream<Data> { _ in }
+    nonisolated let stateChanges = AsyncStream<EternalTerminalSessionState> { _ in }
+
+    private let connectGate: EternalTerminalConnectGate
+    private var closeCalls = 0
+
+    init(connectGate: EternalTerminalConnectGate) {
+        self.connectGate = connectGate
+    }
+
+    func connect() async throws {
+        await connectGate.waitIgnoringCancellation()
+    }
+
+    func send(_ data: Data) async throws {}
+
+    func resize(
+        rows: Int,
+        cols: Int,
+        pixelWidth: Int?,
+        pixelHeight: Int?
+    ) async throws {}
+
+    func notifyNetworkPathChanged() async {}
+
+    func persistCheckpoint(
+        ifCurrentOwner: @MainActor @Sendable @escaping () -> Bool
+    ) async throws {}
+
+    func prepareForApplicationBackground(
+        ifCurrentOwner: @MainActor @Sendable @escaping () -> Bool
+    ) async throws {}
+
+    func resumeFromApplicationBackground() async {}
+    func preparedStartupPlan() async -> TerminalShellStartupPlan { .plainShell }
+
+    func withBootstrapSSHClient<Result: Sendable>(
+        _ operation: @Sendable (SSHClient) async throws -> Result
+    ) async throws -> Result {
+        try await operation(SSHClient())
+    }
+
+    func close() async {
+        closeCalls += 1
+    }
+
+    func closeCount() -> Int { closeCalls }
+}
+
+@MainActor
+private final class SequencedEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
+    private let sessions: [BlockingEternalTerminalSession]
+    private var nextIndex = 0
+
+    init(sessions: [BlockingEternalTerminalSession]) {
+        self.sessions = sessions
+    }
+
+    func prepareSession(
+        request: EternalTerminalSessionRequest,
+        startupPlanProvider: @Sendable @escaping (SSHClient) async throws -> TerminalShellStartupPlan,
+        isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
+    ) async throws -> PreparedEternalTerminalSession {
+        guard sessions.indices.contains(nextIndex) else { throw CancellationError() }
+        let session = sessions[nextIndex]
+        nextIndex += 1
+        return PreparedEternalTerminalSession(session: session, origin: .bootstrapped)
+    }
+
+    func discardResumeState(for paneId: UUID) throws {}
+}
+
 @Suite(.serialized)
 @MainActor
 struct EternalTerminalRuntimeDependencyIsolationTests {
+    @Test
+    func cancelledConnectCannotClearReplacementOrCloseAnAcceptedSessionTwice() async {
+        let gate = EternalTerminalConnectGate()
+        let firstSession = BlockingEternalTerminalSession(connectGate: gate)
+        let replacementSession = BlockingEternalTerminalSession(connectGate: gate)
+        let events = EternalTerminalEventRecorder()
+        let dependencies = EternalTerminalRuntimeDependencies(
+            recordEvent: { [events] event in events.record(event) },
+            tmuxSessionKiller: EternalTerminalTmuxKillRecorder(),
+            sessionPreparer: SequencedEternalTerminalSessionPreparer(
+                sessions: [firstSession, replacementSession]
+            )
+        )
+        let runtime = makeRuntime(dependencies: dependencies)
+
+        runtime.startIfNeeded()
+        #expect(await gate.waitForCount(1))
+        runtime.abortConnection()
+        runtime.startIfNeeded()
+        #expect(await gate.waitForCount(2))
+
+        await gate.release(at: 0)
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(runtime.isStartInFlight)
+        #expect(await firstSession.closeCount() == 1)
+
+        await runtime.close()
+        await gate.release(at: 1)
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(await firstSession.closeCount() == 1)
+        #expect(await replacementSession.closeCount() == 1)
+    }
+
     @Test
     func runtimesAndPortsKeepEffectsAndTmuxKillsWithTheirOwners() async {
         let firstEvents = EternalTerminalEventRecorder()
@@ -72,14 +193,10 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
         let secondTmux = EternalTerminalTmuxKillRecorder()
         let firstDependencies = dependencies(events: firstEvents, tmux: firstTmux)
         let secondDependencies = dependencies(events: secondEvents, tmux: secondTmux)
-        let firstManager = makeManager()
-        let secondManager = makeManager()
         let firstRuntime = makeRuntime(
-            manager: firstManager,
             dependencies: firstDependencies
         )
         let secondRuntime = makeRuntime(
-            manager: secondManager,
             dependencies: secondDependencies
         )
 
@@ -103,8 +220,6 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
 
         await firstRuntime.close()
         await secondRuntime.close()
-        await firstManager.resetForTesting()
-        await secondManager.resetForTesting()
     }
 
     private func dependencies(
@@ -121,7 +236,6 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
     }
 
     private func makeRuntime(
-        manager: TerminalTabManager,
         dependencies: EternalTerminalRuntimeDependencies
     ) -> EternalTerminalRuntime {
         let server = Server(
@@ -134,20 +248,17 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
             paneId: UUID(),
             server: server,
             credentials: ServerCredentials(serverId: server.id),
-            tabManager: manager,
+            ownerAccess: EternalTerminalRuntimeOwnerAccess(
+                isCurrent: { _, _ in true },
+                startupPlan: { _, _, _, _ in throw CancellationError() },
+                resumeContext: { _ in nil },
+                setResumeContext: { _, _ in },
+                updateConnectionState: { _, _ in },
+                markEternalTerminalTransport: { _ in },
+                handleShellEnd: { _, _, _ in },
+                unregister: { _, _ in }
+            ),
             dependencies: dependencies
-        )
-    }
-
-    private func makeManager() -> TerminalTabManager {
-        TerminalTabManager(
-            snapshotStore: EternalTerminalDependencySnapshotStore(),
-            networkReadinessPublisher: nil,
-            liveActivityRefresh: { _ in },
-            tmuxCoordinator: TerminalTmuxSessionCoordinator(),
-            terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
-            eternalTerminalResumeStore: FailingEternalTerminalResumeStore(),
-            moshRecovery: UnavailableTerminalMoshRecoveryService()
         )
     }
 }

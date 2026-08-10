@@ -2,8 +2,8 @@ import CoreGraphics
 import Foundation
 
 /// Selects one application transport coordinator per pane. Transport state is
-/// retained by TerminalTabManager so view reconstruction cannot replace a live
-/// session.
+/// retained by the app-scoped transport owner so view reconstruction cannot
+/// replace a live session.
 @MainActor
 final class TerminalPaneConnectionCoordinator {
     private enum Backend {
@@ -55,11 +55,11 @@ final class TerminalPaneConnectionCoordinator {
     }
 
     var hasLiveConnection: Bool {
-        tabManager.hasLiveTransport(for: paneId)
+        tabManager.transportCoordinator.hasLiveTransport(for: paneId)
     }
 
     var isConnectionStartInFlight: Bool {
-        tabManager.isTransportStartInFlight(for: paneId)
+        tabManager.transportCoordinator.isTransportStartInFlight(for: paneId)
     }
 
     func installRichPasteInterception(on terminal: any TerminalSurface) {
@@ -122,7 +122,7 @@ private final class EternalTerminalPaneCoordinator {
     }
 
     func start(terminal: any TerminalSurface) {
-        let runtime = tabManager.eternalTerminalRuntime(
+        let runtime = tabManager.transportCoordinator.eternalTerminalRuntime(
             for: paneId,
             server: server,
             credentials: credentials
@@ -138,11 +138,11 @@ private final class EternalTerminalPaneCoordinator {
     }
 
     func send(_ data: Data) {
-        tabManager.sendEternalTerminalInput(data, for: paneId)
+        tabManager.transportCoordinator.sendEternalTerminalInput(data, for: paneId)
     }
 
     func handleResize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
-        tabManager.resizeEternalTerminal(
+        tabManager.transportCoordinator.resizeEternalTerminal(
             for: paneId,
             cols: cols,
             rows: rows,
@@ -151,7 +151,8 @@ private final class EternalTerminalPaneCoordinator {
     }
 
     func cancel() {
-        guard tabManager.sessionState.paneState(for: paneId) == nil else { return }
-        Task { await tabManager.unregisterEternalTerminalRuntime(for: paneId) }
+        tabManager.transportCoordinator.unregisterEternalTerminalRuntimeIfPaneWasRemoved(
+            for: paneId
+        )
     }
 }

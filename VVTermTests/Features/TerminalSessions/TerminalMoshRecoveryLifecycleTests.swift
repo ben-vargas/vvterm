@@ -39,19 +39,22 @@ private final class RecordingTerminalMoshRecoveryService: TerminalMoshRecoverySe
     func persistCheckpoint(
         for paneId: UUID,
         using client: SSHClient,
-        shellId: UUID
+        shellId: UUID,
+        isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async {}
 
     func prepareForApplicationBackground(
         for paneId: UUID,
         using client: SSHClient,
-        shellId: UUID
+        shellId: UUID,
+        isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async {}
 
     func resumeFromApplicationBackground(
         for paneId: UUID,
         using client: SSHClient,
-        shellId: UUID
+        shellId: UUID,
+        isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async {}
 
     func deleteCheckpoint(for paneId: UUID) throws {

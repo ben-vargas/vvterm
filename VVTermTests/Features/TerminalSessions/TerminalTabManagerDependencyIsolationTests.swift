@@ -160,7 +160,7 @@ struct TerminalTabManagerDependencyIsolationTests {
         install(tab, in: manager)
         let client = SSHClient()
         let startToken = try #require(
-            manager.beginShellStart(for: tab.rootPaneId, client: client)
+            manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
         )
 
         let plan = try await manager.tmuxCoordinator.startupPlan(
@@ -173,7 +173,7 @@ struct TerminalTabManagerDependencyIsolationTests {
         #expect(plan.command == nil)
         #expect(plan.tmuxLifecycle == nil)
         #expect(await remoteTmux.availabilityProbeCount() == 0)
-        manager.finishShellStart(
+        manager.transportCoordinator.finishShellStart(
             for: tab.rootPaneId,
             client: client,
             startToken: startToken
@@ -231,9 +231,9 @@ struct TerminalTabManagerDependencyIsolationTests {
 
         let client = SSHClient()
         let startToken = try #require(
-            first.beginShellStart(for: tab.rootPaneId, client: client)
+            first.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
         )
-        #expect(await first.registerSSHClient(
+        #expect(await first.transportCoordinator.registerSSHClient(
             client,
             shellId: UUID(),
             startToken: startToken,
@@ -246,12 +246,12 @@ struct TerminalTabManagerDependencyIsolationTests {
             ownership: .managed
         )
 
-        try await first.installMoshServer(for: tab.rootPaneId)
+        try await first.transportCoordinator.installMoshServer(for: tab.rootPaneId)
         first.tmuxCoordinator.killIfNeeded(for: tab.rootPaneId)
         #expect(await waitUntil {
             await firstTmux.killedSessionNames() == ["first-session"]
         })
-        await first.unregisterSSHClient(for: tab.rootPaneId)
+        await first.transportCoordinator.unregisterSSHClient(for: tab.rootPaneId)
         first.closeTab(tab)
 
         #expect(firstEffects.liveActivityRefreshCount > 1)

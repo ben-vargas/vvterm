@@ -274,7 +274,7 @@ struct ConnectionTerminalContainer: View {
                 server: server,
                 isVisible: true,
                 backgroundColor: liveTerminalBackgroundColor,
-                sharedClientProvider: { tabManager.sharedStatsClient(for: server.id) },
+                sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
                 dependencies: statsDependencies,
                 isDockerUnlocked: storeManager.isPro
             )
@@ -287,7 +287,7 @@ struct ConnectionTerminalContainer: View {
             server: server,
             isVisible: selectedView == .stats,
             backgroundColor: liveTerminalBackgroundColor,
-            sharedClientProvider: { tabManager.sharedStatsClient(for: server.id) },
+            sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
             dependencies: statsDependencies,
             isDockerUnlocked: storeManager.isPro
         )

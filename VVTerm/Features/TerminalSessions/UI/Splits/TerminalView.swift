@@ -237,11 +237,11 @@ struct TerminalTabView: View {
     }
 
     private func handlePaneExit(paneId: UUID) {
-        let startToken = tabManager.connectionOwnershipToken(for: paneId)
+        let startToken = tabManager.transportCoordinator.connectionOwnershipToken(for: paneId)
         tabManager.updatePaneState(paneId, connectionState: .disconnected)
         guard let startToken else { return }
         Task {
-            await tabManager.unregisterSSHClient(
+            await tabManager.transportCoordinator.unregisterSSHClient(
                 for: paneId,
                 ifOwnedBy: startToken
             )
@@ -831,7 +831,7 @@ struct TerminalPaneView: View {
         }
         .onChange(of: networkMonitor.readiness) { readiness in
             if readiness == .ready {
-                tabManager.notifyEternalTerminalNetworkPathChanged(for: paneId)
+                tabManager.transportCoordinator.notifyEternalTerminalNetworkPathChanged(for: paneId)
             }
             reconcileAutomaticReconnect()
         }
@@ -1185,12 +1185,12 @@ struct TerminalPaneView: View {
                 return
             }
 
-            if tabManager.hasLiveTransport(for: paneId), connectionState.isConnected {
+            if tabManager.transportCoordinator.hasLiveTransport(for: paneId), connectionState.isConnected {
                 tabManager.updatePaneState(paneId, connectionState: .connected)
                 return
             }
 
-            let inFlight = tabManager.isTransportStartInFlight(for: paneId)
+            let inFlight = tabManager.transportCoordinator.isTransportStartInFlight(for: paneId)
             if inFlight {
                 // Keep polling while a shell start is still in flight so stale locks
                 // and hung attempts are eventually surfaced to the user.
@@ -1212,7 +1212,7 @@ struct TerminalPaneView: View {
         defer { isInstallingMosh = false }
 
         do {
-            try await tabManager.installMoshServer(for: paneId)
+            try await tabManager.transportCoordinator.installMoshServer(for: paneId)
             operationNotice = nil
             retryConnection()
         } catch {

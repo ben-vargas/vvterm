@@ -131,7 +131,7 @@ struct EternalTerminalResumeCredentialStoreTests {
 
         do {
             let store = InMemoryETResumeStore()
-            manager.setEternalTerminalResumeStoreForTesting(store)
+            manager.transportCoordinator.setEternalTerminalResumeStoreForTesting(store)
 
             let serverId = UUID()
             let firstTab = TerminalTab(serverId: serverId, title: "Close")
@@ -158,7 +158,9 @@ struct EternalTerminalResumeCredentialStoreTests {
                 ownership: .managed,
                 markerToken: "safe-marker"
             )
-            manager.setEternalTerminalTmuxResumeContext(lifecycle, for: secondTab.rootPaneId)
+            manager.sessionState.updatePane(secondTab.rootPaneId, persist: true) {
+                $0.eternalTerminalTmuxResumeContext = lifecycle
+            }
 
             let snapshot = try manager.snapshotDataForTesting()
             let snapshotText = String(decoding: snapshot, as: UTF8.self)
@@ -172,7 +174,7 @@ struct EternalTerminalResumeCredentialStoreTests {
 
             manager.persistAndRestoreSnapshotForTesting()
             #expect(
-                manager.eternalTerminalTmuxResumeContext(for: secondTab.rootPaneId)
+                manager.sessionState.paneState(for: secondTab.rootPaneId)?.eternalTerminalTmuxResumeContext
                     == lifecycle
             )
         } catch {

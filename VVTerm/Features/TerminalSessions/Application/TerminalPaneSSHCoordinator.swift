@@ -11,8 +11,6 @@ final class TerminalPaneSSHCoordinator {
 
     private let richPasteRuntime: TerminalRichPasteRuntime
     private let failureOutput: @MainActor @Sendable (TerminalConnectionFailure) -> Data?
-    private let transportWriteQueue = TerminalTransportWriteQueue()
-    private var lastTerminalSize: (cols: Int, rows: Int, pixels: TerminalPixelSize?) = (0, 0, nil)
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "SSHPane")
 
     init(
@@ -45,58 +43,22 @@ final class TerminalPaneSSHCoordinator {
 
     @MainActor
     func sendToSSH(_ data: Data) {
-        guard let route = Self.sshRoute(
-            paneId: paneId,
-            tabManager: tabManager
-        ) else {
-            return
-        }
-        let logger = logger
-        transportWriteQueue.enqueue {
-            do {
-                try await route.client.write(data, to: route.shellId)
-            } catch {
-                logger.error("Failed to send to SSH: \(error.localizedDescription)")
-            }
-        }
+        tabManager.transportCoordinator.sendSSHInput(data, for: paneId)
     }
 
     @MainActor
     func handleResize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
-        guard cols > 0 && rows > 0 else { return }
-        guard let route = Self.sshRoute(
-            paneId: paneId,
-            tabManager: tabManager
-        ) else { return }
-        guard cols != lastTerminalSize.cols
-                || rows != lastTerminalSize.rows
-                || pixelSize != lastTerminalSize.pixels else { return }
-        lastTerminalSize = (cols, rows, pixelSize)
-
-        Task(priority: .userInitiated) { [logger] in
-            do {
-                try await route.client.resize(
-                    cols: cols,
-                    rows: rows,
-                    pixelSize: pixelSize,
-                    for: route.shellId
-                )
-            } catch {
-                logger.warning("Failed to resize PTY: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private static func sshRoute(
-        paneId: UUID,
-        tabManager: TerminalTabManager
-    ) -> (client: SSHClient, shellId: UUID)? {
-        tabManager.activeSSHRoute(for: paneId)
+        tabManager.transportCoordinator.resizeSSH(
+            for: paneId,
+            cols: cols,
+            rows: rows,
+            pixelSize: pixelSize
+        )
     }
 
     func startSSHConnection(terminal: any TerminalSurface) {
         let paneId = self.paneId
-        if tabManager.activeSSHRoute(for: paneId) != nil {
+        if tabManager.transportCoordinator.activeSSHRoute(for: paneId) != nil {
             tabManager.updatePaneState(paneId, connectionState: .connected)
             logger.debug("Reusing existing shell for pane \(paneId.uuidString, privacy: .public)")
             return
@@ -111,7 +73,7 @@ final class TerminalPaneSSHCoordinator {
         let initialTerminalState = Self.initialTerminalState(for: terminal)
         let hasEstablishedConnection = tabManager.sessionState
             .paneState(for: paneId)?.hasEstablishedConnection == true
-        guard tabManager.startSSHConnectionTask(
+        guard tabManager.transportCoordinator.startSSHConnectionTask(
             for: paneId,
             server: server,
             client: sshClient,
@@ -139,7 +101,7 @@ final class TerminalPaneSSHCoordinator {
                 )
             }
         ) else {
-            if tabManager.activeSSHRoute(for: paneId) != nil {
+            if tabManager.transportCoordinator.activeSSHRoute(for: paneId) != nil {
                 tabManager.updatePaneState(paneId, connectionState: .connected)
             }
             logger.debug("Shell start already in progress for pane \(paneId.uuidString, privacy: .public)")

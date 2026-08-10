@@ -99,9 +99,9 @@ struct ActiveServerSummary: Identifiable {
                 status: state.map {
                     let hasResumeCheckpoint = switch configuredServer?.connectionMode {
                     case .eternalTerminal:
-                        tabManager.hasEternalTerminalCheckpoint(for: $0.paneId)
+                        tabManager.transportCoordinator.hasEternalTerminalCheckpoint(for: $0.paneId)
                     case .mosh:
-                        tabManager.hasMoshCheckpoint(for: $0.paneId)
+                        tabManager.transportCoordinator.hasMoshCheckpoint(for: $0.paneId)
                     case .standard, .tailscale, .cloudflare, .none:
                         false
                     }

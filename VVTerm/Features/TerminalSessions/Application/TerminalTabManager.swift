@@ -56,7 +56,7 @@ final class TerminalTabManager: ObservableObject {
     var connectedServerIds: Set<UUID> {
         Set(sessionState.allPaneStates.compactMap { state in
             guard state.connectionState.isConnected,
-                  transportRegistry.hasLiveTransport(for: state.paneId) else {
+                  transportCoordinator.hasLiveTransport(for: state.paneId) else {
                 return nil
             }
             return state.serverId
@@ -66,12 +66,7 @@ final class TerminalTabManager: ObservableObject {
     // MARK: - Terminal Registry
 
     let terminalSurfaceStore: any TerminalSurfaceStoring
-    private let transportRegistry = TerminalTransportRegistry<EternalTerminalRuntime>(
-        staleShellStartThreshold: 120
-    )
-    private var eternalTerminalResumeStore: any EternalTerminalResumeStoring
-    private let defaultEternalTerminalResumeStore: any EternalTerminalResumeStoring
-    private let moshRecovery: any TerminalMoshRecoveryServicing
+    private(set) var transportCoordinator: TerminalTransportCoordinator!
     lazy var reconnectCoordinator = makeReconnectCoordinator()
     /// Server IDs with an in-flight tab-open request to avoid queued duplicates.
     private var tabOpensInFlight: Set<UUID> = []
@@ -109,53 +104,117 @@ final class TerminalTabManager: ObservableObject {
             tmuxCoordinator: tmuxCoordinator
         )
         self.terminalSurfaceStore = terminalSurfaceStore
-        self.eternalTerminalResumeStore = eternalTerminalResumeStore
-        self.defaultEternalTerminalResumeStore = eternalTerminalResumeStore
-        self.moshRecovery = moshRecovery
+        transportCoordinator = TerminalTransportCoordinator(
+            eternalTerminalResumeStore: eternalTerminalResumeStore,
+            moshRecovery: moshRecovery,
+            remoteMosh: dependencies.remoteMosh,
+            eternalTerminalRuntimeDependencies: dependencies.eternalTerminalRuntime,
+            sessionAccess: TerminalTransportSessionAccess(
+                paneState: { [weak self] paneId in
+                    self?.sessionState.paneState(for: paneId)
+                },
+                allPaneStates: { [weak self] in
+                    self?.sessionState.allPaneStates ?? []
+                },
+                selectedTab: { [weak self] serverId in
+                    self?.sessionState.selectedTab(for: serverId)
+                },
+                tabs: { [weak self] serverId in
+                    self?.sessionState.tabs(for: serverId) ?? []
+                },
+                containsPane: { [weak self] paneId in
+                    self?.sessionState.containsPane(paneId) == true
+                },
+                updateActiveTransport: { [weak self] paneId, state in
+                    self?.setPaneTransport(state, for: paneId)
+                },
+                updateEternalTerminalResumeContext: { [weak self] paneId, context in
+                    self?.setEternalTerminalTmuxResumeContext(context, for: paneId)
+                },
+                updateConnectionState: { [weak self] paneId, state in
+                    self?.updatePaneState(paneId, connectionState: state)
+                },
+                updateTitle: { [weak self] paneId, title in
+                    self?.updatePaneTitle(paneId, rawTitle: title)
+                },
+                handleShellEnd: { [weak self] paneId, reason, ownership in
+                    self?.handleShellEnd(
+                        for: paneId,
+                        reason: reason,
+                        ownership: ownership
+                    )
+                },
+                workingDirectory: { [weak self] paneId in
+                    self?.workingDirectory(for: paneId)
+                },
+                shouldApplyWorkingDirectory: { [weak self] paneId in
+                    self?.shouldApplyWorkingDirectory(for: paneId) == true
+                }
+            ),
+            tmuxAccess: TerminalTransportTmuxAccess(
+                cancelPrompt: { [weak tmuxCoordinator] requestId in
+                    tmuxCoordinator?.cancelPrompt(requestId: requestId)
+                },
+                startupPlan: { [weak tmuxCoordinator] paneId, serverId, client, startToken in
+                    guard let tmuxCoordinator else { throw CancellationError() }
+                    return try await tmuxCoordinator.startupPlan(
+                        for: paneId,
+                        serverId: serverId,
+                        client: client,
+                        startToken: startToken
+                    )
+                },
+                eternalTerminalStartupPlan: { [weak tmuxCoordinator] paneId, serverId, client, token in
+                    guard let tmuxCoordinator else { throw CancellationError() }
+                    return try await tmuxCoordinator.eternalTerminalStartupPlan(
+                        for: paneId,
+                        serverId: serverId,
+                        client: client,
+                        runtimeToken: token
+                    )
+                },
+                killSSHSession: { [weak tmuxCoordinator] name, client in
+                    await tmuxCoordinator?.killSession(named: name, using: client)
+                },
+                killEternalTerminalSession: { [weak tmuxCoordinator] name, runtime in
+                    await tmuxCoordinator?.killSession(named: name, using: runtime)
+                }
+            )
+        )
         tmuxCoordinator.bind(
             sessionState: sessionState,
             transportAccess: TerminalTmuxTransportAccess(
                 shellRegistration: { [weak self] paneId in
-                    self?.transportRegistry.shellRegistration(for: paneId).map {
-                        TerminalTmuxShellRegistration(
-                            client: $0.client,
-                            shellId: $0.shellId,
-                            serverId: $0.serverId
-                        )
-                    }
+                    self?.transportCoordinator.tmuxShellRegistration(for: paneId)
                 },
                 ownsShell: { [weak self] paneId, registration in
-                    self?.transportRegistry.ownsShell(
-                        client: registration.client,
-                        shellId: registration.shellId,
-                        for: paneId
-                    ) == true
+                    self?.transportCoordinator.ownsShell(registration, for: paneId) == true
                 },
                 ownsShellStart: { [weak self] paneId, client, startToken in
-                    self?.isCurrentShellOwner(
+                    self?.transportCoordinator.isCurrentShellOwner(
                         for: paneId,
                         client: client,
                         startToken: startToken
                     ) == true
                 },
                 eternalTerminalRuntime: { [weak self] paneId in
-                    self?.transportRegistry.runtime(for: paneId)
+                    self?.transportCoordinator.existingEternalTerminalRuntime(for: paneId)
                 },
                 ownsEternalTerminalRuntime: { [weak self] paneId, runtime in
-                    self?.isCurrentEternalTerminalRuntime(runtime, for: paneId) == true
+                    self?.transportCoordinator.isCurrentEternalTerminalRuntime(runtime, for: paneId) == true
                 },
                 ownsEternalTerminalRuntimeToken: { [weak self] paneId, token in
-                    self?.isCurrentEternalTerminalRuntime(token: token, for: paneId) == true
+                    self?.transportCoordinator.isCurrentEternalTerminalRuntime(token: token, for: paneId) == true
                 },
                 unregisterShell: { [weak self] paneId, registration in
-                    await self?.unregisterSSHClient(
+                    await self?.transportCoordinator.unregisterSSHClient(
                         for: paneId,
                         ifOwnedBy: registration.client,
                         shellId: registration.shellId
                     )
                 },
                 unregisterEternalTerminalRuntime: { [weak self] paneId in
-                    await self?.unregisterEternalTerminalRuntime(for: paneId)
+                    await self?.transportCoordinator.unregisterEternalTerminalRuntime(for: paneId)
                 }
             )
         )
@@ -208,7 +267,7 @@ final class TerminalTabManager: ObservableObject {
                 self?.sessionState.paneStates(forServer: serverId).map(\.paneId) ?? []
             },
             prepareTransport: { [weak self] paneId in
-                await self?.prepareTransportForReconnect(paneId)
+                await self?.transportCoordinator.prepareTransportForReconnect(paneId)
             },
             startConnection: { [weak self] paneId in
                 self?.startReconnectConnection(paneId) == true
@@ -223,10 +282,10 @@ final class TerminalTabManager: ObservableObject {
                 self?.macRecoveryCandidates ?? []
             },
             beginEternalTerminalProbe: { [weak self] paneId in
-                await self?.beginEternalTerminalNetworkRecoveryProbe(for: paneId)
+                await self?.transportCoordinator.beginEternalTerminalNetworkRecoveryProbe(for: paneId)
             },
             hasVerifiedLiveTransport: { [weak self] paneId, probeID in
-                await self?.hasVerifiedLiveTransport(
+                await self?.transportCoordinator.hasVerifiedLiveTransport(
                     for: paneId,
                     eternalTerminalProbeID: probeID
                 ) == true
@@ -247,7 +306,7 @@ final class TerminalTabManager: ObservableObject {
                 self?.sessionState.paneStates(forServer: serverId).map(\.paneId) ?? []
             },
             prepareTransport: { [weak self] paneId in
-                await self?.prepareTransportForReconnect(paneId)
+                await self?.transportCoordinator.prepareTransportForReconnect(paneId)
             },
             startConnection: { [weak self] paneId in
                 self?.startReconnectConnection(paneId) == true
@@ -336,22 +395,6 @@ final class TerminalTabManager: ObservableObject {
 
     private func setPaneTransport(_ state: ShellTransportState, for paneId: UUID) {
         sessionState.updatePane(paneId) { $0.transportState = state }
-    }
-
-    private func handleStaleShellStartContext(
-        _ staleContext: SSHShellRegistry.StartContext?,
-        logMessage: StaticString,
-        paneId: UUID
-    ) {
-        guard let staleContext else { return }
-
-        logger.warning("\(logMessage) \(paneId.uuidString, privacy: .public)")
-        tmuxCoordinator.cancelPrompt(requestId: staleContext.token.id)
-        if !transportRegistry.hasClientReferences(staleContext.client) {
-            Task.detached(priority: .utility) { [client = staleContext.client] in
-                await client.disconnect()
-            }
-        }
     }
 
     // MARK: - Tab Management
@@ -502,11 +545,7 @@ final class TerminalTabManager: ObservableObject {
     @discardableResult
     func beginApplicationTermination() -> Task<Void, Never> {
         let paneIds = sessionState.prepareForApplicationTermination()
-            .union(transportRegistry.ownedPaneIds)
-
-        for paneId in paneIds {
-            transportRegistry.cancelConnectionTask(for: paneId)
-        }
+            .union(transportCoordinator.ownedPaneIds)
         reconnectCoordinator.prepareForApplicationTermination()
         tabOpensInFlight.removeAll()
         for paneId in paneIds {
@@ -515,14 +554,7 @@ final class TerminalTabManager: ObservableObject {
         runtimeTitleByPane.removeAll()
 
         logger.info("Preserved terminal tabs while releasing application runtime state")
-        return Task { [weak self] in
-            guard let self else { return }
-            await self.prepareResumableSessionsForApplicationBackground()
-            for paneId in paneIds {
-                await self.unregisterSSHClient(for: paneId)
-                await self.unregisterEternalTerminalRuntime(for: paneId)
-            }
-        }
+        return transportCoordinator.beginApplicationTermination(paneIds: paneIds)
     }
 
     private func reconnectPaneFacts(for paneId: UUID) -> TerminalReconnectPaneFacts? {
@@ -535,44 +567,6 @@ final class TerminalTabManager: ObservableObject {
     }
 
     #if os(macOS)
-    func hasVerifiedLiveTransport(
-        for paneId: UUID,
-        eternalTerminalProbeID: UUID? = nil
-    ) async -> Bool {
-        guard let paneState = sessionState.paneState(for: paneId) else { return false }
-        if paneState.activeTransport == .eternalTerminal {
-            let runtime = transportRegistry.runtime(for: paneId)
-            let completedProbe = eternalTerminalProbeID.map {
-                runtime?.completedNetworkRecoveryProbe($0) == true
-            } ?? false
-            return MacTerminalRecoveryPolicy.hasVerifiedLiveTransport(
-                connectionState: paneState.connectionState,
-                activeTransport: paneState.activeTransport,
-                hasEternalTerminalRuntime: runtime != nil,
-                hasShellOwnership: false,
-                transportIsLive: completedProbe
-            )
-        }
-        let route = transportRegistry.shellRoute(for: paneId)
-        let client = route?.client
-        let shellId = route?.shellId
-        let transportIsLive = if let client, let shellId {
-            await client.probeLiveTransport(
-                shellId: shellId,
-                transport: paneState.activeTransport
-            )
-        } else {
-            false
-        }
-        return MacTerminalRecoveryPolicy.hasVerifiedLiveTransport(
-            connectionState: paneState.connectionState,
-            activeTransport: paneState.activeTransport,
-            hasEternalTerminalRuntime: transportRegistry.runtime(for: paneId) != nil,
-            hasShellOwnership: shellId != nil && client != nil,
-            transportIsLive: transportIsLive
-        )
-    }
-
     private var offlineMacRecoveryPaneIDs: [UUID] {
         sessionState.allPaneStates.compactMap { paneState in
             MacTerminalRecoveryPolicy.shouldPrepareWhileOffline(
@@ -588,7 +582,7 @@ final class TerminalTabManager: ObservableObject {
                 connectionState: paneState.connectionState,
                 hasEstablishedConnection: paneState.hasEstablishedConnection,
                 activeTransport: paneState.activeTransport,
-                hasEternalTerminalRuntime: hasEternalTerminalRuntime(for: paneState.paneId)
+                hasEternalTerminalRuntime: transportCoordinator.hasEternalTerminalRuntime(for: paneState.paneId)
             )
             return strategy == .ignore
                 ? nil
@@ -604,40 +598,6 @@ final class TerminalTabManager: ObservableObject {
         updatePaneState(paneId, connectionState: .connected)
     }
     #endif
-
-    private func prepareTransportForReconnect(_ paneId: UUID) async {
-        logger.info("Reconnect transport cleanup pane=\(paneId.uuidString, privacy: .public)")
-        transportRegistry.cancelConnectionTask(for: paneId)
-        let client = transportRegistry.connectionClient(for: paneId)
-        let shellId = transportRegistry.shellId(for: paneId)
-        let startToken = transportRegistry.connectionStartToken(for: paneId)
-        let eternalTerminalRuntime = transportRegistry.runtime(for: paneId)
-        let detachedEternalTerminalRuntime = eternalTerminalRuntime.flatMap { runtime in
-            detachEternalTerminalRuntime(for: paneId, ifOwnedBy: runtime) ? runtime : nil
-        }
-
-        if let client,
-           !transportRegistry.hasOtherClientReferences(using: client, excluding: paneId) {
-            await client.abortConnection()
-        }
-        detachedEternalTerminalRuntime?.abortConnection()
-
-        async let sshCleanup: Void = {
-            if let client, let shellId {
-                await unregisterSSHClient(
-                    for: paneId,
-                    ifOwnedBy: client,
-                    shellId: shellId
-                )
-            } else if let startToken {
-                await unregisterSSHClient(for: paneId, ifOwnedBy: startToken)
-            }
-        }()
-        async let eternalTerminalCleanup: Void = {
-            await detachedEternalTerminalRuntime?.close()
-        }()
-        _ = await (sshCleanup, eternalTerminalCleanup)
-    }
 
     private func startReconnectConnection(_ paneId: UUID) -> Bool {
         guard let paneState = sessionState.paneState(for: paneId) else { return false }
@@ -1122,206 +1082,7 @@ final class TerminalTabManager: ObservableObject {
     }
     #endif
 
-    /// Register SSH shell for a pane
-    @discardableResult
-    func registerSSHClient(
-        _ client: SSHClient,
-        shellId: UUID,
-        startToken: SSHShellRegistry.StartToken,
-        for paneId: UUID,
-        serverId: UUID,
-        transportState: ShellTransportState = .ssh
-    ) async -> Bool {
-        let registerResult = transportRegistry.registerShell(
-            client: client,
-            shellId: shellId,
-            startToken: startToken,
-            for: paneId,
-            serverId: serverId
-        )
-
-        switch registerResult {
-        case .stale:
-            logger.warning("Ignoring stale shell registration for pane \(paneId.uuidString, privacy: .public)")
-            await performTrackedConnectionCleanup(for: client) {
-                await client.closeShell(shellId)
-            }
-            return false
-        case .accepted:
-            logger.info(
-                "Shell registered monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public) pane=\(paneId.uuidString, privacy: .public) start=\(startToken.id.uuidString, privacy: .public)"
-            )
-            break
-        }
-
-        setPaneTransport(transportState, for: paneId)
-        return true
-    }
-
-    /// Unregister SSH shell
-    func unregisterSSHClient(for paneId: UUID) async {
-        await unregisterSSHClient(
-            for: paneId,
-            killingManagedTmuxSessionNamed: nil,
-            beforeCleanup: nil
-        )
-    }
-
-    func unregisterSSHClient(
-        for paneId: UUID,
-        ifOwnedBy client: SSHClient,
-        shellId: UUID
-    ) async {
-        guard transportRegistry.ownsShell(
-            client: client,
-            shellId: shellId,
-            for: paneId
-        ) else { return }
-        await unregisterSSHClient(for: paneId)
-    }
-
-    func unregisterSSHClient(
-        for paneId: UUID,
-        ifOwnedBy startToken: SSHShellRegistry.StartToken
-    ) async {
-        guard transportRegistry.ownsConnection(startToken: startToken, for: paneId) else { return }
-        await unregisterSSHClient(for: paneId)
-    }
-
-    private func unregisterSSHClient(
-        for paneId: UUID,
-        killingManagedTmuxSessionNamed tmuxSessionName: String?,
-        beforeCleanup: (@MainActor @Sendable () async -> Void)?
-    ) async {
-        transportRegistry.cancelConnectionTask(for: paneId)
-        let unregisterResult = transportRegistry.unregisterShell(for: paneId)
-        if let pendingStart = unregisterResult.pendingStart {
-            tmuxCoordinator.cancelPrompt(requestId: pendingStart.token.id)
-        }
-
-        guard let registration = unregisterResult.registration else {
-            if let pendingStart = unregisterResult.pendingStart {
-                if !transportRegistry.hasClientReferences(pendingStart.client) {
-                    await performTrackedConnectionCleanup(for: pendingStart.client) {
-                        if let beforeCleanup {
-                            await beforeCleanup()
-                        }
-                        await pendingStart.client.disconnect()
-                    }
-                }
-            }
-            return
-        }
-
-        await performTrackedConnectionCleanup(for: registration.client) {
-            if let beforeCleanup {
-                await beforeCleanup()
-            }
-            if let tmuxSessionName {
-                await self.tmuxCoordinator.killSession(
-                    named: tmuxSessionName,
-                    using: registration.client
-                )
-            }
-            if !self.transportRegistry.hasClientReferences(registration.client) {
-                // Abort the whole session before its bounded shutdown. A last
-                // shell does not need a separate channel-close handshake.
-                await registration.client.disconnect()
-            } else {
-                await registration.client.closeShell(registration.shellId)
-            }
-        }
-
-        setPaneTransport(.ssh, for: paneId)
-    }
-
-    private func performTrackedConnectionCleanup(
-        for client: SSHClient,
-        operation: @MainActor @Sendable @escaping () async -> Void
-    ) async {
-        await transportRegistry.performTrackedCleanup(
-            for: client,
-            operation: operation
-        )
-    }
-
-    func activeSSHRoute(for paneId: UUID) -> (client: SSHClient, shellId: UUID)? {
-        guard let route = transportRegistry.shellRoute(for: paneId) else { return nil }
-        return (client: route.client, shellId: route.shellId)
-    }
-
-    func connectionOwnershipToken(for paneId: UUID) -> SSHShellRegistry.StartToken? {
-        transportRegistry.connectionStartToken(for: paneId)
-    }
-
-    func hasLiveTransport(for paneId: UUID) -> Bool {
-        transportRegistry.hasLiveTransport(for: paneId)
-    }
-
-    func eternalTerminalRuntime(
-        for paneId: UUID,
-        server: Server,
-        credentials: ServerCredentials
-    ) -> EternalTerminalRuntime {
-        if let runtime = transportRegistry.runtime(for: paneId) {
-            return runtime
-        }
-        let runtime = EternalTerminalRuntime(
-            paneId: paneId,
-            server: server,
-            credentials: credentials,
-            tabManager: self,
-            dependencies: dependencies.eternalTerminalRuntime
-        )
-        _ = transportRegistry.runtime(for: paneId) { runtime }
-        markEternalTerminalTransport(for: paneId)
-        return runtime
-    }
-
-    func hasEternalTerminalRuntime(for paneId: UUID) -> Bool {
-        transportRegistry.runtime(for: paneId) != nil
-    }
-
-    func sendEternalTerminalInput(_ data: Data, for paneId: UUID) {
-        transportRegistry.runtime(for: paneId)?.send(data)
-    }
-
-    func resizeEternalTerminal(
-        for paneId: UUID,
-        cols: Int,
-        rows: Int,
-        pixelSize: TerminalPixelSize?
-    ) {
-        guard let runtime = transportRegistry.runtime(for: paneId) else { return }
-        runtime.resize(cols: cols, rows: rows, pixelSize: pixelSize)
-        runtime.startIfNeeded()
-    }
-
-    func isCurrentEternalTerminalRuntime(
-        _ runtime: EternalTerminalRuntime,
-        for paneId: UUID
-    ) -> Bool {
-        transportRegistry.isCurrentRuntime(runtime, for: paneId)
-    }
-
-    func isCurrentEternalTerminalRuntime(
-        token: UUID,
-        for paneId: UUID
-    ) -> Bool {
-        transportRegistry.runtime(for: paneId)?.identityToken == token
-    }
-
-    func markEternalTerminalTransport(for paneId: UUID) {
-        setPaneTransport(.eternalTerminal, for: paneId)
-    }
-
-    func eternalTerminalTmuxResumeContext(
-        for paneId: UUID
-    ) -> EternalTerminalTmuxResumeContext? {
-        sessionState.paneState(for: paneId)?.eternalTerminalTmuxResumeContext
-    }
-
-    func setEternalTerminalTmuxResumeContext(
+    private func setEternalTerminalTmuxResumeContext(
         _ context: EternalTerminalTmuxResumeContext?,
         for paneId: UUID
     ) {
@@ -1331,384 +1092,9 @@ final class TerminalTabManager: ObservableObject {
         }
     }
 
-    func unregisterEternalTerminalRuntime(
-        for paneId: UUID,
-        killingManagedTmuxSessionNamed tmuxSessionName: String? = nil
-    ) async {
-        guard let runtime = transportRegistry.runtime(for: paneId),
-              detachEternalTerminalRuntime(for: paneId, ifOwnedBy: runtime) else { return }
-        if let tmuxSessionName {
-            await tmuxCoordinator.killSession(named: tmuxSessionName, using: runtime)
-        }
-        await runtime.close()
-    }
-
-    @discardableResult
-    func detachEternalTerminalRuntime(
-        for paneId: UUID,
-        ifOwnedBy runtime: EternalTerminalRuntime
-    ) -> Bool {
-        guard transportRegistry.detachRuntime(runtime, for: paneId) else { return false }
-        if sessionState.containsPane(paneId) {
-            setPaneTransport(.ssh, for: paneId)
-        }
-        return true
-    }
-
-    func unregisterEternalTerminalRuntime(
-        for paneId: UUID,
-        ifOwnedBy runtime: EternalTerminalRuntime
-    ) async {
-        guard detachEternalTerminalRuntime(for: paneId, ifOwnedBy: runtime) else { return }
-        await runtime.close()
-    }
-
-    func beginEternalTerminalNetworkRecoveryProbe(for paneId: UUID) async -> UUID? {
-        await transportRegistry.runtime(for: paneId)?.beginNetworkRecoveryProbe()
-    }
-
-    func notifyEternalTerminalNetworkPathChanged(for paneId: UUID) {
-        guard let runtime = transportRegistry.runtime(for: paneId) else { return }
-        Task { await runtime.notifyNetworkPathChanged() }
-    }
-
-    func prepareEternalTerminalSessionsForApplicationBackground() async {
-        await transportRegistry.forEachRuntime { runtime in
-            await runtime.prepareForApplicationBackground()
-        }
-    }
-
-    func resumeEternalTerminalSessionsFromApplicationBackground() async {
-        await transportRegistry.forEachRuntime { runtime in
-            await runtime.resumeFromApplicationBackground()
-        }
-    }
-
-    func hasEternalTerminalCheckpoint(for paneId: UUID) -> Bool {
-        eternalTerminalResumeStore.hasCheckpoint(for: paneId)
-    }
-
-    func hasMoshCheckpoint(for paneId: UUID) -> Bool {
-        moshRecovery.hasCheckpoint(for: paneId)
-    }
-
-    func restoreMoshShell(
-        for paneId: UUID,
-        using client: SSHClient,
-        cols: Int,
-        rows: Int
-    ) async -> ShellHandle? {
-        await moshRecovery.restoreShell(
-            for: paneId,
-            using: client,
-            cols: cols,
-            rows: rows
-        )
-    }
-
-    func persistMoshCheckpoint(
-        for paneId: UUID,
-        client: SSHClient,
-        shellId: UUID
-    ) async {
-        await moshRecovery.persistCheckpoint(
-            for: paneId,
-            using: client,
-            shellId: shellId
-        )
-    }
-
-    func prepareResumableSessionsForApplicationBackground() async {
-        await prepareEternalTerminalSessionsForApplicationBackground()
-
-        let moshRoutes: [(paneId: UUID, client: SSHClient, shellId: UUID)] = sessionState.allPaneStates.compactMap { state in
-            let paneId = state.paneId
-            guard state.activeTransport == .mosh,
-                  let route = transportRegistry.shellRoute(for: paneId) else {
-                return nil
-            }
-            return (paneId: paneId, client: route.client, shellId: route.shellId)
-        }
-        for (paneId, client, shellId) in moshRoutes {
-            await moshRecovery.prepareForApplicationBackground(
-                for: paneId,
-                using: client,
-                shellId: shellId
-            )
-        }
-    }
-
-    func resumeResumableSessionsFromApplicationBackground() async {
-        await resumeEternalTerminalSessionsFromApplicationBackground()
-
-        let moshRoutes: [(paneId: UUID, client: SSHClient, shellId: UUID)] = sessionState.allPaneStates.compactMap { state in
-            let paneId = state.paneId
-            guard state.activeTransport == .mosh,
-                  let route = transportRegistry.shellRoute(for: paneId) else {
-                return nil
-            }
-            return (paneId: paneId, client: route.client, shellId: route.shellId)
-        }
-        for (paneId, client, shellId) in moshRoutes {
-            await moshRecovery.resumeFromApplicationBackground(
-                for: paneId,
-                using: client,
-                shellId: shellId
-            )
-        }
-    }
-
-    /// Returns a unique ownership token only for the first caller while no live shell exists.
-    func beginShellStart(
-        for paneId: UUID,
-        client: SSHClient
-    ) -> SSHShellRegistry.StartToken? {
-        guard let serverId = sessionState.paneState(for: paneId)?.serverId else {
-            return nil
-        }
-
-        let startResult = transportRegistry.beginShellStart(
-            for: paneId,
-            serverId: serverId,
-            client: client
-        )
-
-        handleStaleShellStartContext(
-            startResult.staleContext,
-            logMessage: "Recovered stale pane shell-start lock for",
-            paneId: paneId
-        )
-        return startResult.token
-    }
-
-    @discardableResult
-    func startSSHConnectionTask(
-        for paneId: UUID,
-        server: Server,
-        client: SSHClient,
-        operation: @escaping @Sendable (TerminalSSHConnectionContext) async -> Void
-    ) -> Bool {
-        guard let startToken = beginShellStart(for: paneId, client: client) else {
-            return false
-        }
-
-        let taskId = transportRegistry.startConnectionTask(for: paneId) { [weak self] taskId in
-            guard let context = await self?.makeSSHConnectionContext(
-                taskId: taskId,
-                startToken: startToken,
-                paneId: paneId,
-                server: server,
-                client: client
-            ) else { return }
-            await operation(context)
-            await self?.finishShellStart(
-                for: paneId,
-                client: client,
-                startToken: startToken
-            )
-        }
-        guard taskId != nil else {
-            finishShellStart(for: paneId, client: client, startToken: startToken)
-            return false
-        }
-        return true
-    }
-
-    private func makeSSHConnectionContext(
-        taskId: UUID,
-        startToken: SSHShellRegistry.StartToken,
-        paneId: UUID,
-        server: Server,
-        client: SSHClient
-    ) -> TerminalSSHConnectionContext {
-        let ownsConnection: @MainActor @Sendable () -> Bool = { [weak self] in
-            guard let self else { return false }
-            return self.transportRegistry.isCurrentConnectionTask(taskId: taskId, for: paneId)
-                && self.isCurrentShellOwner(
-                    for: paneId,
-                    client: client,
-                    startToken: startToken
-                )
-        }
-
-        return TerminalSSHConnectionContext(
-            isCurrent: ownsConnection,
-            updateConnectionState: { [weak self] state in
-                guard ownsConnection() else { return }
-                self?.updatePaneState(paneId, connectionState: state)
-            },
-            startupPlan: { [weak self] in
-                guard let self, ownsConnection() else { throw CancellationError() }
-                return try await self.tmuxCoordinator.startupPlan(
-                    for: paneId,
-                    serverId: server.id,
-                    client: client,
-                    startToken: startToken
-                )
-            },
-            restoreMoshShell: { [weak self] cols, rows in
-                guard let self, ownsConnection(), server.connectionMode == .mosh else {
-                    return nil
-                }
-                return await self.restoreMoshShell(
-                    for: paneId,
-                    using: client,
-                    cols: cols,
-                    rows: rows
-                )
-            },
-            registerShell: { [weak self] shell in
-                guard let self, ownsConnection() else { return false }
-                return await self.registerSSHClient(
-                    client,
-                    shellId: shell.id,
-                    startToken: startToken,
-                    for: paneId,
-                    serverId: server.id,
-                    transportState: shell.transportState
-                )
-            },
-            persistMoshCheckpoint: { [weak self] shellId in
-                guard let self, ownsConnection() else { return }
-                await self.persistMoshCheckpoint(for: paneId, client: client, shellId: shellId)
-            },
-            updateTitle: { [weak self] title in
-                guard ownsConnection() else { return }
-                self?.updatePaneTitle(paneId, rawTitle: title)
-            },
-            hasOtherRegistrations: { [weak self] in
-                guard let self, ownsConnection() else { return false }
-                return self.hasOtherRegistrations(using: client, excluding: paneId)
-            },
-            handleShellEnd: { [weak self] shellId, reason in
-                guard ownsConnection() else { return }
-                self?.handleShellEnd(
-                    for: paneId,
-                    client: client,
-                    shellId: shellId,
-                    reason: reason
-                )
-            },
-            handleFailure: { [weak self] failure in
-                guard ownsConnection() else { return }
-                self?.handleConnectionFailure(for: paneId, failure: failure)
-            },
-            workingDirectory: { [weak self] in
-                guard let self, ownsConnection(), self.shouldApplyWorkingDirectory(for: paneId) else {
-                    return nil
-                }
-                return self.workingDirectory(for: paneId)
-            }
-        )
-    }
-
-    func finishShellStart(
-        for paneId: UUID,
-        client: SSHClient,
-        startToken: SSHShellRegistry.StartToken
-    ) {
-        transportRegistry.finishShellStart(
-            for: paneId,
-            client: client,
-            startToken: startToken
-        )
-    }
-
-    func isTransportStartInFlight(for paneId: UUID) -> Bool {
-        let result = transportRegistry.shellStartStatus(for: paneId)
-        handleStaleShellStartContext(
-            result.staleContext,
-            logMessage: "Cleared stale pane shell-start in-flight flag for",
-            paneId: paneId
-        )
-        return result.inFlight
-            || transportRegistry.runtime(for: paneId)?.isStartInFlight == true
-    }
-
-    func isCurrentShellOwner(
-        for paneId: UUID,
-        client: SSHClient,
-        startToken: SSHShellRegistry.StartToken
-    ) -> Bool {
-        sessionState.containsPane(paneId)
-            && transportRegistry.ownsConnection(
-                client: client,
-                startToken: startToken,
-                for: paneId
-            )
-    }
-
-    private func preferredSSHClient(for serverId: UUID, allowPendingStart: Bool) -> SSHClient? {
-        if let selectedTab = sessionState.selectedTab(for: serverId) {
-            let preferredPaneIds = [selectedTab.focusedPaneId, selectedTab.rootPaneId] + selectedTab.allPaneIds
-            for paneId in preferredPaneIds {
-                if let client = transportRegistry.registeredClient(for: paneId) {
-                    return client
-                }
-            }
-        }
-
-        let serverTabs = sessionState.tabs(for: serverId)
-        for tab in serverTabs {
-            for paneId in tab.allPaneIds {
-                if let client = transportRegistry.registeredClient(for: paneId) {
-                    return client
-                }
-            }
-        }
-
-        if let client = transportRegistry.firstRegisteredClient(for: serverId) {
-            return client
-        }
-
-        if allowPendingStart, let client = transportRegistry.firstPendingClient(for: serverId) {
-            return client
-        }
-
-        return nil
-    }
-
-    /// Returns the best-known client for this server, including pending shell starts.
-    func sshClient(for serverId: UUID) -> SSHClient? {
-        preferredSSHClient(for: serverId, allowPendingStart: true)
-    }
-
-    /// Returns only clients that already have a registered shell for this server.
-    func activeSSHClient(for serverId: UUID) -> SSHClient? {
-        preferredSSHClient(for: serverId, allowPendingStart: false)
-    }
-
-    func hasOtherActivePanes(for serverId: UUID, excluding paneId: UUID) -> Bool {
-        sessionState.allPaneStates.contains { state in
-            state.paneId != paneId && state.serverId == serverId && state.connectionState.isConnected
-        }
-    }
-
-    /// Returns true when the same SSH client instance is registered to another live pane.
-    /// This is used to avoid disconnecting a truly shared client during retry cleanup.
-    func hasOtherRegistrations(using client: SSHClient, excluding paneId: UUID) -> Bool {
-        transportRegistry.hasOtherClientReferences(using: client, excluding: paneId)
-    }
-
+    /// DEV-228 compatibility for the excluded SSHSFTPAdapter default provider.
     func sharedStatsClient(for serverId: UUID) -> SSHClient? {
-        if selectedTransport(for: serverId) == .mosh {
-            return nil
-        }
-        return sshClient(for: serverId)
-    }
-
-    private func selectedTransport(for serverId: UUID) -> ShellTransport {
-        if let selectedTab = sessionState.selectedTab(for: serverId),
-           let state = sessionState.paneState(for: selectedTab.focusedPaneId) {
-            return state.activeTransport
-        }
-
-        if let connectedPane = sessionState.paneStates(forServer: serverId)
-            .first(where: { $0.connectionState.isConnected }) {
-            return connectedPane.activeTransport
-        }
-
-        return sessionState.firstPaneState(for: serverId)?.activeTransport ?? .ssh
+        transportCoordinator.sharedStatsClient(for: serverId)
     }
 
     /// Clean up a pane (terminal + SSH)
@@ -1728,35 +1114,15 @@ final class TerminalTabManager: ObservableObject {
 
         tmuxCoordinator.clearRuntimeState(for: paneId)
         reconnectCoordinator.removePane(paneId)
-        transportRegistry.cancelConnectionTask(for: paneId)
         detachTerminalRegistration(for: paneId)
         runtimeTitleByPane.removeValue(forKey: paneId)
         titleOverrideByPane.removeValue(forKey: paneId)
 
-        if intent.deletesResumableSessionState {
-            do {
-                try eternalTerminalResumeStore.deleteResumeState(for: paneId)
-            } catch {
-                logger.error("Failed to delete ET resume credentials: \(error.localizedDescription, privacy: .public)")
-            }
-            do {
-                try moshRecovery.deleteCheckpoint(for: paneId)
-            } catch {
-                logger.error("Failed to delete Mosh recovery snapshot: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-
-        Task.detached { [weak self] in
-            await self?.unregisterSSHClient(
-                for: paneId,
-                killingManagedTmuxSessionNamed: tmuxSessionToKill,
-                beforeCleanup: nil
-            )
-            await self?.unregisterEternalTerminalRuntime(
-                for: paneId,
-                killingManagedTmuxSessionNamed: tmuxSessionToKill
-            )
-        }
+        transportCoordinator.removePane(
+            paneId,
+            deletingResumableState: intent.deletesResumableSessionState,
+            killingManagedTmuxSessionNamed: tmuxSessionToKill
+        )
     }
 
     // MARK: - Pane State
@@ -1827,31 +1193,14 @@ final class TerminalTabManager: ObservableObject {
         updatePaneState(paneId, connectionState: .failed(failure))
     }
 
-    func handleShellEnd(
-        for paneId: UUID,
-        client: SSHClient,
-        shellId: UUID,
-        reason: TerminalShellEndReason
-    ) {
-        guard transportRegistry.ownsShell(client: client, shellId: shellId, for: paneId) else {
-            logger.info("Ignoring stale shell end for pane \(paneId.uuidString, privacy: .public)")
-            return
-        }
-        handleShellEnd(
-            for: paneId,
-            reason: reason,
-            unregistering: (client, shellId)
-        )
-    }
-
     func handleShellEnd(for paneId: UUID, reason: TerminalShellEndReason) {
-        handleShellEnd(for: paneId, reason: reason, unregistering: nil)
+        handleShellEnd(for: paneId, reason: reason, ownership: nil)
     }
 
     private func handleShellEnd(
         for paneId: UUID,
         reason: TerminalShellEndReason,
-        unregistering ownership: (client: SSHClient, shellId: UUID)?
+        ownership: TerminalTransportEndOwnership?
     ) {
         guard let paneState = sessionState.paneState(for: paneId) else { return }
 
@@ -1891,16 +1240,22 @@ final class TerminalTabManager: ObservableObject {
             updatePaneState(paneId, connectionState: .disconnected)
         }
 
-        Task { [weak self, ownership] in
-            guard let self else { return }
-            if let ownership {
-                await self.unregisterSSHClient(
+        let transportCoordinator = transportCoordinator
+        Task { [weak transportCoordinator] in
+            switch ownership {
+            case .ssh(let client, let shellId):
+                await transportCoordinator?.unregisterSSHClient(
                     for: paneId,
-                    ifOwnedBy: ownership.client,
-                    shellId: ownership.shellId
+                    ifOwnedBy: client,
+                    shellId: shellId
                 )
-            } else {
-                await self.unregisterSSHClient(for: paneId)
+            case .eternalTerminal(let token):
+                await transportCoordinator?.unregisterEternalTerminalRuntime(
+                    for: paneId,
+                    ifOwnedByToken: token
+                )
+            case nil:
+                break
             }
         }
     }
@@ -1975,25 +1330,10 @@ final class TerminalTabManager: ObservableObject {
         tmuxCoordinator.shouldApplyWorkingDirectory(for: paneId)
     }
 
-    func installMoshServer(for paneId: UUID) async throws {
-        guard let registration = transportRegistry.shellRegistration(for: paneId) else {
-            throw SSHError.notConnected
-        }
-        try await dependencies.remoteMosh.installMoshServer(
-            using: registration.client
-        )
-    }
-
 }
 
 #if DEBUG
 extension TerminalTabManager {
-    func setEternalTerminalResumeStoreForTesting(
-        _ store: any EternalTerminalResumeStoring
-    ) {
-        eternalTerminalResumeStore = store
-    }
-
     func persistAndRestoreSnapshotForTesting() {
         sessionState.persistAndRestoreSnapshotForTesting()
     }
@@ -2028,9 +1368,8 @@ extension TerminalTabManager {
     /// Resets manager state for deterministic integration tests.
     func resetForTesting() async {
         let allPaneIds = sessionState.paneIds
-            .union(transportRegistry.ownedPaneIds)
+            .union(transportCoordinator.ownedPaneIds)
         tmuxCoordinator.resetRuntimeState(for: allPaneIds)
-        let drainedTransports = transportRegistry.drain()
         sessionState.resetForTesting()
         splitZoomedTabIds = []
         runtimeTitleByPane = [:]
@@ -2044,13 +1383,7 @@ extension TerminalTabManager {
         drainTerminalSurfaces()
         reconnectCoordinator.reset()
         tabOpensInFlight.removeAll()
-        eternalTerminalResumeStore = defaultEternalTerminalResumeStore
-        for client in drainedTransports.clients {
-            await client.disconnect()
-        }
-        for runtime in drainedTransports.runtimes {
-            await runtime.close()
-        }
+        await transportCoordinator.resetForTesting()
     }
 }
 #endif

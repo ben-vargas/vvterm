@@ -470,7 +470,7 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
             terminal.accessibilityIdentifier = "vvterm.reconnectTest.terminalSurface"
             let keyboard = tabManager.keyboardCoordinator
             let keyboardHeight = keyboard.softwareKeyboardEndFrame?.height ?? 0
-            let shellId = tabManager.activeSSHRoute(for: paneId)?.shellId
+            let shellId = tabManager.transportCoordinator.activeSSHRoute(for: paneId)?.shellId
             let terminalDiagnostics = terminal.keyboardUITestDiagnostics(
                 keyboardVisible: keyboard.isSoftwareKeyboardVisible,
                 keyboardHeight: keyboardHeight

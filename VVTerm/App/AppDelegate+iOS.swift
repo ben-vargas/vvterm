@@ -230,7 +230,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         let previousTask = resumableTerminalLifecycleTask
         resumableTerminalLifecycleTask = Task { @MainActor in
             await previousTask?.value
-            await tabManager.prepareResumableSessionsForApplicationBackground()
+            await tabManager.transportCoordinator.prepareResumableSessionsForApplicationBackground()
             completion()
         }
     }
@@ -240,7 +240,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         let previousTask = resumableTerminalLifecycleTask
         resumableTerminalLifecycleTask = Task { @MainActor in
             await previousTask?.value
-            await tabManager.resumeResumableSessionsFromApplicationBackground()
+            await tabManager.transportCoordinator.resumeResumableSessionsFromApplicationBackground()
         }
     }
 }

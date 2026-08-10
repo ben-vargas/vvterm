@@ -714,7 +714,7 @@ extension VVTermApp {
         defaults: UserDefaults = .standard
     ) -> RemoteFileBrowserStore {
         let adapter = SSHSFTPAdapter(borrowedClientProvider: { serverId in
-            tabManager.sharedStatsClient(for: serverId)
+            tabManager.transportCoordinator.sharedStatsClient(for: serverId)
         })
 
         return RemoteFileBrowserStore(
