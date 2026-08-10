@@ -57,13 +57,27 @@ struct GhosttyTerminalInteractionOwnershipTests {
             cellSize: CGSize(width: 10, height: 20),
             columns: 7
         )
+        let textInput = terminal.imeProxyTextView
+        #expect(terminal.terminalInputConfiguration == .systemWithAccessory)
+        #expect(textInput.inputView == nil)
+        #expect(!terminal.shouldHideKeyboardAccessoryBar)
+        #expect(textInput.inputAccessoryView != nil)
+        #expect(!terminal.keyboardCoordinatorDiagnosticSnapshot().isSoftwareKeyboardSuppressed)
+
+        terminal.nativeSelectionLifecycle.prepare(restoreTerminalInput: true)
+        terminal.nativeSelectionLifecycle.beginInteraction(restoreTerminalInput: true)
         _ = terminal.nativeSelectionLifecycle.setSelection(
             NSRange(location: 0, length: 3)
         )
+        _ = terminal.nativeSelectionLifecycle.endInteraction()
 
-        let textInput = terminal.imeProxyTextView
         #expect(textInput.documentMode == .nativeSelection)
         #expect(textInput.text(in: try #require(textInput.selectedTextRange)) == "one")
+        #expect(terminal.terminalInputConfiguration == .systemWithAccessory)
+        #expect(textInput.inputView == nil)
+        #expect(!terminal.shouldHideKeyboardAccessoryBar)
+        #expect(textInput.inputAccessoryView != nil)
+        #expect(!terminal.keyboardCoordinatorDiagnosticSnapshot().isSoftwareKeyboardSuppressed)
 
         let minimumPosition = TerminalNativeTextPosition(offset: Int.min)
         let maximumPosition = TerminalNativeTextPosition(offset: Int.max)

@@ -13,7 +13,6 @@ extension GhosttyTerminalView {
         case systemWithAccessory
         case systemWithoutAccessory
         case suppressed
-        case nativeSelection
     }
 
     override var canBecomeFirstResponder: Bool {
@@ -78,9 +77,6 @@ extension GhosttyTerminalView {
     }
 
     var terminalInputConfiguration: TerminalInputConfiguration {
-        if isNativeSelectionTextInputContext {
-            return .nativeSelection
-        }
         if shouldSuppressSoftwareKeyboard {
             return .suppressed
         }
@@ -96,12 +92,7 @@ extension GhosttyTerminalView {
             return hiddenKeyboardInputView
         }
         #endif
-        switch terminalInputConfiguration {
-        case .suppressed, .nativeSelection:
-            return hiddenKeyboardInputView
-        case .systemWithAccessory, .systemWithoutAccessory:
-            return nil
-        }
+        return shouldSuppressSoftwareKeyboard ? hiddenKeyboardInputView : nil
     }
 
     func reloadTerminalInputViewsIfActive() {
@@ -203,7 +194,6 @@ extension GhosttyTerminalView {
 
     func clearNativeSelectionStateForTerminalInput() {
         guard usesNativeTouchSelection else { return }
-        let previousInputConfiguration = terminalInputConfiguration
         let hadSelection = nativeSelectionLifecycle.selection != nil
         if hadSelection {
             imeProxyTextView.inputDelegate?.selectionWillChange(imeProxyTextView)
@@ -212,9 +202,6 @@ extension GhosttyTerminalView {
         if hadSelection {
             imeProxyTextView.inputDelegate?.selectionDidChange(imeProxyTextView)
         }
-        reloadTerminalInputViews(
-            ifChangedFrom: previousInputConfiguration
-        )
     }
 
     func releaseTerminalInput() {
