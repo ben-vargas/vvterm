@@ -1,6 +1,50 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum SSHKeySettingsFailurePresentation {
+    static func message(
+        for operation: SSHKeySettingsCoordinator.Operation,
+        failure: SSHKeySettingsFailure
+    ) -> String {
+        let format = switch operation {
+        case .importKey:
+            String(localized: "Failed to save key: %@")
+        case .generateKey:
+            String(localized: "Failed to generate key: %@")
+        case .deleteKey:
+            String(localized: "Failed to delete key: %@")
+        }
+        return String(format: format, details(for: failure))
+    }
+
+    static func details(for failure: SSHKeySettingsFailure) -> String {
+        switch failure {
+        case .keychain(let status):
+            "Keychain error: \(status)"
+        case .keychainEncodingFailed:
+            "Failed to encode data for Keychain"
+        case .keychainDecodingFailed:
+            "Failed to decode data from Keychain"
+        case .keychainItemNotFound:
+            "Item not found in Keychain"
+        case .credentialServerMismatch:
+            "Credentials do not belong to this server"
+        case .keychainCopyVerificationFailed:
+            "VVTerm could not verify the copied Keychain item"
+        case .keyGenerationFailed:
+            String(localized: "Failed to generate SSH key")
+        case .keyEncodingFailed:
+            String(localized: "Failed to encode key data")
+        case .rsaExportFailed:
+            String(localized: "Failed to export RSA key")
+        case .invalidKeyData:
+            String(localized: "Invalid key data")
+        case .unavailable:
+            String(localized: "The SSH key operation could not be completed.")
+        }
+    }
+}
+
 // MARK: - Keychain Settings View
 
 struct KeychainSettingsView: View {
@@ -129,12 +173,12 @@ struct KeychainSettingsView: View {
     }
 
     private var deleteError: String? {
-        guard let details = coordinator.failureDetails(for: .deleteKey) else {
+        guard let failure = coordinator.failure(for: .deleteKey) else {
             return nil
         }
-        return String(
-            format: String(localized: "Failed to delete key: %@"),
-            details
+        return SSHKeySettingsFailurePresentation.message(
+            for: .deleteKey,
+            failure: failure
         )
     }
 
@@ -384,12 +428,12 @@ struct AddSSHKeySheet: View {
         if let error {
             return error
         }
-        guard let details = coordinator.failureDetails(for: .importKey) else {
+        guard let failure = coordinator.failure(for: .importKey) else {
             return nil
         }
-        return String(
-            format: String(localized: "Failed to save key: %@"),
-            details
+        return SSHKeySettingsFailurePresentation.message(
+            for: .importKey,
+            failure: failure
         )
     }
 }
@@ -496,12 +540,12 @@ struct GenerateSSHKeySheet: View {
     }
 
     private var generationError: String? {
-        guard let details = coordinator.failureDetails(for: .generateKey) else {
+        guard let failure = coordinator.failure(for: .generateKey) else {
             return nil
         }
-        return String(
-            format: String(localized: "Failed to generate key: %@"),
-            details
+        return SSHKeySettingsFailurePresentation.message(
+            for: .generateKey,
+            failure: failure
         )
     }
 }

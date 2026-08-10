@@ -8,33 +8,33 @@ private final class SSHKeySettingsRepositorySpy: SSHKeySettingsRepository {
     var importedRequests: [ImportedSSHKeyRequest] = []
     var generatedRequests: [GeneratedSSHKeyRequest] = []
     var deletedIDs: [UUID] = []
-    var importError: Error?
-    var generateError: Error?
-    var deleteError: Error?
+    var importFailure: SSHKeySettingsFailure?
+    var generateFailure: SSHKeySettingsFailure?
+    var deleteFailure: SSHKeySettingsFailure?
 
     func loadKeys() -> [SSHKeyEntry] {
         loadedKeys
     }
 
-    func storeImportedKey(_ request: ImportedSSHKeyRequest) throws -> SSHKeyEntry {
+    func storeImportedKey(_ request: ImportedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
         importedRequests.append(request)
-        if let importError { throw importError }
+        if let importFailure { throw importFailure }
         let entry = Self.entry(name: request.name)
         loadedKeys.append(entry)
         return entry
     }
 
-    func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws -> SSHKeyEntry {
+    func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
         generatedRequests.append(request)
-        if let generateError { throw generateError }
+        if let generateFailure { throw generateFailure }
         let entry = Self.entry(name: request.name, keyType: request.keyType)
         loadedKeys.append(entry)
         return entry
     }
 
-    func deleteKey(id: UUID) throws {
+    func deleteKey(id: UUID) throws(SSHKeySettingsFailure) {
         deletedIDs.append(id)
-        if let deleteError { throw deleteError }
+        if let deleteFailure { throw deleteFailure }
         loadedKeys.removeAll { $0.id == id }
     }
 
@@ -56,10 +56,6 @@ private final class SSHKeySettingsRepositorySpy: SSHKeySettingsRepository {
 
 @MainActor
 struct SSHKeySettingsCoordinatorTests {
-    private struct TestError: LocalizedError {
-        var errorDescription: String? { "test failure" }
-    }
-
     @Test
     func loadPublishesRepositoryKeys() {
         let repository = SSHKeySettingsRepositorySpy()
@@ -129,14 +125,14 @@ struct SSHKeySettingsCoordinatorTests {
         let coordinator = SSHKeySettingsCoordinator(repository: repository)
         coordinator.loadKeys()
 
-        repository.deleteError = TestError()
+        repository.deleteFailure = .keychain(status: -25_300)
         coordinator.deleteKey(key)
-        #expect(coordinator.failureDetails(for: .deleteKey) == "test failure")
+        #expect(coordinator.failure(for: .deleteKey) == .keychain(status: -25_300))
         #expect(coordinator.keys == [key])
 
-        repository.deleteError = nil
+        repository.deleteFailure = nil
         coordinator.deleteKey(key)
-        #expect(coordinator.failureDetails(for: .deleteKey) == nil)
+        #expect(coordinator.failure(for: .deleteKey) == nil)
         #expect(coordinator.keys.isEmpty)
         #expect(repository.deletedIDs == [key.id, key.id])
     }
@@ -145,22 +141,64 @@ struct SSHKeySettingsCoordinatorTests {
     func importAndGenerationFailuresRemainDistinct() {
         let repository = SSHKeySettingsRepositorySpy()
         let coordinator = SSHKeySettingsCoordinator(repository: repository)
-        repository.importError = TestError()
+        repository.importFailure = .keychainEncodingFailed
 
         #expect(coordinator.storeImportedKey(
             name: "Import",
             privateKey: Data(),
             passphrase: nil
         ) == nil)
-        #expect(coordinator.failureDetails(for: .importKey) == "test failure")
+        #expect(coordinator.failure(for: .importKey) == .keychainEncodingFailed)
 
-        repository.generateError = TestError()
+        repository.generateFailure = .keyGenerationFailed
         #expect(coordinator.generateAndStoreKey(
             name: "Generate",
             passphrase: nil,
             keyType: .ed25519
         ) == nil)
-        #expect(coordinator.failureDetails(for: .generateKey) == "test failure")
-        #expect(coordinator.failureDetails(for: .importKey) == "test failure")
+        #expect(coordinator.failure(for: .generateKey) == .keyGenerationFailed)
+        #expect(coordinator.failure(for: .importKey) == .keychainEncodingFailed)
+    }
+
+    @Test
+    func presentationMapsEverySemanticFailureToExactDetails() {
+        let mappings: [(SSHKeySettingsFailure, String)] = [
+            (.keychain(status: -25_300), "Keychain error: -25300"),
+            (.keychainEncodingFailed, "Failed to encode data for Keychain"),
+            (.keychainDecodingFailed, "Failed to decode data from Keychain"),
+            (.keychainItemNotFound, "Item not found in Keychain"),
+            (.credentialServerMismatch, "Credentials do not belong to this server"),
+            (
+                .keychainCopyVerificationFailed,
+                "VVTerm could not verify the copied Keychain item"
+            ),
+            (.keyGenerationFailed, "Failed to generate SSH key"),
+            (.keyEncodingFailed, "Failed to encode key data"),
+            (.rsaExportFailed, "Failed to export RSA key"),
+            (.invalidKeyData, "Invalid key data"),
+            (.unavailable, "The SSH key operation could not be completed.")
+        ]
+
+        for (failure, expected) in mappings {
+            #expect(SSHKeySettingsFailurePresentation.details(for: failure) == expected)
+        }
+    }
+
+    @Test
+    func presentationPreservesExactOperationCopy() {
+        let failure = SSHKeySettingsFailure.invalidKeyData
+
+        #expect(SSHKeySettingsFailurePresentation.message(
+            for: .importKey,
+            failure: failure
+        ) == "Failed to save key: Invalid key data")
+        #expect(SSHKeySettingsFailurePresentation.message(
+            for: .generateKey,
+            failure: failure
+        ) == "Failed to generate key: Invalid key data")
+        #expect(SSHKeySettingsFailurePresentation.message(
+            for: .deleteKey,
+            failure: failure
+        ) == "Failed to delete key: Invalid key data")
     }
 }

@@ -14,12 +14,26 @@ nonisolated struct GeneratedSSHKeyRequest: Equatable {
     let keyType: SSHKeyType
 }
 
+nonisolated enum SSHKeySettingsFailure: Error, Equatable, Sendable {
+    case keychain(status: Int32)
+    case keychainEncodingFailed
+    case keychainDecodingFailed
+    case keychainItemNotFound
+    case credentialServerMismatch
+    case keychainCopyVerificationFailed
+    case keyGenerationFailed
+    case keyEncodingFailed
+    case rsaExportFailed
+    case invalidKeyData
+    case unavailable
+}
+
 @MainActor
 protocol SSHKeySettingsRepository: AnyObject {
     func loadKeys() -> [SSHKeyEntry]
-    func storeImportedKey(_ request: ImportedSSHKeyRequest) throws -> SSHKeyEntry
-    func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws -> SSHKeyEntry
-    func deleteKey(id: UUID) throws
+    func storeImportedKey(_ request: ImportedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry
+    func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry
+    func deleteKey(id: UUID) throws(SSHKeySettingsFailure)
 }
 
 @MainActor
@@ -31,7 +45,7 @@ final class SSHKeySettingsCoordinator: ObservableObject {
     }
 
     @Published private(set) var keys: [SSHKeyEntry] = []
-    @Published private(set) var operationFailures: [Operation: String] = [:]
+    @Published private(set) var operationFailures: [Operation: SSHKeySettingsFailure] = [:]
 
     private let repository: any SSHKeySettingsRepository
 
@@ -43,7 +57,7 @@ final class SSHKeySettingsCoordinator: ObservableObject {
         keys = repository.loadKeys()
     }
 
-    func failureDetails(for operation: Operation) -> String? {
+    func failure(for operation: Operation) -> SSHKeySettingsFailure? {
         operationFailures[operation]
     }
 
@@ -57,18 +71,16 @@ final class SSHKeySettingsCoordinator: ObservableObject {
         passphrase: String?
     ) -> SSHKeyEntry? {
         do {
-            let entry = try repository.storeImportedKey(
-                ImportedSSHKeyRequest(
-                    name: name,
-                    privateKey: privateKey,
-                    passphrase: passphrase
-                )
-            )
+            let entry = try repository.storeImportedKey(ImportedSSHKeyRequest(
+                name: name,
+                privateKey: privateKey,
+                passphrase: passphrase
+            ))
             clearFailure(for: .importKey)
             loadKeys()
             return entry
-        } catch {
-            operationFailures[.importKey] = error.localizedDescription
+        } catch let failure {
+            operationFailures[.importKey] = failure
             return nil
         }
     }
@@ -79,19 +91,17 @@ final class SSHKeySettingsCoordinator: ObservableObject {
         keyType: SSHKeyType
     ) -> SSHKeyEntry? {
         do {
-            let entry = try repository.generateAndStoreKey(
-                GeneratedSSHKeyRequest(
-                    name: name,
-                    comment: name.replacingOccurrences(of: " ", with: "_"),
-                    passphrase: passphrase,
-                    keyType: keyType
-                )
-            )
+            let entry = try repository.generateAndStoreKey(GeneratedSSHKeyRequest(
+                name: name,
+                comment: name.replacingOccurrences(of: " ", with: "_"),
+                passphrase: passphrase,
+                keyType: keyType
+            ))
             clearFailure(for: .generateKey)
             loadKeys()
             return entry
-        } catch {
-            operationFailures[.generateKey] = error.localizedDescription
+        } catch let failure {
+            operationFailures[.generateKey] = failure
             return nil
         }
     }
@@ -101,8 +111,8 @@ final class SSHKeySettingsCoordinator: ObservableObject {
             try repository.deleteKey(id: key.id)
             clearFailure(for: .deleteKey)
             loadKeys()
-        } catch {
-            operationFailures[.deleteKey] = error.localizedDescription
+        } catch let failure {
+            operationFailures[.deleteKey] = failure
         }
     }
 }

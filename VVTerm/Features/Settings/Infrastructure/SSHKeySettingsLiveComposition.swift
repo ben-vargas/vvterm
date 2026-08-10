@@ -12,30 +12,64 @@ private final class KeychainSSHKeySettingsRepository: SSHKeySettingsRepository {
         keychain.getStoredSSHKeys()
     }
 
-    func storeImportedKey(_ request: ImportedSSHKeyRequest) throws -> SSHKeyEntry {
-        try keychain.storeSSHKeyEntry(
-            name: request.name,
-            privateKey: request.privateKey,
-            passphrase: request.passphrase
-        )
+    func storeImportedKey(_ request: ImportedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
+        do {
+            return try keychain.storeSSHKeyEntry(
+                name: request.name,
+                privateKey: request.privateKey,
+                passphrase: request.passphrase
+            )
+        } catch {
+            throw Self.failure(for: error)
+        }
     }
 
-    func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws -> SSHKeyEntry {
-        let key = try SSHKeyGenerator.generate(
-            type: request.keyType,
-            comment: request.comment
-        )
-        return try keychain.storeSSHKeyEntry(
-            name: request.name,
-            privateKey: key.privateKey,
-            passphrase: request.passphrase,
-            keyType: key.keyType,
-            publicKey: key.publicKey
-        )
+    func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
+        do {
+            let key = try SSHKeyGenerator.generate(
+                type: request.keyType,
+                comment: request.comment
+            )
+            return try keychain.storeSSHKeyEntry(
+                name: request.name,
+                privateKey: key.privateKey,
+                passphrase: request.passphrase,
+                keyType: key.keyType,
+                publicKey: key.publicKey
+            )
+        } catch {
+            throw Self.failure(for: error)
+        }
     }
 
-    func deleteKey(id: UUID) throws {
-        try keychain.deleteStoredSSHKey(id)
+    func deleteKey(id: UUID) throws(SSHKeySettingsFailure) {
+        do {
+            try keychain.deleteStoredSSHKey(id)
+        } catch {
+            throw Self.failure(for: error)
+        }
+    }
+
+    private static func failure(for error: Error) -> SSHKeySettingsFailure {
+        if let keychainError = error as? KeychainError {
+            return switch keychainError {
+            case .unhandled(let status): .keychain(status: status)
+            case .encodingFailed: .keychainEncodingFailed
+            case .decodingFailed: .keychainDecodingFailed
+            case .itemNotFound: .keychainItemNotFound
+            case .credentialServerMismatch: .credentialServerMismatch
+            case .copyVerificationFailed: .keychainCopyVerificationFailed
+            }
+        }
+        if let generationError = error as? SSHKeyGeneratorError {
+            return switch generationError {
+            case .keyGenerationFailed: .keyGenerationFailed
+            case .encodingFailed: .keyEncodingFailed
+            case .rsaExportFailed: .rsaExportFailed
+            case .invalidKeyData: .invalidKeyData
+            }
+        }
+        return .unavailable
     }
 }
 
@@ -53,20 +87,16 @@ enum SSHKeySettingsLiveComposition {
 private final class PreviewSSHKeySettingsRepository: SSHKeySettingsRepository {
     func loadKeys() -> [SSHKeyEntry] { [] }
 
-    func storeImportedKey(_ request: ImportedSSHKeyRequest) throws -> SSHKeyEntry {
-        throw PreviewError.unsupported
+    func storeImportedKey(_ request: ImportedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
+        throw .unavailable
     }
 
-    func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws -> SSHKeyEntry {
-        throw PreviewError.unsupported
+    func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
+        throw .unavailable
     }
 
-    func deleteKey(id: UUID) throws {
-        throw PreviewError.unsupported
-    }
-
-    private enum PreviewError: Error {
-        case unsupported
+    func deleteKey(id: UUID) throws(SSHKeySettingsFailure) {
+        throw .unavailable
     }
 }
 
