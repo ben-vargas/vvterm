@@ -46,7 +46,8 @@ extension AnalyticsTracker: FreePlanAssignmentTracking {}
 
 extension ServerManagerDependencies {
     static func live(
-        actionAuthorizer: any ProtectedServerActionAuthorizing
+        actionAuthorizer: any ProtectedServerActionAuthorizing,
+        syncRepository: any ServerSyncRepository
     ) -> Self {
         let stateStore = ServerStateStore(
             dependencies: ServerStateStoreDependencies(
@@ -65,7 +66,7 @@ extension ServerManagerDependencies {
         return Self(
             stateStore: stateStore,
             remoteRepository: ServerCloudKitLiveComposition.client,
-            syncRepository: CloudKitSyncCoordinator.shared,
+            syncRepository: syncRepository,
             credentialRepository: KeychainManager.shared,
             actionAuthorizer: actionAuthorizer,
             knownHosts: KnownHostsManager.shared,
@@ -74,14 +75,6 @@ extension ServerManagerDependencies {
             makeID: UUID.init
         )
     }
-}
-
-extension ServerManager {
-    /// Compatibility composition for the Remote Files default initializer.
-    /// App roots must construct and inject their own manager instead.
-    static let shared = ServerManager(
-        dependencies: .live(actionAuthorizer: AppLockManager.shared)
-    )
 }
 
 private extension ServerPendingMutation {

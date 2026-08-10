@@ -12,8 +12,12 @@ import WidgetKit
 struct VVTermApp: App {
     init() {
         let appLockManager = AppLockManager()
+        let cloudKitSyncCoordinator = CloudKitSyncLiveComposition.makeLiveCoordinator()
         let serverManager = ServerManager(
-            dependencies: .live(actionAuthorizer: appLockManager)
+            dependencies: .live(
+                actionAuthorizer: appLockManager,
+                syncRepository: cloudKitSyncCoordinator
+            )
         )
         let engagementTracker = EngagementTracker(dependencies: .live)
         let tabManager = TerminalTabManagerLiveComposition.makeManager(
@@ -29,11 +33,15 @@ struct VVTermApp: App {
                 engagementTracker: engagementTracker
             )
         )
-        let terminalThemeManager = TerminalThemeManager(dependencies: .live)
-        let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager(
-            dependencies: .live
+        let terminalThemeManager = TerminalThemeManager(
+            dependencies: .live(mutationQueue: cloudKitSyncCoordinator)
         )
-        let statsPreferencesStore = PreferencesStore(dependencies: .live)
+        let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager(
+            dependencies: .live(mutationQueue: cloudKitSyncCoordinator)
+        )
+        let statsPreferencesStore = PreferencesStore(
+            dependencies: .live(mutationQueue: cloudKitSyncCoordinator)
+        )
         let serverVolumeVisibilityStore = ServerVolumeVisibilityStore.live
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: .standard)
         let cloudKitManager = CloudKitManager.shared

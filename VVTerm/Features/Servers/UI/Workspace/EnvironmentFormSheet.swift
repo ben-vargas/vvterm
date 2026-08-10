@@ -165,8 +165,12 @@ struct EnvironmentFormSheet: View {
 
 #Preview {
     let appLockManager = AppLockManager()
+    let cloudKitSyncCoordinator = CloudKitSyncLiveComposition.makeLiveCoordinator()
     let serverManager = ServerManager(
-        dependencies: .live(actionAuthorizer: appLockManager),
+        dependencies: .live(
+            actionAuthorizer: appLockManager,
+            syncRepository: cloudKitSyncCoordinator
+        ),
         startsAutomatically: false
     )
     EnvironmentFormSheet(

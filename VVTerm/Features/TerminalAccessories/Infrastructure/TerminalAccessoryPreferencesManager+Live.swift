@@ -26,14 +26,16 @@ extension CloudKitSyncResolutionHub: TerminalAccessoryResolutionSource {
 }
 
 extension TerminalAccessoryPreferencesDependencies {
-    static var live: Self {
+    static func live(
+        mutationQueue: any TerminalAccessoryMutationQueue
+    ) -> Self {
         TerminalAccessoryPreferencesDependencies(
             profileStore: UserDefaultsTerminalAccessoryProfileStore(
                 defaults: .standard,
                 key: CloudKitSyncConstants.terminalAccessoryProfileStorageKey
             ),
             cloud: TerminalAccessoryCloudKitLiveComposition.client,
-            mutationQueue: CloudKitSyncCoordinator.shared,
+            mutationQueue: mutationQueue,
             syncLifecycle: CloudKitSyncLifecycleDriver.shared,
             resolutionSource: CloudKitSyncResolutionHub.shared,
             writerID: DeviceIdentity.id,

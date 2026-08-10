@@ -1642,7 +1642,10 @@ struct TerminalTabManagerLifecycleTests {
             let appDelegate = AppDelegate()
             let appLockManager = AppLockManager()
             let serverManager = ServerManager(
-                dependencies: .live(actionAuthorizer: appLockManager),
+                dependencies: .live(
+                    actionAuthorizer: appLockManager,
+                    syncRepository: CloudKitSyncLiveComposition.makeLiveCoordinator()
+                ),
                 startsAutomatically: false
             )
             appDelegate.configure(

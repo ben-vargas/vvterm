@@ -41,7 +41,9 @@ enum TerminalThemeCloudKitLiveComposition {
 }
 
 extension TerminalThemeManagerDependencies {
-    static var live: Self {
+    static func live(
+        mutationQueue: any TerminalThemeMutationQueue
+    ) -> Self {
         let defaults = UserDefaults.standard
         let keys = TerminalThemeUserDefaultsKeys(
             customThemes: CloudKitSyncConstants.terminalCustomThemesStorageKey,
@@ -57,7 +59,7 @@ extension TerminalThemeManagerDependencies {
                 keys: keys
             ),
             cloud: TerminalThemeCloudKitLiveComposition.client,
-            mutationQueue: CloudKitSyncCoordinator.shared,
+            mutationQueue: mutationQueue,
             syncLifecycle: CloudKitSyncLifecycleDriver.shared,
             preferenceChanges: UserDefaultsTerminalThemePreferenceChangeSource(
                 defaults: defaults,

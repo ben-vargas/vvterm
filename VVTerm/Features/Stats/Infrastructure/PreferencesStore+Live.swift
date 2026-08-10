@@ -10,19 +10,6 @@ enum StatsPreferencesCloudKitLiveComposition {
     )
 }
 
-extension CloudKitSyncCoordinator {
-    static let shared = CloudKitSyncCoordinator(
-        serverCloud: ServerCloudKitLiveComposition.client,
-        terminalThemeCloud: TerminalThemeCloudKitLiveComposition.client,
-        terminalAccessoryCloud: TerminalAccessoryCloudKitLiveComposition.client,
-        statsPreferencesCloud: StatsPreferencesCloudKitLiveComposition.client,
-        queue: PendingCloudKitSyncQueue(),
-        resolutionHub: CloudKitSyncResolutionHub.shared,
-        isSyncEnabled: { SyncSettings.isEnabled },
-        now: Date.init
-    )
-}
-
 extension CloudKitSyncResolutionHub: StatsPreferencesResolutionSource {
     func observeStatsPreferences(
         _ observer: @escaping (StatsPreferences) -> Void
@@ -39,14 +26,16 @@ extension CloudKitSyncResolutionHub: StatsPreferencesResolutionSource {
 }
 
 extension PreferencesStoreDependencies {
-    static var live: Self {
+    static func live(
+        mutationQueue: any StatsPreferencesMutationQueue
+    ) -> Self {
         PreferencesStoreDependencies(
             persistence: UserDefaultsStatsPreferencesStore(
                 defaults: .standard,
                 key: CloudKitSyncConstants.statsPreferencesStorageKey
             ),
             cloud: StatsPreferencesCloudKitLiveComposition.client,
-            mutationQueue: CloudKitSyncCoordinator.shared,
+            mutationQueue: mutationQueue,
             syncLifecycle: CloudKitSyncLifecycleDriver.shared,
             resolutionSource: CloudKitSyncResolutionHub.shared,
             writerID: DeviceIdentity.id,
