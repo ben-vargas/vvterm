@@ -4,11 +4,14 @@ import Foundation
 enum TerminalTmuxSessionLiveComposition {
     static func makeCoordinator(
         defaults: UserDefaults,
-        serverManager: ServerManager
+        serverManager: ServerManager,
+        remoteTmux: any TerminalRemoteTmuxServicing,
+        deviceID: String,
+        themeStyle: @escaping @MainActor () -> RemoteTmuxThemeStyle
     ) -> TerminalTmuxSessionCoordinator {
         TerminalTmuxSessionCoordinator(
             configuration: TerminalTmuxConfiguration(
-                deviceID: DeviceIdentity.id,
+                deviceID: deviceID,
                 enabledByDefault: {
                     guard defaults.object(forKey: "terminalTmuxEnabledDefault") != nil else {
                         return true
@@ -33,15 +36,9 @@ enum TerminalTmuxSessionLiveComposition {
                             )
                         }
                 },
-                themeStyle: {
-                    themeStyle(
-                        for: defaults.string(
-                            forKey: CloudKitSyncConstants.terminalThemeNameKey
-                        )
-                    )
-                }
+                themeStyle: themeStyle
             ),
-            remoteTmux: RemoteTmuxManager.shared
+            remoteTmux: remoteTmux
         )
     }
 

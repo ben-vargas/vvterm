@@ -7,6 +7,8 @@ import SwiftUI
 import StoreKit
 #if os(macOS)
 import AppKit
+#elseif os(iOS)
+import UIKit
 #endif
 
 struct ContentView: View {
@@ -374,6 +376,21 @@ struct ContentView: View {
 // MARK: - Preview
 
 #Preview {
+    let defaults = UserDefaults.standard
+    let networkMonitor = NetworkMonitor.shared
+    let analyticsTracker = AnalyticsTracker.shared
+    let liveActivityManager = LiveActivityManager.shared
+    let remoteMosh = RemoteMoshManager.shared
+    let remoteTmux = RemoteTmuxManager.shared
+    let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
+    let moshResumeStore = MoshResumeStore.shared
+    let applicationIsActive: @MainActor () -> Bool = {
+        #if os(iOS)
+        UIApplication.shared.applicationState == .active
+        #else
+        NSApplication.shared.isActive
+        #endif
+    }
     let appLockManager = AppLockManager()
     let cloudKitSync = CloudKitSyncLiveComposition.makeLive()
     let cloudKitSyncCoordinator = cloudKitSync.coordinator
@@ -385,6 +402,9 @@ struct ContentView: View {
         startsAutomatically: false
     )
     let engagementTracker = EngagementTracker(dependencies: .live)
+    let terminalThemeManager = TerminalThemeManager(
+        dependencies: .live(mutationQueue: cloudKitSyncCoordinator)
+    )
     let statsPreferencesStore = PreferencesStore(
         dependencies: .live(
             mutationQueue: cloudKitSyncCoordinator,
@@ -408,9 +428,25 @@ struct ContentView: View {
         )
     )
     let tabManager = TerminalTabManagerLiveComposition.makeManager(
+        defaults: defaults,
+        networkMonitor: networkMonitor,
         appLockManager: appLockManager,
         serverManager: serverManager,
-        engagementTracker: engagementTracker
+        engagementTracker: engagementTracker,
+        analyticsTracker: analyticsTracker,
+        liveActivityManager: liveActivityManager,
+        remoteMosh: remoteMosh,
+        remoteTmux: remoteTmux,
+        eternalTerminalResumeStore: eternalTerminalResumeStore,
+        moshResumeStore: moshResumeStore,
+        terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
+        deviceID: DeviceIdentity.id,
+        themeStyle: {
+            TerminalTmuxSessionLiveComposition.themeStyle(
+                for: terminalThemeManager.themeSelection.darkThemeName
+            )
+        },
+        applicationIsActive: applicationIsActive
     )
     let terminalSecurityActions = VVTermApp.makeTerminalSecurityActions(
         keychainManager: keychainManager,
@@ -431,8 +467,9 @@ struct ContentView: View {
     )
     .environmentObject(appLockManager)
     .environmentObject(serverManager)
+    .environmentObject(terminalThemeManager)
     .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
-    .environmentObject(ViewTabConfigurationManager(defaults: .standard))
+    .environmentObject(ViewTabConfigurationManager(defaults: defaults))
 }
 
 #if os(macOS)

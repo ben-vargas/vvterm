@@ -43,14 +43,6 @@ nonisolated enum TerminalVoicePresentationState: Equatable, Sendable {
 
 @MainActor
 final class TerminalTabManager: ObservableObject {
-    /// DEV-228-only compatibility composition for the Remote Files default initializer.
-    /// App roots construct and inject their own manager instead.
-    static let shared = TerminalTabManagerLiveComposition.makeManager(
-        appLockManager: .shared,
-        serverManager: .shared,
-        engagementTracker: EngagementTracker(dependencies: .live)
-    )
-
     // MARK: - Session State
 
     let sessionState: TerminalSessionStateStore

@@ -1,28 +1,33 @@
 import Combine
 import Foundation
 
-#if os(iOS)
-import UIKit
-#elseif os(macOS)
-import AppKit
-#endif
-
 @MainActor
 enum TerminalTabManagerLiveComposition {
     private static let persistenceKey = "terminalTabsSnapshot.v1"
 
     static func makeManager(
+        defaults: UserDefaults,
+        networkMonitor: NetworkMonitor,
         appLockManager: AppLockManager,
         serverManager: ServerManager,
-        engagementTracker: EngagementTracker
+        engagementTracker: EngagementTracker,
+        analyticsTracker: AnalyticsTracker,
+        liveActivityManager: LiveActivityManager,
+        remoteMosh: any TerminalRemoteMoshServicing,
+        remoteTmux: any TerminalRemoteTmuxServicing,
+        eternalTerminalResumeStore: any EternalTerminalResumeStoring,
+        moshResumeStore: any MoshResumeStoring,
+        terminalSurfaceStore: any TerminalSurfaceStoring,
+        deviceID: String,
+        themeStyle: @escaping @MainActor () -> RemoteTmuxThemeStyle,
+        applicationIsActive: @escaping @MainActor () -> Bool
     ) -> TerminalTabManager {
-        let defaults = UserDefaults.standard
-        let networkMonitor = NetworkMonitor.shared
-        let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
-        let terminalSurfaceStore = GhosttyTerminalSurfaceStore()
         let tmuxCoordinator = TerminalTmuxSessionLiveComposition.makeCoordinator(
             defaults: defaults,
-            serverManager: serverManager
+            serverManager: serverManager,
+            remoteTmux: remoteTmux,
+            deviceID: deviceID,
+            themeStyle: themeStyle
         )
         let dependencies = TerminalTabManagerDependencies(
             networkReadiness: TerminalNetworkReadinessSource(
@@ -32,13 +37,7 @@ enum TerminalTabManagerLiveComposition {
                     .removeDuplicates()
                     .eraseToAnyPublisher()
             ),
-            applicationIsActive: {
-                #if os(iOS)
-                UIApplication.shared.applicationState == .active
-                #else
-                NSApplication.shared.isActive
-                #endif
-            },
+            applicationIsActive: applicationIsActive,
             appLock: TerminalAppLockSource(
                 initialIsLocked: appLockManager.isAppLocked,
                 updates: appLockManager.$lockState
@@ -51,7 +50,7 @@ enum TerminalTabManagerLiveComposition {
                     await appLockManager.ensureServerUnlocked(server)
                 },
                 refreshLiveActivity: { connectionStates in
-                    LiveActivityManager.shared.refresh(with: connectionStates)
+                    liveActivityManager.refresh(with: connectionStates)
                 },
                 recordSuccessfulConnection: { id, transport in
                     engagementTracker.recordSuccessfulConnection(
@@ -65,12 +64,14 @@ enum TerminalTabManagerLiveComposition {
                     )
                 },
                 recordSplitPaneCreated: {
-                    AnalyticsTracker.shared.trackSplitPaneCreated()
+                    analyticsTracker.trackSplitPaneCreated()
                 }
             ),
-            remoteMosh: RemoteMoshManager.shared,
+            remoteMosh: remoteMosh,
             eternalTerminalRuntime: .live(
-                resumeStore: eternalTerminalResumeStore
+                resumeStore: eternalTerminalResumeStore,
+                analyticsTracker: analyticsTracker,
+                remoteTmux: remoteTmux
             )
         )
         return TerminalTabManager(
@@ -83,7 +84,7 @@ enum TerminalTabManagerLiveComposition {
             terminalSurfaceStore: terminalSurfaceStore,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: TerminalMoshRecoveryService(
-                store: MoshResumeStore.shared
+                store: moshResumeStore
             )
         )
     }

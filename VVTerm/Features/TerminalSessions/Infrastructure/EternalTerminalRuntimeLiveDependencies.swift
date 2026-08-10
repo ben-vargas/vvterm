@@ -3,28 +3,30 @@ import Foundation
 @MainActor
 extension EternalTerminalRuntimeDependencies {
     static func live(
-        resumeStore: any EternalTerminalResumeStoring
+        resumeStore: any EternalTerminalResumeStoring,
+        analyticsTracker: AnalyticsTracker,
+        remoteTmux: any TerminalRemoteTmuxServicing
     ) -> Self {
         Self(
             recordEvent: { event in
                 switch event {
                 case .connectionAttempted:
-                    AnalyticsTracker.shared.trackConnectionAttempted(
+                    analyticsTracker.trackConnectionAttempted(
                         transport: ShellTransport.eternalTerminal.rawValue
                     )
                 case .connectionReconnecting:
-                    AnalyticsTracker.shared.trackConnectionReconnecting(
+                    analyticsTracker.trackConnectionReconnecting(
                         transport: ShellTransport.eternalTerminal.rawValue
                     )
                 case .connectionFailed(let reason):
-                    AnalyticsTracker.shared.trackConnectionFailed(
+                    analyticsTracker.trackConnectionFailed(
                         transport: ShellTransport.eternalTerminal.rawValue,
                         reason: reason
                     )
                 }
             },
             tmuxSessionKiller: LiveEternalTerminalTmuxSessionKiller(
-                remoteTmux: RemoteTmuxManager.shared
+                remoteTmux: remoteTmux
             ),
             sessionPreparer: LiveEternalTerminalSessionPreparer(
                 resumeStore: resumeStore
@@ -34,9 +36,13 @@ extension EternalTerminalRuntimeDependencies {
 }
 
 private nonisolated struct LiveEternalTerminalTmuxSessionKiller: EternalTerminalTmuxSessionKilling {
-    let remoteTmux: RemoteTmuxManager
+    let remoteTmux: any TerminalRemoteTmuxServicing
 
     func killSession(named sessionName: String, using client: SSHClient) async {
-        await remoteTmux.killSession(named: sessionName, using: client)
+        await remoteTmux.killSession(
+            named: sessionName,
+            using: client,
+            backend: nil
+        )
     }
 }

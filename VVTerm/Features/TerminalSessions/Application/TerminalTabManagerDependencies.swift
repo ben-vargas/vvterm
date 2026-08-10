@@ -83,13 +83,13 @@ struct TerminalTmuxConfiguration {
     let enabledByDefault: () -> Bool
     let startupBehaviorByDefault: () -> TmuxStartupBehavior
     let serverSettings: (UUID) -> ServerSettings?
-    let themeStyle: () -> RemoteTmuxThemeStyle
+    let themeStyle: @MainActor () -> RemoteTmuxThemeStyle
 }
 
 @MainActor
 struct TerminalTabManagerDependencies {
     let networkReadiness: TerminalNetworkReadinessSource
-    let applicationIsActive: () -> Bool
+    let applicationIsActive: @MainActor () -> Bool
     let appLock: TerminalAppLockSource
     let effects: TerminalSessionApplicationEffects
     let remoteMosh: any TerminalRemoteMoshServicing
