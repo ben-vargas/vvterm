@@ -3,6 +3,8 @@ import os.log
 
 @MainActor
 final class UserDefaultsStatsPreferencesStore: StatsPreferencesPersisting {
+    static let storageKey = "statsPreferencesV1"
+
     private let defaults: UserDefaults
     private let key: String
     private let logger = Logger(

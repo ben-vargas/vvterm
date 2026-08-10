@@ -7,21 +7,6 @@ struct CloudKitSyncState: Equatable, Sendable {
         case error(String)
         case offline
         case disabled
-
-        var description: String {
-            switch self {
-            case .idle:
-                return String(localized: "Synced")
-            case .syncing:
-                return String(localized: "Syncing...")
-            case .error(let message):
-                return String(format: String(localized: "Error: %@"), message)
-            case .offline:
-                return String(localized: "Offline")
-            case .disabled:
-                return String(localized: "Disabled")
-            }
-        }
     }
 
     enum OperationCompletion: Equatable, Sendable {

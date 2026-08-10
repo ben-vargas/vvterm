@@ -25,7 +25,7 @@ extension PreferencesStoreDependencies {
         PreferencesStoreDependencies(
             persistence: UserDefaultsStatsPreferencesStore(
                 defaults: defaults,
-                key: CloudKitSyncConstants.statsPreferencesStorageKey
+                key: UserDefaultsStatsPreferencesStore.storageKey
             ),
             cloud: cloud,
             mutationQueue: mutationQueue,

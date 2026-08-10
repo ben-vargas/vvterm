@@ -237,7 +237,7 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
         )
         XCTAssertNotNil(
             defaults.data(
-                forKey: CloudKitSyncConstants.terminalAccessoryProfileStorageKey
+                forKey: UserDefaultsTerminalAccessoryProfileStore.storageKey
             )
         )
     }

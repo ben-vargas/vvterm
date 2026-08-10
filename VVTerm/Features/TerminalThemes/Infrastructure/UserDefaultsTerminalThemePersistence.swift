@@ -7,6 +7,15 @@ nonisolated struct TerminalThemeUserDefaultsKeys: Equatable, Sendable {
     let usesPerAppearanceTheme: String
     let preferenceUpdatedAt: String
     let activeBackgroundCache: String
+
+    static let live = Self(
+        customThemes: "terminalCustomThemesV1",
+        darkTheme: "terminalThemeName",
+        lightTheme: "terminalThemeNameLight",
+        usesPerAppearanceTheme: "terminalUsePerAppearanceTheme",
+        preferenceUpdatedAt: "terminalThemePreferenceUpdatedAt",
+        activeBackgroundCache: "terminalBackgroundColor"
+    )
 }
 
 @MainActor

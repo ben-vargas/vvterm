@@ -30,7 +30,7 @@ struct ServerLocalStoreTests {
         let defaults = fixture.defaults
         defer { defaults.removePersistentDomain(forName: fixture.suiteName) }
         let corruptData = Data("not-json".utf8)
-        defaults.set(corruptData, forKey: CloudKitSyncConstants.serverStorageKey)
+        defaults.set(corruptData, forKey: ServerLocalStore.serversStorageKey)
         let store = ServerLocalStore(defaults: defaults)
 
         guard case .unreadable(let issue) = store.loadServers() else {
@@ -51,7 +51,7 @@ struct ServerLocalStoreTests {
         let incompatibleData = try JSONSerialization.data(
             withJSONObject: [["id": UUID().uuidString, "unknown": true]]
         )
-        defaults.set(incompatibleData, forKey: CloudKitSyncConstants.workspaceStorageKey)
+        defaults.set(incompatibleData, forKey: ServerLocalStore.workspacesStorageKey)
         let store = ServerLocalStore(defaults: defaults)
 
         guard case .unreadable(let issue) = store.loadWorkspaces() else {
@@ -70,14 +70,14 @@ struct ServerLocalStoreTests {
         defer { defaults.removePersistentDomain(forName: fixture.suiteName) }
         let firstData = Data("first-corrupt-copy".utf8)
         let secondData = Data("second-corrupt-copy".utf8)
-        defaults.set(firstData, forKey: CloudKitSyncConstants.serverStorageKey)
+        defaults.set(firstData, forKey: ServerLocalStore.serversStorageKey)
         let store = ServerLocalStore(defaults: defaults)
 
         guard case .unreadable(let firstIssue) = store.loadServers() else {
             Issue.record("Expected the first decode failure")
             return
         }
-        defaults.set(secondData, forKey: CloudKitSyncConstants.serverStorageKey)
+        defaults.set(secondData, forKey: ServerLocalStore.serversStorageKey)
         guard case .unreadable = store.loadServers() else {
             Issue.record("Expected the second decode failure")
             return

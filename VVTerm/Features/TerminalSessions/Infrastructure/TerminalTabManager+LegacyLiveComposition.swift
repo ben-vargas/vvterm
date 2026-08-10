@@ -51,7 +51,7 @@ extension TerminalTabManager {
             themeStyle: {
                 TerminalTmuxSessionLiveComposition.themeStyle(
                     for: defaults.string(
-                        forKey: CloudKitSyncConstants.terminalThemeNameKey
+                        forKey: TerminalThemeUserDefaultsKeys.live.darkTheme
                     )
                 )
             },

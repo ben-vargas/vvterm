@@ -10,9 +10,9 @@ struct RemoteFileBrowserScreen: View {
 
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var appLockManager: AppLockManager
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) var terminalThemeName = "Aizen Dark"
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) var terminalThemeNameLight = "Aizen Light"
-    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) var usePerAppearanceTheme = true
+    @AppStorage(TerminalThemeUserDefaultsKeys.live.darkTheme) var terminalThemeName = "Aizen Dark"
+    @AppStorage(TerminalThemeUserDefaultsKeys.live.lightTheme) var terminalThemeNameLight = "Aizen Light"
+    @AppStorage(TerminalThemeUserDefaultsKeys.live.usesPerAppearanceTheme) var usePerAppearanceTheme = true
     @State var presentedPreviewPath: String?
     @State var uploadDestinationPath: String?
     @State var uploadImportRequest: UploadImportRequest?

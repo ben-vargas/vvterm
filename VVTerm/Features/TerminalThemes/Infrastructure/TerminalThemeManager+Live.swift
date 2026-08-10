@@ -60,18 +60,10 @@ extension TerminalThemeManagerDependencies {
         isSyncEnabled: @escaping () -> Bool,
         now: @escaping () -> Date
     ) -> Self {
-        let keys = TerminalThemeUserDefaultsKeys(
-            customThemes: CloudKitSyncConstants.terminalCustomThemesStorageKey,
-            darkTheme: CloudKitSyncConstants.terminalThemeNameKey,
-            lightTheme: CloudKitSyncConstants.terminalThemeNameLightKey,
-            usesPerAppearanceTheme: CloudKitSyncConstants.terminalUsePerAppearanceThemeKey,
-            preferenceUpdatedAt: CloudKitSyncConstants.terminalThemePreferenceUpdatedAtKey,
-            activeBackgroundCache: "terminalBackgroundColor"
-        )
         return TerminalThemeManagerDependencies(
             persistence: UserDefaultsTerminalThemePersistence(
                 defaults: defaults,
-                keys: keys
+                keys: .live
             ),
             cloud: cloud,
             mutationQueue: mutationQueue,

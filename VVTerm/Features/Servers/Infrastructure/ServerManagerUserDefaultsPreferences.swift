@@ -2,6 +2,9 @@ import Foundation
 
 @MainActor
 final class ServerManagerUserDefaultsPreferences: ServerManagerPreferences {
+    static let didBootstrapDefaultWorkspaceKey = "com.vivy.vvterm.didBootstrapDefaultWorkspace"
+    static let pendingBootstrapWorkspaceIDKey = "com.vivy.vvterm.pendingBootstrapWorkspaceID"
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults) {
@@ -9,8 +12,8 @@ final class ServerManagerUserDefaultsPreferences: ServerManagerPreferences {
     }
 
     var didBootstrapDefaultWorkspace: Bool {
-        get { defaults.bool(forKey: CloudKitSyncConstants.didBootstrapDefaultWorkspaceKey) }
-        set { defaults.set(newValue, forKey: CloudKitSyncConstants.didBootstrapDefaultWorkspaceKey) }
+        get { defaults.bool(forKey: Self.didBootstrapDefaultWorkspaceKey) }
+        set { defaults.set(newValue, forKey: Self.didBootstrapDefaultWorkspaceKey) }
     }
 
     var hasSeenWelcome: Bool {
@@ -36,7 +39,7 @@ final class ServerManagerUserDefaultsPreferences: ServerManagerPreferences {
     var pendingBootstrapWorkspaceID: UUID? {
         get {
             guard let rawValue = defaults.string(
-                forKey: CloudKitSyncConstants.pendingBootstrapWorkspaceIDKey
+                forKey: Self.pendingBootstrapWorkspaceIDKey
             ) else {
                 return nil
             }
@@ -46,10 +49,10 @@ final class ServerManagerUserDefaultsPreferences: ServerManagerPreferences {
             if let newValue {
                 defaults.set(
                     newValue.uuidString,
-                    forKey: CloudKitSyncConstants.pendingBootstrapWorkspaceIDKey
+                    forKey: Self.pendingBootstrapWorkspaceIDKey
                 )
             } else {
-                defaults.removeObject(forKey: CloudKitSyncConstants.pendingBootstrapWorkspaceIDKey)
+                defaults.removeObject(forKey: Self.pendingBootstrapWorkspaceIDKey)
             }
         }
     }

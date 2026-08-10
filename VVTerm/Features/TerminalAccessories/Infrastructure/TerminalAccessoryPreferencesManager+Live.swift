@@ -27,7 +27,7 @@ extension TerminalAccessoryPreferencesDependencies {
         TerminalAccessoryPreferencesDependencies(
             profileStore: UserDefaultsTerminalAccessoryProfileStore(
                 defaults: defaults,
-                key: CloudKitSyncConstants.terminalAccessoryProfileStorageKey
+                key: UserDefaultsTerminalAccessoryProfileStore.storageKey
             ),
             cloud: cloud,
             mutationQueue: mutationQueue,

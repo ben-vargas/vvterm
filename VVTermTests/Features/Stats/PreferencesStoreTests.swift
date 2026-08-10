@@ -218,7 +218,7 @@ final class PreferencesStoreTests: XCTestCase {
         )
         XCTAssertNotNil(
             defaults.data(
-                forKey: CloudKitSyncConstants.statsPreferencesStorageKey
+                forKey: UserDefaultsStatsPreferencesStore.storageKey
             )
         )
     }

@@ -3,6 +3,8 @@ import os.log
 
 @MainActor
 final class UserDefaultsTerminalAccessoryProfileStore: TerminalAccessoryProfilePersisting {
+    static let storageKey = "terminalAccessoryProfileV1"
+
     private let defaults: UserDefaults
     private let key: String
     private let logger = Logger(

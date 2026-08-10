@@ -339,11 +339,11 @@ final class TerminalThemePersistenceTests: XCTestCase {
         )
         dependencies.persistence.saveSelection(selection)
         XCTAssertEqual(
-            defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameKey),
+            defaults.string(forKey: TerminalThemeUserDefaultsKeys.live.darkTheme),
             selection.darkThemeName
         )
         XCTAssertEqual(
-            defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameLightKey),
+            defaults.string(forKey: TerminalThemeUserDefaultsKeys.live.lightTheme),
             selection.lightThemeName
         )
 

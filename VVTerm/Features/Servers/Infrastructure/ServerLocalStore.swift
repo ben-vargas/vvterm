@@ -2,6 +2,8 @@ import Foundation
 
 @MainActor
 struct ServerLocalStore {
+    static let serversStorageKey = "com.vivy.vvterm.servers"
+    static let workspacesStorageKey = "com.vivy.vvterm.workspaces"
     private static let workspaceDeletionJournalKey = "com.vivy.vvterm.workspaceDeletionJournal.v1"
 
     private let defaults: UserDefaults
@@ -10,8 +12,8 @@ struct ServerLocalStore {
 
     init(
         defaults: UserDefaults,
-        serversKey: String = CloudKitSyncConstants.serverStorageKey,
-        workspacesKey: String = CloudKitSyncConstants.workspaceStorageKey
+        serversKey: String = Self.serversStorageKey,
+        workspacesKey: String = Self.workspacesStorageKey
     ) {
         self.defaults = defaults
         self.serversKey = serversKey
