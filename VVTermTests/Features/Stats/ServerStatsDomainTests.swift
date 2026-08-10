@@ -12,7 +12,6 @@ final class ServerStatsDomainTests: XCTestCase {
 
         XCTAssertEqual(state.phase, .failed(message: "Connection failed"))
         XCTAssertFalse(state.isCollecting)
-        XCTAssertEqual(state.errorMessage, "Connection failed")
     }
 
     func testStaleCollectionCompletionCannotFinishNewAttempt() {
@@ -27,7 +26,6 @@ final class ServerStatsDomainTests: XCTestCase {
         XCTAssertFalse(state.finish(attemptID: firstAttemptID, errorMessage: "Stale failure"))
         XCTAssertEqual(state.phase, .starting(attemptID: secondAttemptID))
         XCTAssertTrue(state.isCollecting)
-        XCTAssertNil(state.errorMessage)
     }
 
     func testStaleCollectionConnectionCannotAdvanceNewAttempt() {
@@ -43,29 +41,28 @@ final class ServerStatsDomainTests: XCTestCase {
         XCTAssertEqual(state.phase, .starting(attemptID: secondAttemptID))
     }
 
-    func testCredentialApprovalRemainsTypedAndDoesNotReportMissingCredentials() {
+    func testCredentialApprovalRemainsTyped() {
         let attemptID = UUID()
         let serverID = UUID()
-        let request = ServerSecurityApprovalRequest.credentialEndpoint(
-            serverID: serverID
+        let request = ServerStatsApprovalRequest(
+            id: "credential:\(serverID.uuidString)",
+            serverID: serverID,
+            kind: .credentialEndpoint
         )
         var state = ServerStatsCollectionState()
 
         state.start(attemptID: attemptID)
 
         XCTAssertTrue(state.requireApproval(attemptID: attemptID, request: request))
-        XCTAssertEqual(state.securityApproval, request)
-        XCTAssertEqual(
-            state.errorMessage,
-            String(localized: "Credential endpoint approval is required.")
-        )
-        XCTAssertNotEqual(state.errorMessage, "No credentials found")
+        XCTAssertEqual(state.approvalRequest, request)
     }
 
     func testApprovalCancellationBecomesClearFailure() {
         let attemptID = UUID()
-        let request = ServerSecurityApprovalRequest.credentialEndpoint(
-            serverID: UUID()
+        let request = ServerStatsApprovalRequest(
+            id: "credential",
+            serverID: UUID(),
+            kind: .credentialEndpoint
         )
         var state = ServerStatsCollectionState()
         state.start(attemptID: attemptID)
@@ -74,14 +71,11 @@ final class ServerStatsDomainTests: XCTestCase {
         XCTAssertTrue(
             state.resolveApproval(
                 request,
-                message: ServerSecurityApprovalError.cancelled.localizedDescription
+                message: "Approval cancelled"
             )
         )
-        XCTAssertNil(state.securityApproval)
-        XCTAssertEqual(
-            state.errorMessage,
-            ServerSecurityApprovalError.cancelled.localizedDescription
-        )
+        XCTAssertNil(state.approvalRequest)
+        XCTAssertEqual(state.phase, .failed(message: "Approval cancelled"))
     }
 
     func testMemoryPercentReturnsZeroWhenTotalIsZero() {

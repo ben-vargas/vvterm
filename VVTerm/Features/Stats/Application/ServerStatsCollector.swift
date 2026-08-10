@@ -24,22 +24,6 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
 
     var isCollecting: Bool { phase.attemptID != nil }
 
-    var errorMessage: String? {
-        switch phase {
-        case .approvalRequired(let request):
-            switch request.kind {
-            case .credentialEndpoint:
-                return String(localized: "Credential endpoint approval is required.")
-            case .hostKey:
-                return String(localized: "SSH host key approval is required before authentication.")
-            }
-        case .failed(let message):
-            return message
-        case .idle, .starting, .collecting:
-            return nil
-        }
-    }
-
     var approvalRequest: ServerStatsApprovalRequest? {
         guard case .approvalRequired(let request) = phase else { return nil }
         return request
@@ -167,7 +151,6 @@ final class ServerStatsCollector: ObservableObject {
     private var cleanupTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
 
     var isCollecting: Bool { collectionState.isCollecting }
-    var connectionError: String? { collectionState.errorMessage }
     var isDockerCollectionEnabled: Bool { activeAttempt?.collectDocker ?? false }
 
     var approvalReferenceForPresentation: (any ServerStatsApprovalReference)? {
@@ -603,16 +586,7 @@ final class ServerStatsCollector: ObservableObject {
     }
 }
 
-private enum ProcessControlError: LocalizedError {
+nonisolated enum ProcessControlError: Error, Equatable, Sendable {
     case notConnected
     case protectedProcess
-
-    var errorDescription: String? {
-        switch self {
-        case .notConnected:
-            return String(localized: "Stats is not connected to the server.")
-        case .protectedProcess:
-            return String(localized: "This process cannot be killed from Stats.")
-        }
-    }
 }
