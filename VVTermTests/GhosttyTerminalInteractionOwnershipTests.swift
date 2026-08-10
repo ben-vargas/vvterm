@@ -52,6 +52,8 @@ struct GhosttyTerminalInteractionOwnershipTests {
         #expect(interactionTextInput !== terminal)
         #expect(pointerMenu.view === terminal)
 
+        terminal.keyboardUITestSetHardwareKeyboardAttached(false)
+
         terminal.nativeSelectionSnapshot = TerminalNativeTextSnapshot(
             lines: ["one two"],
             cellSize: CGSize(width: 10, height: 20),
