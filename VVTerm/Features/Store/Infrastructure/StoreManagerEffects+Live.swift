@@ -1,52 +1,38 @@
-import Foundation
-
 extension StoreManagerEffects {
-    static func live(engagementTracker: EngagementTracker) -> Self {
+    static func live(
+        analytics: any StoreAnalyticsRecording,
+        engagementTracker: EngagementTracker
+    ) -> Self {
         StoreManagerEffects { effect in
             switch effect {
             case .paywallPresented(let source):
                 engagementTracker.notePaywallPresented()
-                AnalyticsTracker.shared.trackPaywallViewed(source: source.rawValue)
+                analytics.record(.paywallPresented(source: source))
             case .paywallCTATapped(let source, let productID):
-                AnalyticsTracker.shared.trackPaywallCTATapped(
-                    source: source.rawValue,
-                    productId: productID
-                )
+                analytics.record(.paywallCTATapped(source: source, productID: productID))
             case .purchaseStarted(let source, let productID):
-                AnalyticsTracker.shared.trackPurchaseStarted(
-                    source: source.rawValue,
-                    productId: productID
-                )
+                analytics.record(.purchaseStarted(source: source, productID: productID))
             case .purchaseSucceeded(let source, let productID):
-                AnalyticsTracker.shared.trackPurchaseSucceeded(
-                    source: source.rawValue,
-                    productId: productID
-                )
+                analytics.record(.purchaseSucceeded(source: source, productID: productID))
             case .purchaseCancelled(let source, let productID):
-                AnalyticsTracker.shared.trackPurchaseCancelled(
-                    source: source.rawValue,
-                    productId: productID
-                )
+                analytics.record(.purchaseCancelled(source: source, productID: productID))
             case .purchasePending(let source, let productID):
-                AnalyticsTracker.shared.trackPurchasePending(
-                    source: source.rawValue,
-                    productId: productID
-                )
+                analytics.record(.purchasePending(source: source, productID: productID))
             case .purchaseFailed(let source, let productID, let reason):
-                AnalyticsTracker.shared.trackPurchaseFailed(
-                    source: source.rawValue,
-                    productId: productID,
+                analytics.record(.purchaseFailed(
+                    source: source,
+                    productID: productID,
                     reason: reason
-                )
+                ))
             case .limitHit(let source, let generation, let current, let limit):
-                AnalyticsTracker.shared.trackLimitHit(
-                    source: source.rawValue,
-                    generation: generation.rawValue,
+                analytics.record(.limitHit(
+                    source: source,
+                    generation: generation,
                     current: current,
                     limit: limit
-                )
+                ))
             case .entitlementsUpdated(let isPro):
-                AnalyticsTracker.shared.trackAppLaunched(isPro: isPro)
+                analytics.record(.entitlementsUpdated(isPro: isPro))
             case .reviewRequestedAfterPurchase:
                 engagementTracker.requestReviewAfterPurchase()
             }

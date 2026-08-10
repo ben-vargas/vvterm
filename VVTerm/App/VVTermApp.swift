@@ -21,9 +21,13 @@ struct VVTermApp: App {
             serverManager: serverManager,
             engagementTracker: engagementTracker
         )
+        let analyticsTracker = AnalyticsTracker.shared
         let storeManager = StoreManager(
             client: AppStoreKitClient(),
-            effects: .live(engagementTracker: engagementTracker)
+            effects: .live(
+                analytics: analyticsTracker,
+                engagementTracker: engagementTracker
+            )
         )
         let terminalThemeManager = TerminalThemeManager(dependencies: .live)
         let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager(
@@ -35,7 +39,6 @@ struct VVTermApp: App {
         let cloudKitManager = CloudKitManager.shared
         let keychainManager = KeychainManager.shared
         let knownHostsManager = KnownHostsManager.shared
-        let analyticsTracker = AnalyticsTracker.shared
         let analyticsOptOutAction = AnalyticsOptOutAction(
             emitAnalyticsDisabled: {
                 analyticsTracker.trackAnalyticsDisabled()
