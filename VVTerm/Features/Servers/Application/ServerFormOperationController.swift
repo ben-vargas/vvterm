@@ -45,36 +45,48 @@ struct ServerFormDependencies {
     let makeID: @Sendable () -> UUID
 }
 
+nonisolated enum ServerFormOperationFailure: Equatable, Sendable {
+    case operation(message: String)
+    case credentialLoad(message: String)
+    case storedKeyLoad(message: String)
+}
+
 nonisolated enum ServerFormOperationPhase: Equatable, Sendable {
     case idle
-    case loadingCredentials
+    case loadingCredentials(id: UUID)
     case testing(id: UUID, snapshot: ServerFormModel.ConnectionSnapshot)
     case testSucceeded(snapshot: ServerFormModel.ConnectionSnapshot)
     case testFailed(snapshot: ServerFormModel.ConnectionSnapshot, failure: ServerConnectionTestFailure)
     case saving(id: UUID)
-    case failed(message: String)
+    case failed(ServerFormOperationFailure)
     case requiresUpgrade
 }
 
 @MainActor
 final class ServerFormOperationController: ObservableObject {
     @Published private(set) var phase: ServerFormOperationPhase = .idle
+    @Published private(set) var storedKeys: [SSHKeyEntry] = []
+    @Published private(set) var selectedStoredKeyID: UUID?
 
+    private let credentialLoader: any ServerFormCredentialLoading
     private let connectionTester: any ServerConnectionTesting
     private let hostKeys: any ServerHostKeyRepository
     private let saveUseCase: ServerSaveUseCase
     private let now: @Sendable () -> Date
     private let makeID: @Sendable () -> UUID
+    private var credentialLoadTask: Task<Void, Never>?
     private var connectionTestTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
 
     init(
+        credentialLoader: any ServerFormCredentialLoading,
         connectionTester: any ServerConnectionTesting,
         hostKeys: any ServerHostKeyRepository,
         saveUseCase: ServerSaveUseCase,
         now: @escaping @Sendable () -> Date,
         makeID: @escaping @Sendable () -> UUID
     ) {
+        self.credentialLoader = credentialLoader
         self.connectionTester = connectionTester
         self.hostKeys = hostKeys
         self.saveUseCase = saveUseCase
@@ -83,12 +95,14 @@ final class ServerFormOperationController: ObservableObject {
     }
 
     deinit {
+        credentialLoadTask?.cancel()
         connectionTestTask?.cancel()
         saveTask?.cancel()
     }
 
     var isLoadingCredentials: Bool {
-        phase == .loadingCredentials
+        if case .loadingCredentials = phase { return true }
+        return false
     }
 
     var isTestingConnection: Bool {
@@ -105,8 +119,8 @@ final class ServerFormOperationController: ObservableObject {
         phase == .requiresUpgrade
     }
 
-    var failureMessage: String? {
-        if case .failed(let message) = phase { return message }
+    var failure: ServerFormOperationFailure? {
+        if case .failed(let failure) = phase { return failure }
         return nil
     }
 
@@ -122,19 +136,6 @@ final class ServerFormOperationController: ObservableObject {
     func hasValidConnectionTest(for snapshot: ServerFormModel.ConnectionSnapshot) -> Bool {
         guard case .testSucceeded(let completedSnapshot) = phase else { return false }
         return completedSnapshot == snapshot
-    }
-
-    func beginCredentialLoad() {
-        phase = .loadingCredentials
-    }
-
-    func finishCredentialLoad() {
-        guard phase == .loadingCredentials else { return }
-        phase = .idle
-    }
-
-    func fail(_ message: String) {
-        phase = .failed(message: message)
     }
 
     func clearPresentation() {
@@ -157,11 +158,93 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
+    func loadFormCredentials(
+        for server: Server?,
+        onLoaded: @escaping @MainActor (ServerCredentials) -> Void
+    ) {
+        replaceCredentialLoad(
+            unexpectedFailure: { .credentialLoad(message: $0) }
+        ) { [weak self] operationID, loader in
+            let result = try await loader.loadFormCredentials(for: server)
+            guard !Task.isCancelled else { return }
+            guard self?.isCurrentCredentialLoad(operationID) == true else { return }
+
+            self?.storedKeys = result.storedKeys
+            switch result.savedCredentials {
+            case .notRequested:
+                self?.finishCredentialLoad(operationID)
+            case .loaded(let credentials, let selectedStoredKeyID):
+                self?.selectedStoredKeyID = selectedStoredKeyID
+                onLoaded(credentials)
+                self?.finishCredentialLoad(operationID)
+            case .failed(let message):
+                self?.failCredentialLoad(operationID, failure: .credentialLoad(message: message))
+            }
+        }
+    }
+
+    func refreshStoredKeys(
+        selecting selectedID: UUID,
+        onLoaded: @escaping @MainActor (ServerFormStoredKeyLoad) -> Void
+    ) {
+        replaceCredentialLoad(
+            unexpectedFailure: { .storedKeyLoad(message: $0) }
+        ) { [weak self] operationID, loader in
+            let result = try await loader.loadFormCredentials(for: nil)
+            guard !Task.isCancelled else { return }
+            guard self?.isCurrentCredentialLoad(operationID) == true else { return }
+            self?.storedKeys = result.storedKeys
+            guard let entry = result.storedKeys.first(where: { $0.id == selectedID }) else {
+                self?.selectedStoredKeyID = nil
+                self?.finishCredentialLoad(operationID)
+                return
+            }
+            try await self?.loadStoredKey(
+                entry,
+                operationID: operationID,
+                loader: loader,
+                onLoaded: onLoaded
+            )
+        }
+    }
+
+    func selectStoredKey(
+        id: UUID,
+        onLoaded: @escaping @MainActor (ServerFormStoredKeyLoad) -> Void
+    ) {
+        guard let entry = storedKeys.first(where: { $0.id == id }) else { return }
+        selectedStoredKeyID = id
+        replaceCredentialLoad(
+            unexpectedFailure: { .storedKeyLoad(message: $0) }
+        ) { [weak self] operationID, loader in
+            try await self?.loadStoredKey(
+                entry,
+                operationID: operationID,
+                loader: loader,
+                onLoaded: onLoaded
+            )
+        }
+    }
+
+    func clearStoredKeySelection() {
+        invalidateCredentialLoading()
+        selectedStoredKeyID = nil
+    }
+
+    func invalidateCredentialLoading() {
+        credentialLoadTask?.cancel()
+        credentialLoadTask = nil
+        if case .loadingCredentials = phase {
+            phase = .idle
+        }
+    }
+
     func startConnectionTest(
         server: Server,
         credentials: ServerCredentials,
         snapshot: ServerFormModel.ConnectionSnapshot
     ) {
+        invalidateCredentialLoading()
         connectionTestTask?.cancel()
         let operationID = makeID()
         phase = .testing(id: operationID, snapshot: snapshot)
@@ -241,23 +324,84 @@ final class ServerFormOperationController: ObservableObject {
                 if case .proRequired = error {
                     self?.phase = .requiresUpgrade
                 } else {
-                    self?.phase = .failed(message: error.localizedDescription)
+                    self?.phase = .failed(.operation(message: error.localizedDescription))
                 }
             } catch {
                 guard !Task.isCancelled else { return }
                 guard self?.isCurrentSave(operationID) == true else { return }
                 self?.saveTask = nil
-                self?.phase = .failed(message: error.localizedDescription)
+                self?.phase = .failed(.operation(message: error.localizedDescription))
             }
         }
     }
 
     func cancel() {
+        credentialLoadTask?.cancel()
+        credentialLoadTask = nil
         connectionTestTask?.cancel()
         connectionTestTask = nil
         saveTask?.cancel()
         saveTask = nil
         phase = .idle
+    }
+
+    private func replaceCredentialLoad(
+        unexpectedFailure: @escaping (String) -> ServerFormOperationFailure,
+        operation: @escaping @MainActor (
+            _ operationID: UUID,
+            _ loader: any ServerFormCredentialLoading
+        ) async throws -> Void
+    ) {
+        credentialLoadTask?.cancel()
+        let operationID = makeID()
+        phase = .loadingCredentials(id: operationID)
+        let loader = credentialLoader
+        credentialLoadTask = Task { [weak self] in
+            do {
+                try await operation(operationID, loader)
+            } catch is CancellationError {
+                return
+            } catch {
+                self?.failCredentialLoad(
+                    operationID,
+                    failure: unexpectedFailure(error.localizedDescription)
+                )
+            }
+        }
+    }
+
+    private func loadStoredKey(
+        _ entry: SSHKeyEntry,
+        operationID: UUID,
+        loader: any ServerFormCredentialLoading,
+        onLoaded: @escaping @MainActor (ServerFormStoredKeyLoad) -> Void
+    ) async throws {
+        let result = try await loader.loadStoredKey(entry)
+        guard !Task.isCancelled else { return }
+        guard isCurrentCredentialLoad(operationID) else { return }
+        selectedStoredKeyID = result.id
+        onLoaded(result)
+        finishCredentialLoad(operationID)
+    }
+
+    private func finishCredentialLoad(_ id: UUID) {
+        guard isCurrentCredentialLoad(id) else { return }
+        credentialLoadTask = nil
+        phase = .idle
+    }
+
+    private func failCredentialLoad(
+        _ id: UUID,
+        failure: ServerFormOperationFailure
+    ) {
+        guard isCurrentCredentialLoad(id) else { return }
+        credentialLoadTask = nil
+        phase = .failed(failure)
+    }
+
+    private func isCurrentCredentialLoad(_ id: UUID) -> Bool {
+        guard case .loadingCredentials(let currentID) = phase else { return false }
+        return currentID == id
     }
 
     private var currentTestSnapshot: ServerFormModel.ConnectionSnapshot? {

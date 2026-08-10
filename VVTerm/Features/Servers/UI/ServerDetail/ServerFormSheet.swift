@@ -55,13 +55,10 @@ struct ServerFormSheet: View {
     @State private var showingServerLimitAlert = false
     @State private var showingCreateWorkspace = false
     @State private var showingAddKeySheet = false
-    @State private var storedKeys: [SSHKeyEntry] = []
-    @State private var selectedStoredKey: SSHKeyEntry?
     @State private var programmaticSSHKeyValue: String?
     @State private var localDiscoveryPresentation: LocalDeviceDiscoveryPresentation?
     @State private var hasAuthorizedInitialEdit: Bool
 
-    private let credentials: any ServerCredentialRepository
     private let now: @Sendable () -> Date
     private let makeID: @Sendable () -> UUID
 
@@ -86,7 +83,6 @@ struct ServerFormSheet: View {
         self.server = server
         self.prefill = prefill
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
-        self.credentials = dependencies.credentials
         self.now = dependencies.now
         self.makeID = dependencies.makeID
         let saveUseCase = ServerSaveUseCase(
@@ -96,6 +92,9 @@ struct ServerFormSheet: View {
         self.onSave = onSave
         _operations = StateObject(
             wrappedValue: ServerFormOperationController(
+                credentialLoader: ServerFormCredentialLoader(
+                    repository: dependencies.credentials
+                ),
                 connectionTester: dependencies.connectionTester,
                 hostKeys: dependencies.hostKeys,
                 saveUseCase: saveUseCase,
@@ -265,17 +264,21 @@ struct ServerFormSheet: View {
         styledFormContent
         .interactiveDismissDisabled(isSaving)
         .task {
-            guard let server = server else {
-                storedKeys = credentials.getStoredSSHKeys()
-                return
+            if let server {
+                guard await appLockManager.authorizeProtectedServerAction(server, action: .edit) else {
+                    dismiss()
+                    return
+                }
+                hasAuthorizedInitialEdit = true
             }
-            guard await appLockManager.authorizeProtectedServerAction(server, action: .edit) else {
-                dismiss()
-                return
+            operations.loadFormCredentials(for: server) { credentials in
+                if let privateKey = credentials.privateKey,
+                   let key = String(data: privateKey, encoding: .utf8) {
+                    programmaticSSHKeyValue = key
+                }
+                guard let server else { return }
+                form.apply(credentials, for: server)
             }
-            hasAuthorizedInitialEdit = true
-            storedKeys = credentials.getStoredSSHKeys()
-            loadStoredCredentials(for: server)
         }
         #if os(iOS)
             .toolbar {
@@ -302,9 +305,9 @@ struct ServerFormSheet: View {
             .adaptiveSoftScrollEdges()
             .sheet(isPresented: $showingAddKeySheet) {
                 AddSSHKeySheet(onSave: { entry in
-                    storedKeys = credentials.getStoredSSHKeys()
-                    selectedStoredKey = entry
-                    loadStoredKey(entry)
+                    operations.refreshStoredKeys(selecting: entry.id) { loadedKey in
+                        applyStoredKey(loadedKey)
+                    }
                 })
                 .adaptiveSoftScrollEdges()
             }
@@ -335,7 +338,6 @@ struct ServerFormSheet: View {
     private var lifecycleFormContent: some View {
         presentedFormContent
             .onAppear {
-                selectMatchingStoredKeyIfAvailable()
                 reconcileAssignmentWorkspace()
             }
             .onChange(of: operations.connectionTestFailure) { failure in
@@ -350,8 +352,8 @@ struct ServerFormSheet: View {
             .onChange(of: form.port) { _ in resetConnectionTestState() }
             .onChange(of: form.eternalTerminalPort) { _ in resetConnectionTestState() }
             .onChange(of: form.username) { _ in resetConnectionTestState() }
-            .onChange(of: form.transportSelection) { _ in resetConnectionTestState() }
-            .onChange(of: form.authMethod) { _ in resetConnectionTestState() }
+            .onChange(of: form.transportSelection) { _ in handleCredentialIntentChange() }
+            .onChange(of: form.authMethod) { _ in handleCredentialIntentChange() }
     }
 
     var formContent: some View {
@@ -360,23 +362,23 @@ struct ServerFormSheet: View {
                 reconcileAssignmentWorkspace()
                 resetConnectionTestState()
             }
-            .onChange(of: form.password) { _ in resetConnectionTestState() }
+            .onChange(of: form.password) { _ in handleCredentialIntentChange() }
             .onChange(of: form.sshKey) { _ in
                 if let programmaticSSHKeyValue,
                    form.sshKey == programmaticSSHKeyValue {
                     self.programmaticSSHKeyValue = nil
-                } else if !isLoadingCredentials {
-                    selectedStoredKey = nil
+                } else {
+                    operations.clearStoredKeySelection()
                     form.sshPublicKey = ""
                 }
                 resetConnectionTestState()
             }
-            .onChange(of: form.sshPassphrase) { _ in resetConnectionTestState() }
-            .onChange(of: form.sshPublicKey) { _ in resetConnectionTestState() }
-            .onChange(of: form.cloudflareAccessMode) { _ in resetConnectionTestState() }
-            .onChange(of: form.cloudflareClientID) { _ in resetConnectionTestState() }
-            .onChange(of: form.cloudflareClientSecret) { _ in resetConnectionTestState() }
-            .onChange(of: form.cloudflareTeamDomainOverride) { _ in resetConnectionTestState() }
+            .onChange(of: form.sshPassphrase) { _ in handleCredentialIntentChange() }
+            .onChange(of: form.sshPublicKey) { _ in handleCredentialIntentChange() }
+            .onChange(of: form.cloudflareAccessMode) { _ in handleCredentialIntentChange() }
+            .onChange(of: form.cloudflareClientID) { _ in handleCredentialIntentChange() }
+            .onChange(of: form.cloudflareClientSecret) { _ in handleCredentialIntentChange() }
+            .onChange(of: form.cloudflareTeamDomainOverride) { _ in handleCredentialIntentChange() }
     }
 
     @ViewBuilder
@@ -708,7 +710,7 @@ struct ServerFormSheet: View {
 
     @ViewBuilder
     private var errorSection: some View {
-        if let error = operations.failureMessage {
+        if let error = operationFailureMessage {
             Section {
                 Text(error)
                     .foregroundStyle(.red)
@@ -756,20 +758,15 @@ struct ServerFormSheet: View {
     @ViewBuilder
     private var keyInputView: some View {
         // Stored keys picker
-        if !storedKeys.isEmpty {
-            Picker("Stored Key", selection: $selectedStoredKey) {
-                Text("Select a key...").tag(nil as SSHKeyEntry?)
-                ForEach(storedKeys) { key in
+        if !operations.storedKeys.isEmpty {
+            Picker("Stored Key", selection: selectedStoredKeyIDBinding) {
+                Text("Select a key...").tag(nil as UUID?)
+                ForEach(operations.storedKeys) { key in
                     HStack {
                         Image(systemName: key.hasPassphrase ? "lock.shield.fill" : "key.fill")
                         Text(key.name)
                     }
-                    .tag(key as SSHKeyEntry?)
-                }
-            }
-            .onChange(of: selectedStoredKey) { newKey in
-                if let key = newKey {
-                    loadStoredKey(key)
+                    .tag(key.id as UUID?)
                 }
             }
         }
@@ -779,57 +776,43 @@ struct ServerFormSheet: View {
         }
     }
 
-    private func loadStoredKey(_ entry: SSHKeyEntry) {
-        do {
-            if let keyData = try credentials.getStoredSSHKeyData(for: entry.id) {
-                if let keyString = String(data: keyData.key, encoding: .utf8) {
-                    if form.sshKey != keyString {
-                        programmaticSSHKeyValue = keyString
-                    }
-                    form.sshKey = keyString
+    private var selectedStoredKeyIDBinding: Binding<UUID?> {
+        Binding(
+            get: { operations.selectedStoredKeyID },
+            set: { selectedID in
+                guard let selectedID else {
+                    operations.clearStoredKeySelection()
+                    return
                 }
-                if let passphrase = keyData.passphrase {
-                    form.sshPassphrase = passphrase
+                operations.selectStoredKey(id: selectedID) { loadedKey in
+                    applyStoredKey(loadedKey)
                 }
             }
-            form.sshPublicKey = entry.publicKey ?? ""
-        } catch {
-            operations.fail(
-                String(format: String(localized: "Failed to load key: %@"), error.localizedDescription)
-            )
-        }
+        )
     }
 
-    private func selectMatchingStoredKeyIfAvailable() {
-        guard selectedStoredKey == nil,
-              !form.sshKey.isEmpty,
-              !storedKeys.isEmpty,
-              form.authMethod != .password else {
-            return
-        }
-
-        for key in storedKeys {
-            guard let keyData = try? credentials.getStoredSSHKeyData(for: key.id),
-                  let keyString = String(data: keyData.key, encoding: .utf8),
-                  keyString == form.sshKey else {
-                continue
+    private func applyStoredKey(_ loadedKey: ServerFormStoredKeyLoad) {
+        if let privateKey = loadedKey.privateKey {
+            if form.sshKey != privateKey {
+                programmaticSSHKeyValue = privateKey
             }
-
-            if let storedPassphrase = keyData.passphrase,
-               !storedPassphrase.isEmpty,
-               storedPassphrase != form.sshPassphrase {
-                continue
-            }
-
-            selectedStoredKey = key
-            return
+            form.sshKey = privateKey
         }
+        if let passphrase = loadedKey.passphrase {
+            form.sshPassphrase = passphrase
+        }
+        form.sshPublicKey = loadedKey.publicKey
     }
 
     // MARK: - Connection Test
 
     private func resetConnectionTestState() {
         operations.resetConnectionTest()
+    }
+
+    private func handleCredentialIntentChange() {
+        operations.invalidateCredentialLoading()
+        resetConnectionTestState()
     }
 
     private func buildServer(id: UUID, createdAt: Date) -> Server {
@@ -852,23 +835,6 @@ struct ServerFormSheet: View {
         #else
         Text(title)
         #endif
-    }
-
-    private func loadStoredCredentials(for server: Server) {
-        operations.beginCredentialLoad()
-
-        do {
-            form.apply(try credentials.getCredentials(for: server), for: server)
-            selectMatchingStoredKeyIfAvailable()
-            operations.finishCredentialLoad()
-        } catch {
-            operations.fail(
-                String(
-                    format: String(localized: "Failed to load credentials: %@"),
-                    error.localizedDescription
-                )
-            )
-        }
     }
 
     private func applyPrefill(_ prefill: ServerFormPrefill) {
@@ -940,6 +906,24 @@ struct ServerFormSheet: View {
                 dismiss()
             }
         )
+    }
+
+    private var operationFailureMessage: String? {
+        guard let failure = operations.failure else { return nil }
+        switch failure {
+        case .operation(let message):
+            return message
+        case .credentialLoad(let message):
+            return String(
+                format: String(localized: "Failed to load credentials: %@"),
+                message
+            )
+        case .storedKeyLoad(let message):
+            return String(
+                format: String(localized: "Failed to load key: %@"),
+                message
+            )
+        }
     }
 
     private func presentLocalDiscovery() {
