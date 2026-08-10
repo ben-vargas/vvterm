@@ -245,17 +245,27 @@ struct ServerFormSheet: View {
         }
     }
 
-    var formContent: some View {
+    @ViewBuilder
+    private var connectionFormSections: some View {
+        limitSection
+        serverSection
+        authSection
+        connectionSection
+        sessionSection
+    }
+
+    @ViewBuilder
+    private var detailFormSections: some View {
+        securitySection
+        assignmentSection
+        notesSection
+        errorSection
+    }
+
+    private var styledFormContent: some View {
         Form {
-            limitSection
-            serverSection
-            authSection
-            connectionSection
-            sessionSection
-            securitySection
-            assignmentSection
-            notesSection
-            errorSection
+            connectionFormSections
+            detailFormSections
         }
         .formStyle(.grouped)
         #if os(iOS)
@@ -270,6 +280,10 @@ struct ServerFormSheet: View {
             )
         .navigationTitle(isEditing ? String(localized: "Edit Server") : String(localized: "Add Server"))
         #endif
+    }
+
+    private var presentedFormContent: some View {
+        styledFormContent
         .interactiveDismissDisabled(isSaving)
         .task {
             guard let server = server else {
@@ -361,6 +375,10 @@ struct ServerFormSheet: View {
             } message: {
                 Text(hostKeyTrustPresentation?.message ?? "")
             }
+    }
+
+    private var lifecycleFormContent: some View {
+        presentedFormContent
             .onAppear {
                 selectMatchingStoredKeyIfAvailable()
                 reconcileAssignmentWorkspace()
@@ -379,6 +397,10 @@ struct ServerFormSheet: View {
             .onChange(of: form.username) { _ in resetConnectionTestState() }
             .onChange(of: form.transportSelection) { _ in resetConnectionTestState() }
             .onChange(of: form.authMethod) { _ in resetConnectionTestState() }
+    }
+
+    var formContent: some View {
+        lifecycleFormContent
             .onChange(of: form.workspaceID) { _ in
                 reconcileAssignmentWorkspace()
                 resetConnectionTestState()
