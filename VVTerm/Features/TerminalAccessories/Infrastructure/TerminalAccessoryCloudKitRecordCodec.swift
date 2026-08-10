@@ -1,6 +1,10 @@
 import CloudKit
 import Foundation
 
+nonisolated enum TerminalAccessoryCloudKitRecordCodecError: Error, Equatable, Sendable {
+    case encodingFailed
+}
+
 enum TerminalAccessoryCloudKitRecordCodec {
     static let recordType = "UserPreference"
     static let recordName = TerminalAccessoryProfile.recordName
@@ -45,7 +49,7 @@ enum TerminalAccessoryCloudKitRecordCodec {
         do {
             payload = try JSONEncoder().encode(normalized)
         } catch {
-            throw CloudKitError.encodingFailed
+            throw TerminalAccessoryCloudKitRecordCodecError.encodingFailed
         }
 
         let record = existingRecord ?? CKRecord(recordType: recordType, recordID: recordID)

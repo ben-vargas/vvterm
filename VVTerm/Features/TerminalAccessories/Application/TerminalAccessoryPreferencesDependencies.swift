@@ -1,5 +1,9 @@
 import Foundation
 
+nonisolated enum TerminalAccessoryCloudClientError: Error, Equatable, Sendable {
+    case conflictRetryLimitReached
+}
+
 @MainActor
 protocol TerminalAccessoryCloudClient: AnyObject {
     func syncTerminalAccessoryProfile(

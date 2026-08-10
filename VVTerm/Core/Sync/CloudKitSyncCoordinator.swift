@@ -5,22 +5,35 @@ import os.log
 @MainActor
 final class CloudKitSyncCoordinator {
     private let cloudKit: CloudKitManager
+    private let terminalAccessoryCloud: any TerminalAccessoryCloudClient
     private let statsPreferencesCloud: any StatsPreferencesCloudClient
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm",
         category: "CloudKitSyncCoordinator"
     )
-    private let queue = PendingCloudKitSyncQueue()
-    private let resolutionHub = CloudKitSyncResolutionHub.shared
+    private let queue: PendingCloudKitSyncQueue
+    private let resolutionHub: CloudKitSyncResolutionHub
+    private let isSyncEnabled: () -> Bool
+    private let now: () -> Date
     private var isDraining = false
     private var shouldDrainAgain = false
 
     init(
         cloudKit: CloudKitManager,
-        statsPreferencesCloud: any StatsPreferencesCloudClient
+        terminalAccessoryCloud: any TerminalAccessoryCloudClient,
+        statsPreferencesCloud: any StatsPreferencesCloudClient,
+        queue: PendingCloudKitSyncQueue,
+        resolutionHub: CloudKitSyncResolutionHub,
+        isSyncEnabled: @escaping () -> Bool,
+        now: @escaping () -> Date
     ) {
         self.cloudKit = cloudKit
+        self.terminalAccessoryCloud = terminalAccessoryCloud
         self.statsPreferencesCloud = statsPreferencesCloud
+        self.queue = queue
+        self.resolutionHub = resolutionHub
+        self.isSyncEnabled = isSyncEnabled
+        self.now = now
     }
 
     func snapshot() -> [PendingCloudKitMutation] {
@@ -80,7 +93,7 @@ final class CloudKitSyncCoordinator {
     }
 
     func drainPendingMutations() async {
-        guard SyncSettings.isEnabled else { return }
+        guard isSyncEnabled() else { return }
         guard !isDraining else {
             shouldDrainAgain = true
             return
@@ -102,7 +115,7 @@ final class CloudKitSyncCoordinator {
             let orderedMutations = snapshot.sorted(by: PendingCloudKitMutation.drainsBefore)
 
             for mutation in orderedMutations {
-                guard queue.canAttempt(mutation, at: Date()) else {
+                guard queue.canAttempt(mutation, at: now()) else {
                     continue
                 }
 
@@ -152,7 +165,9 @@ final class CloudKitSyncCoordinator {
         case .terminalThemePreferenceUpsert(let preference):
             try await cloudKit.saveTerminalThemePreference(preference)
         case .terminalAccessoryProfileUpsert(let profile):
-            let resolvedProfile = try await cloudKit.syncTerminalAccessoryProfile(profile)
+            let resolvedProfile = try await terminalAccessoryCloud.syncTerminalAccessoryProfile(
+                profile
+            )
             resolutionHub.publish(.terminalAccessoryProfile(resolvedProfile))
         case .statsPreferencesUpsert(let preferences):
             let resolvedPreferences = try await statsPreferencesCloud.syncStatsPreferences(

@@ -3,54 +3,54 @@ import Foundation
 import os.log
 
 @MainActor
-final class StatsPreferencesCloudKitClient: StatsPreferencesCloudClient {
+final class TerminalAccessoryCloudKitClient: TerminalAccessoryCloudClient {
     static let maximumConflictAttempts = 4
 
     private let transport: any CloudKitRecordTransport
     private let logger = Logger(
         subsystem: "app.vivy.VVTerm",
-        category: "StatsPreferencesCloudKit"
+        category: "TerminalAccessoryCloudKit"
     )
 
     init(transport: any CloudKitRecordTransport) {
         self.transport = transport
     }
 
-    func syncStatsPreferences(
-        _ localPreferences: StatsPreferences
-    ) async throws -> StatsPreferences {
+    func syncTerminalAccessoryProfile(
+        _ localProfile: TerminalAccessoryProfile
+    ) async throws -> TerminalAccessoryProfile {
         try await transport.performCloudKitRecordMutation { [self] in
-            try await synchronize(localPreferences.normalized())
+            try await synchronize(localProfile.normalized())
         }
     }
 
     private func synchronize(
-        _ normalizedLocal: StatsPreferences
-    ) async throws -> StatsPreferences {
-        let recordID = StatsPreferencesCloudKitRecordCodec.recordID(
+        _ normalizedLocal: TerminalAccessoryProfile
+    ) async throws -> TerminalAccessoryProfile {
+        let recordID = TerminalAccessoryCloudKitRecordCodec.recordID(
             in: transport.cloudKitRecordZoneID
         )
         var baseRecord: CKRecord?
-        var mergedPreferences = normalizedLocal
+        var mergedProfile = normalizedLocal
 
         do {
             let remoteRecord = try await transport.fetchCloudKitRecord(recordID)
             baseRecord = remoteRecord
-            if let remotePreferences = StatsPreferencesCloudKitRecordCodec.preferences(
+            if let remoteProfile = TerminalAccessoryCloudKitRecordCodec.profile(
                 from: remoteRecord
             ) {
-                let normalizedRemote = remotePreferences.normalized()
-                mergedPreferences = StatsPreferencesCloudKitRecordCodec.merge(
+                let normalizedRemote = remoteProfile.normalized()
+                mergedProfile = TerminalAccessoryCloudKitRecordCodec.merge(
                     local: normalizedLocal,
                     remote: normalizedRemote
                 )
-                if mergedPreferences == normalizedRemote {
+                if mergedProfile == normalizedRemote {
                     transport.markCloudKitRecordSynchronized()
                     return normalizedRemote
                 }
             } else {
                 logger.warning(
-                    "Stats preferences remote payload was invalid; keeping local preferences"
+                    "Terminal accessory remote payload was invalid; keeping local profile"
                 )
             }
         } catch {
@@ -58,8 +58,8 @@ final class StatsPreferencesCloudKitClient: StatsPreferencesCloudClient {
         }
 
         for _ in 0..<Self.maximumConflictAttempts {
-            let candidateRecord = try StatsPreferencesCloudKitRecordCodec.record(
-                for: mergedPreferences,
+            let candidateRecord = try TerminalAccessoryCloudKitRecordCodec.record(
+                for: mergedProfile,
                 recordID: recordID,
                 existingRecord: baseRecord
             )
@@ -67,22 +67,22 @@ final class StatsPreferencesCloudKitClient: StatsPreferencesCloudClient {
             do {
                 try await transport.saveCloudKitRecordIfUnchanged(candidateRecord)
                 transport.markCloudKitRecordSynchronized()
-                return mergedPreferences
+                return mergedProfile
             } catch {
                 if let serverRecord = transport.cloudKitServerRecord(from: error),
-                   let serverPreferences = StatsPreferencesCloudKitRecordCodec.preferences(
+                   let serverProfile = TerminalAccessoryCloudKitRecordCodec.profile(
                        from: serverRecord
                    ) {
-                    let normalizedRemote = serverPreferences.normalized()
-                    let conflictResolved = StatsPreferencesCloudKitRecordCodec.merge(
-                        local: mergedPreferences,
+                    let normalizedRemote = serverProfile.normalized()
+                    let conflictResolved = TerminalAccessoryCloudKitRecordCodec.merge(
+                        local: mergedProfile,
                         remote: normalizedRemote
                     )
                     if conflictResolved == normalizedRemote {
                         transport.markCloudKitRecordSynchronized()
                         return normalizedRemote
                     }
-                    mergedPreferences = conflictResolved
+                    mergedProfile = conflictResolved
                     baseRecord = serverRecord
                     continue
                 }
@@ -96,6 +96,6 @@ final class StatsPreferencesCloudKitClient: StatsPreferencesCloudClient {
             }
         }
 
-        throw StatsPreferencesCloudClientError.conflictRetryLimitReached
+        throw TerminalAccessoryCloudClientError.conflictRetryLimitReached
     }
 }

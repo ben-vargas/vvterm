@@ -39,6 +39,7 @@ final class CloudKitManager: ObservableObject {
     private enum RecordType {
         static let server = "Server"
         static let workspace = "Workspace"
+        static let userPreference = "UserPreference"
     }
 
     private static let serverAndWorkspaceRecordKeys = [
@@ -55,7 +56,6 @@ final class CloudKitManager: ObservableObject {
         serverAndWorkspaceRecordKeys
             + TerminalThemeCloudKitRecordCodec.recordKeys
             + TerminalThemePreferenceCloudKitRecordCodec.recordKeys
-            + TerminalAccessoryCloudKitRecordCodec.recordKeys
     ).reduce(into: [String]()) { keys, key in
         if !keys.contains(key) {
             keys.append(key)
@@ -409,138 +409,6 @@ final class CloudKitManager: ObservableObject {
                 try await saveRecordWithUpsert(record)
             }
         }
-    }
-
-    // MARK: - Terminal Accessory Preference Operations
-
-    func fetchTerminalAccessoryProfile() async throws -> TerminalAccessoryProfile? {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-        let recordID = TerminalAccessoryCloudKitRecordCodec.recordID(in: recordZoneID)
-
-        do {
-            let record = try await withZoneRetry {
-                try await database.record(for: recordID)
-            }
-            guard let profile = TerminalAccessoryCloudKitRecordCodec.profile(from: record) else {
-                logger.warning("Terminal accessory profile payload was invalid; ignoring remote value")
-                return nil
-            }
-            return profile
-        } catch let ckError as CKError where ckError.code == .unknownItem || ckError.code == .zoneNotFound {
-            return nil
-        } catch {
-            throw error
-        }
-    }
-
-    func saveTerminalAccessoryProfile(_ profile: TerminalAccessoryProfile) async throws {
-        try await prepareSyncMutation()
-        let recordID = TerminalAccessoryCloudKitRecordCodec.recordID(in: recordZoneID)
-        let record = try TerminalAccessoryCloudKitRecordCodec.record(
-            for: profile,
-            recordID: recordID
-        )
-        try await performSyncMutation(
-            successLog: "Saved terminal accessory profile to CloudKit",
-            failureLog: "Failed to save terminal accessory profile"
-        ) {
-            try await withZoneRetry {
-                try await saveRecordWithUpsert(record)
-            }
-        }
-    }
-
-    func syncTerminalAccessoryProfile(_ localProfile: TerminalAccessoryProfile) async throws -> TerminalAccessoryProfile {
-        try await prepareSyncMutation()
-        return try await performSyncOperation {
-            try await syncTrackedTerminalAccessoryProfile(localProfile)
-        }
-    }
-
-    private func syncTrackedTerminalAccessoryProfile(
-        _ localProfile: TerminalAccessoryProfile
-    ) async throws -> TerminalAccessoryProfile {
-        let recordID = TerminalAccessoryCloudKitRecordCodec.recordID(in: recordZoneID)
-        let normalizedLocal = localProfile.normalized()
-
-        var baseRecord: CKRecord?
-        var mergedProfile = normalizedLocal
-
-        do {
-            let remoteRecord = try await withZoneRetry {
-                try await database.record(for: recordID)
-            }
-            baseRecord = remoteRecord
-            if let remoteProfile = TerminalAccessoryCloudKitRecordCodec.profile(from: remoteRecord) {
-                let normalizedRemote = remoteProfile.normalized()
-                mergedProfile = TerminalAccessoryCloudKitRecordCodec.merge(
-                    local: normalizedLocal,
-                    remote: normalizedRemote
-                )
-                if mergedProfile == normalizedRemote {
-                    lastSyncDate = Date()
-                    return normalizedRemote
-                }
-            } else {
-                logger.warning("Terminal accessory remote payload was invalid; keeping local profile")
-            }
-        } catch let ckError as CKError where ckError.code == .unknownItem || ckError.code == .zoneNotFound {
-            baseRecord = nil
-            mergedProfile = normalizedLocal
-        }
-
-        var attempts = 0
-        while attempts < 4 {
-            attempts += 1
-
-            let candidateRecord = try TerminalAccessoryCloudKitRecordCodec.record(
-                for: mergedProfile,
-                recordID: recordID,
-                existingRecord: baseRecord
-            )
-
-            do {
-                try await withZoneRetry {
-                    try await saveRecord(candidateRecord, savePolicy: .ifServerRecordUnchanged)
-                }
-                lastSyncDate = Date()
-                return mergedProfile
-            } catch {
-                if let serverRecord = extractServerRecord(from: error),
-                   let serverProfile = TerminalAccessoryCloudKitRecordCodec.profile(from: serverRecord) {
-                    let normalizedRemote = serverProfile.normalized()
-                    let conflictResolved = TerminalAccessoryCloudKitRecordCodec.merge(
-                        local: mergedProfile,
-                        remote: normalizedRemote
-                    )
-
-                    if conflictResolved == normalizedRemote {
-                        lastSyncDate = Date()
-                        return normalizedRemote
-                    }
-
-                    mergedProfile = conflictResolved
-                    baseRecord = serverRecord
-                    continue
-                }
-
-                if isUnknownItemError(error) {
-                    baseRecord = nil
-                    continue
-                }
-
-                logger.error("Failed to sync terminal accessory profile: \(error.localizedDescription)")
-                throw error
-            }
-        }
-
-        logger.error("Failed to sync terminal accessory profile after retries")
-        throw CloudKitError.recordNotFound
     }
 
     private func prepareSyncMutation() async throws {
@@ -938,7 +806,7 @@ final class CloudKitManager: ObservableObject {
             RecordType.workspace,
             TerminalThemeCloudKitRecordCodec.recordType,
             TerminalThemePreferenceCloudKitRecordCodec.recordType,
-            TerminalAccessoryCloudKitRecordCodec.recordType
+            RecordType.userPreference
         ]
         let recordIDs = records
             .filter { trackedRecordTypes.contains($0.recordType) }
@@ -972,7 +840,7 @@ final class CloudKitManager: ObservableObject {
             $0.recordType == TerminalThemePreferenceCloudKitRecordCodec.recordType
         }.count
         let deletedUserPreferences = records.filter {
-            $0.recordType == TerminalAccessoryCloudKitRecordCodec.recordType
+            $0.recordType == RecordType.userPreference
         }.count
         logger.info(
             "Deleted \(deletedServers) servers, \(deletedWorkspaces) workspaces, \(deletedThemes) themes, \(deletedThemePreferences) theme preferences, \(deletedUserPreferences) user preferences from CloudKit"

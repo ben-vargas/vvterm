@@ -13,7 +13,12 @@ enum StatsPreferencesCloudKitLiveComposition {
 extension CloudKitSyncCoordinator {
     static let shared = CloudKitSyncCoordinator(
         cloudKit: CloudKitManager.shared,
-        statsPreferencesCloud: StatsPreferencesCloudKitLiveComposition.client
+        terminalAccessoryCloud: TerminalAccessoryCloudKitLiveComposition.client,
+        statsPreferencesCloud: StatsPreferencesCloudKitLiveComposition.client,
+        queue: PendingCloudKitSyncQueue(),
+        resolutionHub: CloudKitSyncResolutionHub.shared,
+        isSyncEnabled: { SyncSettings.isEnabled },
+        now: Date.init
     )
 }
 

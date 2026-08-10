@@ -10,7 +10,7 @@ private enum StatsPreferencesRecordTransportTestError: Error, Equatable {
 }
 
 @MainActor
-private final class StatsPreferencesRecordTransportStub: StatsPreferencesCloudKitRecordTransport {
+private final class StatsPreferencesRecordTransportStub: CloudKitRecordTransport {
     let cloudKitRecordZoneID = CKRecordZone.ID(
         zoneName: "StatsPreferencesClientTests",
         ownerName: CKCurrentUserDefaultName

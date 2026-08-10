@@ -1,8 +1,14 @@
 import Foundation
 
-extension CloudKitManager: TerminalAccessoryCloudClient {}
 extension CloudKitSyncCoordinator: TerminalAccessoryMutationQueue {}
 extension CloudKitSyncLifecycleDriver: TerminalAccessorySyncLifecycle {}
+
+@MainActor
+enum TerminalAccessoryCloudKitLiveComposition {
+    static let client = TerminalAccessoryCloudKitClient(
+        transport: CloudKitManager.shared
+    )
+}
 
 extension CloudKitSyncResolutionHub: TerminalAccessoryResolutionSource {
     func observeTerminalAccessoryProfile(
@@ -26,7 +32,7 @@ extension TerminalAccessoryPreferencesDependencies {
                 defaults: .standard,
                 key: CloudKitSyncConstants.terminalAccessoryProfileStorageKey
             ),
-            cloud: CloudKitManager.shared,
+            cloud: TerminalAccessoryCloudKitLiveComposition.client,
             mutationQueue: CloudKitSyncCoordinator.shared,
             syncLifecycle: CloudKitSyncLifecycleDriver.shared,
             resolutionSource: CloudKitSyncResolutionHub.shared,
