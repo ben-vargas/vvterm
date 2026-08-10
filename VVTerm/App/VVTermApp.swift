@@ -33,6 +33,12 @@ struct VVTermApp: App {
         let serverVolumeVisibilityStore = ServerVolumeVisibilityStore.live
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: .standard)
         let cloudKitManager = CloudKitManager.shared
+        let syncSettingsCoordinator = SyncSettingsLiveComposition.makeCoordinator(
+            cloudKit: cloudKitManager,
+            keychain: KeychainManager.shared,
+            serverManager: serverManager,
+            terminalAccessory: terminalAccessoryPreferencesManager
+        )
         let networkMonitor = NetworkMonitor.shared
         #if os(iOS)
         let liveActivityManager = LiveActivityManager.shared
@@ -74,6 +80,7 @@ struct VVTermApp: App {
         _viewTabConfigurationManager = StateObject(
             wrappedValue: viewTabConfigurationManager
         )
+        _syncSettingsCoordinator = StateObject(wrappedValue: syncSettingsCoordinator)
         _remoteFileBrowserStore = StateObject(
             wrappedValue: Self.makeRemoteFileBrowserStore(
                 tabManager: tabManager,
@@ -88,7 +95,8 @@ struct VVTermApp: App {
             terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
             viewTabConfigurationManager: viewTabConfigurationManager,
             storeManager: storeManager,
-            statsPreferencesStore: statsPreferencesStore
+            statsPreferencesStore: statsPreferencesStore,
+            syncSettingsCoordinator: syncSettingsCoordinator
         )
         #endif
         appDelegate.configure(
@@ -131,6 +139,7 @@ struct VVTermApp: App {
     @StateObject private var statsPreferencesStore: PreferencesStore
     @StateObject private var serverVolumeVisibilityStore: ServerVolumeVisibilityStore
     @StateObject private var viewTabConfigurationManager: ViewTabConfigurationManager
+    @StateObject private var syncSettingsCoordinator: SyncSettingsCoordinator
     private let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
     #if os(macOS)
     private let settingsWindowPresenter: SettingsWindowPresenter
@@ -361,6 +370,7 @@ struct VVTermApp: App {
             .environmentObject(serverManager)
             .environmentObject(storeManager)
             .environmentObject(viewTabConfigurationManager)
+            .environmentObject(syncSettingsCoordinator)
         }
         #if os(macOS)
         .windowToolbarStyle(.unified)

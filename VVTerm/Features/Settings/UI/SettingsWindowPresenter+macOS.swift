@@ -29,7 +29,8 @@ final class SettingsWindowPresenter {
         terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager,
         viewTabConfigurationManager: ViewTabConfigurationManager,
         storeManager: StoreManager,
-        statsPreferencesStore: PreferencesStore
+        statsPreferencesStore: PreferencesStore,
+        syncSettingsCoordinator: SyncSettingsCoordinator
     ) {
         makeWindow = {
             let settingsView = LocalizedSettingsView(
@@ -39,7 +40,8 @@ final class SettingsWindowPresenter {
                 terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
                 viewTabConfigurationManager: viewTabConfigurationManager,
                 storeManager: storeManager,
-                statsPreferencesStore: statsPreferencesStore
+                statsPreferencesStore: statsPreferencesStore,
+                syncSettingsCoordinator: syncSettingsCoordinator
             )
             return Self.makeSettingsWindow(rootView: settingsView)
         }
@@ -92,6 +94,7 @@ private struct LocalizedSettingsView: View {
     @ObservedObject var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @ObservedObject var viewTabConfigurationManager: ViewTabConfigurationManager
     @ObservedObject var storeManager: StoreManager
+    @ObservedObject var syncSettingsCoordinator: SyncSettingsCoordinator
     let statsPreferencesStore: PreferencesStore
 
     var body: some View {
@@ -106,6 +109,7 @@ private struct LocalizedSettingsView: View {
                 .environmentObject(viewTabConfigurationManager)
                 .environmentObject(serverManager)
                 .environmentObject(storeManager)
+                .environmentObject(syncSettingsCoordinator)
         }
         .environmentObject(appLockManager)
     }

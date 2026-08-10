@@ -8,12 +8,11 @@ import SwiftUI
 // MARK: - Sync Settings View
 
 struct SyncSettingsView: View {
-    @ObservedObject private var cloudKit = CloudKitManager.shared
+    @EnvironmentObject private var coordinator: SyncSettingsCoordinator
     @EnvironmentObject private var serverManager: ServerManager
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @EnvironmentObject private var terminalAccessory: TerminalAccessoryPreferencesManager
     @AppStorage(SyncSettings.enabledKey) private var syncEnabled = true
-    @State private var credentialSyncError: String?
     @State private var confirmsCloudCredentialRemoval = false
     @State private var ignoresNextSyncToggleChange = false
 
@@ -47,7 +46,7 @@ struct SyncSettingsView: View {
                         syncStatusView
                     }
 
-                    if let lastSync = cloudKit.lastSyncDate {
+                    if let lastSync = coordinator.cloudState.lastSyncDate {
                         HStack {
                             Text("Last Synced")
                             Spacer()
@@ -56,7 +55,7 @@ struct SyncSettingsView: View {
                         }
                     }
 
-                    if case .error(let message) = cloudKit.syncStatus {
+                    if case .error(let message) = coordinator.cloudState.status {
                         HStack {
                             Text("Error")
                             Spacer()
@@ -116,12 +115,12 @@ struct SyncSettingsView: View {
             }
 
             // Debug section when CloudKit is unavailable
-            if syncEnabled && !cloudKit.isAvailable {
+            if syncEnabled && !coordinator.cloudState.isAvailable {
                 Section {
                     HStack {
                         Text("Account Status")
                         Spacer()
-                        Text(cloudKit.accountStatusDetail)
+                        Text(coordinator.cloudState.accountStatusDetail)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.trailing)
@@ -137,7 +136,7 @@ struct SyncSettingsView: View {
 
                     Button {
                         Task {
-                            await cloudKit.forceSync()
+                            await coordinator.refreshAccountStatus()
                         }
                     } label: {
                         Label("Re-check iCloud Status", systemImage: "arrow.clockwise")
@@ -156,14 +155,7 @@ struct SyncSettingsView: View {
             titleVisibility: .visible
         ) {
             Button("Remove credentials from iCloud Keychain", role: .destructive) {
-                do {
-                    try KeychainManager.shared.removeCredentialsFromICloud()
-                    credentialSyncError = nil
-                } catch {
-                    credentialSyncError = String(
-                        localized: "Some iCloud Keychain credentials could not be removed. Device-only credentials were kept."
-                    )
-                }
+                coordinator.removeCloudCredentials()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -174,27 +166,14 @@ struct SyncSettingsView: View {
                 ignoresNextSyncToggleChange = false
                 return
             }
-            do {
-                try KeychainManager.shared.handleSyncToggle(
-                    isEnabled: enabled
-                )
-                credentialSyncError = nil
-            } catch {
-                credentialSyncError = String(
-                    localized: "Credentials could not be copied. Existing credentials were kept."
-                )
+            guard coordinator.setSyncEnabled(enabled) else {
                 ignoresNextSyncToggleChange = true
                 syncEnabled = !enabled
                 return
             }
-            if !enabled {
-                serverManager.handleSyncDisabled()
-            }
-            cloudKit.handleSyncToggle(enabled)
             if enabled {
                 Task {
-                    await serverManager.loadData()
-                    await terminalAccessory.refreshFromCloud()
+                    await coordinator.refreshAfterSyncEnabled()
                 }
             }
         }
@@ -204,13 +183,26 @@ struct SyncSettingsView: View {
         terminalThemeManager.customThemes.filter { !$0.isDeleted }.count
     }
 
+    private var credentialSyncError: String? {
+        switch coordinator.credentialFailure {
+        case .toggle:
+            return String(localized: "Credentials could not be copied. Existing credentials were kept.")
+        case .removal:
+            return String(
+                localized: "Some iCloud Keychain credentials could not be removed. Device-only credentials were kept."
+            )
+        case nil:
+            return nil
+        }
+    }
+
     @ViewBuilder
     private var statusBadge: some View {
         if !syncEnabled {
             Label("Disabled", systemImage: "pause.circle")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        } else if cloudKit.isAvailable {
+        } else if coordinator.cloudState.isAvailable {
             Label("Connected", systemImage: "checkmark.circle.fill")
                 .font(.caption)
                 .foregroundStyle(.green)
@@ -223,7 +215,7 @@ struct SyncSettingsView: View {
 
     @ViewBuilder
     private var syncStatusView: some View {
-        switch cloudKit.syncStatus {
+        switch coordinator.cloudState.status {
         case .idle:
             Label("Synced", systemImage: "checkmark.circle")
                 .foregroundStyle(.green)
