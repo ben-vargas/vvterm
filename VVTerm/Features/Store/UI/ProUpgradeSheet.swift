@@ -1007,13 +1007,16 @@ private struct NativeSectionCard<Content: View>: View {
 
 #Preview {
     let appLockManager = AppLockManager()
+    let defaults = UserDefaults.standard
     let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
         transport: CloudKitManager.shared,
-        now: Date.init
+        defaults: defaults,
+        now: Date.init,
+        makeID: UUID.init
     )
     let serverManager = ServerManager(
         dependencies: .live(
-            defaults: .standard,
+            defaults: defaults,
             serverCloud: cloudKitSync.serverCloud,
             credentialRepository: KeychainManager.shared,
             knownHosts: KnownHostsManager.shared,

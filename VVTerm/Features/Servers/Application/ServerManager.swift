@@ -50,14 +50,14 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         }
     }
 
-    private func applyMutationResult(_ result: ServerMutationCommandResult) {
+    private func applyMutationResult(_ result: ServerMutationCommandResult) throws {
         stateStore.applyMutationResult(result)
-        remoteSyncCoordinator.enqueue(result.effect)
+        try remoteSyncCoordinator.enqueue(result.effect)
     }
 
     /// Clear all local data and re-download from CloudKit
-    func clearLocalDataAndResync() async {
-        await remoteSyncCoordinator.clearLocalDataAndResync()
+    func clearLocalDataAndResync() async throws {
+        try await remoteSyncCoordinator.clearLocalDataAndResync()
     }
 
     // MARK: - Data Loading
@@ -98,7 +98,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             command,
             now: dependencies.now()
         )
-        remoteSyncCoordinator.enqueue(result.effect)
+        try remoteSyncCoordinator.enqueue(result.effect)
         await remoteSyncCoordinator.drainPendingMutations()
 
         guard case .serverUpsert(let savedServer) = result.effect else {
@@ -141,7 +141,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             .deleteServer(server.id),
             now: dependencies.now()
         )
-        applyMutationResult(result)
+        try applyMutationResult(result)
         await persistLocalMutations(logMessage: "Deleted server: \(server.name)")
     }
 
@@ -160,7 +160,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             .insertWorkspace(workspace),
             now: dependencies.now()
         )
-        remoteSyncCoordinator.enqueue(result.effect)
+        try remoteSyncCoordinator.enqueue(result.effect)
         stateStore.clearPendingBootstrapWorkspace(reason: "adding a workspace")
         await remoteSyncCoordinator.drainPendingMutations()
         logger.info("Added workspace: \(workspace.name)")
@@ -171,7 +171,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             .updateWorkspace(workspace),
             now: dependencies.now()
         )
-        remoteSyncCoordinator.enqueue(result.effect)
+        try remoteSyncCoordinator.enqueue(result.effect)
         stateStore.promotePendingBootstrapWorkspaceIfNeeded(
             for: workspace.id,
             reason: "updating workspace metadata"
@@ -233,7 +233,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             at: dependencies.now()
         )
         for workspace in reordered {
-            remoteSyncCoordinator.enqueueWorkspaceUpsert(workspace)
+            try remoteSyncCoordinator.enqueueWorkspaceUpsert(workspace)
         }
         await remoteSyncCoordinator.drainPendingMutations()
         logger.info("Reordered workspaces")

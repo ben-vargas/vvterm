@@ -595,6 +595,26 @@ struct ServerManagerLoadLifecycleTests {
         )
     }
 
+    @Test
+    func queuePersistenceFailureIsReturnedWithoutStartingDrain() async {
+        let workspace = makeWorkspace(name: "Local")
+        let sync = ServerSyncRepositoryFake()
+        sync.enqueueError = ServerSyncRepositoryTestError.rejected
+        let manager = makeManager(
+            local: ServerLocalRepositoryFake(servers: [], workspaces: [workspace]),
+            remote: ServerRemoteRepositoryFake(),
+            sync: sync,
+            isSyncEnabled: { true }
+        )
+        let server = makeServer(workspaceID: workspace.id)
+
+        await #expect(throws: ServerSyncRepositoryTestError.self) {
+            try await manager.apply(.create(server))
+        }
+
+        #expect(sync.drainCount == 0)
+    }
+
     private func makeWorkspace(name: String) -> Workspace {
         Workspace(
             id: UUID(uuidString: "10000000-0000-0000-0000-000000000010")!,
@@ -799,20 +819,34 @@ private final class ServerSyncRepositoryFake: ServerSyncRepository {
     private(set) var drainCount = 0
     private(set) var completedDrainCount = 0
     var drainHandler: (@MainActor () async -> Void)?
+    var enqueueError: Error?
 
     func pendingServerMutations() -> [ServerPendingMutation] { [] }
     func clearPendingServerAndWorkspaceMutations() {}
     func removePendingServerMutation(_ mutationID: UUID) {}
-    func enqueueServerUpsert(_ server: Server) { enqueuedServerUpserts.append(server) }
-    func enqueueServerDelete(_ server: Server) {}
-    func enqueueWorkspaceUpsert(_ workspace: Workspace) {}
-    func enqueueWorkspaceDelete(_ workspace: Workspace) {}
+    func enqueueServerUpsert(_ server: Server) throws {
+        if let enqueueError { throw enqueueError }
+        enqueuedServerUpserts.append(server)
+    }
+    func enqueueServerDelete(_ server: Server) throws {
+        if let enqueueError { throw enqueueError }
+    }
+    func enqueueWorkspaceUpsert(_ workspace: Workspace) throws {
+        if let enqueueError { throw enqueueError }
+    }
+    func enqueueWorkspaceDelete(_ workspace: Workspace) throws {
+        if let enqueueError { throw enqueueError }
+    }
     func drainPendingMutations() async {
         drainCount += 1
         await drainHandler?()
         completedDrainCount += 1
     }
     func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws {}
+}
+
+private enum ServerSyncRepositoryTestError: Error {
+    case rejected
 }
 
 @MainActor

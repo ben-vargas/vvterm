@@ -26,16 +26,22 @@ private final class TerminalAccessoryMutationQueueSpy: TerminalAccessoryMutation
     private(set) var drainCount = 0
     var onEnqueue: (() -> Void)?
     var onDrain: (() -> Void)?
+    var enqueueError: Error?
 
-    func enqueueTerminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile) {
-        enqueuedProfiles.append(profile)
+    func enqueueTerminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile) throws {
         onEnqueue?()
+        if let enqueueError { throw enqueueError }
+        enqueuedProfiles.append(profile)
     }
 
     func drainPendingMutations() async {
         drainCount += 1
         onDrain?()
     }
+}
+
+private enum TerminalAccessoryMutationQueueTestError: Error {
+    case rejected
 }
 
 @MainActor
@@ -437,6 +443,26 @@ final class TerminalAccessoryPreferencesManagerTests: XCTestCase {
         debounce.releaseAll()
         await Task.yield()
         XCTAssertEqual(queue.enqueuedProfiles.count, 1)
+    }
+
+    func testQueueFailureDoesNotStartDrain() async {
+        let queue = TerminalAccessoryMutationQueueSpy()
+        queue.enqueueError = TerminalAccessoryMutationQueueTestError.rejected
+        let attempted = expectation(description: "accessory enqueue attempted")
+        queue.onEnqueue = { attempted.fulfill() }
+        let manager = makeManager(
+            queue: queue,
+            isSyncEnabled: { true },
+            waitForSyncDebounce: {},
+            startsSynchronization: false
+        )
+
+        manager.removeActiveItem(.system(.escape))
+        await fulfillment(of: [attempted], timeout: 1)
+        await Task.yield()
+
+        XCTAssertTrue(queue.enqueuedProfiles.isEmpty)
+        XCTAssertEqual(queue.drainCount, 0)
     }
 
     func testBlockedStartupDoesNotRetainOwnerAndObservesCancellation() async {

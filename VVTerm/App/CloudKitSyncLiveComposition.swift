@@ -32,7 +32,8 @@ enum CloudKitSyncLiveComposition {
         clients: CloudKitSyncClients,
         queue: PendingCloudKitSyncQueue,
         isSyncEnabled: @escaping () -> Bool,
-        now: @escaping () -> Date
+        now: @escaping () -> Date,
+        makeID: @escaping () -> UUID
     ) -> CloudKitSyncComposition {
         let terminalAccessoryResolutions = TerminalAccessoryResolutionChannel()
         let statsPreferencesResolutions = StatsPreferencesResolutionChannel()
@@ -53,7 +54,8 @@ enum CloudKitSyncLiveComposition {
                 mutationHandler: mutationHandler,
                 queue: queue,
                 isSyncEnabled: isSyncEnabled,
-                now: now
+                now: now,
+                makeID: makeID
             ),
             terminalAccessoryResolutions: terminalAccessoryResolutions,
             statsPreferencesResolutions: statsPreferencesResolutions
@@ -62,7 +64,9 @@ enum CloudKitSyncLiveComposition {
 
     static func makeLive(
         transport: any CloudKitRecordChangeTransport,
-        now: @escaping () -> Date
+        defaults: UserDefaults,
+        now: @escaping () -> Date,
+        makeID: @escaping () -> UUID
     ) -> CloudKitLiveSyncComposition {
         let serverCloud = ServerCloudKitClient(transport: transport, now: now)
         let terminalThemeCloud = TerminalThemeCloudKitClient(transport: transport)
@@ -75,9 +79,10 @@ enum CloudKitSyncLiveComposition {
                 terminalAccessoryCloud: terminalAccessoryCloud,
                 statsPreferencesCloud: statsPreferencesCloud
             ),
-            queue: PendingCloudKitSyncQueue(),
-            isSyncEnabled: { SyncSettings.isEnabled },
-            now: now
+            queue: PendingCloudKitSyncQueue(defaults: defaults),
+            isSyncEnabled: { SyncSettings.isEnabled(in: defaults) },
+            now: now,
+            makeID: makeID
         )
         return CloudKitLiveSyncComposition(
             coordinator: composition.coordinator,
@@ -99,7 +104,9 @@ extension ServerManager {
         let cloudKit = CloudKitManager.shared
         let sync = CloudKitSyncLiveComposition.makeLive(
             transport: cloudKit,
-            now: Date.init
+            defaults: defaults,
+            now: Date.init,
+            makeID: UUID.init
         )
         return ServerManager(
             dependencies: .live(

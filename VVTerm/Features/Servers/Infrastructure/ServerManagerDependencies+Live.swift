@@ -1,8 +1,8 @@
 import Foundation
 
 extension CloudKitSyncCoordinator: ServerSyncRepository {
-    func clearPendingServerAndWorkspaceMutations() {
-        removeAll { mutation in
+    func clearPendingServerAndWorkspaceMutations() throws {
+        try removeAll { mutation in
             switch mutation.payload {
             case .serverUpsert, .serverDelete, .workspaceUpsert, .workspaceDelete:
                 return true
@@ -13,28 +13,28 @@ extension CloudKitSyncCoordinator: ServerSyncRepository {
         }
     }
 
-    func enqueueServerUpsert(_ server: Server) {
-        enqueue(PendingCloudKitMutation(payload: .serverUpsert(server)))
+    func enqueueServerUpsert(_ server: Server) throws {
+        try enqueue(.serverUpsert(server))
     }
 
-    func enqueueServerDelete(_ server: Server) {
-        enqueue(PendingCloudKitMutation(payload: .serverDelete(server)))
+    func enqueueServerDelete(_ server: Server) throws {
+        try enqueue(.serverDelete(server))
     }
 
-    func enqueueWorkspaceUpsert(_ workspace: Workspace) {
-        enqueue(PendingCloudKitMutation(payload: .workspaceUpsert(workspace)))
+    func enqueueWorkspaceUpsert(_ workspace: Workspace) throws {
+        try enqueue(.workspaceUpsert(workspace))
     }
 
-    func enqueueWorkspaceDelete(_ workspace: Workspace) {
-        enqueue(PendingCloudKitMutation(payload: .workspaceDelete(workspace)))
+    func enqueueWorkspaceDelete(_ workspace: Workspace) throws {
+        try enqueue(.workspaceDelete(workspace))
     }
 
     func pendingServerMutations() -> [ServerPendingMutation] {
         snapshot().compactMap(ServerPendingMutation.init)
     }
 
-    func removePendingServerMutation(_ mutationID: UUID) {
-        remove(mutationID)
+    func removePendingServerMutation(_ mutationID: UUID) throws {
+        try remove(mutationID)
     }
 
     func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws {

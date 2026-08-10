@@ -39,12 +39,12 @@ struct CloudKitMutationQueueAdapterTests {
             payload: .statsPreferencesUpsert(stats),
             createdAt: Date(timeIntervalSinceReferenceDate: 1)
         )
-        coordinator.enqueue(unrelatedMutation)
+        try coordinator.enqueue(unrelatedMutation)
 
-        repository.enqueueServerUpsert(server)
-        repository.enqueueServerDelete(deletedServer)
-        repository.enqueueWorkspaceUpsert(workspace)
-        repository.enqueueWorkspaceDelete(deletedWorkspace)
+        try repository.enqueueServerUpsert(server)
+        try repository.enqueueServerDelete(deletedServer)
+        try repository.enqueueWorkspaceUpsert(workspace)
+        try repository.enqueueWorkspaceDelete(deletedWorkspace)
 
         #expect(coordinator.snapshot().map(\.payload) == [
             .statsPreferencesUpsert(stats),
@@ -61,8 +61,8 @@ struct CloudKitMutationQueueAdapterTests {
         ])
 
         let firstServerMutation = try #require(repository.pendingServerMutations().first)
-        repository.removePendingServerMutation(firstServerMutation.id)
-        repository.clearPendingServerAndWorkspaceMutations()
+        try repository.removePendingServerMutation(firstServerMutation.id)
+        try repository.clearPendingServerAndWorkspaceMutations()
 
         #expect(coordinator.snapshot() == [unrelatedMutation])
     }
@@ -113,7 +113,7 @@ struct CloudKitMutationQueueAdapterTests {
     }
 
     @Test
-    func themeAdapterMapsThemeAndPreferenceUpserts() {
+    func themeAdapterMapsThemeAndPreferenceUpserts() throws {
         let fixture = makeFixture(storageKey: "themeAdapter")
         defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
         let queue: any TerminalThemeMutationQueue = fixture.coordinator
@@ -130,8 +130,8 @@ struct CloudKitMutationQueueAdapterTests {
             updatedAt: Date(timeIntervalSinceReferenceDate: 3_001)
         )
 
-        queue.enqueueTerminalThemeUpsert(theme)
-        queue.enqueueTerminalThemePreferenceUpsert(preference)
+        try queue.enqueueTerminalThemeUpsert(theme)
+        try queue.enqueueTerminalThemePreferenceUpsert(preference)
 
         #expect(fixture.coordinator.snapshot().map(\.payload) == [
             .terminalThemeUpsert(theme),
@@ -140,7 +140,7 @@ struct CloudKitMutationQueueAdapterTests {
     }
 
     @Test
-    func accessoryAdapterMapsProfileUpsert() {
+    func accessoryAdapterMapsProfileUpsert() throws {
         let fixture = makeFixture(storageKey: "accessoryAdapter")
         defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
         let queue: any TerminalAccessoryMutationQueue = fixture.coordinator
@@ -148,7 +148,7 @@ struct CloudKitMutationQueueAdapterTests {
             lastWriterDeviceId: "accessory-writer"
         )
 
-        queue.enqueueTerminalAccessoryProfileUpsert(profile)
+        try queue.enqueueTerminalAccessoryProfileUpsert(profile)
 
         #expect(fixture.coordinator.snapshot().map(\.payload) == [
             .terminalAccessoryProfileUpsert(profile)
@@ -156,17 +156,88 @@ struct CloudKitMutationQueueAdapterTests {
     }
 
     @Test
-    func statsAdapterMapsPreferencesUpsert() {
+    func statsAdapterMapsPreferencesUpsert() throws {
         let fixture = makeFixture(storageKey: "statsAdapter")
         defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
         let queue: any StatsPreferencesMutationQueue = fixture.coordinator
         let preferences = makeStatsPreferences()
 
-        queue.enqueueStatsPreferencesUpsert(preferences)
+        try queue.enqueueStatsPreferencesUpsert(preferences)
 
         #expect(fixture.coordinator.snapshot().map(\.payload) == [
             .statsPreferencesUpsert(preferences)
         ])
+    }
+
+    @Test
+    func adaptersPropagatePersistenceFailuresWithoutChangingMemory() throws {
+        let suiteName = "CloudKitMutationQueueAdapterTests.failure.\(UUID().uuidString)"
+        let defaults = WriteRejectingUserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let coordinator = CloudKitSyncCoordinator(
+            mutationHandler: MutationQueueAdapterHandler(),
+            queue: PendingCloudKitSyncQueue(
+                storageKey: "adapterFailure",
+                defaults: defaults
+            ),
+            isSyncEnabled: { false },
+            now: { Date(timeIntervalSinceReferenceDate: 6_000) },
+            makeID: { UUID(uuidString: "50000000-0000-0000-0000-000000000001")! }
+        )
+        let workspace = makeWorkspace(id: UUID(), name: "Workspace")
+        let server = makeServer(id: UUID(), workspaceID: workspace.id, name: "Server")
+        let theme = TerminalTheme(
+            name: "Theme",
+            content: "background = #000000\nforeground = #FFFFFF\n",
+            updatedAt: Date(timeIntervalSinceReferenceDate: 10)
+        )
+        let profile = TerminalAccessoryProfile.defaultValue(
+            lastWriterDeviceId: "accessory-writer"
+        )
+        let preferences = makeStatsPreferences()
+
+        defaults.rejectWrites = true
+
+        #expect(throws: PendingCloudKitSyncQueueError.self) {
+            try coordinator.enqueueServerUpsert(server)
+        }
+        #expect(throws: PendingCloudKitSyncQueueError.self) {
+            try coordinator.enqueueTerminalThemeUpsert(theme)
+        }
+        #expect(throws: PendingCloudKitSyncQueueError.self) {
+            try coordinator.enqueueTerminalAccessoryProfileUpsert(profile)
+        }
+        #expect(throws: PendingCloudKitSyncQueueError.self) {
+            try coordinator.enqueueStatsPreferencesUpsert(preferences)
+        }
+        #expect(coordinator.snapshot().isEmpty)
+    }
+
+    @Test
+    func adaptersUseCoordinatorIdentityAndClock() throws {
+        let suiteName = "CloudKitMutationQueueAdapterTests.identity.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let expectedID = UUID(uuidString: "50000000-0000-0000-0000-000000000002")!
+        let expectedDate = Date(timeIntervalSinceReferenceDate: 7_000)
+        let coordinator = CloudKitSyncCoordinator(
+            mutationHandler: MutationQueueAdapterHandler(),
+            queue: PendingCloudKitSyncQueue(
+                storageKey: "adapterIdentity",
+                defaults: defaults
+            ),
+            isSyncEnabled: { false },
+            now: { expectedDate },
+            makeID: { expectedID }
+        )
+        let preferences = makeStatsPreferences()
+
+        try coordinator.enqueueStatsPreferencesUpsert(preferences)
+
+        let mutation = try #require(coordinator.snapshot().first)
+        #expect(mutation.id == expectedID)
+        #expect(mutation.createdAt == expectedDate)
+        #expect(mutation.payload == .statsPreferencesUpsert(preferences))
     }
 
     private func makeFixture(
@@ -186,7 +257,8 @@ struct CloudKitMutationQueueAdapterTests {
                     defaults: defaults
                 ),
                 isSyncEnabled: { false },
-                now: { Date(timeIntervalSinceReferenceDate: 5_000) }
+                now: { Date(timeIntervalSinceReferenceDate: 5_000) },
+                makeID: UUID.init
             ),
             defaults,
             suiteName

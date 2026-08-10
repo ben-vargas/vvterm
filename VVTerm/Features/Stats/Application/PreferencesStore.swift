@@ -199,11 +199,19 @@ final class PreferencesStore: ObservableObject {
         let waitForSyncDebounce = dependencies.waitForSyncDebounce
         let isSyncEnabled = dependencies.isSyncEnabled
         let mutationQueue = dependencies.mutationQueue
-        pendingSyncTask = Task { [weak self, waitForSyncDebounce, isSyncEnabled, mutationQueue] in
+        let logger = logger
+        pendingSyncTask = Task { [weak self, waitForSyncDebounce, isSyncEnabled, mutationQueue, logger] in
             try? await waitForSyncDebounce()
             guard !Task.isCancelled else { return }
             guard isSyncEnabled(), let preferences = self?.preferences else { return }
-            mutationQueue.enqueueStatsPreferencesUpsert(preferences)
+            do {
+                try mutationQueue.enqueueStatsPreferencesUpsert(preferences)
+            } catch {
+                logger.error(
+                    "Failed to persist stats preferences sync: \(error.localizedDescription)"
+                )
+                return
+            }
             guard !Task.isCancelled, isSyncEnabled() else { return }
             await mutationQueue.drainPendingMutations()
         }

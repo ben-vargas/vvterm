@@ -26,16 +26,22 @@ private final class StatsPreferencesMutationQueueSpy: StatsPreferencesMutationQu
     private(set) var drainCount = 0
     var onEnqueue: (() -> Void)?
     var onDrain: (() -> Void)?
+    var enqueueError: Error?
 
-    func enqueueStatsPreferencesUpsert(_ preferences: StatsPreferences) {
-        enqueuedPreferences.append(preferences)
+    func enqueueStatsPreferencesUpsert(_ preferences: StatsPreferences) throws {
         onEnqueue?()
+        if let enqueueError { throw enqueueError }
+        enqueuedPreferences.append(preferences)
     }
 
     func drainPendingMutations() async {
         drainCount += 1
         onDrain?()
     }
+}
+
+private enum StatsPreferencesMutationQueueTestError: Error {
+    case rejected
 }
 
 @MainActor
@@ -357,6 +363,26 @@ final class PreferencesStoreTests: XCTestCase {
         debounce.releaseAll()
         await Task.yield()
         XCTAssertEqual(queue.enqueuedPreferences.count, 1)
+    }
+
+    func testQueueFailureDoesNotStartDrain() async {
+        let queue = StatsPreferencesMutationQueueSpy()
+        queue.enqueueError = StatsPreferencesMutationQueueTestError.rejected
+        let attempted = expectation(description: "stats enqueue attempted")
+        queue.onEnqueue = { attempted.fulfill() }
+        let store = makeStore(
+            queue: queue,
+            isSyncEnabled: { true },
+            waitForSyncDebounce: {},
+            startsSynchronization: false
+        )
+
+        store.setStyle(.classic)
+        await fulfillment(of: [attempted], timeout: 1)
+        await Task.yield()
+
+        XCTAssertTrue(queue.enqueuedPreferences.isEmpty)
+        XCTAssertEqual(queue.drainCount, 0)
     }
 
     func testBlockedStartupDoesNotRetainOwnerAndObservesCancellation() async {

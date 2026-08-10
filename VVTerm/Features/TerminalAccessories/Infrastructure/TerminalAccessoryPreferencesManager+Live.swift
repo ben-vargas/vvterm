@@ -1,12 +1,8 @@
 import Foundation
 
 extension CloudKitSyncCoordinator: TerminalAccessoryMutationQueue {
-    func enqueueTerminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile) {
-        enqueue(
-            PendingCloudKitMutation(
-                payload: .terminalAccessoryProfileUpsert(profile)
-            )
-        )
+    func enqueueTerminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile) throws {
+        try enqueue(.terminalAccessoryProfileUpsert(profile))
     }
 }
 extension CloudKitSyncLifecycleDriver: TerminalAccessorySyncLifecycle {}

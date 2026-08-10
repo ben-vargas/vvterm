@@ -430,7 +430,9 @@ struct ContentView: View {
     let isSyncEnabled = { SyncSettings.isEnabled(in: defaults) }
     let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
         transport: cloudKitManager,
-        now: now
+        defaults: defaults,
+        now: now,
+        makeID: UUID.init
     )
     let cloudKitSyncCoordinator = cloudKitSync.coordinator
     let serverManager = ServerManager(

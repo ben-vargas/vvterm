@@ -31,14 +31,17 @@ private final class TerminalThemeMutationQueueSpy: TerminalThemeMutationQueue {
     private(set) var drainCount = 0
     var onPreferenceEnqueue: (() -> Void)?
     var onDrain: (() -> Void)?
+    var enqueueError: Error?
 
-    func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) {
+    func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) throws {
+        if let enqueueError { throw enqueueError }
         enqueuedThemes.append(theme)
     }
 
-    func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) {
-        enqueuedPreferences.append(preference)
+    func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) throws {
         onPreferenceEnqueue?()
+        if let enqueueError { throw enqueueError }
+        enqueuedPreferences.append(preference)
     }
 
     func drainPendingMutations() async {
@@ -52,7 +55,12 @@ private final class TerminalThemeMutationQueueSpy: TerminalThemeMutationQueue {
         drainCount = 0
         onPreferenceEnqueue = nil
         onDrain = nil
+        enqueueError = nil
     }
+}
+
+private enum TerminalThemeMutationQueueTestError: Error {
+    case rejected
 }
 
 @MainActor
@@ -637,7 +645,8 @@ final class TerminalThemePersistenceTests: XCTestCase {
         let manager = makeManager(
             defaults: defaults,
             persistence: persistence,
-            themeFiles: TerminalThemeFilesSpy()
+            themeFiles: TerminalThemeFilesSpy(),
+            paletteResolver: TerminalThemePaletteResolverSpy()
         )
 
         XCTAssertEqual(manager.customThemes, [existingTheme])
@@ -897,6 +906,39 @@ final class TerminalThemePersistenceTests: XCTestCase {
         debounce.releaseAll()
         await Task.yield()
         XCTAssertEqual(queue.enqueuedPreferences.count, 1)
+    }
+
+    func testPreferenceQueueFailureDoesNotStartDrain() async throws {
+        let suiteName = "TerminalThemePersistenceTests.queueFailure.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let queue = TerminalThemeMutationQueueSpy()
+        let preferenceChanges = TerminalThemePreferenceChangeSourceStub()
+        let startupDrained = expectation(description: "startup drain")
+        queue.onDrain = { startupDrained.fulfill() }
+        let manager = makeManager(
+            defaults: defaults,
+            queue: queue,
+            preferenceChanges: preferenceChanges,
+            isSyncEnabled: { true },
+            waitForPreferenceSyncDebounce: {},
+            startsSynchronization: true
+        )
+        await fulfillment(of: [startupDrained], timeout: 1)
+        queue.reset()
+
+        queue.enqueueError = TerminalThemeMutationQueueTestError.rejected
+        let attempted = expectation(description: "preference enqueue attempted")
+        queue.onPreferenceEnqueue = { attempted.fulfill() }
+
+        defaults.set("Aizen Light", forKey: persistenceKeys.darkTheme)
+        preferenceChanges.publish()
+        await fulfillment(of: [attempted], timeout: 1)
+        await Task.yield()
+
+        _ = manager
+        XCTAssertTrue(queue.enqueuedPreferences.isEmpty)
+        XCTAssertEqual(queue.drainCount, 0)
     }
 
     func testBlockedStartupDoesNotRetainOwnerAndObservesCancellation() async throws {

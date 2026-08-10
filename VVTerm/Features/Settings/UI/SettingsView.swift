@@ -326,7 +326,9 @@ struct SettingsView: View {
     )
     let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
         transport: CloudKitManager.shared,
-        now: Date.init
+        defaults: defaults,
+        now: Date.init,
+        makeID: UUID.init
     )
     let cloudKitSyncCoordinator = cloudKitSync.coordinator
     let serverManager = ServerManager(

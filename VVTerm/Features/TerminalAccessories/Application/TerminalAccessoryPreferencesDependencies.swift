@@ -13,7 +13,7 @@ protocol TerminalAccessoryCloudClient: AnyObject {
 
 @MainActor
 protocol TerminalAccessoryMutationQueue: AnyObject {
-    func enqueueTerminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile)
+    func enqueueTerminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile) throws
     func drainPendingMutations() async
 }
 

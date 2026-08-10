@@ -500,11 +500,19 @@ final class TerminalThemeManager: ObservableObject {
         let waitForPreferenceSyncDebounce = dependencies.waitForPreferenceSyncDebounce
         let isSyncEnabled = dependencies.isSyncEnabled
         let mutationQueue = dependencies.mutationQueue
-        pendingPreferenceSyncTask = Task { [waitForPreferenceSyncDebounce, isSyncEnabled, mutationQueue, preference] in
+        let logger = logger
+        pendingPreferenceSyncTask = Task { [waitForPreferenceSyncDebounce, isSyncEnabled, mutationQueue, preference, logger] in
             try? await waitForPreferenceSyncDebounce()
             guard !Task.isCancelled else { return }
             guard !Task.isCancelled, isSyncEnabled() else { return }
-            mutationQueue.enqueueTerminalThemePreferenceUpsert(preference)
+            do {
+                try mutationQueue.enqueueTerminalThemePreferenceUpsert(preference)
+            } catch {
+                logger.error(
+                    "Failed to persist terminal theme preference sync: \(error.localizedDescription)"
+                )
+                return
+            }
             guard !Task.isCancelled, isSyncEnabled() else { return }
             await mutationQueue.drainPendingMutations()
         }
@@ -513,9 +521,17 @@ final class TerminalThemeManager: ObservableObject {
     private func pushThemeToCloud(_ theme: TerminalTheme) {
         let isSyncEnabled = dependencies.isSyncEnabled
         let mutationQueue = dependencies.mutationQueue
-        Task { @MainActor [isSyncEnabled, mutationQueue, theme] in
+        let logger = logger
+        Task { @MainActor [isSyncEnabled, mutationQueue, theme, logger] in
             guard isSyncEnabled() else { return }
-            mutationQueue.enqueueTerminalThemeUpsert(theme)
+            do {
+                try mutationQueue.enqueueTerminalThemeUpsert(theme)
+            } catch {
+                logger.error(
+                    "Failed to persist terminal theme sync: \(error.localizedDescription)"
+                )
+                return
+            }
             guard !Task.isCancelled, isSyncEnabled() else { return }
             await mutationQueue.drainPendingMutations()
         }
@@ -534,7 +550,7 @@ final class TerminalThemeManager: ObservableObject {
                 let remoteThemes = try await cloud.fetchTerminalThemes()
                 guard !Task.isCancelled, isSyncEnabled() else { return }
                 if let manager = self {
-                    manager.applyRemoteThemesAndEnqueueMissing(
+                    try manager.applyRemoteThemesAndEnqueueMissing(
                         remoteThemes,
                         localThemesSnapshot: localThemesSnapshot,
                         mutationQueue: mutationQueue
@@ -547,7 +563,7 @@ final class TerminalThemeManager: ObservableObject {
                 let remotePreference = try await cloud.fetchTerminalThemePreference()
                 guard !Task.isCancelled, isSyncEnabled() else { return }
                 if let manager = self {
-                    manager.applyRemotePreferenceOrEnqueueLocal(
+                    try manager.applyRemotePreferenceOrEnqueueLocal(
                         remotePreference,
                         mutationQueue: mutationQueue
                     )
@@ -570,7 +586,7 @@ final class TerminalThemeManager: ObservableObject {
         _ remoteThemes: [TerminalTheme],
         localThemesSnapshot: [TerminalTheme],
         mutationQueue: any TerminalThemeMutationQueue
-    ) {
+    ) throws {
         var remoteByID: [UUID: TerminalTheme] = [:]
         for remoteTheme in remoteThemes {
             guard let validTheme = try? TerminalThemeValidator.validateStoredTheme(remoteTheme) else {
@@ -590,14 +606,14 @@ final class TerminalThemeManager: ObservableObject {
                remoteTheme.updatedAt >= localTheme.updatedAt {
                 continue
             }
-            mutationQueue.enqueueTerminalThemeUpsert(localTheme)
+            try mutationQueue.enqueueTerminalThemeUpsert(localTheme)
         }
     }
 
     private func applyRemotePreferenceOrEnqueueLocal(
         _ remotePreference: TerminalThemePreference?,
         mutationQueue: any TerminalThemeMutationQueue
-    ) {
+    ) throws {
         if let remotePreference {
             applyRemotePreferenceIfNewer(remotePreference)
             return
@@ -613,7 +629,7 @@ final class TerminalThemeManager: ObservableObject {
         }
 
         let selection = currentPreferenceSnapshot()
-        mutationQueue.enqueueTerminalThemePreferenceUpsert(
+        try mutationQueue.enqueueTerminalThemePreferenceUpsert(
             TerminalThemePreference(
                 darkThemeName: selection.darkThemeName,
                 lightThemeName: selection.lightThemeName,

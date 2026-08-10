@@ -14,8 +14,8 @@ protocol TerminalThemeCloudMutationClient: AnyObject {
 
 @MainActor
 protocol TerminalThemeMutationQueue: AnyObject {
-    func enqueueTerminalThemeUpsert(_ theme: TerminalTheme)
-    func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference)
+    func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) throws
+    func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) throws
     func drainPendingMutations() async
 }
 

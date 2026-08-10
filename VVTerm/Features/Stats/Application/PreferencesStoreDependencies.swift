@@ -13,7 +13,7 @@ protocol StatsPreferencesCloudClient: AnyObject {
 
 @MainActor
 protocol StatsPreferencesMutationQueue: AnyObject {
-    func enqueueStatsPreferencesUpsert(_ preferences: StatsPreferences)
+    func enqueueStatsPreferencesUpsert(_ preferences: StatsPreferences) throws
     func drainPendingMutations() async
 }
 

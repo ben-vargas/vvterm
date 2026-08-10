@@ -64,7 +64,9 @@ struct VVTermApp: App {
         let isSyncEnabled = { SyncSettings.isEnabled(in: defaults) }
         let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
             transport: cloudKitManager,
-            now: now
+            defaults: defaults,
+            now: now,
+            makeID: makeID
         )
         let cloudKitSyncCoordinator = cloudKitSync.coordinator
         let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {

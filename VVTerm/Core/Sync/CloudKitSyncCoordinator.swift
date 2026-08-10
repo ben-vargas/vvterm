@@ -12,6 +12,7 @@ final class CloudKitSyncCoordinator {
     private let queue: PendingCloudKitSyncQueue
     private let isSyncEnabled: () -> Bool
     private let now: () -> Date
+    private let makeID: () -> UUID
     private var isDraining = false
     private var shouldDrainAgain = false
 
@@ -19,12 +20,14 @@ final class CloudKitSyncCoordinator {
         mutationHandler: any PendingCloudKitMutationHandling,
         queue: PendingCloudKitSyncQueue,
         isSyncEnabled: @escaping () -> Bool,
-        now: @escaping () -> Date
+        now: @escaping () -> Date,
+        makeID: @escaping () -> UUID
     ) {
         self.mutationHandler = mutationHandler
         self.queue = queue
         self.isSyncEnabled = isSyncEnabled
         self.now = now
+        self.makeID = makeID
     }
 
     func snapshot() -> [PendingCloudKitMutation] {
@@ -35,27 +38,28 @@ final class CloudKitSyncCoordinator {
         queue.quarantineSnapshot()
     }
 
-    @discardableResult
-    func remove(_ mutationID: UUID) -> Result<Void, any Error> {
-        performQueueMutation("remove pending mutation") {
-            try queue.remove(mutationID)
-        }
+    func remove(_ mutationID: UUID) throws {
+        try queue.remove(mutationID)
     }
 
-    @discardableResult
     func removeAll(
         where shouldRemove: (PendingCloudKitMutation) -> Bool
-    ) -> Result<Void, any Error> {
-        performQueueMutation("remove pending mutations") {
-            try queue.removeAll(where: shouldRemove)
-        }
+    ) throws {
+        try queue.removeAll(where: shouldRemove)
     }
 
-    @discardableResult
-    func enqueue(_ mutation: PendingCloudKitMutation) -> Result<Void, any Error> {
-        performQueueMutation("enqueue pending mutation") {
-            try queue.enqueue(mutation)
-        }
+    func enqueue(_ mutation: PendingCloudKitMutation) throws {
+        try queue.enqueue(mutation)
+    }
+
+    func enqueue(_ payload: PendingCloudKitMutationPayload) throws {
+        try queue.enqueue(
+            PendingCloudKitMutation(
+                id: makeID(),
+                payload: payload,
+                createdAt: now()
+            )
+        )
     }
 
     func enqueueAtomically(_ mutations: [PendingCloudKitMutation]) throws {
@@ -126,19 +130,6 @@ final class CloudKitSyncCoordinator {
                 }
                 return
             }
-        }
-    }
-
-    private func performQueueMutation(
-        _ operation: String,
-        mutation: () throws -> Void
-    ) -> Result<Void, any Error> {
-        do {
-            try mutation()
-            return .success(())
-        } catch {
-            logQueuePersistenceFailure(operation, error: error)
-            return .failure(error)
         }
     }
 

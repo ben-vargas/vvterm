@@ -85,7 +85,8 @@ struct CloudKitSyncLiveCompositionTests {
                 defaults: defaults
             ),
             isSyncEnabled: { false },
-            now: { Date(timeIntervalSinceReferenceDate: 1_000) }
+            now: { Date(timeIntervalSinceReferenceDate: 1_000) },
+            makeID: UUID.init
         )
 
         #expect(clients.serverCloud === server)
@@ -96,7 +97,7 @@ struct CloudKitSyncLiveCompositionTests {
     }
 
     @Test
-    func coordinatorDispatchesEveryMutationAndPublishesResolvedValues() async {
+    func coordinatorDispatchesEveryMutationAndPublishesResolvedValues() async throws {
         let suiteName = "CloudKitSyncDispatchTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -116,7 +117,8 @@ struct CloudKitSyncLiveCompositionTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
-            now: { Date(timeIntervalSinceReferenceDate: 10_000) }
+            now: { Date(timeIntervalSinceReferenceDate: 10_000) },
+            makeID: UUID.init
         )
         let terminalAccessoryResolutions = composition.terminalAccessoryResolutions
         let statsPreferencesResolutions = composition.statsPreferencesResolutions
@@ -158,14 +160,14 @@ struct CloudKitSyncLiveCompositionTests {
         let profile = makeProfile()
         let stats = makeStatsPreferences()
 
-        coordinator.enqueueServerUpsert(server)
-        coordinator.enqueueServerDelete(deletedServer)
-        coordinator.enqueueWorkspaceUpsert(workspace)
-        coordinator.enqueueWorkspaceDelete(deletedWorkspace)
-        coordinator.enqueueTerminalThemeUpsert(theme)
-        coordinator.enqueueTerminalThemePreferenceUpsert(preference)
-        coordinator.enqueueTerminalAccessoryProfileUpsert(profile)
-        coordinator.enqueueStatsPreferencesUpsert(stats)
+        try coordinator.enqueueServerUpsert(server)
+        try coordinator.enqueueServerDelete(deletedServer)
+        try coordinator.enqueueWorkspaceUpsert(workspace)
+        try coordinator.enqueueWorkspaceDelete(deletedWorkspace)
+        try coordinator.enqueueTerminalThemeUpsert(theme)
+        try coordinator.enqueueTerminalThemePreferenceUpsert(preference)
+        try coordinator.enqueueTerminalAccessoryProfileUpsert(profile)
+        try coordinator.enqueueStatsPreferencesUpsert(stats)
         await coordinator.drainPendingMutations()
 
         #expect(serverClient.events == [

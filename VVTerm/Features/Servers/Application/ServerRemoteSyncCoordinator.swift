@@ -77,15 +77,15 @@ final class ServerRemoteSyncCoordinator {
         )
     }
 
-    func clearLocalDataAndResync() async {
+    func clearLocalDataAndResync() async throws {
         logger.info("Clearing local data and re-syncing from CloudKit...")
 
         if let activeLoad {
             await activeLoad.task.value
         }
 
+        try dependencies.syncRepository.clearPendingServerAndWorkspaceMutations()
         stateStore.clearLocalDataAndState()
-        dependencies.syncRepository.clearPendingServerAndWorkspaceMutations()
         await loadData()
 
         logger.info(
@@ -93,19 +93,19 @@ final class ServerRemoteSyncCoordinator {
         )
     }
 
-    func enqueue(_ effect: ServerMutationEffect) {
+    func enqueue(_ effect: ServerMutationEffect) throws {
         switch effect {
         case .serverUpsert(let server):
-            dependencies.syncRepository.enqueueServerUpsert(server)
+            try dependencies.syncRepository.enqueueServerUpsert(server)
         case .serverDelete(let server):
-            dependencies.syncRepository.enqueueServerDelete(server)
+            try dependencies.syncRepository.enqueueServerDelete(server)
         case .workspaceUpsert(let workspace):
-            dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
+            try dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
         }
     }
 
-    func enqueueWorkspaceUpsert(_ workspace: Workspace) {
-        dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
+    func enqueueWorkspaceUpsert(_ workspace: Workspace) throws {
+        try dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
     }
 
     func drainPendingMutations() async {
@@ -160,7 +160,7 @@ final class ServerRemoteSyncCoordinator {
                     forceFullFetch: shouldForceFullFetch
                 )
                 guard !Task.isCancelled else { return }
-                await self?.completeLoad(
+                try await self?.completeLoad(
                     changes,
                     operationID: operationID,
                     generation: generation
@@ -202,7 +202,7 @@ final class ServerRemoteSyncCoordinator {
         _ fetchedChanges: ServerRemoteChanges,
         operationID: UUID,
         generation: LoadGeneration
-    ) async {
+    ) async throws {
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
         let pendingBootstrapWorkspaceID = stateStore.transientBootstrapWorkspaceID
         var mustRestorePersistedCollections = true
@@ -217,8 +217,8 @@ final class ServerRemoteSyncCoordinator {
                 )
             }
         }
-        resolvePendingBootstrapWorkspaceAgainstAuthoritativeFetch(fetchedChanges)
-        guard let backfillResult = await backfillMissingLocalRecordsIfNeeded(
+        try resolvePendingBootstrapWorkspaceAgainstAuthoritativeFetch(fetchedChanges)
+        guard let backfillResult = try await backfillMissingLocalRecordsIfNeeded(
             for: fetchedChanges,
             generation: generation
         ) else { return }
@@ -234,10 +234,10 @@ final class ServerRemoteSyncCoordinator {
             changes,
             canReplaceLocalState: backfillResult.canReplaceLocalState
         )
-        reconcilePendingServerAndWorkspaceUpsertsAgainstRemote(changes)
+        try reconcilePendingServerAndWorkspaceUpsertsAgainstRemote(changes)
         applyPendingSyncOverlay()
         _ = stateStore.reconcilePendingBootstrapWorkspaceState()
-        repairOrphanedServers()
+        try repairOrphanedServers()
 
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
 
@@ -322,7 +322,7 @@ final class ServerRemoteSyncCoordinator {
     private func backfillMissingLocalRecordsIfNeeded(
         for changes: ServerRemoteChanges,
         generation: LoadGeneration
-    ) async -> FullFetchBackfillResult? {
+    ) async throws -> FullFetchBackfillResult? {
         guard !Task.isCancelled, acceptsLoad(generation) else { return nil }
         guard changes.isFullFetch, dependencies.remoteRepository.isAvailable else {
             return FullFetchBackfillResult(changes: changes, canReplaceLocalState: true)
@@ -358,10 +358,10 @@ final class ServerRemoteSyncCoordinator {
         )
 
         for workspace in missingWorkspaces {
-            dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
+            try dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
         }
         for server in missingServers {
-            dependencies.syncRepository.enqueueServerUpsert(server)
+            try dependencies.syncRepository.enqueueServerUpsert(server)
         }
 
         var uploadedWorkspaces: [Workspace] = []
@@ -464,11 +464,11 @@ final class ServerRemoteSyncCoordinator {
 
     private func resolvePendingBootstrapWorkspaceAgainstAuthoritativeFetch(
         _ changes: ServerRemoteChanges
-    ) {
+    ) throws {
         guard let workspace = stateStore.takePendingBootstrapWorkspaceForAuthoritativeEmptyFetch(changes) else {
             return
         }
-        dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
+        try dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
         logger.info(
             "Promoted pending bootstrap workspace after authoritative CloudKit fetch returned no workspaces"
         )
@@ -482,7 +482,7 @@ final class ServerRemoteSyncCoordinator {
 
     private func reconcilePendingServerAndWorkspaceUpsertsAgainstRemote(
         _ changes: ServerRemoteChanges
-    ) {
+    ) throws {
         let snapshot = dependencies.syncRepository.pendingServerMutations()
         let fetchedServersByID = Dictionary(
             uniqueKeysWithValues: changes.servers.map { ($0.id, $0) }
@@ -498,13 +498,13 @@ final class ServerRemoteSyncCoordinator {
                       fetchedServer.updatedAt >= pendingServer.updatedAt else {
                     continue
                 }
-                dependencies.syncRepository.removePendingServerMutation(mutation.id)
+                try dependencies.syncRepository.removePendingServerMutation(mutation.id)
             case .workspaceUpsert(let pendingWorkspace):
                 guard let fetchedWorkspace = fetchedWorkspacesByID[pendingWorkspace.id],
                       fetchedWorkspace.updatedAt >= pendingWorkspace.updatedAt else {
                     continue
                 }
-                dependencies.syncRepository.removePendingServerMutation(mutation.id)
+                try dependencies.syncRepository.removePendingServerMutation(mutation.id)
             case .serverDelete, .workspaceDelete:
                 continue
             }
@@ -561,18 +561,18 @@ final class ServerRemoteSyncCoordinator {
         return stateStore.servers.filter { deletedServerIDs.contains($0.id) }
     }
 
-    private func repairOrphanedServers() {
+    private func repairOrphanedServers() throws {
         let repair = stateStore.repairOrphanedServers(at: dependencies.now())
         guard repair.workspace != nil || !repair.servers.isEmpty else { return }
 
         if let workspace = repair.workspace, stateStore.isSyncEnabled {
-            dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
+            try dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
             logger.warning(
                 "Created repair workspace '\(workspace.name)' to recover orphaned servers"
             )
         }
         for server in repair.servers where stateStore.isSyncEnabled {
-            dependencies.syncRepository.enqueueServerUpsert(server)
+            try dependencies.syncRepository.enqueueServerUpsert(server)
         }
         logger.warning("Repaired \(repair.servers.count) orphaned servers")
     }

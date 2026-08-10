@@ -341,11 +341,19 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         let waitForSyncDebounce = dependencies.waitForSyncDebounce
         let isSyncEnabled = dependencies.isSyncEnabled
         let mutationQueue = dependencies.mutationQueue
-        pendingSyncTask = Task { [weak self, waitForSyncDebounce, isSyncEnabled, mutationQueue] in
+        let logger = logger
+        pendingSyncTask = Task { [weak self, waitForSyncDebounce, isSyncEnabled, mutationQueue, logger] in
             try? await waitForSyncDebounce()
             guard !Task.isCancelled else { return }
             guard isSyncEnabled(), let profile = self?.profile else { return }
-            mutationQueue.enqueueTerminalAccessoryProfileUpsert(profile)
+            do {
+                try mutationQueue.enqueueTerminalAccessoryProfileUpsert(profile)
+            } catch {
+                logger.error(
+                    "Failed to persist terminal accessory sync: \(error.localizedDescription)"
+                )
+                return
+            }
             guard !Task.isCancelled, isSyncEnabled() else { return }
             await mutationQueue.drainPendingMutations()
         }

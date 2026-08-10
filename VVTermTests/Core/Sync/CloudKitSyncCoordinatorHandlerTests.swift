@@ -51,7 +51,8 @@ struct CloudKitSyncCoordinatorHandlerTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
-            now: { currentDate }
+            now: { currentDate },
+            makeID: UUID.init
         )
         let theme = TerminalTheme(
             name: "Retry Theme",
@@ -59,7 +60,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
             updatedAt: Date(timeIntervalSinceReferenceDate: 100)
         )
 
-        coordinator.enqueue(
+        try coordinator.enqueue(
             PendingCloudKitMutation(payload: .terminalThemeUpsert(theme))
         )
         await coordinator.drainPendingMutations()
@@ -92,7 +93,8 @@ struct CloudKitSyncCoordinatorHandlerTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
-            now: { Date(timeIntervalSinceReferenceDate: 30_000) }
+            now: { Date(timeIntervalSinceReferenceDate: 30_000) },
+            makeID: UUID.init
         )
         let mutation = PendingCloudKitMutation(
             id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
@@ -106,7 +108,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
             createdAt: Date(timeIntervalSinceReferenceDate: 200)
         )
 
-        coordinator.enqueue(mutation)
+        try coordinator.enqueue(mutation)
         await coordinator.drainPendingMutations()
 
         #expect(coordinator.snapshot() == [mutation])
@@ -132,13 +134,11 @@ struct CloudKitSyncCoordinatorHandlerTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
-            now: { Date(timeIntervalSinceReferenceDate: 40_000) }
+            now: { Date(timeIntervalSinceReferenceDate: 40_000) },
+            makeID: UUID.init
         )
         let mutation = makeMutation(idSuffix: 2)
-        guard case .success = coordinator.enqueue(mutation) else {
-            Issue.record("Expected the initial enqueue to succeed")
-            return
-        }
+        try coordinator.enqueue(mutation)
 
         defaults.rejectWrites = true
         await coordinator.drainPendingMutations()
@@ -167,13 +167,11 @@ struct CloudKitSyncCoordinatorHandlerTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
-            now: { Date(timeIntervalSinceReferenceDate: 50_000) }
+            now: { Date(timeIntervalSinceReferenceDate: 50_000) },
+            makeID: UUID.init
         )
         let mutation = makeMutation(idSuffix: 3)
-        guard case .success = coordinator.enqueue(mutation) else {
-            Issue.record("Expected the initial enqueue to succeed")
-            return
-        }
+        try coordinator.enqueue(mutation)
 
         defaults.rejectWrites = true
         await coordinator.drainPendingMutations()
