@@ -182,7 +182,6 @@ enum VolumeVisibilityPolicy {
 }
 
 struct ServerVolumeVisibilityPreferences: Codable, Equatable, Sendable {
-    static let defaultsKey = "stats.serverVolumeVisibility.v1"
     static let currentSchemaVersion = 2
 
     private var schemaVersion: Int

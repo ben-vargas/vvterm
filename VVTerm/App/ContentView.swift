@@ -388,7 +388,7 @@ struct ContentView: View {
     let statsDependencies = ServerStatsScreenDependencies(
         makeCollector: { ServerStatsCollector() },
         preferencesStore: statsPreferencesStore,
-        volumeVisibilityStore: ServerVolumeVisibilityStore(defaults: .standard),
+        volumeVisibilityStore: ServerVolumeVisibilityStore.live,
         securityApprovalActions: VVTermApp.makeStatsSecurityApprovalActions(
             appLockManager: appLockManager
         )

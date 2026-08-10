@@ -30,7 +30,7 @@ struct VVTermApp: App {
             dependencies: .live
         )
         let statsPreferencesStore = PreferencesStore(dependencies: .live)
-        let serverVolumeVisibilityStore = ServerVolumeVisibilityStore(defaults: .standard)
+        let serverVolumeVisibilityStore = ServerVolumeVisibilityStore.live
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: .standard)
         _tabManager = StateObject(wrappedValue: tabManager)
         _storeManager = StateObject(wrappedValue: storeManager)
