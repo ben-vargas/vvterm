@@ -24,7 +24,6 @@ struct LocalSSHDiscoveryState: Equatable {
         case scanning(Scan)
         case completed(Permission)
         case unsupportedNetwork
-        case failed(Scan, String)
     }
 
     private(set) var phase: Phase = .idle
@@ -36,18 +35,13 @@ struct LocalSSHDiscoveryState: Equatable {
 
     var permission: Permission {
         switch phase {
-        case .scanning(let scan), .failed(let scan, _):
+        case .scanning(let scan):
             return scan.permission
         case .completed(let permission):
             return permission
         case .idle, .unsupportedNetwork:
             return .unknown
         }
-    }
-
-    var error: String? {
-        guard case .failed(_, let message) = phase else { return nil }
-        return message
     }
 
     func isSourceActive(_ source: Scan.Source) -> Bool {
@@ -99,16 +93,11 @@ struct LocalSSHDiscoveryState: Equatable {
             case .permissionDenied:
                 scan.permission = .denied
                 phase = .scanning(scan)
-            case .failed(let message):
-                phase = .failed(scan, message)
             case .scanningFinished:
                 phase = .completed(scan.permission)
             }
             return true
-        case .failed(let scan, _) where scan.id == scanID:
-            if case .scanningFinished = event { return true }
-            return false
-        case .idle, .completed, .unsupportedNetwork, .scanning, .failed:
+        case .idle, .completed, .unsupportedNetwork, .scanning:
             return false
         }
     }
@@ -182,7 +171,7 @@ final class LocalSSHDiscoveryManager: ObservableObject {
         switch event {
         case .hostFound(let discovered):
             upsert(discovered)
-        case .scanningStarted, .sourceStatus, .permissionDenied, .failed, .scanningFinished:
+        case .scanningStarted, .sourceStatus, .permissionDenied, .scanningFinished:
             break
         }
     }

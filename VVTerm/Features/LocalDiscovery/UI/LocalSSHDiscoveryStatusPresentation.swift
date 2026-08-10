@@ -31,8 +31,6 @@ enum LocalSSHDiscoveryStatusText {
                 format: String(localized: "%lld SSH host(s) found."),
                 Int64(hostCount)
             )
-        case .failed(_, let message):
-            return message
         }
     }
 }

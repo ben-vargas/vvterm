@@ -45,18 +45,17 @@ struct LocalSSHDiscoveryStateTests {
     }
 
     @Test
-    func failureRemainsVisibleAfterTheServiceFinishes() {
+    func permissionDenialRemainsVisibleAfterTheServiceFinishes() {
         var state = LocalSSHDiscoveryState()
         let scanID = UUID()
 
         state.start(id: scanID)
         state.handle(.permissionDenied, scanID: scanID)
-        state.handle(.failed("Local network access failed"), scanID: scanID)
         state.handle(.scanningFinished, scanID: scanID)
 
         #expect(!state.isScanning)
+        #expect(state.phase == .completed(.denied))
         #expect(state.permission == .denied)
-        #expect(state.error == "Local network access failed")
     }
 
     @Test

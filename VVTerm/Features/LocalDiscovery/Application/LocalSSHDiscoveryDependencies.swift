@@ -12,7 +12,6 @@ nonisolated enum LocalSSHDiscoveryEvent: Sendable {
     case sourceStatus(LocalSSHDiscoverySourceStatus)
     case hostFound(DiscoveredSSHHost)
     case permissionDenied
-    case failed(String)
     case scanningFinished
 }
 

@@ -42,8 +42,7 @@ struct LocalSSHDiscoveryStatusPresentationTests {
                     format: String(localized: "%lld SSH host(s) found."),
                     Int64(2)
                 )
-            ),
-            (.failed(noSources, "Probe failed"), 0, "Probe failed")
+            )
         ]
 
         for (phase, hostCount, expected) in mappings {
