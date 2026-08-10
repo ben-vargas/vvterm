@@ -3,6 +3,7 @@ import AppKit
 import SwiftUI
 
 struct VVTermCommands: Commands {
+    let aboutWindowPresenter: AboutWindowPresenter
     let settingsWindowPresenter: SettingsWindowPresenter
     @Environment(\.openWindow) private var openWindow
     @FocusedValue(\.serverViewTabActions) private var serverViewTabActions
@@ -12,7 +13,7 @@ struct VVTermCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
             Button("About VVTerm") {
-                AboutWindowController.shared.show()
+                aboutWindowPresenter.show()
             }
         }
 

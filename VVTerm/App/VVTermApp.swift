@@ -140,6 +140,7 @@ struct VVTermApp: App {
             )
         )
         #if os(macOS)
+        aboutWindowPresenter = AboutWindowPresenter()
         settingsWindowPresenter = SettingsWindowPresenter(
             appLockManager: appLockManager,
             serverManager: serverManager,
@@ -203,6 +204,7 @@ struct VVTermApp: App {
     private let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
     private let terminalSecurityActions: TerminalSecurityActions
     #if os(macOS)
+    private let aboutWindowPresenter: AboutWindowPresenter
     private let settingsWindowPresenter: SettingsWindowPresenter
     #endif
 
@@ -449,7 +451,10 @@ struct VVTermApp: App {
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1100, height: 700)
         .commands {
-            VVTermCommands(settingsWindowPresenter: settingsWindowPresenter)
+            VVTermCommands(
+                aboutWindowPresenter: aboutWindowPresenter,
+                settingsWindowPresenter: settingsWindowPresenter
+            )
         }
         #endif
     }
