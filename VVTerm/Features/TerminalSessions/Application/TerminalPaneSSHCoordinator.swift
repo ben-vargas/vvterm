@@ -184,7 +184,7 @@ final class TerminalPaneSSHCoordinator {
                     )
                 }
                 if shell.transport == .mosh {
-                    await context.persistMoshSnapshot(shell.id)
+                    await context.persistMoshCheckpoint(shell.id)
                 }
                 return true
             },

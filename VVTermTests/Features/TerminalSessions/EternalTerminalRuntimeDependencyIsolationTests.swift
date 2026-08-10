@@ -1,6 +1,5 @@
 import ETSession
 import Foundation
-import MoshCore
 import Testing
 @testable import VVTerm
 
@@ -44,13 +43,6 @@ private final class FailingEternalTerminalResumeStore: EternalTerminalResumeStor
     func save(_ credentials: EternalTerminalResumeCredentials, for paneId: UUID) throws {}
     func save(_ checkpoint: ETSessionCheckpoint, for paneId: UUID) throws {}
     func deleteResumeState(for paneId: UUID) throws {}
-}
-
-private final class EternalTerminalDependencyMoshResumeStore: MoshResumeStoring {
-    func snapshot(for paneId: UUID) throws -> MoshSnapshot? { nil }
-    func hasSnapshot(for paneId: UUID) -> Bool { false }
-    func save(_ snapshot: MoshSnapshot, for paneId: UUID) throws {}
-    func deleteSnapshot(for paneId: UUID) throws {}
 }
 
 @Suite(.serialized)
@@ -137,7 +129,7 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
             networkReadinessPublisher: nil,
             liveActivityRefresh: { _ in },
             eternalTerminalResumeStore: FailingEternalTerminalResumeStore(),
-            moshResumeStore: EternalTerminalDependencyMoshResumeStore()
+            moshRecovery: UnavailableTerminalMoshRecoveryService()
         )
     }
 }

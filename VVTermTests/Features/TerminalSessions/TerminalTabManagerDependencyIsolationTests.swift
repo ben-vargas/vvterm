@@ -1,7 +1,6 @@
 import Combine
 import ETSession
 import Foundation
-import MoshCore
 import Testing
 @testable import VVTerm
 
@@ -29,13 +28,6 @@ private final class DependencyTestETResumeStore: EternalTerminalResumeStoring, @
     func save(_ credentials: EternalTerminalResumeCredentials, for paneId: UUID) throws {}
     func save(_ checkpoint: ETSessionCheckpoint, for paneId: UUID) throws {}
     func deleteResumeState(for paneId: UUID) throws {}
-}
-
-private final class DependencyTestMoshResumeStore: MoshResumeStoring {
-    func snapshot(for paneId: UUID) throws -> MoshSnapshot? { nil }
-    func hasSnapshot(for paneId: UUID) -> Bool { false }
-    func save(_ snapshot: MoshSnapshot, for paneId: UUID) throws {}
-    func deleteSnapshot(for paneId: UUID) throws {}
 }
 
 @MainActor
@@ -268,7 +260,7 @@ struct TerminalTabManagerDependencyIsolationTests {
                 eternalTerminalRuntime: .testing
             ),
             eternalTerminalResumeStore: DependencyTestETResumeStore(),
-            moshResumeStore: DependencyTestMoshResumeStore()
+            moshRecovery: UnavailableTerminalMoshRecoveryService()
         )
     }
 

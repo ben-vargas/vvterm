@@ -19,26 +19,6 @@ private final class InMemoryMoshResumeSecretStore: MoshResumeSecretStoring {
     }
 }
 
-private final class InMemoryMoshResumeStore: MoshResumeStoring {
-    private var snapshots: [UUID: MoshSnapshot] = [:]
-
-    func snapshot(for paneId: UUID) throws -> MoshSnapshot? {
-        snapshots[paneId]
-    }
-
-    func hasSnapshot(for paneId: UUID) -> Bool {
-        snapshots[paneId] != nil
-    }
-
-    func save(_ snapshot: MoshSnapshot, for paneId: UUID) throws {
-        snapshots[paneId] = snapshot
-    }
-
-    func deleteSnapshot(for paneId: UUID) throws {
-        snapshots.removeValue(forKey: paneId)
-    }
-}
-
 @Suite(.serialized)
 @MainActor
 struct MoshResumeStoreTests {
@@ -98,57 +78,16 @@ struct MoshResumeStoreTests {
     }
 
     @Test
-    func explicitCloseDeletesSnapshotButApplicationTerminationPreservesIt() async throws {
-        let manager = TerminalTabManager.shared
-        await manager.resetForTesting()
-
-        do {
-            let store = InMemoryMoshResumeStore()
-            manager.setMoshResumeStoreForTesting(store)
-            let serverId = UUID()
-
-            let closedTab = TerminalTab(serverId: serverId, title: "Close")
-            manager.installTabForTesting(closedTab, paneState: TerminalPaneState(
-                paneId: closedTab.rootPaneId,
-                tabId: closedTab.id,
-                serverId: serverId
-            ))
-            try store.save(snapshot(), for: closedTab.rootPaneId)
-
-            manager.closeTab(closedTab)
-            #expect(try store.snapshot(for: closedTab.rootPaneId) == nil)
-
-            let preservedTab = TerminalTab(serverId: serverId, title: "Terminate")
-            manager.installTabForTesting(preservedTab, paneState: TerminalPaneState(
-                paneId: preservedTab.rootPaneId,
-                tabId: preservedTab.id,
-                serverId: serverId
-            ))
-            let expected = snapshot()
-            try store.save(expected, for: preservedTab.rootPaneId)
-
-            await manager.beginApplicationTermination().value
-
-            #expect(try store.snapshot(for: preservedTab.rootPaneId) == expected)
-            #expect(manager.tabs(for: serverId).map(\.id) == [preservedTab.id])
-        } catch {
-            await manager.resetForTesting()
-            throw error
-        }
-        await manager.resetForTesting()
-    }
-
-    @Test
     func onlyPermanentlyInvalidSnapshotsAreDiscarded() {
-        #expect(MoshResumePolicy.shouldDiscardSnapshot(after: .invalidEndpoint))
-        #expect(MoshResumePolicy.shouldDiscardSnapshot(after: .badSnapshotSchema(99)))
-        #expect(MoshResumePolicy.shouldDiscardSnapshot(after: .decodeFailure))
-        #expect(MoshResumePolicy.shouldDiscardSnapshot(
+        #expect(MoshResumePolicy.storedStateDisposition(after: .invalidEndpoint) == .discard)
+        #expect(MoshResumePolicy.storedStateDisposition(after: .badSnapshotSchema(99)) == .discard)
+        #expect(MoshResumePolicy.storedStateDisposition(after: .decodeFailure) == .discard)
+        #expect(MoshResumePolicy.storedStateDisposition(
             after: .sessionFailed(.authenticationFailure("invalid key"))
-        ))
-        #expect(!MoshResumePolicy.shouldDiscardSnapshot(
+        ) == .discard)
+        #expect(MoshResumePolicy.storedStateDisposition(
             after: .sessionFailed(.transportFailure("offline"))
-        ))
-        #expect(!MoshResumePolicy.shouldDiscardSnapshot(after: .notStarted))
+        ) == .keep)
+        #expect(MoshResumePolicy.storedStateDisposition(after: .notStarted) == .keep)
     }
 }

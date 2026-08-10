@@ -60,7 +60,7 @@ struct TerminalSSHConnectionContext {
     let startupPlan: @MainActor @Sendable () async throws -> TerminalShellStartupPlan
     let restoreMoshShell: @MainActor @Sendable (_ cols: Int, _ rows: Int) async -> ShellHandle?
     let registerShell: @MainActor @Sendable (ShellHandle) async -> Bool
-    let persistMoshSnapshot: @MainActor @Sendable (_ shellId: UUID) async -> Void
+    let persistMoshCheckpoint: @MainActor @Sendable (_ shellId: UUID) async -> Void
     let updateTitle: @MainActor @Sendable (String) -> Void
     let hasOtherRegistrations: @MainActor @Sendable () async -> Bool
     let handleShellEnd: @MainActor @Sendable (_ shellId: UUID, _ reason: TerminalShellEndReason) -> Void

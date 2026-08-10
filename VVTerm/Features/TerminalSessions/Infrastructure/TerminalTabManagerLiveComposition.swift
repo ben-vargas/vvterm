@@ -99,7 +99,9 @@ enum TerminalTabManagerLiveComposition {
             ),
             dependencies: dependencies,
             eternalTerminalResumeStore: EternalTerminalResumeStore.shared,
-            moshResumeStore: MoshResumeStore.shared
+            moshRecovery: TerminalMoshRecoveryService(
+                store: MoshResumeStore.shared
+            )
         )
     }
 }

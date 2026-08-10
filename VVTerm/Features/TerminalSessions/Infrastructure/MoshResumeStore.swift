@@ -34,6 +34,11 @@ private struct MoshResumeCheckpoint: Codable, Equatable, Sendable {
     }
 }
 
+nonisolated enum MoshStoredStateDisposition: Equatable, Sendable {
+    case keep
+    case discard
+}
+
 enum MoshResumeStoreError: LocalizedError {
     case invalidSnapshot
     case corruptStoredSecret
@@ -54,31 +59,33 @@ enum MoshResumeStoreError: LocalizedError {
         }
     }
 
-    var shouldDeleteStoredState: Bool {
+    var storedStateDisposition: MoshStoredStateDisposition {
         switch self {
         case .invalidSnapshot, .corruptStoredSecret, .corruptStoredCheckpoint:
-            true
+            .discard
         case .secureStorageUnavailable, .checkpointStorageUnavailable:
-            false
+            .keep
         }
     }
 }
 
 nonisolated enum MoshResumePolicy {
-    static func shouldDiscardSnapshot(after error: MoshSessionError) -> Bool {
+    static func storedStateDisposition(
+        after error: MoshSessionError
+    ) -> MoshStoredStateDisposition {
         switch error {
         case .invalidEndpoint, .badSnapshotSchema, .decodeFailure:
-            true
+            .discard
         case .sessionFailed(let failure):
             switch failure {
             case .protocolViolation, .authenticationFailure:
-                true
+                .discard
             case .timeout, .retryLimitExceeded, .circuitBreakerTripped,
                  .transportFailure:
-                false
+                .keep
             }
         case .notStarted, .encodeFailure:
-            false
+            .keep
         }
     }
 }
