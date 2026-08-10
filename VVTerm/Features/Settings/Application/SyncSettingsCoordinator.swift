@@ -13,7 +13,7 @@ nonisolated struct SyncSettingsCloudState: Equatable, Sendable {
     let status: Status
     let isAvailable: Bool
     let lastSyncDate: Date?
-    let accountStatusDetail: String
+    let accountState: CloudKitAccountState
 }
 
 @MainActor

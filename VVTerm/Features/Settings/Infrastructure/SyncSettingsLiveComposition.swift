@@ -13,7 +13,7 @@ private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
         Self.state(
             syncState: cloudKit.syncState,
             lastSyncDate: cloudKit.lastSyncDate,
-            accountStatusDetail: cloudKit.accountStatusDetail
+            accountState: cloudKit.accountState
         )
     }
 
@@ -21,13 +21,13 @@ private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
         Publishers.CombineLatest3(
             cloudKit.$syncState,
             cloudKit.$lastSyncDate,
-            cloudKit.$accountStatusDetail
+            cloudKit.$accountState
         )
-        .map { syncState, lastSyncDate, accountStatusDetail in
+        .map { syncState, lastSyncDate, accountState in
             Self.state(
                 syncState: syncState,
                 lastSyncDate: lastSyncDate,
-                accountStatusDetail: accountStatusDetail
+                accountState: accountState
             )
         }
         .eraseToAnyPublisher()
@@ -44,13 +44,13 @@ private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
     private static func state(
         syncState: CloudKitSyncState,
         lastSyncDate: Date?,
-        accountStatusDetail: String
+        accountState: CloudKitAccountState
     ) -> SyncSettingsCloudState {
         SyncSettingsCloudState(
             status: status(syncState.status),
             isAvailable: syncState.isAvailable,
             lastSyncDate: lastSyncDate,
-            accountStatusDetail: accountStatusDetail
+            accountState: accountState
         )
     }
 

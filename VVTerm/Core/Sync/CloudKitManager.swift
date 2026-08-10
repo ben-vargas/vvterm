@@ -13,7 +13,7 @@ final class CloudKitManager: ObservableObject {
 
     @Published private(set) var syncState = CloudKitSyncState()
     @Published var lastSyncDate: Date?
-    @Published var accountStatusDetail: String = String(localized: "Checking...")
+    @Published private(set) var accountState: CloudKitAccountState = .checking
 
     var syncStatus: SyncStatus { syncState.status }
     var isAvailable: Bool { syncState.isAvailable }
@@ -78,36 +78,36 @@ final class CloudKitManager: ObservableObject {
 
         do {
             let status = try await container.accountStatus()
-            let statusDescription: String
-            switch status {
+            let resolvedAccountState: CloudKitAccountState = switch status {
             case .available:
-                statusDescription = String(localized: "available")
+                .available
             case .noAccount:
-                statusDescription = String(localized: "noAccount - User not signed into iCloud")
+                .noAccount
             case .restricted:
-                statusDescription = String(localized: "restricted - iCloud access restricted (parental controls, MDM, etc.)")
+                .restricted
             case .couldNotDetermine:
-                statusDescription = String(localized: "couldNotDetermine - Unable to determine iCloud status")
+                .couldNotDetermine
             case .temporarilyUnavailable:
-                statusDescription = String(localized: "temporarilyUnavailable - iCloud temporarily unavailable")
+                .temporarilyUnavailable
             @unknown default:
-                statusDescription = String(format: String(localized: "unknown status: %@"), String(status.rawValue))
+                .unknown(rawValue: status.rawValue)
             }
+            let statusLogValue = String(describing: resolvedAccountState)
 
-            logger.info("CloudKit account status: \(statusDescription)")
+            logger.info("CloudKit account status: \(statusLogValue)")
             logger.info("Container identifier: \(self.container.containerIdentifier ?? "nil")")
 
-            accountStatusDetail = statusDescription
+            accountState = resolvedAccountState
             accountStatusChecked = true
             if status == .available {
                 syncState.markAvailable()
             } else {
                 syncState.markOffline()
-                logger.warning("CloudKit not available. Status: \(statusDescription)")
+                logger.warning("CloudKit not available. Status: \(statusLogValue)")
             }
         } catch {
             logger.error("CloudKit account status check failed: \(error.localizedDescription)")
-            accountStatusDetail = String(format: String(localized: "Error: %@"), error.localizedDescription)
+            accountState = .failed(detail: error.localizedDescription)
             syncState.markAccountFailure(error.localizedDescription)
             accountStatusChecked = true
         }
@@ -115,7 +115,7 @@ final class CloudKitManager: ObservableObject {
 
     private func applySyncDisabledState() {
         syncState.markDisabled()
-        accountStatusDetail = String(localized: "Disabled")
+        accountState = .disabled
     }
 
     func handleSyncToggle(_ enabled: Bool) {

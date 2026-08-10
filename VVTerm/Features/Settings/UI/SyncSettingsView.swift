@@ -5,6 +5,34 @@
 
 import SwiftUI
 
+enum SyncSettingsAccountStatusText {
+    static func text(for state: CloudKitAccountState) -> String {
+        switch state {
+        case .checking:
+            String(localized: "Checking...")
+        case .available:
+            String(localized: "available")
+        case .noAccount:
+            String(localized: "noAccount - User not signed into iCloud")
+        case .restricted:
+            String(localized: "restricted - iCloud access restricted (parental controls, MDM, etc.)")
+        case .couldNotDetermine:
+            String(localized: "couldNotDetermine - Unable to determine iCloud status")
+        case .temporarilyUnavailable:
+            String(localized: "temporarilyUnavailable - iCloud temporarily unavailable")
+        case .unknown(let rawValue):
+            String(
+                format: String(localized: "unknown status: %@"),
+                String(rawValue)
+            )
+        case .failed(let detail):
+            String(format: String(localized: "Error: %@"), detail)
+        case .disabled:
+            String(localized: "Disabled")
+        }
+    }
+}
+
 // MARK: - Sync Settings View
 
 struct SyncSettingsView: View {
@@ -120,7 +148,9 @@ struct SyncSettingsView: View {
                     HStack {
                         Text("Account Status")
                         Spacer()
-                        Text(coordinator.cloudState.accountStatusDetail)
+                        Text(SyncSettingsAccountStatusText.text(
+                            for: coordinator.cloudState.accountState
+                        ))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.trailing)

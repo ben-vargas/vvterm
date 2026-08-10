@@ -97,7 +97,7 @@ struct SyncSettingsCoordinatorTests {
             status: .offline,
             isAvailable: false,
             lastSyncDate: Date(timeIntervalSince1970: 42),
-            accountStatusDetail: "Offline"
+            accountState: .temporarilyUnavailable
         )
 
         cloud.states.send(updatedState)
@@ -175,6 +175,34 @@ struct SyncSettingsCoordinatorTests {
         #expect(credentials.removalCount == 2)
     }
 
+    @Test
+    func accountStatusPresentationMapsEverySemanticStateToExactCopy() {
+        let mappings: [(CloudKitAccountState, String)] = [
+            (.checking, "Checking..."),
+            (.available, "available"),
+            (.noAccount, "noAccount - User not signed into iCloud"),
+            (
+                .restricted,
+                "restricted - iCloud access restricted (parental controls, MDM, etc.)"
+            ),
+            (
+                .couldNotDetermine,
+                "couldNotDetermine - Unable to determine iCloud status"
+            ),
+            (
+                .temporarilyUnavailable,
+                "temporarilyUnavailable - iCloud temporarily unavailable"
+            ),
+            (.unknown(rawValue: 17), "unknown status: 17"),
+            (.failed(detail: "Account lookup failed"), "Error: Account lookup failed"),
+            (.disabled, "Disabled")
+        ]
+
+        for (state, expected) in mappings {
+            #expect(SyncSettingsAccountStatusText.text(for: state) == expected)
+        }
+    }
+
     private func makeCoordinator(
         cloud: SyncSettingsCloudSpy = SyncSettingsCloudSpy(),
         credentials: SyncSettingsCredentialSpy = SyncSettingsCredentialSpy(),
@@ -193,6 +221,6 @@ private extension SyncSettingsCloudState {
         status: .idle,
         isAvailable: true,
         lastSyncDate: nil,
-        accountStatusDetail: "Available"
+        accountState: .available
     )
 }
