@@ -25,18 +25,13 @@ enum Ghostty {
     /// Wrapper to hold reference to a surface for tracking
     /// Note: ghostty_surface_t is an opaque pointer, so we store it directly
     /// The surface is freed when the GhosttyTerminalView is deallocated
-    class SurfaceReference {
+    final class SurfaceReference {
         let surface: ghostty_surface_t
         weak var terminalView: GhosttyTerminalView?
-        var isValid: Bool = true
 
         init(_ surface: ghostty_surface_t, terminalView: GhosttyTerminalView) {
             self.surface = surface
             self.terminalView = terminalView
-        }
-
-        func invalidate() {
-            isValid = false
         }
     }
 
@@ -240,26 +235,24 @@ extension Ghostty {
         /// Returns the surface reference that should be stored by the view
         @discardableResult
         func registerSurface(_ surface: ghostty_surface_t, terminalView: GhosttyTerminalView) -> Ghostty.SurfaceReference {
+            removeReleasedSurfaceReferences()
             let ref = Ghostty.SurfaceReference(surface, terminalView: terminalView)
             activeSurfaces.append(ref)
-            // Clean up invalid surfaces
-            activeSurfaces = activeSurfaces.filter { $0.isValid }
             return ref
         }
 
         /// Unregister a surface when it's being deallocated
         func unregisterSurface(_ ref: Ghostty.SurfaceReference) {
-            ref.invalidate()
-            activeSurfaces = activeSurfaces.filter { $0.isValid }
+            activeSurfaces.removeAll { $0 === ref || $0.terminalView == nil }
         }
 
         func terminalView(for surface: ghostty_surface_t) -> GhosttyTerminalView? {
-            activeSurfaces = activeSurfaces.filter { $0.isValid && $0.terminalView != nil }
+            removeReleasedSurfaceReferences()
             return activeSurfaces.first { $0.surface == surface }?.terminalView
         }
 
         func activeSurfaceCount() -> Int {
-            activeSurfaces = activeSurfaces.filter { $0.isValid && $0.terminalView != nil }
+            removeReleasedSurfaceReferences()
             return activeSurfaces.count
         }
 
@@ -275,7 +268,8 @@ extension Ghostty {
             ghostty_app_update_config(app, config)
 
             // Propagate config to all existing surfaces
-            for surfaceRef in activeSurfaces where surfaceRef.isValid {
+            removeReleasedSurfaceReferences()
+            for surfaceRef in activeSurfaces {
                 if let presentationOverrides = surfaceRef.terminalView?.surfacePresentationOverrides,
                    !presentationOverrides.isEmpty,
                    let surfaceConfig = cachedSurfaceConfig(for: presentationOverrides) {
@@ -284,9 +278,6 @@ extension Ghostty {
                     ghostty_surface_update_config(surfaceRef.surface, config)
                 }
             }
-
-            // Clean up invalid surfaces
-            activeSurfaces = activeSurfaces.filter { $0.isValid }
 
             ghostty_config_free(config)
 
@@ -370,6 +361,10 @@ extension Ghostty {
                 ghostty_config_free(config)
             }
             surfaceConfigCache.removeAll()
+        }
+
+        private func removeReleasedSurfaceReferences() {
+            activeSurfaces.removeAll { $0.terminalView == nil }
         }
 
         /// Generate and load config content into a ghostty_config_t
