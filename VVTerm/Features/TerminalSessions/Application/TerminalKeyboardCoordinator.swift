@@ -1246,7 +1246,9 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             after: after
         )
 
-        if keyboardPresentationDesired, after.isSoftwareInputActive {
+        if keyboardPresentationDesired,
+           after.isSoftwareInputActive,
+           !isSoftwareKeyboardVisible {
             if presentationVerifyTask == nil {
                 schedulePresentationVerify(
                     for: activePaneId,

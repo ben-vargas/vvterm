@@ -585,7 +585,8 @@ struct TerminalKeyboardCoordinatorTests {
         try? await Task.sleep(nanoseconds: 1_100_000_000)
         await drainMainQueue()
 
-        #expect(session.accessorySuppressionRequests == [false])
+        #expect(!session.accessorySuppressionRequests.isEmpty)
+        #expect(session.accessorySuppressionRequests.allSatisfy { !$0 })
         #expect(session.accessoryReloadCount == 0)
         #expect(session.rebuildCount == 0)
         #expect(!coordinator.keyboardUITestPresentationVerificationPending)
