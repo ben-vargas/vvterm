@@ -32,7 +32,8 @@ final class SettingsWindowPresenter {
         statsPreferencesStore: PreferencesStore,
         syncSettingsCoordinator: SyncSettingsCoordinator,
         sshKeySettingsCoordinator: SSHKeySettingsCoordinator,
-        knownHostSettingsCoordinator: KnownHostSettingsCoordinator
+        knownHostSettingsCoordinator: KnownHostSettingsCoordinator,
+        analyticsOptOutAction: AnalyticsOptOutAction
     ) {
         makeWindow = {
             let settingsView = LocalizedSettingsView(
@@ -42,10 +43,11 @@ final class SettingsWindowPresenter {
                 terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
                 viewTabConfigurationManager: viewTabConfigurationManager,
                 storeManager: storeManager,
-                statsPreferencesStore: statsPreferencesStore,
                 syncSettingsCoordinator: syncSettingsCoordinator,
                 sshKeySettingsCoordinator: sshKeySettingsCoordinator,
-                knownHostSettingsCoordinator: knownHostSettingsCoordinator
+                knownHostSettingsCoordinator: knownHostSettingsCoordinator,
+                statsPreferencesStore: statsPreferencesStore,
+                analyticsOptOutAction: analyticsOptOutAction
             )
             return Self.makeSettingsWindow(rootView: settingsView)
         }
@@ -102,11 +104,15 @@ private struct LocalizedSettingsView: View {
     @ObservedObject var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
     @ObservedObject var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
     let statsPreferencesStore: PreferencesStore
+    let analyticsOptOutAction: AnalyticsOptOutAction
 
     var body: some View {
         let locale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
         AppLockContainer {
-            SettingsView(statsPreferencesStore: statsPreferencesStore)
+            SettingsView(
+                statsPreferencesStore: statsPreferencesStore,
+                analyticsOptOutAction: analyticsOptOutAction
+            )
                 .modifier(AppearanceModifier())
                 .adaptiveSoftScrollEdges()
                 .environment(\.locale, locale)

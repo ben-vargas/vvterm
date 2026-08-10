@@ -16,6 +16,7 @@ struct iOSContentView: View {
     let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     let statsDependencies: ServerStatsScreenDependencies
+    let analyticsOptOutAction: AnalyticsOptOutAction
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
         LocalSSHDiscoveryManager()
     }
@@ -38,7 +39,8 @@ struct iOSContentView: View {
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore,
-        statsDependencies: ServerStatsScreenDependencies
+        statsDependencies: ServerStatsScreenDependencies,
+        analyticsOptOutAction: AnalyticsOptOutAction
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
@@ -46,6 +48,7 @@ struct iOSContentView: View {
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
         self.statsDependencies = statsDependencies
+        self.analyticsOptOutAction = analyticsOptOutAction
     }
 
     private var preferredConnectView: ConnectionViewTabID {
@@ -71,6 +74,7 @@ struct iOSContentView: View {
                 fileTabs: fileTabs,
                 fileBrowser: fileBrowser,
                 statsDependencies: statsDependencies,
+                analyticsOptOutAction: analyticsOptOutAction,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 selectedWorkspace: $selectedWorkspace,
                 selectedEnvironment: $selectedEnvironment,
@@ -92,6 +96,7 @@ struct iOSContentView: View {
                         fileTabs: fileTabs,
                         fileBrowser: fileBrowser,
                         statsDependencies: statsDependencies,
+                        analyticsOptOutAction: analyticsOptOutAction,
                         route: terminalRoute,
                         makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                         onBack: { self.terminalRoute = nil }

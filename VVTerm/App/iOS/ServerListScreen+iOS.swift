@@ -12,6 +12,7 @@ struct ServerListScreen: View {
     @ObservedObject var fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     let statsDependencies: ServerStatsScreenDependencies
+    let analyticsOptOutAction: AnalyticsOptOutAction
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedEnvironment: ServerEnvironment?
@@ -104,7 +105,10 @@ struct ServerListScreen: View {
             .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView(statsPreferencesStore: statsDependencies.preferencesStore)
+            SettingsView(
+                statsPreferencesStore: statsDependencies.preferencesStore,
+                analyticsOptOutAction: analyticsOptOutAction
+            )
                 .modifier(AppearanceModifier())
                 .adaptiveSoftScrollEdges()
         }

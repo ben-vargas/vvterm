@@ -23,6 +23,7 @@ struct ServerTerminalRoute: View {
     @ObservedObject var fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
     let statsDependencies: ServerStatsScreenDependencies
+    let analyticsOptOutAction: AnalyticsOptOutAction
     let route: ServerTerminalNavigationRoute
     let onBack: () -> Void
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
@@ -52,6 +53,7 @@ struct ServerTerminalRoute: View {
         fileTabs: RemoteFileTabManager,
         fileBrowser: RemoteFileBrowserStore,
         statsDependencies: ServerStatsScreenDependencies,
+        analyticsOptOutAction: AnalyticsOptOutAction,
         route: ServerTerminalNavigationRoute,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         onBack: @escaping () -> Void
@@ -61,6 +63,7 @@ struct ServerTerminalRoute: View {
         self.fileTabs = fileTabs
         self.fileBrowser = fileBrowser
         self.statsDependencies = statsDependencies
+        self.analyticsOptOutAction = analyticsOptOutAction
         self.route = route
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onBack = onBack
@@ -163,7 +166,10 @@ struct ServerTerminalRoute: View {
             .sheet(item: $presentedRouteSheet, onDismiss: updateTerminalRouteActivation) { sheet in
                 switch sheet {
                 case .settings:
-                    SettingsView(statsPreferencesStore: statsDependencies.preferencesStore)
+                    SettingsView(
+                        statsPreferencesStore: statsDependencies.preferencesStore,
+                        analyticsOptOutAction: analyticsOptOutAction
+                    )
                         .modifier(AppearanceModifier())
                         .adaptiveSoftScrollEdges()
                 case .editServer(let server):

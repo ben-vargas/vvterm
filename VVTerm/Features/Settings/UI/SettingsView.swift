@@ -35,6 +35,7 @@ enum SettingsSelection: Hashable {
 
 struct SettingsView: View {
     let statsPreferencesStore: PreferencesStore
+    let analyticsOptOutAction: AnalyticsOptOutAction
 
     @AppStorage(TerminalDefaults.fontNameKey) private var terminalFontName = TerminalDefaults.defaultFontName
     @AppStorage(TerminalDefaults.fontSizeKey) private var terminalFontSize = TerminalDefaults.defaultFontSize
@@ -137,7 +138,10 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
-                        GeneralSettingsView(statsPreferencesStore: statsPreferencesStore)
+                        GeneralSettingsView(
+                            statsPreferencesStore: statsPreferencesStore,
+                            analyticsOptOutAction: analyticsOptOutAction
+                        )
                             .navigationTitle("General")
                             .navigationBarTitleDisplayMode(.inline)
                             .adaptiveSoftScrollEdges()
@@ -222,7 +226,10 @@ struct SettingsView: View {
                                     : String(localized: "Upgrade for unlimited features")
                                 )
         case .general:
-                            GeneralSettingsView(statsPreferencesStore: statsPreferencesStore)
+                            GeneralSettingsView(
+                                statsPreferencesStore: statsPreferencesStore,
+                                analyticsOptOutAction: analyticsOptOutAction
+                            )
                                 .navigationTitle("General")
                                 .navigationSubtitle(String(localized: "Appearance and preferences"))
         case .terminal:
@@ -315,7 +322,10 @@ struct SettingsView: View {
         dependencies: .live(actionAuthorizer: appLockManager),
         startsAutomatically: false
     )
-    SettingsView(statsPreferencesStore: PreferencesStore(dependencies: .live))
+    SettingsView(
+        statsPreferencesStore: PreferencesStore(dependencies: .live),
+        analyticsOptOutAction: AnalyticsOptOutAction(emitAnalyticsDisabled: {})
+    )
         .environmentObject(serverManager)
         .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
 }

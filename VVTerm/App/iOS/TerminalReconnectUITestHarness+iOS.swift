@@ -38,6 +38,7 @@ struct TerminalReconnectUITestHarness: View {
     @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var engagementTracker: EngagementTracker
     private let statsDependencies: ServerStatsScreenDependencies
+    private let analyticsOptOutAction = AnalyticsOptOutAction(emitAnalyticsDisabled: {})
     @StateObject private var fileTabs: RemoteFileTabManager
     @StateObject private var fileBrowser: RemoteFileBrowserStore
     @State private var fixtureState = FixtureState.preparing
@@ -137,7 +138,8 @@ struct TerminalReconnectUITestHarness: View {
                     tabManager: tabManager,
                     fileTabs: fileTabs,
                     fileBrowser: fileBrowser,
-                    statsDependencies: statsDependencies
+                    statsDependencies: statsDependencies,
+                    analyticsOptOutAction: analyticsOptOutAction
                 )
             } else {
                 NavigationStack {
@@ -147,6 +149,7 @@ struct TerminalReconnectUITestHarness: View {
                         fileTabs: fileTabs,
                         fileBrowser: fileBrowser,
                         statsDependencies: statsDependencies,
+                        analyticsOptOutAction: analyticsOptOutAction,
                         route: .active(serverId: server.id),
                         makeLocalDiscoveryManager: { LocalSSHDiscoveryManager() },
                         onBack: {}

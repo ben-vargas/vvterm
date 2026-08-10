@@ -35,6 +35,12 @@ struct VVTermApp: App {
         let cloudKitManager = CloudKitManager.shared
         let keychainManager = KeychainManager.shared
         let knownHostsManager = KnownHostsManager.shared
+        let analyticsTracker = AnalyticsTracker.shared
+        let analyticsOptOutAction = AnalyticsOptOutAction(
+            emitAnalyticsDisabled: {
+                analyticsTracker.trackAnalyticsDisabled()
+            }
+        )
         let syncSettingsCoordinator = SyncSettingsLiveComposition.makeCoordinator(
             cloudKit: cloudKitManager,
             keychain: keychainManager,
@@ -70,6 +76,9 @@ struct VVTermApp: App {
                 networkMonitor.refreshCurrentPath()
             }
         )
+        #endif
+        #if os(iOS)
+        self.analyticsOptOutAction = analyticsOptOutAction
         #endif
         _tabManager = StateObject(wrappedValue: tabManager)
         _storeManager = StateObject(wrappedValue: storeManager)
@@ -108,7 +117,8 @@ struct VVTermApp: App {
             statsPreferencesStore: statsPreferencesStore,
             syncSettingsCoordinator: syncSettingsCoordinator,
             sshKeySettingsCoordinator: sshKeySettingsCoordinator,
-            knownHostSettingsCoordinator: knownHostSettingsCoordinator
+            knownHostSettingsCoordinator: knownHostSettingsCoordinator,
+            analyticsOptOutAction: analyticsOptOutAction
         )
         #endif
         appDelegate.configure(
@@ -125,7 +135,7 @@ struct VVTermApp: App {
         TerminalDefaults.applyIfNeeded()
         #if os(iOS)
         VVTermLauncherWidgetRefresh.refreshIfNeeded()
-        AnalyticsTracker.shared.prepareAppleAdsAttribution()
+        analyticsTracker.prepareAppleAdsAttribution()
         #endif
     }
 
@@ -138,6 +148,7 @@ struct VVTermApp: App {
     @StateObject private var ghosttyApp = Ghostty.App(autoStart: false)
     #if os(iOS)
     @StateObject private var screenAwakeCoordinator = TerminalScreenAwakeCoordinator()
+    private let analyticsOptOutAction: AnalyticsOptOutAction
     #endif
     @StateObject private var appLockManager: AppLockManager
     @StateObject private var serverManager: ServerManager
@@ -335,7 +346,8 @@ struct VVTermApp: App {
             tabManager: tabManager,
             fileTabs: remoteFileTabManager,
             fileBrowser: remoteFileBrowserStore,
-            statsDependencies: statsDependencies
+            statsDependencies: statsDependencies,
+            analyticsOptOutAction: analyticsOptOutAction
         )
             .environmentObject(ghosttyApp)
             .environmentObject(terminalThemeManager)

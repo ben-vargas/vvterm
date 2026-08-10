@@ -266,6 +266,7 @@ struct AppearancePreviewCard: View {
 
 struct GeneralSettingsView: View {
     let statsPreferencesStore: PreferencesStore
+    let analyticsOptOutAction: AnalyticsOptOutAction
 
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.system.rawValue
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.system.rawValue
@@ -377,10 +378,12 @@ struct GeneralSettingsView: View {
                     isOn: Binding(
                         get: { analyticsEnabled },
                         set: { newValue in
-                            if analyticsEnabled && !newValue {
-                                AnalyticsTracker.shared.trackAnalyticsDisabled()
+                            analyticsOptOutAction.applyTransition(
+                                from: analyticsEnabled,
+                                to: newValue
+                            ) { persistedValue in
+                                analyticsEnabled = persistedValue
                             }
-                            analyticsEnabled = newValue
                         }
                     )
                 )
@@ -477,7 +480,10 @@ struct GeneralSettingsView: View {
 }
 
 #Preview {
-    GeneralSettingsView(statsPreferencesStore: PreferencesStore(dependencies: .live))
+    GeneralSettingsView(
+        statsPreferencesStore: PreferencesStore(dependencies: .live),
+        analyticsOptOutAction: AnalyticsOptOutAction(emitAnalyticsDisabled: {})
+    )
         .environmentObject(ViewTabConfigurationManager(defaults: .standard))
         .frame(width: 500, height: 400)
 }
