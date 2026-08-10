@@ -1,8 +1,8 @@
 //
-//  GhosttyTerminalProtocol.swift
+//  TerminalInputSequences.swift
 //  VVTerm
 //
-//  Shared enums and utilities for Ghostty terminal views
+//  Shared terminal input keys and byte sequences.
 //
 
 import Foundation
