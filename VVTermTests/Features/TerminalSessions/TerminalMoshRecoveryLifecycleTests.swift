@@ -68,6 +68,7 @@ struct TerminalMoshRecoveryLifecycleTests {
             snapshotStore: TerminalMoshLifecycleSnapshotStore(),
             networkReadinessPublisher: nil,
             liveActivityRefresh: { _ in },
+            tmuxCoordinator: TerminalTmuxSessionCoordinator(),
             terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
             eternalTerminalResumeStore: TerminalMoshLifecycleETStore(),
             moshRecovery: recovery

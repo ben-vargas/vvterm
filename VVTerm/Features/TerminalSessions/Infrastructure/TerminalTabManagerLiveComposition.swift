@@ -18,6 +18,10 @@ enum TerminalTabManagerLiveComposition {
         let networkMonitor = NetworkMonitor.shared
         let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
         let terminalSurfaceStore = GhosttyTerminalSurfaceStore()
+        let tmuxCoordinator = TerminalTmuxSessionLiveComposition.makeCoordinator(
+            defaults: defaults,
+            serverManager: serverManager
+        )
         let dependencies = TerminalTabManagerDependencies(
             networkReadiness: TerminalNetworkReadinessSource(
                 initial: TerminalNetworkReadiness(networkMonitor.readiness),
@@ -55,42 +59,6 @@ enum TerminalTabManagerLiveComposition {
                     AnalyticsTracker.shared.trackSplitPaneCreated()
                 }
             ),
-            tmuxConfiguration: TerminalTmuxConfiguration(
-                deviceID: DeviceIdentity.id,
-                enabledByDefault: {
-                    guard defaults.object(forKey: "terminalTmuxEnabledDefault") != nil else {
-                        return true
-                    }
-                    return defaults.bool(forKey: "terminalTmuxEnabledDefault")
-                },
-                startupBehaviorByDefault: {
-                    guard let rawValue = defaults.string(
-                        forKey: "terminalTmuxStartupBehaviorDefault"
-                    ) else {
-                        return .askEveryTime
-                    }
-                    return TmuxStartupBehavior(rawValue: rawValue) ?? .askEveryTime
-                },
-                serverSettings: { serverId in
-                    serverManager.servers
-                        .first(where: { $0.id == serverId })
-                        .map {
-                            TerminalTmuxConfiguration.ServerSettings(
-                                name: $0.name,
-                                enabledOverride: $0.tmuxEnabledOverride,
-                                startupBehaviorOverride: $0.tmuxStartupBehaviorOverride
-                            )
-                        }
-                },
-                themeStyle: {
-                    TerminalTabManager.remoteTmuxThemeStyle(
-                        for: defaults.string(
-                            forKey: CloudKitSyncConstants.terminalThemeNameKey
-                        )
-                    )
-                }
-            ),
-            remoteTmux: RemoteTmuxManager.shared,
             remoteMosh: RemoteMoshManager.shared,
             eternalTerminalRuntime: .live(
                 resumeStore: eternalTerminalResumeStore
@@ -102,6 +70,7 @@ enum TerminalTabManagerLiveComposition {
                 key: persistenceKey
             ),
             dependencies: dependencies,
+            tmuxCoordinator: tmuxCoordinator,
             terminalSurfaceStore: terminalSurfaceStore,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: TerminalMoshRecoveryService(
@@ -111,7 +80,6 @@ enum TerminalTabManagerLiveComposition {
     }
 }
 
-extension RemoteTmuxManager: TerminalRemoteTmuxServicing {}
 extension RemoteMoshManager: TerminalRemoteMoshServicing {}
 
 private extension TerminalNetworkReadiness {

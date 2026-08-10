@@ -667,7 +667,7 @@ struct TerminalPaneView: View {
     }
 
     private var isAwaitingTmuxSelection: Bool {
-        tabManager.tmuxAttachPrompt?.paneId == paneId
+        tabManager.tmuxCoordinator.attachPrompt?.paneId == paneId
     }
 
     private var noticeSurfaceStyle: NoticeSurfaceStyle {
@@ -905,7 +905,7 @@ struct TerminalPaneView: View {
         .alert("Install tmux?", isPresented: $showingTmuxInstallPrompt) {
             Button("Install") {
                 Task {
-                    await tabManager.startTmuxInstall(for: paneId) {
+                    await tabManager.tmuxCoordinator.startInstall(for: paneId) {
                         retryConnection()
                     }
                 }
@@ -1015,7 +1015,7 @@ struct TerminalPaneView: View {
     }
 
     private func disableTmuxForServer() {
-        tabManager.disableTmux(for: server.id)
+        tabManager.tmuxCoordinator.disable(for: server.id)
     }
 
     private func presentHostKeyTrustConfirmation() {

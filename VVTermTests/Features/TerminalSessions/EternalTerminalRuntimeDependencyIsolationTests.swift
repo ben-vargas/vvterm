@@ -144,6 +144,7 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
             snapshotStore: EternalTerminalDependencySnapshotStore(),
             networkReadinessPublisher: nil,
             liveActivityRefresh: { _ in },
+            tmuxCoordinator: TerminalTmuxSessionCoordinator(),
             terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
             eternalTerminalResumeStore: FailingEternalTerminalResumeStore(),
             moshRecovery: UnavailableTerminalMoshRecoveryService()

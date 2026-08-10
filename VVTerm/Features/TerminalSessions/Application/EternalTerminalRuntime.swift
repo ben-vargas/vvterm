@@ -416,7 +416,7 @@ final class EternalTerminalRuntime {
             request: sessionRequest,
             startupPlanProvider: { [weak tabManager] client in
                 guard let tabManager else { throw CancellationError() }
-                return try await tabManager.eternalTerminalTmuxStartupPlan(
+                return try await tabManager.tmuxCoordinator.eternalTerminalStartupPlan(
                     for: paneId,
                     serverId: server.id,
                     client: client,

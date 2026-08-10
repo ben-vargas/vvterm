@@ -1,7 +1,8 @@
 import Foundation
+import Combine
 
 @MainActor
-final class TmuxAttachResolver {
+final class TmuxAttachResolver: ObservableObject {
     private let configuration: TerminalTmuxConfiguration
     private let remoteTmux: any TerminalRemoteTmuxServicing
 
@@ -9,7 +10,7 @@ final class TmuxAttachResolver {
     var sessionOwnership: [UUID: TmuxSessionOwnership] = [:]
     private(set) var confirmedManagedSessions: Set<UUID> = []
 
-    private(set) var currentPrompt: TmuxAttachPrompt?
+    @Published private(set) var currentPrompt: TmuxAttachPrompt?
     private var promptQueue: [TmuxAttachPrompt] = []
     private var promptContinuations: [UUID: CheckedContinuation<TmuxAttachSelection, Never>] = [:]
 
@@ -20,19 +21,6 @@ final class TmuxAttachResolver {
         self.configuration = configuration
         self.remoteTmux = remoteTmux
     }
-
-    #if DEBUG
-    convenience init() {
-        let dependencies = TerminalTabManagerDependencies.testing(
-            networkReadinessPublisher: nil,
-            liveActivityRefresh: { _ in }
-        )
-        self.init(
-            configuration: dependencies.tmuxConfiguration,
-            remoteTmux: dependencies.remoteTmux
-        )
-    }
-    #endif
 
     // MARK: - Settings
 
@@ -92,17 +80,17 @@ final class TmuxAttachResolver {
         confirmedManagedSessions.removeAll()
     }
 
-    func clearRuntimeState(for entityId: UUID, setPrompt: (TmuxAttachPrompt?) -> Void) {
+    func clearRuntimeState(for entityId: UUID) {
         clearAttachmentState(for: entityId)
         let requestIds = ([currentPrompt].compactMap { $0 } + promptQueue)
             .filter { $0.paneId == entityId }
             .map(\.id)
         for requestId in requestIds {
-            cancelPrompt(requestId: requestId, setPrompt: setPrompt)
+            cancelPrompt(requestId: requestId)
         }
     }
 
-    func updateAttachmentState(for entityId: UUID, selection: TmuxAttachSelection, setPrompt: (TmuxAttachPrompt?) -> Void) {
+    func updateAttachmentState(for entityId: UUID, selection: TmuxAttachSelection) {
         switch selection {
         case .createManaged:
             let managedName = managedSessionName(for: entityId)
@@ -116,7 +104,7 @@ final class TmuxAttachResolver {
             sessionNames[entityId] = name
             sessionOwnership[entityId] = ownership(for: name)
         case .skipTmux:
-            clearRuntimeState(for: entityId, setPrompt: setPrompt)
+            clearRuntimeState(for: entityId)
         }
     }
 
@@ -128,8 +116,7 @@ final class TmuxAttachResolver {
         client: SSHClient,
         backend: RemoteTmuxBackend,
         requestId: UUID,
-        validateOwner: () throws -> Void,
-        setPrompt: @MainActor @Sendable @escaping (TmuxAttachPrompt?) -> Void
+        validateOwner: () throws -> Void
     ) async throws -> TmuxAttachSelection {
         // On reconnect, reuse the previous session choice for this tab/pane
         if let existingName = sessionNames[entityId],
@@ -167,20 +154,19 @@ final class TmuxAttachResolver {
                 requestId: requestId,
                 entityId: entityId,
                 serverId: serverId,
-                availableSessions: sessionInfosForPrompt(from: sessions),
-                setPrompt: setPrompt
+                availableSessions: sessionInfosForPrompt(from: sessions)
             )
         }
     }
 
     // MARK: - Prompt Queue
 
-    func resolvePrompt(requestId: UUID, selection: TmuxAttachSelection, setPrompt: (TmuxAttachPrompt?) -> Void) {
+    func resolvePrompt(requestId: UUID, selection: TmuxAttachSelection) {
         guard let continuation = promptContinuations.removeValue(forKey: requestId) else { return }
 
         if currentPrompt?.id == requestId {
             currentPrompt = nil
-            advancePromptQueue(setPrompt: setPrompt)
+            advancePromptQueue()
             continuation.resume(returning: selection)
             return
         }
@@ -189,12 +175,19 @@ final class TmuxAttachResolver {
         continuation.resume(returning: selection)
     }
 
-    func cancelPrompt(requestId: UUID, setPrompt: (TmuxAttachPrompt?) -> Void) {
-        resolvePrompt(requestId: requestId, selection: .skipTmux, setPrompt: setPrompt)
+    func cancelPrompt(requestId: UUID) {
+        resolvePrompt(requestId: requestId, selection: .skipTmux)
     }
 
     func hasPendingPrompt(requestId: UUID) -> Bool {
         promptContinuations[requestId] != nil
+    }
+
+    func cancelAllPrompts() {
+        let requestIds = ([currentPrompt].compactMap { $0 } + promptQueue).map(\.id)
+        for requestId in requestIds {
+            cancelPrompt(requestId: requestId)
+        }
     }
 
     // MARK: - Filtering
@@ -229,8 +222,7 @@ final class TmuxAttachResolver {
         requestId: UUID,
         entityId: UUID,
         serverId: UUID,
-        availableSessions: [TmuxAttachSessionInfo],
-        setPrompt: @MainActor @Sendable @escaping (TmuxAttachPrompt?) -> Void
+        availableSessions: [TmuxAttachSessionInfo]
     ) async -> TmuxAttachSelection {
         let prompt = TmuxAttachPrompt(
             id: requestId,
@@ -242,39 +234,30 @@ final class TmuxAttachResolver {
         return await withTaskCancellationHandler {
             guard !Task.isCancelled else { return .skipTmux }
             return await withCheckedContinuation { continuation in
-                enqueuePrompt(prompt, continuation: continuation, setPrompt: setPrompt)
+                enqueuePrompt(prompt, continuation: continuation)
             }
         } onCancel: {
             Task { @MainActor [weak self] in
-                self?.cancelPrompt(
-                    requestId: requestId,
-                    setPrompt: setPrompt
-                )
+                self?.cancelPrompt(requestId: requestId)
             }
         }
     }
 
     private func enqueuePrompt(
         _ prompt: TmuxAttachPrompt,
-        continuation: CheckedContinuation<TmuxAttachSelection, Never>,
-        setPrompt: (TmuxAttachPrompt?) -> Void
+        continuation: CheckedContinuation<TmuxAttachSelection, Never>
     ) {
         promptContinuations[prompt.id] = continuation
         if currentPrompt == nil {
             currentPrompt = prompt
-            setPrompt(prompt)
         } else {
             promptQueue.append(prompt)
         }
     }
 
-    private func advancePromptQueue(setPrompt: (TmuxAttachPrompt?) -> Void) {
-        guard currentPrompt == nil, !promptQueue.isEmpty else {
-            setPrompt(currentPrompt)
-            return
-        }
+    private func advancePromptQueue() {
+        guard currentPrompt == nil, !promptQueue.isEmpty else { return }
         currentPrompt = promptQueue.removeFirst()
-        setPrompt(currentPrompt)
     }
 
     private func ownership(for sessionName: String) -> TmuxSessionOwnership {

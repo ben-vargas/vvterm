@@ -63,13 +63,19 @@ private final class TerminalEffectRecorder {
 
 private actor RecordingTerminalRemoteTmuxService: TerminalRemoteTmuxServicing {
     private var killedSessions: [String] = []
+    private var availabilityProbes = 0
 
     func killedSessionNames() -> [String] {
         killedSessions
     }
 
+    func availabilityProbeCount() -> Int {
+        availabilityProbes
+    }
+
     func tmuxAvailability(using client: SSHClient) async -> RemoteTmuxAvailability {
-        .unsupported
+        availabilityProbes += 1
+        return .unsupported
     }
 
     func tmuxInstallBackend(using client: SSHClient) async -> RemoteTmuxBackend? {
@@ -141,6 +147,41 @@ private actor RecordingTerminalRemoteMoshService: TerminalRemoteMoshServicing {
 @MainActor
 struct TerminalTabManagerDependencyIsolationTests {
     @Test
+    func disabledTmuxProducesPlainStartupPlanWithoutRemoteProbe() async throws {
+        let remoteTmux = RecordingTerminalRemoteTmuxService()
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: TerminalEffectRecorder(),
+            remoteTmux: remoteTmux,
+            remoteMosh: RecordingTerminalRemoteMoshService(),
+            deviceID: "skip-device"
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Skip tmux")
+        install(tab, in: manager)
+        let client = SSHClient()
+        let startToken = try #require(
+            manager.beginShellStart(for: tab.rootPaneId, client: client)
+        )
+
+        let plan = try await manager.tmuxCoordinator.startupPlan(
+            for: tab.rootPaneId,
+            serverId: tab.serverId,
+            client: client,
+            startToken: startToken
+        )
+
+        #expect(plan.command == nil)
+        #expect(plan.tmuxLifecycle == nil)
+        #expect(await remoteTmux.availabilityProbeCount() == 0)
+        manager.finishShellStart(
+            for: tab.rootPaneId,
+            client: client,
+            startToken: startToken
+        )
+        await manager.resetForTesting()
+    }
+
+    @Test
     func independentManagersRouteEffectsAndRuntimeServicesOnlyToTheirOwners() async throws {
         let firstNetwork = PassthroughSubject<TerminalNetworkReadiness, Never>()
         let secondNetwork = PassthroughSubject<TerminalNetworkReadiness, Never>()
@@ -199,11 +240,14 @@ struct TerminalTabManagerDependencyIsolationTests {
             for: tab.rootPaneId,
             serverId: tab.serverId
         ))
-        first.tmuxResolver.sessionNames[tab.rootPaneId] = "first-session"
-        first.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
+        first.tmuxCoordinator.setAttachment(
+            for: tab.rootPaneId,
+            sessionName: "first-session",
+            ownership: .managed
+        )
 
         try await first.installMoshServer(for: tab.rootPaneId)
-        first.killTmuxIfNeeded(for: tab.rootPaneId)
+        first.tmuxCoordinator.killIfNeeded(for: tab.rootPaneId)
         #expect(await waitUntil {
             await firstTmux.killedSessionNames() == ["first-session"]
         })
@@ -222,8 +266,8 @@ struct TerminalTabManagerDependencyIsolationTests {
         #expect(await secondMosh.installCount() == 0)
         #expect(await secondTmux.killedSessionNames().isEmpty)
         #expect(
-            first.tmuxResolver.managedSessionName(for: tab.rootPaneId)
-                != second.tmuxResolver.managedSessionName(for: tab.rootPaneId)
+            first.tmuxCoordinator.managedSessionName(for: tab.rootPaneId)
+                != second.tmuxCoordinator.managedSessionName(for: tab.rootPaneId)
         )
 
         await first.resetForTesting()
@@ -246,18 +290,18 @@ struct TerminalTabManagerDependencyIsolationTests {
                 ),
                 applicationIsActive: { true },
                 effects: effects.effects(),
-                tmuxConfiguration: TerminalTmuxConfiguration(
+                remoteMosh: remoteMosh,
+                eternalTerminalRuntime: .testing
+            ),
+            tmuxCoordinator: TerminalTmuxSessionCoordinator(
+                configuration: TerminalTmuxConfiguration(
                     deviceID: deviceID,
                     enabledByDefault: { false },
                     startupBehaviorByDefault: { .skipTmux },
                     serverSettings: { _ in nil },
-                    themeStyle: {
-                        TerminalTabManager.remoteTmuxThemeStyle(for: nil)
-                    }
+                    themeStyle: { TerminalTmuxSessionLiveComposition.themeStyle(for: nil) }
                 ),
-                remoteTmux: remoteTmux,
-                remoteMosh: remoteMosh,
-                eternalTerminalRuntime: .testing
+                remoteTmux: remoteTmux
             ),
             terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
             eternalTerminalResumeStore: DependencyTestETResumeStore(),

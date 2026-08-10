@@ -148,14 +148,15 @@ struct ConnectionTerminalContainer: View {
     private var tmuxAttachPromptBinding: Binding<TmuxAttachPrompt?> {
         Binding(
             get: {
-                guard let prompt = tabManager.tmuxAttachPrompt else { return nil }
+                guard let prompt = tabManager.tmuxCoordinator.attachPrompt else { return nil }
                 guard tabManager.paneState(for: prompt.paneId)?.serverId == server.id else { return nil }
                 return prompt
             },
             set: { newValue in
-                guard newValue == nil, let prompt = tabManager.tmuxAttachPrompt else { return }
+                guard newValue == nil,
+                      let prompt = tabManager.tmuxCoordinator.attachPrompt else { return }
                 guard tabManager.paneState(for: prompt.paneId)?.serverId == server.id else { return }
-                tabManager.cancelTmuxAttachPrompt(requestId: prompt.id)
+                tabManager.tmuxCoordinator.cancelPrompt(requestId: prompt.id)
             }
         )
     }
@@ -289,7 +290,10 @@ struct ConnectionTerminalContainer: View {
                 TmuxAttachPromptSheet(
                     prompt: prompt,
                     onConfirm: { selection in
-                        tabManager.resolveTmuxAttachPrompt(requestId: prompt.id, selection: selection)
+                        tabManager.tmuxCoordinator.resolvePrompt(
+                            requestId: prompt.id,
+                            selection: selection
+                        )
                     }
                 )
                 .adaptiveSoftScrollEdges()

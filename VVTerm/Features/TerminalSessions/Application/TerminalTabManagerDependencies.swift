@@ -69,7 +69,6 @@ struct TerminalSessionApplicationEffects {
 @MainActor
 struct TerminalTmuxConfiguration {
     struct ServerSettings {
-        let name: String
         let enabledOverride: Bool?
         let startupBehaviorOverride: TmuxStartupBehavior?
     }
@@ -86,8 +85,6 @@ struct TerminalTabManagerDependencies {
     let networkReadiness: TerminalNetworkReadinessSource
     let applicationIsActive: () -> Bool
     let effects: TerminalSessionApplicationEffects
-    let tmuxConfiguration: TerminalTmuxConfiguration
-    let remoteTmux: any TerminalRemoteTmuxServicing
     let remoteMosh: any TerminalRemoteMoshServicing
     let eternalTerminalRuntime: EternalTerminalRuntimeDependencies
 }
@@ -113,77 +110,9 @@ extension TerminalTabManagerDependencies {
                 noteTerminalSessionEnded: { _ in },
                 recordSplitPaneCreated: {}
             ),
-            tmuxConfiguration: TerminalTmuxConfiguration(
-                deviceID: "test-device",
-                enabledByDefault: { true },
-                startupBehaviorByDefault: { .askEveryTime },
-                serverSettings: { _ in nil },
-                themeStyle: {
-                    TerminalTabManager.remoteTmuxThemeStyle(for: nil)
-                }
-            ),
-            remoteTmux: UnavailableTerminalRemoteTmuxService(),
             remoteMosh: UnavailableTerminalRemoteMoshService(),
             eternalTerminalRuntime: .testing
         )
-    }
-}
-
-private actor UnavailableTerminalRemoteTmuxService: TerminalRemoteTmuxServicing {
-    func tmuxAvailability(using client: SSHClient) async -> RemoteTmuxAvailability {
-        .unsupported
-    }
-
-    func tmuxInstallBackend(using client: SSHClient) async -> RemoteTmuxBackend? {
-        nil
-    }
-
-    func listSessions(
-        using client: SSHClient,
-        backend: RemoteTmuxBackend
-    ) async throws -> [RemoteTmuxSession] {
-        throw SSHError.notConnected
-    }
-
-    func prepareConfig(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteTmuxThemeStyle,
-        backend: RemoteTmuxBackend?
-    ) async {}
-
-    func sendScript(
-        _ script: String,
-        using client: SSHClient,
-        shellId: UUID
-    ) async throws {
-        throw SSHError.notConnected
-    }
-
-    func killSession(
-        named sessionName: String,
-        using client: SSHClient,
-        backend: RemoteTmuxBackend?
-    ) async {}
-
-    func cleanupLegacySessions(
-        using client: SSHClient,
-        backend: RemoteTmuxBackend?
-    ) async {}
-
-    func cleanupDetachedSessions(
-        deviceId: String,
-        keeping sessionNames: Set<String>,
-        using client: SSHClient,
-        backend: RemoteTmuxBackend?
-    ) async {}
-
-    func currentPath(
-        sessionName: String,
-        using client: SSHClient,
-        backend: RemoteTmuxBackend?
-    ) async -> String? {
-        nil
     }
 }
 

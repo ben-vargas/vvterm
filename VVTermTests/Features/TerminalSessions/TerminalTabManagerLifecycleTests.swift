@@ -642,16 +642,15 @@ struct TerminalTabManagerLifecycleTests {
             }
 
             let selection = Task { @MainActor in
-                await manager.tmuxResolver.requestSelection(
+                await manager.tmuxCoordinator.requestSelection(
                     requestId: startToken.id,
-                    entityId: tab.rootPaneId,
+                    paneId: tab.rootPaneId,
                     serverId: tab.serverId,
-                    availableSessions: [],
-                    setPrompt: { manager.tmuxAttachPrompt = $0 }
+                    availableSessions: []
                 )
             }
             guard await waitUntil({
-                manager.tmuxResolver.hasPendingPrompt(requestId: startToken.id)
+                manager.tmuxCoordinator.hasPendingPrompt(requestId: startToken.id)
             }) else {
                 Issue.record("Pending tmux prompt was not enqueued")
                 selection.cancel()
@@ -661,8 +660,8 @@ struct TerminalTabManagerLifecycleTests {
             await manager.unregisterSSHClient(for: tab.rootPaneId)
 
             let promptWasCancelled = await waitUntil({
-                !manager.tmuxResolver.hasPendingPrompt(requestId: startToken.id)
-                    && manager.tmuxAttachPrompt == nil
+                !manager.tmuxCoordinator.hasPendingPrompt(requestId: startToken.id)
+                    && manager.tmuxCoordinator.attachPrompt == nil
             })
             #expect(promptWasCancelled)
             if !promptWasCancelled {
@@ -828,15 +827,18 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Managed tmux")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.tmuxResolver.sessionNames[tab.rootPaneId] = "vvterm_test"
-            manager.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
-            manager.updatePaneTmuxStatus(tab.rootPaneId, status: .foreground)
+            manager.tmuxCoordinator.setAttachment(
+                for: tab.rootPaneId,
+                sessionName: "vvterm_test",
+                ownership: .managed
+            )
+            manager.tmuxCoordinator.updateStatus(.foreground, for: tab.rootPaneId)
 
             manager.handleShellEnd(for: tab.rootPaneId, reason: .tmuxEnded(.managed))
 
             #expect(manager.tabs(for: tab.serverId).isEmpty)
             #expect(manager.paneState(for: tab.rootPaneId) == nil)
-            #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == nil)
+            #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == nil)
         }
     }
 
@@ -857,9 +859,12 @@ struct TerminalTabManagerLifecycleTests {
                 tabId: tab.id,
                 serverId: tab.serverId
             ))
-            manager.tmuxResolver.sessionNames[secondPaneId] = "vvterm_second"
-            manager.tmuxResolver.sessionOwnership[secondPaneId] = .managed
-            manager.updatePaneTmuxStatus(secondPaneId, status: .background)
+            manager.tmuxCoordinator.setAttachment(
+                for: secondPaneId,
+                sessionName: "vvterm_second",
+                ownership: .managed
+            )
+            manager.tmuxCoordinator.updateStatus(.background, for: secondPaneId)
 
             manager.handleShellEnd(for: secondPaneId, reason: .tmuxEnded(.managed))
 
@@ -875,9 +880,12 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Detached tmux")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.tmuxResolver.sessionNames[tab.rootPaneId] = "vvterm_test"
-            manager.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
-            manager.updatePaneTmuxStatus(tab.rootPaneId, status: .foreground)
+            manager.tmuxCoordinator.setAttachment(
+                for: tab.rootPaneId,
+                sessionName: "vvterm_test",
+                ownership: .managed
+            )
+            manager.tmuxCoordinator.updateStatus(.foreground, for: tab.rootPaneId)
 
             manager.handleShellEnd(for: tab.rootPaneId, reason: .tmuxDetached(.managed))
 
@@ -885,8 +893,8 @@ struct TerminalTabManagerLifecycleTests {
             #expect(manager.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
             #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason == .tmuxDetached)
             #expect(manager.paneState(for: tab.rootPaneId)?.disconnectReason?.allowsAutomaticReconnect == false)
-            #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm_test")
-            #expect(manager.tmuxResolver.hasConfirmedManagedSession(for: tab.rootPaneId))
+            #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId)?.sessionName == "vvterm_test")
+            #expect(manager.tmuxCoordinator.hasConfirmedManagedSession(for: tab.rootPaneId))
         }
     }
 
@@ -896,10 +904,13 @@ struct TerminalTabManagerLifecycleTests {
             await withCleanManager { manager in
                 let tab = TerminalTab(serverId: UUID(), title: "Long-idle tmux reconnect")
                 installTab(tab, in: manager, connectionState: .disconnected)
-                manager.tmuxResolver.sessionNames[tab.rootPaneId] = "vvterm_existing"
-                manager.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
-                manager.tmuxResolver.confirmManagedSession(for: tab.rootPaneId)
-                manager.updatePaneTmuxStatus(tab.rootPaneId, status: .background)
+                manager.tmuxCoordinator.setAttachment(
+                    for: tab.rootPaneId,
+                    sessionName: "vvterm_existing",
+                    ownership: .managed,
+                    managedSessionConfirmed: true
+                )
+                manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
 
                 let disconnectedClient = SSHClient()
                 guard let startToken = manager.beginShellStart(
@@ -911,7 +922,7 @@ struct TerminalTabManagerLifecycleTests {
                 }
 
                 do {
-                    _ = try await manager.tmuxStartupPlan(
+                    _ = try await manager.tmuxCoordinator.startupPlan(
                         for: tab.rootPaneId,
                         serverId: tab.serverId,
                         client: disconnectedClient,
@@ -923,10 +934,12 @@ struct TerminalTabManagerLifecycleTests {
                 }
 
                 #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .background)
-                #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm_existing")
-                #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == .managed)
-                #expect(manager.tmuxResolver.hasConfirmedManagedSession(for: tab.rootPaneId))
-                #expect(manager.tmuxAttachPrompt == nil)
+                #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == TerminalTmuxAttachmentState(
+                    sessionName: "vvterm_existing",
+                    ownership: .managed,
+                    managedSessionConfirmed: true
+                ))
+                #expect(manager.tmuxCoordinator.attachPrompt == nil)
 
                 manager.finishShellStart(
                     for: tab.rootPaneId,
@@ -943,10 +956,13 @@ struct TerminalTabManagerLifecycleTests {
             await withCleanManager { manager in
                 let tab = TerminalTab(serverId: UUID(), title: "Confirmed missing tmux")
                 installTab(tab, in: manager, connectionState: .disconnected)
-                manager.tmuxResolver.sessionNames[tab.rootPaneId] = "vvterm_existing"
-                manager.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
-                manager.tmuxResolver.confirmManagedSession(for: tab.rootPaneId)
-                manager.updatePaneTmuxStatus(tab.rootPaneId, status: .background)
+                manager.tmuxCoordinator.setAttachment(
+                    for: tab.rootPaneId,
+                    sessionName: "vvterm_existing",
+                    ownership: .managed,
+                    managedSessionConfirmed: true
+                )
+                manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
 
                 let client = SSHClient()
                 guard let startToken = manager.beginShellStart(
@@ -956,7 +972,7 @@ struct TerminalTabManagerLifecycleTests {
                     Issue.record("Expected shell start")
                     return
                 }
-                _ = try? await manager.tmuxStartupPlan(
+                _ = try? await manager.tmuxCoordinator.startupPlan(
                     for: tab.rootPaneId,
                     serverId: tab.serverId,
                     client: client,
@@ -965,9 +981,7 @@ struct TerminalTabManagerLifecycleTests {
                 )
 
                 #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .missing)
-                #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == nil)
-                #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == nil)
-                #expect(!manager.tmuxResolver.hasConfirmedManagedSession(for: tab.rootPaneId))
+                #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == nil)
 
                 manager.finishShellStart(
                     for: tab.rootPaneId,
@@ -984,10 +998,13 @@ struct TerminalTabManagerLifecycleTests {
             await withCleanManager { manager in
                 let tab = TerminalTab(serverId: UUID(), title: "Stale tmux probe")
                 installTab(tab, in: manager, connectionState: .disconnected)
-                manager.tmuxResolver.sessionNames[tab.rootPaneId] = "vvterm_existing"
-                manager.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
-                manager.tmuxResolver.confirmManagedSession(for: tab.rootPaneId)
-                manager.updatePaneTmuxStatus(tab.rootPaneId, status: .background)
+                manager.tmuxCoordinator.setAttachment(
+                    for: tab.rootPaneId,
+                    sessionName: "vvterm_existing",
+                    ownership: .managed,
+                    managedSessionConfirmed: true
+                )
+                manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
 
                 let client = SSHClient()
                 let gate = TmuxAvailabilityGate()
@@ -1001,7 +1018,7 @@ struct TerminalTabManagerLifecycleTests {
 
                 let stalePlan = Task { @MainActor in
                     do {
-                        _ = try await manager.tmuxStartupPlan(
+                        _ = try await manager.tmuxCoordinator.startupPlan(
                             for: tab.rootPaneId,
                             serverId: tab.serverId,
                             client: client,
@@ -1034,9 +1051,11 @@ struct TerminalTabManagerLifecycleTests {
 
                 #expect(await stalePlan.value)
                 #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .background)
-                #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm_existing")
-                #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == .managed)
-                #expect(manager.tmuxResolver.hasConfirmedManagedSession(for: tab.rootPaneId))
+                #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == TerminalTmuxAttachmentState(
+                    sessionName: "vvterm_existing",
+                    ownership: .managed,
+                    managedSessionConfirmed: true
+                ))
 
                 manager.finishShellStart(
                     for: tab.rootPaneId,
@@ -1053,10 +1072,13 @@ struct TerminalTabManagerLifecycleTests {
             await withCleanManager { manager in
                 let tab = TerminalTab(serverId: UUID(), title: "Cancelled tmux probe")
                 installTab(tab, in: manager, connectionState: .disconnected)
-                manager.tmuxResolver.sessionNames[tab.rootPaneId] = "vvterm_existing"
-                manager.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
-                manager.tmuxResolver.confirmManagedSession(for: tab.rootPaneId)
-                manager.updatePaneTmuxStatus(tab.rootPaneId, status: .background)
+                manager.tmuxCoordinator.setAttachment(
+                    for: tab.rootPaneId,
+                    sessionName: "vvterm_existing",
+                    ownership: .managed,
+                    managedSessionConfirmed: true
+                )
+                manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
 
                 let client = SSHClient()
                 let gate = TmuxAvailabilityGate()
@@ -1070,7 +1092,7 @@ struct TerminalTabManagerLifecycleTests {
 
                 let cancelledPlan = Task { @MainActor in
                     do {
-                        _ = try await manager.tmuxStartupPlan(
+                        _ = try await manager.tmuxCoordinator.startupPlan(
                             for: tab.rootPaneId,
                             serverId: tab.serverId,
                             client: client,
@@ -1092,9 +1114,11 @@ struct TerminalTabManagerLifecycleTests {
 
                 #expect(await cancelledPlan.value)
                 #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .background)
-                #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm_existing")
-                #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == .managed)
-                #expect(manager.tmuxResolver.hasConfirmedManagedSession(for: tab.rootPaneId))
+                #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == TerminalTmuxAttachmentState(
+                    sessionName: "vvterm_existing",
+                    ownership: .managed,
+                    managedSessionConfirmed: true
+                ))
 
                 manager.finishShellStart(
                     for: tab.rootPaneId,
@@ -1107,23 +1131,22 @@ struct TerminalTabManagerLifecycleTests {
 
     @Test
     func cancelledTmuxPromptCannotResolveReplacementPromptForSamePane() async {
-        let resolver = TmuxAttachResolver()
+        let coordinator = TerminalTmuxSessionCoordinator()
         let paneId = UUID()
         let serverId = UUID()
         let staleRequestId = UUID()
         let replacementRequestId = UUID()
 
         let staleSelection = Task { @MainActor in
-            await resolver.requestSelection(
+            await coordinator.requestSelection(
                 requestId: staleRequestId,
-                entityId: paneId,
+                paneId: paneId,
                 serverId: serverId,
-                availableSessions: [],
-                setPrompt: { _ in }
+                availableSessions: []
             )
         }
         guard await waitUntil({
-            resolver.hasPendingPrompt(requestId: staleRequestId)
+            coordinator.hasPendingPrompt(requestId: staleRequestId)
         }) else {
             Issue.record("Stale tmux prompt was not enqueued")
             staleSelection.cancel()
@@ -1131,16 +1154,15 @@ struct TerminalTabManagerLifecycleTests {
         }
 
         let replacementSelection = Task { @MainActor in
-            await resolver.requestSelection(
+            await coordinator.requestSelection(
                 requestId: replacementRequestId,
-                entityId: paneId,
+                paneId: paneId,
                 serverId: serverId,
-                availableSessions: [],
-                setPrompt: { _ in }
+                availableSessions: []
             )
         }
         guard await waitUntil({
-            resolver.hasPendingPrompt(requestId: replacementRequestId)
+            coordinator.hasPendingPrompt(requestId: replacementRequestId)
         }) else {
             Issue.record("Replacement tmux prompt was not enqueued")
             staleSelection.cancel()
@@ -1150,14 +1172,13 @@ struct TerminalTabManagerLifecycleTests {
 
         staleSelection.cancel()
         #expect(await waitUntil({
-            resolver.currentPrompt?.id == replacementRequestId
-                && !resolver.hasPendingPrompt(requestId: staleRequestId)
+            coordinator.attachPrompt?.id == replacementRequestId
+                && !coordinator.hasPendingPrompt(requestId: staleRequestId)
         }))
 
-        resolver.resolvePrompt(
+        coordinator.resolvePrompt(
             requestId: replacementRequestId,
-            selection: .createManaged,
-            setPrompt: { _ in }
+            selection: .createManaged
         )
 
         #expect(await staleSelection.value == .skipTmux)
@@ -1169,14 +1190,17 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Unconfirmed tmux")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.tmuxResolver.sessionNames[tab.rootPaneId] = "vvterm_test"
-            manager.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
+            manager.tmuxCoordinator.setAttachment(
+                for: tab.rootPaneId,
+                sessionName: "vvterm_test",
+                ownership: .managed
+            )
 
-            #expect(!manager.shouldReattachManagedTmuxSession(for: tab.rootPaneId))
+            #expect(!manager.tmuxCoordinator.shouldReattachManagedSession(for: tab.rootPaneId))
 
-            manager.tmuxResolver.confirmManagedSession(for: tab.rootPaneId)
+            manager.tmuxCoordinator.confirmManagedSession(for: tab.rootPaneId)
 
-            #expect(manager.shouldReattachManagedTmuxSession(for: tab.rootPaneId))
+            #expect(manager.tmuxCoordinator.shouldReattachManagedSession(for: tab.rootPaneId))
         }
     }
 
@@ -1188,16 +1212,22 @@ struct TerminalTabManagerLifecycleTests {
             installTab(confirmedTab, in: manager, connectionState: .connected)
             installTab(unconfirmedTab, in: manager, connectionState: .connected)
 
-            manager.tmuxResolver.sessionNames[confirmedTab.rootPaneId] = "vvterm_confirmed"
-            manager.tmuxResolver.sessionOwnership[confirmedTab.rootPaneId] = .managed
-            manager.tmuxResolver.confirmManagedSession(for: confirmedTab.rootPaneId)
-            manager.tmuxResolver.sessionNames[unconfirmedTab.rootPaneId] = "vvterm_unconfirmed"
-            manager.tmuxResolver.sessionOwnership[unconfirmedTab.rootPaneId] = .managed
+            manager.tmuxCoordinator.setAttachment(
+                for: confirmedTab.rootPaneId,
+                sessionName: "vvterm_confirmed",
+                ownership: .managed,
+                managedSessionConfirmed: true
+            )
+            manager.tmuxCoordinator.setAttachment(
+                for: unconfirmedTab.rootPaneId,
+                sessionName: "vvterm_unconfirmed",
+                ownership: .managed
+            )
 
             manager.persistAndRestoreSnapshotForTesting()
 
-            #expect(manager.shouldReattachManagedTmuxSession(for: confirmedTab.rootPaneId))
-            #expect(!manager.shouldReattachManagedTmuxSession(for: unconfirmedTab.rootPaneId))
+            #expect(manager.tmuxCoordinator.shouldReattachManagedSession(for: confirmedTab.rootPaneId))
+            #expect(!manager.tmuxCoordinator.shouldReattachManagedSession(for: unconfirmedTab.rootPaneId))
         }
     }
 
@@ -1206,9 +1236,12 @@ struct TerminalTabManagerLifecycleTests {
         await withCleanManager { manager in
             let tab = TerminalTab(serverId: UUID(), title: "Failed tmux")
             installTab(tab, in: manager, connectionState: .connected)
-            manager.tmuxResolver.sessionNames[tab.rootPaneId] = "vvterm_test"
-            manager.tmuxResolver.sessionOwnership[tab.rootPaneId] = .managed
-            manager.updatePaneTmuxStatus(tab.rootPaneId, status: .foreground)
+            manager.tmuxCoordinator.setAttachment(
+                for: tab.rootPaneId,
+                sessionName: "vvterm_test",
+                ownership: .managed
+            )
+            manager.tmuxCoordinator.updateStatus(.foreground, for: tab.rootPaneId)
 
             manager.handleShellEnd(for: tab.rootPaneId, reason: .tmuxCreationFailed)
 
@@ -1218,8 +1251,7 @@ struct TerminalTabManagerLifecycleTests {
                     == .failed(String(localized: "Unable to start tmux session."))
             )
             #expect(manager.paneState(for: tab.rootPaneId)?.tmuxStatus == .unknown)
-            #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == nil)
-            #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == nil)
+            #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == nil)
         }
     }
 
@@ -1231,15 +1263,15 @@ struct TerminalTabManagerLifecycleTests {
             manager.updatePaneForTesting(tab.rootPaneId) { $0.disconnectReason = .tmuxDetached }
             var reconnectRequested = false
 
-            manager.completeTmuxInstall(
+            manager.tmuxCoordinator.completeInstall(
                 for: tab.rootPaneId,
                 sessionName: "vvterm_installed",
                 onInstalled: { reconnectRequested = true }
             )
 
             #expect(reconnectRequested)
-            #expect(manager.tmuxResolver.sessionNames[tab.rootPaneId] == "vvterm_installed")
-            #expect(manager.tmuxResolver.sessionOwnership[tab.rootPaneId] == .managed)
+            #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId)?.sessionName == "vvterm_installed")
+            #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId)?.ownership == .managed)
         }
     }
 

@@ -163,7 +163,7 @@ struct TerminalSessionStateStoreTests {
         TerminalSessionStateStore(
             snapshotStore: snapshot,
             connectionViewSelections: selections,
-            tmuxResolver: TmuxAttachResolver()
+            tmuxCoordinator: TerminalTmuxSessionCoordinator()
         )
     }
 }
