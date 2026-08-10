@@ -42,9 +42,11 @@ final class LiveServerStatsApprovalReference: ServerStatsApprovalReference {
 
 @MainActor
 extension ServerStatsCollectorDependencies {
-    static var live: Self {
-        let connectionOperations = SSHConnectionOperationService.shared
-        return ServerStatsCollectorDependencies(
+    static func live(
+        keychainManager: KeychainManager,
+        connectionOperations: SSHConnectionOperationService
+    ) -> Self {
+        ServerStatsCollectorDependencies(
             makeOwnedConnection: {
                 LiveServerStatsConnection(client: SSHClient())
             },
@@ -56,7 +58,7 @@ extension ServerStatsCollectorDependencies {
 
                 let credentials: ServerCredentials
                 do {
-                    credentials = try KeychainManager.shared.getCredentials(for: target.server)
+                    credentials = try keychainManager.getCredentials(for: target.server)
                 } catch ServerCredentialAccessError.approvalRequired {
                     throw ServerStatsApprovalRequired(
                         reference: LiveServerStatsApprovalReference(
@@ -81,10 +83,6 @@ extension ServerStatsCollectorDependencies {
 
 @MainActor
 extension ServerStatsCollector {
-    convenience init() {
-        self.init(dependencies: .live)
-    }
-
     var securityApproval: ServerSecurityApprovalRequest? {
         (approvalReferenceForPresentation as? LiveServerStatsApprovalReference)?.rawValue
     }

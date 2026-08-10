@@ -54,6 +54,10 @@ struct VVTermApp: App {
         let cloudKitManager = CloudKitManager.shared
         let keychainManager = KeychainManager.shared
         let knownHostsManager = KnownHostsManager.shared
+        let makeStatsCollector = Self.makeStatsCollectorFactory(
+            keychainManager: keychainManager,
+            connectionOperations: SSHConnectionOperationService.shared
+        )
         terminalSecurityActions = Self.makeTerminalSecurityActions(
             keychainManager: keychainManager,
             knownHostsManager: knownHostsManager
@@ -117,8 +121,11 @@ struct VVTermApp: App {
         )
         _statsPreferencesStore = StateObject(wrappedValue: statsPreferencesStore)
         _serverVolumeVisibilityStore = StateObject(wrappedValue: serverVolumeVisibilityStore)
+        self.makeStatsCollector = makeStatsCollector
         statsSecurityApprovalActions = Self.makeStatsSecurityApprovalActions(
-            appLockManager: appLockManager
+            appLockManager: appLockManager,
+            keychainManager: keychainManager,
+            knownHostsManager: knownHostsManager
         )
         _viewTabConfigurationManager = StateObject(
             wrappedValue: viewTabConfigurationManager
@@ -192,6 +199,7 @@ struct VVTermApp: App {
     @StateObject private var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
     @StateObject private var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
     private let onWelcomeCompleted: @MainActor () -> Void
+    private let makeStatsCollector: @MainActor () -> ServerStatsCollector
     private let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
     private let terminalSecurityActions: TerminalSecurityActions
     #if os(macOS)
@@ -226,7 +234,7 @@ struct VVTermApp: App {
 
     private var statsDependencies: ServerStatsScreenDependencies {
         ServerStatsScreenDependencies(
-            makeCollector: { ServerStatsCollector() },
+            makeCollector: makeStatsCollector,
             preferencesStore: statsPreferencesStore,
             volumeVisibilityStore: serverVolumeVisibilityStore,
             securityApprovalActions: statsSecurityApprovalActions
@@ -463,6 +471,19 @@ private enum VVTermLauncherWidgetRefresh {
 #endif
 
 extension VVTermApp {
+    static func makeStatsCollectorFactory(
+        keychainManager: KeychainManager,
+        connectionOperations: SSHConnectionOperationService
+    ) -> @MainActor () -> ServerStatsCollector {
+        let dependencies = ServerStatsCollectorDependencies.live(
+            keychainManager: keychainManager,
+            connectionOperations: connectionOperations
+        )
+        return {
+            ServerStatsCollector(dependencies: dependencies)
+        }
+    }
+
     static func makeTerminalSecurityActions(
         keychainManager: KeychainManager,
         knownHostsManager: KnownHostsManager
@@ -503,7 +524,9 @@ extension VVTermApp {
     }
 
     static func makeStatsSecurityApprovalActions(
-        appLockManager: AppLockManager
+        appLockManager: AppLockManager,
+        keychainManager: KeychainManager,
+        knownHostsManager: KnownHostsManager
     ) -> ServerStatsSecurityApprovalActions {
         ServerStatsSecurityApprovalActions(
             approve: { request, server in
@@ -517,20 +540,20 @@ extension VVTermApp {
                         return .failed(.cancelled)
                     }
                     do {
-                        try KeychainManager.shared.approveCredentialUse(for: server)
+                        try keychainManager.approveCredentialUse(for: server)
                         return .approved
                     } catch {
                         return .failed(.unavailable)
                     }
                 case .hostKey(let challenge):
-                    return KnownHostsManager.shared.approve(challenge)
+                    return knownHostsManager.approve(challenge)
                         ? .approved
                         : .failed(.expired)
                 }
             },
             reject: { request in
                 guard case .hostKey(let challenge) = request else { return }
-                KnownHostsManager.shared.reject(challenge)
+                knownHostsManager.reject(challenge)
             }
         )
     }

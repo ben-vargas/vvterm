@@ -399,12 +399,20 @@ struct ContentView: View {
             resolutionSource: cloudKitSync.statsPreferencesResolutions
         )
     )
+    let keychainManager = KeychainManager()
+    let knownHostsManager = KnownHostsManager()
+    let makeStatsCollector = VVTermApp.makeStatsCollectorFactory(
+        keychainManager: keychainManager,
+        connectionOperations: SSHConnectionOperationService.shared
+    )
     let statsDependencies = ServerStatsScreenDependencies(
-        makeCollector: { ServerStatsCollector() },
+        makeCollector: makeStatsCollector,
         preferencesStore: statsPreferencesStore,
         volumeVisibilityStore: ServerVolumeVisibilityStore.live,
         securityApprovalActions: VVTermApp.makeStatsSecurityApprovalActions(
-            appLockManager: appLockManager
+            appLockManager: appLockManager,
+            keychainManager: keychainManager,
+            knownHostsManager: knownHostsManager
         )
     )
     let tabManager = TerminalTabManagerLiveComposition.makeManager(
@@ -413,8 +421,8 @@ struct ContentView: View {
         engagementTracker: engagementTracker
     )
     let terminalSecurityActions = VVTermApp.makeTerminalSecurityActions(
-        keychainManager: KeychainManager(),
-        knownHostsManager: KnownHostsManager()
+        keychainManager: keychainManager,
+        knownHostsManager: knownHostsManager
     )
     ContentView(
         serverManager: serverManager,
