@@ -92,6 +92,14 @@ final class TerminalReconnectCoordinator {
         var automaticReconnectAllowed: Bool
     }
 
+    private final class AutomaticRetry {
+        var task: Task<Void, Never>?
+
+        func cancel() {
+            task?.cancel()
+        }
+    }
+
     let access: TerminalReconnectAccess
     private let preparationTimeout: Duration
     private let connectionTimeout: Duration
@@ -104,7 +112,7 @@ final class TerminalReconnectCoordinator {
     private var records: [UUID: Record] = [:]
     private var connectionGenerations: [UUID: UUID] = [:]
     private var automaticContexts: [UUID: AutomaticContext] = [:]
-    private var automaticRetryTasks: [UUID: Task<Void, Never>] = [:]
+    private var automaticRetries: [UUID: AutomaticRetry] = [:]
     private var signalCancellables: Set<AnyCancellable> = []
 
     private(set) var currentNetworkReadiness: TerminalNetworkReadiness
@@ -160,7 +168,7 @@ final class TerminalReconnectCoordinator {
 
     isolated deinit {
         records.values.forEach { $0.task?.cancel() }
-        automaticRetryTasks.values.forEach { $0.cancel() }
+        automaticRetries.values.forEach { $0.cancel() }
         #if os(macOS)
         macRecoveryTask?.cancel()
         #endif
@@ -320,7 +328,7 @@ final class TerminalReconnectCoordinator {
     }
 
     func cancelAutomaticRetry(for paneId: UUID) {
-        automaticRetryTasks.removeValue(forKey: paneId)?.cancel()
+        automaticRetries.removeValue(forKey: paneId)?.cancel()
     }
 
     func connectionStateDidChange(for paneId: UUID) {
@@ -373,8 +381,8 @@ final class TerminalReconnectCoordinator {
 
     func prepareForApplicationTermination() {
         invalidateAllAttempts()
-        automaticRetryTasks.values.forEach { $0.cancel() }
-        automaticRetryTasks.removeAll()
+        automaticRetries.values.forEach { $0.cancel() }
+        automaticRetries.removeAll()
         automaticContexts.removeAll()
         resetPlatformRecovery()
     }
@@ -705,21 +713,24 @@ final class TerminalReconnectCoordinator {
     }
 
     private func scheduleAutomaticRetry(for paneId: UUID) {
-        guard automaticRetryTasks[paneId] == nil else { return }
+        guard automaticRetries[paneId] == nil else { return }
+        let retry = AutomaticRetry()
         let sleep = sleep
         let retryDelay = retryDelay
-        automaticRetryTasks[paneId] = Task { [weak self] in
+        retry.task = Task { [weak self] in
             do {
                 try await sleep(retryDelay)
             } catch {
                 return
             }
-            self?.automaticRetryDeadlineReached(for: paneId)
+            self?.automaticRetryDeadlineReached(for: paneId, retry: retry)
         }
+        automaticRetries[paneId] = retry
     }
 
-    private func automaticRetryDeadlineReached(for paneId: UUID) {
-        automaticRetryTasks.removeValue(forKey: paneId)
+    private func automaticRetryDeadlineReached(for paneId: UUID, retry: AutomaticRetry) {
+        guard automaticRetries[paneId] === retry else { return }
+        automaticRetries.removeValue(forKey: paneId)
         reconcileAutomaticReconnect(for: paneId)
     }
 

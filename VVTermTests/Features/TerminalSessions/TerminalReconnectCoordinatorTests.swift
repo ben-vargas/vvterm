@@ -22,6 +22,22 @@ private actor ReconnectCancellationGate {
     }
 }
 
+private actor ReconnectRetryGateSequence {
+    private let gates: [ReconnectCancellationGate]
+    private var nextGateIndex = 0
+
+    init(_ gates: [ReconnectCancellationGate]) {
+        self.gates = gates
+    }
+
+    func waitIgnoringCancellation() async {
+        guard gates.indices.contains(nextGateIndex) else { return }
+        let gate = gates[nextGateIndex]
+        nextGateIndex += 1
+        await gate.waitIgnoringCancellation()
+    }
+}
+
 @MainActor
 private final class ReconnectOwnerFixture {
     var facts: [UUID: TerminalReconnectPaneFacts] = [:]
@@ -292,6 +308,64 @@ struct TerminalReconnectCoordinatorTests {
         await retryGate.release()
         #expect(await eventuallyAsync { await retryGate.cancellationObserved })
         #expect(fixture.startCount == 0)
+    }
+
+    @Test
+    func staleCancellationIgnoringRetryCannotRemoveOrStartReplacement() async {
+        let paneId = UUID()
+        let firstRetryGate = ReconnectCancellationGate()
+        let replacementRetryGate = ReconnectCancellationGate()
+        let retrySequence = ReconnectRetryGateSequence([
+            firstRetryGate,
+            replacementRetryGate,
+        ])
+        let fixture = ReconnectOwnerFixture()
+        fixture.facts[paneId] = .init(
+            connectionState: .connected,
+            hasEstablishedConnection: true
+        )
+        let coordinator = makeCoordinator(
+            fixture: fixture,
+            retryDelay: .seconds(5),
+            sleep: { _ in await retrySequence.waitIgnoringCancellation() }
+        )
+        coordinator.reconcileAutomaticReconnect(
+            for: paneId,
+            sceneIsActive: true,
+            applicationIsActive: true,
+            automaticReconnectAllowed: true
+        )
+
+        fixture.facts[paneId] = .init(
+            connectionState: .failed(terminalExternalFailure("first")),
+            hasEstablishedConnection: true
+        )
+        coordinator.connectionStateDidChange(for: paneId)
+        #expect(await eventuallyAsync { await firstRetryGate.started })
+
+        fixture.facts[paneId] = .init(
+            connectionState: .connecting,
+            hasEstablishedConnection: true
+        )
+        coordinator.connectionStateDidChange(for: paneId)
+        fixture.facts[paneId] = .init(
+            connectionState: .failed(terminalExternalFailure("replacement")),
+            hasEstablishedConnection: true
+        )
+        coordinator.connectionStateDidChange(for: paneId)
+        #expect(await eventuallyAsync { await replacementRetryGate.started })
+
+        await firstRetryGate.release()
+        #expect(await eventuallyAsync { await firstRetryGate.cancellationObserved })
+        for _ in 0..<20 {
+            await Task.yield()
+        }
+        #expect(coordinator.attempt(for: paneId) == nil)
+        #expect(fixture.startCount == 0)
+
+        await replacementRetryGate.release()
+        #expect(await eventually { fixture.startCount == 1 })
+        #expect(coordinator.attempt(for: paneId)?.phase == .connecting)
     }
 
     #if os(macOS)
