@@ -4,9 +4,8 @@ import os.log
 
 @MainActor
 final class CloudKitSyncCoordinator {
-    static let shared = CloudKitSyncCoordinator()
-
-    private let cloudKit = CloudKitManager.shared
+    private let cloudKit: CloudKitManager
+    private let statsPreferencesCloud: any StatsPreferencesCloudClient
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm",
         category: "CloudKitSyncCoordinator"
@@ -16,7 +15,13 @@ final class CloudKitSyncCoordinator {
     private var isDraining = false
     private var shouldDrainAgain = false
 
-    private init() {}
+    init(
+        cloudKit: CloudKitManager,
+        statsPreferencesCloud: any StatsPreferencesCloudClient
+    ) {
+        self.cloudKit = cloudKit
+        self.statsPreferencesCloud = statsPreferencesCloud
+    }
 
     func snapshot() -> [PendingCloudKitMutation] {
         queue.snapshot()
@@ -150,7 +155,9 @@ final class CloudKitSyncCoordinator {
             let resolvedProfile = try await cloudKit.syncTerminalAccessoryProfile(profile)
             resolutionHub.publish(.terminalAccessoryProfile(resolvedProfile))
         case .statsPreferencesUpsert(let preferences):
-            let resolvedPreferences = try await cloudKit.syncStatsPreferences(preferences)
+            let resolvedPreferences = try await statsPreferencesCloud.syncStatsPreferences(
+                preferences
+            )
             resolutionHub.publish(.statsPreferences(resolvedPreferences))
         }
     }

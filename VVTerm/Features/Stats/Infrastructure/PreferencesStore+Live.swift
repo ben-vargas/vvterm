@@ -1,8 +1,21 @@
 import Foundation
 
-extension CloudKitManager: StatsPreferencesCloudClient {}
 extension CloudKitSyncCoordinator: StatsPreferencesMutationQueue {}
 extension CloudKitSyncLifecycleDriver: StatsPreferencesSyncLifecycle {}
+
+@MainActor
+enum StatsPreferencesCloudKitLiveComposition {
+    static let client = StatsPreferencesCloudKitClient(
+        transport: CloudKitManager.shared
+    )
+}
+
+extension CloudKitSyncCoordinator {
+    static let shared = CloudKitSyncCoordinator(
+        cloudKit: CloudKitManager.shared,
+        statsPreferencesCloud: StatsPreferencesCloudKitLiveComposition.client
+    )
+}
 
 extension CloudKitSyncResolutionHub: StatsPreferencesResolutionSource {
     func observeStatsPreferences(
@@ -26,7 +39,7 @@ extension PreferencesStoreDependencies {
                 defaults: .standard,
                 key: CloudKitSyncConstants.statsPreferencesStorageKey
             ),
-            cloud: CloudKitManager.shared,
+            cloud: StatsPreferencesCloudKitLiveComposition.client,
             mutationQueue: CloudKitSyncCoordinator.shared,
             syncLifecycle: CloudKitSyncLifecycleDriver.shared,
             resolutionSource: CloudKitSyncResolutionHub.shared,

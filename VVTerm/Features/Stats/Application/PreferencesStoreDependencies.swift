@@ -1,5 +1,9 @@
 import Foundation
 
+nonisolated enum StatsPreferencesCloudClientError: Error, Equatable, Sendable {
+    case conflictRetryLimitReached
+}
+
 @MainActor
 protocol StatsPreferencesCloudClient: AnyObject {
     func syncStatsPreferences(

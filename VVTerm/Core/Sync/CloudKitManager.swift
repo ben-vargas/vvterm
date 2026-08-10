@@ -56,7 +56,6 @@ final class CloudKitManager: ObservableObject {
             + TerminalThemeCloudKitRecordCodec.recordKeys
             + TerminalThemePreferenceCloudKitRecordCodec.recordKeys
             + TerminalAccessoryCloudKitRecordCodec.recordKeys
-            + StatsPreferencesCloudKitRecordCodec.recordKeys
     ).reduce(into: [String]()) { keys, key in
         if !keys.contains(key) {
             keys.append(key)
@@ -544,140 +543,6 @@ final class CloudKitManager: ObservableObject {
         throw CloudKitError.recordNotFound
     }
 
-    // MARK: - Stats Preference Operations
-
-    func fetchStatsPreferences() async throws -> StatsPreferences? {
-        await ensureAccountStatusChecked()
-        guard isAvailable else {
-            throw CloudKitError.notAvailable
-        }
-
-        try await ensureCustomZone()
-        let recordID = StatsPreferencesCloudKitRecordCodec.recordID(in: recordZoneID)
-
-        do {
-            let record = try await withZoneRetry {
-                try await database.record(for: recordID)
-            }
-            guard let preferences = StatsPreferencesCloudKitRecordCodec.preferences(from: record) else {
-                logger.warning("Stats preferences payload was invalid; ignoring remote value")
-                return nil
-            }
-            return preferences
-        } catch let ckError as CKError where ckError.code == .unknownItem || ckError.code == .zoneNotFound {
-            return nil
-        } catch {
-            throw error
-        }
-    }
-
-    func saveStatsPreferences(_ preferences: StatsPreferences) async throws {
-        try await prepareSyncMutation()
-        let recordID = StatsPreferencesCloudKitRecordCodec.recordID(in: recordZoneID)
-        let record = try StatsPreferencesCloudKitRecordCodec.record(
-            for: preferences,
-            recordID: recordID
-        )
-        try await performSyncMutation(
-            successLog: "Saved stats preferences to CloudKit",
-            failureLog: "Failed to save stats preferences"
-        ) {
-            try await withZoneRetry {
-                try await saveRecordWithUpsert(record)
-            }
-        }
-    }
-
-    func syncStatsPreferences(_ localPreferences: StatsPreferences) async throws -> StatsPreferences {
-        try await prepareSyncMutation()
-        return try await performSyncOperation {
-            try await syncTrackedStatsPreferences(localPreferences)
-        }
-    }
-
-    private func syncTrackedStatsPreferences(
-        _ localPreferences: StatsPreferences
-    ) async throws -> StatsPreferences {
-        let recordID = StatsPreferencesCloudKitRecordCodec.recordID(in: recordZoneID)
-        let normalizedLocal = localPreferences.normalized()
-
-        var baseRecord: CKRecord?
-        var mergedPreferences = normalizedLocal
-
-        do {
-            let remoteRecord = try await withZoneRetry {
-                try await database.record(for: recordID)
-            }
-            baseRecord = remoteRecord
-            if let remotePreferences = StatsPreferencesCloudKitRecordCodec.preferences(from: remoteRecord) {
-                let normalizedRemote = remotePreferences.normalized()
-                mergedPreferences = StatsPreferencesCloudKitRecordCodec.merge(
-                    local: normalizedLocal,
-                    remote: normalizedRemote
-                )
-                if mergedPreferences == normalizedRemote {
-                    lastSyncDate = Date()
-                    return normalizedRemote
-                }
-            } else {
-                logger.warning("Stats preferences remote payload was invalid; keeping local preferences")
-            }
-        } catch let ckError as CKError where ckError.code == .unknownItem || ckError.code == .zoneNotFound {
-            baseRecord = nil
-            mergedPreferences = normalizedLocal
-        }
-
-        var attempts = 0
-        while attempts < 4 {
-            attempts += 1
-
-            let candidateRecord = try StatsPreferencesCloudKitRecordCodec.record(
-                for: mergedPreferences,
-                recordID: recordID,
-                existingRecord: baseRecord
-            )
-
-            do {
-                try await withZoneRetry {
-                    try await saveRecord(candidateRecord, savePolicy: .ifServerRecordUnchanged)
-                }
-                lastSyncDate = Date()
-                return mergedPreferences
-            } catch {
-                if let serverRecord = extractServerRecord(from: error),
-                   let serverPreferences = StatsPreferencesCloudKitRecordCodec.preferences(
-                       from: serverRecord
-                   ) {
-                    let normalizedRemote = serverPreferences.normalized()
-                    let conflictResolved = StatsPreferencesCloudKitRecordCodec.merge(
-                        local: mergedPreferences,
-                        remote: normalizedRemote
-                    )
-
-                    if conflictResolved == normalizedRemote {
-                        lastSyncDate = Date()
-                        return normalizedRemote
-                    }
-
-                    mergedPreferences = conflictResolved
-                    baseRecord = serverRecord
-                    continue
-                }
-
-                if isUnknownItemError(error) {
-                    baseRecord = nil
-                    continue
-                }
-
-                logger.error("Failed to sync stats preferences: \(error.localizedDescription)")
-                throw error
-            }
-        }
-
-        logger.error("Failed to sync stats preferences after retries")
-        throw CloudKitError.recordNotFound
-    }
-
     private func prepareSyncMutation() async throws {
         await ensureAccountStatusChecked()
         guard isAvailable else {
@@ -721,6 +586,43 @@ final class CloudKitManager: ObservableObject {
             syncState.completeOperation(operationID, with: .failure(error.localizedDescription))
             throw error
         }
+    }
+
+    // MARK: - Raw Record Transport
+
+    var cloudKitRecordZoneID: CKRecordZone.ID {
+        recordZoneID
+    }
+
+    func performCloudKitRecordMutation<T>(
+        _ operation: () async throws -> T
+    ) async throws -> T {
+        try await prepareSyncMutation()
+        return try await performSyncOperation(operation)
+    }
+
+    func fetchCloudKitRecord(_ recordID: CKRecord.ID) async throws -> CKRecord {
+        try await withZoneRetry {
+            try await database.record(for: recordID)
+        }
+    }
+
+    func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws {
+        try await withZoneRetry {
+            try await saveRecord(record, savePolicy: .ifServerRecordUnchanged)
+        }
+    }
+
+    func markCloudKitRecordSynchronized() {
+        lastSyncDate = Date()
+    }
+
+    func cloudKitServerRecord(from error: Error) -> CKRecord? {
+        extractServerRecord(from: error)
+    }
+
+    func isCloudKitRecordMissing(_ error: Error) -> Bool {
+        isUnknownItemError(error)
     }
 
     // MARK: - Subscriptions
@@ -1036,8 +938,7 @@ final class CloudKitManager: ObservableObject {
             RecordType.workspace,
             TerminalThemeCloudKitRecordCodec.recordType,
             TerminalThemePreferenceCloudKitRecordCodec.recordType,
-            TerminalAccessoryCloudKitRecordCodec.recordType,
-            StatsPreferencesCloudKitRecordCodec.recordType
+            TerminalAccessoryCloudKitRecordCodec.recordType
         ]
         let recordIDs = records
             .filter { trackedRecordTypes.contains($0.recordType) }

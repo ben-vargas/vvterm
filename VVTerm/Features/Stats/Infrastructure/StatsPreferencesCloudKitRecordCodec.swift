@@ -1,12 +1,13 @@
 import CloudKit
 import Foundation
 
+nonisolated enum StatsPreferencesCloudKitRecordCodecError: Error, Equatable, Sendable {
+    case encodingFailed
+}
+
 enum StatsPreferencesCloudKitRecordCodec {
     static let recordType = "UserPreference"
     static let recordName = StatsPreferences.recordName
-    static let recordKeys = [
-        "schemaVersion", "payload", "updatedAt", "lastWriterDeviceId"
-    ]
 
     static func recordID(in zoneID: CKRecordZone.ID) -> CKRecord.ID {
         CKRecord.ID(recordName: recordName, zoneID: zoneID)
@@ -46,7 +47,7 @@ enum StatsPreferencesCloudKitRecordCodec {
         do {
             payload = try JSONEncoder().encode(normalized)
         } catch {
-            throw CloudKitError.encodingFailed
+            throw StatsPreferencesCloudKitRecordCodecError.encodingFailed
         }
 
         let record = existingRecord ?? CKRecord(recordType: recordType, recordID: recordID)
