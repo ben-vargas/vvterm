@@ -7,7 +7,6 @@
 
 import Metal
 import OSLog
-import SwiftUI
 
 #if os(macOS)
 import AppKit
@@ -19,11 +18,6 @@ import UIKit
 @MainActor
 class GhosttyRenderingSetup {
     nonisolated private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm", category: "GhosttyRendering")
-
-    // MARK: - Terminal Settings from AppStorage
-
-    @AppStorage(TerminalDefaults.fontNameKey) private var terminalFontName = TerminalDefaults.defaultFontName
-    @AppStorage(TerminalDefaults.fontSizeKey) private var terminalFontSize = TerminalDefaults.defaultFontSize
 
     // MARK: - Layer Setup
 
@@ -95,9 +89,7 @@ class GhosttyRenderingSetup {
         // Set scale factor for retina displays
         surfaceConfig.scale_factor = Double(window?.backingScaleFactor ?? 2.0)
 
-        // Set font size from settings
-        surfaceConfig.font_size = Float(terminalFontSize)
-
+        // Keep font_size at 0 so Ghostty inherits the injected app configuration.
         // Enable custom I/O backend for SSH clients
         surfaceConfig.use_custom_io = useCustomIO
 
@@ -188,9 +180,7 @@ class GhosttyRenderingSetup {
         let scale = view.contentScaleFactor
         surfaceConfig.scale_factor = Double(scale)
 
-        // Set font size from settings
-        surfaceConfig.font_size = Float(terminalFontSize)
-
+        // Keep font_size at 0 so Ghostty inherits the injected app configuration.
         // Enable custom I/O backend for SSH clients
         surfaceConfig.use_custom_io = useCustomIO
 

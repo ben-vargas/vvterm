@@ -13,7 +13,6 @@ import UIKit
 #endif
 import Combine
 import OSLog
-import SwiftUI
 
 // MARK: - Ghostty Namespace
 
@@ -69,36 +68,12 @@ extension Ghostty {
         /// Resolved appearance supplied by the terminal appearance owner.
         private(set) var appearanceSnapshot: TerminalAppearanceSnapshot
 
+        /// Terminal settings supplied by the app composition root.
+        private(set) var configuration: Ghostty.RuntimeConfiguration
+
         /// Track active surfaces for config propagation
         private var activeSurfaces: [Ghostty.SurfaceReference] = []
         private var surfaceConfigCache: [SurfaceConfigCacheKey: ghostty_config_t] = [:]
-        // MARK: - Terminal Settings from AppStorage
-
-        @AppStorage(TerminalDefaults.fontNameKey) private var terminalFontName = TerminalDefaults.defaultFontName
-        @AppStorage(TerminalDefaults.fontSizeKey) private var terminalFontSize = TerminalDefaults.defaultFontSize
-        @AppStorage(TerminalDefaults.cursorStyleKey) private var terminalCursorStyleRaw = TerminalDefaults.defaultCursorStyle.rawValue
-        @AppStorage(TerminalDefaults.cursorBlinkKey) private var terminalCursorBlink = TerminalDefaults.defaultCursorBlink
-        #if os(macOS)
-        @AppStorage(TerminalDefaults.optionAsAltModeKey) private var terminalOptionAsAltModeRaw = TerminalOptionAsAltMode.none.rawValue
-        #endif
-        @AppStorage(TerminalRemoteClipboardReadPolicy.userDefaultsKey)
-        private var remoteClipboardReadPolicyRaw = TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
-
-        private var remoteClipboardReadPolicy: TerminalRemoteClipboardReadPolicy {
-            TerminalRemoteClipboardReadPolicy(rawValue: remoteClipboardReadPolicyRaw) ?? .defaultValue
-        }
-
-        private var terminalCursorStyle: TerminalCursorStyle {
-            TerminalCursorStyle(rawValue: terminalCursorStyleRaw) ?? TerminalDefaults.defaultCursorStyle
-        }
-
-        private var terminalOptionAsAltMode: TerminalOptionAsAltMode {
-            #if os(macOS)
-            TerminalOptionAsAltMode(rawValue: terminalOptionAsAltModeRaw) ?? .none
-            #else
-            .none
-            #endif
-        }
 
         // MARK: - Initialization
 
@@ -113,10 +88,23 @@ extension Ghostty {
             let optionAsAltModeRaw: String
         }
 
-        init(
+        convenience init(
             appearance: TerminalAppearanceSnapshot = .fallback,
             autoStart: Bool = true
         ) {
+            self.init(
+                configuration: .defaultValue,
+                appearance: appearance,
+                autoStart: autoStart
+            )
+        }
+
+        init(
+            configuration: Ghostty.RuntimeConfiguration,
+            appearance: TerminalAppearanceSnapshot = .fallback,
+            autoStart: Bool = true
+        ) {
+            self.configuration = configuration
             appearanceSnapshot = appearance
             if autoStart {
                 startIfNeeded()
@@ -311,6 +299,13 @@ extension Ghostty {
             NotificationCenter.default.post(name: Ghostty.configDidReloadNotification, object: nil)
         }
 
+        func applyConfiguration(_ configuration: Ghostty.RuntimeConfiguration) {
+            guard self.configuration != configuration else { return }
+            self.configuration = configuration
+            guard didStart, app != nil else { return }
+            reloadConfig()
+        }
+
         func applyAppearance(_ snapshot: TerminalAppearanceSnapshot) {
             guard appearanceSnapshot != snapshot else { return }
             appearanceSnapshot = snapshot
@@ -350,12 +345,12 @@ extension Ghostty {
 
         private func cachedSurfaceConfig(for presentationOverrides: TerminalPresentationOverrides) -> ghostty_config_t? {
             let key = SurfaceConfigCacheKey(
-                fontName: terminalFontName,
-                fontSize: presentationOverrides.resolvedFontSize(),
+                fontName: configuration.fontName,
+                fontSize: presentationOverrides.fontSize ?? configuration.fontSize,
                 themeName: appearanceSnapshot.activeTheme.name,
-                cursorStyleRaw: terminalCursorStyle.rawValue,
-                cursorBlink: terminalCursorBlink,
-                optionAsAltModeRaw: terminalOptionAsAltMode.rawValue
+                cursorStyleRaw: configuration.cursorStyle.rawValue,
+                cursorBlink: configuration.cursorBlink,
+                optionAsAltModeRaw: configuration.optionAsAltMode.rawValue
             )
 
             if let cachedConfig = surfaceConfigCache[key] {
@@ -403,16 +398,16 @@ extension Ghostty {
                 let shellName = (shell as NSString).lastPathComponent
 
                 // Create config with font settings, shell integration, and theme
-                let effectiveFontSize = presentationOverrides.fontSize ?? TerminalDefaults.clampedFontSize(terminalFontSize)
+                let effectiveFontSize = presentationOverrides.fontSize ?? configuration.fontSize
                 let configContent = ConfigBuilder.configContent(
-                    primaryFontFamily: terminalFontName,
+                    primaryFontFamily: configuration.fontName,
                     fontSize: effectiveFontSize,
                     shellName: shellName,
                     themeName: appearanceSnapshot.activeTheme.name,
-                    cursorStyle: terminalCursorStyle,
-                    cursorBlink: terminalCursorBlink,
-                    optionAsAltMode: terminalOptionAsAltMode,
-                    remoteClipboardReadPolicy: remoteClipboardReadPolicy
+                    cursorStyle: configuration.cursorStyle,
+                    cursorBlink: configuration.cursorBlink,
+                    optionAsAltMode: configuration.optionAsAltMode,
+                    remoteClipboardReadPolicy: configuration.remoteClipboardReadPolicy
                 )
 
                 Ghostty.logger.info("Loading Ghostty theme: \(self.appearanceSnapshot.activeTheme.name)")
@@ -426,7 +421,7 @@ extension Ghostty {
                 // Load default files - will load our XDG config
                 ghostty_config_load_default_files(config)
 
-                Ghostty.logger.info("Loaded terminal settings - Font: \(self.terminalFontName) \(Int(effectiveFontSize))pt, Theme: \(self.appearanceSnapshot.activeTheme.name)")
+                Ghostty.logger.info("Loaded terminal settings - Font: \(self.configuration.fontName) \(Int(effectiveFontSize))pt, Theme: \(self.appearanceSnapshot.activeTheme.name)")
             } catch {
                 Ghostty.logger.warning("Failed to write config: \(error)")
             }

@@ -15,6 +15,28 @@ import AppKit
 struct VVTermApp: App {
     init() {
         let defaults = UserDefaults.standard
+        TerminalDefaults.applyIfNeeded(defaults: defaults)
+        #if os(macOS)
+        let terminalOptionAsAltMode = defaults.string(
+            forKey: TerminalDefaults.optionAsAltModeKey
+        ) ?? TerminalOptionAsAltMode.none.rawValue
+        #else
+        let terminalOptionAsAltMode = TerminalOptionAsAltMode.none.rawValue
+        #endif
+        let ghosttyRuntimeConfiguration = Ghostty.RuntimeConfiguration(
+            fontName: defaults.string(forKey: TerminalDefaults.fontNameKey)
+                ?? TerminalDefaults.defaultFontName,
+            fontSize: defaults.object(forKey: TerminalDefaults.fontSizeKey) as? Double
+                ?? TerminalDefaults.defaultFontSize,
+            cursorStyleRawValue: defaults.string(forKey: TerminalDefaults.cursorStyleKey)
+                ?? TerminalDefaults.defaultCursorStyle.rawValue,
+            cursorBlink: defaults.object(forKey: TerminalDefaults.cursorBlinkKey) as? Bool
+                ?? TerminalDefaults.defaultCursorBlink,
+            optionAsAltModeRawValue: terminalOptionAsAltMode,
+            remoteClipboardReadPolicyRawValue: defaults.string(
+                forKey: TerminalRemoteClipboardReadPolicy.userDefaultsKey
+            ) ?? TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
+        )
         let notificationCenter = NotificationCenter.default
         let calendar = Calendar.current
         let now: () -> Date = Date.init
@@ -273,6 +295,12 @@ struct VVTermApp: App {
         #endif
         self.onWelcomeCompleted = onWelcomeCompleted
         self.tabManager = tabManager
+        _ghosttyApp = StateObject(
+            wrappedValue: Ghostty.App(
+                configuration: ghosttyRuntimeConfiguration,
+                autoStart: false
+            )
+        )
         _storeManager = StateObject(wrappedValue: storeManager)
         _appLockManager = StateObject(wrappedValue: appLockManager)
         _serverManager = StateObject(wrappedValue: serverManager)
@@ -334,7 +362,6 @@ struct VVTermApp: App {
         #endif
         storeManager.start()
 
-        TerminalDefaults.applyIfNeeded()
         #if os(iOS)
         VVTermLauncherWidgetRefresh.refreshIfNeeded()
         analyticsTracker.prepareAppleAdsAttribution()
@@ -347,7 +374,7 @@ struct VVTermApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
 
-    @StateObject private var ghosttyApp = Ghostty.App(autoStart: false)
+    @StateObject private var ghosttyApp: Ghostty.App
     #if os(iOS)
     @StateObject private var screenAwakeCoordinator = TerminalScreenAwakeCoordinator()
     private let analyticsOptOutAction: AnalyticsOptOutAction
@@ -401,12 +428,23 @@ struct VVTermApp: App {
     @AppStorage(TerminalRemoteClipboardReadPolicy.userDefaultsKey)
     private var remoteClipboardReadPolicy = TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
 
-    private var terminalOptionAsAltReloadToken: String {
+    private var terminalOptionAsAltModeRawValue: String {
         #if os(macOS)
         terminalOptionAsAltMode
         #else
-        ""
+        TerminalOptionAsAltMode.none.rawValue
         #endif
+    }
+
+    private var ghosttyRuntimeConfiguration: Ghostty.RuntimeConfiguration {
+        Ghostty.RuntimeConfiguration(
+            fontName: terminalFontName,
+            fontSize: terminalFontSize,
+            cursorStyleRawValue: terminalCursorStyle,
+            cursorBlink: terminalCursorBlink,
+            optionAsAltModeRawValue: terminalOptionAsAltModeRawValue,
+            remoteClipboardReadPolicyRawValue: remoteClipboardReadPolicy
+        )
     }
 
     private var statsDependencies: ServerStatsScreenDependencies {
@@ -493,8 +531,8 @@ struct VVTermApp: App {
             .environmentObject(terminalThemeManager)
             .environmentObject(terminalAccessoryPreferencesManager)
             .modifier(AppearanceModifier())
-            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalCursorStyle)\(terminalCursorBlink)\(terminalOptionAsAltReloadToken)\(remoteClipboardReadPolicy)") {
-                ghosttyApp.reloadConfig()
+            .task(id: ghosttyRuntimeConfiguration) {
+                ghosttyApp.applyConfiguration(ghosttyRuntimeConfiguration)
             }
             .sheet(isPresented: .init(
                 get: { !hasSeenWelcome },
@@ -584,8 +622,8 @@ struct VVTermApp: App {
             .environmentObject(terminalThemeManager)
             .environmentObject(terminalAccessoryPreferencesManager)
             .modifier(AppearanceModifier())
-            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalCursorStyle)\(terminalCursorBlink)\(terminalOptionAsAltReloadToken)\(remoteClipboardReadPolicy)") {
-                ghosttyApp.reloadConfig()
+            .task(id: ghosttyRuntimeConfiguration) {
+                ghosttyApp.applyConfiguration(ghosttyRuntimeConfiguration)
             }
             .sheet(isPresented: .init(
                 get: { !hasSeenWelcome },
