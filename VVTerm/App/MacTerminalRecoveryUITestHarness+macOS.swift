@@ -35,6 +35,7 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
             },
             paneIDs: { [weak self] in self.map { [$0.paneId] } ?? [] },
             paneIDsForServer: { _ in [] },
+            networkPathBecameReady: { _ in },
             prepareTransport: { [weak self] _ in
                 self?.cleanupCount += 1
                 let blocker = self?.cleanupBlocker
@@ -65,7 +66,7 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
             markMoshConnected: { _ in }
         ),
         initialNetworkReadiness: .unavailable,
-        initialApplicationIsActive: true,
+        applicationIsActive: { true },
         initialAppIsLocked: false,
         preparationTimeout: .milliseconds(20),
         connectionTimeout: .milliseconds(30),

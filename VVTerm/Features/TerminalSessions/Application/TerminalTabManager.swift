@@ -266,6 +266,9 @@ final class TerminalTabManager: ObservableObject {
             paneIDsForServer: { [weak self] serverId in
                 self?.sessionState.paneStates(forServer: serverId).map(\.paneId) ?? []
             },
+            networkPathBecameReady: { [weak self] paneId in
+                self?.transportCoordinator.notifyEternalTerminalNetworkPathChanged(for: paneId)
+            },
             prepareTransport: { [weak self] paneId in
                 await self?.transportCoordinator.prepareTransportForReconnect(paneId)
             },
@@ -305,6 +308,9 @@ final class TerminalTabManager: ObservableObject {
             paneIDsForServer: { [weak self] serverId in
                 self?.sessionState.paneStates(forServer: serverId).map(\.paneId) ?? []
             },
+            networkPathBecameReady: { [weak self] paneId in
+                self?.transportCoordinator.notifyEternalTerminalNetworkPathChanged(for: paneId)
+            },
             prepareTransport: { [weak self] paneId in
                 await self?.transportCoordinator.prepareTransportForReconnect(paneId)
             },
@@ -320,7 +326,7 @@ final class TerminalTabManager: ObservableObject {
             access: access,
             initialNetworkReadiness: dependencies.networkReadiness.initial,
             networkUpdates: dependencies.networkReadiness.updates,
-            initialApplicationIsActive: dependencies.applicationIsActive(),
+            applicationIsActive: dependencies.applicationIsActive,
             initialAppIsLocked: dependencies.appLock.initialIsLocked,
             appLockUpdates: dependencies.appLock.updates,
             onEvent: { [weak self] event in

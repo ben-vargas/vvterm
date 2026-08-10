@@ -18,6 +18,7 @@ struct TerminalReconnectAccess {
     let paneFacts: @MainActor @Sendable (UUID) -> TerminalReconnectPaneFacts?
     let paneIDs: @MainActor @Sendable () -> [UUID]
     let paneIDsForServer: @MainActor @Sendable (UUID) -> [UUID]
+    let networkPathBecameReady: @MainActor @Sendable (UUID) -> Void
     let prepareTransport: @MainActor @Sendable (UUID) async -> Void
     let startConnection: @MainActor @Sendable (UUID) -> Bool
     let failConnection: @MainActor @Sendable (UUID) -> Void
@@ -104,6 +105,7 @@ final class TerminalReconnectCoordinator {
     private let preparationTimeout: Duration
     private let connectionTimeout: Duration
     private let retryDelay: Duration
+    private let applicationIsActiveQuery: @MainActor () -> Bool
     private let now: @Sendable () -> Date
     private let sleep: Sleep
     private let onEvent: EventHandler
@@ -119,6 +121,10 @@ final class TerminalReconnectCoordinator {
     private(set) var applicationIsActive: Bool
     private(set) var appIsLocked: Bool
 
+    var applicationActivityIsActive: Bool {
+        applicationIsActiveQuery()
+    }
+
     #if os(macOS)
     var macRecoveryGate = MacTerminalRecoveryGate()
     var macReconciliationID: UUID?
@@ -131,7 +137,7 @@ final class TerminalReconnectCoordinator {
         access: TerminalReconnectAccess,
         initialNetworkReadiness: TerminalNetworkReadiness,
         networkUpdates: AnyPublisher<TerminalNetworkReadiness, Never>? = nil,
-        initialApplicationIsActive: Bool,
+        applicationIsActive: @escaping @MainActor () -> Bool,
         initialAppIsLocked: Bool,
         appLockUpdates: AnyPublisher<Bool, Never>? = nil,
         preparationTimeout: Duration = .seconds(5),
@@ -144,7 +150,8 @@ final class TerminalReconnectCoordinator {
     ) {
         self.access = access
         self.currentNetworkReadiness = initialNetworkReadiness
-        self.applicationIsActive = initialApplicationIsActive
+        self.applicationIsActiveQuery = applicationIsActive
+        self.applicationIsActive = applicationIsActive()
         self.appIsLocked = initialAppIsLocked
         self.preparationTimeout = preparationTimeout
         self.connectionTimeout = connectionTimeout
@@ -295,6 +302,11 @@ final class TerminalReconnectCoordinator {
     func receiveNetworkReadiness(_ readiness: TerminalNetworkReadiness) {
         guard currentNetworkReadiness != readiness else { return }
         currentNetworkReadiness = readiness
+        if readiness == .ready {
+            for paneId in access.paneIDs() {
+                access.networkPathBecameReady(paneId)
+            }
+        }
         #if os(macOS)
         receiveMacRecoverySignal(.networkChanged(readiness))
         #elseif os(iOS)
@@ -311,14 +323,13 @@ final class TerminalReconnectCoordinator {
     func reconcileAutomaticReconnect(
         for paneId: UUID,
         sceneIsActive: Bool,
-        applicationIsActive: Bool,
         automaticReconnectAllowed: Bool
     ) {
         automaticContexts[paneId] = AutomaticContext(
             sceneIsActive: sceneIsActive,
             automaticReconnectAllowed: automaticReconnectAllowed
         )
-        receiveApplicationActivity(applicationIsActive)
+        receiveApplicationActivity(applicationActivityIsActive)
         reconcileAutomaticReconnect(for: paneId)
     }
 

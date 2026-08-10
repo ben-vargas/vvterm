@@ -674,7 +674,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         guard tabManager.sessionState.paneState(for: paneId) != nil else { return }
         guard !coordinator.hasLiveConnection else { return }
         guard !coordinator.isConnectionStartInFlight else { return }
-        guard UIApplication.shared.applicationState == .active else { return }
+        guard tabManager.reconnectCoordinator.applicationActivityIsActive else { return }
 
         switch state {
         case .connecting, .reconnecting, .connected:

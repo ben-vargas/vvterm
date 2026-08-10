@@ -45,6 +45,8 @@ private final class ReconnectOwnerFixture {
     var startCount = 0
     var failureCount = 0
     var events: [TerminalReconnectCoordinator.EventStage] = []
+    var applicationIsActive = true
+    var networkReadyPaneIDs: [UUID] = []
     var firstCleanupGate: ReconnectCancellationGate?
     #if os(macOS)
     var recoveryGate: ReconnectCancellationGate?
@@ -57,6 +59,7 @@ private final class ReconnectOwnerFixture {
             paneFacts: { [weak self] in self?.facts[$0] },
             paneIDs: { [weak self] in self.map { Array($0.facts.keys) } ?? [] },
             paneIDsForServer: { _ in [] },
+            networkPathBecameReady: { [weak self] in self?.networkReadyPaneIDs.append($0) },
             prepareTransport: { [weak self] _ in
                 guard let self else { return }
                 cleanupCount += 1
@@ -85,6 +88,7 @@ private final class ReconnectOwnerFixture {
             paneFacts: { [weak self] in self?.facts[$0] },
             paneIDs: { [weak self] in self.map { Array($0.facts.keys) } ?? [] },
             paneIDsForServer: { _ in [] },
+            networkPathBecameReady: { [weak self] in self?.networkReadyPaneIDs.append($0) },
             prepareTransport: { [weak self] _ in
                 guard let self else { return }
                 cleanupCount += 1
@@ -115,10 +119,13 @@ struct TerminalReconnectCoordinatorTests {
             try await Task.sleep(for: $0)
         }
     ) -> TerminalReconnectCoordinator {
-        TerminalReconnectCoordinator(
+        fixture.applicationIsActive = applicationIsActive
+        return TerminalReconnectCoordinator(
             access: fixture.access(),
             initialNetworkReadiness: network,
-            initialApplicationIsActive: applicationIsActive,
+            applicationIsActive: { [weak fixture] in
+                fixture?.applicationIsActive == true
+            },
             initialAppIsLocked: appIsLocked,
             retryDelay: retryDelay,
             sleep: sleep,
@@ -235,6 +242,44 @@ struct TerminalReconnectCoordinatorTests {
     }
 
     @Test
+    func reconcileUsesInjectedApplicationActivityAndRoutesNetworkReadyOnce() async {
+        let paneId = UUID()
+        let fixture = ReconnectOwnerFixture()
+        fixture.facts[paneId] = .init(
+            connectionState: .disconnected,
+            hasEstablishedConnection: true
+        )
+        let coordinator = makeCoordinator(
+            fixture: fixture,
+            network: .unavailable,
+            applicationIsActive: false
+        )
+
+        coordinator.reconcileAutomaticReconnect(
+            for: paneId,
+            sceneIsActive: true,
+            automaticReconnectAllowed: true
+        )
+        #expect(!coordinator.applicationIsActive)
+        #expect(fixture.startCount == 0)
+
+        coordinator.receiveNetworkReadiness(.ready)
+        coordinator.receiveNetworkReadiness(.ready)
+        #expect(fixture.networkReadyPaneIDs == [paneId])
+        #expect(fixture.startCount == 0)
+
+        fixture.applicationIsActive = true
+        #expect(coordinator.applicationActivityIsActive)
+        coordinator.reconcileAutomaticReconnect(
+            for: paneId,
+            sceneIsActive: true,
+            automaticReconnectAllowed: true
+        )
+        #expect(coordinator.applicationIsActive)
+        #expect(await eventually { fixture.startCount == 1 })
+    }
+
+    @Test
     func duplicateGenerationDoesNotCreateSecondReconnect() async {
         let paneId = UUID()
         let generation = UUID()
@@ -293,7 +338,6 @@ struct TerminalReconnectCoordinatorTests {
         coordinator?.reconcileAutomaticReconnect(
             for: paneId,
             sceneIsActive: true,
-            applicationIsActive: true,
             automaticReconnectAllowed: true
         )
         fixture.facts[paneId] = .init(
@@ -332,7 +376,6 @@ struct TerminalReconnectCoordinatorTests {
         coordinator.reconcileAutomaticReconnect(
             for: paneId,
             sceneIsActive: true,
-            applicationIsActive: true,
             automaticReconnectAllowed: true
         )
 

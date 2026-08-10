@@ -559,7 +559,6 @@ struct TerminalPaneView: View {
     @StateObject private var connectWatchdog = TerminalConnectionWatchdog()
     @State private var securityApprovalRequest: TerminalSecurityApprovalRequest?
     @StateObject private var richPasteUI = TerminalRichPasteUIModel()
-    @ObservedObject private var networkMonitor: NetworkMonitor = .shared
 
     @AppStorage(TerminalDefaults.sshAutoReconnectKey) private var autoReconnectEnabled = true
 
@@ -827,12 +826,6 @@ struct TerminalPaneView: View {
             reconcileAutomaticReconnect()
         }
         .onChange(of: scenePhase) { _ in
-            reconcileAutomaticReconnect()
-        }
-        .onChange(of: networkMonitor.readiness) { readiness in
-            if readiness == .ready {
-                tabManager.transportCoordinator.notifyEternalTerminalNetworkPathChanged(for: paneId)
-            }
             reconcileAutomaticReconnect()
         }
         .onChange(of: autoReconnectEnabled) { _ in
@@ -1112,26 +1105,15 @@ struct TerminalPaneView: View {
     }
 
     private func reconcileAutomaticReconnect() {
-        #if os(iOS)
-        let applicationIsActive = UIApplication.shared.applicationState == .active
-        #else
-        let applicationIsActive = NSApplication.shared.isActive
-        #endif
         tabManager.reconnectCoordinator.reconcileAutomaticReconnect(
             for: paneId,
             sceneIsActive: foregroundSceneIsActive,
-            applicationIsActive: applicationIsActive,
             automaticReconnectAllowed: automaticReconnectAllowed
         )
     }
 
     private func retryConnection() {
-        retryConnection(requiresReadyNetwork: false)
-    }
-
-    private func retryConnection(requiresReadyNetwork: Bool) {
         tabManager.reconnectCoordinator.cancelAutomaticRetry(for: paneId)
-        guard !requiresReadyNetwork || networkMonitor.readiness == .ready else { return }
         guard reconnectAttempt == nil else { return }
         guard !connectionState.isConnecting else { return }
         connectWatchdog.cancel()
@@ -1145,7 +1127,7 @@ struct TerminalPaneView: View {
         tabManager.clearMoshFallbackDiagnostics(for: paneId)
         _ = tabManager.reconnectCoordinator.request(
             for: paneId,
-            requiresReadyNetwork: requiresReadyNetwork
+            requiresReadyNetwork: false
         )
     }
 
