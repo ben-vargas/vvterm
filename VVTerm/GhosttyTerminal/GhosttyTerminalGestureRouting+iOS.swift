@@ -502,43 +502,6 @@ extension GhosttyTerminalView {
         }
     }
 
-    func showZoomIndicator() {
-        showZoomIndicator(fontSize: surfacePresentationOverrides.resolvedFontSize())
-    }
-
-    func showZoomIndicator(fontSize: Double) {
-        zoomIndicatorView.update(fontSize: fontSize)
-        updateZoomIndicatorLayout()
-        bringSubviewToFront(zoomIndicatorView)
-
-        zoomIndicatorHideWorkItem?.cancel()
-        zoomIndicatorView.isHidden = false
-        UIView.animate(withDuration: TerminalZoomPresentation.indicatorFadeInDuration) {
-            self.zoomIndicatorView.alpha = 1
-        }
-        scheduleZoomIndicatorHide(after: TerminalZoomPresentation.indicatorHideDelay)
-    }
-
-    func scheduleZoomIndicatorHide(after delay: TimeInterval) {
-        zoomIndicatorHideWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            UIView.animate(withDuration: TerminalZoomPresentation.indicatorFadeOutDuration, animations: {
-                self.zoomIndicatorView.alpha = 0
-            }, completion: { _ in
-                self.zoomIndicatorView.isHidden = true
-            })
-        }
-        zoomIndicatorHideWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
-    }
-
-    func updateZoomIndicatorLayout() {
-        setNeedsLayout()
-        layoutIfNeeded()
-        zoomIndicatorView.layoutIfNeeded()
-    }
-
     var canHandlePinchZoom: Bool {
         if usesNativeTouchSelection, nativeSelectionLifecycle.shouldRefreshSnapshot {
             return false
