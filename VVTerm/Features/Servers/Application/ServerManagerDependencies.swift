@@ -62,12 +62,39 @@ protocol FreePlanAssignmentTracking: AnyObject {
 @MainActor
 struct ServerManagerDependencies {
     let stateStore: ServerStateStore
-    let remoteRepository: any ServerRemoteRepository
-    let syncRepository: any ServerSyncRepository
+    let remoteSyncCoordinator: ServerRemoteSyncCoordinator
     let credentialRepository: any ServerManagerCredentialRepository
     let actionAuthorizer: any ProtectedServerActionAuthorizing
-    let knownHosts: any ServerKnownHostRepository
-    let isRemoteSchemaError: (Error) -> Bool
     let now: () -> Date
     let makeID: () -> UUID
+
+    init(
+        stateStore: ServerStateStore,
+        remoteRepository: any ServerRemoteRepository,
+        syncRepository: any ServerSyncRepository,
+        credentialRepository: any ServerManagerCredentialRepository,
+        actionAuthorizer: any ProtectedServerActionAuthorizing,
+        knownHosts: any ServerKnownHostRepository,
+        isRemoteSchemaError: @escaping (Error) -> Bool,
+        now: @escaping () -> Date,
+        makeID: @escaping () -> UUID
+    ) {
+        self.stateStore = stateStore
+        self.credentialRepository = credentialRepository
+        self.actionAuthorizer = actionAuthorizer
+        self.now = now
+        self.makeID = makeID
+        remoteSyncCoordinator = ServerRemoteSyncCoordinator(
+            dependencies: ServerRemoteSyncCoordinatorDependencies(
+                stateStore: stateStore,
+                remoteRepository: remoteRepository,
+                syncRepository: syncRepository,
+                credentialRepository: credentialRepository,
+                knownHosts: knownHosts,
+                isRemoteSchemaError: isRemoteSchemaError,
+                now: now,
+                makeID: makeID
+            )
+        )
+    }
 }

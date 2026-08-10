@@ -212,6 +212,32 @@ struct ServerManagerLoadLifecycleTests {
     }
 
     @Test
+    func blockedAutomaticLoadDoesNotRetainCoordinator() async {
+        let gate = CancellationIgnoringGate<ServerRemoteChanges>()
+        let remote = ServerRemoteRepositoryFake()
+        remote.fetchHandler = { _, _ in await gate.wait() }
+        var coordinator: ServerRemoteSyncCoordinator? = makeRemoteSyncCoordinator(
+            remote: remote,
+            sync: ServerSyncRepositoryFake(),
+            isSyncEnabled: { true }
+        )
+        weak var releasedCoordinator: ServerRemoteSyncCoordinator?
+        releasedCoordinator = coordinator
+        coordinator?.startAutomaticLoad()
+
+        #expect(await gate.waitUntilStarted())
+        coordinator = nil
+
+        #expect(await gate.waitUntilCancelled())
+        for _ in 0..<2_000 where releasedCoordinator != nil {
+            await Task.yield()
+        }
+        #expect(releasedCoordinator == nil)
+
+        gate.resolve(makeRemoteChanges(workspaceName: "Ignored Remote"))
+    }
+
+    @Test
     func syncDisableCancelsBlockedStartupRecoveryBeforeRemoteLoad() async throws {
         var syncEnabled = true
         let drainGate = CancellationIgnoringGate<Void>()
@@ -270,13 +296,174 @@ struct ServerManagerLoadLifecycleTests {
         drainGate.resolve(())
     }
 
+    @Test
+    func syncDisableDuringSchemaInitializationRejectsLateSaveCompletion() async {
+        var syncEnabled = true
+        let workspace = makeWorkspace(name: "Local")
+        let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])
+        let saveGate = CancellationIgnoringGate<Void>()
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in throw ServerRemoteTestError.schema }
+        remote.saveWorkspaceHandler = { _ in await saveGate.wait() }
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { syncEnabled },
+            isRemoteSchemaError: { _ in true }
+        )
+        let loadTask = Task { await manager.loadData() }
+
+        #expect(await saveGate.waitUntilStarted())
+        syncEnabled = false
+        manager.handleSyncDisabled()
+
+        #expect(await saveGate.waitUntilCancelled())
+        saveGate.resolve(())
+        await loadTask.value
+
+        #expect(manager.workspaces == [workspace])
+        #expect(manager.stateStore.loadState.phase == .idle)
+        #expect(remote.savedWorkspaces == [workspace])
+        #expect(remote.savedServers.isEmpty)
+        #expect(sync.drainCount == 0)
+    }
+
+    @Test
+    func schemaInitializationFailureLeavesCoordinatorReadyForRetry() async {
+        let workspace = makeWorkspace(name: "Local")
+        let server = makeServer(workspaceID: workspace.id)
+        let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, fetchCount in
+            if fetchCount == 1 {
+                throw ServerRemoteTestError.schema
+            }
+            return ServerRemoteChanges(
+                servers: [server],
+                workspaces: [workspace],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: true
+            )
+        }
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { true },
+            isRemoteSchemaError: { _ in true }
+        )
+
+        await manager.loadData()
+
+        #expect(remote.savedWorkspaces == [workspace])
+        #expect(remote.savedServers == [server])
+        guard case .failed = manager.stateStore.loadState.phase else {
+            Issue.record("Expected the first schema load to fail after initialization")
+            return
+        }
+
+        await manager.loadData()
+
+        #expect(remote.fetchCount == 2)
+        #expect(manager.workspaces == [workspace])
+        #expect(manager.servers == [server])
+        #expect(manager.stateStore.loadState.phase == .idle)
+        #expect(sync.drainCount == 1)
+    }
+
+    @Test
+    func independentManagersKeepRemoteCoordinatorsAndSnapshotsIsolated() async {
+        let firstRemote = ServerRemoteRepositoryFake()
+        firstRemote.fetchHandler = { _, _ in
+            self.makeRemoteChanges(workspaceName: "First Remote")
+        }
+        let secondRemote = ServerRemoteRepositoryFake()
+        secondRemote.fetchHandler = { _, _ in
+            self.makeRemoteChanges(workspaceName: "Second Remote")
+        }
+        let firstSync = ServerSyncRepositoryFake()
+        let secondSync = ServerSyncRepositoryFake()
+        let firstDependencies = makeDependencies(
+            local: nil,
+            remote: firstRemote,
+            sync: firstSync,
+            isSyncEnabled: { true },
+            isRemoteSchemaError: { _ in false }
+        )
+        let secondDependencies = makeDependencies(
+            local: nil,
+            remote: secondRemote,
+            sync: secondSync,
+            isSyncEnabled: { true },
+            isRemoteSchemaError: { _ in false }
+        )
+        let firstManager = ServerManager(
+            dependencies: firstDependencies,
+            startsAutomatically: false
+        )
+        let secondManager = ServerManager(
+            dependencies: secondDependencies,
+            startsAutomatically: false
+        )
+
+        await firstManager.loadData()
+        await secondManager.loadData()
+
+        #expect(firstManager.workspaces.map(\.name) == ["First Remote"])
+        #expect(secondManager.workspaces.map(\.name) == ["Second Remote"])
+        #expect(firstManager.stateStore !== secondManager.stateStore)
+        #expect(firstDependencies.remoteSyncCoordinator !== secondDependencies.remoteSyncCoordinator)
+        #expect(firstSync.drainCount == 1)
+        #expect(secondSync.drainCount == 1)
+    }
+
     private func makeManager(
         local: ServerLocalRepositoryFake? = nil,
         remote: ServerRemoteRepositoryFake,
         sync: ServerSyncRepositoryFake,
         isSyncEnabled: @escaping () -> Bool,
+        isRemoteSchemaError: @escaping (Error) -> Bool = { _ in false },
         startsAutomatically: Bool = false
     ) -> ServerManager {
+        ServerManager(
+            dependencies: makeDependencies(
+                local: local,
+                remote: remote,
+                sync: sync,
+                isSyncEnabled: isSyncEnabled,
+                isRemoteSchemaError: isRemoteSchemaError
+            ),
+            startsAutomatically: startsAutomatically
+        )
+    }
+
+    private func makeRemoteSyncCoordinator(
+        local: ServerLocalRepositoryFake? = nil,
+        remote: ServerRemoteRepositoryFake,
+        sync: ServerSyncRepositoryFake,
+        isSyncEnabled: @escaping () -> Bool,
+        isRemoteSchemaError: @escaping (Error) -> Bool = { _ in false }
+    ) -> ServerRemoteSyncCoordinator {
+        makeDependencies(
+            local: local,
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: isSyncEnabled,
+            isRemoteSchemaError: isRemoteSchemaError
+        ).remoteSyncCoordinator
+    }
+
+    private func makeDependencies(
+        local: ServerLocalRepositoryFake?,
+        remote: ServerRemoteRepositoryFake,
+        sync: ServerSyncRepositoryFake,
+        isSyncEnabled: @escaping () -> Bool,
+        isRemoteSchemaError: @escaping (Error) -> Bool
+    ) -> ServerManagerDependencies {
         let now = { Date(timeIntervalSinceReferenceDate: 20_000) }
         let makeID = { UUID(uuidString: "90000000-0000-0000-0000-000000000002")! }
         let stateStore = ServerStateStore(
@@ -291,19 +478,38 @@ struct ServerManagerLoadLifecycleTests {
                 canonicalDefaultWorkspaceNames: { ["My Servers"] }
             )
         )
-        return ServerManager(
-            dependencies: ServerManagerDependencies(
-                stateStore: stateStore,
-                remoteRepository: remote,
-                syncRepository: sync,
-                credentialRepository: ServerManagerCredentialRepositoryFake(),
-                actionAuthorizer: ProtectedServerActionAuthorizerFake(),
-                knownHosts: ServerKnownHostRepositoryFake(),
-                isRemoteSchemaError: { _ in false },
-                now: now,
-                makeID: makeID
-            ),
-            startsAutomatically: startsAutomatically
+        return ServerManagerDependencies(
+            stateStore: stateStore,
+            remoteRepository: remote,
+            syncRepository: sync,
+            credentialRepository: ServerManagerCredentialRepositoryFake(),
+            actionAuthorizer: ProtectedServerActionAuthorizerFake(),
+            knownHosts: ServerKnownHostRepositoryFake(),
+            isRemoteSchemaError: isRemoteSchemaError,
+            now: now,
+            makeID: makeID
+        )
+    }
+
+    private func makeWorkspace(name: String) -> Workspace {
+        Workspace(
+            id: UUID(uuidString: "10000000-0000-0000-0000-000000000010")!,
+            name: name,
+            order: 0,
+            createdAt: .distantPast,
+            updatedAt: .distantPast
+        )
+    }
+
+    private func makeServer(workspaceID: UUID) -> Server {
+        Server(
+            id: UUID(uuidString: "20000000-0000-0000-0000-000000000010")!,
+            workspaceId: workspaceID,
+            name: "Server",
+            host: "server.example.test",
+            username: "root",
+            createdAt: .distantPast,
+            updatedAt: .distantPast
         )
     }
 
@@ -432,7 +638,11 @@ private final class ServerLocalRepositoryFake: ServerLocalRepository {
 private final class ServerRemoteRepositoryFake: ServerRemoteRepository {
     var isAvailable: Bool
     var fetchHandler: (@MainActor (Bool, Int) async throws -> ServerRemoteChanges)?
+    var saveServerHandler: (@MainActor (Server) async throws -> Void)?
+    var saveWorkspaceHandler: (@MainActor (Workspace) async throws -> Void)?
     private(set) var fetchCount = 0
+    private(set) var savedServers: [Server] = []
+    private(set) var savedWorkspaces: [Workspace] = []
 
     init(isAvailable: Bool = false) {
         self.isAvailable = isAvailable
@@ -452,8 +662,15 @@ private final class ServerRemoteRepositoryFake: ServerRemoteRepository {
         )
     }
 
-    func saveServer(_ server: Server) async throws {}
-    func saveWorkspace(_ workspace: Workspace) async throws {}
+    func saveServer(_ server: Server) async throws {
+        savedServers.append(server)
+        try await saveServerHandler?(server)
+    }
+
+    func saveWorkspace(_ workspace: Workspace) async throws {
+        savedWorkspaces.append(workspace)
+        try await saveWorkspaceHandler?(workspace)
+    }
 }
 
 @MainActor
@@ -541,4 +758,8 @@ private final class ServerManagerPreferencesFake: ServerManagerPreferences {
 
 private enum TestTransactionError: Error {
     case persistence
+}
+
+private enum ServerRemoteTestError: Error {
+    case schema
 }
