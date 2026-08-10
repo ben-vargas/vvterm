@@ -34,6 +34,17 @@ nonisolated protocol ServerHostKeyRepository: Sendable {
     func reject(_ challenge: KnownHostsManager.Challenge)
 }
 
+@MainActor
+struct ServerFormDependencies {
+    let credentials: any ServerCredentialRepository
+    let connectionTester: any ServerConnectionTesting
+    let hostKeys: any ServerHostKeyRepository
+    let defaultTmuxEnabled: @MainActor () -> Bool
+    let defaultTmuxStartupBehavior: @MainActor () -> TmuxStartupBehavior
+    let now: @Sendable () -> Date
+    let makeID: @Sendable () -> UUID
+}
+
 nonisolated enum ServerFormOperationPhase: Equatable, Sendable {
     case idle
     case loadingCredentials

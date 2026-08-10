@@ -15,8 +15,16 @@ import AppKit
 struct VVTermApp: App {
     init() {
         let defaults = UserDefaults.standard
+        let notificationCenter = NotificationCenter.default
+        let calendar = Calendar.current
+        let now: () -> Date = Date.init
+        let makeID: () -> UUID = UUID.init
         let networkMonitor = NetworkMonitor.shared
         let analyticsTracker = AnalyticsTracker.shared
+        let cloudKitManager = CloudKitManager.shared
+        let keychainManager = KeychainManager.shared
+        let knownHostsManager = KnownHostsManager.shared
+        let connectionOperations = SSHConnectionOperationService.shared
         let liveActivityManager = LiveActivityManager.shared
         let remoteMosh = RemoteMoshManager.shared
         let remoteTmux = RemoteTmuxManager.shared
@@ -32,17 +40,77 @@ struct VVTermApp: App {
             #endif
         }
         let appLockManager = AppLockManager()
-        let cloudKitSync = CloudKitSyncLiveComposition.makeLive()
+        let syncLifecycle = CloudKitSyncLifecycleDriver(
+            defaults: defaults,
+            notificationCenter: notificationCenter,
+            now: now
+        )
+        let isSyncEnabled = { SyncSettings.isEnabled(in: defaults) }
+        let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
+            transport: cloudKitManager,
+            now: now
+        )
         let cloudKitSyncCoordinator = cloudKitSync.coordinator
+        let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
+            LocalSSHDiscoveryManager(
+                dependencies: .live(
+                    networkConnectionType: { networkMonitor.connectionType },
+                    makeScanID: makeID
+                )
+            )
+        }
         let serverManager = ServerManager(
             dependencies: .live(
+                defaults: defaults,
+                serverCloud: cloudKitSync.serverCloud,
+                credentialRepository: keychainManager,
+                knownHosts: knownHostsManager,
+                freePlanTracker: analyticsTracker,
                 actionAuthorizer: appLockManager,
-                syncRepository: cloudKitSyncCoordinator
+                syncRepository: cloudKitSyncCoordinator,
+                now: now,
+                makeID: makeID
             )
         )
-        let engagementTracker = EngagementTracker(dependencies: .live)
+        let serverFormDependencies = ServerFormDependencies.live(
+            credentials: keychainManager,
+            hostKeys: knownHostsManager,
+            connectionOperations: connectionOperations,
+            remoteMosh: remoteMosh,
+            defaultTmuxEnabled: {
+                defaults.object(forKey: "terminalTmuxEnabledDefault") == nil
+                    ? true
+                    : defaults.bool(forKey: "terminalTmuxEnabledDefault")
+            },
+            defaultTmuxStartupBehavior: {
+                defaults.string(forKey: "terminalTmuxStartupBehaviorDefault")
+                    .flatMap(TmuxStartupBehavior.init(rawValue:)) ?? .askEveryTime
+            },
+            now: now,
+            makeID: makeID
+        )
+        let engagementTracker = EngagementTracker(
+            dependencies: .live(
+                defaults: defaults,
+                analytics: analyticsTracker,
+                now: now,
+                calendar: calendar,
+                applicationIsActive: applicationIsActive
+            )
+        )
         let terminalThemeManager = TerminalThemeManager(
-            dependencies: .live(mutationQueue: cloudKitSyncCoordinator)
+            dependencies: .live(
+                defaults: defaults,
+                notificationCenter: notificationCenter,
+                cloud: cloudKitSync.terminalThemeCloud,
+                mutationQueue: cloudKitSyncCoordinator,
+                syncLifecycle: syncLifecycle,
+                themeFiles: TerminalThemeFileStore.appStorage,
+                builtInThemeCatalog: BundleTerminalThemeCatalog(),
+                paletteResolver: ThemeColorParserPaletteResolver(),
+                isSyncEnabled: isSyncEnabled,
+                now: now
+            )
         )
         let tabManager = TerminalTabManagerLiveComposition.makeManager(
             defaults: defaults,
@@ -74,24 +142,52 @@ struct VVTermApp: App {
         )
         let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager(
             dependencies: .live(
+                defaults: defaults,
+                cloud: cloudKitSync.terminalAccessoryCloud,
                 mutationQueue: cloudKitSyncCoordinator,
-                resolutionSource: cloudKitSync.terminalAccessoryResolutions
+                syncLifecycle: syncLifecycle,
+                resolutionSource: cloudKitSync.terminalAccessoryResolutions,
+                writerID: deviceID,
+                isSyncEnabled: isSyncEnabled,
+                now: now,
+                makeID: makeID,
+                trackCustomActionCreated: { kind in
+                    analyticsTracker.trackCustomActionCreated(kind: kind.rawValue)
+                }
             )
         )
         let statsPreferencesStore = PreferencesStore(
             dependencies: .live(
+                defaults: defaults,
+                cloud: cloudKitSync.statsPreferencesCloud,
                 mutationQueue: cloudKitSyncCoordinator,
-                resolutionSource: cloudKitSync.statsPreferencesResolutions
+                syncLifecycle: syncLifecycle,
+                resolutionSource: cloudKitSync.statsPreferencesResolutions,
+                writerID: deviceID,
+                isSyncEnabled: isSyncEnabled,
+                now: now
             )
         )
         let serverVolumeVisibilityStore = ServerVolumeVisibilityStore.live
         let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: defaults)
-        let cloudKitManager = CloudKitManager.shared
-        let keychainManager = KeychainManager.shared
-        let knownHostsManager = KnownHostsManager.shared
+        let voiceSettingsStore = VoiceSettingsStore(
+            persistence: UserDefaultsVoiceSettingsPersistence(defaults: defaults)
+        )
+        let voiceModelManagers = VoiceSettingsModelManagerOwner(
+            settingsStore: voiceSettingsStore,
+            makeManager: { kind, selectedModelID in
+                MLXModelManager(
+                    kind: kind,
+                    selectedModelID: selectedModelID,
+                    storageRoot: MLXModelManager.modelsRoot,
+                    sessionLifecycle: .live,
+                    operations: .live
+                )
+            }
+        )
         let makeStatsCollector = Self.makeStatsCollectorFactory(
             keychainManager: keychainManager,
-            connectionOperations: SSHConnectionOperationService.shared
+            connectionOperations: connectionOperations
         )
         terminalSecurityActions = Self.makeTerminalSecurityActions(
             keychainManager: keychainManager,
@@ -155,6 +251,9 @@ struct VVTermApp: App {
         _statsPreferencesStore = StateObject(wrappedValue: statsPreferencesStore)
         _serverVolumeVisibilityStore = StateObject(wrappedValue: serverVolumeVisibilityStore)
         self.makeStatsCollector = makeStatsCollector
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
+        self.serverFormDependencies = serverFormDependencies
+        self.voiceModelManagers = voiceModelManagers
         statsSecurityApprovalActions = Self.makeStatsSecurityApprovalActions(
             appLockManager: appLockManager,
             keychainManager: keychainManager,
@@ -185,6 +284,7 @@ struct VVTermApp: App {
             syncSettingsCoordinator: syncSettingsCoordinator,
             sshKeySettingsCoordinator: sshKeySettingsCoordinator,
             knownHostSettingsCoordinator: knownHostSettingsCoordinator,
+            voiceModelManagers: voiceModelManagers,
             analyticsOptOutAction: analyticsOptOutAction
         )
         #endif
@@ -234,6 +334,9 @@ struct VVTermApp: App {
     @StateObject private var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
     private let onWelcomeCompleted: @MainActor () -> Void
     private let makeStatsCollector: @MainActor () -> ServerStatsCollector
+    private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    private let serverFormDependencies: ServerFormDependencies
+    private let voiceModelManagers: VoiceSettingsModelManagerOwner
     private let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
     private let terminalSecurityActions: TerminalSecurityActions
     #if os(macOS)
@@ -341,6 +444,9 @@ struct VVTermApp: App {
             fileBrowser: remoteFileBrowserStore,
             statsDependencies: statsDependencies,
             terminalSecurityActions: terminalSecurityActions,
+            serverFormDependencies: serverFormDependencies,
+            voiceModelManagers: voiceModelManagers,
+            makeLocalDiscoveryManager: makeLocalDiscoveryManager,
             onOpenSettings: { settingsWindowPresenter.show() }
         )
             .environmentObject(ghosttyApp)
@@ -389,7 +495,10 @@ struct VVTermApp: App {
                 serverManager: serverManager,
                 engagementTracker: engagementTracker,
                 statsDependencies: statsDependencies,
-                terminalSecurityActions: terminalSecurityActions
+                terminalSecurityActions: terminalSecurityActions,
+                serverFormDependencies: serverFormDependencies,
+                voiceModelManagers: voiceModelManagers,
+                makeLocalDiscoveryManager: makeLocalDiscoveryManager
             )
                 .environmentObject(ghosttyApp)
                 .environmentObject(terminalThemeManager)
@@ -424,6 +533,9 @@ struct VVTermApp: App {
             fileBrowser: remoteFileBrowserStore,
             statsDependencies: statsDependencies,
             terminalSecurityActions: terminalSecurityActions,
+            serverFormDependencies: serverFormDependencies,
+            voiceModelManagers: voiceModelManagers,
+            makeLocalDiscoveryManager: makeLocalDiscoveryManager,
             analyticsOptOutAction: analyticsOptOutAction
         )
             .environmentObject(ghosttyApp)

@@ -2,6 +2,19 @@ import Foundation
 import Combine
 import os.log
 
+private extension TranscriptionProvider {
+    var displayName: String {
+        switch self {
+        case .system:
+            return String(localized: "System (Apple Speech)")
+        case .mlxWhisper:
+            return String(localized: "MLX Whisper")
+        case .mlxParakeet:
+            return String(localized: "MLX Parakeet")
+        }
+    }
+}
+
 @MainActor
 class AudioService: NSObject, ObservableObject {
     typealias StartupOperation = @MainActor (

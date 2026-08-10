@@ -182,6 +182,47 @@ final class PreferencesStoreTests: XCTestCase {
         super.tearDown()
     }
 
+    func testLiveDependenciesRouteInjectedOwnersAndFacts() {
+        let cloud = StatsPreferencesCloudStub()
+        let queue = StatsPreferencesMutationQueueSpy()
+        let lifecycle = StatsPreferencesSyncLifecycleStub()
+        let resolutionSource = StatsPreferencesResolutionSourceStub()
+        let now = Date(timeIntervalSince1970: 123)
+        var syncEnabled = true
+        let dependencies = PreferencesStoreDependencies.live(
+            defaults: defaults,
+            cloud: cloud,
+            mutationQueue: queue,
+            syncLifecycle: lifecycle,
+            resolutionSource: resolutionSource,
+            writerID: writerID,
+            isSyncEnabled: { syncEnabled },
+            now: { now }
+        )
+
+        XCTAssertTrue(dependencies.cloud === cloud)
+        XCTAssertTrue(dependencies.mutationQueue === queue)
+        XCTAssertTrue(dependencies.syncLifecycle === lifecycle)
+        XCTAssertTrue(dependencies.resolutionSource === resolutionSource)
+        XCTAssertEqual(dependencies.writerID, writerID)
+        XCTAssertTrue(dependencies.isSyncEnabled())
+        syncEnabled = false
+        XCTAssertFalse(dependencies.isSyncEnabled())
+        XCTAssertEqual(dependencies.now(), now)
+        XCTAssertTrue(dependencies.startsSynchronization)
+        XCTAssertEqual(
+            dependencies.persistence.loadPreferences(
+                defaultWriterID: writerID
+            ).lastWriterDeviceId,
+            writerID
+        )
+        XCTAssertNotNil(
+            defaults.data(
+                forKey: CloudKitSyncConstants.statsPreferencesStorageKey
+            )
+        )
+    }
+
     func testDefaultPreferencesReceiveApplicationWriterIdentity() {
         let store = makeStore()
 

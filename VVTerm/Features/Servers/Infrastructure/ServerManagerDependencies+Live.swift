@@ -1,13 +1,5 @@
 import Foundation
 
-@MainActor
-enum ServerCloudKitLiveComposition {
-    static let client = ServerCloudKitClient(
-        transport: CloudKitManager.shared,
-        now: Date.init
-    )
-}
-
 extension CloudKitSyncCoordinator: ServerSyncRepository {
     func clearPendingServerAndWorkspaceMutations() {
         removeAll { mutation in
@@ -74,17 +66,24 @@ extension AnalyticsTracker: FreePlanAssignmentTracking {}
 
 extension ServerManagerDependencies {
     static func live(
+        defaults: UserDefaults,
+        serverCloud: ServerCloudKitClient,
+        credentialRepository: any ServerManagerCredentialRepository,
+        knownHosts: any ServerKnownHostRepository,
+        freePlanTracker: any FreePlanAssignmentTracking,
         actionAuthorizer: any ProtectedServerActionAuthorizing,
-        syncRepository: any ServerSyncRepository
+        syncRepository: any ServerSyncRepository,
+        now: @escaping () -> Date,
+        makeID: @escaping () -> UUID
     ) -> Self {
         let stateStore = ServerStateStore(
             dependencies: ServerStateStoreDependencies(
-                localRepository: ServerLocalStore(),
-                preferences: ServerManagerUserDefaultsPreferences(),
-                freePlanTracker: AnalyticsTracker.shared,
-                isSyncEnabled: { SyncSettings.isEnabled },
-                now: Date.init,
-                makeID: UUID.init,
+                localRepository: ServerLocalStore(defaults: defaults),
+                preferences: ServerManagerUserDefaultsPreferences(defaults: defaults),
+                freePlanTracker: freePlanTracker,
+                isSyncEnabled: { SyncSettings.isEnabled(in: defaults) },
+                now: now,
+                makeID: makeID,
                 defaultWorkspaceName: { AppLanguage.localizedString("My Servers") },
                 canonicalDefaultWorkspaceNames: {
                     Set(AppLanguage.localizedValues(for: "My Servers"))
@@ -93,14 +92,14 @@ extension ServerManagerDependencies {
         )
         return Self(
             stateStore: stateStore,
-            remoteRepository: ServerCloudKitLiveComposition.client,
+            remoteRepository: serverCloud,
             syncRepository: syncRepository,
-            credentialRepository: KeychainManager.shared,
+            credentialRepository: credentialRepository,
             actionAuthorizer: actionAuthorizer,
-            knownHosts: KnownHostsManager.shared,
+            knownHosts: knownHosts,
             isRemoteSchemaError: ServerCloudKitClient.isSchemaError,
-            now: Date.init,
-            makeID: UUID.init
+            now: now,
+            makeID: makeID
         )
     }
 }

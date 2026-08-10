@@ -162,20 +162,3 @@ struct EnvironmentFormSheet: View {
         return error.localizedDescription
     }
 }
-
-#Preview {
-    let appLockManager = AppLockManager()
-    let cloudKitSyncCoordinator = CloudKitSyncLiveComposition.makeLive().coordinator
-    let serverManager = ServerManager(
-        dependencies: .live(
-            actionAuthorizer: appLockManager,
-            syncRepository: cloudKitSyncCoordinator
-        ),
-        startsAutomatically: false
-    )
-    EnvironmentFormSheet(
-        serverManager: serverManager,
-        workspace: Workspace(name: "Default"),
-        onSave: { _, _ in }
-    )
-}

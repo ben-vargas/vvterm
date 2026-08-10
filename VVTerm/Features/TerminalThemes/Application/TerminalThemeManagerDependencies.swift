@@ -30,7 +30,7 @@ protocol TerminalThemeSyncLifecycle: AnyObject {
 @MainActor
 protocol TerminalThemePreferenceChangeSource: AnyObject {
     func observeChanges(
-        _ observer: @escaping () -> Void
+        _ observer: @escaping @MainActor @Sendable () -> Void
     ) -> NSObjectProtocol
     func removeObserver(_ observer: NSObjectProtocol)
 }

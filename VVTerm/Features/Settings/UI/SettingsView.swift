@@ -35,6 +35,7 @@ enum SettingsSelection: Hashable {
 
 struct SettingsView: View {
     let statsPreferencesStore: PreferencesStore
+    let voiceModelManagers: VoiceSettingsModelManagerOwner
     let analyticsOptOutAction: AnalyticsOptOutAction
 
     @AppStorage(TerminalDefaults.fontNameKey) private var terminalFontName = TerminalDefaults.defaultFontName
@@ -159,7 +160,7 @@ struct SettingsView: View {
                     }
 
                     NavigationLink {
-                        TranscriptionSettingsView()
+                        TranscriptionSettingsView(modelManagers: voiceModelManagers)
                             .navigationTitle("Transcription")
                             .navigationBarTitleDisplayMode(.inline)
                             .adaptiveSoftScrollEdges()
@@ -237,7 +238,7 @@ struct SettingsView: View {
                                 .navigationTitle("Terminal")
                                 .navigationSubtitle(String(localized: "Font, theme, and connection settings"))
         case .transcription:
-                            TranscriptionSettingsView()
+                            TranscriptionSettingsView(modelManagers: voiceModelManagers)
                                 .navigationTitle("Transcription")
                                 .navigationSubtitle(String(localized: "Speech-to-text engine and models"))
         case .keychain:
@@ -318,22 +319,59 @@ struct SettingsView: View {
 
 #Preview {
     let appLockManager = AppLockManager()
-    let cloudKitSync = CloudKitSyncLiveComposition.makeLive()
+    let defaults = UserDefaults.standard
+    let syncLifecycle = CloudKitSyncLifecycleDriver(
+        defaults: defaults,
+        notificationCenter: .default
+    )
+    let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
+        transport: CloudKitManager.shared,
+        now: Date.init
+    )
     let cloudKitSyncCoordinator = cloudKitSync.coordinator
     let serverManager = ServerManager(
         dependencies: .live(
+            defaults: defaults,
+            serverCloud: cloudKitSync.serverCloud,
+            credentialRepository: KeychainManager.shared,
+            knownHosts: KnownHostsManager.shared,
+            freePlanTracker: AnalyticsTracker.shared,
             actionAuthorizer: appLockManager,
-            syncRepository: cloudKitSyncCoordinator
+            syncRepository: cloudKitSyncCoordinator,
+            now: Date.init,
+            makeID: UUID.init
         ),
         startsAutomatically: false
+    )
+    let voiceSettingsStore = VoiceSettingsStore(
+        persistence: UserDefaultsVoiceSettingsPersistence(defaults: defaults)
+    )
+    let voiceModelManagers = VoiceSettingsModelManagerOwner(
+        settingsStore: voiceSettingsStore,
+        makeManager: { kind, selectedModelID in
+            MLXModelManager(
+                kind: kind,
+                selectedModelID: selectedModelID,
+                storageRoot: MLXModelManager.modelsRoot,
+                sessionLifecycle: .live,
+                operations: .live
+            )
+        }
     )
     SettingsView(
         statsPreferencesStore: PreferencesStore(
             dependencies: .live(
+                defaults: defaults,
+                cloud: cloudKitSync.statsPreferencesCloud,
                 mutationQueue: cloudKitSyncCoordinator,
-                resolutionSource: cloudKitSync.statsPreferencesResolutions
+                syncLifecycle: syncLifecycle,
+                resolutionSource: cloudKitSync.statsPreferencesResolutions,
+                writerID: DeviceIdentity.id,
+                isSyncEnabled: { SyncSettings.isEnabled(in: defaults) },
+                now: Date.init
             )
         ),
+        voiceModelManagers: voiceModelManagers,
         analyticsOptOutAction: AnalyticsOptOutAction(emitAnalyticsDisabled: {})
     )
         .environmentObject(serverManager)

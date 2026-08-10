@@ -42,6 +42,20 @@ final class MLXDownloadOperationStateTests: XCTestCase {
         XCTAssertEqual(state.phase, .idle)
     }
 
+    func testShutdownRejectsLateCompletionAndNewWork() throws {
+        var state = MLXDownloadOperationState()
+        let operationID = try XCTUnwrap(state.start())
+        XCTAssertTrue(state.beginTask(operationID: operationID, taskIdentifier: 17))
+
+        state.shutdown()
+
+        XCTAssertTrue(state.isShutdown)
+        XCTAssertFalse(state.accepts(taskIdentifier: 17))
+        XCTAssertFalse(state.finishTask(taskIdentifier: 17))
+        XCTAssertFalse(state.finish(operationID: operationID))
+        XCTAssertNil(state.start())
+    }
+
     func testByteAdditionSaturatesOnOverflow() {
         XCTAssertEqual(MLXModelManager.addingBytes(Int64.max - 2, 10), Int64.max)
     }

@@ -231,6 +231,50 @@ struct UserDefaultsEngagementPersistenceTests {
     }
 }
 
+@Suite(.serialized)
+@MainActor
+struct EngagementTrackerLiveDependenciesTests {
+    @Test
+    func liveDependenciesRouteInjectedOwnersAndFacts() {
+        let suiteName = "EngagementLiveDependenciesTests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let history = EngagementHistory(
+            successfulConnectionCount: 4,
+            usageDayCount: 2,
+            lastUsageDay: Date(timeIntervalSince1970: 100),
+            lastReviewRequest: nil
+        )
+        UserDefaultsEngagementPersistence(defaults: defaults).saveHistory(history)
+        let analytics = EngagementAnalyticsSpy()
+        let now = Date(timeIntervalSince1970: 123_456)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let applicationState = EngagementApplicationState(isActive: true)
+        let dependencies = EngagementTrackerDependencies.live(
+            defaults: defaults,
+            analytics: analytics,
+            now: { now },
+            calendar: calendar,
+            applicationIsActive: { applicationState.isActive }
+        )
+
+        #expect(dependencies.persistence.loadHistory() == history)
+        #expect(dependencies.analytics === analytics)
+        #expect(dependencies.now() == now)
+        #expect(dependencies.startOfDay(now) == calendar.startOfDay(for: now))
+        #expect(dependencies.applicationIsActive())
+        applicationState.isActive = false
+        #expect(!dependencies.applicationIsActive())
+
+        dependencies.analytics.trackReviewPromptRequested()
+        #expect(analytics.reviewPromptRequestCount == 1)
+    }
+}
+
 @MainActor
 private final class EngagementPersistenceSpy: EngagementPersisting {
     var history: EngagementHistory

@@ -14,14 +14,16 @@ private final class UserDefaultsTerminalThemePreferenceChangeSource: TerminalThe
     }
 
     func observeChanges(
-        _ observer: @escaping () -> Void
+        _ observer: @escaping @MainActor @Sendable () -> Void
     ) -> NSObjectProtocol {
         notificationCenter.addObserver(
             forName: UserDefaults.didChangeNotification,
             object: defaults,
             queue: .main
         ) { _ in
-            observer()
+            MainActor.assumeIsolated {
+                observer()
+            }
         }
     }
 
@@ -45,18 +47,19 @@ extension CloudKitSyncCoordinator: TerminalThemeMutationQueue {
 }
 extension CloudKitSyncLifecycleDriver: TerminalThemeSyncLifecycle {}
 
-@MainActor
-enum TerminalThemeCloudKitLiveComposition {
-    static let client = TerminalThemeCloudKitClient(
-        transport: CloudKitManager.shared
-    )
-}
-
 extension TerminalThemeManagerDependencies {
     static func live(
-        mutationQueue: any TerminalThemeMutationQueue
+        defaults: UserDefaults,
+        notificationCenter: NotificationCenter,
+        cloud: any TerminalThemeCloudClient,
+        mutationQueue: any TerminalThemeMutationQueue,
+        syncLifecycle: any TerminalThemeSyncLifecycle,
+        themeFiles: any TerminalThemeFileSynchronizing,
+        builtInThemeCatalog: any BuiltInTerminalThemeCatalog,
+        paletteResolver: any TerminalThemePaletteResolving,
+        isSyncEnabled: @escaping () -> Bool,
+        now: @escaping () -> Date
     ) -> Self {
-        let defaults = UserDefaults.standard
         let keys = TerminalThemeUserDefaultsKeys(
             customThemes: CloudKitSyncConstants.terminalCustomThemesStorageKey,
             darkTheme: CloudKitSyncConstants.terminalThemeNameKey,
@@ -70,18 +73,18 @@ extension TerminalThemeManagerDependencies {
                 defaults: defaults,
                 keys: keys
             ),
-            cloud: TerminalThemeCloudKitLiveComposition.client,
+            cloud: cloud,
             mutationQueue: mutationQueue,
-            syncLifecycle: CloudKitSyncLifecycleDriver.shared,
+            syncLifecycle: syncLifecycle,
             preferenceChanges: UserDefaultsTerminalThemePreferenceChangeSource(
                 defaults: defaults,
-                notificationCenter: .default
+                notificationCenter: notificationCenter
             ),
-            themeFiles: TerminalThemeFileStore.appStorage,
-            builtInThemeCatalog: BundleTerminalThemeCatalog(),
-            paletteResolver: ThemeColorParserPaletteResolver(),
-            isSyncEnabled: { SyncSettings.isEnabled },
-            now: Date.init,
+            themeFiles: themeFiles,
+            builtInThemeCatalog: builtInThemeCatalog,
+            paletteResolver: paletteResolver,
+            isSyncEnabled: isSyncEnabled,
+            now: now,
             waitForPreferenceSyncDebounce: {
                 try await Task.sleep(nanoseconds: 600_000_000)
             },

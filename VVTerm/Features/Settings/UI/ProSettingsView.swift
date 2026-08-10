@@ -262,11 +262,21 @@ extension View {
 
 #Preview {
     let appLockManager = AppLockManager()
-    let cloudKitSyncCoordinator = CloudKitSyncLiveComposition.makeLive().coordinator
+    let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
+        transport: CloudKitManager.shared,
+        now: Date.init
+    )
     let serverManager = ServerManager(
         dependencies: .live(
+            defaults: .standard,
+            serverCloud: cloudKitSync.serverCloud,
+            credentialRepository: KeychainManager.shared,
+            knownHosts: KnownHostsManager.shared,
+            freePlanTracker: AnalyticsTracker.shared,
             actionAuthorizer: appLockManager,
-            syncRepository: cloudKitSyncCoordinator
+            syncRepository: cloudKitSync.coordinator,
+            now: Date.init,
+            makeID: UUID.init
         ),
         startsAutomatically: false
     )

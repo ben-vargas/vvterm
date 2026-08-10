@@ -253,21 +253,3 @@ extension Color {
         return String(format: "#%02X%02X%02X", r, g, b)
     }
 }
-
-// MARK: - Preview
-
-#Preview {
-    let appLockManager = AppLockManager()
-    let cloudKitSyncCoordinator = CloudKitSyncLiveComposition.makeLive().coordinator
-    let serverManager = ServerManager(
-        dependencies: .live(
-            actionAuthorizer: appLockManager,
-            syncRepository: cloudKitSyncCoordinator
-        ),
-        startsAutomatically: false
-    )
-    WorkspaceFormSheet(
-        serverManager: serverManager,
-        onSave: { _ in }
-    )
-}

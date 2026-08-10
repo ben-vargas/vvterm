@@ -62,6 +62,8 @@ struct ServerFormSheet: View {
     @State private var hasAuthorizedInitialEdit: Bool
 
     private let credentials: any ServerCredentialRepository
+    private let now: @Sendable () -> Date
+    private let makeID: @Sendable () -> UUID
 
     var isEditing: Bool { server != nil }
 
@@ -94,6 +96,8 @@ struct ServerFormSheet: View {
         self.prefill = prefill
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.credentials = dependencies.credentials
+        self.now = dependencies.now
+        self.makeID = dependencies.makeID
         let saveUseCase = ServerSaveUseCase(
             mutations: serverManager,
             credentials: dependencies.credentials
@@ -112,8 +116,8 @@ struct ServerFormSheet: View {
         var initialForm = ServerFormModel(
             server: server,
             workspaceID: workspace?.id,
-            defaultTmuxEnabled: Self.defaultTmuxEnabled(),
-            defaultTmuxStartupBehavior: Self.defaultTmuxStartupBehavior()
+            defaultTmuxEnabled: dependencies.defaultTmuxEnabled(),
+            defaultTmuxStartupBehavior: dependencies.defaultTmuxStartupBehavior()
         )
         if server == nil, let prefill {
             initialForm.applyPrefill(
@@ -857,7 +861,7 @@ struct ServerFormSheet: View {
             workspaceID: selectedWorkspace?.id
                 ?? assignmentWorkspaces.first?.id
                 ?? stateStore.workspaces.first?.id
-                ?? UUID(),
+                ?? makeID(),
             createdAt: createdAt
         )
     }
@@ -871,22 +875,6 @@ struct ServerFormSheet: View {
         #else
         Text(title)
         #endif
-    }
-
-    private static func defaultTmuxEnabled() -> Bool {
-        let defaults = UserDefaults.standard
-        if defaults.object(forKey: "terminalTmuxEnabledDefault") == nil {
-            return true
-        }
-        return defaults.bool(forKey: "terminalTmuxEnabledDefault")
-    }
-
-    private static func defaultTmuxStartupBehavior() -> TmuxStartupBehavior {
-        let defaults = UserDefaults.standard
-        guard let rawValue = defaults.string(forKey: "terminalTmuxStartupBehaviorDefault") else {
-            return .askEveryTime
-        }
-        return TmuxStartupBehavior(rawValue: rawValue) ?? .askEveryTime
     }
 
     private func loadStoredCredentials(for server: Server) {
@@ -959,9 +947,9 @@ struct ServerFormSheet: View {
 
         let snapshot = form.connectionSnapshot
         guard force || !operations.hasValidConnectionTest(for: snapshot) else { return }
-        let serverID = server?.id ?? UUID()
+        let serverID = server?.id ?? makeID()
         operations.startConnectionTest(
-            server: buildServer(id: serverID, createdAt: server?.createdAt ?? Date()),
+            server: buildServer(id: serverID, createdAt: server?.createdAt ?? now()),
             credentials: form.makeCredentials(serverID: serverID),
             snapshot: snapshot
         )
@@ -979,8 +967,8 @@ struct ServerFormSheet: View {
     }
 
     func saveServer() {
-        let serverID = server?.id ?? UUID()
-        let newServer = buildServer(id: serverID, createdAt: server?.createdAt ?? Date())
+        let serverID = server?.id ?? makeID()
+        let newServer = buildServer(id: serverID, createdAt: server?.createdAt ?? now())
         operations.save(
             mutation: isEditing ? .update(newServer) : .create(newServer),
             credentials: form.makeCredentials(serverID: serverID),

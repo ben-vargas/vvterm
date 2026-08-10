@@ -11,30 +11,29 @@ extension CloudKitSyncCoordinator: StatsPreferencesMutationQueue {
 }
 extension CloudKitSyncLifecycleDriver: StatsPreferencesSyncLifecycle {}
 
-@MainActor
-enum StatsPreferencesCloudKitLiveComposition {
-    static let client = StatsPreferencesCloudKitClient(
-        transport: CloudKitManager.shared
-    )
-}
-
 extension PreferencesStoreDependencies {
     static func live(
+        defaults: UserDefaults,
+        cloud: any StatsPreferencesCloudClient,
         mutationQueue: any StatsPreferencesMutationQueue,
-        resolutionSource: any StatsPreferencesResolutionSource
+        syncLifecycle: any StatsPreferencesSyncLifecycle,
+        resolutionSource: any StatsPreferencesResolutionSource,
+        writerID: String,
+        isSyncEnabled: @escaping () -> Bool,
+        now: @escaping () -> Date
     ) -> Self {
         PreferencesStoreDependencies(
             persistence: UserDefaultsStatsPreferencesStore(
-                defaults: .standard,
+                defaults: defaults,
                 key: CloudKitSyncConstants.statsPreferencesStorageKey
             ),
-            cloud: StatsPreferencesCloudKitLiveComposition.client,
+            cloud: cloud,
             mutationQueue: mutationQueue,
-            syncLifecycle: CloudKitSyncLifecycleDriver.shared,
+            syncLifecycle: syncLifecycle,
             resolutionSource: resolutionSource,
-            writerID: DeviceIdentity.id,
-            isSyncEnabled: { SyncSettings.isEnabled },
-            now: Date.init,
+            writerID: writerID,
+            isSyncEnabled: isSyncEnabled,
+            now: now,
             waitForSyncDebounce: {
                 try await Task.sleep(nanoseconds: 650_000_000)
             },

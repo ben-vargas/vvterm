@@ -480,17 +480,31 @@ struct GeneralSettingsView: View {
 }
 
 #Preview {
-    let cloudKitSync = CloudKitSyncLiveComposition.makeLive()
+    let defaults = UserDefaults.standard
+    let syncLifecycle = CloudKitSyncLifecycleDriver(
+        defaults: defaults,
+        notificationCenter: .default
+    )
+    let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
+        transport: CloudKitManager.shared,
+        now: Date.init
+    )
     let cloudKitSyncCoordinator = cloudKitSync.coordinator
     GeneralSettingsView(
         statsPreferencesStore: PreferencesStore(
             dependencies: .live(
+                defaults: defaults,
+                cloud: cloudKitSync.statsPreferencesCloud,
                 mutationQueue: cloudKitSyncCoordinator,
-                resolutionSource: cloudKitSync.statsPreferencesResolutions
+                syncLifecycle: syncLifecycle,
+                resolutionSource: cloudKitSync.statsPreferencesResolutions,
+                writerID: DeviceIdentity.id,
+                isSyncEnabled: { SyncSettings.isEnabled(in: defaults) },
+                now: Date.init
             )
         ),
         analyticsOptOutAction: AnalyticsOptOutAction(emitAnalyticsDisabled: {})
     )
-        .environmentObject(ViewTabConfigurationManager(defaults: .standard))
+        .environmentObject(ViewTabConfigurationManager(defaults: defaults))
         .frame(width: 500, height: 400)
 }

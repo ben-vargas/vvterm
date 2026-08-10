@@ -86,12 +86,12 @@ private final class TerminalThemeSyncLifecycleStub: TerminalThemeSyncLifecycle {
 private final class TerminalThemePreferenceChangeSourceStub: TerminalThemePreferenceChangeSource {
     private final class ObserverToken: NSObject {}
 
-    private var observers: [ObjectIdentifier: () -> Void] = [:]
+    private var observers: [ObjectIdentifier: @MainActor @Sendable () -> Void] = [:]
     private(set) var removeCount = 0
     var onRemove: (() -> Void)?
 
     func observeChanges(
-        _ observer: @escaping () -> Void
+        _ observer: @escaping @MainActor @Sendable () -> Void
     ) -> NSObjectProtocol {
         let token = ObserverToken()
         observers[ObjectIdentifier(token)] = observer
@@ -289,6 +289,74 @@ final class TerminalThemePersistenceTests: XCTestCase {
             try? FileManager.default.removeItem(at: temporaryDirectory)
         }
         temporaryDirectory = nil
+    }
+
+    func testLiveDependenciesRouteInjectedOwnersAndFacts() throws {
+        let suiteName = "TerminalThemeLiveDependenciesTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let notificationCenter = NotificationCenter()
+        let cloud = TerminalThemeCloudStub()
+        let queue = TerminalThemeMutationQueueSpy()
+        let lifecycle = TerminalThemeSyncLifecycleStub()
+        let themeFiles = TerminalThemeFilesSpy()
+        let catalog = BuiltInTerminalThemeCatalogStub(names: ["Injected Theme"])
+        let paletteResolver = TerminalThemePaletteResolverSpy()
+        let now = Date(timeIntervalSince1970: 123)
+        var syncEnabled = true
+        let dependencies = TerminalThemeManagerDependencies.live(
+            defaults: defaults,
+            notificationCenter: notificationCenter,
+            cloud: cloud,
+            mutationQueue: queue,
+            syncLifecycle: lifecycle,
+            themeFiles: themeFiles,
+            builtInThemeCatalog: catalog,
+            paletteResolver: paletteResolver,
+            isSyncEnabled: { syncEnabled },
+            now: { now }
+        )
+
+        XCTAssertTrue(dependencies.cloud === cloud)
+        XCTAssertTrue(dependencies.mutationQueue === queue)
+        XCTAssertTrue(dependencies.syncLifecycle === lifecycle)
+        XCTAssertTrue((dependencies.themeFiles as? TerminalThemeFilesSpy) === themeFiles)
+        XCTAssertTrue(
+            (dependencies.paletteResolver as? TerminalThemePaletteResolverSpy)
+                === paletteResolver
+        )
+        XCTAssertEqual(dependencies.builtInThemeCatalog.themeNames(), ["Injected Theme"])
+        XCTAssertTrue(dependencies.isSyncEnabled())
+        syncEnabled = false
+        XCTAssertFalse(dependencies.isSyncEnabled())
+        XCTAssertEqual(dependencies.now(), now)
+        XCTAssertTrue(dependencies.startsSynchronization)
+
+        let selection = TerminalThemeSelection(
+            darkThemeName: "Injected Dark",
+            lightThemeName: "Injected Light",
+            usePerAppearanceTheme: true
+        )
+        dependencies.persistence.saveSelection(selection)
+        XCTAssertEqual(
+            defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameKey),
+            selection.darkThemeName
+        )
+        XCTAssertEqual(
+            defaults.string(forKey: CloudKitSyncConstants.terminalThemeNameLightKey),
+            selection.lightThemeName
+        )
+
+        var notificationCount = 0
+        let observer = dependencies.preferenceChanges.observeChanges {
+            notificationCount += 1
+        }
+        notificationCenter.post(
+            name: UserDefaults.didChangeNotification,
+            object: defaults
+        )
+        XCTAssertEqual(notificationCount, 1)
+        dependencies.preferenceChanges.removeObserver(observer)
     }
 
     func testInvalidThemeSurvivesLoadingAndDoesNotDeleteItsFileOrSelection() throws {

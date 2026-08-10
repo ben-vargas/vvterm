@@ -26,7 +26,7 @@ extension ConnectionTerminalContainer {
                         serverManager: serverManager,
                         workspace: serverManager.workspaces.first { $0.id == editingServer.workspaceId },
                         server: editingServer,
-                        dependencies: .live,
+                        dependencies: serverFormDependencies,
                         makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                         onSave: { _ in
                             serverToEdit = nil

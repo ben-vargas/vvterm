@@ -15,6 +15,7 @@ struct ConnectionTerminalContainer: View {
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     let statsDependencies: ServerStatsScreenDependencies
     let terminalSecurityActions: TerminalSecurityActions
+    let serverFormDependencies: ServerFormDependencies
     let server: Server
     @Binding var isZenModeEnabled: Bool
     let isSidebarVisible: Bool

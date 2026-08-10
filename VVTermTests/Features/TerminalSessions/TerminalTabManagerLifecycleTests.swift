@@ -1635,10 +1635,21 @@ struct TerminalTabManagerLifecycleTests {
 
             let appDelegate = AppDelegate()
             let appLockManager = AppLockManager()
+            let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
+                transport: CloudKitManager.shared,
+                now: Date.init
+            )
             let serverManager = ServerManager(
                 dependencies: .live(
+                    defaults: .standard,
+                    serverCloud: cloudKitSync.serverCloud,
+                    credentialRepository: KeychainManager.shared,
+                    knownHosts: KnownHostsManager.shared,
+                    freePlanTracker: AnalyticsTracker.shared,
                     actionAuthorizer: appLockManager,
-                    syncRepository: CloudKitSyncLiveComposition.makeLive().coordinator
+                    syncRepository: cloudKitSync.coordinator,
+                    now: Date.init,
+                    makeID: UUID.init
                 ),
                 startsAutomatically: false
             )

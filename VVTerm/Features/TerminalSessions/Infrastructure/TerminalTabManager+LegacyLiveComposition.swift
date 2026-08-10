@@ -14,10 +14,25 @@ extension TerminalTabManager {
         let defaults = UserDefaults.standard
         let appLockManager = AppLockManager.shared
         let serverManager = ServerManager.shared
-        let engagementTracker = EngagementTracker(dependencies: .live)
         let analyticsTracker = AnalyticsTracker.shared
         let remoteTmux = RemoteTmuxManager.shared
         let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
+        let applicationIsActive = {
+            #if os(iOS)
+            UIApplication.shared.applicationState == .active
+            #else
+            NSApplication.shared.isActive
+            #endif
+        }
+        let engagementTracker = EngagementTracker(
+            dependencies: .live(
+                defaults: defaults,
+                analytics: analyticsTracker,
+                now: Date.init,
+                calendar: .current,
+                applicationIsActive: applicationIsActive
+            )
+        )
 
         return TerminalTabManagerLiveComposition.makeManager(
             defaults: defaults,
@@ -40,13 +55,7 @@ extension TerminalTabManager {
                     )
                 )
             },
-            applicationIsActive: {
-                #if os(iOS)
-                UIApplication.shared.applicationState == .active
-                #else
-                NSApplication.shared.isActive
-                #endif
-            }
+            applicationIsActive: applicationIsActive
         )
     }()
 }

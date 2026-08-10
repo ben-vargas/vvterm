@@ -13,6 +13,8 @@ struct ServerListScreen: View {
     let fileBrowser: RemoteFileBrowserStore
     let statsDependencies: ServerStatsScreenDependencies
     let analyticsOptOutAction: AnalyticsOptOutAction
+    let serverFormDependencies: ServerFormDependencies
+    let voiceModelManagers: VoiceSettingsModelManagerOwner
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedEnvironment: ServerEnvironment?
@@ -85,7 +87,7 @@ struct ServerListScreen: View {
                     serverManager: serverManager,
                     workspace: selectedWorkspace,
                     prefill: addServerPrefill,
-                    dependencies: .live,
+                    dependencies: serverFormDependencies,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     onSave: { _ in showingAddServer = false }
                 )
@@ -107,6 +109,7 @@ struct ServerListScreen: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView(
                 statsPreferencesStore: statsDependencies.preferencesStore,
+                voiceModelManagers: voiceModelManagers,
                 analyticsOptOutAction: analyticsOptOutAction
             )
                 .modifier(AppearanceModifier())
@@ -128,7 +131,7 @@ struct ServerListScreen: View {
                     serverManager: serverManager,
                     workspace: selectedWorkspace,
                     server: server,
-                    dependencies: .live,
+                    dependencies: serverFormDependencies,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     onSave: { updatedServer in
                         handleSavedServer(updatedServer, originalServer: server)

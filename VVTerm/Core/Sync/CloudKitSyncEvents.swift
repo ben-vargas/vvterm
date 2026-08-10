@@ -13,8 +13,6 @@ nonisolated enum CloudKitSyncLifecycleEvent: Equatable, Sendable {
 
 @MainActor
 final class CloudKitSyncLifecycleDriver {
-    static let shared = CloudKitSyncLifecycleDriver()
-
     typealias Observer = (CloudKitSyncLifecycleEvent) -> Void
 
     private let defaults: UserDefaults

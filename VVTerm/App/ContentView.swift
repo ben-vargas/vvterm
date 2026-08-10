@@ -16,10 +16,9 @@ struct ContentView: View {
     let fileBrowser: RemoteFileBrowserStore
     let statsDependencies: ServerStatsScreenDependencies
     let terminalSecurityActions: TerminalSecurityActions
+    let serverFormDependencies: ServerFormDependencies
     let onOpenSettings: () -> Void
-    private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
-        LocalSSHDiscoveryManager()
-    }
+    private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var engagementTracker: EngagementTracker
     @ObservedObject private var tabManager: TerminalTabManager
@@ -56,6 +55,8 @@ struct ContentView: View {
         fileBrowser: RemoteFileBrowserStore,
         statsDependencies: ServerStatsScreenDependencies,
         terminalSecurityActions: TerminalSecurityActions,
+        serverFormDependencies: ServerFormDependencies,
+        makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         onOpenSettings: @escaping () -> Void
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
@@ -65,6 +66,8 @@ struct ContentView: View {
         self.fileBrowser = fileBrowser
         self.statsDependencies = statsDependencies
         self.terminalSecurityActions = terminalSecurityActions
+        self.serverFormDependencies = serverFormDependencies
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onOpenSettings = onOpenSettings
     }
 
@@ -130,6 +133,7 @@ struct ContentView: View {
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     statsDependencies: statsDependencies,
                     terminalSecurityActions: terminalSecurityActions,
+                    serverFormDependencies: serverFormDependencies,
                     server: server,
                     isZenModeEnabled: $isZenModeEnabled,
                     isSidebarVisible: isSidebarVisible,
@@ -273,6 +277,7 @@ struct ContentView: View {
                 ServerSidebarView(
                     serverManager: serverManager,
                     tabManager: tabManager,
+                    serverFormDependencies: serverFormDependencies,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     onOpenSettings: onOpenSettings,
                     selectedWorkspace: $selectedWorkspace,
@@ -309,6 +314,7 @@ struct ContentView: View {
                         ServerSidebarView(
                             serverManager: serverManager,
                             tabManager: tabManager,
+                            serverFormDependencies: serverFormDependencies,
                             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                             onOpenSettings: onOpenSettings,
                             selectedWorkspace: $selectedWorkspace,
@@ -377,8 +383,13 @@ struct ContentView: View {
 
 #Preview {
     let defaults = UserDefaults.standard
+    let notificationCenter = NotificationCenter.default
+    let calendar = Calendar.current
+    let now: () -> Date = Date.init
+    let makeID: () -> UUID = UUID.init
     let networkMonitor = NetworkMonitor.shared
     let analyticsTracker = AnalyticsTracker.shared
+    let cloudKitManager = CloudKitManager.shared
     let liveActivityManager = LiveActivityManager.shared
     let remoteMosh = RemoteMoshManager.shared
     let remoteTmux = RemoteTmuxManager.shared
@@ -392,27 +403,85 @@ struct ContentView: View {
         #endif
     }
     let appLockManager = AppLockManager()
-    let cloudKitSync = CloudKitSyncLiveComposition.makeLive()
+    let keychainManager = KeychainManager()
+    let knownHostsManager = KnownHostsManager()
+    let syncLifecycle = CloudKitSyncLifecycleDriver(
+        defaults: defaults,
+        notificationCenter: notificationCenter,
+        now: now
+    )
+    let isSyncEnabled = { SyncSettings.isEnabled(in: defaults) }
+    let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
+        transport: cloudKitManager,
+        now: now
+    )
     let cloudKitSyncCoordinator = cloudKitSync.coordinator
     let serverManager = ServerManager(
         dependencies: .live(
+            defaults: defaults,
+            serverCloud: cloudKitSync.serverCloud,
+            credentialRepository: keychainManager,
+            knownHosts: knownHostsManager,
+            freePlanTracker: analyticsTracker,
             actionAuthorizer: appLockManager,
-            syncRepository: cloudKitSyncCoordinator
+            syncRepository: cloudKitSyncCoordinator,
+            now: now,
+            makeID: makeID
         ),
         startsAutomatically: false
     )
-    let engagementTracker = EngagementTracker(dependencies: .live)
+    let engagementTracker = EngagementTracker(
+        dependencies: .live(
+            defaults: defaults,
+            analytics: analyticsTracker,
+            now: now,
+            calendar: calendar,
+            applicationIsActive: applicationIsActive
+        )
+    )
     let terminalThemeManager = TerminalThemeManager(
-        dependencies: .live(mutationQueue: cloudKitSyncCoordinator)
+        dependencies: .live(
+            defaults: defaults,
+            notificationCenter: notificationCenter,
+            cloud: cloudKitSync.terminalThemeCloud,
+            mutationQueue: cloudKitSyncCoordinator,
+            syncLifecycle: syncLifecycle,
+            themeFiles: TerminalThemeFileStore.appStorage,
+            builtInThemeCatalog: BundleTerminalThemeCatalog(),
+            paletteResolver: ThemeColorParserPaletteResolver(),
+            isSyncEnabled: isSyncEnabled,
+            now: now
+        )
     )
     let statsPreferencesStore = PreferencesStore(
         dependencies: .live(
+            defaults: defaults,
+            cloud: cloudKitSync.statsPreferencesCloud,
             mutationQueue: cloudKitSyncCoordinator,
-            resolutionSource: cloudKitSync.statsPreferencesResolutions
+            syncLifecycle: syncLifecycle,
+            resolutionSource: cloudKitSync.statsPreferencesResolutions,
+            writerID: DeviceIdentity.id,
+            isSyncEnabled: isSyncEnabled,
+            now: now
         )
     )
-    let keychainManager = KeychainManager()
-    let knownHostsManager = KnownHostsManager()
+    let serverFormDependencies = ServerFormDependencies.live(
+        credentials: keychainManager,
+        hostKeys: knownHostsManager,
+        connectionOperations: SSHConnectionOperationService.shared,
+        remoteMosh: remoteMosh,
+        defaultTmuxEnabled: {
+            defaults.object(forKey: "terminalTmuxEnabledDefault") == nil
+                ? true
+                : defaults.bool(forKey: "terminalTmuxEnabledDefault")
+        },
+        defaultTmuxStartupBehavior: {
+            defaults.string(forKey: "terminalTmuxStartupBehaviorDefault")
+                .flatMap(TmuxStartupBehavior.init(rawValue:)) ?? .askEveryTime
+        },
+        now: now,
+        makeID: makeID
+    )
     let makeStatsCollector = VVTermApp.makeStatsCollectorFactory(
         keychainManager: keychainManager,
         connectionOperations: SSHConnectionOperationService.shared
@@ -463,6 +532,15 @@ struct ContentView: View {
         ),
         statsDependencies: statsDependencies,
         terminalSecurityActions: terminalSecurityActions,
+        serverFormDependencies: serverFormDependencies,
+        makeLocalDiscoveryManager: {
+            LocalSSHDiscoveryManager(
+                dependencies: .live(
+                    networkConnectionType: { networkMonitor.connectionType },
+                    makeScanID: makeID
+                )
+            )
+        },
         onOpenSettings: {}
     )
     .environmentObject(appLockManager)

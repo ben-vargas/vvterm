@@ -32,6 +32,7 @@ nonisolated struct MLXDownloadOperationState: Equatable, Sendable {
         case idle
         case resolving(operationID: UUID)
         case downloading(operationID: UUID, taskIdentifier: Int)
+        case shutdown
     }
 
     private(set) var phase: Phase = .idle
@@ -73,7 +74,7 @@ nonisolated struct MLXDownloadOperationState: Equatable, Sendable {
     mutating func cancel(operationID: UUID) -> Bool {
         let activeOperationID: UUID
         switch phase {
-        case .idle:
+        case .idle, .shutdown:
             return false
         case .resolving(let operationID), .downloading(let operationID, _):
             activeOperationID = operationID
@@ -85,12 +86,51 @@ nonisolated struct MLXDownloadOperationState: Equatable, Sendable {
 
     func isActive(operationID: UUID) -> Bool {
         switch phase {
-        case .idle:
+        case .idle, .shutdown:
             return false
         case .resolving(let activeOperationID), .downloading(let activeOperationID, _):
             return activeOperationID == operationID
         }
     }
+
+    mutating func shutdown() {
+        phase = .shutdown
+    }
+
+    var isShutdown: Bool {
+        phase == .shutdown
+    }
+}
+
+@MainActor
+struct MLXModelSessionLifecycle {
+    let configuration: URLSessionConfiguration
+    let invalidate: @MainActor (URLSession) -> Void
+
+    static var live: Self {
+        MLXModelSessionLifecycle(
+            configuration: .default,
+            invalidate: { $0.invalidateAndCancel() }
+        )
+    }
+}
+
+nonisolated struct MLXModelManagerOperations: Sendable {
+    let adoptLegacyDownload: @Sendable (
+        _ root: URL,
+        _ kind: MLXModelKind,
+        _ modelID: String
+    ) async -> MLXLegacyModelAdoptionResult
+
+    static let live = MLXModelManagerOperations(
+        adoptLegacyDownload: { root, kind, modelID in
+            MLXModelLegacyAdopter.adoptIfPossible(
+                root: root,
+                kind: kind,
+                modelID: modelID
+            )
+        }
+    )
 }
 
 @MainActor
@@ -115,20 +155,16 @@ final class MLXModelManager: NSObject, ObservableObject {
     @Published private(set) var localStorageBytes: Int64 = 0
     @Published private(set) var totalStorageBytes: Int64 = 0
     @Published private(set) var repoSizeBytes: Int64?
-    @Published var modelId: String {
-        didSet {
-            recordPendingLegacyCleanup(for: oldValue)
-            if let activeContext, activeContext.modelID != normalizedModelId {
-                cancelActiveDownload()
-            }
-            refreshStatus()
-        }
-    }
-
     let kind: MLXModelKind
 
+    var modelId: String { selectedModelID() }
+
     private let logger = Logger.settings
-    private var session: URLSession!
+    private let selectedModelID: @MainActor () -> String
+    private let storageRoot: URL
+    private let sessionLifecycle: MLXModelSessionLifecycle
+    private let operations: MLXModelManagerOperations
+    private var session: URLSession?
     private var operationState = MLXDownloadOperationState()
     private var activeContext: DownloadContext?
     private var activeFile: ActiveFileDownload?
@@ -142,11 +178,30 @@ final class MLXModelManager: NSObject, ObservableObject {
     private var statusOperationID: UUID?
     private var pendingLegacyCleanup: Set<URL> = []
 
-    init(kind: MLXModelKind, modelId: String) {
+    init(
+        kind: MLXModelKind,
+        selectedModelID: @escaping @MainActor () -> String,
+        storageRoot: URL,
+        sessionLifecycle: MLXModelSessionLifecycle,
+        operations: MLXModelManagerOperations
+    ) {
         self.kind = kind
-        self.modelId = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.selectedModelID = selectedModelID
+        self.storageRoot = storageRoot
+        self.sessionLifecycle = sessionLifecycle
+        self.operations = operations
         super.init()
-        session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        session = URLSession(
+            configuration: sessionLifecycle.configuration,
+            delegate: self,
+            delegateQueue: nil
+        )
+    }
+
+    isolated deinit {
+        if let session {
+            sessionLifecycle.invalidate(session)
+        }
     }
 
     struct DownloadItem {
@@ -170,7 +225,11 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     var modelDirectory: URL {
-        Self.modelDirectory(for: kind, modelId: normalizedModelId)
+        Self.modelDirectory(
+            for: kind,
+            modelId: normalizedModelId,
+            modelsRoot: storageRoot
+        )
     }
 
     nonisolated static var modelsRoot: URL {
@@ -190,10 +249,15 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     var isModelAvailable: Bool {
-        Self.isModelAvailable(kind: kind, modelId: normalizedModelId)
+        Self.isModelAvailable(
+            kind: kind,
+            modelId: normalizedModelId,
+            modelsRoot: storageRoot
+        )
     }
 
     func refreshStatus() {
+        guard !operationState.isShutdown else { return }
         if isModelAvailable {
             statusTask?.cancel()
             state = .ready
@@ -210,7 +274,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         statusTask?.cancel()
         let operationID = UUID()
         statusOperationID = operationID
-        let root = Self.modelsRoot
+        let root = storageRoot
         let kind = kind
         let modelID = normalizedModelId
 
@@ -220,12 +284,9 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
 
         state = .checkingLegacyDownload
-        statusTask = Task.detached { [weak self] in
-            let result = MLXModelLegacyAdopter.adoptIfPossible(
-                root: root,
-                kind: kind,
-                modelID: modelID
-            )
+        let operations = operations
+        statusTask = Task.detached { [weak self, operations] in
+            let result = await operations.adoptLegacyDownload(root, kind, modelID)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
                 guard self.statusOperationID == operationID,
@@ -246,6 +307,7 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     func removeModel() {
+        guard !operationState.isShutdown else { return }
         cancelActiveDownload()
         statusTask?.cancel()
         do {
@@ -261,11 +323,12 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     func removeIncompatibleDownload() {
+        guard !operationState.isShutdown else { return }
         cancelActiveDownload()
         statusTask?.cancel()
         do {
             try MLXModelLegacyAdopter.removeIncompatibleDownloads(
-                root: Self.modelsRoot,
+                root: storageRoot,
                 kind: kind,
                 modelID: normalizedModelId
             )
@@ -278,13 +341,13 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
     }
 
-    static func clearAllStorage() {
-        let root = modelsRoot
-        guard FileManager.default.fileExists(atPath: root.path) else { return }
-        try? FileManager.default.removeItem(at: root)
+    func clearAllStorage() {
+        guard FileManager.default.fileExists(atPath: storageRoot.path) else { return }
+        try? FileManager.default.removeItem(at: storageRoot)
     }
 
     func downloadModel() async {
+        guard !operationState.isShutdown else { return }
         statusTask?.cancel()
         let modelId = normalizedModelId
         guard !modelId.isEmpty else {
@@ -297,7 +360,11 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
         guard let operationID = operationState.start() else { return }
 
-        let finalDirectory = Self.modelDirectory(for: kind, modelId: modelId)
+        let finalDirectory = Self.modelDirectory(
+            for: kind,
+            modelId: modelId,
+            modelsRoot: storageRoot
+        )
         let stagingDirectory = finalDirectory
             .deletingLastPathComponent()
             .appendingPathComponent(".\(finalDirectory.lastPathComponent)-\(operationID.uuidString).download", isDirectory: true)
@@ -321,11 +388,11 @@ final class MLXModelManager: NSObject, ObservableObject {
 
         do {
             let fileManager = FileManager.default
-            try fileManager.createDirectory(at: Self.modelsRoot, withIntermediateDirectories: true)
-            let capacity = try Self.availableStorageCapacity(at: Self.modelsRoot)
+            try fileManager.createDirectory(at: storageRoot, withIntermediateDirectories: true)
+            let capacity = try Self.availableStorageCapacity(at: storageRoot)
             expectedTotalBytes = try MLXModelDownloadBudget.validate(
                 manifest: manifest,
-                currentRepositoryBytes: Self.directorySizeBytes(Self.modelsRoot),
+                currentRepositoryBytes: Self.directorySizeBytes(storageRoot),
                 availableCapacity: capacity
             )
             if fileManager.fileExists(atPath: context.stagingDirectory.path) {
@@ -351,7 +418,7 @@ final class MLXModelManager: NSObject, ObservableObject {
                 finalDirectory: context.finalDirectory
             )
             try? MLXModelLegacyAdopter.removeIncompatibleDownloads(
-                root: Self.modelsRoot,
+                root: storageRoot,
                 kind: kind,
                 modelID: modelId
             )
@@ -430,21 +497,34 @@ final class MLXModelManager: NSObject, ObservableObject {
         modelId.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    func modelSelectionDidChange(from previousModelID: String) {
+        guard !operationState.isShutdown else { return }
+        recordPendingLegacyCleanup(for: previousModelID)
+        if let activeContext, activeContext.modelID != normalizedModelId {
+            cancelActiveDownload()
+        }
+        refreshStatus()
+    }
+
     private func recordPendingLegacyCleanup(for previousModelID: String) {
         let previous = previousModelID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !previous.isEmpty, previous != normalizedModelId else { return }
 
         for directory in MLXModelStorageLayout.legacyDirectories(
-            root: Self.modelsRoot,
+            root: storageRoot,
             kind: kind,
             modelID: previous
         ) where FileManager.default.fileExists(atPath: directory.path) {
             pendingLegacyCleanup.insert(directory)
         }
 
-        let current = Self.modelDirectory(for: kind, modelId: previous)
+        let current = Self.modelDirectory(
+            for: kind,
+            modelId: previous,
+            modelsRoot: storageRoot
+        )
         if FileManager.default.fileExists(atPath: current.path),
-           !Self.isModelAvailable(kind: kind, modelId: previous) {
+           !Self.isModelAvailable(kind: kind, modelId: previous, modelsRoot: storageRoot) {
             pendingLegacyCleanup.insert(current)
         }
     }
@@ -478,11 +558,12 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     func refreshStorageUsage() {
+        guard !operationState.isShutdown else { return }
         storageTask?.cancel()
         let operationID = UUID()
         storageOperationID = operationID
         let modelDir = modelDirectory
-        let rootDir = Self.modelsRoot
+        let rootDir = storageRoot
         storageTask = Task.detached { [weak self] in
             let modelBytes = Self.directorySizeBytes(modelDir)
             let rootBytes = Self.directorySizeBytes(rootDir)
@@ -497,6 +578,7 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     func refreshRepoSize() {
+        guard !operationState.isShutdown else { return }
         let modelId = normalizedModelId
         repoSizeBytes = MLXModelCatalog.downloadManifest(for: modelId, kind: kind)?.expectedBytes
     }
@@ -516,6 +598,7 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 
     private func download(_ item: DownloadItem, operationID: UUID) async throws {
+        guard let session else { throw CancellationError() }
         let task = session.downloadTask(with: item.url)
 
         _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
@@ -535,7 +618,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         guard let context = activeContext else { return }
         let operationID: UUID
         switch operationState.phase {
-        case .idle:
+        case .idle, .shutdown:
             activeContext = nil
             return
         case .resolving(let id), .downloading(let id, _):
@@ -551,6 +634,23 @@ final class MLXModelManager: NSObject, ObservableObject {
             activeFile.task.cancel()
         }
         logger.info("Cancelled MLX model download for \(context.modelID)")
+    }
+
+    func shutdown() {
+        guard !operationState.isShutdown else { return }
+        cancelActiveDownload()
+        operationState.shutdown()
+        statusTask?.cancel()
+        statusTask = nil
+        statusOperationID = nil
+        storageTask?.cancel()
+        storageTask = nil
+        storageOperationID = nil
+        state = .idle
+        if let session {
+            self.session = nil
+            sessionLifecycle.invalidate(session)
+        }
     }
 
     private func completeActiveFile(

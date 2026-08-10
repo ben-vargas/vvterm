@@ -17,10 +17,10 @@ struct iOSContentView: View {
     let fileBrowser: RemoteFileBrowserStore
     let statsDependencies: ServerStatsScreenDependencies
     let terminalSecurityActions: TerminalSecurityActions
+    let serverFormDependencies: ServerFormDependencies
+    let voiceModelManagers: VoiceSettingsModelManagerOwner
     let analyticsOptOutAction: AnalyticsOptOutAction
-    private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
-        LocalSSHDiscoveryManager()
-    }
+    private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var engagementTracker: EngagementTracker
     @ObservedObject private var tabManager: TerminalTabManager
@@ -42,6 +42,9 @@ struct iOSContentView: View {
         fileBrowser: RemoteFileBrowserStore,
         statsDependencies: ServerStatsScreenDependencies,
         terminalSecurityActions: TerminalSecurityActions,
+        serverFormDependencies: ServerFormDependencies,
+        voiceModelManagers: VoiceSettingsModelManagerOwner,
+        makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         analyticsOptOutAction: AnalyticsOptOutAction
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
@@ -51,6 +54,9 @@ struct iOSContentView: View {
         self.fileBrowser = fileBrowser
         self.statsDependencies = statsDependencies
         self.terminalSecurityActions = terminalSecurityActions
+        self.serverFormDependencies = serverFormDependencies
+        self.voiceModelManagers = voiceModelManagers
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.analyticsOptOutAction = analyticsOptOutAction
     }
 
@@ -78,6 +84,8 @@ struct iOSContentView: View {
                 fileBrowser: fileBrowser,
                 statsDependencies: statsDependencies,
                 analyticsOptOutAction: analyticsOptOutAction,
+                serverFormDependencies: serverFormDependencies,
+                voiceModelManagers: voiceModelManagers,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 selectedWorkspace: $selectedWorkspace,
                 selectedEnvironment: $selectedEnvironment,
@@ -100,6 +108,8 @@ struct iOSContentView: View {
                         fileBrowser: fileBrowser,
                         statsDependencies: statsDependencies,
                         terminalSecurityActions: terminalSecurityActions,
+                        serverFormDependencies: serverFormDependencies,
+                        voiceModelManagers: voiceModelManagers,
                         analyticsOptOutAction: analyticsOptOutAction,
                         route: terminalRoute,
                         makeLocalDiscoveryManager: makeLocalDiscoveryManager,

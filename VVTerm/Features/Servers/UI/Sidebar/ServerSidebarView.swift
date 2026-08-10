@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ServerSidebarView: View {
     let serverManager: ServerManager
+    let serverFormDependencies: ServerFormDependencies
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     let onOpenSettings: () -> Void
     @ObservedObject private var stateStore: ServerStateStore
@@ -40,12 +41,14 @@ struct ServerSidebarView: View {
     init(
         serverManager: ServerManager,
         tabManager: TerminalTabManager,
+        serverFormDependencies: ServerFormDependencies,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         onOpenSettings: @escaping () -> Void,
         selectedWorkspace: Binding<Workspace?>,
         selectedServer: Binding<Server?>
     ) {
         self.serverManager = serverManager
+        self.serverFormDependencies = serverFormDependencies
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onOpenSettings = onOpenSettings
         _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
@@ -241,7 +244,7 @@ struct ServerSidebarView: View {
                 serverManager: serverManager,
                 workspace: selectedWorkspace,
                 prefill: addServerPrefill,
-                dependencies: .live,
+                dependencies: serverFormDependencies,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 onSave: { _ in showingAddServer = false }
             )
@@ -268,7 +271,7 @@ struct ServerSidebarView: View {
                 serverManager: serverManager,
                 workspace: selectedWorkspace,
                 server: server,
-                dependencies: .live,
+                dependencies: serverFormDependencies,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 onSave: { updatedServer in
                     handleSavedServer(updatedServer, originalServer: server)

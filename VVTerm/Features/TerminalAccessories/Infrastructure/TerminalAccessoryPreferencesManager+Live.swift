@@ -11,34 +11,33 @@ extension CloudKitSyncCoordinator: TerminalAccessoryMutationQueue {
 }
 extension CloudKitSyncLifecycleDriver: TerminalAccessorySyncLifecycle {}
 
-@MainActor
-enum TerminalAccessoryCloudKitLiveComposition {
-    static let client = TerminalAccessoryCloudKitClient(
-        transport: CloudKitManager.shared
-    )
-}
-
 extension TerminalAccessoryPreferencesDependencies {
     static func live(
+        defaults: UserDefaults,
+        cloud: any TerminalAccessoryCloudClient,
         mutationQueue: any TerminalAccessoryMutationQueue,
-        resolutionSource: any TerminalAccessoryResolutionSource
+        syncLifecycle: any TerminalAccessorySyncLifecycle,
+        resolutionSource: any TerminalAccessoryResolutionSource,
+        writerID: String,
+        isSyncEnabled: @escaping () -> Bool,
+        now: @escaping () -> Date,
+        makeID: @escaping () -> UUID,
+        trackCustomActionCreated: @escaping (TerminalAccessoryCustomActionKind) -> Void
     ) -> Self {
         TerminalAccessoryPreferencesDependencies(
             profileStore: UserDefaultsTerminalAccessoryProfileStore(
-                defaults: .standard,
+                defaults: defaults,
                 key: CloudKitSyncConstants.terminalAccessoryProfileStorageKey
             ),
-            cloud: TerminalAccessoryCloudKitLiveComposition.client,
+            cloud: cloud,
             mutationQueue: mutationQueue,
-            syncLifecycle: CloudKitSyncLifecycleDriver.shared,
+            syncLifecycle: syncLifecycle,
             resolutionSource: resolutionSource,
-            writerID: DeviceIdentity.id,
-            isSyncEnabled: { SyncSettings.isEnabled },
-            now: Date.init,
-            makeID: UUID.init,
-            trackCustomActionCreated: { kind in
-                AnalyticsTracker.shared.trackCustomActionCreated(kind: kind.rawValue)
-            },
+            writerID: writerID,
+            isSyncEnabled: isSyncEnabled,
+            now: now,
+            makeID: makeID,
+            trackCustomActionCreated: trackCustomActionCreated,
             waitForSyncDebounce: {
                 try await Task.sleep(nanoseconds: 650_000_000)
             },

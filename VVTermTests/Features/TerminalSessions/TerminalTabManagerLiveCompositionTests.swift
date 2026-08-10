@@ -229,6 +229,8 @@ struct TerminalTabManagerLiveCompositionTests {
         liveActivityController: LiveCompositionLiveActivityController,
         applicationIsActive: Bool
     ) -> TerminalTabManager {
+        let analyticsTracker = AnalyticsTracker.shared
+        let applicationIsActiveQuery = { applicationIsActive }
         TerminalTabManagerLiveComposition.makeManager(
             defaults: defaults,
             networkMonitor: .shared,
@@ -237,8 +239,16 @@ struct TerminalTabManagerLiveCompositionTests {
                 authService: LiveCompositionBiometricAuthService()
             ),
             serverManager: .shared,
-            engagementTracker: EngagementTracker(dependencies: .live),
-            analyticsTracker: .shared,
+            engagementTracker: EngagementTracker(
+                dependencies: .live(
+                    defaults: defaults,
+                    analytics: analyticsTracker,
+                    now: Date.init,
+                    calendar: .current,
+                    applicationIsActive: applicationIsActiveQuery
+                )
+            ),
+            analyticsTracker: analyticsTracker,
             liveActivityManager: LiveActivityManager(
                 controller: liveActivityController
             ),
@@ -251,7 +261,7 @@ struct TerminalTabManagerLiveCompositionTests {
             themeStyle: {
                 TerminalTmuxSessionLiveComposition.themeStyle(for: "Aizen Dark")
             },
-            applicationIsActive: { applicationIsActive }
+            applicationIsActive: applicationIsActiveQuery
         )
     }
 

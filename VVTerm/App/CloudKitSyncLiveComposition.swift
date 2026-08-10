@@ -16,6 +16,17 @@ struct CloudKitSyncComposition {
 }
 
 @MainActor
+struct CloudKitLiveSyncComposition {
+    let coordinator: CloudKitSyncCoordinator
+    let terminalAccessoryResolutions: TerminalAccessoryResolutionChannel
+    let statsPreferencesResolutions: StatsPreferencesResolutionChannel
+    let serverCloud: ServerCloudKitClient
+    let terminalThemeCloud: TerminalThemeCloudKitClient
+    let terminalAccessoryCloud: TerminalAccessoryCloudKitClient
+    let statsPreferencesCloud: StatsPreferencesCloudKitClient
+}
+
+@MainActor
 enum CloudKitSyncLiveComposition {
     static func make(
         clients: CloudKitSyncClients,
@@ -49,17 +60,33 @@ enum CloudKitSyncLiveComposition {
         )
     }
 
-    static func makeLive() -> CloudKitSyncComposition {
-        make(
+    static func makeLive(
+        transport: any CloudKitRecordChangeTransport,
+        now: @escaping () -> Date
+    ) -> CloudKitLiveSyncComposition {
+        let serverCloud = ServerCloudKitClient(transport: transport, now: now)
+        let terminalThemeCloud = TerminalThemeCloudKitClient(transport: transport)
+        let terminalAccessoryCloud = TerminalAccessoryCloudKitClient(transport: transport)
+        let statsPreferencesCloud = StatsPreferencesCloudKitClient(transport: transport)
+        let composition = make(
             clients: CloudKitSyncClients(
-                serverCloud: ServerCloudKitLiveComposition.client,
-                terminalThemeCloud: TerminalThemeCloudKitLiveComposition.client,
-                terminalAccessoryCloud: TerminalAccessoryCloudKitLiveComposition.client,
-                statsPreferencesCloud: StatsPreferencesCloudKitLiveComposition.client
+                serverCloud: serverCloud,
+                terminalThemeCloud: terminalThemeCloud,
+                terminalAccessoryCloud: terminalAccessoryCloud,
+                statsPreferencesCloud: statsPreferencesCloud
             ),
             queue: PendingCloudKitSyncQueue(),
             isSyncEnabled: { SyncSettings.isEnabled },
-            now: Date.init
+            now: now
+        )
+        return CloudKitLiveSyncComposition(
+            coordinator: composition.coordinator,
+            terminalAccessoryResolutions: composition.terminalAccessoryResolutions,
+            statsPreferencesResolutions: composition.statsPreferencesResolutions,
+            serverCloud: serverCloud,
+            terminalThemeCloud: terminalThemeCloud,
+            terminalAccessoryCloud: terminalAccessoryCloud,
+            statsPreferencesCloud: statsPreferencesCloud
         )
     }
 }
@@ -68,11 +95,22 @@ extension ServerManager {
     /// Compatibility composition for the Remote Files default initializer.
     /// App roots must construct and inject their own manager instead.
     static let shared: ServerManager = {
-        let syncCoordinator = CloudKitSyncLiveComposition.makeLive().coordinator
+        let cloudKit = CloudKitManager.shared
+        let sync = CloudKitSyncLiveComposition.makeLive(
+            transport: cloudKit,
+            now: Date.init
+        )
         return ServerManager(
             dependencies: .live(
+                defaults: .standard,
+                serverCloud: sync.serverCloud,
+                credentialRepository: KeychainManager.shared,
+                knownHosts: KnownHostsManager.shared,
+                freePlanTracker: AnalyticsTracker.shared,
                 actionAuthorizer: AppLockManager.shared,
-                syncRepository: syncCoordinator
+                syncRepository: sync.coordinator,
+                now: Date.init,
+                makeID: UUID.init
             )
         )
     }()

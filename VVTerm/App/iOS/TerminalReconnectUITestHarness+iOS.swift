@@ -39,6 +39,9 @@ struct TerminalReconnectUITestHarness: View {
     @ObservedObject private var engagementTracker: EngagementTracker
     private let statsDependencies: ServerStatsScreenDependencies
     private let terminalSecurityActions: TerminalSecurityActions
+    private let serverFormDependencies: ServerFormDependencies
+    private let voiceModelManagers: VoiceSettingsModelManagerOwner
+    private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     private let analyticsOptOutAction = AnalyticsOptOutAction(emitAnalyticsDisabled: {})
     @StateObject private var fileTabs: RemoteFileTabManager
     @StateObject private var fileBrowser: RemoteFileBrowserStore
@@ -49,13 +52,19 @@ struct TerminalReconnectUITestHarness: View {
         serverManager: ServerManager,
         engagementTracker: EngagementTracker,
         statsDependencies: ServerStatsScreenDependencies,
-        terminalSecurityActions: TerminalSecurityActions
+        terminalSecurityActions: TerminalSecurityActions,
+        serverFormDependencies: ServerFormDependencies,
+        voiceModelManagers: VoiceSettingsModelManagerOwner,
+        makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory
     ) {
         _tabManager = ObservedObject(wrappedValue: tabManager)
         _serverManager = ObservedObject(wrappedValue: serverManager)
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         self.statsDependencies = statsDependencies
         self.terminalSecurityActions = terminalSecurityActions
+        self.serverFormDependencies = serverFormDependencies
+        self.voiceModelManagers = voiceModelManagers
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         _fileTabs = StateObject(
             wrappedValue: RemoteFileTabManager(defaults: Self.fixtureDefaults)
         )
@@ -143,6 +152,9 @@ struct TerminalReconnectUITestHarness: View {
                     fileBrowser: fileBrowser,
                     statsDependencies: statsDependencies,
                     terminalSecurityActions: terminalSecurityActions,
+                    serverFormDependencies: serverFormDependencies,
+                    voiceModelManagers: voiceModelManagers,
+                    makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                     analyticsOptOutAction: analyticsOptOutAction
                 )
             } else {
@@ -154,9 +166,11 @@ struct TerminalReconnectUITestHarness: View {
                         fileBrowser: fileBrowser,
                         statsDependencies: statsDependencies,
                         terminalSecurityActions: terminalSecurityActions,
+                        serverFormDependencies: serverFormDependencies,
+                        voiceModelManagers: voiceModelManagers,
                         analyticsOptOutAction: analyticsOptOutAction,
                         route: .active(serverId: server.id),
-                        makeLocalDiscoveryManager: { LocalSSHDiscoveryManager() },
+                        makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                         onBack: {}
                     )
                 }

@@ -3,21 +3,18 @@ import Foundation
 extension LocalSSHDiscoveryService: LocalSSHDiscovering {}
 
 extension LocalSSHDiscoveryDependencies {
-    static var live: Self {
+    static func live(
+        networkConnectionType: @escaping () -> NetworkMonitor.ConnectionType,
+        makeScanID: @escaping () -> UUID
+    ) -> Self {
         LocalSSHDiscoveryDependencies(
             service: LocalSSHDiscoveryService(),
             networkAvailability: {
-                NetworkMonitor.shared.connectionType == .cellular
+                networkConnectionType() == .cellular
                     ? .unsupported
                     : .supported
             },
-            makeScanID: UUID.init
+            makeScanID: makeScanID
         )
-    }
-}
-
-extension LocalSSHDiscoveryManager {
-    convenience init() {
-        self.init(dependencies: .live)
     }
 }

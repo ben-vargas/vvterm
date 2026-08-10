@@ -5,6 +5,25 @@ import Testing
 @MainActor
 struct LocalSSHDiscoveryStateTests {
     @Test
+    func liveDependenciesUseInjectedNetworkStateAndScanID() {
+        let scanID = UUID()
+        var connectionType = NetworkMonitor.ConnectionType.cellular
+        let dependencies = LocalSSHDiscoveryDependencies.live(
+            networkConnectionType: { connectionType },
+            makeScanID: { scanID }
+        )
+
+        #expect(dependencies.networkAvailability() == .unsupported)
+        connectionType = .wifi
+        #expect(dependencies.networkAvailability() == .supported)
+        connectionType = .ethernet
+        #expect(dependencies.networkAvailability() == .supported)
+        connectionType = .unknown
+        #expect(dependencies.networkAvailability() == .supported)
+        #expect(dependencies.makeScanID() == scanID)
+    }
+
+    @Test
     func activeSourcesArePartOfTheScanningState() {
         var state = LocalSSHDiscoveryState()
         let scanID = UUID()

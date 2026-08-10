@@ -33,6 +33,7 @@ final class SettingsWindowPresenter {
         syncSettingsCoordinator: SyncSettingsCoordinator,
         sshKeySettingsCoordinator: SSHKeySettingsCoordinator,
         knownHostSettingsCoordinator: KnownHostSettingsCoordinator,
+        voiceModelManagers: VoiceSettingsModelManagerOwner,
         analyticsOptOutAction: AnalyticsOptOutAction
     ) {
         makeWindow = {
@@ -47,6 +48,7 @@ final class SettingsWindowPresenter {
                 sshKeySettingsCoordinator: sshKeySettingsCoordinator,
                 knownHostSettingsCoordinator: knownHostSettingsCoordinator,
                 statsPreferencesStore: statsPreferencesStore,
+                voiceModelManagers: voiceModelManagers,
                 analyticsOptOutAction: analyticsOptOutAction
             )
             return Self.makeSettingsWindow(rootView: settingsView)
@@ -104,6 +106,7 @@ private struct LocalizedSettingsView: View {
     @ObservedObject var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
     @ObservedObject var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
     let statsPreferencesStore: PreferencesStore
+    let voiceModelManagers: VoiceSettingsModelManagerOwner
     let analyticsOptOutAction: AnalyticsOptOutAction
 
     var body: some View {
@@ -111,6 +114,7 @@ private struct LocalizedSettingsView: View {
         AppLockContainer {
             SettingsView(
                 statsPreferencesStore: statsPreferencesStore,
+                voiceModelManagers: voiceModelManagers,
                 analyticsOptOutAction: analyticsOptOutAction
             )
                 .modifier(AppearanceModifier())

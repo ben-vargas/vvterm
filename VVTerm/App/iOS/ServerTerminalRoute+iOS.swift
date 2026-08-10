@@ -24,6 +24,8 @@ struct ServerTerminalRoute: View {
     let fileBrowser: RemoteFileBrowserStore
     let statsDependencies: ServerStatsScreenDependencies
     let terminalSecurityActions: TerminalSecurityActions
+    let serverFormDependencies: ServerFormDependencies
+    let voiceModelManagers: VoiceSettingsModelManagerOwner
     let analyticsOptOutAction: AnalyticsOptOutAction
     let route: ServerTerminalNavigationRoute
     let onBack: () -> Void
@@ -55,6 +57,8 @@ struct ServerTerminalRoute: View {
         fileBrowser: RemoteFileBrowserStore,
         statsDependencies: ServerStatsScreenDependencies,
         terminalSecurityActions: TerminalSecurityActions,
+        serverFormDependencies: ServerFormDependencies,
+        voiceModelManagers: VoiceSettingsModelManagerOwner,
         analyticsOptOutAction: AnalyticsOptOutAction,
         route: ServerTerminalNavigationRoute,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
@@ -66,6 +70,8 @@ struct ServerTerminalRoute: View {
         self.fileBrowser = fileBrowser
         self.statsDependencies = statsDependencies
         self.terminalSecurityActions = terminalSecurityActions
+        self.serverFormDependencies = serverFormDependencies
+        self.voiceModelManagers = voiceModelManagers
         self.analyticsOptOutAction = analyticsOptOutAction
         self.route = route
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
@@ -171,6 +177,7 @@ struct ServerTerminalRoute: View {
                 case .settings:
                     SettingsView(
                         statsPreferencesStore: statsDependencies.preferencesStore,
+                        voiceModelManagers: voiceModelManagers,
                         analyticsOptOutAction: analyticsOptOutAction
                     )
                         .modifier(AppearanceModifier())
@@ -181,7 +188,7 @@ struct ServerTerminalRoute: View {
                             serverManager: serverManager,
                             workspace: serverManager.workspaces.first { $0.id == server.workspaceId },
                             server: server,
-                            dependencies: .live,
+                            dependencies: serverFormDependencies,
                             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                             onSave: { _ in presentedRouteSheet = nil }
                         )
@@ -270,6 +277,7 @@ struct ServerTerminalRoute: View {
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 statsDependencies: statsDependencies,
                 terminalSecurityActions: terminalSecurityActions,
+                serverFormDependencies: serverFormDependencies,
                 server: server,
                 isZenModeEnabled: $isZenModeEnabled,
                 isSidebarVisible: false,

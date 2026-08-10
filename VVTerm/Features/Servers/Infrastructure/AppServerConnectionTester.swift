@@ -4,6 +4,56 @@ import MoshBootstrap
 
 extension KnownHostsManager: ServerHostKeyRepository {}
 
+nonisolated protocol ServerConnectionOperationRunning: Sendable {
+    func runServerConnectionTest(
+        server: Server,
+        credentials: ServerCredentials,
+        operation: @escaping @Sendable (SSHClient) async throws -> Void
+    ) async throws
+}
+
+nonisolated protocol ServerMoshConnectionTesting: Sendable {
+    func testServerConnection(
+        using client: SSHClient,
+        portRange: ClosedRange<Int>
+    ) async throws
+}
+
+extension SSHConnectionOperationService: ServerConnectionOperationRunning {
+    func runServerConnectionTest(
+        server: Server,
+        credentials: ServerCredentials,
+        operation: @escaping @Sendable (SSHClient) async throws -> Void
+    ) async throws {
+        try await withTemporaryConnection(
+            server: server,
+            credentials: credentials,
+            operation: operation
+        )
+    }
+}
+
+extension RemoteMoshManager: ServerMoshConnectionTesting {
+    func testServerConnection(
+        using client: SSHClient,
+        portRange: ClosedRange<Int>
+    ) async throws {
+        let connectInfo = try await bootstrapConnectInfo(
+            using: client,
+            startCommand: "exec true",
+            portRange: portRange
+        )
+        await Self.terminateBootstrappedServer(pid: connectInfo.serverPID) { pid in
+            await self.terminateMoshServer(
+                pid: pid,
+                execute: { command, timeout in
+                    try await client.execute(command, timeout: timeout)
+                }
+            )
+        }
+    }
+}
+
 nonisolated enum ServerConnectionTestPlan: Equatable, Sendable {
     case sshOnly
     case mosh(portRange: ClosedRange<Int>)
@@ -45,38 +95,48 @@ nonisolated enum ServerConnectionApprovalPolicy {
     }
 }
 
-@MainActor
-struct ServerFormDependencies {
-    let credentials: any ServerCredentialRepository
-    let connectionTester: any ServerConnectionTesting
-    let hostKeys: any ServerHostKeyRepository
-    let now: @Sendable () -> Date
-    let makeID: @Sendable () -> UUID
-
-    static var live: Self {
-        let hostKeys = KnownHostsManager.shared
-        let now: @Sendable () -> Date = { Date() }
-        return Self(
-            credentials: KeychainManager.shared,
+extension ServerFormDependencies {
+    static func live(
+        credentials: any ServerCredentialRepository,
+        hostKeys: any ServerHostKeyRepository,
+        connectionOperations: any ServerConnectionOperationRunning,
+        remoteMosh: any ServerMoshConnectionTesting,
+        defaultTmuxEnabled: @escaping @MainActor () -> Bool,
+        defaultTmuxStartupBehavior: @escaping @MainActor () -> TmuxStartupBehavior,
+        now: @escaping @Sendable () -> Date,
+        makeID: @escaping @Sendable () -> UUID
+    ) -> Self {
+        Self(
+            credentials: credentials,
             connectionTester: AppServerConnectionTester(
+                connectionOperations: connectionOperations,
+                remoteMosh: remoteMosh,
                 hostKeys: hostKeys,
                 now: now
             ),
             hostKeys: hostKeys,
+            defaultTmuxEnabled: defaultTmuxEnabled,
+            defaultTmuxStartupBehavior: defaultTmuxStartupBehavior,
             now: now,
-            makeID: { UUID() }
+            makeID: makeID
         )
     }
 }
 
-nonisolated final class AppServerConnectionTester: ServerConnectionTesting, @unchecked Sendable {
+nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
+    private let connectionOperations: any ServerConnectionOperationRunning
+    private let remoteMosh: any ServerMoshConnectionTesting
     private let hostKeys: any ServerHostKeyRepository
     private let now: @Sendable () -> Date
 
     init(
+        connectionOperations: any ServerConnectionOperationRunning,
+        remoteMosh: any ServerMoshConnectionTesting,
         hostKeys: any ServerHostKeyRepository,
         now: @escaping @Sendable () -> Date
     ) {
+        self.connectionOperations = connectionOperations
+        self.remoteMosh = remoteMosh
         self.hostKeys = hostKeys
         self.now = now
     }
@@ -85,7 +145,7 @@ nonisolated final class AppServerConnectionTester: ServerConnectionTesting, @unc
         let plan = ServerConnectionTestPlan(server: server)
         do {
             try Task.checkCancellation()
-            try await SSHConnectionOperationService.shared.withTemporaryConnection(
+            try await connectionOperations.runServerConnectionTest(
                 server: server,
                 credentials: credentials
             ) { client in
@@ -94,21 +154,9 @@ nonisolated final class AppServerConnectionTester: ServerConnectionTesting, @unc
                 case .sshOnly:
                     break
                 case .mosh(let portRange):
-                    let connectInfo = try await RemoteMoshManager.shared.bootstrapConnectInfo(
+                    try await remoteMosh.testServerConnection(
                         using: client,
-                        startCommand: "exec true",
                         portRange: portRange
-                    )
-                    await RemoteMoshManager.terminateBootstrappedServer(
-                        pid: connectInfo.serverPID,
-                        terminate: { pid in
-                            await RemoteMoshManager.shared.terminateMoshServer(
-                                pid: pid,
-                                execute: { command, timeout in
-                                    try await client.execute(command, timeout: timeout)
-                                }
-                            )
-                        }
                     )
                 case .eternalTerminal(let port):
                     let session = ETTerminalSession(
