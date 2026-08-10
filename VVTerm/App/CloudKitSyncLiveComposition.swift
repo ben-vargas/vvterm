@@ -79,7 +79,10 @@ enum CloudKitSyncLiveComposition {
                 terminalAccessoryCloud: terminalAccessoryCloud,
                 statsPreferencesCloud: statsPreferencesCloud
             ),
-            queue: PendingCloudKitSyncQueue(defaults: defaults),
+            queue: PendingCloudKitSyncQueue(
+                defaults: defaults,
+                legacyMigrator: CloudKitPendingMutationLegacyMigrator()
+            ),
             isSyncEnabled: { SyncSettings.isEnabled(in: defaults) },
             now: now,
             makeID: makeID

@@ -7,7 +7,7 @@ struct PendingCloudKitSyncTests {
     func everySupportedMutationRoundTrips() throws {
         let fixtures = PendingSyncFixtures()
 
-        for (index, payload) in fixtures.supportedPayloads.enumerated() {
+        for (index, payload) in try fixtures.supportedPayloads().enumerated() {
             let mutation = PendingCloudKitMutation(
                 id: fixtures.mutationIDs[index],
                 payload: payload,
@@ -26,8 +26,11 @@ struct PendingCloudKitSyncTests {
     }
 
     @Test
-    func previouslyPersistedAssociatedPayloadDecodesWithoutMigration() throws {
+    func previouslyPersistedAssociatedPayloadMigrates() throws {
+        let storage = makeStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suiteName) }
         let data = Data(#"""
+        [
         {
           "id": "10000000-0000-0000-0000-000000000001",
           "payload": {
@@ -45,9 +48,16 @@ struct PendingCloudKitSyncTests {
           "lastErrorCode": "networkFailure",
           "lastErrorDescription": "offline"
         }
+        ]
         """#.utf8)
 
-        let mutation = try JSONDecoder().decode(PendingCloudKitMutation.self, from: data)
+        storage.defaults.set(data, forKey: storage.storageKey)
+        let queue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults,
+            legacyMigrator: CloudKitPendingMutationLegacyMigrator()
+        )
+        let mutation = try #require(queue.snapshot().first)
         let expectedTheme = TerminalTheme(
             id: UUID(uuidString: "20000000-0000-0000-0000-000000000002")!,
             name: "Durable Theme",
@@ -56,12 +66,47 @@ struct PendingCloudKitSyncTests {
         )
 
         #expect(mutation.id == UUID(uuidString: "10000000-0000-0000-0000-000000000001"))
-        #expect(mutation.payload == .terminalThemeUpsert(expectedTheme))
+        let expectedPayload = try PendingCloudKitMutationPayload.terminalThemeUpsert(expectedTheme)
+        #expect(mutation.payload == expectedPayload)
         #expect(mutation.createdAt == Date(timeIntervalSinceReferenceDate: 1_000))
         #expect(mutation.retryCount == 2)
         #expect(mutation.nextRetryAt == Date(timeIntervalSinceReferenceDate: 1_060))
         #expect(mutation.lastErrorCode == "networkFailure")
         #expect(mutation.lastErrorDescription == "offline")
+    }
+
+    @Test
+    func everyAssociatedLegacyPayloadMigratesWithoutQuarantine() throws {
+        let fixtures = PendingSyncFixtures()
+        let storage = makeStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suiteName) }
+
+        let legacyRecords = try fixtures.associatedLegacyRecords()
+        storage.defaults.set(
+            try JSONSerialization.data(withJSONObject: legacyRecords),
+            forKey: storage.storageKey
+        )
+
+        let queue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults,
+            legacyMigrator: CloudKitPendingMutationLegacyMigrator()
+        )
+        let expectedPayloads: [PendingCloudKitMutationPayload] = [
+            try .serverUpsert(fixtures.server),
+            try .serverDelete(fixtures.legacyDeletedServer),
+            try .workspaceUpsert(fixtures.workspace),
+            try .workspaceDelete(fixtures.deletedWorkspace),
+            try .terminalThemeUpsert(fixtures.theme),
+            try .terminalThemePreferenceUpsert(fixtures.themePreference),
+            try .terminalAccessoryProfileUpsert(fixtures.accessoryProfile),
+            try .statsPreferencesUpsert(fixtures.statsPreferences)
+        ]
+
+        #expect(queue.snapshot().map(\.payload) == expectedPayloads)
+        #expect(queue.snapshot().map(\.id) == Array(fixtures.mutationIDs.prefix(8)))
+        #expect(queue.snapshot().allSatisfy { $0.retryCount == 2 })
+        #expect(queue.quarantineSnapshot().isEmpty)
     }
 
     @Test
@@ -75,10 +120,12 @@ struct PendingCloudKitSyncTests {
 
         let queue = PendingCloudKitSyncQueue(
             storageKey: storage.storageKey,
-            defaults: storage.defaults
+            defaults: storage.defaults,
+            legacyMigrator: CloudKitPendingMutationLegacyMigrator()
         )
 
-        #expect(queue.snapshot().map(\.payload) == fixtures.migratedLegacyPayloads)
+        let expectedPayloads = try fixtures.migratedLegacyPayloads()
+        #expect(queue.snapshot().map(\.payload) == expectedPayloads)
         #expect(queue.snapshot().map(\.id) == Array(fixtures.mutationIDs.prefix(9)))
         #expect(queue.snapshot().allSatisfy { $0.retryCount == 2 })
         #expect(queue.quarantineSnapshot().isEmpty)
@@ -144,10 +191,12 @@ struct PendingCloudKitSyncTests {
 
         let queue = PendingCloudKitSyncQueue(
             storageKey: storage.storageKey,
-            defaults: storage.defaults
+            defaults: storage.defaults,
+            legacyMigrator: CloudKitPendingMutationLegacyMigrator()
         )
 
-        #expect(queue.snapshot().map(\.payload) == [.serverUpsert(fixtures.server)])
+        let expectedPayload = try PendingCloudKitMutationPayload.serverUpsert(fixtures.server)
+        #expect(queue.snapshot().map(\.payload) == [expectedPayload])
         #expect(queue.quarantineSnapshot().count == 5)
         #expect(queue.quarantineSnapshot().allSatisfy { !$0.encodedLegacyRecord.isEmpty })
         #expect(queue.quarantineSnapshot().contains { $0.reason == .missingOrConflictingPayload })
@@ -164,32 +213,32 @@ struct PendingCloudKitSyncTests {
     }
 
     @Test
-    func retryCountAndExponentialDelaySaturate() {
+    func retryCountAndExponentialDelaySaturate() throws {
         let fixtures = PendingSyncFixtures()
         let now = Date(timeIntervalSinceReferenceDate: 50_000)
         let error = RetryTestError()
 
         let firstFailure = PendingCloudKitMutation(
-            payload: .serverUpsert(fixtures.server)
+            payload: try .serverUpsert(fixtures.server)
         ).withFailure(error: error, at: now)
         #expect(firstFailure.retryCount == 1)
         #expect(firstFailure.nextRetryAt == now.addingTimeInterval(30))
 
         let negativeCount = PendingCloudKitMutation(
-            payload: .serverUpsert(fixtures.server),
+            payload: try .serverUpsert(fixtures.server),
             retryCount: Int.min
         )
         #expect(negativeCount.retryCount == 0)
 
         let cappedDelay = PendingCloudKitMutation(
-            payload: .serverUpsert(fixtures.server),
+            payload: try .serverUpsert(fixtures.server),
             retryCount: 7
         ).withFailure(error: error, at: now)
         #expect(cappedDelay.retryCount == 8)
         #expect(cappedDelay.nextRetryAt == now.addingTimeInterval(3_600))
 
         let saturatedCount = PendingCloudKitMutation(
-            payload: .serverUpsert(fixtures.server),
+            payload: try .serverUpsert(fixtures.server),
             retryCount: Int.max
         )
         #expect(saturatedCount.retryCount == PendingCloudKitMutation.maximumRetryCount)
@@ -215,24 +264,22 @@ struct PendingCloudKitSyncTests {
         )
         try queue.enqueue(PendingCloudKitMutation(payload: .serverDelete(fixtures.deletedServer)))
 
-        #expect(
-            queue.snapshot().map(\.payload) == [
-                .workspaceUpsert(fixtures.workspaceWithServerID),
-                .serverDelete(fixtures.deletedServer)
-            ]
-        )
+        let firstExpectedPayloads = [
+            try PendingCloudKitMutationPayload.workspaceUpsert(fixtures.workspaceWithServerID),
+            try PendingCloudKitMutationPayload.serverDelete(fixtures.deletedServer)
+        ]
+        #expect(queue.snapshot().map(\.payload) == firstExpectedPayloads)
 
         try queue.enqueue(
             PendingCloudKitMutation(
                 payload: .workspaceDelete(fixtures.deletedWorkspaceWithServerID)
             )
         )
-        #expect(
-            queue.snapshot().map(\.payload) == [
-                .serverDelete(fixtures.deletedServer),
-                .workspaceDelete(fixtures.deletedWorkspaceWithServerID)
-            ]
-        )
+        let finalExpectedPayloads = [
+            try PendingCloudKitMutationPayload.serverDelete(fixtures.deletedServer),
+            try PendingCloudKitMutationPayload.workspaceDelete(fixtures.deletedWorkspaceWithServerID)
+        ]
+        #expect(queue.snapshot().map(\.payload) == finalExpectedPayloads)
 
         let reloadedQueue = PendingCloudKitSyncQueue(
             storageKey: storage.storageKey,
@@ -262,10 +309,11 @@ struct PendingCloudKitSyncTests {
             )
         ])
 
-        #expect(queue.snapshot().map(\.payload) == [
-            .serverDelete(fixtures.deletedServer),
-            .workspaceDelete(fixtures.deletedWorkspaceWithServerID)
-        ])
+        let expectedPayloads = [
+            try PendingCloudKitMutationPayload.serverDelete(fixtures.deletedServer),
+            try PendingCloudKitMutationPayload.workspaceDelete(fixtures.deletedWorkspaceWithServerID)
+        ]
+        #expect(queue.snapshot().map(\.payload) == expectedPayloads)
         let reloadedQueue = PendingCloudKitSyncQueue(
             storageKey: storage.storageKey,
             defaults: storage.defaults
@@ -282,7 +330,7 @@ struct PendingCloudKitSyncTests {
             storageKey: storage.storageKey,
             defaults: storage.defaults
         )
-        let original = PendingCloudKitMutation(payload: .serverUpsert(fixtures.server))
+        let original = PendingCloudKitMutation(payload: try .serverUpsert(fixtures.server))
         try queue.enqueue(original)
 
         storage.defaults.rejectWrites = true
@@ -310,7 +358,7 @@ struct PendingCloudKitSyncTests {
             storageKey: storage.storageKey,
             defaults: storage.defaults
         )
-        let mutation = PendingCloudKitMutation(payload: .serverUpsert(fixtures.server))
+        let mutation = PendingCloudKitMutation(payload: try .serverUpsert(fixtures.server))
         try queue.enqueue(mutation)
 
         storage.defaults.rejectWrites = true
@@ -336,7 +384,7 @@ struct PendingCloudKitSyncTests {
             storageKey: storage.storageKey,
             defaults: storage.defaults
         )
-        let mutation = PendingCloudKitMutation(payload: .serverUpsert(fixtures.server))
+        let mutation = PendingCloudKitMutation(payload: try .serverUpsert(fixtures.server))
         try queue.enqueue(mutation)
 
         storage.defaults.rejectWrites = true
@@ -358,9 +406,9 @@ struct PendingCloudKitSyncTests {
     }
 
     @Test
-    func drainOrderPreservesDependenciesAndDefersDeletes() {
+    func drainOrderPreservesDependenciesAndDefersDeletes() throws {
         let fixtures = PendingSyncFixtures()
-        let mutations = fixtures.supportedPayloads.reversed().enumerated().map { index, payload in
+        let mutations = try fixtures.supportedPayloads().reversed().enumerated().map { index, payload in
             PendingCloudKitMutation(
                 id: fixtures.mutationIDs[index],
                 payload: payload,
@@ -372,28 +420,29 @@ struct PendingCloudKitSyncTests {
             .sorted(by: PendingCloudKitMutation.drainsBefore)
             .map(\.payload)
 
-        #expect(orderedPayloads == fixtures.payloadsInDrainOrder)
+        let expectedDrainOrder = try fixtures.payloadsInDrainOrder()
+        #expect(orderedPayloads == expectedDrainOrder)
 
         let later = PendingCloudKitMutation(
             id: fixtures.mutationIDs[1],
-            payload: .terminalThemeUpsert(fixtures.theme),
+            payload: try .terminalThemeUpsert(fixtures.theme),
             createdAt: fixtures.createdAt.addingTimeInterval(1)
         )
         let earlier = PendingCloudKitMutation(
             id: fixtures.mutationIDs[2],
-            payload: .terminalThemeUpsert(fixtures.theme),
+            payload: try .terminalThemeUpsert(fixtures.theme),
             createdAt: fixtures.createdAt
         )
         #expect([later, earlier].sorted(by: PendingCloudKitMutation.drainsBefore) == [earlier, later])
 
         let lowerID = PendingCloudKitMutation(
             id: fixtures.mutationIDs[0],
-            payload: .terminalThemeUpsert(fixtures.theme),
+            payload: try .terminalThemeUpsert(fixtures.theme),
             createdAt: fixtures.createdAt
         )
         let higherID = PendingCloudKitMutation(
             id: fixtures.mutationIDs[1],
-            payload: .terminalThemeUpsert(fixtures.theme),
+            payload: try .terminalThemeUpsert(fixtures.theme),
             createdAt: fixtures.createdAt
         )
         #expect(
@@ -516,29 +565,29 @@ private struct PendingSyncFixtures {
         )
     }
 
-    var supportedPayloads: [PendingCloudKitMutationPayload] {
+    func supportedPayloads() throws -> [PendingCloudKitMutationPayload] {
         [
-            .serverUpsert(server),
-            .serverDelete(deletedServer),
-            .workspaceUpsert(workspace),
-            .workspaceDelete(deletedWorkspace),
-            .terminalThemeUpsert(theme),
-            .terminalThemePreferenceUpsert(themePreference),
-            .terminalAccessoryProfileUpsert(accessoryProfile),
-            .statsPreferencesUpsert(statsPreferences)
+            try .serverUpsert(server),
+            try .serverDelete(deletedServer),
+            try .workspaceUpsert(workspace),
+            try .workspaceDelete(deletedWorkspace),
+            try .terminalThemeUpsert(theme),
+            try .terminalThemePreferenceUpsert(themePreference),
+            try .terminalAccessoryProfileUpsert(accessoryProfile),
+            try .statsPreferencesUpsert(statsPreferences)
         ]
     }
 
-    var payloadsInDrainOrder: [PendingCloudKitMutationPayload] {
+    func payloadsInDrainOrder() throws -> [PendingCloudKitMutationPayload] {
         [
-            .workspaceUpsert(workspace),
-            .serverUpsert(server),
-            .terminalThemeUpsert(theme),
-            .terminalThemePreferenceUpsert(themePreference),
-            .terminalAccessoryProfileUpsert(accessoryProfile),
-            .statsPreferencesUpsert(statsPreferences),
-            .serverDelete(deletedServer),
-            .workspaceDelete(deletedWorkspace)
+            try .workspaceUpsert(workspace),
+            try .serverUpsert(server),
+            try .terminalThemeUpsert(theme),
+            try .terminalThemePreferenceUpsert(themePreference),
+            try .terminalAccessoryProfileUpsert(accessoryProfile),
+            try .statsPreferencesUpsert(statsPreferences),
+            try .serverDelete(deletedServer),
+            try .workspaceDelete(deletedWorkspace)
         ]
     }
 
@@ -610,17 +659,62 @@ private struct PendingSyncFixtures {
         ]
     }
 
-    var migratedLegacyPayloads: [PendingCloudKitMutationPayload] {
+    func migratedLegacyPayloads() throws -> [PendingCloudKitMutationPayload] {
         [
-            .serverUpsert(server),
-            .serverDelete(legacyDeletedServer),
-            .workspaceUpsert(workspace),
-            .workspaceDelete(deletedWorkspace),
-            .terminalThemeUpsert(theme),
-            .terminalThemeUpsert(legacyDeletedTheme),
-            .terminalThemePreferenceUpsert(themePreference),
-            .terminalAccessoryProfileUpsert(accessoryProfile),
-            .statsPreferencesUpsert(statsPreferences)
+            try .serverUpsert(server),
+            try .serverDelete(legacyDeletedServer),
+            try .workspaceUpsert(workspace),
+            try .workspaceDelete(deletedWorkspace),
+            try .terminalThemeUpsert(theme),
+            try .terminalThemeUpsert(legacyDeletedTheme),
+            try .terminalThemePreferenceUpsert(themePreference),
+            try .terminalAccessoryProfileUpsert(accessoryProfile),
+            try .statsPreferencesUpsert(statsPreferences)
+        ]
+    }
+
+    func associatedLegacyRecords() throws -> [Any] {
+        [
+            try associatedLegacyRecord(
+                id: mutationIDs[0],
+                kind: "serverUpsert",
+                value: server
+            ),
+            try associatedLegacyRecord(
+                id: mutationIDs[1],
+                kind: "serverDelete",
+                value: legacyDeletedServer
+            ),
+            try associatedLegacyRecord(
+                id: mutationIDs[2],
+                kind: "workspaceUpsert",
+                value: workspace
+            ),
+            try associatedLegacyRecord(
+                id: mutationIDs[3],
+                kind: "workspaceDelete",
+                value: deletedWorkspace
+            ),
+            try associatedLegacyRecord(
+                id: mutationIDs[4],
+                kind: "terminalThemeUpsert",
+                value: theme
+            ),
+            try associatedLegacyRecord(
+                id: mutationIDs[5],
+                kind: "terminalThemePreferenceUpsert",
+                value: themePreference
+            ),
+            try associatedLegacyRecord(
+                id: mutationIDs[6],
+                kind: "terminalAccessoryProfileUpsert",
+                value: accessoryProfile
+            ),
+            try associatedLegacyRecord(
+                id: mutationIDs[7],
+                kind: "statsPreferencesUpsert",
+                value: statsPreferences
+            )
         ]
     }
 }
@@ -648,6 +742,27 @@ private struct RetryTestError: Error {}
 private func jsonObject(_ fixture: LegacyMutationFixture) throws -> Any {
     let encoded = try JSONEncoder().encode(fixture)
     return try JSONSerialization.jsonObject(with: encoded)
+}
+
+private func associatedLegacyRecord<Value: Encodable>(
+    id: UUID,
+    kind: String,
+    value: Value
+) throws -> Any {
+    let valueData = try JSONEncoder().encode(value)
+    let valueObject = try JSONSerialization.jsonObject(with: valueData)
+    return [
+        "id": id.uuidString,
+        "payload": [
+            "kind": kind,
+            "payload": valueObject
+        ],
+        "createdAt": 10_000,
+        "retryCount": 2,
+        "nextRetryAt": 10_120,
+        "lastErrorCode": "legacy-error",
+        "lastErrorDescription": "Legacy failure"
+    ]
 }
 
 private func makeStorage() -> (suiteName: String, storageKey: String, defaults: UserDefaults) {

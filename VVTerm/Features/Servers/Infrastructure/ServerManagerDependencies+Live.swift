@@ -2,15 +2,7 @@ import Foundation
 
 extension CloudKitSyncCoordinator: ServerSyncRepository {
     func clearPendingServerAndWorkspaceMutations() throws {
-        try removeAll { mutation in
-            switch mutation.payload {
-            case .serverUpsert, .serverDelete, .workspaceUpsert, .workspaceDelete:
-                return true
-            case .terminalThemeUpsert, .terminalThemePreferenceUpsert,
-                 .terminalAccessoryProfileUpsert, .statsPreferencesUpsert:
-                return false
-            }
-        }
+        try removeAll { ServerPendingCloudKitPayloadCodec.contains($0.payload) }
     }
 
     func enqueueServerUpsert(_ server: Server) throws {
@@ -41,7 +33,7 @@ extension CloudKitSyncCoordinator: ServerSyncRepository {
         guard mutations.allSatisfy(\.payload.isDeletion) else {
             throw WorkspaceDeletionTransactionError.invalidPendingMutation
         }
-        try enqueueAtomically(mutations.map(PendingCloudKitMutation.init))
+        try enqueueAtomically(try mutations.map(PendingCloudKitMutation.init))
     }
 }
 
@@ -106,17 +98,7 @@ extension ServerManagerDependencies {
 
 private extension ServerPendingMutation {
     init?(_ mutation: PendingCloudKitMutation) {
-        let payload: Payload
-        switch mutation.payload {
-        case .serverUpsert(let server):
-            payload = .serverUpsert(server)
-        case .serverDelete(let server):
-            payload = .serverDelete(server)
-        case .workspaceUpsert(let workspace):
-            payload = .workspaceUpsert(workspace)
-        case .workspaceDelete(let workspace):
-            payload = .workspaceDelete(workspace)
-        default:
+        guard let payload = try? ServerPendingCloudKitPayloadCodec.decode(mutation.payload) else {
             return nil
         }
         self.init(id: mutation.id, payload: payload, createdAt: mutation.createdAt)
@@ -135,19 +117,12 @@ private extension ServerPendingMutation.Payload {
 }
 
 private extension PendingCloudKitMutation {
-    init(_ mutation: ServerPendingMutation) {
-        let payload: PendingCloudKitMutationPayload
-        switch mutation.payload {
-        case .serverUpsert(let server):
-            payload = .serverUpsert(server)
-        case .serverDelete(let server):
-            payload = .serverDelete(server)
-        case .workspaceUpsert(let workspace):
-            payload = .workspaceUpsert(workspace)
-        case .workspaceDelete(let workspace):
-            payload = .workspaceDelete(workspace)
-        }
-        self.init(id: mutation.id, payload: payload, createdAt: mutation.createdAt)
+    init(_ mutation: ServerPendingMutation) throws {
+        self.init(
+            id: mutation.id,
+            payload: try ServerPendingCloudKitPayloadCodec.encode(mutation.payload),
+            createdAt: mutation.createdAt
+        )
     }
 }
 

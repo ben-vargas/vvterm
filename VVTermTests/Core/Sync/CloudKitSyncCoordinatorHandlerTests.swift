@@ -59,24 +59,31 @@ struct CloudKitSyncCoordinatorHandlerTests {
             content: "background = #000000\nforeground = #FFFFFF\n",
             updatedAt: Date(timeIntervalSinceReferenceDate: 100)
         )
+        let payload = try PendingCloudKitMutationPayload.terminalThemeUpsert(theme)
 
         try coordinator.enqueue(
-            PendingCloudKitMutation(payload: .terminalThemeUpsert(theme))
+            PendingCloudKitMutation(payload: payload)
         )
         await coordinator.drainPendingMutations()
 
         let failedMutation = try #require(coordinator.snapshot().first)
-        #expect(handler.received.map(\.payload) == [.terminalThemeUpsert(theme)])
+        let firstReceivedPayload = try #require(handler.received.first?.payload)
+        let decodedTheme = try firstReceivedPayload.decode(
+            TerminalTheme.self,
+            entityType: TerminalThemePendingCloudKitPayloadCodec.themeEntityType,
+            operation: .upsert
+        )
+        let receivedTheme = try #require(decodedTheme)
+        #expect(handler.received.map(\.payload) == [payload])
+        #expect(receivedTheme == theme)
         #expect(failedMutation.retryCount == 1)
         #expect(failedMutation.nextRetryAt == currentDate.addingTimeInterval(30))
 
         currentDate = try #require(failedMutation.nextRetryAt)
         await coordinator.drainPendingMutations()
 
-        #expect(handler.received.map(\.payload) == [
-            .terminalThemeUpsert(theme),
-            .terminalThemeUpsert(theme)
-        ])
+        let expectedReceivedPayloads = [payload, payload]
+        #expect(handler.received.map(\.payload) == expectedReceivedPayloads)
         #expect(coordinator.snapshot().isEmpty)
     }
 
@@ -96,15 +103,15 @@ struct CloudKitSyncCoordinatorHandlerTests {
             now: { Date(timeIntervalSinceReferenceDate: 30_000) },
             makeID: UUID.init
         )
+        let theme = TerminalTheme(
+            name: "Cancelled Theme",
+            content: "background = #000000\nforeground = #FFFFFF\n",
+            updatedAt: Date(timeIntervalSinceReferenceDate: 100)
+        )
+        let payload = try PendingCloudKitMutationPayload.terminalThemeUpsert(theme)
         let mutation = PendingCloudKitMutation(
             id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
-            payload: .terminalThemeUpsert(
-                TerminalTheme(
-                    name: "Cancelled Theme",
-                    content: "background = #000000\nforeground = #FFFFFF\n",
-                    updatedAt: Date(timeIntervalSinceReferenceDate: 100)
-                )
-            ),
+            payload: payload,
             createdAt: Date(timeIntervalSinceReferenceDate: 200)
         )
 
@@ -137,7 +144,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
             now: { Date(timeIntervalSinceReferenceDate: 40_000) },
             makeID: UUID.init
         )
-        let mutation = makeMutation(idSuffix: 2)
+        let mutation = try makeMutation(idSuffix: 2)
         try coordinator.enqueue(mutation)
 
         defaults.rejectWrites = true
@@ -170,7 +177,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
             now: { Date(timeIntervalSinceReferenceDate: 50_000) },
             makeID: UUID.init
         )
-        let mutation = makeMutation(idSuffix: 3)
+        let mutation = try makeMutation(idSuffix: 3)
         try coordinator.enqueue(mutation)
 
         defaults.rejectWrites = true
@@ -186,21 +193,20 @@ struct CloudKitSyncCoordinatorHandlerTests {
         #expect(reloadedQueue.snapshot() == [mutation])
     }
 
-    private func makeMutation(idSuffix: Int) -> PendingCloudKitMutation {
-        PendingCloudKitMutation(
+    private func makeMutation(idSuffix: Int) throws -> PendingCloudKitMutation {
+        let theme = TerminalTheme(
+            name: "Durable Theme",
+            content: "background = #000000\nforeground = #FFFFFF\n",
+            updatedAt: Date(timeIntervalSinceReferenceDate: 100)
+        )
+        return PendingCloudKitMutation(
             id: UUID(
                 uuidString: String(
                     format: "10000000-0000-0000-0000-%012d",
                     idSuffix
                 )
             )!,
-            payload: .terminalThemeUpsert(
-                TerminalTheme(
-                    name: "Durable Theme",
-                    content: "background = #000000\nforeground = #FFFFFF\n",
-                    updatedAt: Date(timeIntervalSinceReferenceDate: 100)
-                )
-            ),
+            payload: try PendingCloudKitMutationPayload.terminalThemeUpsert(theme),
             createdAt: Date(timeIntervalSinceReferenceDate: 200)
         )
     }

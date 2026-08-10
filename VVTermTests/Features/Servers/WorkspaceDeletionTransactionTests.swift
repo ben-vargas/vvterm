@@ -5,21 +5,30 @@ import Testing
 @MainActor
 struct WorkspaceDeletionTransactionTests {
     @Test
-    func serverMutationValueDecodesTheExistingDurableQueueShape() throws {
+    func serverCodecDecodesTheDurableQueueShape() throws {
         let fixture = WorkspaceDeletionFixture()
         let id = UUID(uuidString: "30000000-0000-0000-0000-000000000010")!
         let createdAt = Date(timeIntervalSinceReferenceDate: 1_500)
         let existingQueueMutation = PendingCloudKitMutation(
             id: id,
-            payload: .serverDelete(fixture.firstServer),
+            payload: try .serverDelete(fixture.firstServer),
             createdAt: createdAt,
             retryCount: 4,
             lastErrorDescription: "retry"
         )
 
-        let decoded = try JSONDecoder().decode(
-            ServerPendingMutation.self,
+        let durableMutation = try JSONDecoder().decode(
+            PendingCloudKitMutation.self,
             from: JSONEncoder().encode(existingQueueMutation)
+        )
+        let decodedPayloadValue = try ServerPendingCloudKitPayloadCodec.decode(
+            durableMutation.payload
+        )
+        let decodedPayload = try #require(decodedPayloadValue)
+        let decoded = ServerPendingMutation(
+            id: durableMutation.id,
+            payload: decodedPayload,
+            createdAt: durableMutation.createdAt
         )
 
         #expect(

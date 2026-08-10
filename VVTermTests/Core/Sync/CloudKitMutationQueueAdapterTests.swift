@@ -34,9 +34,10 @@ struct CloudKitMutationQueueAdapterTests {
             name: "Deleted Server"
         )
         let stats = makeStatsPreferences()
+        let statsPayload = try PendingCloudKitMutationPayload.statsPreferencesUpsert(stats)
         let unrelatedMutation = PendingCloudKitMutation(
             id: UUID(uuidString: "30000000-0000-0000-0000-000000000001")!,
-            payload: .statsPreferencesUpsert(stats),
+            payload: statsPayload,
             createdAt: Date(timeIntervalSinceReferenceDate: 1)
         )
         try coordinator.enqueue(unrelatedMutation)
@@ -46,19 +47,21 @@ struct CloudKitMutationQueueAdapterTests {
         try repository.enqueueWorkspaceUpsert(workspace)
         try repository.enqueueWorkspaceDelete(deletedWorkspace)
 
-        #expect(coordinator.snapshot().map(\.payload) == [
-            .statsPreferencesUpsert(stats),
+        let expectedPayloads = [
+            statsPayload,
+            try PendingCloudKitMutationPayload.serverUpsert(server),
+            try PendingCloudKitMutationPayload.serverDelete(deletedServer),
+            try PendingCloudKitMutationPayload.workspaceUpsert(workspace),
+            try PendingCloudKitMutationPayload.workspaceDelete(deletedWorkspace)
+        ]
+        let expectedServerPayloads: [ServerPendingMutation.Payload] = [
             .serverUpsert(server),
             .serverDelete(deletedServer),
             .workspaceUpsert(workspace),
             .workspaceDelete(deletedWorkspace)
-        ])
-        #expect(repository.pendingServerMutations().map(\.payload) == [
-            .serverUpsert(server),
-            .serverDelete(deletedServer),
-            .workspaceUpsert(workspace),
-            .workspaceDelete(deletedWorkspace)
-        ])
+        ]
+        #expect(coordinator.snapshot().map(\.payload) == expectedPayloads)
+        #expect(repository.pendingServerMutations().map(\.payload) == expectedServerPayloads)
 
         let firstServerMutation = try #require(repository.pendingServerMutations().first)
         try repository.removePendingServerMutation(firstServerMutation.id)
@@ -98,18 +101,21 @@ struct CloudKitMutationQueueAdapterTests {
             workspaceMutation
         ])
 
-        #expect(fixture.coordinator.snapshot() == [
+        let serverPayload = try PendingCloudKitMutationPayload.serverDelete(server)
+        let workspacePayload = try PendingCloudKitMutationPayload.workspaceDelete(workspace)
+        let expectedMutations = [
             PendingCloudKitMutation(
                 id: serverMutation.id,
-                payload: .serverDelete(server),
+                payload: serverPayload,
                 createdAt: createdAt
             ),
             PendingCloudKitMutation(
                 id: workspaceMutation.id,
-                payload: .workspaceDelete(workspace),
+                payload: workspacePayload,
                 createdAt: createdAt
             )
-        ])
+        ]
+        #expect(fixture.coordinator.snapshot() == expectedMutations)
     }
 
     @Test
@@ -133,10 +139,11 @@ struct CloudKitMutationQueueAdapterTests {
         try queue.enqueueTerminalThemeUpsert(theme)
         try queue.enqueueTerminalThemePreferenceUpsert(preference)
 
-        #expect(fixture.coordinator.snapshot().map(\.payload) == [
-            .terminalThemeUpsert(theme),
-            .terminalThemePreferenceUpsert(preference)
-        ])
+        let expectedPayloads = [
+            try PendingCloudKitMutationPayload.terminalThemeUpsert(theme),
+            try PendingCloudKitMutationPayload.terminalThemePreferenceUpsert(preference)
+        ]
+        #expect(fixture.coordinator.snapshot().map(\.payload) == expectedPayloads)
     }
 
     @Test
@@ -150,9 +157,9 @@ struct CloudKitMutationQueueAdapterTests {
 
         try queue.enqueueTerminalAccessoryProfileUpsert(profile)
 
-        #expect(fixture.coordinator.snapshot().map(\.payload) == [
+        let expectedPayload = try PendingCloudKitMutationPayload
             .terminalAccessoryProfileUpsert(profile)
-        ])
+        #expect(fixture.coordinator.snapshot().map(\.payload) == [expectedPayload])
     }
 
     @Test
@@ -164,9 +171,9 @@ struct CloudKitMutationQueueAdapterTests {
 
         try queue.enqueueStatsPreferencesUpsert(preferences)
 
-        #expect(fixture.coordinator.snapshot().map(\.payload) == [
+        let expectedPayload = try PendingCloudKitMutationPayload
             .statsPreferencesUpsert(preferences)
-        ])
+        #expect(fixture.coordinator.snapshot().map(\.payload) == [expectedPayload])
     }
 
     @Test
@@ -235,9 +242,11 @@ struct CloudKitMutationQueueAdapterTests {
         try coordinator.enqueueStatsPreferencesUpsert(preferences)
 
         let mutation = try #require(coordinator.snapshot().first)
+        let expectedPayload = try PendingCloudKitMutationPayload
+            .statsPreferencesUpsert(preferences)
         #expect(mutation.id == expectedID)
         #expect(mutation.createdAt == expectedDate)
-        #expect(mutation.payload == .statsPreferencesUpsert(preferences))
+        #expect(mutation.payload == expectedPayload)
     }
 
     private func makeFixture(

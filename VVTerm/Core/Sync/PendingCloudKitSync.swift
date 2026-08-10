@@ -1,162 +1,6 @@
 import CloudKit
 import Foundation
 
-enum PendingCloudKitMutationPayload: Codable, Equatable {
-    case serverUpsert(Server)
-    case serverDelete(Server)
-    case workspaceUpsert(Workspace)
-    case workspaceDelete(Workspace)
-    case terminalThemeUpsert(TerminalTheme)
-    case terminalThemePreferenceUpsert(TerminalThemePreference)
-    case terminalAccessoryProfileUpsert(TerminalAccessoryProfile)
-    case statsPreferencesUpsert(StatsPreferences)
-
-    private enum Kind: String, Codable {
-        case serverUpsert
-        case serverDelete
-        case workspaceUpsert
-        case workspaceDelete
-        case terminalThemeUpsert
-        case terminalThemePreferenceUpsert
-        case terminalAccessoryProfileUpsert
-        case statsPreferencesUpsert
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case kind
-        case payload
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        switch try container.decode(Kind.self, forKey: .kind) {
-        case .serverUpsert:
-            self = .serverUpsert(try container.decode(Server.self, forKey: .payload))
-        case .serverDelete:
-            self = .serverDelete(try container.decode(Server.self, forKey: .payload))
-        case .workspaceUpsert:
-            self = .workspaceUpsert(try container.decode(Workspace.self, forKey: .payload))
-        case .workspaceDelete:
-            self = .workspaceDelete(try container.decode(Workspace.self, forKey: .payload))
-        case .terminalThemeUpsert:
-            self = .terminalThemeUpsert(try container.decode(TerminalTheme.self, forKey: .payload))
-        case .terminalThemePreferenceUpsert:
-            self = .terminalThemePreferenceUpsert(
-                try container.decode(TerminalThemePreference.self, forKey: .payload)
-            )
-        case .terminalAccessoryProfileUpsert:
-            self = .terminalAccessoryProfileUpsert(
-                try container.decode(TerminalAccessoryProfile.self, forKey: .payload)
-            )
-        case .statsPreferencesUpsert:
-            self = .statsPreferencesUpsert(
-                try container.decode(StatsPreferences.self, forKey: .payload)
-            )
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .serverUpsert(let server):
-            try container.encode(Kind.serverUpsert, forKey: .kind)
-            try container.encode(server, forKey: .payload)
-        case .serverDelete(let server):
-            try container.encode(Kind.serverDelete, forKey: .kind)
-            try container.encode(server, forKey: .payload)
-        case .workspaceUpsert(let workspace):
-            try container.encode(Kind.workspaceUpsert, forKey: .kind)
-            try container.encode(workspace, forKey: .payload)
-        case .workspaceDelete(let workspace):
-            try container.encode(Kind.workspaceDelete, forKey: .kind)
-            try container.encode(workspace, forKey: .payload)
-        case .terminalThemeUpsert(let theme):
-            try container.encode(Kind.terminalThemeUpsert, forKey: .kind)
-            try container.encode(theme, forKey: .payload)
-        case .terminalThemePreferenceUpsert(let preference):
-            try container.encode(Kind.terminalThemePreferenceUpsert, forKey: .kind)
-            try container.encode(preference, forKey: .payload)
-        case .terminalAccessoryProfileUpsert(let profile):
-            try container.encode(Kind.terminalAccessoryProfileUpsert, forKey: .kind)
-            try container.encode(profile, forKey: .payload)
-        case .statsPreferencesUpsert(let preferences):
-            try container.encode(Kind.statsPreferencesUpsert, forKey: .kind)
-            try container.encode(preferences, forKey: .payload)
-        }
-    }
-
-    var entityKey: String {
-        switch self {
-        case .serverUpsert(let server), .serverDelete(let server):
-            return server.id.uuidString
-        case .workspaceUpsert(let workspace), .workspaceDelete(let workspace):
-            return workspace.id.uuidString
-        case .terminalThemeUpsert(let theme):
-            return theme.id.uuidString
-        case .terminalThemePreferenceUpsert:
-            return TerminalThemePreference.recordName
-        case .terminalAccessoryProfileUpsert:
-            return TerminalAccessoryProfile.recordName
-        case .statsPreferencesUpsert:
-            return StatsPreferences.recordName
-        }
-    }
-
-    var coalescingKey: String {
-        switch self {
-        case .serverUpsert, .serverDelete:
-            return "server:\(entityKey)"
-        case .workspaceUpsert, .workspaceDelete:
-            return "workspace:\(entityKey)"
-        case .terminalThemeUpsert:
-            return "terminalTheme:\(entityKey)"
-        case .terminalThemePreferenceUpsert:
-            return "terminalThemePreference:\(entityKey)"
-        case .terminalAccessoryProfileUpsert:
-            return "terminalAccessoryProfile:\(entityKey)"
-        case .statsPreferencesUpsert:
-            return "statsPreferences:\(entityKey)"
-        }
-    }
-
-    var drainPriority: Int {
-        switch self {
-        case .workspaceUpsert: return 0
-        case .serverUpsert: return 1
-        case .terminalThemeUpsert: return 2
-        case .terminalThemePreferenceUpsert: return 3
-        case .terminalAccessoryProfileUpsert: return 4
-        case .statsPreferencesUpsert: return 5
-        case .serverDelete: return 6
-        case .workspaceDelete: return 7
-        }
-    }
-
-    var isDelete: Bool {
-        switch self {
-        case .serverDelete, .workspaceDelete:
-            return true
-        default:
-            return false
-        }
-    }
-
-    var description: String {
-        let operation: String
-        switch self {
-        case .serverUpsert: operation = "server upsert"
-        case .serverDelete: operation = "server delete"
-        case .workspaceUpsert: operation = "workspace upsert"
-        case .workspaceDelete: operation = "workspace delete"
-        case .terminalThemeUpsert: operation = "terminal theme upsert"
-        case .terminalThemePreferenceUpsert: operation = "terminal theme preference upsert"
-        case .terminalAccessoryProfileUpsert: operation = "terminal accessory profile upsert"
-        case .statsPreferencesUpsert: operation = "stats preferences upsert"
-        }
-        return "\(operation) \(entityKey)"
-    }
-}
-
 struct PendingCloudKitMutation: Codable, Equatable, Identifiable {
     static let maximumRetryCount = 64
 
@@ -286,16 +130,19 @@ final class PendingCloudKitSyncQueue {
     private let storageKey: String
     private let quarantineStorageKey: String
     private let defaults: UserDefaults
+    private let legacyMigrator: (any PendingCloudKitLegacyMutationMigrating)?
     private var items: [PendingCloudKitMutation]
     private var quarantinedItems: [PendingCloudKitMutationQuarantine]
 
     init(
         storageKey: String = CloudKitSyncConstants.pendingCloudKitSyncQueueStorageKey,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        legacyMigrator: (any PendingCloudKitLegacyMutationMigrating)? = nil
     ) {
         self.storageKey = storageKey
         self.quarantineStorageKey = storageKey + Self.quarantineStorageKeySuffix
         self.defaults = defaults
+        self.legacyMigrator = legacyMigrator
         self.items = []
         self.quarantinedItems = []
         loadQuarantine()
@@ -402,10 +249,7 @@ final class PendingCloudKitSyncQueue {
                 continue
             }
 
-            guard let legacyMutation = try? JSONDecoder().decode(
-                LegacyPendingCloudKitMutation.self,
-                from: recordData
-            ) else {
+            guard let migration = legacyMigrator?.migrate(recordData: recordData) else {
                 quarantine(
                     recordData,
                     legacyMutationID: nil,
@@ -415,7 +259,7 @@ final class PendingCloudKitSyncQueue {
                 continue
             }
 
-            switch legacyMutation.migrated() {
+            switch migration {
             case .success(let mutation):
                 migratedItems.removeAll {
                     $0.payload.coalescingKey == mutation.payload.coalescingKey
@@ -424,7 +268,7 @@ final class PendingCloudKitSyncQueue {
             case .failure(let reason):
                 quarantine(
                     recordData,
-                    legacyMutationID: legacyMutation.id,
+                    legacyMutationID: Self.legacyMutationID(in: recordData),
                     reason: reason,
                     in: &updatedQuarantinedItems
                 )
@@ -516,6 +360,15 @@ final class PendingCloudKitSyncQueue {
             defaults.removeObject(forKey: key)
         }
     }
+
+    private static func legacyMutationID(in data: Data) -> UUID? {
+        guard let object = try? JSONSerialization.jsonObject(with: data),
+              let record = object as? [String: Any],
+              let rawID = record["id"] as? String else {
+            return nil
+        }
+        return UUID(uuidString: rawID)
+    }
 }
 
 enum PendingCloudKitSyncQueueError: LocalizedError {
@@ -523,109 +376,5 @@ enum PendingCloudKitSyncQueueError: LocalizedError {
 
     var errorDescription: String? {
         "The pending CloudKit mutation queue could not be saved."
-    }
-}
-
-private enum LegacyPendingCloudKitEntity: String, Decodable {
-    case server
-    case workspace
-    case terminalTheme
-    case terminalThemePreference
-    case terminalAccessoryProfile
-    case statsPreferences
-}
-
-private enum LegacyPendingCloudKitOperation: String, Decodable {
-    case upsert
-    case delete
-}
-
-private struct LegacyPendingCloudKitMutation: Decodable {
-    let id: UUID
-    let entity: LegacyPendingCloudKitEntity
-    let operation: LegacyPendingCloudKitOperation
-    let entityKey: String
-    let server: Server?
-    let workspace: Workspace?
-    let terminalTheme: TerminalTheme?
-    let terminalThemePreference: TerminalThemePreference?
-    let terminalAccessoryProfile: TerminalAccessoryProfile?
-    let statsPreferences: StatsPreferences?
-    let createdAt: Date
-    let retryCount: Int
-    let nextRetryAt: Date?
-    let lastErrorCode: String?
-    let lastErrorDescription: String?
-
-    func migrated() -> Result<PendingCloudKitMutation, PendingCloudKitMutationQuarantineReason> {
-        let payload: PendingCloudKitMutationPayload
-        switch (entity, operation) {
-        case (.server, .upsert):
-            guard let server else { return .failure(.missingOrConflictingPayload) }
-            payload = .serverUpsert(server)
-        case (.server, .delete):
-            guard let server else { return .failure(.missingOrConflictingPayload) }
-            payload = .serverDelete(server)
-        case (.workspace, .upsert):
-            guard let workspace else { return .failure(.missingOrConflictingPayload) }
-            payload = .workspaceUpsert(workspace)
-        case (.workspace, .delete):
-            guard let workspace else { return .failure(.missingOrConflictingPayload) }
-            payload = .workspaceDelete(workspace)
-        case (.terminalTheme, .upsert), (.terminalTheme, .delete):
-            guard let terminalTheme else { return .failure(.missingOrConflictingPayload) }
-            // Legacy theme deletes used the same CloudKit save path as tombstone upserts.
-            payload = .terminalThemeUpsert(terminalTheme)
-        case (.terminalThemePreference, .upsert):
-            guard let terminalThemePreference else {
-                return .failure(.missingOrConflictingPayload)
-            }
-            payload = .terminalThemePreferenceUpsert(terminalThemePreference)
-        case (.terminalAccessoryProfile, .upsert):
-            guard let terminalAccessoryProfile else {
-                return .failure(.missingOrConflictingPayload)
-            }
-            payload = .terminalAccessoryProfileUpsert(terminalAccessoryProfile)
-        case (.statsPreferences, .upsert):
-            guard let statsPreferences else {
-                return .failure(.missingOrConflictingPayload)
-            }
-            payload = .statsPreferencesUpsert(statsPreferences)
-        case (.terminalThemePreference, .delete),
-             (.terminalAccessoryProfile, .delete),
-             (.statsPreferences, .delete):
-            return .failure(.unsupportedOperation)
-        }
-
-        guard payloadCount == 1 else {
-            return .failure(.missingOrConflictingPayload)
-        }
-
-        guard entityKey == payload.entityKey else {
-            return .failure(.mismatchedEntityKey)
-        }
-
-        return .success(
-            PendingCloudKitMutation(
-                id: id,
-                payload: payload,
-                createdAt: createdAt,
-                retryCount: retryCount,
-                nextRetryAt: nextRetryAt,
-                lastErrorCode: lastErrorCode,
-                lastErrorDescription: lastErrorDescription
-            )
-        )
-    }
-
-    private var payloadCount: Int {
-        [
-            server != nil,
-            workspace != nil,
-            terminalTheme != nil,
-            terminalThemePreference != nil,
-            terminalAccessoryProfile != nil,
-            statsPreferences != nil
-        ].reduce(0) { $0 + ($1 ? 1 : 0) }
     }
 }

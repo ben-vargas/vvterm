@@ -186,6 +186,46 @@ struct CloudKitSyncLiveCompositionTests {
     }
 
     @Test
+    func unsupportedPayloadRemainsQueuedAfterRealRouterFailure() async throws {
+        let suiteName = "CloudKitSyncUnsupportedPayloadTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let now = Date(timeIntervalSinceReferenceDate: 20_000)
+        let composition = CloudKitSyncLiveComposition.make(
+            clients: CloudKitSyncClients(
+                serverCloud: AppServerMutationClientStub(),
+                terminalThemeCloud: AppThemeMutationClientStub(),
+                terminalAccessoryCloud: AppAccessoryCloudClientStub(),
+                statsPreferencesCloud: AppStatsCloudClientStub()
+            ),
+            queue: PendingCloudKitSyncQueue(
+                storageKey: "unsupportedPayloadQueue",
+                defaults: defaults
+            ),
+            isSyncEnabled: { true },
+            now: { now },
+            makeID: UUID.init
+        )
+        let payload = try PendingCloudKitPayloadEnvelope(
+            entityType: "unknown",
+            entityKey: "unknown-record",
+            operation: .upsert,
+            drainPriority: 99,
+            value: ["value": "unsupported"]
+        )
+
+        try composition.coordinator.enqueue(payload)
+        await composition.coordinator.drainPendingMutations()
+
+        let retainedMutation = try #require(composition.coordinator.snapshot().first)
+        #expect(composition.coordinator.snapshot().count == 1)
+        #expect(retainedMutation.payload == payload)
+        #expect(retainedMutation.retryCount == 1)
+        #expect(retainedMutation.nextRetryAt == now.addingTimeInterval(30))
+        #expect(retainedMutation.lastErrorDescription?.contains("Unsupported") == true)
+    }
+
+    @Test
     func resolutionChannelsAreIsolatedAndRemovedObserversStayRemoved() {
         let terminalAccessoryResolutions = TerminalAccessoryResolutionChannel()
         let statsPreferencesResolutions = StatsPreferencesResolutionChannel()
