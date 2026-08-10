@@ -82,6 +82,8 @@ final class CloudKitSyncCoordinator {
                     try await mutationHandler.handle(mutation)
                     queue.remove(mutation.id)
                     didProgress = true
+                } catch is CancellationError {
+                    return
                 } catch {
                     if isIgnorableDeleteSyncError(error, for: mutation) {
                         queue.remove(mutation.id)

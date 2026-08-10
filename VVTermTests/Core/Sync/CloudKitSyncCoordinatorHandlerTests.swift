@@ -11,6 +11,7 @@ private final class PendingMutationHandlerStub: PendingCloudKitMutationHandling 
     enum Behavior {
         case succeed
         case fail
+        case cancel
     }
 
     var behaviors: [Behavior]
@@ -28,6 +29,8 @@ private final class PendingMutationHandlerStub: PendingCloudKitMutationHandling 
             return
         case .fail:
             throw PendingMutationHandlerTestError.failed
+        case .cancel:
+            throw CancellationError()
         }
     }
 }
@@ -73,6 +76,45 @@ struct CloudKitSyncCoordinatorHandlerTests {
             .terminalThemeUpsert(theme),
             .terminalThemeUpsert(theme)
         ])
+        #expect(coordinator.snapshot().isEmpty)
+    }
+
+    @Test
+    func cancellationLeavesMutationUnchangedAndImmediatelyRetryable() async throws {
+        let suiteName = "CloudKitSyncCoordinatorHandlerTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let handler = PendingMutationHandlerStub(behaviors: [.cancel, .succeed])
+        let coordinator = CloudKitSyncCoordinator(
+            mutationHandler: handler,
+            queue: PendingCloudKitSyncQueue(
+                storageKey: "handlerCancellationQueue",
+                defaults: defaults
+            ),
+            isSyncEnabled: { true },
+            now: { Date(timeIntervalSinceReferenceDate: 30_000) }
+        )
+        let mutation = PendingCloudKitMutation(
+            id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
+            payload: .terminalThemeUpsert(
+                TerminalTheme(
+                    name: "Cancelled Theme",
+                    content: "background = #000000\nforeground = #FFFFFF\n",
+                    updatedAt: Date(timeIntervalSinceReferenceDate: 100)
+                )
+            ),
+            createdAt: Date(timeIntervalSinceReferenceDate: 200)
+        )
+
+        coordinator.enqueue(mutation)
+        await coordinator.drainPendingMutations()
+
+        #expect(coordinator.snapshot() == [mutation])
+        #expect(handler.received == [mutation])
+
+        await coordinator.drainPendingMutations()
+
+        #expect(handler.received == [mutation, mutation])
         #expect(coordinator.snapshot().isEmpty)
     }
 }
