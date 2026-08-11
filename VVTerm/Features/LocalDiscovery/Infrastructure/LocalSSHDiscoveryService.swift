@@ -197,28 +197,27 @@ final class LocalSSHDiscoveryService: NSObject {
             let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: nwPort)
             let connection = NWConnection(to: endpoint, using: .tcp)
             let queue = DispatchQueue(label: "com.vivy.vvterm.discovery.probe.\(host)")
-            var completed = false
-
-            let complete: (Bool) -> Void = { ready in
-                guard !completed else { return }
-                completed = true
-                continuation.resume(returning: ready)
-                connection.cancel()
-            }
+            let completionState = ReachabilityCompletionState()
 
             connection.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    complete(true)
+                    guard completionState.completeOnce() else { return }
+                    continuation.resume(returning: true)
+                    connection.cancel()
                 case .failed, .cancelled:
-                    complete(false)
+                    guard completionState.completeOnce() else { return }
+                    continuation.resume(returning: false)
+                    connection.cancel()
                 default:
                     break
                 }
             }
 
             queue.asyncAfter(deadline: .now() + timeout) {
-                complete(false)
+                guard completionState.completeOnce() else { return }
+                continuation.resume(returning: false)
+                connection.cancel()
             }
 
             connection.start(queue: queue)
