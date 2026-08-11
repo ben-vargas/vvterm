@@ -46,9 +46,11 @@ struct SSHStartupIntegrationTests {
         let username: String
         let privateKey: Data
 
-        static func fromEnvironment() throws -> Configuration? {
+        static func fromEnvironment() throws -> Configuration {
             let environment = ProcessInfo.processInfo.environment
-            guard environment["VVTERM_SSH_INTEGRATION"] == "1" else { return nil }
+            guard environment["VVTERM_SSH_INTEGRATION"] == "1" else {
+                throw IntegrationError.missingEnvironment("VVTERM_SSH_INTEGRATION=1")
+            }
             guard let encodedKey = environment["VVTERM_SSH_PRIVATE_KEY_BASE64"] else {
                 throw IntegrationError.missingEnvironment("VVTERM_SSH_PRIVATE_KEY_BASE64")
             }
@@ -94,7 +96,7 @@ struct SSHStartupIntegrationTests {
 
     @Test
     func sshAndMoshReachFirstTerminalByte() async throws {
-        guard let configuration = try Configuration.fromEnvironment() else { return }
+        let configuration = try Configuration.fromEnvironment()
 
         let ssh = try await measureStartups(
             count: 6,
@@ -115,8 +117,10 @@ struct SSHStartupIntegrationTests {
 
     @Test
     func missingMoshServerFallsBackWithExactReason() async throws {
-        guard let configuration = try Configuration.fromEnvironment(),
-              let port = integrationPort(named: "VVTERM_SSH_MISSING_MOSH_PORT") else { return }
+        let configuration = try Configuration.fromEnvironment()
+        guard let port = integrationPort(named: "VVTERM_SSH_MISSING_MOSH_PORT") else {
+            throw IntegrationError.missingEnvironment("VVTERM_SSH_MISSING_MOSH_PORT")
+        }
 
         let result = try await measureStartup(
             configuration: configuration.withPort(port),
@@ -128,8 +132,10 @@ struct SSHStartupIntegrationTests {
 
     @Test
     func blockedMoshUDPFallsBackWithExactReason() async throws {
-        guard let configuration = try Configuration.fromEnvironment(),
-              let port = integrationPort(named: "VVTERM_SSH_BLOCKED_UDP_PORT") else { return }
+        let configuration = try Configuration.fromEnvironment()
+        guard let port = integrationPort(named: "VVTERM_SSH_BLOCKED_UDP_PORT") else {
+            throw IntegrationError.missingEnvironment("VVTERM_SSH_BLOCKED_UDP_PORT")
+        }
 
         let result = try await measureStartup(
             configuration: configuration.withPort(port),
@@ -141,7 +147,7 @@ struct SSHStartupIntegrationTests {
 
     @Test @MainActor
     func managedTmuxCreateAndQuietReattachStayOnMosh() async throws {
-        guard let configuration = try Configuration.fromEnvironment() else { return }
+        let configuration = try Configuration.fromEnvironment()
         let previousKnownHost = KnownHostsManager.shared.entry(
             for: configuration.host,
             port: configuration.port
@@ -227,7 +233,7 @@ struct SSHStartupIntegrationTests {
 
     @Test @MainActor
     func managedTmuxCreateAndReattachStayAliveOnStandardSSH() async throws {
-        guard let configuration = try Configuration.fromEnvironment() else { return }
+        let configuration = try Configuration.fromEnvironment()
         let previousKnownHost = KnownHostsManager.shared.entry(
             for: configuration.host,
             port: configuration.port
@@ -320,7 +326,7 @@ struct SSHStartupIntegrationTests {
 
     @Test
     func cancellingAtEachStartupBoundaryStopsStartupAndAllowsFreshConnection() async throws {
-        guard let configuration = try Configuration.fromEnvironment() else { return }
+        let configuration = try Configuration.fromEnvironment()
         let previousKnownHost = KnownHostsManager.shared.entry(
             for: configuration.host,
             port: configuration.port
@@ -386,7 +392,7 @@ struct SSHStartupIntegrationTests {
 
     @Test
     func disconnectingAtEachStartupBoundaryFailsCleanly() async throws {
-        guard let configuration = try Configuration.fromEnvironment() else { return }
+        let configuration = try Configuration.fromEnvironment()
         let previousKnownHost = KnownHostsManager.shared.entry(
             for: configuration.host,
             port: configuration.port
@@ -458,8 +464,10 @@ struct SSHStartupIntegrationTests {
 
     @Test
     func rejectedPTYCleansChannelAndLeavesSessionUsable() async throws {
-        guard let configuration = try Configuration.fromEnvironment(),
-              let rejectedPTYPort = integrationPort(named: "VVTERM_SSH_REJECT_PTY_PORT") else { return }
+        let configuration = try Configuration.fromEnvironment()
+        guard let rejectedPTYPort = integrationPort(named: "VVTERM_SSH_REJECT_PTY_PORT") else {
+            throw IntegrationError.missingEnvironment("VVTERM_SSH_REJECT_PTY_PORT")
+        }
 
         let rejectedConfiguration = configuration.withPort(rejectedPTYPort)
         let previousKnownHost = KnownHostsManager.shared.entry(
@@ -500,7 +508,7 @@ struct SSHStartupIntegrationTests {
 
     @Test
     func disconnectedTmuxProbeIsIndeterminateAndFreshConnectionRecovers() async throws {
-        guard let configuration = try Configuration.fromEnvironment() else { return }
+        let configuration = try Configuration.fromEnvironment()
         let previousKnownHost = KnownHostsManager.shared.entry(
             for: configuration.host,
             port: configuration.port

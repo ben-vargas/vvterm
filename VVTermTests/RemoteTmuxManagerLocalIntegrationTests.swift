@@ -5,9 +5,10 @@ import Testing
 
 @Suite(.serialized)
 struct RemoteTmuxManagerLocalIntegrationTests {
-    @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: "/opt/homebrew/bin/tmux")))
+    @Test
     func externalAttachPreservesRealTmuxGlobalOptions() throws {
         let installedTmux = "/opt/homebrew/bin/tmux"
+        try requireExecutable(installedTmux)
 
         let temporaryDirectory = FileManager.default.temporaryDirectory
         let root = temporaryDirectory
@@ -154,13 +155,12 @@ struct RemoteTmuxManagerLocalIntegrationTests {
         #expect(extendedKeysAfter == extendedKeysBefore)
     }
 
-    @Test(.enabled(if:
-        FileManager.default.isExecutableFile(atPath: "/opt/homebrew/bin/tmux")
-            && FileManager.default.isExecutableFile(atPath: "/opt/homebrew/bin/fish")
-    ))
+    @Test
     func managedCreationAndReattachScopeConfigurationToManagedSession() throws {
         let installedTmux = "/opt/homebrew/bin/tmux"
         let installedFish = "/opt/homebrew/bin/fish"
+        try requireExecutable(installedTmux)
+        try requireExecutable(installedFish)
         let temporaryDirectory = FileManager.default.temporaryDirectory
         let root = temporaryDirectory
             .appendingPathComponent("vvterm-dev220-\(UUID().uuidString)", isDirectory: true)
@@ -512,8 +512,9 @@ struct RemoteTmuxManagerLocalIntegrationTests {
         #expect(!initialPaneStartCommand.contains("sleep 0.4"))
     }
 
-    @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: "/opt/homebrew/bin/fish")))
+    @Test
     func posixWrapperPreservesLiteralBackticksThroughFish() throws {
+        try requireExecutable("/opt/homebrew/bin/fish")
         let expected = "before`literal`after"
         let script = "printf '%s' \(RemoteTerminalBootstrap.shellQuoted(expected))"
         let command = RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
@@ -540,6 +541,16 @@ struct RemoteTmuxManagerLocalIntegrationTests {
             arguments: ["set-option", "-g", option, value],
             environment: environment
         ))
+    }
+
+    private func requireExecutable(_ path: String) throws {
+        guard FileManager.default.isExecutableFile(atPath: path) else {
+            throw IntegrationDependencyError.missingExecutable(path)
+        }
+    }
+
+    private enum IntegrationDependencyError: Error {
+        case missingExecutable(String)
     }
 
     private func setGlobalArrayOption(
