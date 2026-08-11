@@ -4,24 +4,26 @@ import Foundation
 @MainActor
 private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
     private let cloudKit: CloudKitManager
+    private let statusStore: CloudKitSyncStatusStore
 
     init(cloudKit: CloudKitManager) {
         self.cloudKit = cloudKit
+        statusStore = cloudKit.statusStore
     }
 
     var currentState: SyncSettingsCloudState {
         Self.state(
-            syncState: cloudKit.syncState,
-            lastSyncDate: cloudKit.lastSyncDate,
-            accountState: cloudKit.accountState
+            syncState: statusStore.syncState,
+            lastSyncDate: statusStore.lastSyncDate,
+            accountState: statusStore.accountState
         )
     }
 
     var stateUpdates: AnyPublisher<SyncSettingsCloudState, Never> {
         Publishers.CombineLatest3(
-            cloudKit.$syncState,
-            cloudKit.$lastSyncDate,
-            cloudKit.$accountState
+            statusStore.$syncState,
+            statusStore.$lastSyncDate,
+            statusStore.$accountState
         )
         .map { syncState, lastSyncDate, accountState in
             Self.state(

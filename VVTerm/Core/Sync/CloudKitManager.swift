@@ -1,22 +1,22 @@
 import CloudKit
 import Foundation
-import Combine
 import os.log
 
 // MARK: - CloudKit Manager
 
 @MainActor
-final class CloudKitManager: ObservableObject {
+final class CloudKitManager {
     static let shared = CloudKitManager()
 
     typealias SyncStatus = CloudKitSyncState.Status
 
-    @Published private(set) var syncState = CloudKitSyncState()
-    @Published var lastSyncDate: Date?
-    @Published private(set) var accountState: CloudKitAccountState = .checking
+    let statusStore = CloudKitSyncStatusStore()
 
-    var syncStatus: SyncStatus { syncState.status }
-    var isAvailable: Bool { syncState.isAvailable }
+    var syncState: CloudKitSyncState { statusStore.syncState }
+    var lastSyncDate: Date? { statusStore.lastSyncDate }
+    var accountState: CloudKitAccountState { statusStore.accountState }
+    var syncStatus: SyncStatus { statusStore.syncState.status }
+    var isAvailable: Bool { statusStore.syncState.isAvailable }
     private(set) var cloudKitSyncGeneration = UUID()
 
     private let container: CKContainer
@@ -153,11 +153,11 @@ final class CloudKitManager: ObservableObject {
             logger.info("CloudKit account status: \(statusLogValue)")
             logger.info("Container identifier: \(self.container.containerIdentifier ?? "nil")")
 
-            accountState = resolvedAccountState
+            statusStore.accountState = resolvedAccountState
             if status == .available {
-                syncState.markAvailable()
+                statusStore.syncState.markAvailable()
             } else {
-                syncState.markOffline()
+                statusStore.syncState.markOffline()
                 logger.warning("CloudKit not available. Status: \(statusLogValue)")
             }
         } catch {
@@ -168,21 +168,21 @@ final class CloudKitManager: ObservableObject {
             accountStatusCheck = nil
             if error is CancellationError { return }
             logger.error("CloudKit account status check failed: \(error.localizedDescription)")
-            accountState = .failed(detail: error.localizedDescription)
-            syncState.markAccountFailure(error.localizedDescription)
+            statusStore.accountState = .failed(detail: error.localizedDescription)
+            statusStore.syncState.markAccountFailure(error.localizedDescription)
         }
     }
 
     private func applySyncDisabledState() {
-        syncState.markDisabled()
-        accountState = .disabled
+        statusStore.syncState.markDisabled()
+        statusStore.accountState = .disabled
     }
 
     func handleSyncToggle(_ enabled: Bool) {
         let generation = advanceSyncGeneration()
         if enabled {
-            accountState = .checking
-            syncState.markCheckingAccount()
+            statusStore.accountState = .checking
+            statusStore.syncState.markCheckingAccount()
             Task { [weak self] in
                 guard let self else { return }
                 await self.checkAccountStatus(for: generation)
@@ -499,7 +499,7 @@ final class CloudKitManager: ObservableObject {
             try saveChangeToken(token)
         }
         pendingRecordChanges = nil
-        lastSyncDate = Date()
+        statusStore.lastSyncDate = Date()
     }
 
     private func prepareSyncMutation(generation: UUID) async throws {
@@ -517,19 +517,22 @@ final class CloudKitManager: ObservableObject {
     ) async throws -> T {
         try requireCurrentGeneration(generation)
         let operationID = UUID()
-        guard syncState.beginOperation(operationID) else {
+        guard statusStore.syncState.beginOperation(operationID) else {
             throw CloudKitError.notAvailable
         }
 
         do {
             let result = try await operation()
             try requireCurrentGeneration(generation)
-            syncState.completeOperation(operationID, with: .success)
+            statusStore.syncState.completeOperation(operationID, with: .success)
             return result
         } catch {
             if isCurrentGeneration(generation) {
                 logger.error("CloudKit sync operation failed: \(error.localizedDescription)")
-                syncState.completeOperation(operationID, with: .failure(error.localizedDescription))
+                statusStore.syncState.completeOperation(
+                    operationID,
+                    with: .failure(error.localizedDescription)
+                )
             }
             throw error
         }
@@ -554,7 +557,7 @@ final class CloudKitManager: ObservableObject {
             generation: generation,
             operation
         )
-        lastSyncDate = Date()
+        statusStore.lastSyncDate = Date()
         return result
     }
 
@@ -929,15 +932,15 @@ final class CloudKitManager: ObservableObject {
     // MARK: - Force Sync
 
     func forceSync() async {
-        lastSyncDate = nil
+        statusStore.lastSyncDate = nil
         clearChangeToken()
         let generation = advanceSyncGeneration()
         guard isSyncEnabled else {
             applySyncDisabledState()
             return
         }
-        accountState = .checking
-        syncState.markCheckingAccount()
+        statusStore.accountState = .checking
+        statusStore.syncState.markCheckingAccount()
         await checkAccountStatus(for: generation)
     }
 
