@@ -39,7 +39,7 @@ extension RemoteFileBrowserScreen {
     }
 
     var effectiveSecurityApprovalRequest: ServerSecurityApprovalRequest? {
-        securityApprovalRequest ?? uploadRuntime.securityApprovalRequest
+        operationCoordinator.securityApprovalRequest
     }
 
     var hostKeyApprovalBinding: Binding<Bool> {
@@ -54,34 +54,18 @@ extension RemoteFileBrowserScreen {
         onCancellation: (@MainActor () -> Void)? = nil
     ) -> Bool {
         guard effectiveSecurityApprovalRequest == nil else { return false }
-
-        let request = browser.securityApprovalActions.pendingRequest(error, server)
-
-        guard let request else {
+        guard operationCoordinator.requestSecurityApproval(
+            for: error,
+            retry: retry ?? {},
+            onCancellation: onCancellation ?? {}
+        ) else {
             if case .hostKeyApprovalRequired = RemoteFileBrowserError.map(error) {
                 operationErrorMessage = ServerSecurityApprovalError.unavailable.localizedDescription
                 return true
             }
             return false
         }
-
-        securityApprovalRetry = retry
-        securityApprovalCancellation = onCancellation
-        securityApprovalRequest = request
         return true
-    }
-
-    @MainActor
-    func isSecurityApprovalError(_ error: Error) -> Bool {
-        if browser.securityApprovalActions.pendingRequest(error, server) != nil {
-            return true
-        }
-        switch RemoteFileBrowserError.map(error) {
-        case .hostKeyApprovalRequired:
-            return true
-        default:
-            return false
-        }
     }
 
     @MainActor
@@ -107,44 +91,17 @@ extension RemoteFileBrowserScreen {
 
     @MainActor
     func cancelSecurityApproval() {
-        if securityApprovalRequest == nil, uploadRuntime.securityApprovalRequest != nil {
-            uploadRuntime.cancelSecurityRequest()
-            return
+        guard effectiveSecurityApprovalRequest != nil else { return }
+        if let error = operationCoordinator.cancelSecurityRequest() {
+            operationErrorMessage = error.localizedDescription
         }
-        guard let request = securityApprovalRequest else { return }
-        browser.securityApprovalActions.reject(request)
-        let cancellation = securityApprovalCancellation
-        clearSecurityApproval()
-        operationErrorMessage = ServerSecurityApprovalError.cancelled.localizedDescription
-        cancellation?()
     }
 
     @MainActor
     func approveHostKeyAndRetry() {
-        if securityApprovalRequest == nil, uploadRuntime.securityApprovalRequest != nil {
-            uploadRuntime.approveSecurityRequest()
-            return
+        guard effectiveSecurityApprovalRequest != nil else { return }
+        if let error = operationCoordinator.approveSecurityRequest() {
+            operationErrorMessage = error.localizedDescription
         }
-        guard let request = securityApprovalRequest else { return }
-        guard browser.securityApprovalActions.approve(request) else {
-            clearSecurityApproval()
-            operationErrorMessage = ServerSecurityApprovalError.expired.localizedDescription
-            return
-        }
-        completeSecurityApprovalAndRetry()
-    }
-
-    @MainActor
-    func completeSecurityApprovalAndRetry() {
-        let retry = securityApprovalRetry
-        clearSecurityApproval()
-        retry?()
-    }
-
-    @MainActor
-    func clearSecurityApproval() {
-        securityApprovalRequest = nil
-        securityApprovalRetry = nil
-        securityApprovalCancellation = nil
     }
 }

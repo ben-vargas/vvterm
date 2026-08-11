@@ -111,7 +111,7 @@ extension RemoteFileBrowserScreen {
     func platformBeginDownload(_ entry: RemoteFileEntry) {
         cleanupDownloadExport()
         if let downloadTransferNoticeID {
-            noticeHost.dismiss(id: downloadTransferNoticeID.uuidString)
+            operationCoordinator.cancel(downloadTransferNoticeID)
         }
 
         let transferID = UUID()
@@ -131,7 +131,7 @@ extension RemoteFileBrowserScreen {
             title: String(localized: "Downloading"),
             initialMessage: String(localized: "Preparing remote file."),
             successMessage: String(localized: "Download ready to export."),
-            completionLifetime: .persistent,
+            keepsSuccessVisible: true,
             onSuccess: {
                 guard downloadTransferNoticeID == transferID else { return }
                 downloadExportDocument = RemoteFileDownloadDocument(sourceURL: temporaryURL)

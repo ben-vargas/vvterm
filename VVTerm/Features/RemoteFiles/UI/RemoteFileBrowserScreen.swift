@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 struct RemoteFileBrowserScreen: View {
     @ObservedObject var browser: RemoteFileBrowserStore
-    @ObservedObject var uploadRuntime: RemoteFileUploadRuntime
+    @ObservedObject var operationCoordinator: RemoteFileOperationCoordinator
     let server: Server
     let fileTab: RemoteFileTab
     let initialPath: String?
@@ -40,12 +40,7 @@ struct RemoteFileBrowserScreen: View {
     @State var isPermissionSubmitting = false
     @State var permissionErrorMessage: String?
     @State var operationErrorMessage: String?
-    @State var securityApprovalRequest: ServerSecurityApprovalRequest?
-    @State var securityApprovalRetry: (@MainActor () -> Void)?
-    @State var securityApprovalCancellation: (@MainActor () -> Void)?
     @State var transferCancellationRequest: TransferCancellationRequest?
-    @State var transferTasks: [UUID: Task<Void, Never>] = [:]
-    @State var activeTransferKinds: [UUID: TransferKind] = [:]
     @State var isDropTargeted = false
     @StateObject var platformState = RemoteFileBrowserPlatformState()
     @StateObject var noticeHost = NoticeHostModel()
@@ -137,8 +132,8 @@ struct RemoteFileBrowserScreen: View {
         self.fileTab = fileTab
         self.initialPath = initialPath
         self.onCurrentPathChange = onCurrentPathChange
-        _uploadRuntime = ObservedObject(
-            wrappedValue: browser.uploadRuntime(for: fileTab, server: server)
+        _operationCoordinator = ObservedObject(
+            wrappedValue: browser.operationCoordinator(for: fileTab, server: server)
         )
     }
 
@@ -376,7 +371,7 @@ struct RemoteFileBrowserScreen: View {
     func fileNoticeHost<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         NoticeHost(
             topBanner: noticeHost.topBanner,
-            bottomOperations: noticeHost.bottomOperations + uploadOperationNotices,
+            bottomOperations: noticeHost.bottomOperations + operationNotices,
             bottomInsetBehavior: .contentBottom
         ) {
             content()
@@ -490,86 +485,6 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    @MainActor
-    func beginTransferStatus(
-        id: UUID,
-        title: String,
-        message: String,
-        completedUnitCount: Int? = nil,
-        totalUnitCount: Int? = nil,
-        fileURL: URL? = nil,
-        fileName: String? = nil,
-        filePath: String? = nil
-    ) {
-        noticeHost.show(
-            NoticeItem(
-                id: id.uuidString,
-                lane: .bottomOperation,
-                level: .info,
-                leading: .activity,
-                title: title,
-                message: message,
-                detail: transferDetail(fileName: fileName, filePath: filePath),
-                progress: transferProgress(
-                    completedUnitCount: completedUnitCount,
-                    totalUnitCount: totalUnitCount
-                ),
-                action: transferCompletionAction(fileURL: fileURL),
-                dismissAction: { requestTransferCancellation(id: id) }
-            )
-        )
-    }
-
-    @MainActor
-    func updateTransferStatus(
-        id: UUID,
-        title: String,
-        message: String,
-        completedUnitCount: Int,
-        totalUnitCount: Int
-    ) {
-        noticeHost.show(
-            NoticeItem(
-                id: id.uuidString,
-                lane: .bottomOperation,
-                level: .info,
-                leading: .activity,
-                title: title,
-                message: message,
-                progress: NoticeProgress(
-                    completedUnitCount: completedUnitCount,
-                    totalUnitCount: totalUnitCount
-                ),
-                dismissAction: { requestTransferCancellation(id: id) }
-            )
-        )
-    }
-
-    @MainActor
-    func completeTransferStatus(
-        id: UUID,
-        title: String,
-        message: String,
-        fileURL: URL? = nil,
-        fileName: String? = nil,
-        filePath: String? = nil,
-        lifetime: NoticeLifetime = .autoDismiss(.seconds(2))
-    ) {
-        noticeHost.show(
-            NoticeItem(
-                id: id.uuidString,
-                lane: .bottomOperation,
-                level: .success,
-                leading: .icon("checkmark.circle.fill"),
-                title: title,
-                message: message,
-                detail: transferDetail(fileName: fileName, filePath: filePath),
-                lifetime: lifetime,
-                action: transferCompletionAction(fileURL: fileURL)
-            )
-        )
-    }
-
     func transferProgress(
         completedUnitCount: Int?,
         totalUnitCount: Int?
@@ -597,8 +512,8 @@ struct RemoteFileBrowserScreen: View {
         platformTransferCompletionAction(fileURL: fileURL)
     }
 
-    var uploadOperationNotices: [NoticeItem] {
-        uploadRuntime.operations.map { operation in
+    var operationNotices: [NoticeItem] {
+        operationCoordinator.operations.map { operation in
             let message: String
             let level: NoticeLevel
             let leading: NoticeLeading
@@ -626,13 +541,13 @@ struct RemoteFileBrowserScreen: View {
                 level = .success
                 leading = .icon("checkmark.circle.fill")
                 progress = nil
-                dismissAction = { uploadRuntime.dismiss(operation.id) }
+                dismissAction = { operationCoordinator.dismiss(operation.id) }
             case .failed(let currentMessage):
                 message = currentMessage
                 level = .error
                 leading = .icon("xmark.octagon.fill")
                 progress = nil
-                dismissAction = { uploadRuntime.dismiss(operation.id) }
+                dismissAction = { operationCoordinator.dismiss(operation.id) }
             }
 
             return NoticeItem(
@@ -642,7 +557,12 @@ struct RemoteFileBrowserScreen: View {
                 leading: leading,
                 title: operation.title,
                 message: message,
+                detail: transferDetail(
+                    fileName: operation.completion?.fileName,
+                    filePath: operation.completion?.filePath
+                ),
                 progress: progress,
+                action: transferCompletionAction(fileURL: operation.completion?.fileURL),
                 dismissAction: dismissAction
             )
         }
@@ -658,122 +578,25 @@ struct RemoteFileBrowserScreen: View {
         successFileURL: URL? = nil,
         successFileName: String? = nil,
         successFilePath: String? = nil,
-        completionLifetime: NoticeLifetime = .autoDismiss(.seconds(2)),
+        keepsSuccessVisible: Bool = false,
         onSuccess: (@MainActor () -> Void)? = nil,
-        allowsSecurityRetry: Bool = true,
         operation: @escaping (@escaping @MainActor (RemoteFileBrowserStore.TransferProgress) -> Void) async throws -> Void
     ) {
-        let transferID = id
-        activeTransferKinds[transferID] = cancellationKind
-
-        withAnimation(.easeInOut(duration: 0.2)) {
-            beginTransferStatus(
-                id: transferID,
-                title: title,
-                message: initialMessage
-            )
-        }
-
-        let transferTask = Task {
-            do {
-                try await operation { progress in
-                    let itemName = progress.currentItemName.isEmpty
-                        ? String(localized: "item")
-                        : progress.currentItemName
-                    let progressMessage: String
-                    if progress.completedUnitCount == 0 {
-                        progressMessage = String(
-                            format: String(localized: "Uploading %@"),
-                            itemName
-                        )
-                    } else {
-                        progressMessage = String(
-                            format: String(localized: "%lld of %lld: %@"),
-                            Int64(progress.completedUnitCount),
-                            Int64(progress.totalUnitCount),
-                            itemName
-                        )
-                    }
-                    updateTransferStatus(
-                        id: transferID,
-                        title: title,
-                        message: progressMessage,
-                        completedUnitCount: progress.completedUnitCount,
-                        totalUnitCount: progress.totalUnitCount
-                    )
-                }
-
-                try Task.checkCancellation()
-
-                await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        completeTransferStatus(
-                            id: transferID,
-                            title: title,
-                            message: successMessage,
-                            fileURL: successFileURL,
-                            fileName: successFileName,
-                            filePath: successFilePath,
-                            lifetime: completionLifetime
-                        )
-                        finishTransfer(id: transferID)
-                    }
-                    onSuccess?()
-                }
-            } catch is CancellationError {
-                await MainActor.run {
-                    noticeHost.dismiss(id: transferID.uuidString)
-                    finishTransfer(id: transferID)
-                }
-            } catch {
-                await MainActor.run {
-                    guard !Task.isCancelled else {
-                        noticeHost.dismiss(id: transferID.uuidString)
-                        finishTransfer(id: transferID)
-                        return
-                    }
-
-                    if allowsSecurityRetry,
-                       presentSecurityApproval(
-                           for: error,
-                           retry: {
-                               performTransfer(
-                                   id: transferID,
-                                   cancellationKind: cancellationKind,
-                                   title: title,
-                                   initialMessage: initialMessage,
-                                   successMessage: successMessage,
-                                   successFileURL: successFileURL,
-                                   successFileName: successFileName,
-                                   successFilePath: successFilePath,
-                                   completionLifetime: completionLifetime,
-                                   onSuccess: onSuccess,
-                                   allowsSecurityRetry: false,
-                                   operation: operation
-                               )
-                           }
-                       ) {
-                        noticeHost.dismiss(id: transferID.uuidString)
-                        finishTransfer(id: transferID)
-                        return
-                    }
-
-                    noticeHost.show(
-                        NoticeItem(
-                            id: transferID.uuidString,
-                            lane: .bottomOperation,
-                            level: .error,
-                            leading: .icon("xmark.octagon.fill"),
-                            title: title,
-                            message: remoteOperationErrorMessage(for: error),
-                            dismissAction: { noticeHost.dismiss(id: transferID.uuidString) }
-                        )
-                    )
-                    finishTransfer(id: transferID)
-                }
-            }
-        }
-        transferTasks[transferID] = transferTask
+        operationCoordinator.start(
+            id: id,
+            kind: cancellationKind == .upload ? .upload : .transfer,
+            title: title,
+            initialMessage: initialMessage,
+            successMessage: successMessage,
+            completion: .init(
+                fileURL: successFileURL,
+                fileName: successFileName,
+                filePath: successFilePath
+            ),
+            keepsSuccessVisible: keepsSuccessVisible,
+            onSuccess: onSuccess,
+            operation: operation
+        )
     }
 
     @MainActor
@@ -786,9 +609,8 @@ struct RemoteFileBrowserScreen: View {
         successFileURL: URL? = nil,
         successFileName: String? = nil,
         successFilePath: String? = nil,
-        completionLifetime: NoticeLifetime = .autoDismiss(.seconds(2)),
+        keepsSuccessVisible: Bool = false,
         onSuccess: (@MainActor () -> Void)? = nil,
-        allowsSecurityRetry: Bool = true,
         operation: @escaping () async throws -> Void
     ) {
         performTransfer(
@@ -800,9 +622,8 @@ struct RemoteFileBrowserScreen: View {
             successFileURL: successFileURL,
             successFileName: successFileName,
             successFilePath: successFilePath,
-            completionLifetime: completionLifetime,
-            onSuccess: onSuccess,
-            allowsSecurityRetry: allowsSecurityRetry
+            keepsSuccessVisible: keepsSuccessVisible,
+            onSuccess: onSuccess
         ) { _ in
             try await operation()
         }
@@ -810,138 +631,46 @@ struct RemoteFileBrowserScreen: View {
 
     @MainActor
     func requestTransferCancellation(id: UUID) {
-        if uploadRuntime.contains(id) {
-            transferCancellationRequest = TransferCancellationRequest(
-                id: id,
-                kind: .upload
-            )
+        guard let operation = operationCoordinator.operations.first(where: { $0.id == id }) else {
             return
         }
-
-        guard transferTasks[id] != nil else {
-            noticeHost.dismiss(id: id.uuidString)
-            return
-        }
-
         transferCancellationRequest = TransferCancellationRequest(
             id: id,
-            kind: activeTransferKinds[id] ?? .transfer
+            kind: operation.kind == .upload ? .upload : .transfer
         )
     }
 
     @MainActor
     func cancelTransfer(id: UUID) {
-        if uploadRuntime.contains(id) {
-            uploadRuntime.cancel(id)
-            transferCancellationRequest = nil
-            return
-        }
-        transferTasks.removeValue(forKey: id)?.cancel()
-        activeTransferKinds.removeValue(forKey: id)
+        operationCoordinator.cancel(id)
         transferCancellationRequest = nil
-        noticeHost.dismiss(id: id.uuidString)
-    }
-
-    @MainActor
-    func finishTransfer(id: UUID) {
-        transferTasks.removeValue(forKey: id)
-        activeTransferKinds.removeValue(forKey: id)
-        if transferCancellationRequest?.id == id {
-            transferCancellationRequest = nil
-        }
     }
 
     func performOperation(
         onFailure: (@MainActor (Error) -> Void)? = nil,
-        allowsSecurityRetry: Bool = true,
-        operation: @escaping () async throws -> Void
+        operation: @escaping @MainActor @Sendable () async throws -> Void
     ) {
-        Task {
-            do {
-                try await operation()
-            } catch {
-                await MainActor.run {
-                    if !allowsSecurityRetry, isSecurityApprovalError(error) {
-                        if let onFailure {
-                            onFailure(ServerSecurityApprovalError.unavailable)
-                        } else {
-                            operationErrorMessage = ServerSecurityApprovalError.unavailable.localizedDescription
-                        }
-                        return
-                    }
-                    if allowsSecurityRetry,
-                       presentSecurityApproval(
-                           for: error,
-                           retry: {
-                               performOperation(
-                                   onFailure: onFailure,
-                                   allowsSecurityRetry: false,
-                                   operation: operation
-                               )
-                           },
-                           onCancellation: {
-                               onFailure?(ServerSecurityApprovalError.cancelled)
-                           }
-                       ) {
-                        return
-                    }
-                    if let onFailure {
-                        onFailure(error)
-                    } else {
-                        presentOperationError(error)
-                    }
-                }
+        operationCoordinator.run(
+            operation: operation,
+            onSuccess: { _ in },
+            onFailure: { error in
+                if let onFailure { onFailure(error) } else { presentOperationError(error) }
             }
-        }
+        )
     }
 
     func performOperation<Result>(
-        operation: @escaping () async throws -> Result,
+        operation: @escaping @MainActor @Sendable () async throws -> Result,
         onSuccess: @escaping @MainActor (Result) -> Void,
         onFailure: (@MainActor (Error) -> Void)? = nil,
-        allowsSecurityRetry: Bool = true
     ) {
-        Task {
-            do {
-                let result = try await operation()
-                await MainActor.run {
-                    onSuccess(result)
-                }
-            } catch {
-                await MainActor.run {
-                    if !allowsSecurityRetry, isSecurityApprovalError(error) {
-                        if let onFailure {
-                            onFailure(ServerSecurityApprovalError.unavailable)
-                        } else {
-                            operationErrorMessage = ServerSecurityApprovalError.unavailable.localizedDescription
-                        }
-                        return
-                    }
-                    if allowsSecurityRetry,
-                       presentSecurityApproval(
-                           for: error,
-                           retry: {
-                               performOperation(
-                                   operation: operation,
-                                   onSuccess: onSuccess,
-                                   onFailure: onFailure,
-                                   allowsSecurityRetry: false
-                               )
-                           },
-                           onCancellation: {
-                               onFailure?(ServerSecurityApprovalError.cancelled)
-                           }
-                       ) {
-                        return
-                    }
-                    if let onFailure {
-                        onFailure(error)
-                    } else {
-                        presentOperationError(error)
-                    }
-                }
+        operationCoordinator.run(
+            operation: operation,
+            onSuccess: onSuccess,
+            onFailure: { error in
+                if let onFailure { onFailure(error) } else { presentOperationError(error) }
             }
-        }
+        )
     }
 
     var trimmedNewFolderName: String {
@@ -1245,7 +974,11 @@ struct RemoteFileBrowserScreen: View {
 
     func handleDownloadExportCompletion(_ result: Result<URL, Error>) {
         isDownloadExporterPresented = false
-        let noticeID = downloadTransferNoticeID?.uuidString
+        let transferID = downloadTransferNoticeID
+        let noticeID = transferID?.uuidString
+        if let transferID {
+            operationCoordinator.dismiss(transferID)
+        }
 
         switch result {
         case .success:
@@ -1291,11 +1024,10 @@ struct RemoteFileBrowserScreen: View {
 
     func handleDownloadExportCancellation() {
         isDownloadExporterPresented = false
-        RemoteFileDownloadExportCancellationHandler.handle(
-            noticeID: downloadTransferNoticeID,
-            cleanup: cleanupDownloadExport,
-            dismissNotice: noticeHost.dismiss
-        )
+        cleanupDownloadExport()
+        if let downloadTransferNoticeID {
+            operationCoordinator.dismiss(downloadTransferNoticeID)
+        }
 
         downloadTransferNoticeID = nil
     }
@@ -1304,7 +1036,8 @@ struct RemoteFileBrowserScreen: View {
         let browser = browser
         let fileTab = fileTab
         let server = server
-        uploadRuntime.start(
+        operationCoordinator.start(
+            kind: .upload,
             title: String(localized: "Uploading"),
             initialMessage: initialMessage,
             successMessage: String(localized: "Upload complete.")

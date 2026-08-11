@@ -89,7 +89,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     let workingDirectoryProvider: WorkingDirectoryProvider
 
     var persistedStates: [String: RemoteFileBrowserPersistedState] = [:]
-    private var uploadRuntimesByTabID: [UUID: RemoteFileUploadRuntime] = [:]
+    private var operationCoordinatorsByTabID: [UUID: RemoteFileOperationCoordinator] = [:]
     private(set) var activeDragPayload: RemoteFileDragPayload?
     nonisolated static let directoryEntryLimit = 2_000
     static let defaultPreviewBytes = 512 * 1_024
@@ -119,7 +119,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     }
 
     isolated deinit {
-        uploadRuntimesByTabID.values.forEach { $0.cancelAll() }
+        operationCoordinatorsByTabID.values.forEach { $0.cancelAll() }
     }
 
     func prepareNewTab(_ tab: RemoteFileTab, duplicating sourceTab: RemoteFileTab?) {
@@ -335,7 +335,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     }
 
     func removeRuntimeState(for tabId: UUID) {
-        uploadRuntimesByTabID.removeValue(forKey: tabId)?.cancelAll()
+        operationCoordinatorsByTabID.removeValue(forKey: tabId)?.cancelAll()
         temporaryStorage.removePreviewArtifact(for: states[tabId]?.viewerPayload)
         states.removeValue(forKey: tabId)
 
@@ -358,17 +358,20 @@ final class RemoteFileBrowserStore: ObservableObject {
         remoteFileServiceAdapter?.disconnect(serverId: serverId)
     }
 
-    func uploadRuntime(for tab: RemoteFileTab, server: Server) -> RemoteFileUploadRuntime {
+    func operationCoordinator(
+        for tab: RemoteFileTab,
+        server: Server
+    ) -> RemoteFileOperationCoordinator {
         precondition(tab.serverId == server.id)
-        if let runtime = uploadRuntimesByTabID[tab.id] {
-            return runtime
+        if let coordinator = operationCoordinatorsByTabID[tab.id] {
+            return coordinator
         }
-        let runtime = RemoteFileUploadRuntime(
+        let coordinator = RemoteFileOperationCoordinator(
             server: server,
             securityApprovalActions: securityApprovalActions
         )
-        uploadRuntimesByTabID[tab.id] = runtime
-        return runtime
+        operationCoordinatorsByTabID[tab.id] = coordinator
+        return coordinator
     }
 
     func goUp(in tab: RemoteFileTab, server: Server) async {

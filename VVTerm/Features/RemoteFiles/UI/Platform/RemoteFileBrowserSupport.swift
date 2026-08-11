@@ -20,21 +20,6 @@ struct RemoteFileDownloadDocument: FileDocument {
     }
 }
 
-@MainActor
-enum RemoteFileDownloadExportCancellationHandler {
-    static func handle(
-        noticeID: UUID?,
-        cleanup: () -> Void,
-        dismissNotice: (String) -> Void
-    ) {
-        cleanup()
-
-        if let noticeID {
-            dismissNotice(noticeID.uuidString)
-        }
-    }
-}
-
 struct RemoteFileShareItem: Identifiable {
     let id = UUID()
     let sourceURL: URL

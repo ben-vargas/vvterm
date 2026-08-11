@@ -118,14 +118,15 @@ struct RemoteFileBrowserStoreTests {
     }
 
     @Test
-    func uploadRuntimeSurvivesScreenReconstructionAndTabRemovalCancelsWork() async {
+    func operationCoordinatorSurvivesScreenReconstructionAndTabRemovalCancelsWork() async {
         let store = RemoteFileBrowserStore(defaults: makeDefaults())
         let server = makeServer()
         let tab = RemoteFileTab(serverId: server.id, seedPath: "/tmp")
-        let cancellationProbe = RemoteFileUploadCancellationProbe()
-        let firstRuntime = store.uploadRuntime(for: tab, server: server)
+        let cancellationProbe = RemoteFileOperationCancellationProbe()
+        let firstCoordinator = store.operationCoordinator(for: tab, server: server)
 
-        let operationID = firstRuntime.start(
+        let operationID = firstCoordinator.start(
+            kind: .upload,
             title: "Uploading",
             initialMessage: "Preparing",
             successMessage: "Complete"
@@ -134,13 +135,13 @@ struct RemoteFileBrowserStoreTests {
         }
         #expect(await cancellationProbe.waitUntilStarted())
 
-        let reconstructedScreenRuntime = store.uploadRuntime(for: tab, server: server)
-        #expect(firstRuntime === reconstructedScreenRuntime)
-        #expect(reconstructedScreenRuntime.contains(operationID))
+        let reconstructedScreenCoordinator = store.operationCoordinator(for: tab, server: server)
+        #expect(firstCoordinator === reconstructedScreenCoordinator)
+        #expect(reconstructedScreenCoordinator.contains(operationID))
 
         store.removeRuntimeState(for: tab.id)
 
-        #expect(!firstRuntime.contains(operationID))
+        #expect(!firstCoordinator.contains(operationID))
         #expect(await cancellationProbe.waitUntilCancelled())
     }
 
@@ -219,7 +220,7 @@ struct RemoteFileBrowserStoreTests {
     }
 }
 
-private actor RemoteFileUploadCancellationProbe {
+private actor RemoteFileOperationCancellationProbe {
     private var didStart = false
     private var didObserveCancellation = false
 
