@@ -814,6 +814,18 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         #if DEBUG
         guard !Self.usesUITestKeyboardFrameSimulation else { return }
         #endif
+        handleLocalSoftwareKeyboardHidden(
+            sourceScreenIdentifier: sourceScreenIdentifier,
+            animationDuration: animationDuration,
+            animationCurve: animationCurve
+        )
+    }
+
+    private func handleLocalSoftwareKeyboardHidden(
+        sourceScreenIdentifier: ObjectIdentifier?,
+        animationDuration: TimeInterval?,
+        animationCurve: TerminalKeyboardAnimationCurve?
+    ) {
         guard activeTerminalSceneIsForeground,
               inputOwnership.allowsLocalAcquisition else { return }
         updateKeyboardAnimation(duration: animationDuration, curve: animationCurve)
@@ -1677,6 +1689,14 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             presentation = .hidden
         }
         setSoftwareKeyboardPresentation(presentation)
+    }
+
+    func keyboardUITestReceiveSoftwareKeyboardHidden() {
+        handleLocalSoftwareKeyboardHidden(
+            sourceScreenIdentifier: nil,
+            animationDuration: nil,
+            animationCurve: nil
+        )
     }
     #endif
 }

@@ -380,7 +380,9 @@ struct TerminalKeyboardUITestHarness: View {
 
                     Button("HW On") {
                         terminalView?.keyboardUITestSetHardwareKeyboardAttached(true)
-                        if simulatesKeyboardFrames {
+                        if simulatesKeyboardFrames,
+                           terminalView?.keyboardCoordinatorDiagnosticSnapshot()
+                            .isSoftwareKeyboardSuppressed == true {
                             applySimulatedKeyboardGeometry(.hidden)
                         }
                     }
@@ -917,8 +919,13 @@ struct TerminalKeyboardUITestHarness: View {
         keyboardVisible = visible
         keyboardHeight = frame?.height ?? 0
         keyboardFrame = frame
-        tabManager.keyboardCoordinator
-            .keyboardUITestSetSoftwareKeyboardEndFrame(frame)
+        if let frame {
+            tabManager.keyboardCoordinator
+                .keyboardUITestSetSoftwareKeyboardEndFrame(frame)
+        } else {
+            tabManager.keyboardCoordinator
+                .keyboardUITestReceiveSoftwareKeyboardHidden()
+        }
         refreshDiagnostics()
     }
 
