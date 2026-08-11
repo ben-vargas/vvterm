@@ -130,71 +130,125 @@ struct ToolbarBackdrop: View {
     }
 }
 
+private struct TerminalCommandBridgeHost<Content: View>: View {
+    @EnvironmentObject private var commandBridge: MacShellCommandBridge
+    private let content: (MacShellCommandBridge) -> Content
+
+    init(@ViewBuilder content: @escaping (MacShellCommandBridge) -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        content(commandBridge)
+    }
+}
+
+private struct TerminalZenChromeHost<Content: View>: View {
+    let isZenModeEnabled: Bool
+    let appliesTerminalInsets: Bool
+    let backgroundColor: Color
+    private let content: (EdgeInsets) -> Content
+
+    @State private var safeAreaInsets = EdgeInsets()
+
+    init(
+        isZenModeEnabled: Bool,
+        appliesTerminalInsets: Bool,
+        backgroundColor: Color,
+        @ViewBuilder content: @escaping (EdgeInsets) -> Content
+    ) {
+        self.isZenModeEnabled = isZenModeEnabled
+        self.appliesTerminalInsets = appliesTerminalInsets
+        self.backgroundColor = backgroundColor
+        self.content = content
+    }
+
+    var body: some View {
+        content(appliesTerminalInsets ? safeAreaInsets : EdgeInsets())
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(backgroundColor)
+            .overlay(alignment: .top) {
+                if !isZenModeEnabled {
+                    ToolbarBackdrop(color: backgroundColor)
+                }
+            }
+            .background {
+                if isZenModeEnabled {
+                    ZenWindowChromeBridge(contentInsets: $safeAreaInsets)
+                        .frame(width: 0, height: 0)
+                }
+            }
+            .zenExpandedTopSafeArea(appliesTerminalInsets)
+    }
+}
+
 extension ConnectionTerminalContainer {
     var platformBody: some View {
-        sharedBody
-            .focusedValue(\.openTerminalTab, handleNewTabCommand)
-            .focusedValue(\.serverViewTabActions, serverViewTabActions())
-            // The connected-server toolbar is rendered by the AppKit NSToolbar
-            // (see MacConnectionToolbar). This pane publishes its sections into
-            // the shared bridge; the toolbar hosts them.
-            .onAppear { activateToolbarBridge(); updateCommandBridge() }
-            .onDisappear {
-                MacToolbarBridge.shared.deactivate(ownerId: server.id.uuidString)
-                commandBridge.clear(ownerId: server.id.uuidString)
-            }
-            .onChange(of: selectedView) { _ in activateToolbarBridge(); updateCommandBridge() }
-            .onChange(of: shouldShowViewPicker) { _ in activateToolbarBridge() }
-            .onChange(of: serverTabs.count) { _ in activateToolbarBridge() }
-            .onChange(of: serverFileTabs.count) { _ in activateToolbarBridge() }
-            .onChange(of: selectedFileTabId) { _ in activateToolbarBridge() }
-            .onChange(of: selectedTabId) { _ in activateToolbarBridge(); updateCommandBridge() }
-            .onChange(of: selectedTab?.focusedPaneId) { _ in updateCommandBridge() }
-            .onChange(of: selectedTab?.layout) { _ in updateCommandBridge() }
-            .onChange(of: terminalContent.state.splitZoomedTabIds) { _ in updateCommandBridge() }
-            .onChange(of: isZenModeEnabled) { _ in activateToolbarBridge() }
-            .alert(
-                disconnectAlertTitle,
-                isPresented: $showingDisconnectConfirmation,
-            ) {
-                Button("Cancel", role: .cancel) {}
-                Button(disconnectActionTitle, role: .destructive) {
-                    disconnectFromServer()
+        TerminalCommandBridgeHost { commandBridge in
+            sharedBody
+                .focusedValue(\.openTerminalTab, handleNewTabCommand)
+                .focusedValue(\.serverViewTabActions, serverViewTabActions())
+                // The connected-server toolbar is rendered by the AppKit NSToolbar
+                // (see MacConnectionToolbar). This pane publishes its sections into
+                // the shared bridge; the toolbar hosts them.
+                .onAppear { activateToolbarBridge(); updateCommandBridge(commandBridge) }
+                .onDisappear {
+                    MacToolbarBridge.shared.deactivate(ownerId: server.id.uuidString)
+                    commandBridge.clear(ownerId: server.id.uuidString)
                 }
-                .keyboardShortcut(.defaultAction)
-            } message: {
-                Text(disconnectAlertMessage)
-            }
-            .alert("Close this terminal?", isPresented: $showingPaneCloseConfirmation) {
-                Button("Cancel", role: .cancel) {}
-                Button("Close", role: .destructive) {
-                    closeFocusedPaneConfirmed()
-                }
-                .keyboardShortcut(.defaultAction)
-            } message: {
-                Text("The SSH connection will be terminated.")
-            }
-            .sheet(item: $serverToEdit) { editingServer in
-                ServerFormSheet(
-                    serverManager: serverManager,
-                    workspace: serverManager.workspaces.first { $0.id == editingServer.workspaceId },
-                    server: editingServer,
-                    dependencies: serverFormDependencies,
-                    makeLocalDiscoveryManager: makeLocalDiscoveryManager,
-                    onSave: { _ in
-                        serverToEdit = nil
+                .onChange(of: selectedView) { _ in activateToolbarBridge(); updateCommandBridge(commandBridge) }
+                .onChange(of: shouldShowViewPicker) { _ in activateToolbarBridge() }
+                .onChange(of: serverTabs.count) { _ in activateToolbarBridge() }
+                .onChange(of: serverFileTabs.count) { _ in activateToolbarBridge() }
+                .onChange(of: selectedFileTabId) { _ in activateToolbarBridge() }
+                .onChange(of: selectedTabId) { _ in activateToolbarBridge(); updateCommandBridge(commandBridge) }
+                .onChange(of: selectedTab?.focusedPaneId) { _ in updateCommandBridge(commandBridge) }
+                .onChange(of: selectedTab?.layout) { _ in updateCommandBridge(commandBridge) }
+                .onChange(of: terminalContent.state.splitZoomedTabIds) { _ in updateCommandBridge(commandBridge) }
+                .onChange(of: isZenModeEnabled) { _ in activateToolbarBridge() }
+                .alert(
+                    disconnectAlertTitle,
+                    isPresented: $showingDisconnectConfirmation,
+                ) {
+                    Button("Cancel", role: .cancel) {}
+                    Button(disconnectActionTitle, role: .destructive) {
+                        disconnectFromServer()
                     }
-                )
-                .adaptiveSoftScrollEdges()
-                .frame(
-                    minWidth: 640,
-                    idealWidth: 700,
-                    maxWidth: 760,
-                    minHeight: 520,
-                    idealHeight: 620,
-                    maxHeight: 680
-                )
-            }
+                    .keyboardShortcut(.defaultAction)
+                } message: {
+                    Text(disconnectAlertMessage)
+                }
+                .alert("Close this terminal?", isPresented: $showingPaneCloseConfirmation) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Close", role: .destructive) {
+                        closeFocusedPaneConfirmed()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                } message: {
+                    Text("The SSH connection will be terminated.")
+                }
+                .sheet(item: $serverToEdit) { editingServer in
+                    ServerFormSheet(
+                        serverManager: serverManager,
+                        workspace: serverManager.workspaces.first { $0.id == editingServer.workspaceId },
+                        server: editingServer,
+                        dependencies: serverFormDependencies,
+                        makeLocalDiscoveryManager: makeLocalDiscoveryManager,
+                        onSave: { _ in
+                            serverToEdit = nil
+                        }
+                    )
+                    .adaptiveSoftScrollEdges()
+                    .frame(
+                        minWidth: 640,
+                        idealWidth: 700,
+                        maxWidth: 760,
+                        minHeight: 520,
+                        idealHeight: 620,
+                        maxHeight: 680
+                    )
+                }
+        }
     }
 
     /// Publishes this server's toolbar content to the AppKit toolbar bridge,
@@ -241,7 +295,7 @@ extension ConnectionTerminalContainer {
 
     /// Publishes this server's keyboard-command actions to the command bridge,
     /// which ContentView republishes as scene focus values for the menu commands.
-    private func updateCommandBridge() {
+    private func updateCommandBridge(_ commandBridge: MacShellCommandBridge) {
         let splitActions: TerminalSplitActions?
         if selectedView == .terminal {
             splitActions = TerminalSplitActions(
@@ -641,31 +695,43 @@ extension ConnectionTerminalContainer {
         return String(localized: "All terminal tabs for this server will be closed.")
     }
 
-    func platformChrome<Content: View>(
-        _ content: Content,
-        backgroundColor: Color
-    ) -> some View {
-        content
-            .overlay(alignment: .top) {
-                if !isZenModeEnabled {
-                    ToolbarBackdrop(color: backgroundColor)
-                }
-            }
-            .background {
-                if isZenModeEnabled {
-                    ZenWindowChromeBridge(contentInsets: $zenWindowSafeAreaInsets)
-                        .frame(width: 0, height: 0)
-                }
-            }
-            .zenExpandedTopSafeArea(isZenModeEnabled && selectedView == .terminal)
-    }
+    func platformChrome(backgroundColor: Color) -> some View {
+        TerminalZenChromeHost(
+            isZenModeEnabled: isZenModeEnabled,
+            appliesTerminalInsets: isZenModeEnabled && selectedView == .terminal,
+            backgroundColor: backgroundColor
+        ) { terminalContentInsets in
+            ZStack {
+                statsLayer(backgroundColor: backgroundColor)
 
-    private var terminalContentInsets: EdgeInsets {
-        isZenModeEnabled ? zenWindowSafeAreaInsets : EdgeInsets()
+                if selectedView == .files {
+                    filesLayer
+                }
+
+                terminalLayer(contentInsets: terminalContentInsets)
+            }
+        }
     }
 
     @ViewBuilder
-    var terminalLayer: some View {
+    private func statsLayer(backgroundColor: Color) -> some View {
+        // Keep stats mounted so collection can pause and resume without losing
+        // its current in-memory presentation state.
+        ServerStatsView(
+            server: server,
+            isVisible: selectedView == .stats,
+            backgroundColor: backgroundColor,
+            sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
+            dependencies: statsDependencies,
+            isDockerUnlocked: storeManager.allowsProFeatures
+        )
+        .opacity(selectedView == .stats ? 1 : 0)
+        .allowsHitTesting(selectedView == .stats)
+        .zIndex(selectedView == .stats ? 1 : 0)
+    }
+
+    @ViewBuilder
+    private func terminalLayer(contentInsets: EdgeInsets) -> some View {
         ForEach(serverTabs, id: \.id) { tab in
             let isVisible = selectedView == .terminal && selectedTabId == tab.id
             let voiceRuntime = voiceInputRuntimeStore.runtime(for: tab.id)
@@ -681,7 +747,7 @@ extension ConnectionTerminalContainer {
                 audioService: voiceRuntime.audioService,
                 voiceRecordingOperation: voiceRuntime.recordingOperation
             )
-            .padding(terminalContentInsets)
+            .padding(contentInsets)
             .opacity(isVisible ? 1 : 0)
             .allowsHitTesting(isVisible)
             .zIndex(isVisible ? 1 : 0)
@@ -691,9 +757,13 @@ extension ConnectionTerminalContainer {
             TerminalEmptyStateView(server: server) {
                 openNewTab()
             }
-            .padding(terminalContentInsets)
+            .padding(contentInsets)
         }
     }
+
+    func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {}
+
+    func platformPrepareForPaneClose() {}
 }
 
 private extension View {

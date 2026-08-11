@@ -54,15 +54,8 @@ struct ConnectionTerminalContainer: View {
     @EnvironmentObject var ghosttyApp: Ghostty.App
     @EnvironmentObject var storeManager: StoreManager
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
-    #if os(macOS)
-    @EnvironmentObject var commandBridge: MacShellCommandBridge
-    #endif
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
-
-    #if os(iOS)
-    @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) var preservesTerminalSizeForKeyboard = false
-    #endif
 
     /// Disconnect confirmation
     @State var showingDisconnectConfirmation = false
@@ -76,9 +69,6 @@ struct ConnectionTerminalContainer: View {
     @State var showingFileTabLimitAlert = false
     @State var showingSplitPaneUpgradeAlert = false
     @State var showingZenPanel = false
-    #if os(macOS)
-    @State var zenWindowSafeAreaInsets = EdgeInsets()
-    #endif
 
     init(
         tabManager: TerminalTabManager,
@@ -248,19 +238,14 @@ struct ConnectionTerminalContainer: View {
     var sharedBody: some View {
         let backgroundColor = liveTerminalBackgroundColor
 
-        return platformChrome(
-            contentLayer
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(backgroundColor),
-            backgroundColor: backgroundColor
-        )
+        return platformChrome(backgroundColor: backgroundColor)
             .onAppear {
                 voiceInputRuntimeStore.synchronize(
                     tabIDs: Set(serverTabs.map(\.id)),
                     for: server.id
                 )
                 repairSelectedTabSelectionIfNeeded()
-                handleSelectedViewChange(selectedView)
+                platformHandleSelectedViewChange(selectedView)
                 ensureInitialFileTabIfNeeded()
             }
             .task(id: terminalAppearanceSnapshot) {
@@ -268,7 +253,7 @@ struct ConnectionTerminalContainer: View {
                 ghosttyApp.applyAppearance(snapshot)
             }
             .onChange(of: selectedView) { newValue in
-                handleSelectedViewChange(newValue)
+                platformHandleSelectedViewChange(newValue)
                 ensureInitialFileTabIfNeeded()
             }
             .onChangeCompat(of: serverTabs.map(\.id)) { tabIDs in
@@ -286,34 +271,6 @@ struct ConnectionTerminalContainer: View {
             .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
             .limitReachedAlert(.fileTabs, isPresented: $showingFileTabLimitAlert)
             .splitPaneProFeatureAlert(isPresented: $showingSplitPaneUpgradeAlert)
-    }
-
-    @ViewBuilder
-    private var contentLayer: some View {
-        #if os(iOS)
-        // View switches must swap content without implicit animations: animating
-        // the insertion of the Metal-backed terminal view during the segmented
-        // picker's transition hangs the main thread in a trait-update loop.
-        platformContentStack
-            .transaction { transaction in
-                transaction.animation = nil
-            }
-        #else
-        contentStack
-        #endif
-    }
-
-    @ViewBuilder
-    private var contentStack: some View {
-        ZStack {
-            statsLayer
-
-            if selectedView == .files {
-                filesLayer
-            }
-
-            terminalLayer
-        }
     }
 
     @ViewBuilder
@@ -335,41 +292,6 @@ struct ConnectionTerminalContainer: View {
             }
             .zIndex(1)
         }
-    }
-
-    @ViewBuilder
-    var statsLayer: some View {
-        #if os(iOS)
-        // Mount stats only while selected. The dashboard nests ViewThatFits,
-        // Grid, and lazy stacks; keeping it in the ZStack at opacity 0 makes
-        // every layout pass of the other views re-measure it, which explodes
-        // combinatorially and hangs the main thread when the terminal mounts.
-        if selectedView == .stats {
-            ServerStatsView(
-                server: server,
-                isVisible: true,
-                backgroundColor: liveTerminalBackgroundColor,
-                sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
-                dependencies: statsDependencies,
-                isDockerUnlocked: storeManager.allowsProFeatures
-            )
-            .zIndex(1)
-        }
-        #else
-        // Stats view - always in hierarchy, visibility controlled by opacity
-        // Pass isVisible to pause/resume collection when hidden
-        ServerStatsView(
-            server: server,
-            isVisible: selectedView == .stats,
-            backgroundColor: liveTerminalBackgroundColor,
-            sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
-            dependencies: statsDependencies,
-            isDockerUnlocked: storeManager.allowsProFeatures
-        )
-            .opacity(selectedView == .stats ? 1 : 0)
-            .allowsHitTesting(selectedView == .stats)
-            .zIndex(selectedView == .stats ? 1 : 0)
-        #endif
     }
 
     var body: some View {
@@ -418,17 +340,6 @@ struct ConnectionTerminalContainer: View {
         let repairedId = selectedTabId
         guard currentId != repairedId else { return }
         tabManager.sessionState.selectTab(repairedId, for: server.id)
-    }
-
-    private func handleSelectedViewChange(_ selectedView: ConnectionViewTabID) {
-        #if os(iOS)
-        guard selectedView != .terminal else { return }
-        for tab in serverTabs {
-            for paneId in tab.allPaneIds {
-                tabManager.presentationState.applyVoiceEvent(.pendingReturnDismissed, for: paneId)
-            }
-        }
-        #endif
     }
 
     func openNewTab(selectTerminalViewOnSuccess: Bool = false) {
@@ -616,9 +527,7 @@ struct ConnectionTerminalContainer: View {
     /// matching the in-pane close button's confirmation.
     func requestCloseFocusedPane() {
         guard selectedTab != nil else { return }
-        #if os(iOS)
-        tabManager.keyboardCoordinator.deactivateInputImmediately(reason: .routeModal)
-        #endif
+        platformPrepareForPaneClose()
         showingPaneCloseConfirmation = true
     }
 

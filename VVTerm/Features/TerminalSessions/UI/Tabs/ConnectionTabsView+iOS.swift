@@ -1,6 +1,30 @@
 #if os(iOS)
 import SwiftUI
 
+private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
+    @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey)
+    private var preservesTerminalSizeForKeyboard = false
+
+    let isTerminalSelected: Bool
+    let content: Content
+
+    init(
+        isTerminalSelected: Bool,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.isTerminalSelected = isTerminalSelected
+        self.content = content()
+    }
+
+    var body: some View {
+        content.modifier(
+            TerminalKeyboardSafeAreaModifier(
+                isEnabled: preservesTerminalSizeForKeyboard && isTerminalSelected
+            )
+        )
+    }
+}
+
 extension ConnectionTerminalContainer {
     var platformBody: some View {
         sharedBody
@@ -37,42 +61,64 @@ extension ConnectionTerminalContainer {
             }
     }
 
-    func platformChrome<Content: View>(
-        _ content: Content,
-        backgroundColor: Color
-    ) -> some View {
-        VStack(spacing: 0) {
-            if !isZenModeEnabled {
-                headerTabsBar
-            }
+    func platformChrome(backgroundColor: Color) -> some View {
+        TerminalKeyboardSafeAreaHost(isTerminalSelected: selectedView == .terminal) {
+            VStack(spacing: 0) {
+                if !isZenModeEnabled {
+                    headerTabsBar
+                }
 
-            content
-        }
-        .overlay(alignment: .topTrailing) {
-            if isZenModeEnabled {
-                zenModeOverlay
-                    .transition(.opacity)
-                    .zIndex(10)
+                platformContentStack(backgroundColor: backgroundColor)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(backgroundColor)
             }
+            .overlay(alignment: .topTrailing) {
+                if isZenModeEnabled {
+                    zenModeOverlay
+                        .transition(.opacity)
+                        .zIndex(10)
+                }
+            }
+            .background(backgroundColor.ignoresSafeArea(.all))
         }
-        .background(backgroundColor.ignoresSafeArea(.all))
-        .modifier(
-            TerminalKeyboardSafeAreaModifier(
-                isEnabled: preservesTerminalSizeForKeyboard
-                    && selectedView == .terminal
-            )
-        )
     }
 
     @ViewBuilder
-    var platformContentStack: some View {
-        switch selectedView {
-        case .stats:
-            statsLayer
-        case .files:
-            filesLayer
-        case .terminal:
-            terminalLayer
+    private func platformContentStack(backgroundColor: Color) -> some View {
+        Group {
+            switch selectedView {
+            case .stats:
+                statsLayer(backgroundColor: backgroundColor)
+            case .files:
+                filesLayer
+            case .terminal:
+                terminalLayer
+            }
+        }
+        // View switches must swap content without implicit animations: animating
+        // the insertion of the Metal-backed terminal view during the segmented
+        // picker's transition hangs the main thread in a trait-update loop.
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+    }
+
+    @ViewBuilder
+    private func statsLayer(backgroundColor: Color) -> some View {
+        // Mount stats only while selected. The dashboard nests ViewThatFits,
+        // Grid, and lazy stacks; keeping it in the hierarchy at opacity 0 makes
+        // every layout pass of the other views re-measure it, which explodes
+        // combinatorially and hangs the main thread when the terminal mounts.
+        if selectedView == .stats {
+            ServerStatsView(
+                server: server,
+                isVisible: true,
+                backgroundColor: backgroundColor,
+                sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
+                dependencies: statsDependencies,
+                isDockerUnlocked: storeManager.allowsProFeatures
+            )
+            .zIndex(1)
         }
     }
 
@@ -135,6 +181,19 @@ extension ConnectionTerminalContainer {
         tabManager.disconnectServer(server.id)
         fileBrowser.disconnect(serverId: server.id)
         fileTabManager.disconnect(serverId: server.id)
+    }
+
+    func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {
+        guard selectedView != .terminal else { return }
+        for tab in serverTabs {
+            for paneId in tab.allPaneIds {
+                tabManager.presentationState.applyVoiceEvent(.pendingReturnDismissed, for: paneId)
+            }
+        }
+    }
+
+    func platformPrepareForPaneClose() {
+        tabManager.keyboardCoordinator.deactivateInputImmediately(reason: .routeModal)
     }
 
     private var zenModeOverlay: some View {
