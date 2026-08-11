@@ -63,6 +63,29 @@ private actor TerminalOwnerReleaseCancellationProbe {
 @MainActor
 struct TerminalTabManagerIndependenceTests {
     @Test
+    func richPasteRuntimeSurvivesPaneViewReconstructionAndClosesWithPane() {
+        let manager = makeManager(snapshotStore: InMemoryTerminalTabSnapshotStore())
+        let tab = TerminalTab(serverId: UUID(), title: "Rich Paste")
+        install(tab, in: manager)
+
+        let firstRuntime = manager.richPasteRuntimeStore.runtime(
+            for: tab.rootPaneId,
+            tabManager: manager
+        )
+        let reconstructedPaneRuntime = manager.richPasteRuntimeStore.runtime(
+            for: tab.rootPaneId,
+            tabManager: manager
+        )
+
+        #expect(firstRuntime === reconstructedPaneRuntime)
+        #expect(manager.richPasteRuntimeStore.runtimeCount == 1)
+
+        manager.closeTab(tab)
+
+        #expect(manager.richPasteRuntimeStore.runtimeCount == 0)
+    }
+
+    @Test
     func ownerReleaseCancelsConnectionWorkWithoutRetainingManagerOrTransportOwner() async {
         var manager: TerminalTabManager? = makeManager(
             snapshotStore: InMemoryTerminalTabSnapshotStore()

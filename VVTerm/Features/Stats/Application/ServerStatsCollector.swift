@@ -13,13 +13,18 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     nonisolated enum Phase: Equatable, Sendable {
         case idle
         case starting(attemptID: UUID)
+        case startingPaused(attemptID: UUID)
         case collecting(attemptID: UUID)
+        case paused(attemptID: UUID)
         case approvalRequired(ServerStatsApprovalRequest)
         case failed(ServerStatsCollectionFailure)
 
         var attemptID: UUID? {
             switch self {
-            case .starting(let attemptID), .collecting(let attemptID):
+            case .starting(let attemptID),
+                 .startingPaused(let attemptID),
+                 .collecting(let attemptID),
+                 .paused(let attemptID):
                 return attemptID
             case .idle, .approvalRequired, .failed:
                 return nil
@@ -29,7 +34,19 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
 
     private(set) var phase: Phase = .idle
 
-    var isCollecting: Bool { phase.attemptID != nil }
+    var isCollecting: Bool {
+        switch phase {
+        case .starting, .collecting:
+            return true
+        case .idle, .startingPaused, .paused, .approvalRequired, .failed:
+            return false
+        }
+    }
+
+    var isPolling: Bool {
+        if case .collecting = phase { return true }
+        return false
+    }
 
     var approvalRequest: ServerStatsApprovalRequest? {
         guard case .approvalRequired(let request) = phase else { return nil }
@@ -42,9 +59,52 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
 
     @discardableResult
     mutating func markConnected(attemptID: UUID) -> Bool {
-        guard phase == .starting(attemptID: attemptID) else { return false }
-        phase = .collecting(attemptID: attemptID)
-        return true
+        switch phase {
+        case .starting(let currentAttemptID) where currentAttemptID == attemptID:
+            phase = .collecting(attemptID: attemptID)
+            return true
+        case .startingPaused(let currentAttemptID) where currentAttemptID == attemptID:
+            phase = .paused(attemptID: attemptID)
+            return true
+        default:
+            return false
+        }
+    }
+
+    @discardableResult
+    mutating func pause(attemptID: UUID) -> Bool {
+        switch phase {
+        case .starting(let currentAttemptID) where currentAttemptID == attemptID:
+            phase = .startingPaused(attemptID: attemptID)
+            return true
+        case .collecting(let currentAttemptID) where currentAttemptID == attemptID:
+            phase = .paused(attemptID: attemptID)
+            return true
+        case .startingPaused(let currentAttemptID) where currentAttemptID == attemptID:
+            return true
+        case .paused(let currentAttemptID) where currentAttemptID == attemptID:
+            return true
+        default:
+            return false
+        }
+    }
+
+    @discardableResult
+    mutating func resume(attemptID: UUID) -> Bool {
+        switch phase {
+        case .startingPaused(let currentAttemptID) where currentAttemptID == attemptID:
+            phase = .starting(attemptID: attemptID)
+            return true
+        case .paused(let currentAttemptID) where currentAttemptID == attemptID:
+            phase = .collecting(attemptID: attemptID)
+            return true
+        case .starting(let currentAttemptID) where currentAttemptID == attemptID:
+            return true
+        case .collecting(let currentAttemptID) where currentAttemptID == attemptID:
+            return true
+        default:
+            return false
+        }
     }
 
     @discardableResult
@@ -193,6 +253,7 @@ final class ServerStatsCollector: ObservableObject {
            activeAttempt.serverID == target.serverID,
            activeAttempt.identity.ownership == .owned {
             activeAttempt.collectDocker = collectDocker
+            _ = collectionState.resume(attemptID: activeAttempt.id)
             return
         }
 
@@ -204,6 +265,7 @@ final class ServerStatsCollector: ObservableObject {
         )
         if let activeAttempt, activeAttempt.identity == requestedIdentity {
             activeAttempt.collectDocker = collectDocker
+            _ = collectionState.resume(attemptID: activeAttempt.id)
             return
         }
 
@@ -245,8 +307,10 @@ final class ServerStatsCollector: ObservableObject {
 
             while !Task.isCancelled {
                 guard self?.isCurrentCollectionAttempt(attemptIdentity) == true else { return }
-                await self?.collectStats(attemptIdentity: attemptIdentity)
-                try await Task.sleep(for: .seconds(2))
+                if self?.collectionState.isPolling == true {
+                    await self?.collectStats(attemptIdentity: attemptIdentity)
+                }
+                try await self?.dependencies.waitForNextPoll()
             }
         }
         let task = Task(priority: .utility) { @MainActor [weak self, session] in
@@ -273,6 +337,11 @@ final class ServerStatsCollector: ObservableObject {
             }
         }
         attempt.primaryTask = task
+    }
+
+    func pauseCollecting() {
+        guard let activeAttempt else { return }
+        _ = collectionState.pause(attemptID: activeAttempt.id)
     }
 
     func stopCollecting() {

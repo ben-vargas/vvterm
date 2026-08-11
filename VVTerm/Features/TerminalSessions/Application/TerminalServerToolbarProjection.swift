@@ -95,21 +95,6 @@ struct TerminalServerContentState: Equatable {
     let splitZoomedTabIds: Set<UUID>
 }
 
-struct TerminalServerToolbarMenuAvailability: Equatable {
-    let hasTerminalTabs: Bool
-    let hasSelectedTerminal: Bool
-    let hasConnectedTerminal: Bool
-}
-
-struct TerminalServerToolbarMenuState: Equatable {
-    let selectedView: ConnectionViewTabID?
-    let tabIds: [UUID]
-    let selectedTabId: UUID?
-    let focusedPaneId: UUID?
-    let selectedConnectionState: ConnectionState?
-    let availability: TerminalServerToolbarMenuAvailability
-}
-
 struct TerminalServerToolbarTabItem: Equatable, Identifiable {
     let id: UUID
     let title: String
@@ -139,20 +124,6 @@ final class TerminalServerContentProjection: ObservableObject {
     }
 
     fileprivate func update(_ state: TerminalServerContentState) {
-        guard self.state != state else { return }
-        self.state = state
-    }
-}
-
-@MainActor
-final class TerminalServerToolbarMenuProjection: ObservableObject {
-    @Published private(set) var state: TerminalServerToolbarMenuState
-
-    init(state: TerminalServerToolbarMenuState) {
-        self.state = state
-    }
-
-    fileprivate func update(_ state: TerminalServerToolbarMenuState) {
         guard self.state != state else { return }
         self.state = state
     }
@@ -189,17 +160,16 @@ final class TerminalServerFloatingControlProjection: ObservableObject {
 #endif
 
 /// One per-server projection with separate observable surfaces.
-/// Title changes redraw only the tab strip. They do not invalidate an open menu.
+/// Title and connection-status changes redraw only the tab strip. They do not
+/// invalidate route chrome or an open menu.
 @MainActor
 final class TerminalServerToolbarProjection: ObservableObject {
     let content: TerminalServerContentProjection
-    let menu: TerminalServerToolbarMenuProjection
     let tabStrip: TerminalServerToolbarTabStripProjection
     #if os(iOS)
     let floatingControls: TerminalServerFloatingControlProjection
     #endif
 
-    private let serverId: UUID
     private var sessionSnapshot: TerminalServerSessionSnapshot
     private var selectedView: ConnectionViewTabID?
     private var runtimeTitles: [UUID: String]
@@ -212,7 +182,6 @@ final class TerminalServerToolbarProjection: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
 
     init(serverId: UUID, tabManager: TerminalTabManager) {
-        self.serverId = serverId
         sessionSnapshot = tabManager.sessionState.snapshot(for: serverId)
         selectedView = tabManager.connectionViewSelections.selection(for: serverId)
         runtimeTitles = tabManager.titleStore.runtimeTitles
@@ -231,7 +200,6 @@ final class TerminalServerToolbarProjection: ObservableObject {
             splitZoomedTabIds: splitZoomedTabIds
         )
         content = TerminalServerContentProjection(state: initialStates.content)
-        menu = TerminalServerToolbarMenuProjection(state: initialStates.menu)
         tabStrip = TerminalServerToolbarTabStripProjection(state: initialStates.tabStrip)
         #if os(iOS)
         floatingControls = TerminalServerFloatingControlProjection(
@@ -312,17 +280,14 @@ final class TerminalServerToolbarProjection: ObservableObject {
             voicePresentation: voicePresentation
         )
         let routeStateChanged = content.state != states.content
-            || menu.state != states.menu
             || floatingControls.state != floatingState
         #else
         let routeStateChanged = content.state != states.content
-            || menu.state != states.menu
         #endif
         if routeStateChanged {
             objectWillChange.send()
         }
         content.update(states.content)
-        menu.update(states.menu)
         tabStrip.update(states.tabStrip)
         #if os(iOS)
         floatingControls.update(floatingState)
@@ -360,37 +325,18 @@ final class TerminalServerToolbarProjection: ObservableObject {
         splitZoomedTabIds: Set<UUID>
     ) -> (
         content: TerminalServerContentState,
-        menu: TerminalServerToolbarMenuState,
         tabStrip: TerminalServerToolbarTabStripState
     ) {
         let tabs = sessionSnapshot.tabs
         let selectedTab = resolvedSelectedTab(in: sessionSnapshot)
-        let selectedState = selectedTab.flatMap {
-            sessionSnapshot.connectionStatesByPane[$0.focusedPaneId]
-        }
         let content = TerminalServerContentState(
             tabs: tabs,
             selectedTabId: selectedTab?.id,
             selectedView: selectedView,
             splitZoomedTabIds: splitZoomedTabIds.intersection(tabs.map(\.id))
         )
-        let menu = TerminalServerToolbarMenuState(
-            selectedView: selectedView,
-            tabIds: tabs.map(\.id),
-            selectedTabId: selectedTab?.id,
-            focusedPaneId: selectedTab?.focusedPaneId,
-            selectedConnectionState: selectedState,
-            availability: TerminalServerToolbarMenuAvailability(
-                hasTerminalTabs: !tabs.isEmpty,
-                hasSelectedTerminal: selectedTab != nil,
-                hasConnectedTerminal: sessionSnapshot.connectionStatesByPane.values.contains {
-                    $0.isConnected
-                }
-            )
-        )
         return (
             content,
-            menu,
             makeTabStripState(
                 sessionSnapshot: sessionSnapshot,
                 runtimeTitles: runtimeTitles,

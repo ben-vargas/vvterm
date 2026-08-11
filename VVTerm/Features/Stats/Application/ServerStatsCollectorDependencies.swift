@@ -68,6 +68,8 @@ protocol ServerStatsCollectionSession: AnyObject {
 
 @MainActor
 struct ServerStatsCollectorDependencies {
+    typealias WaitForNextPoll = @MainActor @Sendable () async throws -> Void
+
     let makeOwnedConnection: () -> any ServerStatsConnectionReference
     let makeSession: (
         _ target: any ServerStatsCollectionTarget,
@@ -75,4 +77,23 @@ struct ServerStatsCollectorDependencies {
         _ ownership: ServerStatsClientOwnership
     ) throws -> any ServerStatsCollectionSession
     let makeAttemptID: () -> UUID
+    let waitForNextPoll: WaitForNextPoll
+
+    init(
+        makeOwnedConnection: @escaping () -> any ServerStatsConnectionReference,
+        makeSession: @escaping (
+            _ target: any ServerStatsCollectionTarget,
+            _ connection: any ServerStatsConnectionReference,
+            _ ownership: ServerStatsClientOwnership
+        ) throws -> any ServerStatsCollectionSession,
+        makeAttemptID: @escaping () -> UUID,
+        waitForNextPoll: @escaping WaitForNextPoll = {
+            try await Task.sleep(for: .seconds(2))
+        }
+    ) {
+        self.makeOwnedConnection = makeOwnedConnection
+        self.makeSession = makeSession
+        self.makeAttemptID = makeAttemptID
+        self.waitForNextPoll = waitForNextPoll
+    }
 }

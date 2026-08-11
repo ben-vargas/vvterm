@@ -1,3 +1,4 @@
+import Darwin
 import Testing
 @testable import VVTerm
 
@@ -25,6 +26,22 @@ struct SSHAddressCandidatePolicyTests {
         #expect(
             SSHAddressCandidatePolicy.launchOffsets(candidateCount: .max).count
                 == SSHAddressCandidatePolicy.maximumCandidateCount
+        )
+    }
+
+    @Test
+    func numericAddressesBypassNameServiceResolution() {
+        #expect(
+            SSHAddressConnector.resolutionFlags(for: "192.0.2.1")
+                == AI_NUMERICHOST | AI_NUMERICSERV
+        )
+        #expect(
+            SSHAddressConnector.resolutionFlags(for: "2001:db8::1")
+                == AI_NUMERICHOST | AI_NUMERICSERV
+        )
+        #expect(
+            SSHAddressConnector.resolutionFlags(for: "server.example.com")
+                == AI_NUMERICSERV
         )
     }
 }

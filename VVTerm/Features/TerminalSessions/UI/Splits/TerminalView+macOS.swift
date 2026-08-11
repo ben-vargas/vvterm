@@ -33,7 +33,6 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     let server: Server
     let credentials: ServerCredentials
     let tabManager: TerminalTabManager
-    let richPasteUIModel: TerminalRichPasteUIModel
     let isActive: Bool
     let terminalContextMenuActions: TerminalContextMenuActions
     let onProcessExit: () -> Void
@@ -196,7 +195,6 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
             server: server,
             credentials: credentials,
             tabManager: tabManager,
-            richPasteUIModel: richPasteUIModel,
             sshFailureOutput: { failure in
                 TerminalConnectionFailurePresentation.ansiSSHErrorData(for: failure)
             }

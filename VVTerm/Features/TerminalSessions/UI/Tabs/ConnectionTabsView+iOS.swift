@@ -112,7 +112,6 @@ extension ConnectionTerminalContainer {
         if selectedView == .stats {
             ServerStatsView(
                 server: server,
-                isVisible: true,
                 backgroundColor: backgroundColor,
                 sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
                 dependencies: statsDependencies,
@@ -178,6 +177,7 @@ extension ConnectionTerminalContainer {
     }
 
     private func disconnectFromServer() {
+        statsDependencies.runtimeStore.releaseCollector(for: server.id)
         tabManager.disconnectServer(server.id)
         fileBrowser.disconnect(serverId: server.id)
         fileTabManager.disconnect(serverId: server.id)
@@ -236,6 +236,7 @@ extension ConnectionTerminalContainer {
                 },
                 onDisconnect: {
                     showingZenPanel = false
+                    statsDependencies.runtimeStore.releaseCollector(for: server.id)
                     if let onDisconnectRoute {
                         onDisconnectRoute()
                     } else {

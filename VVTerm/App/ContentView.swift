@@ -548,8 +548,11 @@ struct ContentView: View {
         connectionOperations: connectionOperations,
         sshClientFactory: sshClientFactory
     )
+    let statsRuntimeStore = ServerStatsRuntimeStore(
+        makeCollector: makeStatsCollector
+    )
     let statsDependencies = ServerStatsScreenDependencies(
-        makeCollector: makeStatsCollector,
+        runtimeStore: statsRuntimeStore,
         preferencesStore: statsPreferencesStore,
         volumeVisibilityStore: ServerVolumeVisibilityStore.live,
         securityApprovalActions: VVTermApp.makeStatsSecurityApprovalActions(

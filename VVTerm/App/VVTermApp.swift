@@ -244,6 +244,9 @@ struct VVTermApp: App {
             connectionOperations: connectionOperations,
             sshClientFactory: sshClientFactory
         )
+        let statsRuntimeStore = ServerStatsRuntimeStore(
+            makeCollector: makeStatsCollector
+        )
         terminalSecurityActions = Self.makeTerminalSecurityActions(
             keychainManager: keychainManager,
             knownHostsManager: knownHostsManager
@@ -315,7 +318,7 @@ struct VVTermApp: App {
         _workspaceSelectionStore = StateObject(wrappedValue: workspaceSelectionStore)
         #endif
         self.voiceInputRuntimeStore = voiceInputRuntimeStore
-        self.makeStatsCollector = makeStatsCollector
+        self.statsRuntimeStore = statsRuntimeStore
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.serverFormDependencies = serverFormDependencies
         self.voiceModelManagers = voiceModelManagers
@@ -399,7 +402,7 @@ struct VVTermApp: App {
     @StateObject private var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
     @StateObject private var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
     private let onWelcomeCompleted: @MainActor () -> Void
-    private let makeStatsCollector: @MainActor () -> ServerStatsCollector
+    private let statsRuntimeStore: ServerStatsRuntimeStore
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     private let serverFormDependencies: ServerFormDependencies
     private let voiceModelManagers: VoiceSettingsModelManagerOwner
@@ -449,7 +452,7 @@ struct VVTermApp: App {
 
     private var statsDependencies: ServerStatsScreenDependencies {
         ServerStatsScreenDependencies(
-            makeCollector: makeStatsCollector,
+            runtimeStore: statsRuntimeStore,
             preferencesStore: statsPreferencesStore,
             volumeVisibilityStore: serverVolumeVisibilityStore,
             securityApprovalActions: statsSecurityApprovalActions

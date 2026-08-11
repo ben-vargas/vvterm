@@ -280,6 +280,7 @@ nonisolated enum SSHAddressConnector {
         hints.ai_family = AF_UNSPEC
         hints.ai_socktype = SOCK_STREAM
         hints.ai_protocol = IPPROTO_TCP
+        hints.ai_flags = resolutionFlags(for: host)
         var result: UnsafeMutablePointer<addrinfo>?
         let status = getaddrinfo(host, String(port), &hints, &result)
         guard status == 0, let first = result else {
@@ -306,6 +307,20 @@ nonisolated enum SSHAddressConnector {
             current = info.ai_next
         }
         return candidates
+    }
+
+    static func resolutionFlags(for host: String) -> Int32 {
+        var ipv4Address = in_addr()
+        if host.withCString({ inet_pton(AF_INET, $0, &ipv4Address) }) == 1 {
+            return AI_NUMERICHOST | AI_NUMERICSERV
+        }
+
+        var ipv6Address = in6_addr()
+        if host.withCString({ inet_pton(AF_INET6, $0, &ipv6Address) }) == 1 {
+            return AI_NUMERICHOST | AI_NUMERICSERV
+        }
+
+        return AI_NUMERICSERV
     }
 
     private static func resolveCancellable(host: String, port: Int) async throws -> [Candidate] {

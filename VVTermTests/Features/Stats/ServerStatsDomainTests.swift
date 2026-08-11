@@ -51,6 +51,63 @@ final class ServerStatsDomainTests: XCTestCase {
         XCTAssertEqual(state.phase, .starting(attemptID: secondAttemptID))
     }
 
+    func testPauseAndResumePreserveStartingAttempt() {
+        let attemptID = UUID()
+        var state = ServerStatsCollectionState()
+
+        state.start(attemptID: attemptID)
+
+        XCTAssertTrue(state.pause(attemptID: attemptID))
+        XCTAssertEqual(state.phase, .startingPaused(attemptID: attemptID))
+        XCTAssertFalse(state.isCollecting)
+
+        XCTAssertTrue(state.resume(attemptID: attemptID))
+        XCTAssertEqual(state.phase, .starting(attemptID: attemptID))
+        XCTAssertTrue(state.isCollecting)
+    }
+
+    func testConnectedAttemptCanPauseAndResumeWithoutChangingIdentity() {
+        let attemptID = UUID()
+        var state = ServerStatsCollectionState()
+
+        state.start(attemptID: attemptID)
+        XCTAssertTrue(state.markConnected(attemptID: attemptID))
+
+        XCTAssertTrue(state.pause(attemptID: attemptID))
+        XCTAssertEqual(state.phase, .paused(attemptID: attemptID))
+        XCTAssertFalse(state.isCollecting)
+
+        XCTAssertTrue(state.resume(attemptID: attemptID))
+        XCTAssertEqual(state.phase, .collecting(attemptID: attemptID))
+        XCTAssertTrue(state.isCollecting)
+    }
+
+    func testConnectionCompletionWhilePausedKeepsAttemptPaused() {
+        let attemptID = UUID()
+        var state = ServerStatsCollectionState()
+
+        state.start(attemptID: attemptID)
+        XCTAssertTrue(state.pause(attemptID: attemptID))
+
+        XCTAssertTrue(state.markConnected(attemptID: attemptID))
+        XCTAssertEqual(state.phase, .paused(attemptID: attemptID))
+        XCTAssertFalse(state.isCollecting)
+    }
+
+    func testStaleAttemptCannotPauseOrResumeCurrentAttempt() {
+        let currentAttemptID = UUID()
+        let staleAttemptID = UUID()
+        var state = ServerStatsCollectionState()
+
+        state.start(attemptID: currentAttemptID)
+        XCTAssertFalse(state.pause(attemptID: staleAttemptID))
+        XCTAssertEqual(state.phase, .starting(attemptID: currentAttemptID))
+
+        XCTAssertTrue(state.pause(attemptID: currentAttemptID))
+        XCTAssertFalse(state.resume(attemptID: staleAttemptID))
+        XCTAssertEqual(state.phase, .startingPaused(attemptID: currentAttemptID))
+    }
+
     func testHostKeyApprovalRemainsTyped() {
         let attemptID = UUID()
         let serverID = UUID()

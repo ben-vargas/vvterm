@@ -4,7 +4,7 @@ extension RemoteFileBrowserScreen {
     func securityApprovalPresentation<Content: View>(_ content: Content) -> some View {
         content
             .sshHostKeyTrustAlert(
-                request: securityApprovalRequest,
+                request: effectiveSecurityApprovalRequest,
                 isPresented: hostKeyApprovalBinding,
                 onCancel: { _ in cancelSecurityApproval() },
                 onApprove: { _ in approveHostKeyAndRetry() }
@@ -32,10 +32,14 @@ extension RemoteFileBrowserScreen {
     }
 
     var hostKeyApprovalChallenge: KnownHostsManager.Challenge? {
-        guard case .hostKey(let challenge) = securityApprovalRequest else {
+        guard case .hostKey(let challenge) = effectiveSecurityApprovalRequest else {
             return nil
         }
         return challenge
+    }
+
+    var effectiveSecurityApprovalRequest: ServerSecurityApprovalRequest? {
+        securityApprovalRequest ?? uploadRuntime.securityApprovalRequest
     }
 
     var hostKeyApprovalBinding: Binding<Bool> {
@@ -49,7 +53,7 @@ extension RemoteFileBrowserScreen {
         retry: (@MainActor () -> Void)?,
         onCancellation: (@MainActor () -> Void)? = nil
     ) -> Bool {
-        guard securityApprovalRequest == nil else { return false }
+        guard effectiveSecurityApprovalRequest == nil else { return false }
 
         let request: ServerSecurityApprovalRequest?
         if let detected = ServerSecurityApprovalRequest.detect(error, server: server) {
@@ -116,6 +120,10 @@ extension RemoteFileBrowserScreen {
 
     @MainActor
     func cancelSecurityApproval() {
+        if securityApprovalRequest == nil, uploadRuntime.securityApprovalRequest != nil {
+            uploadRuntime.cancelSecurityRequest()
+            return
+        }
         guard let request = securityApprovalRequest else { return }
         if case .hostKey(let challenge) = request {
             KnownHostsManager.shared.reject(challenge)
@@ -128,6 +136,10 @@ extension RemoteFileBrowserScreen {
 
     @MainActor
     func approveHostKeyAndRetry() {
+        if securityApprovalRequest == nil, uploadRuntime.securityApprovalRequest != nil {
+            uploadRuntime.approveSecurityRequest()
+            return
+        }
         guard let challenge = hostKeyApprovalChallenge else { return }
         guard KnownHostsManager.shared.approve(challenge) else {
             clearSecurityApproval()

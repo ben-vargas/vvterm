@@ -554,6 +554,7 @@ extension ConnectionTerminalContainer {
     }
 
     private func disconnectFromServer() {
+        statsDependencies.runtimeStore.releaseCollector(for: server.id)
         fileBrowser.disconnect(serverId: server.id)
         fileTabManager.disconnect(serverId: server.id)
         tabManager.disconnectServer(server.id)
@@ -717,19 +718,16 @@ extension ConnectionTerminalContainer {
 
     @ViewBuilder
     private func statsLayer(backgroundColor: Color) -> some View {
-        // Keep stats mounted so collection can pause and resume without losing
-        // its current in-memory presentation state.
-        ServerStatsView(
-            server: server,
-            isVisible: selectedView == .stats,
-            backgroundColor: backgroundColor,
-            sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
-            dependencies: statsDependencies,
-            isDockerUnlocked: storeManager.allowsProFeatures
-        )
-        .opacity(selectedView == .stats ? 1 : 0)
-        .allowsHitTesting(selectedView == .stats)
-        .zIndex(selectedView == .stats ? 1 : 0)
+        if selectedView == .stats {
+            ServerStatsView(
+                server: server,
+                backgroundColor: backgroundColor,
+                sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
+                dependencies: statsDependencies,
+                isDockerUnlocked: storeManager.allowsProFeatures
+            )
+            .zIndex(1)
+        }
     }
 
     @ViewBuilder

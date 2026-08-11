@@ -268,6 +268,9 @@ struct ConnectionTerminalContainer: View {
                     showingZenPanel = false
                 }
             }
+            .onDisappear {
+                statsDependencies.runtimeStore.releaseCollector(for: server.id)
+            }
             .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
             .limitReachedAlert(.fileTabs, isPresented: $showingFileTabLimitAlert)
             .splitPaneProFeatureAlert(isPresented: $showingSplitPaneUpgradeAlert)

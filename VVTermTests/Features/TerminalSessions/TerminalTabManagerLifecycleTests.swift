@@ -427,7 +427,7 @@ struct TerminalTabManagerLifecycleTests {
     }
 
     @Test
-    func toolbarProjectionSeparatesMenuTabTitleAndVoiceInvalidation() async {
+    func toolbarProjectionSeparatesRouteTabTitleAndVoiceInvalidation() async {
         await withCleanManager { manager in
             let observedTab = TerminalTab(serverId: UUID(), title: "Observed")
             let otherTab = TerminalTab(serverId: UUID(), title: "Other")
@@ -438,7 +438,6 @@ struct TerminalTabManagerLifecycleTests {
                 tabManager: manager
             )
             var contentUpdates = 0
-            var menuUpdates = 0
             var tabStripUpdates = 0
             #if os(iOS)
             var floatingControlUpdates = 0
@@ -447,7 +446,6 @@ struct TerminalTabManagerLifecycleTests {
             var cancellations = [
                 projection.objectWillChange.sink { routeUpdates += 1 },
                 projection.content.objectWillChange.sink { contentUpdates += 1 },
-                projection.menu.objectWillChange.sink { menuUpdates += 1 },
                 projection.tabStrip.objectWillChange.sink { tabStripUpdates += 1 }
             ]
             #if os(iOS)
@@ -464,7 +462,6 @@ struct TerminalTabManagerLifecycleTests {
                 rawDirectory: "/tmp/output-metadata"
             )
             #expect(contentUpdates == 0)
-            #expect(menuUpdates == 0)
             #expect(tabStripUpdates == 0)
             #if os(iOS)
             #expect(floatingControlUpdates == 0)
@@ -473,7 +470,6 @@ struct TerminalTabManagerLifecycleTests {
 
             manager.updatePaneTitle(observedTab.rootPaneId, rawTitle: "Output title")
             #expect(contentUpdates == 0)
-            #expect(menuUpdates == 0)
             #expect(tabStripUpdates == 1)
             #expect(projection.tabStrip.state.items.first?.title == "Output title")
             #if os(iOS)
@@ -484,7 +480,6 @@ struct TerminalTabManagerLifecycleTests {
             manager.updatePaneTitle(observedTab.rootPaneId, rawTitle: "Output title")
             manager.updatePaneTitle(otherTab.rootPaneId, rawTitle: "Other output title")
             #expect(contentUpdates == 0)
-            #expect(menuUpdates == 0)
             #expect(tabStripUpdates == 1)
             #if os(iOS)
             #expect(floatingControlUpdates == 0)
@@ -506,6 +501,33 @@ struct TerminalTabManagerLifecycleTests {
             #expect(routeUpdates == 2)
             #expect(manager.presentationState.voicePresentation(for: observedTab.rootPaneId) == .pendingReturn)
             #endif
+        }
+    }
+
+    @Test
+    func connectionAttemptUpdatesOnlyTheTabStripProjection() async {
+        await withCleanManager { manager in
+            let tab = TerminalTab(serverId: UUID(), title: "Connecting")
+            installTab(tab, in: manager, connectionState: .connecting)
+            let projection = TerminalServerToolbarProjection(
+                serverId: tab.serverId,
+                tabManager: manager
+            )
+            var routeUpdates = 0
+            var contentUpdates = 0
+            var tabStripUpdates = 0
+            let cancellations = [
+                projection.objectWillChange.sink { routeUpdates += 1 },
+                projection.content.objectWillChange.sink { contentUpdates += 1 },
+                projection.tabStrip.objectWillChange.sink { tabStripUpdates += 1 }
+            ]
+            defer { cancellations.forEach { $0.cancel() } }
+
+            manager.updatePaneState(tab.rootPaneId, connectionState: .reconnecting(attempt: 2))
+
+            #expect(routeUpdates == 0)
+            #expect(contentUpdates == 0)
+            #expect(tabStripUpdates == 1)
         }
     }
 

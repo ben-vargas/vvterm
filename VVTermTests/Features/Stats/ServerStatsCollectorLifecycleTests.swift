@@ -83,6 +83,8 @@ private final class StatsTestEvent {
             waiters.append((expectedCount, continuation))
         }
     }
+
+    var recordedCount: Int { count }
 }
 
 @MainActor
@@ -356,6 +358,115 @@ final class ServerStatsCollectorLifecycleTests: XCTestCase {
     }
 
     @MainActor
+    func testPauseAndResumeKeepSessionCacheAndSuspendPolling() async throws {
+        let snapshotGate = StatsTestGate<ServerStats>()
+        let firstPollWait = StatsTestGate<Void>()
+        let secondPollWait = StatsTestGate<Void>()
+        var pollWaits = [firstPollWait, secondPollWait]
+        let factory = StatsTestSessionFactory(behaviors: [.collect(snapshotGate)])
+        let collector = makeCollector(
+            factory: factory,
+            waitForNextPoll: {
+                guard !pollWaits.isEmpty else {
+                    try await Task.sleep(for: .seconds(60))
+                    return
+                }
+                try await pollWaits.removeFirst().wait()
+            }
+        )
+        let target = StatsTestTarget()
+
+        await collector.startCollecting(for: target)
+        let session = try XCTUnwrap(factory.sessions.first)
+        await session.collectionStarted.wait()
+
+        var snapshot = ServerStats()
+        snapshot.cpuUsage = 42
+        snapshotGate.succeed(with: snapshot)
+        await firstPollWait.waitUntilStarted()
+        let attemptID = try XCTUnwrap(collector.collectionState.phase.attemptID)
+
+        collector.pauseCollecting()
+        XCTAssertEqual(collector.collectionState.phase, .paused(attemptID: attemptID))
+        XCTAssertFalse(collector.isCollecting)
+        XCTAssertEqual(collector.stats.cpuUsage, 42)
+
+        firstPollWait.succeed(with: ())
+        await secondPollWait.waitUntilStarted()
+        XCTAssertEqual(session.collectionStarted.recordedCount, 1)
+        XCTAssertEqual(factory.sessions.count, 1)
+        XCTAssertEqual(factory.ownedConnections.count, 1)
+
+        await collector.startCollecting(for: target)
+        XCTAssertTrue(collector.isCollecting)
+        XCTAssertEqual(factory.sessions.count, 1)
+        XCTAssertEqual(factory.ownedConnections.count, 1)
+        XCTAssertEqual(collector.stats.cpuUsage, 42)
+
+        secondPollWait.succeed(with: ())
+        await session.collectionStarted.wait(for: 2)
+        XCTAssertEqual(session.collectionStarted.recordedCount, 2)
+
+        collector.stopCollecting()
+        await snapshotGate.waitUntilCancelled()
+        await session.disconnected.wait()
+        XCTAssertEqual(session.disconnectCount, 1)
+    }
+
+    @MainActor
+    func testRuntimeStoreRetainsOneCollectorPerServerUntilRelease() {
+        var collectorCount = 0
+        let store = ServerStatsRuntimeStore {
+            collectorCount += 1
+            return ServerStatsCollector(
+                dependencies: ServerStatsCollectorDependencies(
+                    makeOwnedConnection: { StatsTestConnection() },
+                    makeSession: { _, _, _ in throw StatsTestError.incompatibleConnection },
+                    makeAttemptID: UUID.init
+                )
+            )
+        }
+        let firstServerID = UUID()
+        let secondServerID = UUID()
+
+        let first = store.collector(for: firstServerID)
+        let repeatedFirst = store.collector(for: firstServerID)
+        let second = store.collector(for: secondServerID)
+
+        XCTAssertTrue(first === repeatedFirst)
+        XCTAssertFalse(first === second)
+        XCTAssertEqual(collectorCount, 2)
+
+        store.releaseCollector(for: firstServerID)
+        let replacementFirst = store.collector(for: firstServerID)
+
+        XCTAssertFalse(first === replacementFirst)
+        XCTAssertEqual(collectorCount, 3)
+    }
+
+    @MainActor
+    func testRuntimeStoreReleaseStopsOwnedSessionExactlyOnce() async throws {
+        let runGate = StatsTestGate<Void>()
+        let factory = StatsTestSessionFactory(behaviors: [.suspended(runGate)])
+        let store = ServerStatsRuntimeStore {
+            self.makeCollector(factory: factory)
+        }
+        let serverID = UUID()
+        let collector = store.collector(for: serverID)
+
+        await collector.startCollecting(for: StatsTestTarget(serverID: serverID))
+        let session = try XCTUnwrap(factory.sessions.first)
+        await session.runStarted.wait()
+
+        store.releaseCollector(for: serverID)
+        store.releaseCollector(for: serverID)
+
+        await runGate.waitUntilCancelled()
+        await session.disconnected.wait()
+        XCTAssertEqual(session.disconnectCount, 1)
+    }
+
+    @MainActor
     func testReplacementCancelsFirstAttemptAndRejectsItsLateSnapshot() async throws {
         let staleSnapshotGate = StatsTestGate<ServerStats>(ignoresCancellation: true)
         let replacementGate = StatsTestGate<Void>()
@@ -485,7 +596,10 @@ final class ServerStatsCollectorLifecycleTests: XCTestCase {
     @MainActor
     private func makeCollector(
         factory: StatsTestSessionFactory,
-        makeAttemptID: @escaping () -> UUID = UUID.init
+        makeAttemptID: @escaping () -> UUID = UUID.init,
+        waitForNextPoll: @escaping @MainActor @Sendable () async throws -> Void = {
+            try await Task.sleep(for: .seconds(2))
+        }
     ) -> ServerStatsCollector {
         ServerStatsCollector(
             dependencies: ServerStatsCollectorDependencies(
@@ -497,7 +611,8 @@ final class ServerStatsCollectorLifecycleTests: XCTestCase {
                         ownership: ownership
                     )
                 },
-                makeAttemptID: makeAttemptID
+                makeAttemptID: makeAttemptID,
+                waitForNextPoll: waitForNextPoll
             )
         )
     }

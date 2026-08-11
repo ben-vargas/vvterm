@@ -562,7 +562,7 @@ struct TerminalPaneView: View {
     @State private var dismissFallbackBanner = false
     @StateObject private var connectWatchdog = TerminalConnectionWatchdog()
     @State private var securityApprovalRequest: ServerSecurityApprovalRequest?
-    @StateObject private var richPasteUI = TerminalRichPasteUIModel()
+    @ObservedObject private var richPasteUI: TerminalRichPasteUIModel
 
     @AppStorage(TerminalDefaults.sshAutoReconnectKey) private var autoReconnectEnabled = true
 
@@ -602,6 +602,12 @@ struct TerminalPaneView: View {
         self.appearance = appearance
         self.showsVoiceButton = showsVoiceButton
         self.onVoiceTrigger = onVoiceTrigger
+        _richPasteUI = ObservedObject(
+            wrappedValue: tabManager.richPasteRuntimeStore.runtime(
+                for: paneId,
+                tabManager: tabManager
+            ).uiModel
+        )
     }
 
     private var paneState: TerminalPanePresentationState? {
@@ -1004,7 +1010,6 @@ struct TerminalPaneView: View {
             server: server,
             credentials: credentials,
             tabManager: tabManager,
-            richPasteUIModel: richPasteUI,
             isActive: shouldFocus,
             terminalContextMenuActions: terminalContextMenuActions,
             onPaneKeyboardShortcut: onPaneKeyboardShortcut,
@@ -1021,7 +1026,6 @@ struct TerminalPaneView: View {
             server: server,
             credentials: credentials,
             tabManager: tabManager,
-            richPasteUIModel: richPasteUI,
             isActive: shouldFocus,
             terminalContextMenuActions: terminalContextMenuActions,
             onProcessExit: onProcessExit,

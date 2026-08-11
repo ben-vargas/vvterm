@@ -20,10 +20,10 @@ struct ServerStatsSecurityApprovalActions {
     let reject: Reject
 }
 
-/// Stable app-owned dependencies for one server's Stats screen.
+/// Stable app-owned dependencies for Stats screens.
 @MainActor
 struct ServerStatsScreenDependencies {
-    let makeCollector: @MainActor () -> ServerStatsCollector
+    let runtimeStore: ServerStatsRuntimeStore
     let preferencesStore: PreferencesStore
     let volumeVisibilityStore: ServerVolumeVisibilityStore
     let securityApprovalActions: ServerStatsSecurityApprovalActions

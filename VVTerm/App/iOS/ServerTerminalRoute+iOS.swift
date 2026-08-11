@@ -95,10 +95,6 @@ struct ServerTerminalRoute: View {
         toolbarProjection.content
     }
 
-    private var terminalToolbarMenu: TerminalServerToolbarMenuProjection {
-        toolbarProjection.menu
-    }
-
     private var floatingControls: TerminalServerFloatingControlProjection {
         toolbarProjection.floatingControls
     }
@@ -145,7 +141,7 @@ struct ServerTerminalRoute: View {
 
     private var hasNavigationContext: Bool {
         route.isConnecting
-            || terminalToolbarMenu.state.availability.hasTerminalTabs
+            || !terminalContent.state.tabs.isEmpty
             || !fileTabs.tabs(for: route.serverId).isEmpty
     }
 

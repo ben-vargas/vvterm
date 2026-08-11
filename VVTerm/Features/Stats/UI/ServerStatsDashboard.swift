@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ServerStatsDashboard: View {
     let server: Server
-    let isVisible: Bool
     let backgroundColor: Color
     var sharedClientProvider: () -> SSHClient?
     @ObservedObject var statsCollector: ServerStatsCollector
@@ -69,7 +68,7 @@ struct ServerStatsDashboard: View {
                 )
             }
 
-            if isVisible, let error = statsCollector.connectionError {
+            if let error = statsCollector.connectionError {
                 ConnectionErrorOverlay(error: error, style: style) {
                     Task {
                         await statsCollector.startCollecting(
@@ -83,22 +82,18 @@ struct ServerStatsDashboard: View {
             }
         }
         .task(id: makeTaskKey()) {
-            if isVisible {
-                await statsCollector.startCollecting(
-                    for: server,
-                    using: sharedClientProvider(),
-                    collectDocker: isDockerUnlocked
-                )
-            } else {
-                statsCollector.stopCollecting()
-            }
+            await statsCollector.startCollecting(
+                for: server,
+                using: sharedClientProvider(),
+                collectDocker: isDockerUnlocked
+            )
         }
         .task(id: approvalRequestInFlight?.id) {
             await performSecurityApprovalIfNeeded()
         }
         .onDisappear {
             approvalRequestInFlight = nil
-            statsCollector.stopCollecting()
+            statsCollector.pauseCollecting()
         }
         .sshHostKeyTrustAlert(
             request: hostKeyRequest,
@@ -171,6 +166,6 @@ struct ServerStatsDashboard: View {
 
     private func makeTaskKey() -> String {
         let clientId = sharedClientProvider().map { ObjectIdentifier($0).hashValue } ?? 0
-        return "\(server.id.uuidString)-\(isVisible)-\(clientId)-\(isDockerUnlocked)"
+        return "\(server.id.uuidString)-\(clientId)-\(isDockerUnlocked)"
     }
 }

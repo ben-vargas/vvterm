@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct RemoteFileBrowserScreen: View {
     @ObservedObject var browser: RemoteFileBrowserStore
+    @ObservedObject var uploadRuntime: RemoteFileUploadRuntime
     let server: Server
     let fileTab: RemoteFileTab
     let initialPath: String?
@@ -136,6 +137,9 @@ struct RemoteFileBrowserScreen: View {
         self.fileTab = fileTab
         self.initialPath = initialPath
         self.onCurrentPathChange = onCurrentPathChange
+        _uploadRuntime = ObservedObject(
+            wrappedValue: browser.uploadRuntime(for: fileTab, server: server)
+        )
     }
 
     var snapshot: Snapshot {
@@ -372,7 +376,7 @@ struct RemoteFileBrowserScreen: View {
     func fileNoticeHost<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         NoticeHost(
             topBanner: noticeHost.topBanner,
-            bottomOperations: noticeHost.bottomOperations,
+            bottomOperations: noticeHost.bottomOperations + uploadOperationNotices,
             bottomInsetBehavior: .contentBottom
         ) {
             content()
@@ -593,6 +597,57 @@ struct RemoteFileBrowserScreen: View {
         platformTransferCompletionAction(fileURL: fileURL)
     }
 
+    var uploadOperationNotices: [NoticeItem] {
+        uploadRuntime.operations.map { operation in
+            let message: String
+            let level: NoticeLevel
+            let leading: NoticeLeading
+            let progress: NoticeProgress?
+            let dismissAction: (() -> Void)?
+
+            switch operation.phase {
+            case .running(let currentMessage, let completed, let total):
+                message = currentMessage
+                level = .info
+                leading = .activity
+                progress = transferProgress(
+                    completedUnitCount: completed,
+                    totalUnitCount: total
+                )
+                dismissAction = { requestTransferCancellation(id: operation.id) }
+            case .awaitingSecurityApproval(let currentMessage):
+                message = currentMessage
+                level = .warning
+                leading = .icon("lock.shield.fill")
+                progress = nil
+                dismissAction = { requestTransferCancellation(id: operation.id) }
+            case .succeeded(let currentMessage):
+                message = currentMessage
+                level = .success
+                leading = .icon("checkmark.circle.fill")
+                progress = nil
+                dismissAction = { uploadRuntime.dismiss(operation.id) }
+            case .failed(let currentMessage):
+                message = currentMessage
+                level = .error
+                leading = .icon("xmark.octagon.fill")
+                progress = nil
+                dismissAction = { uploadRuntime.dismiss(operation.id) }
+            }
+
+            return NoticeItem(
+                id: operation.id.uuidString,
+                lane: .bottomOperation,
+                level: level,
+                leading: leading,
+                title: operation.title,
+                message: message,
+                progress: progress,
+                dismissAction: dismissAction
+            )
+        }
+    }
+
     @MainActor
     func performTransfer(
         id: UUID = UUID(),
@@ -755,6 +810,14 @@ struct RemoteFileBrowserScreen: View {
 
     @MainActor
     func requestTransferCancellation(id: UUID) {
+        if uploadRuntime.contains(id) {
+            transferCancellationRequest = TransferCancellationRequest(
+                id: id,
+                kind: .upload
+            )
+            return
+        }
+
         guard transferTasks[id] != nil else {
             noticeHost.dismiss(id: id.uuidString)
             return
@@ -768,6 +831,11 @@ struct RemoteFileBrowserScreen: View {
 
     @MainActor
     func cancelTransfer(id: UUID) {
+        if uploadRuntime.contains(id) {
+            uploadRuntime.cancel(id)
+            transferCancellationRequest = nil
+            return
+        }
         transferTasks.removeValue(forKey: id)?.cancel()
         activeTransferKinds.removeValue(forKey: id)
         transferCancellationRequest = nil
@@ -1233,8 +1301,10 @@ struct RemoteFileBrowserScreen: View {
     }
 
     func beginUploadFlow(urls: [URL], to destinationPath: String, initialMessage: String) {
-        performTransfer(
-            cancellationKind: .upload,
+        let browser = browser
+        let fileTab = fileTab
+        let server = server
+        uploadRuntime.start(
             title: String(localized: "Uploading"),
             initialMessage: initialMessage,
             successMessage: String(localized: "Upload complete.")

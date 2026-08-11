@@ -7,11 +7,10 @@ struct ServerStatsView: View {
     @AppStorage(StatsResolvedAppearance.storageKey) private var appearanceMode = "system"
 
     let server: Server
-    let isVisible: Bool
     let backgroundColor: Color
     var sharedClientProvider: () -> SSHClient? = { nil }
 
-    @StateObject private var statsCollector: ServerStatsCollector
+    @ObservedObject private var statsCollector: ServerStatsCollector
     @ObservedObject private var preferencesStore: PreferencesStore
     @ObservedObject private var volumeVisibilityStore: ServerVolumeVisibilityStore
     private let securityApprovalActions: ServerStatsSecurityApprovalActions
@@ -21,17 +20,17 @@ struct ServerStatsView: View {
 
     init(
         server: Server,
-        isVisible: Bool,
         backgroundColor: Color,
         sharedClientProvider: @escaping () -> SSHClient? = { nil },
         dependencies: ServerStatsScreenDependencies,
         isDockerUnlocked: Bool
     ) {
         self.server = server
-        self.isVisible = isVisible
         self.backgroundColor = backgroundColor
         self.sharedClientProvider = sharedClientProvider
-        _statsCollector = StateObject(wrappedValue: dependencies.makeCollector())
+        _statsCollector = ObservedObject(
+            wrappedValue: dependencies.runtimeStore.collector(for: server.id)
+        )
         _preferencesStore = ObservedObject(wrappedValue: dependencies.preferencesStore)
         _volumeVisibilityStore = ObservedObject(wrappedValue: dependencies.volumeVisibilityStore)
         self.securityApprovalActions = dependencies.securityApprovalActions
@@ -44,7 +43,6 @@ struct ServerStatsView: View {
 
         ServerStatsDashboard(
             server: server,
-            isVisible: isVisible,
             backgroundColor: backgroundColor,
             sharedClientProvider: sharedClientProvider,
             statsCollector: statsCollector,

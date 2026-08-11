@@ -117,6 +117,33 @@ struct RemoteFileBrowserStoreTests {
         #expect(store.states[tab.id] == nil)
     }
 
+    @Test
+    func uploadRuntimeSurvivesScreenReconstructionAndTabRemovalCancelsWork() async {
+        let store = RemoteFileBrowserStore(defaults: makeDefaults())
+        let server = makeServer()
+        let tab = RemoteFileTab(serverId: server.id, seedPath: "/tmp")
+        let cancellationProbe = RemoteFileUploadCancellationProbe()
+        let firstRuntime = store.uploadRuntime(for: tab, server: server)
+
+        let operationID = firstRuntime.start(
+            title: "Uploading",
+            initialMessage: "Preparing",
+            successMessage: "Complete"
+        ) { _ in
+            try await cancellationProbe.run()
+        }
+        #expect(await cancellationProbe.waitUntilStarted())
+
+        let reconstructedScreenRuntime = store.uploadRuntime(for: tab, server: server)
+        #expect(firstRuntime === reconstructedScreenRuntime)
+        #expect(reconstructedScreenRuntime.contains(operationID))
+
+        store.removeRuntimeState(for: tab.id)
+
+        #expect(!firstRuntime.contains(operationID))
+        #expect(await cancellationProbe.waitUntilCancelled())
+    }
+
     @Test(arguments: [1_999, 2_000, 2_001])
     func directoryListingTruncatesOnlyWhenAnExtraEntryExists(entryCount: Int) {
         let entries = (0..<entryCount).map { index in
@@ -179,5 +206,35 @@ struct RemoteFileBrowserStoreTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+}
+
+private actor RemoteFileUploadCancellationProbe {
+    private var didStart = false
+    private var didObserveCancellation = false
+
+    func run() async throws {
+        didStart = true
+        while !Task.isCancelled {
+            await Task.yield()
+        }
+        didObserveCancellation = true
+        throw CancellationError()
+    }
+
+    func waitUntilStarted() async -> Bool {
+        for _ in 0..<2_000 {
+            if didStart { return true }
+            await Task.yield()
+        }
+        return didStart
+    }
+
+    func waitUntilCancelled() async -> Bool {
+        for _ in 0..<2_000 {
+            if didObserveCancellation { return true }
+            await Task.yield()
+        }
+        return didObserveCancellation
     }
 }

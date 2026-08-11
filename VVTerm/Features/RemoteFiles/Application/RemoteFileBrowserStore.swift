@@ -88,6 +88,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     let workingDirectoryProvider: WorkingDirectoryProvider
 
     var persistedStates: [String: RemoteFileBrowserPersistedState] = [:]
+    private var uploadRuntimesByTabID: [UUID: RemoteFileUploadRuntime] = [:]
     nonisolated static let directoryEntryLimit = 2_000
     static let defaultPreviewBytes = 512 * 1_024
     static let hardPreviewBytes = 2 * 1_024 * 1_024
@@ -115,6 +116,10 @@ final class RemoteFileBrowserStore: ObservableObject {
         self.serverProvider = serverProvider
         self.workingDirectoryProvider = workingDirectoryProvider
         loadPersistedStates()
+    }
+
+    isolated deinit {
+        uploadRuntimesByTabID.values.forEach { $0.cancelAll() }
     }
 
     func prepareNewTab(_ tab: RemoteFileTab, duplicating sourceTab: RemoteFileTab?) {
@@ -322,6 +327,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     }
 
     func removeRuntimeState(for tabId: UUID) {
+        uploadRuntimesByTabID.removeValue(forKey: tabId)?.cancelAll()
         temporaryStorage.removePreviewArtifact(for: states[tabId]?.viewerPayload)
         states.removeValue(forKey: tabId)
 
@@ -342,6 +348,16 @@ final class RemoteFileBrowserStore: ObservableObject {
         }
 
         remoteFileServiceAdapter.disconnect(serverId: serverId)
+    }
+
+    func uploadRuntime(for tab: RemoteFileTab, server: Server) -> RemoteFileUploadRuntime {
+        precondition(tab.serverId == server.id)
+        if let runtime = uploadRuntimesByTabID[tab.id] {
+            return runtime
+        }
+        let runtime = RemoteFileUploadRuntime(server: server)
+        uploadRuntimesByTabID[tab.id] = runtime
+        return runtime
     }
 
     func goUp(in tab: RemoteFileTab, server: Server) async {

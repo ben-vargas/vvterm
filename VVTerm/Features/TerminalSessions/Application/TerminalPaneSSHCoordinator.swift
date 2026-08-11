@@ -19,7 +19,6 @@ final class TerminalPaneSSHCoordinator {
         credentials: ServerCredentials,
         sshClient: SSHClient,
         tabManager: TerminalTabManager,
-        richPasteUIModel: TerminalRichPasteUIModel,
         failureOutput: @escaping @MainActor @Sendable (TerminalConnectionFailure) -> Data?
     ) {
         self.paneId = paneId
@@ -28,11 +27,9 @@ final class TerminalPaneSSHCoordinator {
         self.sshClient = sshClient
         self.tabManager = tabManager
         self.failureOutput = failureOutput
-        self.richPasteRuntime = .terminalPane(
-            paneId: paneId,
-            sshClient: sshClient,
-            tabManager: tabManager,
-            uiModel: richPasteUIModel
+        self.richPasteRuntime = tabManager.richPasteRuntimeStore.runtime(
+            for: paneId,
+            tabManager: tabManager
         )
     }
 

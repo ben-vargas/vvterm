@@ -7,7 +7,7 @@ nonisolated extension ServerStatsCollectionState {
             return String(localized: "SSH host key approval is required before authentication.")
         case .failed(let failure):
             return failure.errorMessage
-        case .idle, .starting, .collecting:
+        case .idle, .starting, .startingPaused, .collecting, .paused:
             return nil
         }
     }

@@ -307,7 +307,6 @@ struct RemoteTerminalPaneWrapper: View {
     let server: Server
     let credentials: ServerCredentials
     let tabManager: TerminalTabManager
-    let richPasteUIModel: TerminalRichPasteUIModel
     let isActive: Bool
     let terminalContextMenuActions: TerminalContextMenuActions
     let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
@@ -333,7 +332,6 @@ struct RemoteTerminalPaneWrapper: View {
                 server: server,
                 credentials: credentials,
                 tabManager: tabManager,
-                richPasteUIModel: richPasteUIModel,
                 size: geometry.size,
                 isActive: isActive,
                 terminalContextMenuActions: terminalContextMenuActions,
@@ -423,7 +421,6 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     let server: Server
     let credentials: ServerCredentials
     let tabManager: TerminalTabManager
-    let richPasteUIModel: TerminalRichPasteUIModel
     let size: CGSize
     let isActive: Bool
     let terminalContextMenuActions: TerminalContextMenuActions
@@ -442,7 +439,6 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             server: server,
             credentials: credentials,
             tabManager: tabManager,
-            richPasteUIModel: richPasteUIModel,
             sshFailureOutput: { failure in
                 TerminalConnectionFailurePresentation.ansiSSHErrorData(for: failure)
             }

@@ -29,6 +29,7 @@ final class TerminalTabManager {
     private var tabOpenAttemptsByServer: [UUID: UUID] = [:]
 
     let titleStore = TerminalPaneTitleStore()
+    let richPasteRuntimeStore = TerminalRichPasteRuntimeStore()
     #if os(iOS)
     let keyboardCoordinator = TerminalKeyboardCoordinator()
     #endif
@@ -461,6 +462,7 @@ final class TerminalTabManager {
         for paneId in paneIds {
             detachTerminalRegistration(for: paneId)
         }
+        richPasteRuntimeStore.removeAll()
         titleStore.removeAllRuntimeTitles()
 
         logger.info("Preserved terminal tabs while releasing application runtime state")
@@ -998,6 +1000,7 @@ final class TerminalTabManager {
 
         tmuxCoordinator.clearRuntimeState(for: paneId)
         reconnectCoordinator.removePane(paneId)
+        richPasteRuntimeStore.removePane(paneId)
         detachTerminalRegistration(for: paneId)
         titleStore.removePane(paneId)
 
@@ -1197,6 +1200,7 @@ extension TerminalTabManager {
         sessionState.resetForTesting()
         presentationState.reset()
         titleStore.reset()
+        richPasteRuntimeStore.removeAll()
         #if os(iOS)
         keyboardCoordinator.setActivePane(nil)
         keyboardCoordinator.setViewActive(false)
