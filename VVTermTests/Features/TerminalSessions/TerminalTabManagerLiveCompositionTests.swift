@@ -250,15 +250,38 @@ struct TerminalTabManagerLiveCompositionTests {
         let applicationIsActiveQuery: @MainActor @Sendable () -> Bool = {
             applicationIsActive
         }
+        let appLockManager = AppLockManager(
+            defaults: defaults,
+            authService: LiveCompositionBiometricAuthService()
+        )
+        let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
+            transport: CloudKitManager.shared,
+            defaults: defaults,
+            now: Date.init,
+            makeID: UUID.init
+        )
+        let serverManager = ServerManager(
+            dependencies: .live(
+                defaults: defaults,
+                serverCloud: cloudKitSync.serverCloud,
+                credentialRepository: KeychainManager.shared,
+                knownHosts: KnownHostsManager.shared,
+                freePlanTracker: analyticsTracker,
+                actionAuthorizer: appLockManager,
+                syncRepository: cloudKitSync.coordinator,
+                defaultWorkspaceName: { "Default" },
+                canonicalDefaultWorkspaceNames: { ["Default"] },
+                now: Date.init,
+                makeID: UUID.init
+            ),
+            startsAutomatically: false
+        )
         return TerminalTabManagerLiveComposition.makeManager(
             defaults: defaults,
             sshClientFactory: .testing(),
             networkMonitor: .shared,
-            appLockManager: AppLockManager(
-                defaults: defaults,
-                authService: LiveCompositionBiometricAuthService()
-            ),
-            serverManager: .shared,
+            appLockManager: appLockManager,
+            serverManager: serverManager,
             engagementTracker: EngagementTracker(
                 dependencies: .live(
                     defaults: defaults,
