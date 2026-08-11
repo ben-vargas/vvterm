@@ -22,6 +22,49 @@ nonisolated enum SpeechRecognitionOperationState: Equatable, Sendable {
     }
 }
 
+nonisolated final class SpeechRecognitionResultState: @unchecked Sendable {
+    private let lock = NSLock()
+    private let temporaryFileURL: URL?
+    private var resolution: Result<String, any Error>?
+    private var continuation: CheckedContinuation<String, any Error>?
+
+    init(temporaryFileURL: URL? = nil) {
+        self.temporaryFileURL = temporaryFileURL
+    }
+
+    func value() async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            if let resolution {
+                lock.unlock()
+                continuation.resume(with: resolution)
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    @discardableResult
+    func resolve(_ resolution: Result<String, any Error>) -> Bool {
+        lock.lock()
+        guard self.resolution == nil else {
+            lock.unlock()
+            return false
+        }
+        self.resolution = resolution
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+
+        if let temporaryFileURL {
+            try? FileManager.default.removeItem(at: temporaryFileURL)
+        }
+        continuation?.resume(with: resolution)
+        return true
+    }
+}
+
 @MainActor
 class SpeechRecognitionService: ObservableObject {
     @Published var transcribedText = ""
@@ -34,6 +77,7 @@ class SpeechRecognitionService: ObservableObject {
     private var recognitionState: SpeechRecognitionOperationState = .idle
     private var recognitionCompletionStream: AsyncStream<Void>?
     private var recognitionCompletionContinuation: AsyncStream<Void>.Continuation?
+    private var transcriptionResultState: SpeechRecognitionResultState?
     private let selectedLanguageCode: @MainActor () -> String
 
     init(selectedLanguageCode: @escaping @MainActor () -> String) {
@@ -111,6 +155,7 @@ class SpeechRecognitionService: ObservableObject {
         recognitionRequest?.endAudio()
         recognitionRequest = nil
 
+        cancelBatchTranscription()
         recognitionTask?.cancel()
         recognitionTask = nil
         finishRecognitionCompletion()
@@ -154,6 +199,11 @@ class SpeechRecognitionService: ObservableObject {
     }
 
     func stopRecognition() async -> String {
+        if transcriptionResultState != nil {
+            cancelRecognition()
+            return ""
+        }
+
         guard let generation = recognitionState.generation else {
             return transcribedText.isEmpty ? partialTranscription : transcribedText
         }
@@ -183,10 +233,14 @@ class SpeechRecognitionService: ObservableObject {
     }
 
     func transcribe(samples: [Float], sampleRate: Double) async throws -> String {
+        guard Self.acceptsAudioInput(sampleCount: samples.count, sampleRate: sampleRate) else {
+            throw SpeechRecognitionError.invalidAudio
+        }
         guard let speechRecognizer = resolvedRecognizer(), speechRecognizer.isAvailable else {
             throw SpeechRecognitionError.recognitionUnavailable
         }
 
+        cancelBatchTranscription()
         recognitionTask?.cancel()
         recognitionTask = nil
         finishRecognitionCompletion()
@@ -197,62 +251,68 @@ class SpeechRecognitionService: ObservableObject {
             .appendingPathComponent("vvterm-transcription-\(UUID().uuidString)")
             .appendingPathExtension("caf")
 
-        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
-        let file = try AVAudioFile(forWriting: tempURL, settings: format.settings)
-        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))!
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
+              let buffer = AVAudioPCMBuffer(
+                  pcmFormat: format,
+                  frameCapacity: AVAudioFrameCount(samples.count)
+              ),
+              let channel = buffer.floatChannelData?.pointee else {
+            throw SpeechRecognitionError.invalidAudio
+        }
         buffer.frameLength = AVAudioFrameCount(samples.count)
-
-        if let channel = buffer.floatChannelData?.pointee {
-            samples.withUnsafeBufferPointer { ptr in
-                channel.update(from: ptr.baseAddress!, count: samples.count)
-            }
+        samples.withUnsafeBufferPointer { pointer in
+            channel.update(from: pointer.baseAddress!, count: samples.count)
         }
 
-        try file.write(from: buffer)
+        do {
+            let file = try AVAudioFile(forWriting: tempURL, settings: format.settings)
+            try file.write(from: buffer)
+        } catch {
+            try? FileManager.default.removeItem(at: tempURL)
+            recognitionState = .idle
+            throw error
+        }
 
         let request = SFSpeechURLRecognitionRequest(url: tempURL)
         request.shouldReportPartialResults = false
         request.requiresOnDeviceRecognition = false
+        let resultState = SpeechRecognitionResultState(temporaryFileURL: tempURL)
+        transcriptionResultState = resultState
 
-        return try await withCheckedThrowingContinuation { continuation in
-            var finished = false
-            let cleanup: () -> Void = {
-                try? FileManager.default.removeItem(at: tempURL)
+        defer {
+            if recognitionState.acceptsResult(for: generation) {
+                recognitionTask?.cancel()
+                recognitionTask = nil
+                recognitionState = .idle
             }
+            if transcriptionResultState === resultState {
+                transcriptionResultState = nil
+            }
+        }
 
-            recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
-                if finished { return }
-
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            recognitionTask = speechRecognizer.recognitionTask(with: request) { result, error in
                 if let error {
-                    finished = true
-                    cleanup()
-                    Task { @MainActor in
-                        guard self?.recognitionState.acceptsResult(for: generation) == true else { return }
-                        self?.recognitionTask = nil
-                        self?.recognitionState = .idle
-                    }
-                    continuation.resume(throwing: error)
+                    resultState.resolve(.failure(error))
                     return
                 }
 
-                guard let result else { return }
-                if result.isFinal {
-                    finished = true
-                    cleanup()
-                    Task { @MainActor in
-                        guard self?.recognitionState.acceptsResult(for: generation) == true else { return }
-                        self?.recognitionTask = nil
-                        self?.recognitionState = .idle
-                    }
-                    continuation.resume(returning: result.bestTranscription.formattedString)
-                }
+                guard let result, result.isFinal else { return }
+                resultState.resolve(.success(result.bestTranscription.formattedString))
             }
+            let result = try await resultState.value()
+            try Task.checkCancellation()
+            return result
+        } onCancel: {
+            resultState.resolve(.failure(CancellationError()))
         }
     }
 
     func cancelRecognition() {
         recognitionState = .idle
         recognitionRequest?.endAudio()
+        cancelBatchTranscription()
         recognitionTask?.cancel()
 
         recognitionRequest = nil
@@ -284,21 +344,36 @@ class SpeechRecognitionService: ObservableObject {
         }
     }
 
+    nonisolated static func acceptsAudioInput(sampleCount: Int, sampleRate: Double) -> Bool {
+        sampleCount > 0
+            && sampleCount <= Int(AVAudioFrameCount.max)
+            && sampleRate.isFinite
+            && sampleRate > 0
+    }
+
     private func finishRecognitionCompletion() {
         recognitionCompletionContinuation?.finish()
         recognitionCompletionContinuation = nil
         recognitionCompletionStream = nil
     }
 
+    private func cancelBatchTranscription() {
+        transcriptionResultState?.resolve(.failure(CancellationError()))
+        transcriptionResultState = nil
+    }
+
     // MARK: - Errors
 
     enum SpeechRecognitionError: LocalizedError {
         case recognitionUnavailable
+        case invalidAudio
 
         var errorDescription: String? {
             switch self {
             case .recognitionUnavailable:
                 return "Speech recognition is not available. Please enable Siri in System Settings > Siri & Spotlight."
+            case .invalidAudio:
+                return "The audio data is invalid."
             }
         }
     }
