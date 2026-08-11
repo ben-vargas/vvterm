@@ -223,36 +223,62 @@ actor SSHClient {
     // MARK: - Connection
 
     func connect(to server: Server, credentials: ServerCredentials) async throws -> SSHSession {
-        if case .disconnecting(let operation) = lifecycle {
-            await operation.task.value
-        }
-        if case .aborted(let state) = lifecycle,
-           state.session != nil || state.connectTask != nil {
-            await disconnect()
-        }
-        try Task.checkCancellation()
-
         let key = connectionKey(for: server)
 
-        switch lifecycle {
-        case .connected(var state):
-            if state.key == key, await state.session.isConnected {
-                state.server = server
-                lifecycle = .connected(state)
-                return state.session
+        connectionPreparation: while true {
+            try Task.checkCancellation()
+
+            switch lifecycle {
+            case .disconnecting(let operation):
+                await operation.task.value
+
+            case .aborted(let state) where state.session != nil || state.connectTask != nil:
+                await disconnect()
+
+            case .connected(let state):
+                let transportIsConnected = await state.session.isConnected
+                guard case .connected(let currentState) = lifecycle,
+                      currentState.id == state.id,
+                      currentState.session === state.session else {
+                    continue
+                }
+
+                switch SSHConnectedSessionPolicy.action(
+                    existingConnectionKey: state.key,
+                    requestedConnectionKey: key,
+                    transportIsConnected: transportIsConnected
+                ) {
+                case .reuse:
+                    var updatedState = currentState
+                    updatedState.server = server
+                    lifecycle = .connected(updatedState)
+                    return updatedState.session
+
+                case .recover:
+                    state.session.abort()
+                    lifecycle = .aborted(
+                        AbortedState(operationID: state.id, session: state.session, connectTask: nil)
+                    )
+                    await disconnect()
+
+                case .reject:
+                    throw SSHError.connectionFailed("SSH client already connected")
+                }
+
+            case .connecting(let state) where state.key == key:
+                return try await resolveConnection(
+                    operationID: state.id,
+                    key: key,
+                    server: server,
+                    task: state.task
+                )
+
+            case .connecting:
+                throw SSHError.connectionFailed("SSH client already connected")
+
+            case .disconnected, .failed, .aborted:
+                break connectionPreparation
             }
-            throw SSHError.connectionFailed("SSH client already connected")
-        case .connecting(let state) where state.key == key:
-            return try await resolveConnection(
-                operationID: state.id,
-                key: key,
-                server: server,
-                task: state.task
-            )
-        case .connecting:
-            throw SSHError.connectionFailed("SSH client already connected")
-        case .disconnected, .failed, .aborted, .disconnecting:
-            break
         }
 
         let startupTrace = SSHStartupTrace(logger: logger)
