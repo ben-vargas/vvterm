@@ -303,7 +303,7 @@ nonisolated enum TerminalDefaults {
     }
 
     #if os(macOS)
-    private static func seedMacOSFontDefaultsIfNeeded(defaults: UserDefaults) {
+    @MainActor private static func seedMacOSFontDefaultsIfNeeded(defaults: UserDefaults) {
         let storedFontName = defaults.string(forKey: fontNameKey)
         let normalizedStoredFontName = storedFontName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let storedFontSize = defaults.object(forKey: fontSizeKey) as? Double
@@ -338,7 +338,7 @@ nonisolated enum TerminalDefaults {
         fontAvailability(storedFontName) ? storedFontName : defaultPrimaryFontName
     }
 
-    private static func isAvailableMacOSFont(named fontName: String) -> Bool {
+    @MainActor private static func isAvailableMacOSFont(named fontName: String) -> Bool {
         NSFont(name: fontName, size: 12) != nil
     }
     #endif
