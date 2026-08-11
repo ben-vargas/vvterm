@@ -142,12 +142,14 @@ final class ShellSplitViewController: NSSplitViewController {
 
     private func updateZenWindowTitle() {
         guard let window = view.window else { return }
-        let bridge = MacToolbarBridge.shared
-        let shouldShowTitle = bridge.isActive && bridge.isZenMode && !bridge.zenTitle.isEmpty
+        let snapshot = MacToolbarBridge.shared.snapshot
+        let shouldShowTitle = snapshot.isActive
+            && snapshot.isZenMode
+            && !snapshot.zenTitle.isEmpty
 
         if shouldShowTitle {
-            window.title = bridge.zenTitle
-            window.subtitle = bridge.zenSubtitle()
+            window.title = snapshot.zenTitle
+            window.subtitle = snapshot.zenSubtitle
             window.titleVisibility = .visible
         } else {
             window.subtitle = ""
@@ -159,7 +161,8 @@ final class ShellSplitViewController: NSSplitViewController {
         super.viewDidAppear()
         installToolbarIfNeeded()
         if bridgeObserver == nil {
-            bridgeObserver = MacToolbarBridge.shared.$revision
+            bridgeObserver = MacToolbarBridge.shared.$snapshot
+                .removeDuplicates()
                 .receive(on: RunLoop.main)
                 .sink { [weak self] _ in self?.updateZenWindowTitle() }
         }

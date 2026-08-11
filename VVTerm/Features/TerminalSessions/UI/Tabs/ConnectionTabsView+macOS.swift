@@ -208,6 +208,8 @@ extension ConnectionTerminalContainer {
                 .onChange(of: selectedTab?.layout) { _ in updateCommandBridge(commandBridge) }
                 .onChange(of: terminalContent.state.splitZoomedTabIds) { _ in updateCommandBridge(commandBridge) }
                 .onChange(of: isZenModeEnabled) { _ in activateToolbarBridge() }
+                .onChange(of: zenSubtitleText) { _ in activateToolbarBridge() }
+                .onChange(of: toolbarFilesMenuEntries()) { _ in activateToolbarBridge() }
                 .alert(
                     disconnectAlertTitle,
                     isPresented: $showingDisconnectConfirmation,
@@ -256,8 +258,9 @@ extension ConnectionTerminalContainer {
     /// Publishes this server's toolbar content to the AppKit toolbar bridge,
     /// which renders it with native controls.
     private func activateToolbarBridge() {
-        MacToolbarBridge.shared.activate(
-            ownerId: server.id.uuidString,
+        let ownerId = server.id.uuidString
+        let snapshot = MacToolbarSnapshot(
+            ownerId: ownerId,
             showsViewPicker: shouldShowViewPicker,
             showsTabStrip: (selectedView == .terminal && !serverTabs.isEmpty)
                 || (selectedView == .files && !serverFileTabs.isEmpty),
@@ -265,18 +268,59 @@ extension ConnectionTerminalContainer {
             isZenMode: isZenModeEnabled,
             zenTitle: server.name,
             zenIcon: "server.rack",
-            zenSubtitle: { zenSubtitleText },
-            viewPicker: { toolbarViewPickerData() },
-            tabStrip: { AnyView(tabsToolbarView) },
-            filesMenu: { toolbarFilesMenuEntries() },
-            serverMenu: { toolbarServerMenuEntries() },
-            onEnterZen: {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-                    isZenModeEnabled = true
-                }
-            },
-            zenPanelContent: { AnyView(zenPanelView) }
+            zenSubtitle: zenSubtitleText,
+            viewPicker: toolbarViewPickerData(),
+            filesMenu: toolbarFilesMenuEntries(),
+            serverMenu: toolbarServerMenuEntries()
         )
+        MacToolbarBridge.shared.activate(
+            snapshot: snapshot,
+            dispatch: performToolbarCommand,
+            tabStrip: { tabsToolbarView },
+            zenPanel: { zenPanelView }
+        )
+    }
+
+    private func performToolbarCommand(_ command: MacToolbarCommandID) {
+        switch command {
+        case .selectView(let rawValue):
+            guard let tab = ConnectionViewTabID(rawValue: rawValue) else { return }
+            selectedViewBinding.wrappedValue = tab
+        case .filesParent:
+            guard let tab = selectedFileTab else { return }
+            Task { await fileBrowser.goUp(in: tab, server: server) }
+        case .filesRefresh:
+            guard let tab = selectedFileTab else { return }
+            Task { await fileBrowser.refresh(server: server, tab: tab) }
+        case .filesUpload:
+            guard let tab = selectedFileTab else { return }
+            fileBrowser.requestUploadPicker(
+                for: tab,
+                destinationPath: fileBrowser.currentPath(for: tab)
+            )
+        case .filesNewFolder:
+            guard let tab = selectedFileTab else { return }
+            fileBrowser.requestCreateFolder(
+                for: tab,
+                destinationPath: fileBrowser.currentPath(for: tab)
+            )
+        case .filesToggleHidden:
+            guard let tab = selectedFileTab else { return }
+            fileBrowser.setShowHiddenFiles(!fileBrowser.showHiddenFiles(for: tab), for: tab)
+        case .filesCopyPath:
+            let path = selectedFileTab.map { fileBrowser.currentPath(for: $0) } ?? "/"
+            Clipboard.copy(path)
+        case .openSettings:
+            onOpenSettings?()
+        case .editServer:
+            serverToEdit = server
+        case .disconnect:
+            showingDisconnectConfirmation = true
+        case .enterZen:
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                isZenModeEnabled = true
+            }
+        }
     }
 
     /// Subtitle shown under the server name in zen, derived entirely from live
@@ -333,11 +377,7 @@ extension ConnectionTerminalContainer {
                     help: tab.rawValue.capitalized
                 )
             },
-            selectedId: selectedView.rawValue,
-            onSelect: { newValue in
-                guard let selectedTab = ConnectionViewTabID(rawValue: newValue) else { return }
-                selectedViewBinding.wrappedValue = selectedTab
-            }
+            selectedId: selectedView.rawValue
         )
     }
 
@@ -348,50 +388,65 @@ extension ConnectionTerminalContainer {
         let hasTab = tab != nil
 
         return [
-            ToolbarMenuEntry(title: String(localized: "Parent"), systemImage: "arrow.turn.up.left", isEnabled: hasTab && currentPath != "/") {
-                guard let tab = selectedFileTab else { return }
-                Task { await fileBrowser.goUp(in: tab, server: server) }
-            },
-            ToolbarMenuEntry(title: String(localized: "Refresh"), systemImage: "arrow.clockwise", isEnabled: hasTab) {
-                guard let tab = selectedFileTab else { return }
-                Task { await fileBrowser.refresh(server: server, tab: tab) }
-            },
-            .separator,
-            ToolbarMenuEntry(title: String(localized: "Upload…"), systemImage: "square.and.arrow.up", isEnabled: hasTab) {
-                guard let tab = selectedFileTab else { return }
-                fileBrowser.requestUploadPicker(for: tab, destinationPath: currentPath)
-            },
-            ToolbarMenuEntry(title: String(localized: "New Folder…"), systemImage: "folder.badge.plus", isEnabled: hasTab) {
-                guard let tab = selectedFileTab else { return }
-                fileBrowser.requestCreateFolder(for: tab, destinationPath: currentPath)
-            },
             ToolbarMenuEntry(
+                command: .filesParent,
+                title: String(localized: "Parent"),
+                systemImage: "arrow.turn.up.left",
+                isEnabled: hasTab && currentPath != "/"
+            ),
+            ToolbarMenuEntry(
+                command: .filesRefresh,
+                title: String(localized: "Refresh"),
+                systemImage: "arrow.clockwise",
+                isEnabled: hasTab
+            ),
+            .separator,
+            ToolbarMenuEntry(
+                command: .filesUpload,
+                title: String(localized: "Upload…"),
+                systemImage: "square.and.arrow.up",
+                isEnabled: hasTab
+            ),
+            ToolbarMenuEntry(
+                command: .filesNewFolder,
+                title: String(localized: "New Folder…"),
+                systemImage: "folder.badge.plus",
+                isEnabled: hasTab
+            ),
+            ToolbarMenuEntry(
+                command: .filesToggleHidden,
                 title: hiddenVisible ? String(localized: "Hide Hidden Files") : String(localized: "Show Hidden Files"),
                 systemImage: hiddenVisible ? "eye.slash" : "eye",
                 isEnabled: hasTab
-            ) {
-                guard let tab = selectedFileTab else { return }
-                fileBrowser.setShowHiddenFiles(!hiddenVisible, for: tab)
-            },
+            ),
             .separator,
-            ToolbarMenuEntry(title: String(localized: "Copy Path"), systemImage: "document.on.document") {
-                Clipboard.copy(currentPath)
-            }
+            ToolbarMenuEntry(
+                command: .filesCopyPath,
+                title: String(localized: "Copy Path"),
+                systemImage: "document.on.document"
+            )
         ]
     }
 
     private func toolbarServerMenuEntries() -> [ToolbarMenuEntry] {
         [
-            ToolbarMenuEntry(title: String(localized: "Settings"), systemImage: "gear") {
-                onOpenSettings?()
-            },
-            ToolbarMenuEntry(title: String(localized: "Edit Server"), systemImage: "pencil") {
-                serverToEdit = server
-            },
+            ToolbarMenuEntry(
+                command: .openSettings,
+                title: String(localized: "Settings"),
+                systemImage: "gear"
+            ),
+            ToolbarMenuEntry(
+                command: .editServer,
+                title: String(localized: "Edit Server"),
+                systemImage: "pencil"
+            ),
             .separator,
-            ToolbarMenuEntry(title: String(localized: "Disconnect"), systemImage: "xmark.circle", isDestructive: true) {
-                showingDisconnectConfirmation = true
-            }
+            ToolbarMenuEntry(
+                command: .disconnect,
+                title: String(localized: "Disconnect"),
+                systemImage: "xmark.circle",
+                isDestructive: true
+            )
         ]
     }
 

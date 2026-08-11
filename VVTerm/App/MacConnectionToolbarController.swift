@@ -29,7 +29,7 @@ private struct MacTabStripHost: View {
     @ObservedObject var bridge = MacToolbarBridge.shared
 
     var body: some View {
-        bridge.tabStrip()
+        bridge.makeTabStripView()
             .frame(
                 maxWidth: .infinity,
                 minHeight: ServerViewTopTabBarMetrics.toolbarTabStripHeight,
@@ -43,7 +43,7 @@ private struct MacZenControlHost: View {
     @ObservedObject var bridge = MacToolbarBridge.shared
 
     var body: some View {
-        bridge.zenPanelContent()
+        bridge.makeZenPanelView()
     }
 }
 
@@ -59,7 +59,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     private weak var segmentedControl: NSSegmentedControl?
 
     // The pull-down menus are rebuilt lazily (NSMenuDelegate) right before they
-    // open, keyed by these identifiers — never on every bridge revision.
+    // open, keyed by these identifiers, not on every snapshot update.
     private static let filesMenuIdentifier = NSUserInterfaceItemIdentifier("vvterm.filesMenu.menu")
     private static let serverMenuIdentifier = NSUserInterfaceItemIdentifier("vvterm.serverMenu.menu")
 
@@ -69,12 +69,10 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
-        bridge.onItemSetChange = { [weak self] in
-            DispatchQueue.main.async { self?.reconcile() }
-        }
-        cancellable = bridge.$revision
+        cancellable = bridge.$snapshot
+            .removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.refreshContent() }
+            .sink { [weak self] _ in self?.reconcile() }
     }
 
     func configure(tabManager: TerminalTabManager) {
@@ -89,19 +87,20 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     }
 
     private var desiredIdentifiers: [NSToolbarItem.Identifier] {
+        let snapshot = bridge.snapshot
         // Leading flexible space puts the sidebar toggle at the right edge of
         // the sidebar region (next to the divider), the standard macOS spot.
         var ids: [NSToolbarItem.Identifier] = [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator]
         guard tabManager != nil else { return ids }
-        guard bridge.isActive else { return ids }
-        if bridge.isZenMode {
+        guard snapshot.isActive else { return ids }
+        if snapshot.isZenMode {
             // Keep the sidebar toggle at the right edge of the sidebar section,
             // then let AppKit render the native window title/subtitle in the
             // content-side titlebar area.
             return [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .vvZenControls]
         }
-        if bridge.showsViewPicker { ids.append(.vvViewPicker) }
-        if bridge.showsTabStrip {
+        if snapshot.showsViewPicker { ids.append(.vvViewPicker) }
+        if snapshot.showsTabStrip {
             ids.append(.vvTabStrip)
             // In terminal there is no Files button to separate the tabs from
             // the trailing zen/server group, so add a fixed gap. A real .space
@@ -109,12 +108,12 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
             // strip and the zen/server group get separate capsules (a custom
             // spacer view stays in the same glass group and merges them). Files
             // view already gets that separation from the Files button itself.
-            if !bridge.showsFilesMenu { ids.append(.space) }
+            if !snapshot.showsFilesMenu { ids.append(.space) }
         } else {
             // No tabs in this view (e.g. Stats) — push trailing buttons right.
             ids.append(.flexibleSpace)
         }
-        if bridge.showsFilesMenu { ids.append(.vvFilesMenu) }
+        if snapshot.showsFilesMenu { ids.append(.vvFilesMenu) }
         ids.append(.vvEnterZen)
         ids.append(.vvServerMenu)
         return ids
@@ -142,7 +141,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     /// bridge content. Menus are not rebuilt here — they refresh lazily on open
     /// via `menuNeedsUpdate(_:)`.
     private func refreshContent() {
-        guard let segmented = segmentedControl, let picker = bridge.viewPicker() else { return }
+        guard let segmented = segmentedControl, let picker = bridge.snapshot.viewPicker else { return }
         currentPicker = picker
         if segmented.segmentCount != picker.segments.count {
             configureSegmentedControl(segmented)
@@ -245,7 +244,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     }
 
     private func configureSegmentedControl(_ segmented: NSSegmentedControl) {
-        guard let picker = bridge.viewPicker() else {
+        guard let picker = bridge.snapshot.viewPicker else {
             segmented.segmentCount = 0
             return
         }
@@ -268,7 +267,9 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
         guard let picker = currentPicker,
               sender.selectedSegment >= 0,
               sender.selectedSegment < picker.segments.count else { return }
-        picker.onSelect(picker.segments[sender.selectedSegment].id)
+        bridge.dispatcher.dispatch(
+            .selectView(picker.segments[sender.selectedSegment].id)
+        )
     }
 
     private func makeTabStripItem() -> NSToolbarItem {
@@ -332,7 +333,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     }
 
     @objc private func enterZenTapped() {
-        bridge.onEnterZen()
+        bridge.dispatcher.dispatch(.enterZen)
     }
 
     private func makeLazyMenu(identifier: NSUserInterfaceItemIdentifier) -> NSMenu {
@@ -345,13 +346,13 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
 
     /// Rebuild the about-to-open menu from the current bridge entries. Called by
     /// AppKit just before display, so the menus stay fresh without being rebuilt
-    /// on every revision.
+    /// on every snapshot update.
     func menuNeedsUpdate(_ menu: NSMenu) {
         switch menu.identifier {
         case Self.filesMenuIdentifier:
-            populate(menu, with: bridge.filesMenu())
+            populate(menu, with: bridge.snapshot.filesMenu)
         case Self.serverMenuIdentifier:
-            populate(menu, with: bridge.serverMenu())
+            populate(menu, with: bridge.snapshot.serverMenu)
         default:
             break
         }
@@ -369,7 +370,8 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
             // initializer, which a closure-carrying subclass can't honor).
             let menuItem = NSMenuItem(title: entry.title, action: #selector(menuItemFired(_:)), keyEquivalent: "")
             menuItem.target = self
-            menuItem.representedObject = MenuActionBox(entry.action)
+            guard let command = entry.command else { continue }
+            menuItem.representedObject = MenuActionBox(command)
             menuItem.isEnabled = entry.isEnabled
             if let systemImage = entry.systemImage {
                 menuItem.image = NSImage(systemSymbolName: systemImage, accessibilityDescription: entry.title)
@@ -379,13 +381,14 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     }
 
     @objc private func menuItemFired(_ sender: NSMenuItem) {
-        (sender.representedObject as? MenuActionBox)?.action()
+        guard let command = (sender.representedObject as? MenuActionBox)?.command else { return }
+        bridge.dispatcher.dispatch(command)
     }
 }
 
-/// Boxes a menu action closure for storage in NSMenuItem.representedObject.
+/// Boxes a typed command for storage in NSMenuItem.representedObject.
 private final class MenuActionBox {
-    let action: () -> Void
-    init(_ action: @escaping () -> Void) { self.action = action }
+    let command: MacToolbarCommandID
+    init(_ command: MacToolbarCommandID) { self.command = command }
 }
 #endif

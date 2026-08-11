@@ -410,10 +410,10 @@ struct ServerSidebarView: View {
         // focusedValue above can't reach the scene Commands. Register the action
         // on the shell command bridge too; ContentView republishes it.
         .onAppear {
-            commandBridge.openLocalDiscovery = presentLocalDiscovery
+            commandBridge.setLocalDiscovery(presentLocalDiscovery)
         }
         .onDisappear {
-            commandBridge.openLocalDiscovery = nil
+            commandBridge.setLocalDiscovery(nil)
         }
         #endif
         .lockedItemAlert(

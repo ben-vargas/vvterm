@@ -7,8 +7,6 @@ import Testing
 struct AppTerminalManagerInjectionTests {
     @Test
     func macToolbarDefersTerminalItemsUntilManagerIsInjected() {
-        let previousItemSetChange = MacToolbarBridge.shared.onItemSetChange
-        defer { MacToolbarBridge.shared.onItemSetChange = previousItemSetChange }
         let controller = MacConnectionToolbarController()
 
         let identifiers = controller.toolbarDefaultItemIdentifiers(controller.toolbar)
