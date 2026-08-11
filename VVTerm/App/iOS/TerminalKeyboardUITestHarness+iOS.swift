@@ -139,6 +139,10 @@ struct TerminalKeyboardUITestHarness: View {
         Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-mouse-capture")
     }
 
+    private var seedsTerminalSelectionFixture: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-selection-fixture")
+    }
+
     private var seedsTerminalPasteboard: Bool {
         Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-pasteboard")
     }
@@ -807,8 +811,10 @@ struct TerminalKeyboardUITestHarness: View {
         manager.updatePaneState(Self.paneId, connectionState: .connected)
         manager.keyboardCoordinator.setActivePane(Self.paneId)
         manager.keyboardCoordinator.setViewActive(true)
-        if simulatesTerminalMouseCapture {
+        if seedsTerminalSelectionFixture || simulatesTerminalMouseCapture {
             terminalView.feedData(Self.touchSelectionFixture)
+        }
+        if simulatesTerminalMouseCapture {
             terminalView.feedData(Self.mouseCaptureSequence)
         }
         if seedsTerminalPasteboard {
@@ -1295,6 +1301,17 @@ struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
 
 final class TerminalKeyboardHarnessContainerView: UIView {
     private(set) weak var terminalView: GhosttyTerminalView?
+    // This retained sibling must track every terminal layout change so XCUITest
+    // gets exact terminal geometry without becoming the UIKit hit-test owner.
+    private let gestureSurface: UIView = {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = true
+        view.accessibilityIdentifier = "vvterm.keyboardTest.gestureSurface"
+        view.accessibilityLabel = "Terminal Gesture Test Surface"
+        return view
+    }()
     weak var tabManager: TerminalTabManager?
     var paneId: UUID?
     var onInput: ((Data) -> Void)?
@@ -1333,9 +1350,10 @@ final class TerminalKeyboardHarnessContainerView: UIView {
             ),
             useCustomIO: true
         )
-        terminal.accessibilityIdentifier = surfaceIdentifier
-        terminal.accessibilityLabel = surfaceLabel
-        terminal.isAccessibilityElement = true
+        terminal.isAccessibilityElement = false
+        terminal.imeProxyTextView.accessibilityIdentifier = surfaceIdentifier
+        terminal.imeProxyTextView.accessibilityLabel = surfaceLabel
+        terminal.imeProxyTextView.isAccessibilityElement = true
         terminal.acceptsTerminalInput = true
         terminal.keyboardUITestSetHardwareKeyboardAttached(false)
         terminal.writeCallback = { [weak self] data in
@@ -1374,6 +1392,7 @@ final class TerminalKeyboardHarnessContainerView: UIView {
         }
 
         addSubview(terminal)
+        addSubview(gestureSurface)
         terminalView = terminal
         setNeedsLayout()
 
@@ -1410,6 +1429,7 @@ final class TerminalKeyboardHarnessContainerView: UIView {
         super.layoutSubviews()
         guard let terminalView else { return }
         terminalView.frame = bounds
+        gestureSurface.frame = terminalView.frame
         if bounds.width > 0, bounds.height > 0 {
             terminalView.sizeDidChange(bounds.size)
         }

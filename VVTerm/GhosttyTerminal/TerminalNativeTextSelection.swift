@@ -57,7 +57,7 @@ struct TerminalNativeSelectionLifecycle: Equatable {
     }
 
     mutating func endInteraction(restorationID: UUID = UUID()) -> UUID? {
-        if let selection {
+        if let selection, selection.length > 0 {
             phase = .selected(
                 range: selection,
                 restoreTerminalInput: shouldRestoreTerminalInput
@@ -77,17 +77,17 @@ struct TerminalNativeSelectionLifecycle: Equatable {
         case .interacting(_, let restoreTerminalInput):
             phase = .interacting(selection: selection, restoreTerminalInput: restoreTerminalInput)
         case .selected(_, let restoreTerminalInput):
-            if let selection {
+            if let selection, selection.length > 0 {
                 phase = .selected(range: selection, restoreTerminalInput: restoreTerminalInput)
             } else {
                 return beginRestorationIfNeeded(id: restorationID)
             }
         case .inactive:
-            if let selection {
+            if let selection, selection.length > 0 {
                 phase = .selected(range: selection, restoreTerminalInput: false)
             }
         case .restoringTerminalInput:
-            if let selection {
+            if let selection, selection.length > 0 {
                 phase = .selected(range: selection, restoreTerminalInput: false)
             }
         }

@@ -64,11 +64,13 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        isMultipleTouchEnabled = true
         clearSystemInputAssistant()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
+        isMultipleTouchEnabled = true
         clearSystemInputAssistant()
     }
 
@@ -111,10 +113,6 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     weak var inputDelegate: UITextInputDelegate?
     var markedTextStyle: [NSAttributedString.Key: Any]?
     lazy var tokenizer: UITextInputTokenizer = UITextInputStringTokenizer(textInput: self)
-
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        false
-    }
 
     override var canBecomeFirstResponder: Bool {
         terminalOwner?.imeProxyCanBecomeFirstResponder ?? false

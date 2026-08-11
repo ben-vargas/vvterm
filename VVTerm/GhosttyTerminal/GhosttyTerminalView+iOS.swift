@@ -183,6 +183,7 @@ class GhosttyTerminalView: UIView {
     var zoomIndicatorHideWorkItem: DispatchWorkItem?
     var nativeSelectionSnapshot = TerminalNativeTextSnapshot.empty
     var nativeSelectionLifecycle = TerminalNativeSelectionLifecycle()
+    var nativeSelectionLongPressAnchor: NSRange?
     var nativeSelectedRange: NSRange? { nativeSelectionLifecycle.selection }
     var nativeSelectionInteractionActive: Bool { nativeSelectionLifecycle.interactionIsActive }
     var prefersNativeSelectionFirstResponder: Bool { nativeSelectionLifecycle.keepsFirstResponder }
@@ -212,8 +213,11 @@ class GhosttyTerminalView: UIView {
         ]
         return recognizer
     }()
-    lazy var directTouchLongPressExclusionRecognizer: UILongPressGestureRecognizer = {
-        let recognizer = UILongPressGestureRecognizer(target: nil, action: nil)
+    lazy var nativeSelectionLongPressRecognizer: UILongPressGestureRecognizer = {
+        let recognizer = UILongPressGestureRecognizer(
+            target: self,
+            action: #selector(handleNativeSelectionLongPress(_:))
+        )
         recognizer.minimumPressDuration = 0.2
         recognizer.cancelsTouchesInView = false
         recognizer.allowedTouchTypes = [
@@ -368,10 +372,9 @@ class GhosttyTerminalView: UIView {
         directTouchTapRecognizer.delegate = self
         scrollRecognizer.delegate = self
         pinchRecognizer.delegate = self
-        directTouchTapRecognizer.require(toFail: directTouchLongPressExclusionRecognizer)
-        addGestureRecognizer(directTouchLongPressExclusionRecognizer)
-
-        addGestureRecognizer(directTouchTapRecognizer)
+        directTouchTapRecognizer.require(toFail: nativeSelectionLongPressRecognizer)
+        addGestureRecognizer(nativeSelectionLongPressRecognizer)
+        imeProxyTextView.addGestureRecognizer(directTouchTapRecognizer)
         addGestureRecognizer(scrollRecognizer)
         addGestureRecognizer(pointerHoverRecognizer)
         addGestureRecognizer(pinchRecognizer)

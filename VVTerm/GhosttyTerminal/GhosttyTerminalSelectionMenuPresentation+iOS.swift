@@ -18,19 +18,7 @@ extension GhosttyTerminalView: UIEditMenuInteractionDelegate {
             return UIMenu(children: pointerContextMenuElements())
         }
 
-        var actions: [UIMenuElement] = []
-
-        if let selectionText = currentSelectionText(), !selectionText.isEmpty {
-            actions.append(UIAction(title: String(localized: "Copy"), image: UIImage(systemName: "doc.on.doc")) { [weak self] _ in
-                self?.copy(nil)
-            })
-        }
-
-        actions.append(UIAction(title: String(localized: "Paste"), image: UIImage(systemName: "doc.on.clipboard")) { [weak self] _ in
-            self?.paste(nil)
-        })
-
-        return UIMenu(children: actions)
+        return UIMenu(children: nativeSelectionMenuElements())
     }
 
     func editMenuInteraction(
@@ -43,6 +31,12 @@ extension GhosttyTerminalView: UIEditMenuInteractionDelegate {
 }
 
 extension GhosttyTerminalView {
+    func presentNativeSelectionEditMenu(at point: CGPoint) {
+        editMenuPresentation = .selection
+        let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: point)
+        editMenuInteraction?.presentEditMenu(with: configuration)
+    }
+
     func dismissEditMenuIfNeeded() {
         editMenuInteraction?.dismissMenu()
     }

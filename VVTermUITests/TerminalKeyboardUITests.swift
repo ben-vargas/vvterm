@@ -1823,6 +1823,12 @@ final class TerminalKeyboardUITests: XCTestCase {
         wait(for: diagnostics, labelContaining: "softwareInputActive=true", timeout: 5, diagnostics: diagnosticsText(in: app))
         wait(for: diagnostics, labelContaining: "accessoryHidden=true", timeout: 5, diagnostics: diagnosticsText(in: app))
         wait(for: diagnostics, labelContaining: "accessoryAttached=false", timeout: 5, diagnostics: diagnosticsText(in: app))
+        wait(for: diagnostics, labelContaining: "imeProxyFirstResponder=true", timeout: 5, diagnostics: diagnosticsText(in: app))
+        assertKeyboardAndAccessoryHidden(in: app)
+
+        terminal.typeText("x")
+        wait(for: diagnostics, labelContaining: "inputHex=78", timeout: 5, diagnostics: diagnosticsText(in: app))
+        assertKeyboardAndAccessoryHidden(in: app)
 
         app.buttons["vvterm.keyboardTest.hardware.detach"].tap()
         wait(for: diagnostics, labelContaining: "hardware=false", timeout: 5, diagnostics: diagnosticsText(in: app))
@@ -2017,17 +2023,30 @@ final class TerminalKeyboardUITests: XCTestCase {
         }
         assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
 
-        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.4)
-        assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
-
-        terminal.pinch(withScale: 0.8, velocity: -1)
+        let gestureSurface = app.descendants(matching: .any)["vvterm.keyboardTest.gestureSurface"]
+        XCTAssertTrue(
+            gestureSurface.waitForExistence(timeout: 5),
+            diagnosticsText(in: app)
+        )
+        gestureSurface.pinch(withScale: 0.8, velocity: -1)
         waitForDiagnosticMetrics(in: app) { metrics in
             (metrics["zoomActions"] ?? 0) > 0
         }
         assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
 
-        terminal.tap()
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.4)
+        waitForDiagnosticMetrics(in: app) { metrics in
+            (metrics["nativeSelectionLength"] ?? 0) > 0
+        }
+        assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
+
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.15)).tap()
+        waitForDiagnosticMetrics(in: app) { metrics in
+            (metrics["nativeSelectionLength"] ?? 0) == 0
+        }
+        assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.15)).tap()
         waitForMouseClickCounts(presses: 2, releases: 2, in: app)
         terminal.tap()
         waitForMouseClickCounts(presses: 3, releases: 3, in: app)
@@ -2082,14 +2101,51 @@ final class TerminalKeyboardUITests: XCTestCase {
             diagnostics: diagnosticsText(in: app)
         )
         assertKeyboardSessionAndAccessoryVisible(in: app)
+        XCTAssertTrue(paste.waitForNonExistence(timeout: 5), diagnosticsText(in: app))
+        assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
+    }
+
+    @MainActor
+    func testCapturedMultiTapUsesNativeSelectionWithoutSendingClick() throws {
+        let app = launchKeyboardHarness(simulatesTerminalMouseCapture: true)
+        let terminal = waitForTerminal(in: app)
+        let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
 
         terminal.tap()
-        waitForMouseClickCounts(presses: 2, releases: 2, in: app)
+        waitForMouseClickCounts(presses: 1, releases: 1, in: app)
+
+        terminal.doubleTap()
+        waitForDiagnosticMetrics(in: app) { metrics in
+            (metrics["nativeSelectionLength"] ?? 0) > 0
+        }
+        assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
+        let doubleTapSelectionLength = try requiredDiagnosticMetric(
+            "nativeSelectionLength",
+            in: app
+        )
+
+        terminal.tap(withNumberOfTaps: 3, numberOfTouches: 1)
+        waitForDiagnosticMetrics(in: app) { metrics in
+            (metrics["nativeSelectionLength"] ?? 0) > doubleTapSelectionLength
+        }
+        assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
+
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.15)).tap()
+        waitForDiagnosticMetrics(in: app) { metrics in
+            (metrics["nativeSelectionLength"] ?? 0) == 0
+        }
+        wait(
+            for: diagnostics,
+            labelContaining: "nativeSelectionActive=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
     }
 
     @MainActor
     func testDirectTouchDoesNotClickOutsideMouseCapture() throws {
-        let app = launchKeyboardHarness()
+        let app = launchKeyboardHarness(seedsTerminalSelectionFixture: true)
         let terminal = waitForTerminal(in: app)
         let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
         wait(
@@ -2113,9 +2169,33 @@ final class TerminalKeyboardUITests: XCTestCase {
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
+        wait(
+            for: diagnostics,
+            labelContaining: "nativeSelectionActive=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        XCTAssertEqual(
+            try requiredDiagnosticMetric("nativeSelectionLength", in: app),
+            0,
+            diagnosticsText(in: app)
+        )
 
         terminal.doubleTap()
         assertMouseClickCountsRemain(presses: 0, releases: 0, in: app)
+        waitForDiagnosticMetrics(in: app) { metrics in
+            (metrics["nativeSelectionLength"] ?? 0) > 0
+        }
+        let doubleTapSelectionLength = try requiredDiagnosticMetric(
+            "nativeSelectionLength",
+            in: app
+        )
+
+        terminal.tap(withNumberOfTaps: 3, numberOfTouches: 1)
+        assertMouseClickCountsRemain(presses: 0, releases: 0, in: app)
+        waitForDiagnosticMetrics(in: app) { metrics in
+            (metrics["nativeSelectionLength"] ?? 0) > doubleTapSelectionLength
+        }
     }
 
     @MainActor
@@ -2450,6 +2530,7 @@ final class TerminalKeyboardUITests: XCTestCase {
         simulatesKeyboardFrames: Bool = false,
         simulatesCodexTUIResponse: Bool = false,
         simulatesTerminalMouseCapture: Bool = false,
+        seedsTerminalSelectionFixture: Bool = false,
         seedsTerminalPasteboard: Bool = false,
         simulatesDetachedLightAccessoryHost: Bool = false,
         simulatesStaleLightAccessoryCacheOnResume: Bool = false,
@@ -2485,6 +2566,9 @@ final class TerminalKeyboardUITests: XCTestCase {
         }
         if simulatesTerminalMouseCapture {
             app.launchArguments.append("--vvterm-ui-test-terminal-mouse-capture")
+        }
+        if seedsTerminalSelectionFixture {
+            app.launchArguments.append("--vvterm-ui-test-terminal-selection-fixture")
         }
         if seedsTerminalPasteboard {
             app.launchArguments.append("--vvterm-ui-test-terminal-pasteboard")

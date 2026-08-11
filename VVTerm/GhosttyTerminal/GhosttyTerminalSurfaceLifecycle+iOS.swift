@@ -86,14 +86,14 @@ extension GhosttyTerminalView {
         onVoiceButtonTapped = nil
         richPasteInterceptor = nil
         writeCallback = nil
+        if let nativeTextInteraction {
+            imeProxyTextView.removeInteraction(nativeTextInteraction)
+            self.nativeTextInteraction = nil
+        }
         imeProxyTextView.inputDelegate = nil
         imeProxyTextView.terminalOwner = nil
         _ = imeProxyTextView.resignFirstResponder()
         keyboardToolbar = nil
-        if let nativeTextInteraction {
-            removeInteraction(nativeTextInteraction)
-            self.nativeTextInteraction = nil
-        }
         if let nativeFindInteraction {
             if nativeFindInteraction.isFindNavigatorVisible {
                 nativeFindInteraction.dismissFindNavigator()
@@ -102,6 +102,7 @@ extension GhosttyTerminalView {
             self.nativeFindInteraction = nil
         }
         nativeFindSession = nil
+        nativeSelectionLongPressAnchor = nil
         nativeSelectionLifecycle.cancel()
         nativeSelectionSnapshot = .empty
         if let editMenuInteraction {

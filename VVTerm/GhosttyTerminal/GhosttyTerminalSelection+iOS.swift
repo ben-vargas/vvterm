@@ -12,12 +12,7 @@ import UIKit
 
 extension GhosttyTerminalView: UITextInteractionDelegate {
     func interactionShouldBegin(_ interaction: UITextInteraction, at point: CGPoint) -> Bool {
-        guard TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
-            terminalMouseCaptured: surface?.mouseCaptured == true,
-            interaction: nativeSelectionGestureInteraction
-        ) else {
-            return false
-        }
+        guard hasActiveSelectionInteraction else { return false }
         nativeSelectionLifecycle.prepare(restoreTerminalInput: isTerminalTextInputActive)
         refreshNativeSelectionSnapshot()
         guard nativeSelectionSnapshot.length > 0 else {
@@ -44,15 +39,149 @@ extension GhosttyTerminalView: UITextInteractionDelegate {
 }
 
 extension GhosttyTerminalView {
+    @objc func handleNativeSelectionLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        switch recognizer.state {
+        case .began:
+            beginNativeSelection(at: recognizer.location(in: self))
+        case .changed:
+            extendNativeSelection(to: recognizer.location(in: self))
+        case .ended:
+            finishNativeSelectionInteraction(
+                presentingMenuAt: recognizer.location(in: self)
+            )
+        case .cancelled, .failed:
+            nativeSelectionLongPressAnchor = nil
+            if nativeSelectionLifecycle.selection == nil {
+                nativeSelectionLifecycle.cancel()
+            } else {
+                finishNativeSelectionInteraction(presentingMenuAt: nil)
+            }
+        default:
+            break
+        }
+    }
+
+    private func beginNativeSelection(at point: CGPoint) {
+        selectNativeText(at: point, granularity: .word, keepsDragAnchor: true)
+    }
+
+    @objc private func handleNativeSelectionMultiTap(_ recognizer: UITapGestureRecognizer) {
+        guard recognizer.state == .ended,
+              canRouteTerminalInput,
+              !isPaused,
+              !isShuttingDown else {
+            return
+        }
+        let granularity: UITextGranularity = recognizer.numberOfTapsRequired >= 3
+            ? .paragraph
+            : .word
+        selectNativeText(
+            at: recognizer.location(in: self),
+            granularity: granularity,
+            keepsDragAnchor: false
+        )
+        finishNativeSelectionInteraction(
+            presentingMenuAt: recognizer.location(in: self)
+        )
+    }
+
+    private func selectNativeText(
+        at point: CGPoint,
+        granularity: UITextGranularity,
+        keepsDragAnchor: Bool
+    ) {
+        nativeSelectionLongPressAnchor = nil
+        nativeSelectionLifecycle.prepare(restoreTerminalInput: isTerminalTextInputActive)
+        nativeSelectionLifecycle.beginInteraction(restoreTerminalInput: isTerminalTextInputActive)
+        refreshNativeSelectionSnapshot()
+        guard nativeSelectionSnapshot.length > 0 else {
+            nativeSelectionLongPressAnchor = nil
+            nativeSelectionLifecycle.cancel()
+            return
+        }
+
+        let offset = nativeSelectionSnapshot.offset(for: point)
+        let position = TerminalNativeTextPosition(offset: offset)
+        let direction = UITextDirection(rawValue: UITextStorageDirection.forward.rawValue)
+        let tokenRange = imeProxyTextView.tokenizer.rangeEnclosingPosition(
+            position,
+            with: granularity,
+            inDirection: direction
+        )
+        let range = nativeSelectionSnapshot.nativeRange(from: tokenRange)
+            ?? nativeSelectionSnapshot.characterRange(at: point)
+        nativeSelectionLongPressAnchor = keepsDragAnchor ? range : nil
+        setNativeSelectedRange(range)
+    }
+
+    private func extendNativeSelection(to point: CGPoint) {
+        guard let anchor = nativeSelectionLongPressAnchor,
+              let target = nativeSelectionSnapshot.characterRange(at: point) else {
+            return
+        }
+        let lowerBound = min(anchor.location, target.location)
+        let upperBound = max(
+            nativeSelectionSnapshot.upperBound(of: anchor),
+            nativeSelectionSnapshot.upperBound(of: target)
+        )
+        setNativeSelectedRange(
+            NSRange(location: lowerBound, length: upperBound - lowerBound)
+        )
+    }
+
+    private func finishNativeSelectionInteraction(presentingMenuAt point: CGPoint?) {
+        nativeSelectionLongPressAnchor = nil
+        if nativeSelectionLifecycle.interactionIsActive {
+            let restorationID = nativeSelectionLifecycle.endInteraction()
+            scheduleNativeSelectionTerminalInputRestoration(restorationID)
+        }
+        if let point, (nativeSelectionLifecycle.selection?.length ?? 0) > 0 {
+            presentNativeSelectionEditMenu(at: point)
+        }
+    }
+
     func setupNativeTextSelectionInteractions() {
-        let interaction = UITextInteraction(for: .nonEditable)
+        let interaction = UITextInteraction(for: .editable)
         interaction.delegate = self
         interaction.textInput = imeProxyTextView
-        addInteraction(interaction)
+        imeProxyTextView.addInteraction(interaction)
         nativeTextInteraction = interaction
         for gesture in interaction.gesturesForFailureRequirements {
             scrollRecognizer.require(toFail: gesture)
         }
+
+        let nativeSelectionDoubleTap = UITapGestureRecognizer(
+            target: self,
+            action: #selector(handleNativeSelectionMultiTap(_:))
+        )
+        nativeSelectionDoubleTap.numberOfTapsRequired = 2
+        nativeSelectionDoubleTap.cancelsTouchesInView = false
+        nativeSelectionDoubleTap.allowedTouchTypes = [
+            NSNumber(value: UITouch.TouchType.direct.rawValue)
+        ]
+        nativeSelectionDoubleTap.delegate = self
+
+        let nativeSelectionTripleTap = UITapGestureRecognizer(
+            target: self,
+            action: #selector(handleNativeSelectionMultiTap(_:))
+        )
+        nativeSelectionTripleTap.numberOfTapsRequired = 3
+        nativeSelectionTripleTap.cancelsTouchesInView = false
+        nativeSelectionTripleTap.allowedTouchTypes = [
+            NSNumber(value: UITouch.TouchType.direct.rawValue)
+        ]
+        nativeSelectionTripleTap.delegate = self
+
+        nativeSelectionDoubleTap.require(toFail: nativeSelectionTripleTap)
+        directTouchTapRecognizer.require(toFail: nativeSelectionDoubleTap)
+        for gesture in interaction.gesturesForFailureRequirements {
+            gesture.require(toFail: directTouchTapRecognizer)
+            gesture.require(toFail: nativeSelectionLongPressRecognizer)
+            gesture.require(toFail: nativeSelectionDoubleTap)
+            gesture.require(toFail: nativeSelectionTripleTap)
+        }
+        imeProxyTextView.addGestureRecognizer(nativeSelectionDoubleTap)
+        imeProxyTextView.addGestureRecognizer(nativeSelectionTripleTap)
     }
 
     private func notifyNativeSelectionLayoutChange() {

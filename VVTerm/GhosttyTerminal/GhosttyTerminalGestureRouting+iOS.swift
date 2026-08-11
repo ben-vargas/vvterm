@@ -12,19 +12,14 @@ import UIKit
 
 extension GhosttyTerminalView: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        if gestureRecognizer == directTouchLongPressExclusionRecognizer {
-            return TerminalPointerInputRoutingPolicy.shouldSendDirectTouchClick(
-                terminalMouseCaptured: surface?.mouseCaptured == true,
-                terminalInputAvailable: canRouteTerminalInput && !isPaused && !isShuttingDown,
-                selectionInteractionActive: false
-            )
+        if gestureRecognizer == nativeSelectionLongPressRecognizer {
+            guard canRouteTerminalInput, !isPaused, !isShuttingDown else { return false }
+            return !isPointOnNativeSelectionHandleHitArea(touch.location(in: self))
         }
         if gestureRecognizer == directTouchTapRecognizer {
-            return TerminalPointerInputRoutingPolicy.shouldSendDirectTouchClick(
-                terminalMouseCaptured: surface?.mouseCaptured == true,
-                terminalInputAvailable: canRouteTerminalInput && !isPaused && !isShuttingDown,
-                selectionInteractionActive: hasActiveSelectionInteraction(at: touch.location(in: self))
-            )
+            guard canRouteTerminalInput, !isPaused, !isShuttingDown else { return false }
+            let location = touch.location(in: self)
+            return !isPointOnNativeSelectionHandleHitArea(location)
         }
         if gestureRecognizer == pinchRecognizer {
             return canHandlePinchZoom
@@ -68,19 +63,10 @@ extension GhosttyTerminalView: UIGestureRecognizerDelegate {
 }
 
 extension GhosttyTerminalView {
-    var nativeSelectionGestureInteraction: TerminalSelectionInteraction {
-        switch directTouchLongPressExclusionRecognizer.state {
-        case .began, .changed:
-            .intentionalGesture
-        default:
-            .none
-        }
-    }
-
     var allowsHostTextSelection: Bool {
         TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
             terminalMouseCaptured: surface?.mouseCaptured == true,
-            interaction: hasActiveSelectionInteraction ? .activeSelection : .none
+            selectionInteractionActive: hasActiveSelectionInteraction
         )
     }
 
@@ -88,11 +74,6 @@ extension GhosttyTerminalView {
         nativeSelectionInteractionActive
             || nativeSelectedRange != nil
             || prefersNativeSelectionFirstResponder
-    }
-
-    func hasActiveSelectionInteraction(at point: CGPoint) -> Bool {
-        hasActiveSelectionInteraction
-            || isPointOnNativeSelectionHandleHitArea(point)
     }
 
     func shouldAllowScrollGesture(
@@ -131,10 +112,8 @@ extension GhosttyTerminalView {
             if let location, isPointOnNativeSelectionHandleHitArea(location) {
                 return
             }
-            clearNativeSelectionStateForTerminalInput()
             guard shouldAutoFocusKeyboard(for: touches) else { return }
             notifyDirectTouchOnTerminal(isFocusTap: true)
-            requestKeyboardFocus(for: .directTouch)
             return
         }
         // Tap just focuses keyboard - no mouse events (avoids accidental selection).
@@ -162,13 +141,23 @@ extension GhosttyTerminalView {
 
     @objc func handleDirectTouchTap(_ recognizer: UITapGestureRecognizer) {
         guard recognizer.state == .ended,
-              let surface,
+              canRouteTerminalInput,
+              !isPaused,
+              !isShuttingDown else {
+            return
+        }
+
+        let selectionWasActive = hasActiveSelectionInteraction
+        clearNativeSelectionStateForTerminalInput()
+        if selectionWasActive {
+            _ = requestKeyboardFocus(for: .directTouch)
+        }
+
+        guard let surface,
               TerminalPointerInputRoutingPolicy.shouldSendDirectTouchClick(
                   terminalMouseCaptured: surface.mouseCaptured,
-                  terminalInputAvailable: canRouteTerminalInput && !isPaused && !isShuttingDown,
-                  selectionInteractionActive: hasActiveSelectionInteraction(
-                      at: recognizer.location(in: self)
-                  )
+                  terminalInputAvailable: true,
+                  selectionInteractionActive: selectionWasActive
               ) else {
             return
         }
