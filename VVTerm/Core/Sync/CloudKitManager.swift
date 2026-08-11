@@ -77,13 +77,16 @@ final class CloudKitManager: ObservableObject {
     init(
         container: CKContainer,
         syncEnabled: @escaping @MainActor @Sendable () -> Bool,
-        accountStatus: @escaping @MainActor @Sendable () async throws -> CKAccountStatus
+        accountStatus: @escaping @MainActor @Sendable () async throws -> CKAccountStatus,
+        initialZoneReady: Bool = UserDefaults.standard.bool(
+            forKey: CloudKitSyncConstants.zoneReadyKey()
+        )
     ) {
         self.container = container
         database = container.privateCloudDatabase
         self.syncEnabled = syncEnabled
         fetchAccountStatus = accountStatus
-        zoneReady = UserDefaults.standard.bool(forKey: CloudKitSyncConstants.zoneReadyKey(for: recordZoneName))
+        zoneReady = initialZoneReady
         if isSyncEnabled {
             let generation = cloudKitSyncGeneration
             Task { [weak self] in

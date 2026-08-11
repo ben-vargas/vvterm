@@ -118,7 +118,8 @@ struct CloudKitManagerLifecycleTests {
                 identifier: CloudKitSyncConstants.cloudKitContainerIdentifier
             ),
             syncEnabled: { syncEnabled.value },
-            accountStatus: { .available }
+            accountStatus: { .available },
+            initialZoneReady: true
         )
         #expect(await waitUntil { manager.isAvailable })
         let gate = CloudKitOperationGate()
