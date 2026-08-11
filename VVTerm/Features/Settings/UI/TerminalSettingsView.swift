@@ -418,15 +418,6 @@ struct TerminalSettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private var terminalBehaviorSection: some View {
-        #if os(iOS)
-        Section("Terminal Behavior") {
-            TerminalScreenAwakeSettingRow()
-        }
-        #endif
-    }
-
     private var sessionPersistenceSection: some View {
         Section {
             Toggle("Enable tmux by default", isOn: $tmuxEnabledDefault)
@@ -686,16 +677,7 @@ struct CustomThemeSaveSheet: View {
     var formContent: some View {
         Form {
             Section {
-                #if os(iOS)
-                HStack(spacing: 10) {
-                    Text("Name")
-                    Spacer(minLength: 8)
-                    TextField("", text: $name, prompt: Text("Custom Theme"))
-                        .multilineTextAlignment(.trailing)
-                }
-                #else
-                TextField("Name", text: $name, prompt: Text("Custom Theme"))
-                #endif
+                platformThemeNameField(name: $name)
             } header: {
                 sectionHeader("Theme Name")
             }
@@ -1082,16 +1064,7 @@ struct ThemeBuilderSheet: View {
     var formContent: some View {
         Form {
                 Section {
-                    #if os(iOS)
-                    HStack(spacing: 10) {
-                        Text("Name")
-                        Spacer(minLength: 8)
-                        TextField("", text: $name, prompt: Text("Custom Theme"))
-                            .multilineTextAlignment(.trailing)
-                    }
-                    #else
-                    TextField("Name", text: $name, prompt: Text("Custom Theme"))
-                    #endif
+                    platformThemeNameField(name: $name)
                 } header: {
                     sectionHeader("Theme")
                 }
@@ -1254,42 +1227,16 @@ struct ThemeBuilderSheet: View {
         placeholder: String,
         fallback: Color
     ) -> some View {
-        #if os(iOS)
-        HStack(spacing: 10) {
-            Text(label)
-                .lineLimit(1)
-
-            Spacer(minLength: 8)
-
-            TextField("", text: text, prompt: Text(placeholder))
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-                .font(.system(.body, design: .monospaced))
-                .multilineTextAlignment(.trailing)
-                .frame(minWidth: 110, maxWidth: 170, alignment: .trailing)
-
-            ThemeBuilderColorSwatchPicker(
+        platformColorField(
+            label,
+            text: text,
+            placeholder: placeholder,
+            swatch: ThemeBuilderColorSwatchPicker(
                 label: label,
                 text: text,
                 fallback: fallback
             )
-        }
-        #else
-        HStack(spacing: 10) {
-            ThemeBuilderColorSwatchPicker(
-                label: label,
-                text: text,
-                fallback: fallback
-            )
-
-            TextField(label, text: text, prompt: Text(placeholder))
-                #if os(iOS)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-                #endif
-                .font(.system(.body, design: .monospaced))
-        }
-        #endif
+        )
     }
 
     private func paletteColorBinding(_ index: Int) -> Binding<String> {

@@ -12,6 +12,12 @@ struct TerminalScreenAwakeSettingRow: View {
 }
 
 extension TerminalSettingsView {
+    var terminalBehaviorSection: some View {
+        Section("Terminal Behavior") {
+            TerminalScreenAwakeSettingRow()
+        }
+    }
+
     func loadSystemFonts() -> [String] {
         var fonts = ["Menlo", "SF Mono", "Courier New"]
         let nerdFonts = [
@@ -166,6 +172,15 @@ extension ManageCustomThemesSheet {
 }
 
 extension CustomThemeSaveSheet {
+    func platformThemeNameField(name: Binding<String>) -> some View {
+        HStack(spacing: 10) {
+            Text("Name")
+            Spacer(minLength: 8)
+            TextField("", text: name, prompt: Text("Custom Theme"))
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
     var platformBody: some View {
         NavigationStack {
             formContent
@@ -188,6 +203,38 @@ extension CustomThemeSaveSheet {
 }
 
 extension ThemeBuilderSheet {
+    func platformThemeNameField(name: Binding<String>) -> some View {
+        HStack(spacing: 10) {
+            Text("Name")
+            Spacer(minLength: 8)
+            TextField("", text: name, prompt: Text("Custom Theme"))
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    func platformColorField<Swatch: View>(
+        _ label: String,
+        text: Binding<String>,
+        placeholder: String,
+        swatch: Swatch
+    ) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            TextField("", text: text, prompt: Text(placeholder))
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .font(.system(.body, design: .monospaced))
+                .multilineTextAlignment(.trailing)
+                .frame(minWidth: 110, maxWidth: 170, alignment: .trailing)
+
+            swatch
+        }
+    }
+
     var platformBody: some View {
         NavigationStack {
             formContent

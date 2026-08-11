@@ -3,6 +3,11 @@ import AppKit
 import SwiftUI
 
 extension TerminalSettingsView {
+    @ViewBuilder
+    var terminalBehaviorSection: some View {
+        EmptyView()
+    }
+
     func loadSystemFonts() -> [String] {
         let fontManager = NSFontManager.shared
         return fontManager.availableFontFamilies.filter { familyName in
@@ -91,6 +96,10 @@ extension ManageCustomThemesSheet {
 }
 
 extension CustomThemeSaveSheet {
+    func platformThemeNameField(name: Binding<String>) -> some View {
+        TextField("Name", text: name, prompt: Text("Custom Theme"))
+    }
+
     var platformBody: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(title: "Save Custom Theme") {
@@ -129,6 +138,24 @@ extension CustomThemeSaveSheet {
 }
 
 extension ThemeBuilderSheet {
+    func platformThemeNameField(name: Binding<String>) -> some View {
+        TextField("Name", text: name, prompt: Text("Custom Theme"))
+    }
+
+    func platformColorField<Swatch: View>(
+        _ label: String,
+        text: Binding<String>,
+        placeholder: String,
+        swatch: Swatch
+    ) -> some View {
+        HStack(spacing: 10) {
+            swatch
+
+            TextField(label, text: text, prompt: Text(placeholder))
+                .font(.system(.body, design: .monospaced))
+        }
+    }
+
     var platformBody: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(title: LocalizedStringKey(title)) {
