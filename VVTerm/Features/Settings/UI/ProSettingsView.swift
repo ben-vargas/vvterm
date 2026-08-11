@@ -274,35 +274,3 @@ extension View {
     }
 }
 #endif
-
-// MARK: - Preview
-
-#Preview {
-    let appLockManager = AppLockManager()
-    let defaults = UserDefaults.standard
-    let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
-        transport: CloudKitManager.shared,
-        defaults: defaults,
-        now: Date.init,
-        makeID: UUID.init
-    )
-    let serverManager = ServerManager(
-        dependencies: .live(
-            defaults: defaults,
-            serverCloud: cloudKitSync.serverCloud,
-            credentialRepository: KeychainManager.shared,
-            knownHosts: KnownHostsManager.shared,
-            freePlanTracker: AnalyticsTracker.shared,
-            actionAuthorizer: appLockManager,
-            syncRepository: cloudKitSync.coordinator,
-            defaultWorkspaceName: { "My Servers" },
-            canonicalDefaultWorkspaceNames: { ["My Servers"] },
-            now: Date.init,
-            makeID: UUID.init
-        ),
-        startsAutomatically: false
-    )
-    ProSettingsView()
-        .environmentObject(serverManager)
-        .environmentObject(StoreManager(client: AppStoreKitClient(), effects: .none))
-}
