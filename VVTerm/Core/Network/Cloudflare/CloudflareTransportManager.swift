@@ -35,7 +35,43 @@ nonisolated enum CloudflareMetadataRequestError: LocalizedError {
     }
 }
 
+nonisolated struct CloudflareTransportSession: Sendable {
+    let connect: @Sendable (String, Cloudflared.AuthMethod) async throws -> UInt16
+    let disconnect: @Sendable () async -> Void
+}
+
+typealias CloudflareTransportSessionFactory = @Sendable (
+    any AuthProviding
+) -> CloudflareTransportSession
+
 actor CloudflareTransportManager {
+    private enum SessionState {
+        case idle
+        case preparing(UUID)
+        case connecting(UUID, CloudflareTransportSession)
+        case connected(UUID, CloudflareTransportSession)
+
+        var operationID: UUID? {
+            switch self {
+            case .idle:
+                return nil
+            case .preparing(let operationID),
+                 .connecting(let operationID, _),
+                 .connected(let operationID, _):
+                return operationID
+            }
+        }
+
+        var session: CloudflareTransportSession? {
+            switch self {
+            case .connecting(_, let session), .connected(_, let session):
+                return session
+            case .idle, .preparing:
+                return nil
+            }
+        }
+    }
+
     private struct AccessMetadata: Sendable {
         let teamDomain: String
         let appDomain: String
@@ -115,22 +151,73 @@ actor CloudflareTransportManager {
     private let disconnectTimeout: Duration = .seconds(4)
     private let metadataKeychain = KeychainStore(service: "app.vivy.vvterm.cloudflare.metadata")
     private let metadataStorageKey = "cache.v1"
-    private var activeSession: SessionActor?
+    private let makeSession: CloudflareTransportSessionFactory
+    private var sessionState: SessionState = .idle
     private var metadataCache: [String: AccessMetadata] = [:]
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "CloudflareTransport")
 
+    init(
+        makeSession: @escaping CloudflareTransportSessionFactory = { authProvider in
+            let session = SessionActor(
+                authProvider: authProvider,
+                tunnelProvider: CloudflareTunnelProvider(),
+                retryPolicy: RetryPolicy(maxReconnectAttempts: 1, baseDelayNanoseconds: 500_000_000),
+                oauthFallback: nil,
+                sleep: { delay in
+                    try? await Task.sleep(nanoseconds: delay)
+                }
+            )
+            return CloudflareTransportSession(
+                connect: { hostname, method in
+                    try await session.connect(hostname: hostname, method: method)
+                },
+                disconnect: {
+                    await session.disconnect()
+                }
+            )
+        }
+    ) {
+        self.makeSession = makeSession
+    }
+
     func connect(server: Server, credentials: ServerCredentials) async throws -> UInt16 {
-        await disconnect()
+        let operationID = UUID()
+        let previousSession = sessionState.session
+        sessionState = .preparing(operationID)
+        if let previousSession {
+            await disconnect(previousSession)
+        }
+        guard sessionState.operationID == operationID else {
+            throw CancellationError()
+        }
 
         let hostname = server.host.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !hostname.isEmpty else {
+            sessionState = .idle
             throw SSHError.cloudflareConfigurationRequired(
                 String(localized: "Cloudflare transport requires a valid hostname.")
             )
         }
 
         let accessMode = server.cloudflareAccessMode ?? .oauth
-        let metadata = try await resolveAccessMetadata(for: hostname, server: server, mode: accessMode)
+        let metadata: AccessMetadata
+        do {
+            metadata = try await resolveAccessMetadata(
+                for: hostname,
+                server: server,
+                mode: accessMode,
+                operationID: operationID
+            )
+        } catch {
+            if sessionState.operationID == operationID {
+                sessionState = .idle
+                throw error
+            }
+            throw CancellationError()
+        }
+        guard sessionState.operationID == operationID else {
+            throw CancellationError()
+        }
 
         let authProvider: any AuthProviding
         let authMethod: Cloudflared.AuthMethod
@@ -152,11 +239,13 @@ actor CloudflareTransportManager {
             let clientSecret = credentials.cloudflareClientSecret?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
             guard !clientID.isEmpty else {
+                sessionState = .idle
                 throw SSHError.cloudflareConfigurationRequired(
                     String(localized: "Cloudflare service token client ID is required.")
                 )
             }
             guard !clientSecret.isEmpty else {
+                sessionState = .idle
                 throw SSHError.cloudflareConfigurationRequired(
                     String(localized: "Cloudflare service token client secret is required.")
                 )
@@ -170,33 +259,50 @@ actor CloudflareTransportManager {
             )
         }
 
-        let session = SessionActor(
-            authProvider: authProvider,
-            tunnelProvider: CloudflareTunnelProvider(),
-            retryPolicy: RetryPolicy(maxReconnectAttempts: 1, baseDelayNanoseconds: 500_000_000),
-            oauthFallback: nil,
-            sleep: { delay in
-                try? await Task.sleep(nanoseconds: delay)
-            }
-        )
+        let session = makeSession(authProvider)
+        sessionState = .connecting(operationID, session)
 
         do {
-            let localPort = try await session.connect(hostname: hostname, method: authMethod)
-            activeSession = session
+            let localPort = try await session.connect(hostname, authMethod)
+            guard sessionState.operationID == operationID else {
+                throw CancellationError()
+            }
+            sessionState = .connected(operationID, session)
             return localPort
+        } catch is CancellationError {
+            if sessionState.operationID == operationID {
+                sessionState = .idle
+                await disconnect(session)
+            }
+            throw CancellationError()
         } catch let failure as Failure {
+            guard sessionState.operationID == operationID else {
+                throw CancellationError()
+            }
+            sessionState = .idle
+            await disconnect(session)
             throw mapFailure(failure)
         } catch {
+            guard sessionState.operationID == operationID else {
+                throw CancellationError()
+            }
+            sessionState = .idle
+            await disconnect(session)
             throw SSHError.cloudflareTunnelFailed(error.localizedDescription)
         }
     }
 
     func disconnect() async {
-        guard let activeSession else { return }
-        self.activeSession = nil
+        let session = sessionState.session
+        sessionState = .idle
+        guard let session else { return }
+        await disconnect(session)
+    }
+
+    private func disconnect(_ session: CloudflareTransportSession) async {
         do {
             try await HardOperationDeadline.run(timeout: disconnectTimeout) {
-                await activeSession.disconnect()
+                await session.disconnect()
             }
         } catch {
             logger.warning("Timed out while disconnecting Cloudflare transport session")
@@ -206,7 +312,8 @@ actor CloudflareTransportManager {
     private func resolveAccessMetadata(
         for hostname: String,
         server: Server,
-        mode: CloudflareAccessMode
+        mode: CloudflareAccessMode,
+        operationID: UUID
     ) async throws -> AccessMetadata {
         let cacheKey = metadataCacheKey(for: hostname)
         let teamOverride = server.cloudflareTeamDomainOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -247,9 +354,14 @@ actor CloudflareTransportManager {
 
             do {
                 let discovered = try await discoverAccessMetadata(hostname: hostname)
+                guard sessionState.operationID == operationID else {
+                    throw CancellationError()
+                }
                 metadataCache[cacheKey] = discovered
                 persistMetadata(discovered, for: cacheKey)
                 return discovered
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 throw SSHError.cloudflareConfigurationRequired(
                     String(
