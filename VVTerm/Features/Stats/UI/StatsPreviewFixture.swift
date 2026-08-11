@@ -208,6 +208,19 @@ enum StatsPreviewFixture {
         makeHistory([20, 22, 24, 28, 30, 31, 32, 35, 37, 36])
     }
 
+    static var presentationSnapshot: ServerStatsPresentationSnapshot {
+        ServerStatsPresentationSnapshot(
+            stats: stats,
+            cpuHistory: cpuHistory,
+            memoryHistory: memoryHistory,
+            gpuHistories: gpuHistories,
+            networkRxHistory: networkRxHistory,
+            networkTxHistory: networkTxHistory,
+            dockerCPUHistory: dockerCPUHistory,
+            dockerMemoryHistory: dockerMemoryHistory
+        )
+    }
+
     private static func makeHistory(_ values: [Double]) -> [StatsPoint] {
         values.enumerated().map { index, value in
             StatsPoint(

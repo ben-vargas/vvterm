@@ -4,18 +4,13 @@ struct StatsAppearancePreviewContent: View {
     let preferences: StatsPreferences
 
     var body: some View {
+        let snapshot = StatsPreviewFixture.presentationSnapshot
+
         StatsBlocksContent(
             serverName: String(localized: "demo-server"),
-            stats: StatsPreviewFixture.stats,
-            cpuHistory: StatsPreviewFixture.cpuHistory,
-            memoryHistory: StatsPreviewFixture.memoryHistory,
-            gpuHistories: StatsPreviewFixture.gpuHistories,
-            networkRxHistory: StatsPreviewFixture.networkRxHistory,
-            networkTxHistory: StatsPreviewFixture.networkTxHistory,
-            dockerCPUHistory: StatsPreviewFixture.dockerCPUHistory,
-            dockerMemoryHistory: StatsPreviewFixture.dockerMemoryHistory,
+            snapshot: snapshot,
             preferences: preferences,
-            storageVolumes: VolumeVisibilityPolicy.normalized(StatsPreviewFixture.stats.volumes),
+            storageVolumes: VolumeVisibilityPolicy.normalized(snapshot.stats.volumes),
             hiddenStorageVolumeIDs: [],
             backgroundColor: .clear,
             surface: .grouped,
@@ -216,14 +211,7 @@ struct StatsBlocksContent: View {
     @AppStorage(StatsResolvedAppearance.storageKey) private var appearanceMode = "system"
 
     let serverName: String
-    let stats: ServerStats
-    let cpuHistory: [StatsPoint]
-    let memoryHistory: [StatsPoint]
-    let gpuHistories: [String: [StatsPoint]]
-    let networkRxHistory: [StatsPoint]
-    let networkTxHistory: [StatsPoint]
-    let dockerCPUHistory: [StatsPoint]
-    let dockerMemoryHistory: [StatsPoint]
+    let snapshot: ServerStatsPresentationSnapshot
     let preferences: StatsPreferences
     let storageVolumes: [VolumeInfo]
     let hiddenStorageVolumeIDs: Set<VolumeIdentity>
@@ -272,7 +260,7 @@ struct StatsBlocksContent: View {
         if preferences.style == .classic {
             ClassicStatsContent(
                 serverName: serverName,
-                stats: stats,
+                stats: snapshot.stats,
                 visibleBlocks: preferences.visibleBlocks,
                 surfaceStyle: classicSurfaceStyle,
                 isDockerUnlocked: isDockerUnlocked,
@@ -354,34 +342,34 @@ struct StatsBlocksContent: View {
         case .system:
             SystemOverviewCard(
                 serverName: serverName,
-                stats: stats,
+                stats: snapshot.stats,
                 style: style
             )
         case .cpu:
             CPUCard(
-                stats: stats,
-                history: cpuHistory,
+                stats: snapshot.stats,
+                history: snapshot.cpuHistory,
                 style: style
             )
         case .memory:
             MemoryCard(
-                stats: stats,
-                history: memoryHistory,
+                stats: snapshot.stats,
+                history: snapshot.memoryHistory,
                 style: style
             )
         case .gpu:
             if shouldShowGPU {
                 GPUCard(
-                    stats: stats,
-                    histories: gpuHistories,
+                    stats: snapshot.stats,
+                    histories: snapshot.gpuHistories,
                     style: style
                 )
             }
         case .network:
             NetworkCard(
-                stats: stats,
-                rxHistory: networkRxHistory,
-                txHistory: networkTxHistory,
+                stats: snapshot.stats,
+                rxHistory: snapshot.networkRxHistory,
+                txHistory: snapshot.networkTxHistory,
                 style: style
             )
         case .storage:
@@ -396,8 +384,8 @@ struct StatsBlocksContent: View {
             )
         case .processes:
             ProcessesCard(
-                processes: stats.topProcesses,
-                processCount: stats.processCount,
+                processes: snapshot.stats.topProcesses,
+                processCount: snapshot.stats.processCount,
                 style: style,
                 terminateProcess: terminateProcess,
                 loadProcesses: loadProcesses
@@ -405,9 +393,9 @@ struct StatsBlocksContent: View {
         case .docker:
             if isDockerUnlocked {
                 DockerCard(
-                    docker: stats.docker,
-                    cpuHistory: dockerCPUHistory,
-                    memoryHistory: dockerMemoryHistory,
+                    docker: snapshot.stats.docker,
+                    cpuHistory: snapshot.dockerCPUHistory,
+                    memoryHistory: snapshot.dockerMemoryHistory,
                     style: style,
                     loadDockerStats: loadDockerStats,
                     performDockerAction: performDockerAction
@@ -419,7 +407,7 @@ struct StatsBlocksContent: View {
     }
 
     private var shouldShowGPU: Bool {
-        !stats.hardware.gpus.isEmpty || !stats.gpuSamples.isEmpty
+        !snapshot.stats.hardware.gpus.isEmpty || !snapshot.stats.gpuSamples.isEmpty
     }
 
     private var visibleStorageVolumes: [VolumeInfo] {

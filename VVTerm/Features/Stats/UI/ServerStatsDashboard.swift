@@ -15,7 +15,8 @@ struct ServerStatsDashboard: View {
 
     var body: some View {
         let style = StatsVisualStyle(preferencesStyle: preferences.style)
-        let storageVolumes = VolumeVisibilityPolicy.normalized(statsCollector.stats.volumes)
+        let snapshot = statsCollector.presentationSnapshot
+        let storageVolumes = VolumeVisibilityPolicy.normalized(snapshot.stats.volumes)
         let hiddenStorageVolumeIDs = volumeVisibilityStore.hiddenVolumeIDs(
             for: server.id,
             volumes: storageVolumes
@@ -25,14 +26,7 @@ struct ServerStatsDashboard: View {
             ScrollView {
                 StatsBlocksContent(
                     serverName: server.name,
-                    stats: statsCollector.stats,
-                    cpuHistory: statsCollector.cpuHistory,
-                    memoryHistory: statsCollector.memoryHistory,
-                    gpuHistories: statsCollector.gpuUtilizationHistoryByDeviceID,
-                    networkRxHistory: statsCollector.networkRxHistory,
-                    networkTxHistory: statsCollector.networkTxHistory,
-                    dockerCPUHistory: statsCollector.dockerCPUHistory,
-                    dockerMemoryHistory: statsCollector.dockerMemoryHistory,
+                    snapshot: snapshot,
                     preferences: preferences,
                     storageVolumes: storageVolumes,
                     hiddenStorageVolumeIDs: hiddenStorageVolumeIDs,

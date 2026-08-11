@@ -248,6 +248,24 @@ private struct StatsExternalTestError: LocalizedError {
 
 final class ServerStatsCollectorLifecycleTests: XCTestCase {
     @MainActor
+    func testPresentationSnapshotUsesCurrentCollectorValues() {
+        let collector = makeCollector(factory: StatsTestSessionFactory(behaviors: []))
+        let timestamp = Date(timeIntervalSince1970: 42)
+        let cpuPoint = StatsPoint(timestamp: timestamp, value: 55)
+        let gpuPoint = StatsPoint(timestamp: timestamp, value: 34)
+
+        collector.stats.cpuUsage = 55
+        collector.cpuHistory = [cpuPoint]
+        collector.gpuUtilizationHistoryByDeviceID = ["gpu-0": [gpuPoint]]
+
+        let snapshot = collector.presentationSnapshot
+
+        XCTAssertEqual(snapshot.stats.cpuUsage, 55)
+        XCTAssertEqual(snapshot.cpuHistory.map(\.value), [55])
+        XCTAssertEqual(snapshot.gpuHistories["gpu-0"]?.map(\.value), [34])
+    }
+
+    @MainActor
     func testUnknownSessionCreationFailureKeepsExternalDetail() async {
         let collector = ServerStatsCollector(
             dependencies: ServerStatsCollectorDependencies(

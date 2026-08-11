@@ -223,6 +223,19 @@ final class ServerStatsCollector: ObservableObject {
     var isCollecting: Bool { collectionState.isCollecting }
     var isDockerCollectionEnabled: Bool { activeAttempt?.collectDocker ?? false }
 
+    var presentationSnapshot: ServerStatsPresentationSnapshot {
+        ServerStatsPresentationSnapshot(
+            stats: stats,
+            cpuHistory: cpuHistory,
+            memoryHistory: memoryHistory,
+            gpuHistories: gpuUtilizationHistoryByDeviceID,
+            networkRxHistory: networkRxHistory,
+            networkTxHistory: networkTxHistory,
+            dockerCPUHistory: dockerCPUHistory,
+            dockerMemoryHistory: dockerMemoryHistory
+        )
+    }
+
     var approvalReferenceForPresentation: (any ServerStatsApprovalReference)? {
         pendingApprovalReference
     }

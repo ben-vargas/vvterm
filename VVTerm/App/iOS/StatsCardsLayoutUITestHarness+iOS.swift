@@ -17,19 +17,14 @@ struct StatsCardsLayoutUITestHarness: View {
     }
 
     var body: some View {
+        let snapshot = StatsPreviewFixture.presentationSnapshot
+
         ScrollView {
             StatsBlocksContent(
                 serverName: "layout-test",
-                stats: StatsPreviewFixture.stats,
-                cpuHistory: StatsPreviewFixture.cpuHistory,
-                memoryHistory: StatsPreviewFixture.memoryHistory,
-                gpuHistories: StatsPreviewFixture.gpuHistories,
-                networkRxHistory: StatsPreviewFixture.networkRxHistory,
-                networkTxHistory: StatsPreviewFixture.networkTxHistory,
-                dockerCPUHistory: StatsPreviewFixture.dockerCPUHistory,
-                dockerMemoryHistory: StatsPreviewFixture.dockerMemoryHistory,
+                snapshot: snapshot,
                 preferences: preferences,
-                storageVolumes: VolumeVisibilityPolicy.normalized(StatsPreviewFixture.stats.volumes),
+                storageVolumes: VolumeVisibilityPolicy.normalized(snapshot.stats.volumes),
                 hiddenStorageVolumeIDs: [],
                 backgroundColor: .black,
                 surface: .dashboard,
