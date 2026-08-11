@@ -3,7 +3,7 @@
 require "date"
 
 path = ARGV.fetch(0, "CHANGELOG.md")
-text = File.read(path)
+text = path == "-" ? $stdin.read : File.read(path)
 errors = []
 expected_sections = %w[Added Changed Fixed Security].freeze
 
