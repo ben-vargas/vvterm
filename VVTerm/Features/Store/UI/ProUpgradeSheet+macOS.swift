@@ -4,6 +4,42 @@ import Combine
 import SwiftUI
 
 extension ProUpgradeSheet {
+    func platformBody<Content: View>(
+        sheetContent: Content,
+        source: PaywallSource,
+        onClose: @escaping () -> Void
+    ) -> some View {
+        sheetContent
+    }
+
+    func platformSheetLayout<Content: View, Footer: View>(
+        content: Content,
+        footer: Footer,
+        source: PaywallSource
+    ) -> some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                content
+                    .padding(.horizontal, 22)
+                    .padding(.top, 18)
+                    .padding(.bottom, 18)
+            }
+            .scrollIndicators(.automatic)
+
+            footer
+        }
+        .frame(
+            minWidth: 500,
+            idealWidth: 520,
+            maxWidth: .infinity,
+            minHeight: 620,
+            idealHeight: 780,
+            maxHeight: .infinity
+        )
+        .background(sheetBackground)
+        .background(ProUpgradeWindowConfigurator(source: source))
+    }
+
     func openSubscriptionManagement() {
         if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
             NSWorkspace.shared.open(url)
