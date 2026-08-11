@@ -77,7 +77,7 @@ nonisolated enum ConnectionState: Hashable, Sendable {
 
 }
 
-enum TerminalConnectionAttemptPolicy {
+nonisolated enum TerminalConnectionAttemptPolicy {
     static func state(attempt: Int, hasEstablishedConnection: Bool) -> ConnectionState {
         if hasEstablishedConnection || attempt > 1 {
             return .reconnecting(attempt: attempt)

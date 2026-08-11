@@ -55,8 +55,10 @@ extension GhosttyTerminalView {
             NSAnimationContext.runAnimationGroup({ context in
                 context.duration = TerminalZoomPresentation.indicatorFadeOutDuration
                 self.zoomIndicatorView.animator().alphaValue = 0
-            }, completionHandler: {
-                self.zoomIndicatorView.isHidden = true
+            }, completionHandler: { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.zoomIndicatorView.isHidden = true
+                }
             })
         }
         zoomIndicatorHideWorkItem = workItem

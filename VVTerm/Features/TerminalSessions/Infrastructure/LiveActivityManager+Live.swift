@@ -28,13 +28,17 @@ private final class ActivityKitTerminalLiveActivityController: TerminalLiveActiv
     func reconcile(toward target: TerminalLiveActivityTarget) async {
         let activities = Activity<VVTermActivityAttributes>.activities
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            await end(activities)
+            for activity in activities {
+                await activity.end(dismissalPolicy: .immediate)
+            }
             reconciledTarget = .end
             return
         }
 
         guard case .active(let snapshot) = target else {
-            await end(activities)
+            for activity in activities {
+                await activity.end(dismissalPolicy: .immediate)
+            }
             reconciledTarget = .end
             return
         }
@@ -86,12 +90,6 @@ private final class ActivityKitTerminalLiveActivityController: TerminalLiveActiv
             logger.error("Timed out ending Live Activities during application termination")
         }
         return completed
-    }
-
-    private func end(_ activities: [Activity<VVTermActivityAttributes>]) async {
-        for activity in activities {
-            await activity.end(dismissalPolicy: .immediate)
-        }
     }
 
     private func activityStatus(

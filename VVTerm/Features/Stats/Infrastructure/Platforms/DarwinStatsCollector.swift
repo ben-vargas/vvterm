@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Darwin/macOS Stats Collector
 
 /// Stats collector for macOS/Darwin systems using sysctl, vm_stat, etc.
-struct DarwinStatsCollector: PlatformStatsCollector {
+nonisolated struct DarwinStatsCollector: PlatformStatsCollector {
     private static let periodicProcessLimit = 24
     static let statsBatchCommand = RemoteTerminalBootstrap.wrapPOSIXShellCommand("""
         export LC_ALL=C LANG=C

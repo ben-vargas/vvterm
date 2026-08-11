@@ -18,7 +18,7 @@ extension TerminalTabManager {
         let remoteTmux = RemoteTmuxManager.shared
         let sshClientFactory = SSHClientLiveComposition.dev228CompatibilityFactory
         let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
-        let applicationIsActive = {
+        let applicationIsActive: @MainActor @Sendable () -> Bool = {
             #if os(iOS)
             UIApplication.shared.applicationState == .active
             #else

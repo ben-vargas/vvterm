@@ -1,18 +1,18 @@
 import Foundation
 
-struct TerminalHardwareKeyRepeatState<Payload> {
-    struct Active {
+nonisolated struct TerminalHardwareKeyRepeatState<Payload> {
+    nonisolated struct Active {
         let token: UUID
         let keyCode: UInt16
         var payload: Payload
     }
 
-    enum Phase {
+    nonisolated enum Phase {
         case idle
         case repeating(Active)
     }
 
-    enum Registration {
+    nonisolated enum Registration {
         case started(Active)
         case updated(Active)
     }

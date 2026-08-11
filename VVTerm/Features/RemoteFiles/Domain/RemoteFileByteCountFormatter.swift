@@ -1,6 +1,6 @@
 import Foundation
 
-enum RemoteFileByteCountFormatter {
+nonisolated enum RemoteFileByteCountFormatter {
     private static let bytesPerExabyte = 1_000_000_000_000_000_000.0
 
     static func string(from byteCount: UInt64) -> String {

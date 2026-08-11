@@ -1,6 +1,6 @@
 import Foundation
 
-struct TranscriptionSettingsKeys {
+nonisolated struct TranscriptionSettingsKeys {
     static let provider = "transcriptionProvider"
     static let mlxWhisperModelId = "mlxWhisperModelId"
     static let mlxParakeetModelId = "mlxParakeetModelId"
@@ -11,7 +11,7 @@ struct TranscriptionSettingsKeys {
     static let legacyParakeetModelID = "parakeetModelId"
 }
 
-struct TranscriptionSettingsDefaults {
+nonisolated struct TranscriptionSettingsDefaults {
     static let provider: TranscriptionProvider = .system
     static let mlxWhisperModelId = MLXModelCatalog.defaultModelID(for: .whisper)
     static let mlxParakeetModelId = MLXModelCatalog.defaultModelID(for: .parakeetTDT)

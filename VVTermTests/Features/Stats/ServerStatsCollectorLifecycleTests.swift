@@ -3,7 +3,7 @@ import XCTest
 @testable import VVTerm
 
 @MainActor
-private final class StatsTestGate<Value> {
+private final class StatsTestGate<Value: Sendable> {
     private let ignoresCancellation: Bool
     private var continuation: CheckedContinuation<Value, Error>?
     private var started = false
@@ -142,7 +142,7 @@ private final class StatsTestSession: ServerStatsCollectionSession {
     }
 
     func runCollection(
-        _ operation: @MainActor @escaping () async throws -> Void
+        _ operation: @MainActor @Sendable @escaping () async throws -> Void
     ) async throws {
         runStarted.record()
         defer { runFinished.record() }

@@ -72,7 +72,7 @@ nonisolated enum TerminalThemePendingCloudKitPayloadCodec {
     }
 }
 
-extension PendingCloudKitPayloadEnvelope {
+nonisolated extension PendingCloudKitPayloadEnvelope {
     static func terminalThemeUpsert(_ theme: TerminalTheme) throws -> Self {
         try TerminalThemePendingCloudKitPayloadCodec.encodeTheme(theme)
     }

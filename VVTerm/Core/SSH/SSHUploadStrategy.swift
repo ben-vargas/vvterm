@@ -1,4 +1,4 @@
-enum SSHUploadStrategy: Sendable {
+nonisolated enum SSHUploadStrategy: Sendable {
     case automatic
     case execPreferred
 }

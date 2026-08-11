@@ -39,8 +39,8 @@ struct VVTermApp: App {
         )
         let notificationCenter = NotificationCenter.default
         let calendar = Calendar.current
-        let now: () -> Date = Date.init
-        let makeID: () -> UUID = UUID.init
+        let now: @Sendable () -> Date = Date.init
+        let makeID: @Sendable () -> UUID = UUID.init
         let defaultWorkspaceName: () -> String = {
             AppLanguage.localizedString(
                 "My Servers",
@@ -70,7 +70,7 @@ struct VVTermApp: App {
         let moshResumeStore = MoshResumeStore.shared
         let terminalSurfaceStore = GhosttyTerminalSurfaceStore()
         let deviceID = DeviceIdentity.id
-        let applicationIsActive: @MainActor () -> Bool = {
+        let applicationIsActive: @MainActor @Sendable () -> Bool = {
             #if os(iOS)
             UIApplication.shared.applicationState == .active
             #else

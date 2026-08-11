@@ -5,7 +5,7 @@ nonisolated enum TerminalAccessoryCloudKitRecordCodecError: Error, Equatable, Se
     case encodingFailed
 }
 
-enum TerminalAccessoryCloudKitRecordCodec {
+nonisolated enum TerminalAccessoryCloudKitRecordCodec {
     static let recordType = "UserPreference"
     static let recordName = TerminalAccessoryProfile.recordName
     static let recordKeys = [

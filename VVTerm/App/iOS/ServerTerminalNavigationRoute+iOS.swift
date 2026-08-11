@@ -1,8 +1,8 @@
 import Foundation
 
 #if os(iOS)
-enum ServerTerminalNavigationRoute: Equatable {
-    enum ConnectionResolution {
+nonisolated enum ServerTerminalNavigationRoute: Equatable, Sendable {
+    nonisolated enum ConnectionResolution: Sendable {
         case succeeded
         case failed
     }

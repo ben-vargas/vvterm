@@ -1,7 +1,7 @@
 import Foundation
 
-struct TerminalNativeSelectionLifecycle: Equatable {
-    enum Phase: Equatable {
+nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
+    nonisolated enum Phase: Equatable, Sendable {
         case inactive
         case prepared(selection: NSRange?, restoreTerminalInput: Bool)
         case interacting(selection: NSRange?, restoreTerminalInput: Bool)
@@ -243,8 +243,8 @@ final class TerminalNativeFindOverlayView: UIView {
     }
 }
 
-struct TerminalNativeTextSnapshot {
-    struct Line {
+nonisolated struct TerminalNativeTextSnapshot: Sendable {
+    nonisolated struct Line: Sendable {
         let text: String
         let startOffset: Int
         let utf16Length: Int
@@ -254,9 +254,12 @@ struct TerminalNativeTextSnapshot {
 
     let lines: [Line]
     let text: String
-    let nsText: NSString
     let cellSize: CGSize
     let columns: Int
+
+    private var nsText: NSString {
+        text as NSString
+    }
 
     init(lines rawLines: [String], cellSize: CGSize, columns: Int) {
         let sanitizedCellSize = CGSize(width: max(cellSize.width, 1), height: max(cellSize.height, 1))
@@ -276,7 +279,6 @@ struct TerminalNativeTextSnapshot {
 
         self.lines = builtLines
         self.text = rawLines.joined(separator: "\n")
-        self.nsText = self.text as NSString
     }
 
     var length: Int {
@@ -299,12 +301,12 @@ struct TerminalNativeTextSnapshot {
         return addition.overflow ? length : addition.partialValue
     }
 
-    func nativeRange(from range: UITextRange?) -> NSRange? {
+    @MainActor func nativeRange(from range: UITextRange?) -> NSRange? {
         guard let range = range as? TerminalNativeTextRange else { return nil }
         return clampedRange(range.nsRange)
     }
 
-    func nativeRange(_ range: NSRange?) -> TerminalNativeTextRange? {
+    @MainActor func nativeRange(_ range: NSRange?) -> TerminalNativeTextRange? {
         guard let range else { return nil }
         let clamped = clampedRange(range)
         return TerminalNativeTextRange(start: clamped.location, end: upperBound(of: clamped))
@@ -346,7 +348,7 @@ struct TerminalNativeTextSnapshot {
         ).integral
     }
 
-    func firstRect(for range: NSRange) -> CGRect {
+    @MainActor func firstRect(for range: NSRange) -> CGRect {
         let rects = selectionRects(for: range)
         if let firstRect = rects.first?.rect {
             return firstRect
@@ -354,7 +356,7 @@ struct TerminalNativeTextSnapshot {
         return caretRect(for: range.location)
     }
 
-    func selectionRects(for range: NSRange) -> [TerminalNativeSelectionRect] {
+    @MainActor func selectionRects(for range: NSRange) -> [TerminalNativeSelectionRect] {
         let clamped = clampedRange(range)
         guard clamped.length > 0, !lines.isEmpty else { return [] }
 
@@ -390,7 +392,10 @@ struct TerminalNativeTextSnapshot {
         return rects
     }
 
-    func searchRanges(query: String, options: UITextSearchOptions) -> [NSRange] {
+    @MainActor func searchRanges(
+        query: String,
+        options: UITextSearchOptions
+    ) -> [NSRange] {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedQuery.isEmpty, length > 0 else { return [] }
 

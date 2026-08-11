@@ -1,6 +1,6 @@
 import Foundation
 
-struct RemoteFileTab: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct RemoteFileTab: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     let serverId: UUID
     let createdAt: Date

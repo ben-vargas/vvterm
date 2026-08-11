@@ -50,7 +50,7 @@ protocol ServerStatsCollectionSession: AnyObject {
     var ownership: ServerStatsClientOwnership { get }
 
     func runCollection(
-        _ operation: @MainActor @escaping () async throws -> Void
+        _ operation: @MainActor @Sendable @escaping () async throws -> Void
     ) async throws
     func disconnect() async
     func prepareIfNeeded() async -> ServerStatsCollectionPreparation?

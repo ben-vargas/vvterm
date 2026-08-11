@@ -1,6 +1,6 @@
 import Foundation
 
-struct RemoteFileFilesystemStatus: Hashable, Sendable {
+nonisolated struct RemoteFileFilesystemStatus: Hashable, Sendable {
     let blockSize: UInt64
     let totalBlocks: UInt64
     let freeBlocks: UInt64
@@ -19,7 +19,7 @@ struct RemoteFileFilesystemStatus: Hashable, Sendable {
     }
 }
 
-enum RemoteFileFilesystemCapacity: Hashable, Sendable {
+nonisolated enum RemoteFileFilesystemCapacity: Hashable, Sendable {
     case known(RemoteFileFilesystemStatus)
     case unavailable
 
@@ -29,7 +29,7 @@ enum RemoteFileFilesystemCapacity: Hashable, Sendable {
     }
 }
 
-enum RemoteFileDirectoryPhase: Equatable, Sendable {
+nonisolated enum RemoteFileDirectoryPhase: Equatable, Sendable {
     case notLoaded
     case loading(requestID: UUID, hasLoadedDirectory: Bool)
     case loaded
@@ -77,7 +77,7 @@ enum RemoteFileDirectoryPhase: Equatable, Sendable {
     }
 }
 
-enum RemoteFileViewerPhase: Equatable, Sendable {
+nonisolated enum RemoteFileViewerPhase: Equatable, Sendable {
     case idle
     case selected(path: String)
     case loading(path: String, requestID: UUID)
@@ -141,7 +141,7 @@ enum RemoteFileViewerPhase: Equatable, Sendable {
     }
 }
 
-private extension UInt64 {
+nonisolated private extension UInt64 {
     func saturatingMultiply(_ other: UInt64) -> UInt64 {
         let result = multipliedReportingOverflow(by: other)
         return result.overflow ? .max : result.partialValue

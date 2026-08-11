@@ -36,7 +36,7 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
     }
 
     func runCollection(
-        _ operation: @MainActor @escaping () async throws -> Void
+        _ operation: @MainActor @Sendable @escaping () async throws -> Void
     ) async throws {
         do {
             try await connectionOperations.runWithConnection(

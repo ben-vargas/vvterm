@@ -90,7 +90,7 @@ struct TerminalTmuxConfiguration {
 struct TerminalTabManagerDependencies {
     let sshClientFactory: SSHClientFactory
     let networkReadiness: TerminalNetworkReadinessSource
-    let applicationIsActive: @MainActor () -> Bool
+    let applicationIsActive: @MainActor @Sendable () -> Bool
     let appLock: TerminalAppLockSource
     let effects: TerminalSessionApplicationEffects
     let remoteMosh: any TerminalRemoteMoshServicing

@@ -84,8 +84,10 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
             forName: NSView.boundsDidChangeNotification,
             object: scrollView.contentView,
             queue: .main
-        ) { [weak self] notification in
-            self?.handleScrollChange(notification)
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleScrollChange()
+            }
         })
 
         // Listen for scrollbar updates from Ghostty
@@ -94,7 +96,13 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
             object: surfaceView,
             queue: .main
         ) { [weak self] notification in
-            self?.handleScrollbarUpdate(notification)
+            guard let scrollbar = notification.userInfo?[Notification.Name.ScrollbarKey]
+                as? Ghostty.Action.Scrollbar else {
+                return
+            }
+            Task { @MainActor [weak self, scrollbar] in
+                self?.handleScrollbarUpdate(scrollbar)
+            }
         })
 
         // Listen for live scroll events
@@ -103,7 +111,9 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
             object: scrollView,
             queue: .main
         ) { [weak self] _ in
-            self?.isLiveScrolling = true
+            Task { @MainActor [weak self] in
+                self?.isLiveScrolling = true
+            }
         })
 
         observers.append(NotificationCenter.default.addObserver(
@@ -111,7 +121,9 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
             object: scrollView,
             queue: .main
         ) { [weak self] _ in
-            self?.isLiveScrolling = false
+            Task { @MainActor [weak self] in
+                self?.isLiveScrolling = false
+            }
         })
 
         observers.append(NotificationCenter.default.addObserver(
@@ -119,7 +131,9 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
             object: scrollView,
             queue: .main
         ) { [weak self] _ in
-            self?.handleLiveScroll()
+            Task { @MainActor [weak self] in
+                self?.handleLiveScroll()
+            }
         })
 
         observers.append(NotificationCenter.default.addObserver(
@@ -127,7 +141,9 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
             object: nil,
             queue: nil
         ) { [weak self] _ in
-            self?.handleScrollerStyleChange()
+            Task { @MainActor [weak self] in
+                self?.handleScrollerStyleChange()
+            }
         })
     }
 
@@ -135,7 +151,7 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
         fatalError("init(coder:) not implemented")
     }
 
-    deinit {
+    isolated deinit {
         observers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
@@ -274,7 +290,7 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
     // MARK: - Notifications
 
     /// Handles bounds changes in the scroll view's clip view, keeping the surface view synchronized.
-    private func handleScrollChange(_ notification: Notification) {
+    private func handleScrollChange() {
         synchronizeSurfaceView()
     }
 
@@ -309,10 +325,7 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
     }
 
     /// Handles scrollbar state updates from the terminal core.
-    private func handleScrollbarUpdate(_ notification: Notification) {
-        guard let scrollbar = notification.userInfo?[Notification.Name.ScrollbarKey] as? Ghostty.Action.Scrollbar else {
-            return
-        }
+    private func handleScrollbarUpdate(_ scrollbar: Ghostty.Action.Scrollbar) {
         surfaceView.scrollbar = scrollbar
         synchronizeScrollView()
     }

@@ -682,7 +682,7 @@ struct ServerManagerLoadLifecycleTests {
 }
 
 @MainActor
-private final class ServerCancellationIgnoringGate<Value> {
+private final class ServerCancellationIgnoringGate<Value: Sendable> {
     private var continuation: CheckedContinuation<Value, Never>?
     private(set) var isStarted = false
     private(set) var cancellationCount = 0

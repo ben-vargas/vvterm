@@ -426,8 +426,8 @@ struct ContentView: View {
     let defaults = UserDefaults.standard
     let notificationCenter = NotificationCenter.default
     let calendar = Calendar.current
-    let now: () -> Date = Date.init
-    let makeID: () -> UUID = UUID.init
+    let now: @Sendable () -> Date = Date.init
+    let makeID: @Sendable () -> UUID = UUID.init
     let networkMonitor = NetworkMonitor.shared
     let analyticsTracker = AnalyticsTracker.shared
     let cloudKitManager = CloudKitManager.shared
@@ -436,7 +436,7 @@ struct ContentView: View {
     let remoteTmux = RemoteTmuxManager.shared
     let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
     let moshResumeStore = MoshResumeStore.shared
-    let applicationIsActive: @MainActor () -> Bool = {
+    let applicationIsActive: @MainActor @Sendable () -> Bool = {
         #if os(iOS)
         UIApplication.shared.applicationState == .active
         #else

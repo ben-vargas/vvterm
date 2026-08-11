@@ -179,8 +179,12 @@ struct TerminalTabManagerLiveCompositionTests {
             applicationIsActive: true
         )
 
-        #expect((first.terminalSurfaceStore as AnyObject) === firstSurfaceStore)
-        #expect((second.terminalSurfaceStore as AnyObject) === secondSurfaceStore)
+        let firstOwnsSurfaceStore =
+            (first.terminalSurfaceStore as AnyObject) === firstSurfaceStore
+        let secondOwnsSurfaceStore =
+            (second.terminalSurfaceStore as AnyObject) === secondSurfaceStore
+        #expect(firstOwnsSurfaceStore)
+        #expect(secondOwnsSurfaceStore)
         #expect(first.tmuxCoordinator.isEnabled(for: UUID()))
         #expect(!second.tmuxCoordinator.isEnabled(for: UUID()))
         #expect(!first.reconnectCoordinator.applicationIsActive)
@@ -243,7 +247,9 @@ struct TerminalTabManagerLiveCompositionTests {
         applicationIsActive: Bool
     ) -> TerminalTabManager {
         let analyticsTracker = AnalyticsTracker.shared
-        let applicationIsActiveQuery = { applicationIsActive }
+        let applicationIsActiveQuery: @MainActor @Sendable () -> Bool = {
+            applicationIsActive
+        }
         return TerminalTabManagerLiveComposition.makeManager(
             defaults: defaults,
             sshClientFactory: .testing(),

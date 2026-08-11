@@ -1,6 +1,6 @@
 import Foundation
 
-struct CloudKitPendingMutationLegacyMigrator: PendingCloudKitLegacyMutationMigrating {
+nonisolated struct CloudKitPendingMutationLegacyMigrator: PendingCloudKitLegacyMutationMigrating {
     func migrate(
         recordData: Data
     ) -> Result<PendingCloudKitMutation, PendingCloudKitMutationQuarantineReason>? {
@@ -145,7 +145,7 @@ struct CloudKitPendingMutationLegacyMigrator: PendingCloudKitLegacyMutationMigra
     }
 }
 
-private struct LegacyMetadata: Decodable {
+nonisolated private struct LegacyMetadata: Decodable, Sendable {
     let id: UUID
     let createdAt: Date
     let retryCount: Int
@@ -166,7 +166,7 @@ private struct LegacyMetadata: Decodable {
     }
 }
 
-private struct LegacyUnionRoute {
+nonisolated private struct LegacyUnionRoute: Sendable {
     static let payloadFields = [
         "server",
         "workspace",

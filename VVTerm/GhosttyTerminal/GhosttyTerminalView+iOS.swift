@@ -13,12 +13,12 @@ import SwiftUI
 import IOSurface
 import CoreImage
 
-enum TerminalSurfaceGeometryUpdate: Equatable {
+nonisolated enum TerminalSurfaceGeometryUpdate: Equatable, Sendable {
     case apply
     case preserveCurrentGrid
 }
 
-enum TerminalSurfaceGeometryPolicy {
+nonisolated enum TerminalSurfaceGeometryPolicy {
     static func update(
         renderingIsPaused: Bool,
         preservesForegroundKeyboardGrid: Bool,

@@ -1,6 +1,6 @@
 import Foundation
 
-enum RemotePlatform: String, Sendable {
+nonisolated enum RemotePlatform: String, Sendable {
     case linux = "linux"
     case darwin = "darwin"
     case freebsd = "freebsd"

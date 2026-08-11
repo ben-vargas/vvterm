@@ -1,6 +1,6 @@
 import Foundation
 
-enum RemoteFileSort: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated enum RemoteFileSort: String, Codable, CaseIterable, Identifiable, Sendable {
     case name
     case modifiedAt
     case size
@@ -28,7 +28,7 @@ enum RemoteFileSort: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum RemoteFileSortDirection: String, Codable, Sendable {
+nonisolated enum RemoteFileSortDirection: String, Codable, Sendable {
     case ascending
     case descending
 
@@ -51,7 +51,7 @@ enum RemoteFileSortDirection: String, Codable, Sendable {
     }
 }
 
-extension Array where Element == RemoteFileEntry {
+nonisolated extension Array where Element == RemoteFileEntry {
     func sortedForBrowser(using sort: RemoteFileSort, direction: RemoteFileSortDirection) -> [RemoteFileEntry] {
         sorted { lhs, rhs in
             let lhsDirectoryRank = lhs.type == .directory ? 0 : 1

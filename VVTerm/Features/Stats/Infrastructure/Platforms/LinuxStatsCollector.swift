@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Linux Stats Collector
 
 /// Stats collector for Linux systems using /proc filesystem
-struct LinuxStatsCollector: PlatformStatsCollector {
+nonisolated struct LinuxStatsCollector: PlatformStatsCollector {
     private let bytesPerKiB: UInt64 = 1_024
     private let bytesPerMiB: UInt64 = 1_048_576
     private let bytesPerGiB: UInt64 = 1_073_741_824
@@ -1159,7 +1159,7 @@ struct LinuxStatsCollector: PlatformStatsCollector {
 
 // MARK: - CPU Result Helper
 
-struct CpuResult {
+nonisolated struct CpuResult: Sendable {
     let total: Double
     let user: Double
     let system: Double
@@ -1168,7 +1168,7 @@ struct CpuResult {
     let idle: Double
 }
 
-private extension Array {
+nonisolated private extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
     }

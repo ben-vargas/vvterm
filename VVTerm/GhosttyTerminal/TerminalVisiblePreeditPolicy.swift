@@ -1,6 +1,6 @@
 import Foundation
 
-enum TerminalVisiblePreeditPolicy {
+nonisolated enum TerminalVisiblePreeditPolicy {
     static func isDictationInputMode(_ inputModePrimaryLanguage: String?) -> Bool {
         inputModePrimaryLanguage?.lowercased() == "dictation"
     }

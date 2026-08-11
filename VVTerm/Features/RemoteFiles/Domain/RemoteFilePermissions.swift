@@ -1,6 +1,6 @@
 import Foundation
 
-enum RemoteFilePermissionAudience: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum RemoteFilePermissionAudience: String, CaseIterable, Identifiable, Sendable {
     case owner
     case group
     case everyone
@@ -8,7 +8,7 @@ enum RemoteFilePermissionAudience: String, CaseIterable, Identifiable, Sendable 
     var id: String { rawValue }
 }
 
-enum RemoteFilePermissionCapability: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum RemoteFilePermissionCapability: String, CaseIterable, Identifiable, Sendable {
     case read
     case write
     case execute
@@ -39,7 +39,7 @@ enum RemoteFilePermissionCapability: String, CaseIterable, Identifiable, Sendabl
     }
 }
 
-struct RemoteFilePermissionDraft: Equatable, Sendable {
+nonisolated struct RemoteFilePermissionDraft: Equatable, Sendable {
     private var bits: UInt32
 
     init(accessBits: UInt32) {

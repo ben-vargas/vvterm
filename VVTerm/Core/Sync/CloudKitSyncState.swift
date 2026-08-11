@@ -1,6 +1,6 @@
 import Foundation
 
-struct CloudKitSyncState: Equatable, Sendable {
+nonisolated struct CloudKitSyncState: Equatable, Sendable {
     enum Status: Equatable, Sendable {
         case idle
         case syncing

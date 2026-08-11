@@ -1,6 +1,6 @@
 import Foundation
 
-struct RemoteTerminalEnvironmentVariable: Hashable, Sendable {
+nonisolated struct RemoteTerminalEnvironmentVariable: Hashable, Sendable {
     let name: String
     let value: String
 }
@@ -9,7 +9,7 @@ struct RemoteTerminalEnvironmentVariable: Hashable, Sendable {
 /// SSH already exposes genuine `SSH_*` variables. ET is SSH-compatible from the
 /// application's perspective but needs Snacks' documented opt-in because its PTY
 /// is not created by sshd. Mosh does not preserve Kitty graphics sequences.
-enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
+nonisolated enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
     nonisolated static let compatibilityEnvironmentName = "SNACKS_SSH"
 
     case genuineSSH
@@ -41,17 +41,17 @@ enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
     }
 }
 
-enum RemoteTerminalType: String, Hashable, Sendable {
+nonisolated enum RemoteTerminalType: String, Hashable, Sendable {
     case xterm256Color = "xterm-256color"
     case xtermGhostty = "xterm-ghostty"
 }
 
-enum RemoteShellLaunchPlan: Hashable, Sendable {
+nonisolated enum RemoteShellLaunchPlan: Hashable, Sendable {
     case shell
     case exec(String)
 }
 
-enum RemoteWorkingDirectoryRestoreFailure: String, LocalizedError, Sendable {
+nonisolated enum RemoteWorkingDirectoryRestoreFailure: String, LocalizedError, Sendable {
     case emptyPath
     case unsupportedShell
     case invalidWindowsPath
@@ -71,7 +71,7 @@ enum RemoteWorkingDirectoryRestoreFailure: String, LocalizedError, Sendable {
     }
 }
 
-enum RemoteWorkingDirectoryRestorePlan: Equatable, Sendable {
+nonisolated enum RemoteWorkingDirectoryRestorePlan: Equatable, Sendable {
     case command(String)
     case keepDefault(RemoteWorkingDirectoryRestoreFailure)
 
@@ -81,7 +81,7 @@ enum RemoteWorkingDirectoryRestorePlan: Equatable, Sendable {
     }
 }
 
-enum RemoteTerminalBootstrap {
+nonisolated enum RemoteTerminalBootstrap {
     nonisolated static let defaultTerminalType: RemoteTerminalType = .xterm256Color
     nonisolated static let termProgram = "ghostty"
 

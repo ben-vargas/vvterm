@@ -1,6 +1,6 @@
 import Foundation
 
-final class RemoteFileTemporaryStorage {
+nonisolated final class RemoteFileTemporaryStorage: @unchecked Sendable {
     private struct DragExport {
         let rootURL: URL
         let itemURL: URL
@@ -11,7 +11,7 @@ final class RemoteFileTemporaryStorage {
     private static let staleDragExportAge: TimeInterval = 24 * 60 * 60
     private static let staleDragExportCleanupLimit = 64
 
-    nonisolated init(
+    init(
         fileManager: FileManager = .default,
         rootDirectory: URL = FileManager.default.temporaryDirectory.appendingPathComponent("VVTermRemoteFiles", isDirectory: true)
     ) {
@@ -29,7 +29,7 @@ final class RemoteFileTemporaryStorage {
 
     func prepareDragExport(
         for entry: RemoteFileEntry,
-        download: (URL) async throws -> Void
+        download: @Sendable (URL) async throws -> Void
     ) async throws -> URL {
         let export = try makeDragExport(for: entry)
         do {

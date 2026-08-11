@@ -1,20 +1,20 @@
 import Foundation
 
-enum TerminalSnippetSendMode: String, Codable, CaseIterable, Identifiable {
+nonisolated enum TerminalSnippetSendMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case insert
     case insertAndEnter
 
     var id: String { rawValue }
 }
 
-enum TerminalAccessoryCustomActionKind: String, Codable, CaseIterable, Identifiable {
+nonisolated enum TerminalAccessoryCustomActionKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case command
     case shortcut
 
     var id: String { rawValue }
 }
 
-struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hashable {
+nonisolated struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hashable, Sendable {
     var control: Bool = false
     var alternate: Bool = false
     var command: Bool = false
@@ -59,7 +59,7 @@ struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hashable {
 
 }
 
-enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Identifiable {
+nonisolated enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Identifiable, Sendable {
     case a
     case b
     case c
@@ -246,7 +246,7 @@ enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, Identifiable {
+nonisolated enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, Identifiable, Sendable {
     case commandModifier
     case escape
     case tab
@@ -308,7 +308,7 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
     }
 }
 
-enum TerminalAccessoryItemRef: Codable, Hashable {
+nonisolated enum TerminalAccessoryItemRef: Codable, Hashable, Sendable {
     case system(TerminalAccessorySystemActionID)
     case custom(UUID)
 
@@ -356,7 +356,7 @@ enum TerminalAccessoryItemRef: Codable, Hashable {
     }
 }
 
-struct TerminalAccessoryCustomAction: Identifiable, Codable, Equatable {
+nonisolated struct TerminalAccessoryCustomAction: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var title: String
     var kind: TerminalAccessoryCustomActionKind
@@ -395,7 +395,7 @@ struct TerminalAccessoryCustomAction: Identifiable, Codable, Equatable {
 
 }
 
-struct TerminalSnippet: Identifiable, Codable, Equatable {
+nonisolated struct TerminalSnippet: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var title: String
     var content: String
@@ -424,13 +424,13 @@ struct TerminalSnippet: Identifiable, Codable, Equatable {
     }
 }
 
-struct TerminalAccessoryLayout: Codable, Equatable {
+nonisolated struct TerminalAccessoryLayout: Codable, Equatable, Sendable {
     var version: Int
     var activeItems: [TerminalAccessoryItemRef]
     var updatedAt: Date
 }
 
-struct TerminalAccessoryProfile: Codable, Equatable {
+nonisolated struct TerminalAccessoryProfile: Codable, Equatable, Sendable {
     var schemaVersion: Int
     var layout: TerminalAccessoryLayout
     var customActions: [TerminalAccessoryCustomAction]
@@ -486,7 +486,7 @@ struct TerminalAccessoryProfile: Codable, Equatable {
     }
 }
 
-extension TerminalAccessoryProfile {
+nonisolated extension TerminalAccessoryProfile {
     static let schemaVersion = 2
     static let recordType = "UserPreference"
     static let recordName = "terminalAccessory.v1"
@@ -665,7 +665,7 @@ extension TerminalAccessoryProfile {
     }
 }
 
-private extension TerminalAccessoryCustomAction {
+private nonisolated extension TerminalAccessoryCustomAction {
     func normalized() -> TerminalAccessoryCustomAction {
         let sanitizedTitle: String
         let sanitizedCommandContent: String
@@ -697,7 +697,7 @@ private extension TerminalAccessoryCustomAction {
     }
 }
 
-private extension TerminalSnippet {
+private nonisolated extension TerminalSnippet {
     var asCustomAction: TerminalAccessoryCustomAction {
         TerminalAccessoryCustomAction(
             id: id,

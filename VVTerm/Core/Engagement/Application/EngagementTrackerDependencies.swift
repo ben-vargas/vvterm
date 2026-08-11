@@ -32,5 +32,5 @@ struct EngagementTrackerDependencies {
     let analytics: any EngagementAnalytics
     let now: () -> Date
     let startOfDay: (Date) -> Date
-    let applicationIsActive: () -> Bool
+    let applicationIsActive: @MainActor @Sendable () -> Bool
 }

@@ -95,7 +95,7 @@ nonisolated enum ServerPendingCloudKitPayloadCodec {
     }
 }
 
-extension PendingCloudKitPayloadEnvelope {
+nonisolated extension PendingCloudKitPayloadEnvelope {
     static func serverUpsert(_ server: Server) throws -> Self {
         try ServerPendingCloudKitPayloadCodec.encode(.serverUpsert(server))
     }

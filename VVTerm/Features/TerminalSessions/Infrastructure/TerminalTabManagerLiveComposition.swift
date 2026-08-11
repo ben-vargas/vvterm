@@ -21,7 +21,7 @@ enum TerminalTabManagerLiveComposition {
         terminalSurfaceStore: any TerminalSurfaceStoring,
         deviceID: String,
         themeStyle: @escaping @MainActor () -> RemoteTmuxThemeStyle,
-        applicationIsActive: @escaping @MainActor () -> Bool
+        applicationIsActive: @escaping @MainActor @Sendable () -> Bool
     ) -> TerminalTabManager {
         let tmuxCoordinator = TerminalTmuxSessionLiveComposition.makeCoordinator(
             defaults: defaults,

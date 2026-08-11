@@ -41,7 +41,6 @@ final class TerminalInputAccessoryView: UIInputView {
     private weak var dynamicItemsStack: UIStackView?
     private var scrollLeadingToLeadingButtonsConstraint: NSLayoutConstraint?
     private var scrollLeadingToEdgeConstraint: NSLayoutConstraint?
-    private var appearanceObserver: NSObjectProtocol?
     private var keyRepeatTimer: DispatchSourceTimer?
     private var repeatingKey: TerminalKey?
 
@@ -144,10 +143,8 @@ final class TerminalInputAccessoryView: UIInputView {
         return CGSize(width: width, height: Self.preferredHeight)
     }
 
-    deinit {
-        if let observer = appearanceObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
+    isolated deinit {
+        NotificationCenter.default.removeObserver(self)
         stopKeyRepeat()
     }
 
@@ -352,13 +349,16 @@ final class TerminalInputAccessoryView: UIInputView {
     }
 
     private func observeResolvedAppearanceChanges() {
-        appearanceObserver = NotificationCenter.default.addObserver(
-            forName: Ghostty.configDidReloadNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.updateBackgroundEffect()
-        }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleResolvedAppearanceChange),
+            name: Ghostty.configDidReloadNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleResolvedAppearanceChange() {
+        updateBackgroundEffect()
     }
 
     private func rebuildAccessoryItems() {

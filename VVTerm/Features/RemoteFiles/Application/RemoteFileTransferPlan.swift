@@ -1,6 +1,6 @@
 import Foundation
 
-struct RemoteFileTransferLimits: Sendable {
+nonisolated struct RemoteFileTransferLimits: Sendable {
     let maxDepth: Int
     let maxEntries: Int
     let maxEntriesPerDirectory: Int
@@ -22,7 +22,7 @@ struct RemoteFileTransferLimits: Sendable {
     )
 }
 
-enum RemoteFileTransferError: LocalizedError, Equatable, Sendable {
+nonisolated enum RemoteFileTransferError: LocalizedError, Equatable, Sendable {
     case depthLimit(maximum: Int)
     case entryLimit(maximum: Int)
     case directoryEntryLimit(maximum: Int)
@@ -77,7 +77,7 @@ enum RemoteFileTransferError: LocalizedError, Equatable, Sendable {
     }
 }
 
-struct RemoteFileTransferPlanNode: Sendable {
+nonisolated struct RemoteFileTransferPlanNode: Sendable {
     let entry: RemoteFileEntry
     let children: [RemoteFileTransferPlanNode]
 
@@ -86,12 +86,12 @@ struct RemoteFileTransferPlanNode: Sendable {
     }
 }
 
-struct LocalFileIdentity: Hashable, Sendable {
+nonisolated struct LocalFileIdentity: Hashable, Sendable {
     let device: UInt64
     let inode: UInt64
 }
 
-struct LocalUploadPlanNode: Sendable {
+nonisolated struct LocalUploadPlanNode: Sendable {
     enum Kind: Sendable {
         case regularFile(byteCount: UInt64)
         case directory
@@ -108,7 +108,7 @@ struct LocalUploadPlanNode: Sendable {
     }
 }
 
-struct RemoteFileTraversalBudget {
+nonisolated struct RemoteFileTraversalBudget: Sendable {
     private(set) var admittedEntries = 0
     let limits: RemoteFileTransferLimits
     private let deadline: ContinuousClock.Instant
@@ -145,7 +145,7 @@ struct RemoteFileTraversalBudget {
     }
 }
 
-struct RemoteFileTransferByteBudget {
+nonisolated struct RemoteFileTransferByteBudget: Sendable {
     private(set) var consumedBytes: UInt64 = 0
     let limits: RemoteFileTransferLimits
 

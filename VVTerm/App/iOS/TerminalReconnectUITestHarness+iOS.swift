@@ -412,6 +412,7 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
         coordinator.invalidate()
     }
 
+    @MainActor
     final class Coordinator {
         private let tabManager: TerminalTabManager
         private weak var label: UILabel?
@@ -427,7 +428,9 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
         func install(_ label: UILabel) {
             self.label = label
             let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in
-                self?.refresh()
+                Task { @MainActor [weak self] in
+                    self?.refresh()
+                }
             }
             RunLoop.main.add(timer, forMode: .common)
             self.timer = timer

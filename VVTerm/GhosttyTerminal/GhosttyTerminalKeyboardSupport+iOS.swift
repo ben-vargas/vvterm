@@ -2,7 +2,7 @@
 import OSLog
 import UIKit
 
-struct IMEProxySnapshot: Equatable {
+nonisolated struct IMEProxySnapshot: Equatable, Sendable {
     var text: String
     var selectedRange: NSRange
     var markedRange: NSRange?
@@ -49,7 +49,7 @@ extension UIViewController {
     }
 }
 
-struct TerminalFindNavigatorLifecycle {
+nonisolated struct TerminalFindNavigatorLifecycle: Sendable {
     private(set) var isActive = false
     private(set) var suppressedGhosttySearchEndCount = 0
     private var restoreTerminalFocusAfterEnd = false

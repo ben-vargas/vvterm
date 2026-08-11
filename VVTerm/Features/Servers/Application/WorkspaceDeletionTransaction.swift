@@ -1,6 +1,6 @@
 import Foundation
 
-struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable {
+nonisolated struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let workspace: Workspace
     let deletedServers: [Server]
@@ -53,7 +53,7 @@ struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable {
     }
 }
 
-struct WorkspaceDeletionJournal: Codable, Equatable {
+nonisolated struct WorkspaceDeletionJournal: Codable, Equatable, Sendable {
     enum FailureStage: String, Codable, Equatable {
         case localPersistence
         case pendingSyncQueue

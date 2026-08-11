@@ -68,7 +68,7 @@ struct TerminalSSHConnectionContext {
     let workingDirectory: @MainActor @Sendable () -> String?
 }
 
-extension TerminalConnectionFailure {
+nonisolated extension TerminalConnectionFailure {
     static func transport(_ error: Error) -> Self {
         let message = error.localizedDescription
         guard let sshError = error as? SSHError else {

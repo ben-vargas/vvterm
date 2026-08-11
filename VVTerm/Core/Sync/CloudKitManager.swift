@@ -558,7 +558,7 @@ final class CloudKitManager: ObservableObject {
                 return
             }
 
-            try await database.save(subscription)
+            _ = try await database.save(subscription)
             logger.info("Subscribed to database changes")
         } catch {
             logger.error("Failed to subscribe to database changes: \(error.localizedDescription)")
@@ -922,7 +922,7 @@ enum CloudKitError: LocalizedError {
     }
 }
 
-final class CloudKitOperationContinuation<Success: Sendable>: @unchecked Sendable {
+nonisolated final class CloudKitOperationContinuation<Success: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Success, Error>?
     private var operation: Operation?
@@ -987,7 +987,7 @@ final class CloudKitOperationContinuation<Success: Sendable>: @unchecked Sendabl
     }
 }
 
-final class CloudKitTaskContinuation<Success: Sendable>: @unchecked Sendable {
+nonisolated final class CloudKitTaskContinuation<Success: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Success, Error>?
     private var result: Result<Success, Error>?

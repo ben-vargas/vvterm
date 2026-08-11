@@ -124,7 +124,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         case routeModal
     }
 
-    enum PresentationRefreshAction: Equatable {
+    nonisolated enum PresentationRefreshAction: Equatable, Sendable {
         case none
         case deferUntilVerification
         case rebuild

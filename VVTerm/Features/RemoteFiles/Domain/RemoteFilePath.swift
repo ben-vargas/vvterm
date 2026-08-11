@@ -1,6 +1,6 @@
 import Foundation
 
-struct RemoteFileBreadcrumb: Identifiable, Hashable, Sendable {
+nonisolated struct RemoteFileBreadcrumb: Identifiable, Hashable, Sendable {
     let title: String
     let path: String
 

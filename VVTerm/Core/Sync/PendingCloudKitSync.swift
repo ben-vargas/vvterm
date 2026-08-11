@@ -1,7 +1,7 @@
 import CloudKit
 import Foundation
 
-struct PendingCloudKitMutation: Codable, Equatable, Identifiable {
+nonisolated struct PendingCloudKitMutation: Codable, Equatable, Identifiable, Sendable {
     static let maximumRetryCount = 64
 
     let id: UUID
@@ -109,14 +109,14 @@ struct PendingCloudKitMutation: Codable, Equatable, Identifiable {
     }
 }
 
-enum PendingCloudKitMutationQuarantineReason: String, Codable, Equatable, Error {
+nonisolated enum PendingCloudKitMutationQuarantineReason: String, Codable, Equatable, Error, Sendable {
     case unreadableLegacyRecord
     case missingOrConflictingPayload
     case mismatchedEntityKey
     case unsupportedOperation
 }
 
-struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identifiable {
+nonisolated struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let legacyMutationID: UUID?
     let reason: PendingCloudKitMutationQuarantineReason
@@ -124,7 +124,7 @@ struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identifiable {
     let quarantinedAt: Date
 }
 
-final class PendingCloudKitSyncQueue {
+nonisolated final class PendingCloudKitSyncQueue {
     private static let quarantineStorageKeySuffix = ".quarantine.v1"
 
     private let storageKey: String
@@ -371,7 +371,7 @@ final class PendingCloudKitSyncQueue {
     }
 }
 
-enum PendingCloudKitSyncQueueError: LocalizedError {
+nonisolated enum PendingCloudKitSyncQueueError: LocalizedError, Sendable {
     case persistenceFailed
 
     var errorDescription: String? {

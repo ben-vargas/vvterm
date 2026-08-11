@@ -53,7 +53,7 @@ final class UIKitTerminalKeyboardEventSource: TerminalKeyboardEventSource {
         stop()
     }
 
-    private enum NotificationKind {
+    private nonisolated enum NotificationKind: Sendable {
         case frameChanged
         case hidden
     }
@@ -67,6 +67,8 @@ final class UIKitTerminalKeyboardEventSource: TerminalKeyboardEventSource {
             object: nil,
             queue: .main
         ) { [weak self] notification in
+            // NotificationCenter guarantees this callback runs on the main queue.
+            nonisolated(unsafe) let notification = notification
             MainActor.assumeIsolated {
                 self?.enqueue(notification, kind: kind)
             }
@@ -79,7 +81,7 @@ final class UIKitTerminalKeyboardEventSource: TerminalKeyboardEventSource {
         kind: NotificationKind
     ) {
         let event = event(from: notification, kind: kind)
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             self?.handler?(event)
         }
     }

@@ -237,7 +237,7 @@ final class ServerStatsCollector: ObservableObject {
         activeAttempt = attempt
         let attemptIdentity = attempt.attemptIdentity
 
-        let collectConnection: @MainActor () async throws -> Void = { [weak self] in
+        let collectConnection: @MainActor @Sendable () async throws -> Void = { [weak self] in
             guard self?.markCollectionConnected(
                 attemptID: attemptID,
                 attemptIdentity: attemptIdentity

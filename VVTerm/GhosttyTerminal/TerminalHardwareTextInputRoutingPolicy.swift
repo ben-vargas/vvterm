@@ -1,6 +1,6 @@
 import Foundation
 
-enum TerminalHardwareTextInputRoutingPolicy {
+nonisolated enum TerminalHardwareTextInputRoutingPolicy {
     nonisolated static func inputModeAllowsOneToOneHardwareText(
         _ primaryLanguage: String?
     ) -> Bool {
@@ -133,7 +133,7 @@ enum TerminalHardwareTextInputRoutingPolicy {
     }
 }
 
-enum TerminalHardwareKeyRepeatSource {
+nonisolated enum TerminalHardwareKeyRepeatSource: Sendable {
     case directTerminal
     case layoutResolvedText
     case systemInterpretedText
@@ -147,7 +147,7 @@ enum TerminalHardwareKeyRepeatSource {
     }
 }
 
-enum TerminalHardwareKeyRepeatPolicy {
+nonisolated enum TerminalHardwareKeyRepeatPolicy {
     static func shouldRepeat(
         source: TerminalHardwareKeyRepeatSource,
         isPrintableKey: Bool,
@@ -171,7 +171,7 @@ enum TerminalHardwareKeyRepeatPolicy {
     }
 }
 
-enum TerminalKeyInputModifierPolicy {
+nonisolated enum TerminalKeyInputModifierPolicy {
     static func consumedModifiers(for mods: Ghostty.Input.Mods) -> Ghostty.Input.Mods {
         mods.subtracting([.ctrl, .super])
     }

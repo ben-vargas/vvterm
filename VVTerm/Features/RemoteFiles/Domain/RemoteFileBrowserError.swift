@@ -1,6 +1,6 @@
 import Foundation
 
-enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
+nonisolated enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
     case permissionDenied
     case pathNotFound
     case disconnected

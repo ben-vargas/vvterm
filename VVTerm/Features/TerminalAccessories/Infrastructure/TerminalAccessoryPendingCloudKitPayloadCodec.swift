@@ -43,7 +43,7 @@ nonisolated enum TerminalAccessoryPendingCloudKitPayloadCodec {
     }
 }
 
-extension PendingCloudKitPayloadEnvelope {
+nonisolated extension PendingCloudKitPayloadEnvelope {
     static func terminalAccessoryProfileUpsert(
         _ profile: TerminalAccessoryProfile
     ) throws -> Self {

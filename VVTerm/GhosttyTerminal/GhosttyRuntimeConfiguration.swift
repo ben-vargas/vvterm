@@ -29,7 +29,7 @@ extension Ghostty {
             ) ?? .defaultValue
         }
 
-        static var defaultValue: Self {
+        @MainActor static var defaultValue: Self {
             Self(
                 fontName: TerminalDefaults.defaultFontName,
                 fontSize: TerminalDefaults.defaultFontSize,

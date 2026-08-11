@@ -3,9 +3,10 @@ import Foundation
 /// libssh2 has process-global lifecycle (`libssh2_init`/`libssh2_exit`).
 /// Initialize once and keep alive for the app lifetime to avoid tearing down
 /// the library while other SSH sessions are still active.
-enum LibSSH2Runtime {
+nonisolated enum LibSSH2Runtime {
     private static let lock = NSLock()
-    private static var initialized = false
+    /// Access is serialized by `lock`; libssh2 initialization is process-global.
+    nonisolated(unsafe) private static var initialized = false
 
     static func ensureInitialized() throws {
         lock.lock()

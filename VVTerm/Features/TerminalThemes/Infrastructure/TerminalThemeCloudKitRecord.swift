@@ -1,7 +1,7 @@
 import CloudKit
 import Foundation
 
-enum TerminalThemeCloudKitRecordCodec {
+nonisolated enum TerminalThemeCloudKitRecordCodec {
     static let recordType = "TerminalTheme"
     static let recordKeys = ["name", "content", "updatedAt", "deletedAt"]
 
@@ -38,7 +38,7 @@ enum TerminalThemeCloudKitRecordCodec {
     }
 }
 
-enum TerminalThemePreferenceCloudKitRecordCodec {
+nonisolated enum TerminalThemePreferenceCloudKitRecordCodec {
     static let recordType = "TerminalThemePreference"
     static let recordName = TerminalThemePreference.recordName
     static let recordKeys = [
@@ -90,5 +90,5 @@ enum TerminalThemePreferenceCloudKitRecordCodec {
 }
 
 extension TerminalThemePreference {
-    static let recordName = "terminal-theme-preference.v1"
+    nonisolated static let recordName = "terminal-theme-preference.v1"
 }

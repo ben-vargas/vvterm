@@ -104,12 +104,14 @@ struct ZenWindowChromeBridge: NSViewRepresentable {
                 NSWindow.didBecomeKeyNotification
             ].map { name in
                 center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    self?.triggerUpdate()
+                    Task { @MainActor [weak self] in
+                        self?.triggerUpdate()
+                    }
                 }
             }
         }
 
-        deinit {
+        isolated deinit {
             removeObservers()
         }
     }

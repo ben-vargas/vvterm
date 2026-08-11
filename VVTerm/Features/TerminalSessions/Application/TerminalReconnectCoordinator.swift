@@ -105,7 +105,7 @@ final class TerminalReconnectCoordinator: ObservableObject {
     private let preparationTimeout: Duration
     private let connectionTimeout: Duration
     private let retryDelay: Duration
-    private let applicationIsActiveQuery: @MainActor () -> Bool
+    private let applicationIsActiveQuery: @MainActor @Sendable () -> Bool
     private let now: @Sendable () -> Date
     private let sleep: Sleep
     private let onEvent: EventHandler
@@ -137,7 +137,7 @@ final class TerminalReconnectCoordinator: ObservableObject {
         access: TerminalReconnectAccess,
         initialNetworkReadiness: TerminalNetworkReadiness,
         networkUpdates: AnyPublisher<TerminalNetworkReadiness, Never>? = nil,
-        applicationIsActive: @escaping @MainActor () -> Bool,
+        applicationIsActive: @escaping @MainActor @Sendable () -> Bool,
         initialAppIsLocked: Bool,
         appLockUpdates: AnyPublisher<Bool, Never>? = nil,
         preparationTimeout: Duration = .seconds(5),

@@ -8,7 +8,7 @@ extension EngagementTrackerDependencies {
         analytics: any EngagementAnalytics,
         now: @escaping () -> Date,
         calendar: Calendar,
-        applicationIsActive: @escaping () -> Bool
+        applicationIsActive: @escaping @MainActor @Sendable () -> Bool
     ) -> Self {
         EngagementTrackerDependencies(
             persistence: UserDefaultsEngagementPersistence(defaults: defaults),

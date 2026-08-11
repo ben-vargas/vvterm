@@ -13,7 +13,7 @@ nonisolated struct StoreEntitlementResult: Equatable, Sendable {
 }
 
 @MainActor
-protocol StoreClient: AnyObject {
+protocol StoreClient: AnyObject, Sendable {
     func products(for identifiers: [String]) async throws -> [StoreProduct]
     func purchase(productId: String) async throws -> StorePurchaseResult
     func sync() async throws

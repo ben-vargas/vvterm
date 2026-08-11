@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-enum RemoteTerminalTypeResolver {
+nonisolated enum RemoteTerminalTypeResolver {
     typealias CommandExecutor = @Sendable (_ command: String, _ timeout: Duration?) async throws -> String
 
     private static let logger = Logger(

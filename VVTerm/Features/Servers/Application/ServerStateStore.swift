@@ -81,7 +81,7 @@ final class ServerStateStore: ObservableObject {
 
     func startLoading(operationID: UUID) -> UUID {
         updateSnapshot { snapshot in
-            snapshot.loadState.start(operationID: operationID)
+            _ = snapshot.loadState.start(operationID: operationID)
         }
         return operationID
     }

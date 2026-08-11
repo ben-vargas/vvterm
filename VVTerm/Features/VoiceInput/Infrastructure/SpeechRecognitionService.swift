@@ -3,7 +3,7 @@ import Combine
 import Speech
 import AVFoundation
 
-enum SpeechRecognitionOperationState: Equatable {
+nonisolated enum SpeechRecognitionOperationState: Equatable, Sendable {
     case idle
     case running(UUID)
     case finishing(UUID)

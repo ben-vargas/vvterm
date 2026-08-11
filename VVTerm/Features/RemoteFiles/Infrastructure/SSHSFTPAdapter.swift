@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 final class SSHSFTPAdapter {
-    typealias BorrowedClientProvider = @MainActor (UUID) -> SSHClient?
+    typealias BorrowedClientProvider = @MainActor @Sendable (UUID) -> SSHClient?
 
     private enum ClientOwnership {
         case borrowed
@@ -25,9 +25,9 @@ final class SSHSFTPAdapter {
         self.borrowedClientProvider = borrowedClientProvider
     }
 
-    func withService<T>(
+    func withService<T: Sendable>(
         for server: Server,
-        operation: @escaping (any RemoteFileService) async throws -> T
+        operation: @MainActor @escaping @Sendable (any RemoteFileService) async throws -> T
     ) async throws -> T {
         let registration = clientRegistration(for: server)
         let credentials = try KeychainManager.shared.getCredentials(for: server)

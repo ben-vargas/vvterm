@@ -8,7 +8,7 @@ import UIKit
 
 extension Ghostty.Input {
     /// `ghostty_input_mods_e`
-    struct Mods: OptionSet {
+    nonisolated struct Mods: OptionSet, Sendable {
         let rawValue: UInt32
 
         static let none = Mods(rawValue: GHOSTTY_MODS_NONE.rawValue)
@@ -63,7 +63,7 @@ extension Ghostty.Input {
     ///
     /// This is a packed bitmask that contains precision and momentum information
     /// for scroll events, matching the Zig `ScrollMods` packed struct.
-    struct ScrollMods {
+    nonisolated struct ScrollMods: Sendable {
         let rawValue: Int32
 
         /// True if this is a high-precision scroll event (e.g., trackpad, Magic Mouse)

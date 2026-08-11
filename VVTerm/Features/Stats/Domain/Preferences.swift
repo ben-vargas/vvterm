@@ -50,7 +50,7 @@ nonisolated struct StatsPreferences: Codable, Equatable, Sendable {
     }
 }
 
-extension StatsPreferences {
+nonisolated extension StatsPreferences {
     nonisolated static let schemaVersion = 1
     static let recordName = "statsPreferences.v1"
 

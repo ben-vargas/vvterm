@@ -5,7 +5,7 @@ nonisolated enum StatsPreferencesCloudKitRecordCodecError: Error, Equatable, Sen
     case encodingFailed
 }
 
-enum StatsPreferencesCloudKitRecordCodec {
+nonisolated enum StatsPreferencesCloudKitRecordCodec {
     static let recordType = "UserPreference"
     static let recordName = StatsPreferences.recordName
 

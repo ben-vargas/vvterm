@@ -1,6 +1,6 @@
 import Foundation
 
-enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identifiable, Sendable {
     case deny
     case ask
     case allow
@@ -49,7 +49,7 @@ nonisolated enum TerminalClipboardWritePolicy {
     }
 }
 
-enum TerminalClipboardConfirmationKind: Equatable, Sendable {
+nonisolated enum TerminalClipboardConfirmationKind: Equatable, Sendable {
     case remoteRead
     case remoteWrite
     case unsafePaste
@@ -74,17 +74,17 @@ enum TerminalClipboardConfirmationKind: Equatable, Sendable {
     }
 }
 
-enum TerminalClipboardConfirmationDecision: Equatable, Sendable {
+nonisolated enum TerminalClipboardConfirmationDecision: Equatable, Sendable {
     case cancel
     case allow
 }
 
-enum TerminalClipboardPresentationRetryAction: Equatable, Sendable {
+nonisolated enum TerminalClipboardPresentationRetryAction: Equatable, Sendable {
     case retry(nextAttempt: Int)
     case cancel
 }
 
-enum TerminalClipboardPresentationRetryPolicy {
+nonisolated enum TerminalClipboardPresentationRetryPolicy {
     static let maximumAttempts = 480
 
     static func action(after attemptCount: Int) -> TerminalClipboardPresentationRetryAction {

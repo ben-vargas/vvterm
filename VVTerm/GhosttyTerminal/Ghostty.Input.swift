@@ -63,7 +63,7 @@ extension Ghostty {
     // MARK: Mods
 
     /// Returns the event modifier flags set for the Ghostty mods enum.
-    static func eventModifierFlags(mods: ghostty_input_mods_e) -> NSEvent.ModifierFlags {
+    nonisolated static func eventModifierFlags(mods: ghostty_input_mods_e) -> NSEvent.ModifierFlags {
         var flags = NSEvent.ModifierFlags(rawValue: 0);
         if (mods.rawValue & GHOSTTY_MODS_SHIFT.rawValue != 0) { flags.insert(.shift) }
         if (mods.rawValue & GHOSTTY_MODS_CTRL.rawValue != 0) { flags.insert(.control) }
@@ -73,7 +73,7 @@ extension Ghostty {
     }
 
     /// Translate event modifier flags to a ghostty mods enum.
-    static func ghosttyMods(_ flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
+    nonisolated static func ghosttyMods(_ flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
         var mods: UInt32 = GHOSTTY_MODS_NONE.rawValue
 
         if (flags.contains(.shift)) { mods |= GHOSTTY_MODS_SHIFT.rawValue }
@@ -117,7 +117,7 @@ extension Ghostty {
     // MARK: iOS Modifier Conversion
 
     /// Translate UIKeyModifierFlags to a ghostty mods enum.
-    static func ghosttyMods(_ flags: UIKeyModifierFlags) -> ghostty_input_mods_e {
+    nonisolated static func ghosttyMods(_ flags: UIKeyModifierFlags) -> ghostty_input_mods_e {
         var mods: UInt32 = GHOSTTY_MODS_NONE.rawValue
 
         if flags.contains(.shift) { mods |= GHOSTTY_MODS_SHIFT.rawValue }

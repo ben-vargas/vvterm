@@ -1,7 +1,7 @@
 #if os(iOS)
 import UIKit
 
-enum AppSceneLifecyclePolicy {
+nonisolated enum AppSceneLifecyclePolicy {
     static func shouldHandleBackgroundTransition(
         connectedSceneStates: [UIScene.ActivationState]
     ) -> Bool {

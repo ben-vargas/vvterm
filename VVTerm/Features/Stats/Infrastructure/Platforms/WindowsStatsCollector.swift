@@ -4,7 +4,7 @@ import Foundation
 
 /// Stats collector for Windows systems via OpenSSH.
 /// Prefers cmd.exe-friendly probes on cmd-hosted sessions and PowerShell on PowerShell-hosted sessions.
-struct WindowsStatsCollector: PlatformStatsCollector {
+nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
     private let shellInfoTimeout: Duration = .seconds(5)
     private let cpuTimeout: Duration = .seconds(8)
     private let memoryTimeout: Duration = .seconds(8)
@@ -1190,7 +1190,7 @@ struct WindowsStatsCollector: PlatformStatsCollector {
     }
 }
 
-struct WindowsCPUUsage {
+nonisolated struct WindowsCPUUsage: Sendable {
     let usagePercent: Double
     let userPercent: Double
     let systemPercent: Double

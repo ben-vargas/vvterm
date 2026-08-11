@@ -10,12 +10,12 @@ actor SSHConnectionOperationService {
         self.clientFactory = clientFactory
     }
 
-    func runWithConnection<T>(
+    func runWithConnection<T: Sendable>(
         using client: SSHClient,
         server: Server,
         credentials: ServerCredentials,
         disconnectWhenDone: Bool = false,
-        operation: @escaping (SSHClient) async throws -> T
+        operation: @escaping @Sendable (SSHClient) async throws -> T
     ) async throws -> T {
         do {
             _ = try await client.connect(to: server, credentials: credentials)
@@ -32,10 +32,10 @@ actor SSHConnectionOperationService {
         }
     }
 
-    func withTemporaryConnection<T>(
+    func withTemporaryConnection<T: Sendable>(
         server: Server,
         credentials: ServerCredentials,
-        operation: @escaping (SSHClient) async throws -> T
+        operation: @escaping @Sendable (SSHClient) async throws -> T
     ) async throws -> T {
         let client = clientFactory.makeClient()
         return try await runWithConnection(

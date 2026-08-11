@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-protocol TerminalMoshRecoveryServicing {
+protocol TerminalMoshRecoveryServicing: Sendable {
     func hasCheckpoint(for paneId: UUID) -> Bool
     func restoreShell(
         for paneId: UUID,

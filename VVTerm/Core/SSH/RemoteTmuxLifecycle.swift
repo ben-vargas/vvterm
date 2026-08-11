@@ -1,12 +1,12 @@
 import Foundation
 
-enum TmuxLifecycleEvent: String, Hashable, Sendable {
+nonisolated enum TmuxLifecycleEvent: String, Hashable, Sendable {
     case detached
     case ended
     case creationFailed
 }
 
-enum TmuxLifecycleMarker {
+nonisolated enum TmuxLifecycleMarker {
     nonisolated private static let prefix = "\u{001B}]777;vvterm-tmux;"
     nonisolated private static let terminator = "\u{0007}"
 
@@ -15,8 +15,8 @@ enum TmuxLifecycleMarker {
     }
 }
 
-struct TmuxLifecycleStreamParser: Sendable {
-    struct Result: Equatable, Sendable {
+nonisolated struct TmuxLifecycleStreamParser: Sendable {
+    nonisolated struct Result: Equatable, Sendable {
         let output: Data
         let events: [TmuxLifecycleEvent]
     }

@@ -16,7 +16,7 @@ extension ServerEnvironment {
         Color.fromHex(colorHex)
     }
 
-    var displayName: String {
+    nonisolated var displayName: String {
         guard isBuiltIn else { return name }
         switch id {
         case ServerEnvironment.production.id: return String(localized: "Production")
@@ -26,7 +26,7 @@ extension ServerEnvironment {
         }
     }
 
-    var displayShortName: String {
+    nonisolated var displayShortName: String {
         guard isBuiltIn else { return shortName }
         switch id {
         case ServerEnvironment.production.id: return String(localized: "Prod")

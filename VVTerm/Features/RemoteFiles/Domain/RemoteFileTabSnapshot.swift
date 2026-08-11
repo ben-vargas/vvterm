@@ -1,6 +1,6 @@
 import Foundation
 
-struct RemoteFileTabSnapshot: Codable, Equatable, Sendable {
+nonisolated struct RemoteFileTabSnapshot: Codable, Equatable, Sendable {
     var tabsByServer: [String: [RemoteFileTab]]
     var selectedTabByServer: [String: UUID]
     var schemaVersion: Int

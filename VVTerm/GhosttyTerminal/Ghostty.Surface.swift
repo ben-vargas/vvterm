@@ -4,7 +4,7 @@ extension Ghostty {
     /// Represents a single surface within Ghostty.
     ///
     /// Wraps a `ghostty_surface_t`
-    final class Surface: @unchecked Sendable {
+    nonisolated final class Surface: @unchecked Sendable {
         private var surface: ghostty_surface_t?
         private let lock = NSLock()
 

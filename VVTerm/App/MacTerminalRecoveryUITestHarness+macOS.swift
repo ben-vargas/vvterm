@@ -20,11 +20,26 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
     private(set) var lastAttemptStartedAt: Date?
 
     nonisolated private static let simulatedSleepInterval: TimeInterval = 8 * 60 * 60
+    nonisolated private static func sleep(for duration: Duration) async throws {
+        try await Task.sleep(for: duration)
+    }
     private let paneId = UUID()
     private let simulatesSuccess: Bool
     private let cleanupBlocker = MacTerminalRecoveryHarnessBlocker()
-    private lazy var coordinator = TerminalReconnectCoordinator(
-        access: TerminalReconnectAccess(
+    private var coordinatorStorage: TerminalReconnectCoordinator?
+
+    private var coordinator: TerminalReconnectCoordinator {
+        if let coordinatorStorage {
+            return coordinatorStorage
+        }
+        let coordinator = makeCoordinator()
+        coordinatorStorage = coordinator
+        return coordinator
+    }
+
+    private func makeCoordinator() -> TerminalReconnectCoordinator {
+        TerminalReconnectCoordinator(
+            access: TerminalReconnectAccess(
             paneFacts: { [weak self] paneId in
                 guard let self, paneId == self.paneId else { return nil }
                 return TerminalReconnectPaneFacts(
@@ -63,15 +78,21 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
             beginEternalTerminalProbe: { _ in nil },
             hasVerifiedLiveTransport: { _, _ in false },
             markMoshConnected: { _ in }
-        ),
-        initialNetworkReadiness: .unavailable,
-        applicationIsActive: { true },
-        initialAppIsLocked: false,
-        preparationTimeout: .milliseconds(20),
-        connectionTimeout: .milliseconds(30),
-        now: { Date(timeIntervalSince1970: Self.simulatedSleepInterval) },
-        onChange: {}
-    )
+            ),
+            initialNetworkReadiness: .unavailable,
+            networkUpdates: nil,
+            applicationIsActive: { true },
+            initialAppIsLocked: false,
+            appLockUpdates: nil,
+            preparationTimeout: .milliseconds(20),
+            connectionTimeout: .milliseconds(30),
+            retryDelay: .seconds(5),
+            now: { Date(timeIntervalSince1970: Self.simulatedSleepInterval) },
+            sleep: Self.sleep,
+            onEvent: { _ in },
+            onChange: {}
+        )
+    }
 
     init(simulatesSuccess: Bool) {
         self.simulatesSuccess = simulatesSuccess

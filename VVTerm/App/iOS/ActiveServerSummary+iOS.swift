@@ -6,7 +6,7 @@
 import Foundation
 
 #if os(iOS)
-enum ActiveConnectionPresentationStatus: Equatable {
+nonisolated enum ActiveConnectionPresentationStatus: Equatable, Sendable {
     case disconnected
     case connecting
     case connected

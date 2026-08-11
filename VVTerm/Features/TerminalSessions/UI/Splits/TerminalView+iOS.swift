@@ -4,13 +4,13 @@ import Foundation
 import SwiftUI
 import UIKit
 
-enum TerminalRenderingTransition: Equatable {
+nonisolated enum TerminalRenderingTransition: Equatable, Sendable {
     case none
     case pause
     case resume
 }
 
-enum TerminalRenderingPolicy {
+nonisolated enum TerminalRenderingPolicy {
     static func transition(
         terminalIsActive: Bool,
         sceneIsActive: Bool,
@@ -385,26 +385,17 @@ private struct TerminalSceneActivationObserver: UIViewRepresentable {
 
 private final class TerminalSceneActivationView: UIView {
     var onSceneActivation: (UIScene) -> Void
-    private var observer: NSObjectProtocol?
 
     init(onSceneActivation: @escaping (UIScene) -> Void) {
         self.onSceneActivation = onSceneActivation
         super.init(frame: .zero)
         isUserInteractionEnabled = false
-        observer = NotificationCenter.default.addObserver(
-            forName: UIScene.didActivateNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  let activatedScene = notification.object as? UIScene,
-                  activatedScene === self.window?.windowScene else { return }
-            DispatchQueue.main.async { [weak self] in
-                guard let self,
-                      activatedScene === self.window?.windowScene else { return }
-                self.onSceneActivation(activatedScene)
-            }
-        }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(sceneDidActivate(_:)),
+            name: UIScene.didActivateNotification,
+            object: nil
+        )
     }
 
     @available(*, unavailable)
@@ -412,10 +403,18 @@ private final class TerminalSceneActivationView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        if let observer {
-            NotificationCenter.default.removeObserver(observer)
+    @objc private func sceneDidActivate(_ notification: Notification) {
+        guard let activatedScene = notification.object as? UIScene,
+              activatedScene === window?.windowScene else { return }
+        Task { @MainActor [weak self, weak activatedScene] in
+            guard let self, let activatedScene,
+                  activatedScene === self.window?.windowScene else { return }
+            self.onSceneActivation(activatedScene)
         }
+    }
+
+    isolated deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 }
 

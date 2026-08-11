@@ -1,17 +1,17 @@
 import Foundation
 
-enum TerminalAccessoryResolvedItem: Equatable {
+nonisolated enum TerminalAccessoryResolvedItem: Equatable, Sendable {
     case system(TerminalAccessorySystemActionID)
     case custom(TerminalAccessoryCustomAction)
 }
 
-enum TerminalAccessoryInputSnapshotChange: Equatable {
+nonisolated enum TerminalAccessoryInputSnapshotChange: Equatable, Sendable {
     case none
     case leadingButtons
     case itemsAndLeadingButtons
 }
 
-struct TerminalAccessoryInputSnapshot: Equatable {
+nonisolated struct TerminalAccessoryInputSnapshot: Equatable, Sendable {
     let resolvedItems: [TerminalAccessoryResolvedItem]
     let showsDismissKeyboardButton: Bool
 

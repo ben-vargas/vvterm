@@ -1,4 +1,4 @@
-extension ConnectionViewTabID {
+nonisolated extension ConnectionViewTabID {
     var localizedKey: String {
         switch self {
         case .stats: "Stats"

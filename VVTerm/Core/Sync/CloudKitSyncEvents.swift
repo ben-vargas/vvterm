@@ -59,7 +59,7 @@ final class CloudKitSyncLifecycleDriver {
         }
     }
 
-    deinit {
+    isolated deinit {
         if let foregroundObserver {
             notificationCenter.removeObserver(foregroundObserver)
         }

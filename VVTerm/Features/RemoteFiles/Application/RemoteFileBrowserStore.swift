@@ -473,9 +473,9 @@ final class RemoteFileBrowserStore: ObservableObject {
         focus(entry, in: tab)
     }
 
-    func withRemoteFileService<T>(
+    func withRemoteFileService<T: Sendable>(
         for server: Server,
-        operation: @escaping (any RemoteFileService) async throws -> T
+        operation: @MainActor @escaping @Sendable (any RemoteFileService) async throws -> T
     ) async throws -> T {
         try await remoteFileServiceAdapter.withService(for: server, operation: operation)
     }

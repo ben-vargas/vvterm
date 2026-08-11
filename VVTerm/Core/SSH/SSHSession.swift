@@ -25,7 +25,7 @@ private final class KeyboardInteractiveContext: @unchecked Sendable {
     }
 }
 
-private func keyboardInteractivePassword(
+nonisolated private func keyboardInteractivePassword(
     from abstract: UnsafeMutablePointer<UnsafeMutableRawPointer?>?
 ) -> String? {
     guard let abstract, let contextPointer = abstract.pointee else { return nil }
@@ -34,16 +34,16 @@ private func keyboardInteractivePassword(
 }
 
 // C callback for keyboard-interactive authentication
-nonisolated(unsafe) private let kbdintCallback: @convention(c) (
-    UnsafePointer<CChar>?,  // name
-    Int32,                   // name_len
-    UnsafePointer<CChar>?,  // instruction
-    Int32,                   // instruction_len
-    Int32,                   // num_prompts
-    UnsafePointer<LIBSSH2_USERAUTH_KBDINT_PROMPT>?,  // prompts
-    UnsafeMutablePointer<LIBSSH2_USERAUTH_KBDINT_RESPONSE>?,  // responses
-    UnsafeMutablePointer<UnsafeMutableRawPointer?>?  // abstract
-) -> Void = { name, nameLen, instruction, instructionLen, numPrompts, prompts, responses, abstract in
+nonisolated private func kbdintCallback(
+    _ name: UnsafePointer<CChar>?,
+    _ nameLen: Int32,
+    _ instruction: UnsafePointer<CChar>?,
+    _ instructionLen: Int32,
+    _ numPrompts: Int32,
+    _ prompts: UnsafePointer<LIBSSH2_USERAUTH_KBDINT_PROMPT>?,
+    _ responses: UnsafeMutablePointer<LIBSSH2_USERAUTH_KBDINT_RESPONSE>?,
+    _ abstract: UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) {
     guard numPrompts > 0, let responses = responses, let password = keyboardInteractivePassword(from: abstract) else {
         return
     }
@@ -1599,8 +1599,9 @@ actor SSHSession {
         let states = shellChannels
         shellChannels.removeAll()
         for state in states.values {
+            let output = state.output
             Task {
-                await state.output.cancel()
+                await output.cancel()
             }
         }
     }

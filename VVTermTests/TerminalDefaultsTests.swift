@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import VVTerm
 
+@MainActor
 struct TerminalDefaultsTests {
     private func makeDefaults(testName: String = #function) -> UserDefaults {
         let suiteName = "TerminalDefaultsTests.\(testName)"

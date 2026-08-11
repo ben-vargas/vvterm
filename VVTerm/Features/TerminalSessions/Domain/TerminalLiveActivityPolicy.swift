@@ -9,7 +9,7 @@ nonisolated struct TerminalLiveActivitySnapshot: Equatable, Sendable {
     let activeCount: Int
 }
 
-enum TerminalLiveActivityPolicy {
+nonisolated enum TerminalLiveActivityPolicy {
     static func snapshot(for connectionStates: [ConnectionState]) -> TerminalLiveActivitySnapshot? {
         let activeStates = connectionStates.filter { $0.isConnected || $0.isConnecting }
         guard !activeStates.isEmpty else { return nil }

@@ -25,7 +25,7 @@ struct TerminalSurfaceLifecycleCallbacks {
 #endif
 
 @MainActor
-protocol TerminalSurface: AnyObject, TerminalOutputSink {
+protocol TerminalSurface: AnyObject, TerminalOutputSink, Sendable {
     var terminalGeometry: TerminalSurfaceGeometry? { get }
     var isHostingSceneActive: Bool? { get }
 

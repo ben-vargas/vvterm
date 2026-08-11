@@ -1,7 +1,7 @@
 import Foundation
 import UniformTypeIdentifiers
 
-struct RemoteFileViewerPayload: Identifiable, Hashable, Sendable {
+nonisolated struct RemoteFileViewerPayload: Identifiable, Hashable, Sendable {
     let previewKind: RemoteFilePreviewKind
     let entry: RemoteFileEntry
     let textPreview: String?
@@ -22,14 +22,14 @@ struct RemoteFileViewerPayload: Identifiable, Hashable, Sendable {
     }
 }
 
-enum RemoteFilePreviewKind: Hashable, Sendable {
+nonisolated enum RemoteFilePreviewKind: Hashable, Sendable {
     case text
     case image
     case video
     case unavailable
 }
 
-enum RemoteFilePreviewDetector {
+nonisolated enum RemoteFilePreviewDetector {
     private static let nullByte = UInt8(ascii: "\0")
 
     static func previewKind(for entry: RemoteFileEntry, data: Data) -> RemoteFilePreviewKind {

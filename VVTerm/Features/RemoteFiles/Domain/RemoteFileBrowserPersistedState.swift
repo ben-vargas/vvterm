@@ -1,6 +1,6 @@
 import Foundation
 
-struct RemoteFileBrowserPersistedState: Codable, Hashable, Sendable {
+nonisolated struct RemoteFileBrowserPersistedState: Codable, Hashable, Sendable {
     var lastVisitedPath: String?
     var sort: RemoteFileSort
     var sortDirection: RemoteFileSortDirection

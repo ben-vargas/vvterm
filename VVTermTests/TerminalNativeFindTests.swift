@@ -3,6 +3,7 @@ import Testing
 import UIKit
 @testable import VVTerm
 
+@MainActor
 struct TerminalNativeFindTests {
     @Test
     func findsRepeatedVisibleMatchesAcrossLines() {

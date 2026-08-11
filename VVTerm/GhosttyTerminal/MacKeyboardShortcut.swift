@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 
-struct MacKeyboardShortcut {
+nonisolated struct MacKeyboardShortcut: Sendable {
     let keyCode: UInt16
     let modifiers: NSEvent.ModifierFlags
 
@@ -26,14 +26,14 @@ struct MacKeyboardShortcut {
     }
 }
 
-enum MacTerminalShortcut {
+nonisolated enum MacTerminalShortcut {
     static let copy = MacKeyboardShortcut(key: .c, modifiers: .command)!
     static let paste = MacKeyboardShortcut(key: .v, modifiers: .command)!
     static let richPaste = MacKeyboardShortcut(key: .v, modifiers: .control)!
     static let toggleVoiceRecording = MacKeyboardShortcut(key: .m, modifiers: [.command, .shift])!
 }
 
-enum MacTerminalShortcutRouting {
+nonisolated enum MacTerminalShortcutRouting {
     static func shouldHandle(
         _ shortcut: MacKeyboardShortcut,
         keyCode: UInt16,

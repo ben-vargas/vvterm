@@ -1,6 +1,6 @@
 import Foundation
 
-enum ConnectionViewTabID: String, CaseIterable, Codable, Identifiable {
+nonisolated enum ConnectionViewTabID: String, CaseIterable, Codable, Identifiable, Sendable {
     case stats
     case terminal
     case files
@@ -8,7 +8,7 @@ enum ConnectionViewTabID: String, CaseIterable, Codable, Identifiable {
     var id: Self { self }
 }
 
-struct ConnectionViewTabConfiguration: Codable, Equatable {
+nonisolated struct ConnectionViewTabConfiguration: Codable, Equatable, Sendable {
     var order: [ConnectionViewTabID]
     var visibleTabs: Set<ConnectionViewTabID>
     var defaultTab: ConnectionViewTabID

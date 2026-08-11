@@ -1,6 +1,6 @@
 import Foundation
 
-extension TerminalSnippetSendMode {
+nonisolated extension TerminalSnippetSendMode {
     var title: String {
         switch self {
         case .insert:
@@ -11,7 +11,7 @@ extension TerminalSnippetSendMode {
     }
 }
 
-extension TerminalAccessoryCustomActionKind {
+nonisolated extension TerminalAccessoryCustomActionKind {
     var title: String {
         switch self {
         case .command:
@@ -22,7 +22,7 @@ extension TerminalAccessoryCustomActionKind {
     }
 }
 
-extension TerminalAccessoryShortcutModifiers {
+nonisolated extension TerminalAccessoryShortcutModifiers {
     var displayParts: [String] {
         var parts: [String] = []
         if control {
@@ -45,7 +45,7 @@ extension TerminalAccessoryShortcutModifiers {
     }
 }
 
-extension TerminalAccessoryShortcutKey {
+nonisolated extension TerminalAccessoryShortcutKey {
     var title: String {
         switch self {
         case .a: return "A"
@@ -126,7 +126,7 @@ extension TerminalAccessoryShortcutKey {
     }
 }
 
-extension TerminalAccessorySystemActionID {
+nonisolated extension TerminalAccessorySystemActionID {
     var listTitle: String {
         switch self {
         case .commandModifier: return String(localized: "Cmd")
@@ -219,7 +219,7 @@ extension TerminalAccessorySystemActionID {
     }
 }
 
-extension TerminalAccessoryCustomAction {
+nonisolated extension TerminalAccessoryCustomAction {
     var detailText: String {
         switch kind {
         case .command:

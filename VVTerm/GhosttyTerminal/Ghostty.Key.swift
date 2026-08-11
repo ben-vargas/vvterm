@@ -6,7 +6,7 @@ import UIKit
 
 extension Ghostty.Input {
     /// `ghostty_input_key_e`
-    enum Key: String, CaseIterable {
+    nonisolated enum Key: String, CaseIterable, Sendable {
         // Writing System Keys
         case backquote
         case backslash

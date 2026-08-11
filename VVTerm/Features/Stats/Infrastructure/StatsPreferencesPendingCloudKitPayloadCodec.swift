@@ -34,7 +34,7 @@ nonisolated enum StatsPreferencesPendingCloudKitPayloadCodec {
     }
 }
 
-extension PendingCloudKitPayloadEnvelope {
+nonisolated extension PendingCloudKitPayloadEnvelope {
     static func statsPreferencesUpsert(_ preferences: StatsPreferences) throws -> Self {
         try StatsPreferencesPendingCloudKitPayloadCodec.encode(preferences)
     }

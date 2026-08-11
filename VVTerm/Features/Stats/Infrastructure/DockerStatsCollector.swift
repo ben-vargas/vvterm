@@ -1,6 +1,6 @@
 import Foundation
 
-struct DockerStatsCollector: Sendable {
+nonisolated struct DockerStatsCollector: Sendable {
     nonisolated static let periodicContainerLimit = 24
 
     private let collectionTimeout: Duration = .seconds(8)
@@ -504,13 +504,13 @@ struct DockerStatsCollector: Sendable {
     }
 }
 
-private enum DockerShell {
+nonisolated private enum DockerShell {
     case posix
     case powershell
     case cmd
 }
 
-private enum DockerControlError: LocalizedError {
+nonisolated private enum DockerControlError: LocalizedError, Sendable {
     case missingContainerID
     case commandFailed(String)
 
@@ -524,7 +524,7 @@ private enum DockerControlError: LocalizedError {
     }
 }
 
-private extension DockerAvailability {
+nonisolated private extension DockerAvailability {
     var controlFailureMessage: String {
         switch self {
         case .unknown:
@@ -541,7 +541,7 @@ private extension DockerAvailability {
     }
 }
 
-private struct DockerPSRow: Decodable {
+nonisolated private struct DockerPSRow: Decodable, Sendable {
     let id: String?
     let names: String?
     let image: String?
@@ -565,7 +565,7 @@ private struct DockerPSRow: Decodable {
     }
 }
 
-private struct DockerStatsRow: Decodable {
+nonisolated private struct DockerStatsRow: Decodable, Sendable {
     let blockIO: String?
     let container: String?
     let cpuPercent: String?
@@ -589,7 +589,7 @@ private struct DockerStatsRow: Decodable {
     }
 }
 
-private extension String {
+nonisolated private extension String {
     var trimmedNonEmpty: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed

@@ -43,8 +43,8 @@ struct RemoteFileSharePicker: NSViewRepresentable {
             picker.delegate = self
             activePicker = picker
 
-            DispatchQueue.main.async { [weak self, weak view] in
-                guard let self, let view else { return }
+            DispatchQueue.main.async { [weak view] in
+                guard let view else { return }
                 picker.show(relativeTo: view.bounds, of: view, preferredEdge: .maxY)
             }
         }
@@ -169,12 +169,14 @@ struct MacOSWindowTopInsetBridge: NSViewRepresentable {
                 NSWindow.didBecomeKeyNotification
             ].map { name in
                 center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    self?.triggerUpdate()
+                    Task { @MainActor [weak self] in
+                        self?.triggerUpdate()
+                    }
                 }
             }
         }
 
-        deinit {
+        isolated deinit {
             removeObservers()
         }
     }
