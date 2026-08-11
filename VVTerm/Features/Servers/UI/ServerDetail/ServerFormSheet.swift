@@ -251,13 +251,9 @@ struct ServerFormSheet: View {
             detailFormSections
         }
         .formStyle(.grouped)
-        #if os(iOS)
-        .environment(\.defaultMinListRowHeight, 34)
-        .modifier(CompactListSectionSpacingModifier())
-        .modifier(TransparentNavigationBarModifier())
-            .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle(isEditing ? String(localized: "Edit Server") : String(localized: "Add Server"))
-        #endif
+        .serverFormPlatformStyle(
+            title: isEditing ? String(localized: "Edit Server") : String(localized: "Add Server")
+        )
     }
 
     private var presentedFormContent: some View {
@@ -280,28 +276,13 @@ struct ServerFormSheet: View {
                 form.apply(credentials, for: server)
             }
         }
-        #if os(iOS)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
-                        .tint(.secondary)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        saveServer()
-                    } label: {
-                        if isSaving {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Text(isEditing ? String(localized: "Save") : String(localized: "Add"))
-                        }
-                    }
-                    .disabled(saveButtonDisabled)
-                }
-            }
-        #endif
+            .serverFormPlatformActions(
+                isEditing: isEditing,
+                isSaving: isSaving,
+                saveButtonDisabled: saveButtonDisabled,
+                onCancel: { dismiss() },
+                onSave: saveServer
+            )
             .adaptiveSoftScrollEdges()
             .sheet(isPresented: $showingAddKeySheet) {
                 AddSSHKeySheet(onSave: { entry in
@@ -718,28 +699,6 @@ struct ServerFormSheet: View {
         }
     }
 
-    #if os(iOS)
-    private struct CompactListSectionSpacingModifier: ViewModifier {
-        func body(content: Content) -> some View {
-            if #available(iOS 17.0, *) {
-                content.listSectionSpacing(.compact)
-            } else {
-                content
-            }
-        }
-    }
-
-    private struct TransparentNavigationBarModifier: ViewModifier {
-        func body(content: Content) -> some View {
-            if #available(iOS 16.0, *) {
-                content.toolbarBackground(.hidden, for: .navigationBar)
-            } else {
-                content
-            }
-        }
-    }
-    #endif
-
     // MARK: - Key Input View
 
     @ViewBuilder
@@ -1119,30 +1078,12 @@ struct MoveServerSheet: View {
             .adaptiveSoftScrollEdges()
         }
         .proUpgradePresentation(isPresented: $showingUpgrade, source: .workspaceLimit)
-        #if os(iOS)
-        .navigationTitle("Move Server")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
-                    .disabled(isMoving)
-                    .tint(.secondary)
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button {
-                    moveServer()
-                } label: {
-                    if isMoving {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Text("Move")
-                    }
-                }
-                .disabled(moveButtonDisabled)
-            }
-        }
-        #endif
+        .moveServerPlatformActions(
+            isMoving: isMoving,
+            moveButtonDisabled: moveButtonDisabled,
+            onCancel: { dismiss() },
+            onMove: moveServer
+        )
         .adaptiveSoftScrollEdges()
     }
 
