@@ -1373,12 +1373,23 @@ actor SSHSession {
         session: OpaquePointer,
         operation: () -> Int32
     ) async -> Int32 {
+        await completeChannelCleanupCall(
+            canContinue: {
+                isActive
+                    && libssh2Session == session
+                    && socket >= 0
+                    && atomicSocket.isUsable
+            },
+            operation: operation
+        )
+    }
+
+    private func completeChannelCleanupCall(
+        canContinue: () -> Bool,
+        operation: () -> Int32
+    ) async -> Int32 {
         for _ in 0..<1_024 {
-            guard isActive,
-                  let currentSession = libssh2Session,
-                  currentSession == session,
-                  socket >= 0,
-                  atomicSocket.isUsable else {
+            guard canContinue() else {
                 return -1
             }
 
@@ -1391,6 +1402,24 @@ actor SSHSession {
         }
         return LIBSSH2_ERROR_EAGAIN
     }
+
+    #if DEBUG
+    func completeChannelCleanupCallForTesting(
+        results: [Int32]
+    ) async -> (result: Int32, callCount: Int) {
+        var pendingResults = results
+        var callCount = 0
+        let result = await completeChannelCleanupCall(
+            canContinue: { true },
+            operation: {
+                callCount += 1
+                guard !pendingResults.isEmpty else { return 0 }
+                return pendingResults.removeFirst()
+            }
+        )
+        return (result, callCount)
+    }
+    #endif
 
     private func startIOLoop() {
         guard ioTask == nil else { return }
@@ -1500,7 +1529,7 @@ actor SSHSession {
                 let requestIds = Array(execRequests.keys)
                 for requestId in requestIds {
                     guard let request = execRequests[requestId] else { continue }
-                    guard ensureExecChannelReady(request) else { continue }
+                    guard await ensureExecChannelReady(request) else { continue }
 
                     guard let execChannel = request.channel else { continue }
 
@@ -1508,7 +1537,7 @@ actor SSHSession {
                     if bytesRead > 0 {
                         let readCount = Int(bytesRead)
                         guard request.outputBudget.reserve(readCount) else {
-                            finishExecRequest(requestId, error: SSHError.outputLimitExceeded)
+                            await finishExecRequest(requestId, error: SSHError.outputLimitExceeded)
                             continue
                         }
                         request.output.append(Data(bytes: buffer, count: readCount))
@@ -1516,7 +1545,7 @@ actor SSHSession {
                     } else if bytesRead == Int(LIBSSH2_ERROR_EAGAIN) {
                         // No data yet
                     } else if bytesRead < 0 {
-                        finishExecRequest(requestId, error: SSHError.socketError("Exec read failed: \(bytesRead)"))
+                        await finishExecRequest(requestId, error: SSHError.socketError("Exec read failed: \(bytesRead)"))
                         continue
                     }
 
@@ -1524,7 +1553,7 @@ actor SSHSession {
                     if stderrRead > 0 {
                         let readCount = Int(stderrRead)
                         guard request.outputBudget.reserve(readCount) else {
-                            finishExecRequest(requestId, error: SSHError.outputLimitExceeded)
+                            await finishExecRequest(requestId, error: SSHError.outputLimitExceeded)
                             continue
                         }
                         request.stderr.append(Data(bytes: buffer, count: readCount))
@@ -1532,12 +1561,12 @@ actor SSHSession {
                     } else if stderrRead == Int(LIBSSH2_ERROR_EAGAIN) {
                         // No stderr data yet
                     } else if stderrRead < 0 {
-                        finishExecRequest(requestId, error: SSHError.socketError("Exec stderr read failed: \(stderrRead)"))
+                        await finishExecRequest(requestId, error: SSHError.socketError("Exec stderr read failed: \(stderrRead)"))
                         continue
                     }
 
                     if let currentChannel = request.channel, libssh2_channel_eof(currentChannel) != 0 {
-                        finishExecRequest(requestId, error: nil)
+                        await finishExecRequest(requestId, error: nil)
                         didWork = true
                     }
                 }
@@ -1615,9 +1644,9 @@ actor SSHSession {
         }
     }
 
-    private func ensureExecChannelReady(_ request: ExecRequest) -> Bool {
+    private func ensureExecChannelReady(_ request: ExecRequest) async -> Bool {
         guard let session = libssh2Session else {
-            finishExecRequest(request.id, error: SSHError.notConnected)
+            await finishExecRequest(request.id, error: SSHError.notConnected)
             return false
         }
 
@@ -1638,7 +1667,7 @@ actor SSHSession {
                 if lastError == LIBSSH2_ERROR_EAGAIN {
                     return false
                 }
-                finishExecRequest(request.id, error: SSHError.channelOpenFailed)
+                await finishExecRequest(request.id, error: SSHError.channelOpenFailed)
                 return false
             }
         }
@@ -1655,7 +1684,7 @@ actor SSHSession {
                 return false
             }
             if execResult != 0 {
-                finishExecRequest(request.id, error: SSHError.unknown("Exec failed: \(execResult)"))
+                await finishExecRequest(request.id, error: SSHError.unknown("Exec failed: \(execResult)"))
                 return false
             }
             request.isStarted = true
@@ -1664,18 +1693,34 @@ actor SSHSession {
         return true
     }
 
-    private func cancelExecRequest(_ requestId: UUID, error: Error) {
+    private func cancelExecRequest(_ requestId: UUID, error: Error) async {
         guard execRequests[requestId] != nil else { return }
-        finishExecRequest(requestId, error: error)
+        await finishExecRequest(requestId, error: error)
     }
 
-    private func finishExecRequest(_ requestId: UUID, error: Error?) {
+    private func finishExecRequest(_ requestId: UUID, error: Error?) async {
         guard let request = execRequests.removeValue(forKey: requestId) else { return }
 
         if let channel = request.channel {
-            libssh2_channel_close(channel)
-            libssh2_channel_free(channel)
             request.channel = nil
+
+            if let session = libssh2Session {
+                // Do not resume the command until its close packet is sent.
+                // Windows OpenSSH otherwise keeps that channel slot occupied.
+                let closeResult = await completeActiveChannelCleanupCall(session: session) {
+                    libssh2_channel_close(channel)
+                }
+                if closeResult != 0 {
+                    logger.warning("Exec channel close failed: \(closeResult)")
+                }
+
+                let freeResult = await completeActiveChannelCleanupCall(session: session) {
+                    libssh2_channel_free(channel)
+                }
+                if freeResult != 0 {
+                    logger.warning("Exec channel free failed: \(freeResult)")
+                }
+            }
         }
 
         if let error = error {
