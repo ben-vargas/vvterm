@@ -56,7 +56,6 @@ final class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         do {
             try await transport.performCloudKitRecordMutation { [transport] in
                 try await transport.upsertCloudKitRecord(record)
-                transport.markCloudKitRecordSynchronized()
             }
             logger.info("Saved terminal theme \(theme.name) to CloudKit")
         } catch {
@@ -75,7 +74,6 @@ final class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         do {
             try await transport.performCloudKitRecordMutation { [transport] in
                 try await transport.upsertCloudKitRecord(record)
-                transport.markCloudKitRecordSynchronized()
             }
             logger.info("Saved terminal theme preference to CloudKit")
         } catch {

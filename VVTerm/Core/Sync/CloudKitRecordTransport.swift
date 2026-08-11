@@ -80,7 +80,6 @@ protocol CloudKitRecordTransport: AnyObject {
     func fetchCloudKitRecord(_ recordID: CKRecord.ID) async throws -> CKRecord
     func upsertCloudKitRecord(_ record: CKRecord) async throws
     func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws
-    func markCloudKitRecordSynchronized()
     func cloudKitServerRecord(from error: Error) -> CKRecord?
     func isCloudKitRecordMissing(_ error: Error) -> Bool
 }
@@ -90,6 +89,7 @@ extension CloudKitManager: CloudKitRecordTransport {}
 @MainActor
 protocol CloudKitRecordChangeTransport: CloudKitRecordTransport {
     var isCloudKitAvailable: Bool { get }
+    var cloudKitSyncGeneration: UUID { get }
 
     /// Reads the zone's single primary change stream without advancing its shared token.
     /// One consumer owns this stream. Every call must use that consumer's normalized keys.

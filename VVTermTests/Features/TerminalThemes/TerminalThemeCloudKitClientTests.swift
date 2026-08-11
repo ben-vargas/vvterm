@@ -26,7 +26,6 @@ private final class TerminalThemeRecordTransportStub: CloudKitRecordTransport {
     private(set) var requestedKeys: [String]?
     private(set) var requestedRecordIDs: [CKRecord.ID] = []
     private(set) var upsertedRecords: [CKRecord] = []
-    private(set) var synchronizedCount = 0
 
     func performCloudKitRecordMutation<T>(
         _ operation: () async throws -> T
@@ -56,10 +55,6 @@ private final class TerminalThemeRecordTransportStub: CloudKitRecordTransport {
     }
 
     func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws {}
-
-    func markCloudKitRecordSynchronized() {
-        synchronizedCount += 1
-    }
 
     func cloudKitServerRecord(from error: Error) -> CKRecord? { nil }
 
@@ -151,7 +146,6 @@ struct TerminalThemeCloudKitClientTests {
             TerminalThemeCloudKitRecordCodec.theme(from: transport.upsertedRecords[0])
                 == theme
         )
-        #expect(transport.synchronizedCount == 1)
     }
 
     @Test
@@ -173,7 +167,6 @@ struct TerminalThemeCloudKitClientTests {
 
         #expect(transport.mutationCount == 1)
         #expect(transport.upsertedRecords.count == 1)
-        #expect(transport.synchronizedCount == 0)
     }
 
     @Test
@@ -193,7 +186,6 @@ struct TerminalThemeCloudKitClientTests {
         )
         #expect(record.recordID.zoneID == transport.cloudKitRecordZoneID)
         #expect(TerminalThemePreferenceCloudKitRecordCodec.preference(from: record) == preference)
-        #expect(transport.synchronizedCount == 1)
     }
 
     private func makeTheme(

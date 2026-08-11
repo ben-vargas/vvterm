@@ -67,6 +67,10 @@ nonisolated struct CloudKitSyncState: Equatable, Sendable {
         phase = .available(AvailableContext())
     }
 
+    mutating func markCheckingAccount() {
+        phase = .checkingAccount
+    }
+
     mutating func markAccountFailure(_ message: String) {
         phase = .accountFailure(message)
     }

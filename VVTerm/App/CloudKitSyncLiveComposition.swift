@@ -32,6 +32,7 @@ enum CloudKitSyncLiveComposition {
         clients: CloudKitSyncClients,
         queue: PendingCloudKitSyncQueue,
         isSyncEnabled: @escaping () -> Bool,
+        currentGeneration: @escaping () -> UUID,
         now: @escaping () -> Date,
         makeID: @escaping () -> UUID
     ) -> CloudKitSyncComposition {
@@ -54,6 +55,7 @@ enum CloudKitSyncLiveComposition {
                 mutationHandler: mutationHandler,
                 queue: queue,
                 isSyncEnabled: isSyncEnabled,
+                currentGeneration: currentGeneration,
                 now: now,
                 makeID: makeID
             ),
@@ -84,6 +86,7 @@ enum CloudKitSyncLiveComposition {
                 legacyMigrator: CloudKitPendingMutationLegacyMigrator()
             ),
             isSyncEnabled: { SyncSettings.isEnabled(in: defaults) },
+            currentGeneration: { transport.cloudKitSyncGeneration },
             now: now,
             makeID: makeID
         )

@@ -72,6 +72,7 @@ struct CloudKitSyncLiveCompositionTests {
         let theme = AppThemeMutationClientStub()
         let accessory = AppAccessoryCloudClientStub()
         let stats = AppStatsCloudClientStub()
+        let generation = UUID()
         let clients = CloudKitSyncClients(
             serverCloud: server,
             terminalThemeCloud: theme,
@@ -85,6 +86,7 @@ struct CloudKitSyncLiveCompositionTests {
                 defaults: defaults
             ),
             isSyncEnabled: { false },
+            currentGeneration: { generation },
             now: { Date(timeIntervalSinceReferenceDate: 1_000) },
             makeID: UUID.init
         )
@@ -105,6 +107,7 @@ struct CloudKitSyncLiveCompositionTests {
         let themeClient = AppThemeMutationClientStub()
         let accessoryClient = AppAccessoryCloudClientStub()
         let statsClient = AppStatsCloudClientStub()
+        let generation = UUID()
         let composition = CloudKitSyncLiveComposition.make(
             clients: CloudKitSyncClients(
                 serverCloud: serverClient,
@@ -117,6 +120,7 @@ struct CloudKitSyncLiveCompositionTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
+            currentGeneration: { generation },
             now: { Date(timeIntervalSinceReferenceDate: 10_000) },
             makeID: UUID.init
         )
@@ -191,6 +195,7 @@ struct CloudKitSyncLiveCompositionTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let now = Date(timeIntervalSinceReferenceDate: 20_000)
+        let generation = UUID()
         let composition = CloudKitSyncLiveComposition.make(
             clients: CloudKitSyncClients(
                 serverCloud: AppServerMutationClientStub(),
@@ -203,6 +208,7 @@ struct CloudKitSyncLiveCompositionTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
+            currentGeneration: { generation },
             now: { now },
             makeID: UUID.init
         )

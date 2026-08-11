@@ -188,6 +188,7 @@ struct CloudKitMutationQueueAdapterTests {
                 defaults: defaults
             ),
             isSyncEnabled: { false },
+            currentGeneration: UUID.init,
             now: { Date(timeIntervalSinceReferenceDate: 6_000) },
             makeID: { UUID(uuidString: "50000000-0000-0000-0000-000000000001")! }
         )
@@ -234,6 +235,7 @@ struct CloudKitMutationQueueAdapterTests {
                 defaults: defaults
             ),
             isSyncEnabled: { false },
+            currentGeneration: UUID.init,
             now: { expectedDate },
             makeID: { expectedID }
         )
@@ -266,6 +268,7 @@ struct CloudKitMutationQueueAdapterTests {
                     defaults: defaults
                 ),
                 isSyncEnabled: { false },
+                currentGeneration: UUID.init,
                 now: { Date(timeIntervalSinceReferenceDate: 5_000) },
                 makeID: UUID.init
             ),

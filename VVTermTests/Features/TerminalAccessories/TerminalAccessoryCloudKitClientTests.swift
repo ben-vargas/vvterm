@@ -21,7 +21,6 @@ private final class TerminalAccessoryRecordTransportStub: CloudKitRecordTranspor
     var conflictRecord: CKRecord?
     private(set) var mutationCount = 0
     private(set) var savedRecords: [CKRecord] = []
-    private(set) var synchronizedCount = 0
 
     init(fetchResult: Result<CKRecord, Error>) {
         self.fetchResult = fetchResult
@@ -51,10 +50,6 @@ private final class TerminalAccessoryRecordTransportStub: CloudKitRecordTranspor
         savedRecords.append(record)
         guard !saveResults.isEmpty else { return }
         try saveResults.removeFirst().get()
-    }
-
-    func markCloudKitRecordSynchronized() {
-        synchronizedCount += 1
     }
 
     func cloudKitServerRecord(from error: Error) -> CKRecord? {
@@ -112,7 +107,6 @@ struct TerminalAccessoryCloudKitClientTests {
         #expect(resolved == remote.normalized())
         #expect(transport.mutationCount == 1)
         #expect(transport.savedRecords.isEmpty)
-        #expect(transport.synchronizedCount == 1)
     }
 
     @Test
@@ -136,7 +130,6 @@ struct TerminalAccessoryCloudKitClientTests {
         #expect(resolved == local.normalized())
         #expect(transport.savedRecords.count == 2)
         #expect(transport.savedRecords[1] === conflictRecord)
-        #expect(transport.synchronizedCount == 1)
     }
 
     @Test
@@ -157,7 +150,6 @@ struct TerminalAccessoryCloudKitClientTests {
 
         #expect(resolved == conflictRemote.normalized())
         #expect(transport.savedRecords.count == 1)
-        #expect(transport.synchronizedCount == 1)
     }
 
     @Test
@@ -183,7 +175,6 @@ struct TerminalAccessoryCloudKitClientTests {
             transport.savedRecords.count
                 == TerminalAccessoryCloudKitClient.maximumConflictAttempts
         )
-        #expect(transport.synchronizedCount == 0)
     }
 
     @Test
@@ -205,7 +196,6 @@ struct TerminalAccessoryCloudKitClientTests {
         }
 
         #expect(transport.savedRecords.isEmpty)
-        #expect(transport.synchronizedCount == 0)
     }
 
     @Test

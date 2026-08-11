@@ -45,7 +45,6 @@ final class StatsPreferencesCloudKitClient: StatsPreferencesCloudClient {
                     remote: normalizedRemote
                 )
                 if mergedPreferences == normalizedRemote {
-                    transport.markCloudKitRecordSynchronized()
                     return normalizedRemote
                 }
             } else {
@@ -66,7 +65,6 @@ final class StatsPreferencesCloudKitClient: StatsPreferencesCloudClient {
 
             do {
                 try await transport.saveCloudKitRecordIfUnchanged(candidateRecord)
-                transport.markCloudKitRecordSynchronized()
                 return mergedPreferences
             } catch {
                 if let serverRecord = transport.cloudKitServerRecord(from: error),
@@ -79,7 +77,6 @@ final class StatsPreferencesCloudKitClient: StatsPreferencesCloudClient {
                         remote: normalizedRemote
                     )
                     if conflictResolved == normalizedRemote {
-                        transport.markCloudKitRecordSynchronized()
                         return normalizedRemote
                     }
                     mergedPreferences = conflictResolved

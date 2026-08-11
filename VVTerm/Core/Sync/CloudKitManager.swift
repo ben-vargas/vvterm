@@ -17,6 +17,7 @@ final class CloudKitManager: ObservableObject {
 
     var syncStatus: SyncStatus { syncState.status }
     var isAvailable: Bool { syncState.isAvailable }
+    private(set) var cloudKitSyncGeneration = UUID()
 
     private let container: CKContainer
     private let database: CKDatabase
@@ -27,8 +28,15 @@ final class CloudKitManager: ObservableObject {
     private var changeTokenKey: String { CloudKitSyncConstants.changeTokenKey(for: recordZoneName) }
     private var zoneReadyKey: String { CloudKitSyncConstants.zoneReadyKey(for: recordZoneName) }
 
-    private var accountStatusChecked = false
-    private var isSyncEnabled: Bool { SyncSettings.isEnabled }
+    private let syncEnabled: @MainActor @Sendable () -> Bool
+    private let fetchAccountStatus: @MainActor @Sendable () async throws -> CKAccountStatus
+    private var isSyncEnabled: Bool { syncEnabled() }
+    private struct AccountStatusCheck {
+        let id: UUID
+        let generation: UUID
+        let task: Task<CKAccountStatus, Error>
+    }
+
     private struct InFlightRecordChanges {
         let id: UUID
         let identity: CloudKitRecordChangeFetchIdentity
@@ -51,39 +59,78 @@ final class CloudKitManager: ObservableObject {
 
     private var inFlightRecordChanges: InFlightRecordChanges?
     private var pendingRecordChanges: PendingRecordChanges?
+    private var accountStatusCheck: AccountStatusCheck?
     private var ensureZoneTask: Task<Void, Error>?
     private var zoneReady: Bool
 
-    private init() {
-        container = CKContainer(identifier: CloudKitSyncConstants.cloudKitContainerIdentifier)
+    private convenience init() {
+        let container = CKContainer(
+            identifier: CloudKitSyncConstants.cloudKitContainerIdentifier
+        )
+        self.init(
+            container: container,
+            syncEnabled: { SyncSettings.isEnabled },
+            accountStatus: { try await container.accountStatus() }
+        )
+    }
+
+    init(
+        container: CKContainer,
+        syncEnabled: @escaping @MainActor @Sendable () -> Bool,
+        accountStatus: @escaping @MainActor @Sendable () async throws -> CKAccountStatus
+    ) {
+        self.container = container
         database = container.privateCloudDatabase
+        self.syncEnabled = syncEnabled
+        fetchAccountStatus = accountStatus
         zoneReady = UserDefaults.standard.bool(forKey: CloudKitSyncConstants.zoneReadyKey(for: recordZoneName))
-        Task { await checkAccountStatus() }
+        if isSyncEnabled {
+            let generation = cloudKitSyncGeneration
+            Task { [weak self] in
+                await self?.checkAccountStatus(for: generation)
+            }
+        } else {
+            applySyncDisabledState()
+        }
     }
 
     // MARK: - Account Status
 
     /// Ensures account status is checked before performing operations
-    private func ensureAccountStatusChecked() async {
-        guard isSyncEnabled else {
-            applySyncDisabledState()
-            accountStatusChecked = true
-            return
-        }
-        // Re-check when unavailable so transient account/network states can recover
-        guard !accountStatusChecked || !isAvailable else { return }
-        await checkAccountStatus()
+    private func ensureAccountStatusChecked(for generation: UUID) async throws {
+        try requireCurrentGeneration(generation)
+        guard !isAvailable else { return }
+        await checkAccountStatus(for: generation)
+        try requireCurrentGeneration(generation)
     }
 
-    private func checkAccountStatus() async {
-        guard isSyncEnabled else {
-            applySyncDisabledState()
-            accountStatusChecked = true
-            return
+    private func checkAccountStatus(for generation: UUID) async {
+        guard isCurrentGeneration(generation) else { return }
+
+        let check: AccountStatusCheck
+        if let current = accountStatusCheck, current.generation == generation {
+            check = current
+        } else {
+            let task = Task { @MainActor [fetchAccountStatus] in
+                let status = try await fetchAccountStatus()
+                try Task.checkCancellation()
+                return status
+            }
+            check = AccountStatusCheck(
+                id: UUID(),
+                generation: generation,
+                task: task
+            )
+            accountStatusCheck = check
         }
 
         do {
-            let status = try await container.accountStatus()
+            let status = try await check.task.value
+            guard isCurrentGeneration(generation),
+                  accountStatusCheck?.id == check.id else {
+                return
+            }
+            accountStatusCheck = nil
             let resolvedAccountState: CloudKitAccountState = switch status {
             case .available:
                 .available
@@ -104,7 +151,6 @@ final class CloudKitManager: ObservableObject {
             logger.info("Container identifier: \(self.container.containerIdentifier ?? "nil")")
 
             accountState = resolvedAccountState
-            accountStatusChecked = true
             if status == .available {
                 syncState.markAvailable()
             } else {
@@ -112,10 +158,15 @@ final class CloudKitManager: ObservableObject {
                 logger.warning("CloudKit not available. Status: \(statusLogValue)")
             }
         } catch {
+            guard isCurrentGeneration(generation),
+                  accountStatusCheck?.id == check.id else {
+                return
+            }
+            accountStatusCheck = nil
+            if error is CancellationError { return }
             logger.error("CloudKit account status check failed: \(error.localizedDescription)")
             accountState = .failed(detail: error.localizedDescription)
             syncState.markAccountFailure(error.localizedDescription)
-            accountStatusChecked = true
         }
     }
 
@@ -125,11 +176,14 @@ final class CloudKitManager: ObservableObject {
     }
 
     func handleSyncToggle(_ enabled: Bool) {
+        let generation = advanceSyncGeneration()
         if enabled {
-            accountStatusChecked = false
-            Task {
-                await checkAccountStatus()
-                await subscribeToChanges()
+            accountState = .checking
+            syncState.markCheckingAccount()
+            Task { [weak self] in
+                guard let self else { return }
+                await self.checkAccountStatus(for: generation)
+                await self.subscribeToChanges(generation: generation)
             }
         } else {
             applySyncDisabledState()
@@ -142,13 +196,15 @@ final class CloudKitManager: ObservableObject {
         forceFullFetch: Bool,
         desiredKeys: [String]
     ) async throws -> CloudKitRawRecordChanges {
+        let generation = cloudKitSyncGeneration
         try Task.checkCancellation()
-        await ensureAccountStatusChecked()
+        try await ensureAccountStatusChecked(for: generation)
         guard isAvailable else {
             throw CloudKitError.notAvailable
         }
 
         try await ensureCustomZone()
+        try requireCurrentGeneration(generation)
 
         let fetchIdentity = CloudKitRecordChangeFetchIdentity(
             forceFullFetch: forceFullFetch,
@@ -203,9 +259,11 @@ final class CloudKitManager: ObservableObject {
                     try await self.fetchRecordChangesFromCloudKit(
                         forceFullFetch: forceFullFetch,
                         desiredKeys: desiredKeys,
-                        identity: fetchIdentity
+                        identity: fetchIdentity,
+                        generation: generation
                     )
                 }
+                try self.requireCurrentGeneration(generation)
                 self.completeRecordChangesTask(taskID, with: .success(changes))
                 return changes
             } catch {
@@ -309,13 +367,15 @@ final class CloudKitManager: ObservableObject {
     private func fetchRecordChangesFromCloudKit(
         forceFullFetch: Bool,
         desiredKeys: [String],
-        identity: CloudKitRecordChangeFetchIdentity
+        identity: CloudKitRecordChangeFetchIdentity,
+        generation: UUID
     ) async throws -> CloudKitRawRecordChanges {
-        try await performSyncOperation {
+        try await performSyncOperation(generation: generation) {
             try await fetchTrackedRecordChangesFromCloudKit(
                 forceFullFetch: forceFullFetch,
                 desiredKeys: desiredKeys,
-                identity: identity
+                identity: identity,
+                generation: generation
             )
         }
     }
@@ -323,7 +383,8 @@ final class CloudKitManager: ObservableObject {
     private func fetchTrackedRecordChangesFromCloudKit(
         forceFullFetch: Bool,
         desiredKeys: [String],
-        identity: CloudKitRecordChangeFetchIdentity
+        identity: CloudKitRecordChangeFetchIdentity,
+        generation: UUID
     ) async throws -> CloudKitRawRecordChanges {
         let previousToken = forceFullFetch ? nil : loadChangeToken()
 
@@ -333,12 +394,14 @@ final class CloudKitManager: ObservableObject {
                 isFullFetch: forceFullFetch || previousToken == nil,
                 desiredKeys: desiredKeys
             )
+            try requireCurrentGeneration(generation)
             logger.info(
                 "Fetched \(changes.changes.count) raw CloudKit changes (full fetch: \(changes.isFullFetch))"
             )
             return makePendingRecordChanges(from: changes, identity: identity)
         } catch {
             if isChangeTokenExpired(error) {
+                try requireCurrentGeneration(generation)
                 logger.warning("CloudKit change token expired; resetting and performing full fetch")
                 clearChangeToken()
                 let changes = try await fetchRawRecordChangesFromCloudKit(
@@ -346,6 +409,7 @@ final class CloudKitManager: ObservableObject {
                     isFullFetch: true,
                     desiredKeys: desiredKeys
                 )
+                try requireCurrentGeneration(generation)
                 return makePendingRecordChanges(from: changes, identity: identity)
             }
 
@@ -435,17 +499,20 @@ final class CloudKitManager: ObservableObject {
         lastSyncDate = Date()
     }
 
-    private func prepareSyncMutation() async throws {
-        await ensureAccountStatusChecked()
+    private func prepareSyncMutation(generation: UUID) async throws {
+        try await ensureAccountStatusChecked(for: generation)
         guard isAvailable else {
             throw CloudKitError.notAvailable
         }
         try await ensureCustomZone()
+        try requireCurrentGeneration(generation)
     }
 
     private func performSyncOperation<T>(
+        generation: UUID,
         _ operation: () async throws -> T
     ) async throws -> T {
+        try requireCurrentGeneration(generation)
         let operationID = UUID()
         guard syncState.beginOperation(operationID) else {
             throw CloudKitError.notAvailable
@@ -453,11 +520,14 @@ final class CloudKitManager: ObservableObject {
 
         do {
             let result = try await operation()
+            try requireCurrentGeneration(generation)
             syncState.completeOperation(operationID, with: .success)
             return result
         } catch {
-            logger.error("CloudKit sync operation failed: \(error.localizedDescription)")
-            syncState.completeOperation(operationID, with: .failure(error.localizedDescription))
+            if isCurrentGeneration(generation) {
+                logger.error("CloudKit sync operation failed: \(error.localizedDescription)")
+                syncState.completeOperation(operationID, with: .failure(error.localizedDescription))
+            }
             throw error
         }
     }
@@ -475,58 +545,72 @@ final class CloudKitManager: ObservableObject {
     func performCloudKitRecordMutation<T>(
         _ operation: () async throws -> T
     ) async throws -> T {
-        try await prepareSyncMutation()
-        return try await performSyncOperation(operation)
+        let generation = cloudKitSyncGeneration
+        try await prepareSyncMutation(generation: generation)
+        let result = try await performSyncOperation(
+            generation: generation,
+            operation
+        )
+        lastSyncDate = Date()
+        return result
     }
 
     func fetchCloudKitRecords(
         matchingRecordTypes recordTypes: Set<String>,
         desiredKeys: [String]
     ) async throws -> [CKRecord] {
-        await ensureAccountStatusChecked()
+        let generation = cloudKitSyncGeneration
+        try await ensureAccountStatusChecked(for: generation)
         guard isAvailable else {
             throw CloudKitError.notAvailable
         }
         try await ensureCustomZone()
-        return try await withZoneRetry {
+        let records = try await withZoneRetry {
             try await fetchAllRecordsFromCloudKit(
                 matchingRecordTypes: recordTypes,
                 desiredKeys: desiredKeys
             )
         }
+        try requireCurrentGeneration(generation)
+        return records
     }
 
     func fetchCloudKitRecord(_ recordID: CKRecord.ID) async throws -> CKRecord {
-        await ensureAccountStatusChecked()
+        let generation = cloudKitSyncGeneration
+        try await ensureAccountStatusChecked(for: generation)
         guard isAvailable else {
             throw CloudKitError.notAvailable
         }
         try await ensureCustomZone()
-        return try await withZoneRetry {
+        let record = try await withZoneRetry {
             try await database.record(for: recordID)
         }
+        try requireCurrentGeneration(generation)
+        return record
     }
 
     func upsertCloudKitRecord(_ record: CKRecord) async throws {
+        let generation = cloudKitSyncGeneration
         try await withZoneRetry {
             try await saveRecordWithUpsert(record)
         }
+        try requireCurrentGeneration(generation)
     }
 
     func deleteCloudKitRecord(_ recordID: CKRecord.ID) async throws {
+        let generation = cloudKitSyncGeneration
         _ = try await withZoneRetry {
             try await database.modifyRecords(saving: [], deleting: [recordID])
         }
+        try requireCurrentGeneration(generation)
     }
 
     func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws {
+        let generation = cloudKitSyncGeneration
         try await withZoneRetry {
             try await saveRecord(record, savePolicy: .ifServerRecordUnchanged)
         }
-    }
-
-    func markCloudKitRecordSynchronized() {
-        lastSyncDate = Date()
+        try requireCurrentGeneration(generation)
     }
 
     func cloudKitServerRecord(from error: Error) -> CKRecord? {
@@ -540,8 +624,16 @@ final class CloudKitManager: ObservableObject {
     // MARK: - Subscriptions
 
     func subscribeToChanges() async {
-        await ensureAccountStatusChecked()
-        guard isSyncEnabled, isAvailable else { return }
+        await subscribeToChanges(generation: cloudKitSyncGeneration)
+    }
+
+    private func subscribeToChanges(generation: UUID) async {
+        do {
+            try await ensureAccountStatusChecked(for: generation)
+        } catch {
+            return
+        }
+        guard isCurrentGeneration(generation), isAvailable else { return }
 
         let subscriptionID = CloudKitSyncConstants.databaseSubscriptionID
 
@@ -554,11 +646,14 @@ final class CloudKitManager: ObservableObject {
         do {
             if let existing = try? await database.subscription(for: subscriptionID) as? CKDatabaseSubscription,
                existing.notificationInfo?.shouldSendContentAvailable == true {
+                guard isCurrentGeneration(generation) else { return }
                 logger.debug("CloudKit database subscription already configured")
                 return
             }
 
+            guard isCurrentGeneration(generation) else { return }
             _ = try await database.save(subscription)
+            guard isCurrentGeneration(generation) else { return }
             logger.info("Subscribed to database changes")
         } catch {
             logger.error("Failed to subscribe to database changes: \(error.localizedDescription)")
@@ -832,9 +927,48 @@ final class CloudKitManager: ObservableObject {
 
     func forceSync() async {
         lastSyncDate = nil
-        accountStatusChecked = false
         clearChangeToken()
-        await checkAccountStatus()
+        let generation = advanceSyncGeneration()
+        guard isSyncEnabled else {
+            applySyncDisabledState()
+            return
+        }
+        accountState = .checking
+        syncState.markCheckingAccount()
+        await checkAccountStatus(for: generation)
+    }
+
+    @discardableResult
+    private func advanceSyncGeneration() -> UUID {
+        let generation = UUID()
+        cloudKitSyncGeneration = generation
+        accountStatusCheck?.task.cancel()
+        accountStatusCheck = nil
+        cancelRecordChanges()
+        pendingRecordChanges = nil
+        return generation
+    }
+
+    private func cancelRecordChanges() {
+        guard let current = inFlightRecordChanges else { return }
+        inFlightRecordChanges = nil
+        current.task.cancel()
+        for waiter in current.waiters.values {
+            waiter.resume(with: .failure(CancellationError()))
+        }
+        for waiter in current.teardownWaiters.values {
+            waiter.resume(with: .success(()))
+        }
+    }
+
+    private func isCurrentGeneration(_ generation: UUID) -> Bool {
+        isSyncEnabled && cloudKitSyncGeneration == generation
+    }
+
+    private func requireCurrentGeneration(_ generation: UUID) throws {
+        guard isCurrentGeneration(generation) else {
+            throw CancellationError()
+        }
     }
 
     // MARK: - Record Zone

@@ -45,7 +45,6 @@ final class TerminalAccessoryCloudKitClient: TerminalAccessoryCloudClient {
                     remote: normalizedRemote
                 )
                 if mergedProfile == normalizedRemote {
-                    transport.markCloudKitRecordSynchronized()
                     return normalizedRemote
                 }
             } else {
@@ -66,7 +65,6 @@ final class TerminalAccessoryCloudKitClient: TerminalAccessoryCloudClient {
 
             do {
                 try await transport.saveCloudKitRecordIfUnchanged(candidateRecord)
-                transport.markCloudKitRecordSynchronized()
                 return mergedProfile
             } catch {
                 if let serverRecord = transport.cloudKitServerRecord(from: error),
@@ -79,7 +77,6 @@ final class TerminalAccessoryCloudKitClient: TerminalAccessoryCloudClient {
                         remote: normalizedRemote
                     )
                     if conflictResolved == normalizedRemote {
-                        transport.markCloudKitRecordSynchronized()
                         return normalizedRemote
                     }
                     mergedProfile = conflictResolved

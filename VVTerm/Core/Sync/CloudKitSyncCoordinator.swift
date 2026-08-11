@@ -11,6 +11,7 @@ final class CloudKitSyncCoordinator {
     )
     private let queue: PendingCloudKitSyncQueue
     private let isSyncEnabled: () -> Bool
+    private let currentGeneration: () -> UUID
     private let now: () -> Date
     private let makeID: () -> UUID
     private var isDraining = false
@@ -20,12 +21,14 @@ final class CloudKitSyncCoordinator {
         mutationHandler: any PendingCloudKitMutationHandling,
         queue: PendingCloudKitSyncQueue,
         isSyncEnabled: @escaping () -> Bool,
+        currentGeneration: @escaping () -> UUID,
         now: @escaping () -> Date,
         makeID: @escaping () -> UUID
     ) {
         self.mutationHandler = mutationHandler
         self.queue = queue
         self.isSyncEnabled = isSyncEnabled
+        self.currentGeneration = currentGeneration
         self.now = now
         self.makeID = makeID
     }
@@ -68,6 +71,7 @@ final class CloudKitSyncCoordinator {
 
     func drainPendingMutations() async {
         guard isSyncEnabled() else { return }
+        let generation = currentGeneration()
         guard !isDraining else {
             shouldDrainAgain = true
             return
@@ -80,6 +84,7 @@ final class CloudKitSyncCoordinator {
         }
 
         while true {
+            guard isCurrent(generation) else { return }
             let drainRequestedDuringIteration = shouldDrainAgain
             shouldDrainAgain = false
             let snapshot = queue.snapshot()
@@ -89,6 +94,7 @@ final class CloudKitSyncCoordinator {
             let orderedMutations = snapshot.sorted(by: PendingCloudKitMutation.drainsBefore)
 
             for mutation in orderedMutations {
+                guard isCurrent(generation) else { return }
                 guard queue.canAttempt(mutation, at: now()) else {
                     continue
                 }
@@ -98,6 +104,7 @@ final class CloudKitSyncCoordinator {
                 } catch is CancellationError {
                     return
                 } catch {
+                    guard isCurrent(generation) else { return }
                     if isIgnorableDeleteSyncError(error, for: mutation) {
                         guard removePersistedMutation(mutation) else { return }
                         didProgress = true
@@ -120,6 +127,7 @@ final class CloudKitSyncCoordinator {
                     continue
                 }
 
+                guard isCurrent(generation) else { return }
                 guard removePersistedMutation(mutation) else { return }
                 didProgress = true
             }
@@ -131,6 +139,10 @@ final class CloudKitSyncCoordinator {
                 return
             }
         }
+    }
+
+    private func isCurrent(_ generation: UUID) -> Bool {
+        isSyncEnabled() && currentGeneration() == generation
     }
 
     private func removePersistedMutation(_ mutation: PendingCloudKitMutation) -> Bool {

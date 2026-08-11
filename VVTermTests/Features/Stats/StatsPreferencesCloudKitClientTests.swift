@@ -21,7 +21,6 @@ private final class StatsPreferencesRecordTransportStub: CloudKitRecordTransport
     var conflictRecord: CKRecord?
     private(set) var mutationCount = 0
     private(set) var savedRecords: [CKRecord] = []
-    private(set) var synchronizedCount = 0
 
     init(fetchResult: Result<CKRecord, Error>) {
         self.fetchResult = fetchResult
@@ -51,10 +50,6 @@ private final class StatsPreferencesRecordTransportStub: CloudKitRecordTransport
         savedRecords.append(record)
         guard !saveResults.isEmpty else { return }
         try saveResults.removeFirst().get()
-    }
-
-    func markCloudKitRecordSynchronized() {
-        synchronizedCount += 1
     }
 
     func cloudKitServerRecord(from error: Error) -> CKRecord? {
@@ -95,7 +90,6 @@ struct StatsPreferencesCloudKitClientTests {
         #expect(resolved == remote.normalized())
         #expect(transport.mutationCount == 1)
         #expect(transport.savedRecords.isEmpty)
-        #expect(transport.synchronizedCount == 1)
     }
 
     @Test
@@ -123,7 +117,6 @@ struct StatsPreferencesCloudKitClientTests {
 
         #expect(transport.savedRecords.count == 2)
         #expect(transport.savedRecords[1] === conflictRecord)
-        #expect(transport.synchronizedCount == 1)
         #expect(publisher.preferences == [local.normalized()])
     }
 
@@ -145,7 +138,6 @@ struct StatsPreferencesCloudKitClientTests {
 
         #expect(resolved == conflictRemote.normalized())
         #expect(transport.savedRecords.count == 1)
-        #expect(transport.synchronizedCount == 1)
     }
 
     @Test
@@ -171,7 +163,6 @@ struct StatsPreferencesCloudKitClientTests {
             transport.savedRecords.count
                 == StatsPreferencesCloudKitClient.maximumConflictAttempts
         )
-        #expect(transport.synchronizedCount == 0)
     }
 
     @Test
@@ -193,7 +184,6 @@ struct StatsPreferencesCloudKitClientTests {
         }
 
         #expect(transport.savedRecords.isEmpty)
-        #expect(transport.synchronizedCount == 0)
     }
 
     private func record(for preferences: StatsPreferences) throws -> CKRecord {

@@ -165,7 +165,6 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         do {
             try await transport.performCloudKitRecordMutation { [transport] in
                 try await transport.upsertCloudKitRecord(record)
-                transport.markCloudKitRecordSynchronized()
             }
             logger.info("\(successMessage)")
         } catch {
@@ -186,7 +185,6 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         do {
             try await transport.performCloudKitRecordMutation { [transport] in
                 try await transport.deleteCloudKitRecord(recordID)
-                transport.markCloudKitRecordSynchronized()
             }
             logger.info("\(successMessage)")
         } catch {

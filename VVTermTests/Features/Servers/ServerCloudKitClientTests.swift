@@ -14,6 +14,7 @@ private final class ServerCloudKitRecordTransportStub: CloudKitRecordChangeTrans
         ownerName: CKCurrentUserDefaultName
     )
     var isCloudKitAvailable = true
+    var cloudKitSyncGeneration = UUID()
     var changesResult: Result<CloudKitRawRecordChanges, Error> = .success(
         CloudKitRawRecordChanges(
             changes: [],
@@ -27,7 +28,6 @@ private final class ServerCloudKitRecordTransportStub: CloudKitRecordChangeTrans
     private(set) var mutationCount = 0
     private(set) var upsertedRecords: [CKRecord] = []
     private(set) var deletedRecordIDs: [CKRecord.ID] = []
-    private(set) var synchronizedCount = 0
     private(set) var committedCheckpoints: [CloudKitRecordChangeCheckpoint] = []
 
     func fetchCloudKitRecordChanges(
@@ -71,10 +71,6 @@ private final class ServerCloudKitRecordTransportStub: CloudKitRecordChangeTrans
     }
 
     func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws {}
-
-    func markCloudKitRecordSynchronized() {
-        synchronizedCount += 1
-    }
 
     func cloudKitServerRecord(from error: Error) -> CKRecord? { nil }
     func isCloudKitRecordMissing(_ error: Error) -> Bool { false }
@@ -209,7 +205,6 @@ struct ServerCloudKitClientTests {
         #expect(transport.deletedRecordIDs.allSatisfy {
             $0.zoneID == transport.cloudKitRecordZoneID
         })
-        #expect(transport.synchronizedCount == 4)
     }
 
     @Test
@@ -229,7 +224,6 @@ struct ServerCloudKitClientTests {
 
         #expect(transport.mutationCount == 1)
         #expect(transport.upsertedRecords.count == 1)
-        #expect(transport.synchronizedCount == 0)
     }
 
     @Test

@@ -6,12 +6,38 @@ private enum PendingMutationHandlerTestError: Error {
     case failed
 }
 
+private actor PendingMutationHandlerGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func waitUntilBlocked() async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(1))
+        while clock.now < deadline {
+            if continuation != nil { return true }
+            await Task.yield()
+        }
+        return continuation != nil
+    }
+
+    func release() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
 @MainActor
 private final class PendingMutationHandlerStub: PendingCloudKitMutationHandling {
     enum Behavior {
         case succeed
         case fail
         case cancel
+        case wait(PendingMutationHandlerGate)
     }
 
     var behaviors: [Behavior]
@@ -31,6 +57,8 @@ private final class PendingMutationHandlerStub: PendingCloudKitMutationHandling 
             throw PendingMutationHandlerTestError.failed
         case .cancel:
             throw CancellationError()
+        case .wait(let gate):
+            await gate.wait()
         }
     }
 }
@@ -44,6 +72,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         var currentDate = Date(timeIntervalSinceReferenceDate: 20_000)
         let handler = PendingMutationHandlerStub(behaviors: [.fail, .succeed])
+        let generation = UUID()
         let coordinator = CloudKitSyncCoordinator(
             mutationHandler: handler,
             queue: PendingCloudKitSyncQueue(
@@ -51,6 +80,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
+            currentGeneration: { generation },
             now: { currentDate },
             makeID: UUID.init
         )
@@ -93,6 +123,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let handler = PendingMutationHandlerStub(behaviors: [.cancel, .succeed])
+        let generation = UUID()
         let coordinator = CloudKitSyncCoordinator(
             mutationHandler: handler,
             queue: PendingCloudKitSyncQueue(
@@ -100,6 +131,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
+            currentGeneration: { generation },
             now: { Date(timeIntervalSinceReferenceDate: 30_000) },
             makeID: UUID.init
         )
@@ -134,6 +166,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let storageKey = "handlerRemovalFailureQueue"
         let handler = PendingMutationHandlerStub(behaviors: [.succeed])
+        let generation = UUID()
         let coordinator = CloudKitSyncCoordinator(
             mutationHandler: handler,
             queue: PendingCloudKitSyncQueue(
@@ -141,6 +174,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
+            currentGeneration: { generation },
             now: { Date(timeIntervalSinceReferenceDate: 40_000) },
             makeID: UUID.init
         )
@@ -167,6 +201,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let storageKey = "handlerRetryPersistenceFailureQueue"
         let handler = PendingMutationHandlerStub(behaviors: [.fail])
+        let generation = UUID()
         let coordinator = CloudKitSyncCoordinator(
             mutationHandler: handler,
             queue: PendingCloudKitSyncQueue(
@@ -174,6 +209,7 @@ struct CloudKitSyncCoordinatorHandlerTests {
                 defaults: defaults
             ),
             isSyncEnabled: { true },
+            currentGeneration: { generation },
             now: { Date(timeIntervalSinceReferenceDate: 50_000) },
             makeID: UUID.init
         )
@@ -191,6 +227,42 @@ struct CloudKitSyncCoordinatorHandlerTests {
             defaults: defaults
         )
         #expect(reloadedQueue.snapshot() == [mutation])
+    }
+
+    @Test
+    func disableAndReenableRejectsStaleSuccessfulDrainCompletion() async throws {
+        let suiteName = "CloudKitSyncCoordinatorHandlerTests.generation.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let gate = PendingMutationHandlerGate()
+        let handler = PendingMutationHandlerStub(behaviors: [.wait(gate), .succeed])
+        var isSyncEnabled = true
+        var generation = UUID()
+        let coordinator = CloudKitSyncCoordinator(
+            mutationHandler: handler,
+            queue: PendingCloudKitSyncQueue(
+                storageKey: "handlerGenerationQueue",
+                defaults: defaults
+            ),
+            isSyncEnabled: { isSyncEnabled },
+            currentGeneration: { generation },
+            now: { Date(timeIntervalSinceReferenceDate: 60_000) },
+            makeID: UUID.init
+        )
+        let mutation = try makeMutation(idSuffix: 4)
+        try coordinator.enqueue(mutation)
+        let staleDrain = Task { await coordinator.drainPendingMutations() }
+        #expect(await gate.waitUntilBlocked())
+
+        isSyncEnabled = false
+        generation = UUID()
+        isSyncEnabled = true
+        await gate.release()
+        await staleDrain.value
+
+        #expect(coordinator.snapshot() == [mutation])
+        await coordinator.drainPendingMutations()
+        #expect(coordinator.snapshot().isEmpty)
     }
 
     private func makeMutation(idSuffix: Int) throws -> PendingCloudKitMutation {
