@@ -48,20 +48,6 @@
                BlueprintName = "VVTermTests"
                ReferencedContainer = "container:VVTerm.xcodeproj">
             </BuildableReference>
-            <SkippedTests>
-               <Test
-                  Identifier = "SSHStartupIntegrationTests">
-               </Test>
-               <Test
-                  Identifier = "SSHAddressConnectorIntegrationTests">
-               </Test>
-               <Test
-                  Identifier = "RemoteTmuxManagerLocalIntegrationTests">
-               </Test>
-               <Test
-                  Identifier = "SSHSocketReadinessPollerTests/manySessionBenchmarkReportsBeforeAndAfterMedianAndTail()">
-               </Test>
-            </SkippedTests>
          </TestableReference>
       </Testables>
    </TestAction>
