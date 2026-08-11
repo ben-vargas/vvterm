@@ -124,9 +124,35 @@ Current architecture:
 
 Feature-first shape:
 - `Domain`: pure feature types and rules
-- `Application`: feature state, orchestration, coordinators, use-case style logic
+- `Application`: authoritative feature state, user intents, tasks, cancellation, and workflows
 - `Infrastructure`: transport, persistence, adapters, external integrations
-- `UI`: SwiftUI/AppKit/UIKit presentation only
+- `UI`: SwiftUI/AppKit/UIKit presentation that renders state and forwards user intents
+
+Dependency direction:
+- `App` creates one explicit production dependency graph and injects it at app or feature roots.
+- Keep the composition owner plain and non-observable. It assembles live dependencies but does not duplicate feature state.
+- Preview and test compositions must not start live CloudKit, Keychain, network, StoreKit, or other external work.
+- Leaf views, stores, coordinators, clients, repositories, and adapters must not create production dependencies through `.shared`, default live arguments, or hidden service locators.
+- Feature code may depend on neutral `Core` contracts. `Core` must not expose or depend on feature-owned models or policies.
+- Map feature models at Infrastructure boundaries. UI must not own transport, persistence, filesystem or path policy, shell syntax, or long-lived tasks.
+
+Type meanings for new and touched code:
+- `Store`: authoritative observable state.
+- `Coordinator`: one asynchronous workflow or lifecycle, including task replacement and cancellation.
+- `Client`: an external-system boundary.
+- `Repository`: a persistence boundary.
+- `Policy`: a pure deterministic rule.
+- `Projection`: narrow read-only observable state derived from an authoritative owner.
+- `Runtime`: a native resource lifecycle.
+- `Composition`: live, preview, or test dependency assembly.
+- Keep `ObservableObject` while iOS 16.1 and macOS 13.3 are supported. Do not start a whole-app Observation migration.
+- Retire an ambiguous `Manager` name only when its owned implementation already changes. Do not perform naming-only migrations.
+
+State and lifecycle rules:
+- Model closed presentation and workflow states with feature-owned enums instead of independent flags, revision counters, or closure payloads.
+- Store only facts that cannot be derived safely from authoritative state.
+- The owner that starts a task also owns replacement, cancellation, stale-result rejection, and teardown.
+- Prefer one stable dispatcher with typed command IDs for app and toolbar commands.
 
 For Files/SFTP specifically:
 - no non-view logic under `UI`
@@ -138,6 +164,15 @@ For every feature:
 - keep `Domain`, `Application`, `Infrastructure`, and `UI` boundaries intact
 - prefer view-owned dependencies to be injected from the app/screen boundary instead of created inside leaf views
 - if shared cross-feature primitives are needed, extract them into `Core` instead of creating new app-wide bucket folders
+- prefer one primary type per file and match the filename to that type
+- order files as inputs and owned state, initialization, public intents, then private helpers
+- keep view-owned state private; comments explain reasons and invariants instead of repeating code
+- review ownership when a file exceeds 600 lines; a file over 1,000 lines needs a clear reason
+
+Architecture non-goals:
+- no whole-app architecture rewrite, generic reducer framework, package explosion, mass rename, or UI redesign
+- no behavior change only to reduce a file size
+- use direct cutovers; do not add compatibility service locators or a second app dependency graph
 
 Apple platform UI split pattern:
 - Do not let shared SwiftUI files accumulate large inline `#if os(iOS)` / `#if os(macOS)` branches. If platform layout, lifecycle, modifiers, or state diverge, keep the shared feature shell neutral and move platform presentation into `Type+iOS.swift` and `Type+macOS.swift` files with file-level compile gates.
