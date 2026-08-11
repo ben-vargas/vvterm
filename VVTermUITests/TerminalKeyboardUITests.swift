@@ -91,13 +91,13 @@ final class TerminalKeyboardUITests: XCTestCase {
             return gap < 100
         }
 
-        let commands: [(key: String, modifiers: XCUIElement.KeyModifierFlags, action: String)] = [
-            ("d", [.command], "splitRight"),
-            (XCUIKeyboardKey.leftArrow.rawValue, [.command, .option], "selectLeft"),
-            (XCUIKeyboardKey.rightArrow.rawValue, [.command, .control], "moveDividerRight"),
+        let commands: [(button: String, action: String)] = [
+            ("vvterm.keyboardTest.command.cmdD", "splitRight"),
+            ("vvterm.keyboardTest.command.cmdAltLeft", "selectLeft"),
+            ("vvterm.keyboardTest.command.cmdCtrlRight", "moveDividerRight"),
         ]
         for (index, command) in commands.enumerated() {
-            app.typeKey(command.key, modifierFlags: command.modifiers)
+            app.buttons[command.button].tap()
             wait(
                 for: diagnostics,
                 labelContaining: "paneShortcutActions=\(index + 1)",

@@ -202,6 +202,30 @@ extension GhosttyTerminalView {
         )
     }
 
+    @discardableResult
+    func keyboardUITestSendRegisteredKeyCommand(
+        _ input: String,
+        modifiers: UIKeyModifierFlags
+    ) -> Bool {
+        guard let command = keyCommands?.first(where: {
+            $0.input == input && $0.modifierFlags == modifiers
+        }), let action = command.action,
+              imeProxyTextView.isFirstResponder,
+              let target = imeProxyTextView.target(
+                  forAction: action,
+                  withSender: command
+              ) as AnyObject?,
+              target === self else {
+            return false
+        }
+        return UIApplication.shared.sendAction(
+            action,
+            to: target,
+            from: command,
+            for: nil
+        )
+    }
+
     func keyboardUITestRequestHardwareKeyboardFocus() {
         _ = requestKeyboardFocus(for: .hardwareKeyboard)
     }

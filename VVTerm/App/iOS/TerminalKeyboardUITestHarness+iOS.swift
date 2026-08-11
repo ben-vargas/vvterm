@@ -1122,6 +1122,36 @@ struct TerminalSplitKeyboardUITestHarness: View {
             }
             .buttonStyle(.borderedProminent)
             .padding(8)
+
+            HStack(spacing: 8) {
+                Button("Registered Cmd-D") {
+                    focusedTerminal?.keyboardUITestSendRegisteredKeyCommand(
+                        "d",
+                        modifiers: .command
+                    )
+                }
+                .accessibilityIdentifier("vvterm.keyboardTest.command.cmdD")
+
+                Button("Registered Cmd-Alt-Left") {
+                    focusedTerminal?.keyboardUITestSendRegisteredKeyCommand(
+                        UIKeyCommand.inputLeftArrow,
+                        modifiers: [.command, .alternate]
+                    )
+                }
+                .accessibilityIdentifier("vvterm.keyboardTest.command.cmdAltLeft")
+
+                Button("Registered Cmd-Ctrl-Right") {
+                    focusedTerminal?.keyboardUITestSendRegisteredKeyCommand(
+                        UIKeyCommand.inputRightArrow,
+                        modifiers: [.command, .control]
+                    )
+                }
+                .accessibilityIdentifier("vvterm.keyboardTest.command.cmdCtrlRight")
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.top, 52)
+            .padding(.trailing, 8)
+            .frame(maxWidth: .infinity, alignment: .topTrailing)
         }
         .task {
             ghosttyApp.startIfNeeded()
