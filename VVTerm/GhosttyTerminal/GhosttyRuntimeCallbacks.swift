@@ -13,215 +13,250 @@ import AppKit
 import UIKit
 #endif
 
+private nonisolated enum GhosttyRuntimeAction: Sendable {
+    case title(String)
+    case workingDirectory(String)
+    case promptTitle
+    case progress(stateRawValue: UInt32, value: Int?)
+    #if os(iOS)
+    case startSearch(String)
+    case endSearch
+    case searchTotal(Int?)
+    case searchSelected(Int?)
+    #endif
+    case cellSize(width: UInt32, height: UInt32)
+    case scrollbar(Ghostty.Action.Scrollbar)
+    case readonly(Bool)
+}
+
+private nonisolated enum GhosttyRuntimeActionDisposition: Sendable {
+    case deliver(GhosttyRuntimeAction)
+    case handled
+    case unhandled
+}
+
+private nonisolated struct GhosttyRuntimeActionTarget: Sendable {
+    let app: Ghostty.App?
+    let surfaceAddress: UInt?
+    let fallbackTerminalView: GhosttyTerminalView?
+    let description: String
+    let tagRawValue: UInt32
+}
+
 extension Ghostty.App {
     @MainActor
     private struct TitleDeliveryLogCache {
         static var lastUndeliveredTitleBySurface: [String: String] = [:]
     }
 
-    // MARK: - Callbacks (macOS)
+    /// Builds C callbacks outside the app's Main Actor isolation. libghostty may
+    /// invoke every callback from its renderer thread.
+    nonisolated static func makeRuntimeConfiguration(
+        userdata: UnsafeMutableRawPointer?,
+        supportsSelectionClipboard: Bool
+    ) -> ghostty_runtime_config_s {
+        ghostty_runtime_config_s(
+            userdata: userdata,
+            supports_selection_clipboard: supportsSelectionClipboard,
+            wakeup_cb: { userdata in Ghostty.App.wakeup(userdata) },
+            action_cb: { app, target, action in
+                guard let app else { return false }
+                return Ghostty.App.runtimeAction(app, target: target, action: action)
+            },
+            read_clipboard_cb: { userdata, location, state in
+                Ghostty.App.readClipboard(userdata, location: location, state: state)
+            },
+            confirm_read_clipboard_cb: { userdata, string, state, request in
+                Ghostty.App.confirmReadClipboard(
+                    userdata,
+                    string: string,
+                    state: state,
+                    request: request
+                )
+            },
+            write_clipboard_cb: { userdata, location, contents, count, confirm in
+                Ghostty.App.writeClipboard(
+                    userdata,
+                    location: location,
+                    contents: contents,
+                    count: count,
+                    confirm: confirm
+                )
+            },
+            close_surface_cb: { userdata, processAlive in
+                Ghostty.App.closeSurface(userdata, processAlive: processAlive)
+            }
+        )
+    }
 
-    static func wakeup(_ userdata: UnsafeMutableRawPointer?) {
-        guard let state = Ghostty.CallbackContext<Ghostty.App>.resolve(userdata) else { return }
+    // MARK: - Native callback boundary
+
+    nonisolated private static func wakeup(_ userdata: UnsafeMutableRawPointer?) {
+        guard let app = Ghostty.CallbackContext<Ghostty.App>.resolve(userdata) else { return }
         DispatchQueue.main.async {
-            state.appTick()
+            app.appTick()
         }
     }
 
-    static func action(_ app: ghostty_app_t, target: ghostty_target_s, action: ghostty_action_s) -> Bool {
-        // Get the terminal view from surface userdata if target is a surface
-        var titleTargetDescription = "target \(target.tag.rawValue)"
-        var activeSurfaceCount = 0
-        let terminalView: GhosttyTerminalView? = {
-            guard target.tag == GHOSTTY_TARGET_SURFACE else { return nil }
-            guard let surface = target.target.surface else { return nil }
-            titleTargetDescription = String(describing: surface)
-            if let appUserdata = ghostty_app_userdata(app) {
-                let state = Ghostty.CallbackContext<Ghostty.App>.resolve(appUserdata)
-                activeSurfaceCount = state?.activeSurfaceCount() ?? 0
-                if let registeredView = state?.terminalView(for: surface) {
-                    return registeredView
-                }
+    nonisolated private static func runtimeAction(
+        _ app: ghostty_app_t,
+        target: ghostty_target_s,
+        action: ghostty_action_s
+    ) -> Bool {
+        let actionTarget = makeActionTarget(app: app, target: target)
+        switch decode(action) {
+        case .deliver(let runtimeAction):
+            DispatchQueue.main.async {
+                deliver(runtimeAction, to: actionTarget)
             }
-            guard let surfaceUserdata = ghostty_surface_userdata(surface) else { return nil }
-            return Ghostty.CallbackContext<GhosttyTerminalView>.resolve(surfaceUserdata)
-        }()
+            return true
 
+        case .handled:
+            return true
+
+        case .unhandled:
+            DispatchQueue.main.async {
+                Ghostty.logger.debug(
+                    "Action received: \(action.tag.rawValue) on target: \(actionTarget.tagRawValue)"
+                )
+            }
+            return false
+        }
+    }
+
+    nonisolated private static func makeActionTarget(
+        app: ghostty_app_t,
+        target: ghostty_target_s
+    ) -> GhosttyRuntimeActionTarget {
+        guard target.tag == GHOSTTY_TARGET_SURFACE,
+              let surface = target.target.surface else {
+            return GhosttyRuntimeActionTarget(
+                app: nil,
+                surfaceAddress: nil,
+                fallbackTerminalView: nil,
+                description: "target \(target.tag.rawValue)",
+                tagRawValue: target.tag.rawValue
+            )
+        }
+
+        let appOwner = ghostty_app_userdata(app).flatMap {
+            Ghostty.CallbackContext<Ghostty.App>.resolve($0)
+        }
+        let fallbackTerminalView = ghostty_surface_userdata(surface).flatMap {
+            Ghostty.CallbackContext<GhosttyTerminalView>.resolve($0)
+        }
+        return GhosttyRuntimeActionTarget(
+            app: appOwner,
+            surfaceAddress: UInt(bitPattern: surface),
+            fallbackTerminalView: fallbackTerminalView,
+            description: String(describing: surface),
+            tagRawValue: target.tag.rawValue
+        )
+    }
+
+    nonisolated private static func decode(
+        _ action: ghostty_action_s
+    ) -> GhosttyRuntimeActionDisposition {
         switch action.tag {
         case GHOSTTY_ACTION_SET_TITLE:
-            // Window/tab title change
-            if let titlePtr = action.action.set_title.title {
-                let title = String(cString: titlePtr)
-
-                // Propagate to terminal view callback
-                DispatchQueue.main.async {
-                    guard let terminalView else {
-                        if TitleDeliveryLogCache.lastUndeliveredTitleBySurface[titleTargetDescription] != title {
-                            TitleDeliveryLogCache.lastUndeliveredTitleBySurface[titleTargetDescription] = title
-                            Ghostty.logger.warning(
-                                "Ghostty title received without terminal view: \(title, privacy: .public), target: \(titleTargetDescription, privacy: .public), active surfaces: \(activeSurfaceCount)"
-                            )
-                        }
-                        return
-                    }
-
-                    guard terminalView.onTitleChange != nil else {
-                        if TitleDeliveryLogCache.lastUndeliveredTitleBySurface[titleTargetDescription] != title {
-                            TitleDeliveryLogCache.lastUndeliveredTitleBySurface[titleTargetDescription] = title
-                            Ghostty.logger.warning(
-                                "Ghostty title received before title callback was installed: \(title, privacy: .public), target: \(titleTargetDescription, privacy: .public)"
-                            )
-                        }
-                        return
-                    }
-
-                    terminalView.onTitleChange?(title)
-                }
-            }
-            return true
+            guard let title = action.action.set_title.title else { return .handled }
+            return .deliver(.title(String(cString: title)))
 
         case GHOSTTY_ACTION_PWD:
-            // Working directory change
-            if let pwdPtr = action.action.pwd.pwd {
-                let pwd = String(cString: pwdPtr)
-                Ghostty.logger.info("PWD changed: \(pwd)")
-                DispatchQueue.main.async {
-                    terminalView?.onPwdChange?(pwd)
-                }
-            }
-            return true
+            guard let pwd = action.action.pwd.pwd else { return .handled }
+            return .deliver(.workingDirectory(String(cString: pwd)))
 
         case GHOSTTY_ACTION_PROMPT_TITLE:
-            // Prompt title update (for shell integration)
-            Ghostty.logger.debug("Prompt title action received")
-            return true
+            return .deliver(.promptTitle)
 
         case GHOSTTY_ACTION_PROGRESS_REPORT:
             let report = action.action.progress_report
-            let state = GhosttyProgressState(cState: report.state)
-            let value = report.progress >= 0 ? Int(report.progress) : nil
-            DispatchQueue.main.async {
-                terminalView?.onProgressReport?(state, value)
-            }
-            return true
+            return .deliver(.progress(
+                stateRawValue: report.state.rawValue,
+                value: report.progress >= 0 ? Int(report.progress) : nil
+            ))
 
         case GHOSTTY_ACTION_START_SEARCH:
             #if os(iOS)
             let needle = action.action.start_search.needle.map { String(cString: $0) } ?? ""
-            DispatchQueue.main.async {
-                terminalView?.handleGhosttySearchStarted(needle: needle)
-            }
-            return true
+            return .deliver(.startSearch(needle))
             #else
-            return false
+            return .unhandled
             #endif
 
         case GHOSTTY_ACTION_END_SEARCH:
             #if os(iOS)
-            DispatchQueue.main.async {
-                terminalView?.handleGhosttySearchEnded()
-            }
-            return true
+            return .deliver(.endSearch)
             #else
-            return false
+            return .unhandled
             #endif
 
         case GHOSTTY_ACTION_SEARCH_TOTAL:
             #if os(iOS)
-            let total = action.action.search_total.total >= 0 ? Int(action.action.search_total.total) : nil
-            DispatchQueue.main.async {
-                terminalView?.handleGhosttySearchTotalChange(total)
-            }
-            return true
+            let total = action.action.search_total.total
+            return .deliver(.searchTotal(total >= 0 ? Int(total) : nil))
             #else
-            return false
+            return .unhandled
             #endif
 
         case GHOSTTY_ACTION_SEARCH_SELECTED:
             #if os(iOS)
-            let selected = action.action.search_selected.selected >= 0 ? Int(action.action.search_selected.selected) : nil
-            DispatchQueue.main.async {
-                terminalView?.handleGhosttySearchSelectedChange(selected)
-            }
-            return true
+            let selected = action.action.search_selected.selected
+            return .deliver(.searchSelected(selected >= 0 ? Int(selected) : nil))
             #else
-            return false
+            return .unhandled
             #endif
 
         case GHOSTTY_ACTION_CELL_SIZE:
-            // Cell size update - used for row-to-pixel conversion in scrollbar
-            #if os(macOS)
             let cellSize = action.action.cell_size
-            let backingSize = NSSize(width: Double(cellSize.width), height: Double(cellSize.height))
-            DispatchQueue.main.async {
-                guard let terminalView = terminalView else { return }
-                // Convert from backing (pixel) coordinates to points
-                terminalView.cellSize = terminalView.convertFromBacking(backingSize)
-            }
-            #else
-            let cellSize = action.action.cell_size
-            DispatchQueue.main.async {
-                guard let terminalView = terminalView else { return }
-                // Convert from backing (pixel) coordinates to points
-                let scale = terminalView.window?.screen.scale ?? max(terminalView.traitCollection.displayScale, 1)
-                terminalView.cellSize = CGSize(
-                    width: Double(cellSize.width) / scale,
-                    height: Double(cellSize.height) / scale
-                )
-            }
-            #endif
-            return true
+            return .deliver(.cellSize(width: cellSize.width, height: cellSize.height))
 
         case GHOSTTY_ACTION_SCROLLBAR:
-            // Scrollbar state update - post notification for scroll view
-            let scrollbar = Ghostty.Action.Scrollbar(c: action.action.scrollbar)
-            NotificationCenter.default.post(
-                name: .ghosttyDidUpdateScrollbar,
-                object: terminalView,
-                userInfo: [Notification.Name.ScrollbarKey: scrollbar]
-            )
-            return true
+            return .deliver(.scrollbar(Ghostty.Action.Scrollbar(c: action.action.scrollbar)))
 
         case GHOSTTY_ACTION_READONLY:
-            let isReadonly = action.action.readonly == GHOSTTY_READONLY_ON
-            DispatchQueue.main.async {
-                terminalView?.updateReadonlyState(isReadonly)
-            }
-            return true
+            return .deliver(.readonly(action.action.readonly == GHOSTTY_READONLY_ON))
 
         case GHOSTTY_ACTION_MOUSE_SHAPE,
              GHOSTTY_ACTION_MOUSE_VISIBILITY,
              GHOSTTY_ACTION_MOUSE_OVER_LINK:
             #if os(iOS)
-            return true
+            return .handled
             #else
-            Ghostty.logger.debug("Action received: \(action.tag.rawValue) on target: \(target.tag.rawValue)")
-            return false
+            return .unhandled
             #endif
 
         default:
-            // Log unhandled actions
-            Ghostty.logger.debug("Action received: \(action.tag.rawValue) on target: \(target.tag.rawValue)")
-            return false
+            return .unhandled
         }
     }
 
-    static func readClipboard(_ userdata: UnsafeMutableRawPointer?, location: ghostty_clipboard_e, state: UnsafeMutableRawPointer?) {
+    nonisolated private static func readClipboard(
+        _ userdata: UnsafeMutableRawPointer?,
+        location: ghostty_clipboard_e,
+        state: UnsafeMutableRawPointer?
+    ) {
+        _ = location
         guard let terminalView = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata) else { return }
-        guard let surface = terminalView.surface?.unsafeCValue else { return }
+        let stateAddress = state.map { UInt(bitPattern: $0) }
 
-        // Read from macOS clipboard
-        let clipboardString = Clipboard.readString() ?? ""
-
-        // Complete the clipboard request by providing data to Ghostty
-        clipboardString.withCString { ptr in
-            ghostty_surface_complete_clipboard_request(surface, ptr, state, false)
+        DispatchQueue.main.async {
+            guard let surface = terminalView.surface?.unsafeCValue else { return }
+            let clipboardString = Clipboard.readString() ?? ""
+            let callbackState = stateAddress.flatMap(UnsafeMutableRawPointer.init(bitPattern:))
+            clipboardString.withCString { pointer in
+                ghostty_surface_complete_clipboard_request(
+                    surface,
+                    pointer,
+                    callbackState,
+                    false
+                )
+            }
+            Ghostty.logger.debug("Read clipboard [bytes: \(clipboardString.utf8.count)]")
         }
-
-        Ghostty.logger.debug("Read clipboard [bytes: \(clipboardString.utf8.count)]")
     }
 
-    static func confirmReadClipboard(
+    nonisolated private static func confirmReadClipboard(
         _ userdata: UnsafeMutableRawPointer?,
         string: UnsafePointer<CChar>?,
         state: UnsafeMutableRawPointer?,
@@ -231,12 +266,18 @@ extension Ghostty.App {
               let string,
               let state else { return }
         let clipboardString = String(cString: string)
-        terminalView.handleClipboardConfirmation(
-            clipboardString,
-            state: state,
-            kind: clipboardConfirmationKind(request: request)
-        )
-        Ghostty.logger.debug("Queued clipboard confirmation request: \(request.rawValue)")
+        let stateAddress = UInt(bitPattern: state)
+        let kind = clipboardConfirmationKind(request: request)
+
+        DispatchQueue.main.async {
+            guard let callbackState = UnsafeMutableRawPointer(bitPattern: stateAddress) else { return }
+            terminalView.handleClipboardConfirmation(
+                clipboardString,
+                state: callbackState,
+                kind: kind
+            )
+            Ghostty.logger.debug("Queued clipboard confirmation request: \(request.rawValue)")
+        }
     }
 
     nonisolated static func clipboardConfirmationKind(
@@ -254,53 +295,139 @@ extension Ghostty.App {
         }
     }
 
-    static func writeClipboard(
+    nonisolated private static func writeClipboard(
         _ userdata: UnsafeMutableRawPointer?,
         location: ghostty_clipboard_e,
         contents: UnsafePointer<ghostty_clipboard_content_s>?,
         count: Int,
         confirm: Bool
     ) {
-        guard let contents = contents, count > 0 else { return }
+        guard let contents, count > 0 else { return }
         guard let terminalView = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata) else { return }
         #if os(iOS)
         guard location != GHOSTTY_CLIPBOARD_SELECTION else { return }
         #endif
 
-        // The runtime passes an array of clipboard entries; prefer the first
-        // textual entry. The API does not supply a byte length, so we treat
-        // the data as a null-terminated UTF-8 C string.
-        for idx in 0..<count {
-            let entry = contents.advanced(by: idx).pointee
-            guard let dataPtr = entry.data else { continue }
+        for index in 0..<count {
+            let entry = contents.advanced(by: index).pointee
+            guard let data = entry.data else { continue }
+            let string = String(cString: data)
+            guard !string.isEmpty else { continue }
 
-            var string = String(cString: dataPtr)
-            if !string.isEmpty {
-                // Apply copy transformations from settings
-                string = TerminalTextCleaner.cleanText(string, settings: .current())
-
+            DispatchQueue.main.async {
+                let cleanedString = TerminalTextCleaner.cleanText(
+                    string,
+                    settings: .current()
+                )
                 let action = TerminalClipboardWritePolicy.action(
                     requiresConfirmation: confirm
                 )
-                DispatchQueue.main.async {
-                    terminalView.handleClipboardWrite(string, action: action)
-                }
+                terminalView.handleClipboardWrite(cleanedString, action: action)
                 Ghostty.logger.debug(
-                    "Handled clipboard write [bytes: \(string.utf8.count)] [confirmation: \(confirm)]"
+                    "Handled clipboard write [bytes: \(cleanedString.utf8.count)] [confirmation: \(confirm)]"
                 )
-                return
             }
+            return
         }
     }
 
-    static func closeSurface(_ userdata: UnsafeMutableRawPointer?, processAlive: Bool) {
+    nonisolated private static func closeSurface(
+        _ userdata: UnsafeMutableRawPointer?,
+        processAlive: Bool
+    ) {
         guard let terminalView = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata) else { return }
-
-        Ghostty.logger.info("Close surface: processAlive=\(processAlive)")
-
-        // Trigger process exit callback on main thread
         DispatchQueue.main.async {
+            Ghostty.logger.info("Close surface: processAlive=\(processAlive)")
             terminalView.onProcessExit?()
+        }
+    }
+
+    // MARK: - Main Actor delivery
+
+    private static func deliver(
+        _ action: GhosttyRuntimeAction,
+        to target: GhosttyRuntimeActionTarget
+    ) {
+        let registeredTerminalView: GhosttyTerminalView?
+        if let surfaceAddress = target.surfaceAddress,
+           let surface = UnsafeMutableRawPointer(bitPattern: surfaceAddress),
+           let app = target.app {
+            registeredTerminalView = app.terminalView(for: surface)
+        } else {
+            registeredTerminalView = nil
+        }
+        let terminalView = registeredTerminalView ?? target.fallbackTerminalView
+
+        switch action {
+        case .title(let title):
+            guard let terminalView else {
+                if TitleDeliveryLogCache.lastUndeliveredTitleBySurface[target.description] != title {
+                    TitleDeliveryLogCache.lastUndeliveredTitleBySurface[target.description] = title
+                    Ghostty.logger.warning(
+                        "Ghostty title received without terminal view: \(title, privacy: .public), target: \(target.description, privacy: .public), active surfaces: \(target.app?.activeSurfaceCount() ?? 0)"
+                    )
+                }
+                return
+            }
+            guard terminalView.onTitleChange != nil else {
+                if TitleDeliveryLogCache.lastUndeliveredTitleBySurface[target.description] != title {
+                    TitleDeliveryLogCache.lastUndeliveredTitleBySurface[target.description] = title
+                    Ghostty.logger.warning(
+                        "Ghostty title received before title callback was installed: \(title, privacy: .public), target: \(target.description, privacy: .public)"
+                    )
+                }
+                return
+            }
+            terminalView.onTitleChange?(title)
+
+        case .workingDirectory(let path):
+            Ghostty.logger.info("PWD changed: \(path)")
+            terminalView?.onPwdChange?(path)
+
+        case .promptTitle:
+            Ghostty.logger.debug("Prompt title action received")
+
+        case .progress(let stateRawValue, let value):
+            let cState = ghostty_action_progress_report_state_e(rawValue: stateRawValue)
+            terminalView?.onProgressReport?(GhosttyProgressState(cState: cState), value)
+
+        #if os(iOS)
+        case .startSearch(let needle):
+            terminalView?.handleGhosttySearchStarted(needle: needle)
+
+        case .endSearch:
+            terminalView?.handleGhosttySearchEnded()
+
+        case .searchTotal(let total):
+            terminalView?.handleGhosttySearchTotalChange(total)
+
+        case .searchSelected(let selected):
+            terminalView?.handleGhosttySearchSelectedChange(selected)
+        #endif
+
+        case .cellSize(let width, let height):
+            guard let terminalView else { return }
+            #if os(macOS)
+            let backingSize = NSSize(width: Double(width), height: Double(height))
+            terminalView.cellSize = terminalView.convertFromBacking(backingSize)
+            #else
+            let scale = terminalView.window?.screen.scale
+                ?? max(terminalView.traitCollection.displayScale, 1)
+            terminalView.cellSize = CGSize(
+                width: Double(width) / scale,
+                height: Double(height) / scale
+            )
+            #endif
+
+        case .scrollbar(let scrollbar):
+            NotificationCenter.default.post(
+                name: .ghosttyDidUpdateScrollbar,
+                object: terminalView,
+                userInfo: [Notification.Name.ScrollbarKey: scrollbar]
+            )
+
+        case .readonly(let isReadonly):
+            terminalView?.updateReadonlyState(isReadonly)
         }
     }
 }

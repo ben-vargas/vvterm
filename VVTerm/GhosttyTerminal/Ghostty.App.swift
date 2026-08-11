@@ -157,20 +157,9 @@ extension Ghostty {
 
             // Create runtime config with callbacks
             let callbackContext = Ghostty.CallbackContext(owner: self)
-            var runtime_cfg = ghostty_runtime_config_s(
+            var runtime_cfg = App.makeRuntimeConfiguration(
                 userdata: callbackContext.userdata,
-                supports_selection_clipboard: supportsSelectionClipboard,
-                wakeup_cb: { userdata in App.wakeup(userdata) },
-                action_cb: { app, target, action in
-                    guard let app else { return false }
-                    return App.action(app, target: target, action: action)
-                },
-                read_clipboard_cb: { userdata, loc, state in App.readClipboard(userdata, location: loc, state: state) },
-                confirm_read_clipboard_cb: { userdata, str, state, request in App.confirmReadClipboard(userdata, string: str, state: state, request: request) },
-                write_clipboard_cb: { userdata, loc, content, count, confirm in
-                    App.writeClipboard(userdata, location: loc, contents: content, count: count, confirm: confirm)
-                },
-                close_surface_cb: { userdata, processAlive in App.closeSurface(userdata, processAlive: processAlive) }
+                supportsSelectionClipboard: supportsSelectionClipboard
             )
 
             // Create config and load VVTerm terminal settings
