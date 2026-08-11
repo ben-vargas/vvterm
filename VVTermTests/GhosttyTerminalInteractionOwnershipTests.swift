@@ -9,6 +9,47 @@ import UIKit
 @MainActor
 struct GhosttyTerminalInteractionOwnershipTests {
     @Test
+    func textInteractionBeginsOnlyForSettledNativeSelection() throws {
+        let app = Ghostty.App()
+        defer { app.cleanup() }
+        let appHandle = try #require(app.app)
+        let terminal = GhosttyTerminalView(
+            frame: CGRect(x: 0, y: 0, width: 800, height: 600),
+            worktreePath: FileManager.default.currentDirectoryPath,
+            ghosttyApp: appHandle,
+            appWrapper: app,
+            paneId: "interaction-begin-policy",
+            terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
+                profile: .defaultValue(lastWriterDeviceId: "interaction-begin-policy-test"),
+                showsDismissKeyboardButton: true
+            ),
+            useCustomIO: true
+        )
+        defer { terminal.cleanup() }
+        let interaction = try #require(terminal.nativeTextInteraction)
+
+        #expect(!terminal.interactionShouldBegin(interaction, at: .zero))
+
+        terminal.feedData(Data("one two".utf8))
+        terminal.refreshNativeSelectionSnapshot()
+        let selectionLength = min(3, terminal.nativeSelectionSnapshot.length)
+        try #require(selectionLength > 0)
+        terminal.nativeSelectionLifecycle.prepare(restoreTerminalInput: false)
+        terminal.nativeSelectionLifecycle.beginInteraction(restoreTerminalInput: false)
+        _ = terminal.nativeSelectionLifecycle.setSelection(
+            NSRange(location: 0, length: selectionLength)
+        )
+        _ = terminal.nativeSelectionLifecycle.endInteraction()
+        #expect(
+            terminal.nativeSelectedRange == NSRange(location: 0, length: selectionLength)
+        )
+
+        #expect(terminal.interactionShouldBegin(interaction, at: .zero))
+        terminal.nativeSelectionLifecycle.cancel()
+        #expect(terminal.nativeSelectionLifecycle.phase == .inactive)
+    }
+
+    @Test
     func terminalInteractionsAreInstalledAndReleased() async throws {
         let app = Ghostty.App()
         defer { app.cleanup() }
