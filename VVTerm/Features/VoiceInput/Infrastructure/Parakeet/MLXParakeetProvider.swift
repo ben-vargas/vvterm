@@ -24,12 +24,12 @@ final class MLXParakeetProvider {
             try Task.checkCancellation()
             guard !samples.isEmpty else { return "" }
 
-            let model = try ParakeetModelLoader.shared.loadModel(at: modelDirectory)
+            let result = try ParakeetModelLoader.shared.transcribe(
+                samples: samples,
+                modelDirectory: modelDirectory
+            )
             try Task.checkCancellation()
-            let audio = MLXArray(samples, [samples.count])
-            let result = try model.transcribe(audioData: audio, dtype: .float32, chunkDuration: nil)
-            try Task.checkCancellation()
-            return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return result
         }
         return try await withTaskCancellationHandler {
             try await task.value
@@ -50,7 +50,9 @@ final class MLXParakeetProvider {
 import MLX
 @preconcurrency import MLXNN
 
-nonisolated final class ParakeetModelLoader {
+/// MLX model loading and inference are serialized by `lock`. No model value
+/// escapes this object, so the lock is the complete mutable-state boundary.
+nonisolated final class ParakeetModelLoader: @unchecked Sendable {
     static let shared = ParakeetModelLoader()
 
     private var cachedModel: ParakeetTDT?
@@ -59,10 +61,20 @@ nonisolated final class ParakeetModelLoader {
 
     private init() {}
 
-    func loadModel(at modelDirectory: URL) throws -> ParakeetTDT {
+    func transcribe(samples: [Float], modelDirectory: URL) throws -> String {
         lock.lock()
         defer { lock.unlock() }
 
+        try Task.checkCancellation()
+        let model = try loadModel(at: modelDirectory)
+        try Task.checkCancellation()
+        let audio = MLXArray(samples, [samples.count])
+        let result = try model.transcribe(audioData: audio, dtype: .float32, chunkDuration: nil)
+        try Task.checkCancellation()
+        return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func loadModel(at modelDirectory: URL) throws -> ParakeetTDT {
         if let cachedModel, cachedModelURL == modelDirectory {
             return cachedModel
         }
