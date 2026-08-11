@@ -155,6 +155,21 @@ final class NoticePresentationUITests: XCTestCase {
     }
 
     @MainActor
+    func testFilesEntryCanReopenPreviewAfterBackNavigation() throws {
+        let app = launchNoticeHarness(additionalArguments: ["--vvterm-ui-test-notice-files-preview"])
+        let previewNavigationBar = app.navigationBars["report.pdf"]
+
+        XCTAssertTrue(previewNavigationBar.waitForExistence(timeout: 10))
+        previewNavigationBar.buttons.firstMatch.tap()
+
+        XCTAssertTrue(app.navigationBars["Files"].waitForExistence(timeout: 5))
+        let entry = app.buttons["vvterm.noticeTest.filesEntry"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        entry.tap()
+        XCTAssertTrue(previewNavigationBar.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testConcurrentOperationsStackAboveBottomToolbar() throws {
         let app = launchNoticeHarness(additionalArguments: ["--vvterm-ui-test-notice-operation-stack"])
         let first = app.staticTexts["Upload 1"]

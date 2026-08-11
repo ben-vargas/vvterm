@@ -46,6 +46,25 @@ struct RemoteFilePathTests {
     }
 
     @Test
+    func pathPolicyTrimsAValidName() throws {
+        #expect(try RemoteFilePathPolicy.validatedName("  notes.txt \n") == "notes.txt")
+    }
+
+    @Test(arguments: ["", "   ", ".", "..", "nested/file", "nested\\file"])
+    func pathPolicyRejectsInvalidNames(_ value: String) {
+        #expect(throws: RemoteFileBrowserError.self) {
+            try RemoteFilePathPolicy.validatedName(value)
+        }
+    }
+
+    @Test
+    func pathPolicyResolvesRelativeDestinationDirectory() throws {
+        let path = try RemoteFilePathPolicy.validatedDirectoryPath("../archive", relativeTo: "/srv/current")
+
+        #expect(path == "/srv/archive")
+    }
+
+    @Test
     func localDescendantRejectsParentSymlinkOutsideRoot() throws {
         let fileManager = FileManager.default
         let base = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)

@@ -383,7 +383,7 @@ extension RemoteFileBrowserScreen {
                 return
             }
             do {
-                let validatedName = try validatedRemoteName(proposedName)
+                let validatedName = try RemoteFilePathPolicy.validatedName(proposedName)
                 let createdPath = RemoteFilePath.appending(validatedName, to: parentPath)
                 platformState.inlineEditor = .createFolder(
                     parentPath: parentPath,
@@ -424,7 +424,7 @@ extension RemoteFileBrowserScreen {
 
         case .rename(let entryPath, let originalName, _, _):
             do {
-                let validatedName = try validatedRemoteName(proposedName)
+                let validatedName = try RemoteFilePathPolicy.validatedName(proposedName)
                 if validatedName == originalName {
                     platformState.inlineEditor = nil
                     return
@@ -671,7 +671,13 @@ extension RemoteFileBrowserScreen {
             initialMessage: String(localized: "Preparing remote items."),
             successMessage: String(localized: "Transfer complete.")
         ) { onProgress in
-            try await transferDroppedRemoteItems([payload], to: destinationPath, onProgress: onProgress)
+            try await browser.transferDroppedRemoteItems(
+                [payload],
+                to: destinationPath,
+                destinationTab: fileTab,
+                destinationServer: server,
+                onProgress: onProgress
+            )
         }
     }
 

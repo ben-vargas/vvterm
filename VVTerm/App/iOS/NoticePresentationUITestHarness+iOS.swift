@@ -351,7 +351,12 @@ private struct NoticeFilesPreviewHarness: View {
     var body: some View {
         NavigationStack {
             List {
-                Label("report.pdf", systemImage: "doc.richtext")
+                Button {
+                    showsPreview = true
+                } label: {
+                    Label("report.pdf", systemImage: "doc.richtext")
+                }
+                .accessibilityIdentifier("vvterm.noticeTest.filesEntry")
             }
             .navigationTitle("Files")
             .navigationDestination(isPresented: $showsPreview) {

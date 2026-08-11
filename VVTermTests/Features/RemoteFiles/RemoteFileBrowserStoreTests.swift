@@ -145,6 +145,27 @@ struct RemoteFileBrowserStoreTests {
         #expect(await cancellationProbe.waitUntilCancelled())
     }
 
+    @Test
+    func tabRemovalDeletesOwnedTemporaryTransfers() throws {
+        let rootDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storage = RemoteFileTemporaryStorage(rootDirectory: rootDirectory)
+        let store = RemoteFileBrowserStore(
+            defaults: makeDefaults(),
+            temporaryStorage: storage
+        )
+        let tab = makeTab()
+        let url = try store.makeTemporaryTransferFileURL(
+            for: makeEntry(name: "download.txt", path: "/download.txt", type: .file),
+            in: tab
+        )
+        try Data("partial".utf8).write(to: url)
+
+        store.removeRuntimeState(for: tab.id)
+
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
     @Test(arguments: [1_999, 2_000, 2_001])
     func directoryListingTruncatesOnlyWhenAnExtraEntryExists(entryCount: Int) {
         let entries = (0..<entryCount).map { index in

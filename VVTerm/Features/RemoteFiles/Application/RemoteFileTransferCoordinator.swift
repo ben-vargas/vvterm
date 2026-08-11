@@ -81,7 +81,7 @@ extension RemoteFileBrowserStore {
         server: Server,
         permissions: Int32 = 0o755
     ) async throws {
-        let leaf = try RemoteFileLeaf(validating: validatedRemoteName(directoryName))
+        let leaf = try RemoteFileLeaf(validating: RemoteFilePathPolicy.validatedName(directoryName))
         let remotePath = RemoteFilePath.appending(leaf, to: remoteDirectoryPath)
         try await createDirectory(at: remotePath, in: tab, server: server, permissions: permissions)
     }
@@ -976,13 +976,5 @@ extension RemoteFileBrowserStore {
             }
         }
         return try await operation()
-    }
-
-    func validatedRemoteName(_ name: String) throws -> String {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw RemoteFileBrowserError.failed(String(localized: "A name is required."))
-        }
-        return try RemoteFileLeaf(validating: trimmed).value
     }
 }

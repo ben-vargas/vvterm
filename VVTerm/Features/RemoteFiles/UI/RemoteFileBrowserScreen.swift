@@ -580,7 +580,7 @@ struct RemoteFileBrowserScreen: View {
         successFilePath: String? = nil,
         keepsSuccessVisible: Bool = false,
         onSuccess: (@MainActor () -> Void)? = nil,
-        operation: @escaping (@escaping @MainActor (RemoteFileBrowserStore.TransferProgress) -> Void) async throws -> Void
+        operation: @escaping (@escaping @MainActor @Sendable (RemoteFileBrowserStore.TransferProgress) -> Void) async throws -> Void
     ) {
         operationCoordinator.start(
             id: id,
@@ -887,12 +887,17 @@ struct RemoteFileBrowserScreen: View {
             initialMessage: String(localized: "Preparing remote file."),
             successMessage: String(localized: "Share sheet ready.")
         ) {
-            let temporaryURL = try temporaryDownloadURL(for: entry)
-            try await browser.downloadFile(
-                at: entry.path,
-                to: temporaryURL,
-                server: server
-            )
+            let temporaryURL = try browser.makeTemporaryTransferFileURL(for: entry, in: fileTab)
+            do {
+                try await browser.downloadFile(
+                    at: entry.path,
+                    to: temporaryURL,
+                    server: server
+                )
+            } catch {
+                browser.removeTemporaryTransferFile(at: temporaryURL, in: fileTab)
+                throw error
+            }
 
             await MainActor.run {
                 shareItem = RemoteFileShareItem(
@@ -1098,9 +1103,11 @@ struct RemoteFileBrowserScreen: View {
             successMessage: String(localized: "Transfer complete.")
         ) { onProgress in
             let payloads = try await loadDroppedRemotePayloads(from: remoteProviders)
-            try await transferDroppedRemoteItems(
+            try await browser.transferDroppedRemoteItems(
                 payloads,
                 to: destinationPath,
+                destinationTab: fileTab,
+                destinationServer: server,
                 onProgress: onProgress
             )
         }
@@ -1239,18 +1246,10 @@ struct RemoteFileBrowserScreen: View {
             payloads.append(try await loadDroppedRemotePayload(from: provider))
         }
 
-        var seenPaths: Set<String> = []
-        let uniquePayloads: [RemoteFileDragPayload] = payloads.compactMap { payload in
-            let uniqueEntries = payload.entries.filter { entry in
-                seenPaths.insert(entry.path).inserted
-            }
-            guard !uniqueEntries.isEmpty else { return nil }
-            return RemoteFileDragPayload(serverId: payload.serverId, entries: uniqueEntries)
-        }
-        guard !uniquePayloads.isEmpty else {
+        guard payloads.contains(where: { !$0.entries.isEmpty }) else {
             throw RemoteFileBrowserError.failed(String(localized: "No valid remote items were dropped."))
         }
-        return uniquePayloads
+        return payloads
     }
 
     func loadDroppedRemotePayload(from provider: NSItemProvider) async throws -> RemoteFileDragPayload {
@@ -1282,88 +1281,6 @@ struct RemoteFileBrowserScreen: View {
         }
     }
 
-    func moveDroppedRemoteItems(
-        _ payloads: [RemoteFileDragPayload],
-        to destinationDirectoryPath: String,
-        onProgress: (@MainActor (RemoteFileBrowserStore.TransferProgress) -> Void)? = nil
-    ) async throws {
-        let uniqueEntries = payloads
-            .flatMap(\.entries)
-            .reduce(into: [RemoteFileEntry]()) { entries, entry in
-                guard !entries.contains(where: { $0.path == entry.path }) else { return }
-                entries.append(entry)
-            }
-        let totalUnitCount = max(1, uniqueEntries.count)
-
-        for (index, sourceEntry) in uniqueEntries.enumerated() {
-            let destinationDirectory = RemoteFilePath.normalize(destinationDirectoryPath)
-            let sourceLeaf = try RemoteFileLeaf(validating: sourceEntry.name)
-            let destinationPath = RemoteFilePath.appending(sourceLeaf, to: destinationDirectory)
-
-            guard destinationPath != sourceEntry.path else { continue }
-
-            if sourceEntry.type == .directory {
-                let normalizedSource = RemoteFilePath.normalize(sourceEntry.path)
-                if destinationDirectory == normalizedSource || destinationDirectory.hasPrefix(normalizedSource + "/") {
-                    throw RemoteFileBrowserError.failed(
-                        String(localized: "A folder cannot be moved into itself or one of its descendants.")
-                    )
-                }
-            }
-
-            try await browser.renameItem(
-                at: sourceEntry.path,
-                to: destinationPath,
-                in: fileTab,
-                server: server
-            )
-            onProgress?(
-                RemoteFileBrowserStore.TransferProgress(
-                    completedUnitCount: index + 1,
-                    totalUnitCount: totalUnitCount,
-                    currentItemName: sourceEntry.name
-                )
-            )
-        }
-    }
-
-    func transferDroppedRemoteItems(
-        _ payloads: [RemoteFileDragPayload],
-        to destinationDirectoryPath: String,
-        onProgress: (@MainActor (RemoteFileBrowserStore.TransferProgress) -> Void)? = nil
-    ) async throws {
-        let sourceServerIDs = Set(payloads.map(\.serverId))
-        guard sourceServerIDs.count == 1, let sourceServerId = sourceServerIDs.first else {
-            throw RemoteFileBrowserError.failed(
-                String(localized: "A single drop can only contain items from one remote server.")
-            )
-        }
-
-        if sourceServerId == server.id {
-            try await moveDroppedRemoteItems(
-                payloads,
-                to: destinationDirectoryPath,
-                onProgress: onProgress
-            )
-            return
-        }
-
-        let uniqueEntries = payloads
-            .flatMap(\.entries)
-            .reduce(into: [RemoteFileEntry]()) { entries, entry in
-                guard !entries.contains(where: { $0.path == entry.path }) else { return }
-                entries.append(entry)
-            }
-        try await browser.copyEntries(
-            uniqueEntries,
-            from: sourceServerId,
-            to: destinationDirectoryPath,
-            destinationTab: fileTab,
-            destinationServer: server,
-            onProgress: onProgress
-        )
-    }
-
     func dragSuggestedName(for entries: [RemoteFileEntry]) -> String? {
         guard entries.count > 1 else {
             guard let name = entries.first?.name, !name.isEmpty else { return nil }
@@ -1387,7 +1304,7 @@ struct RemoteFileBrowserScreen: View {
 
         performOperation(
             operation: {
-                let folderName = try validatedRemoteName(trimmedNewFolderName)
+                let folderName = try RemoteFilePathPolicy.validatedName(trimmedNewFolderName)
                 try await browser.createDirectory(
                     named: folderName,
                     in: destinationPath,
@@ -1411,7 +1328,7 @@ struct RemoteFileBrowserScreen: View {
 
         performOperation(
             operation: {
-                let newName = try validatedRemoteName(trimmedRenameName)
+                let newName = try RemoteFilePathPolicy.validatedName(trimmedRenameName)
                 guard newName != entry.name else {
                     return false
                 }
@@ -1445,7 +1362,7 @@ struct RemoteFileBrowserScreen: View {
         performOperation(
             operation: {
                 let sourceDirectory = RemoteFilePath.parent(of: entry.path)
-                let destinationDirectory = try validatedRemoteDirectoryPath(
+                let destinationDirectory = try RemoteFilePathPolicy.validatedDirectoryPath(
                     moveDestinationDirectory,
                     relativeTo: sourceDirectory
                 )
@@ -1549,47 +1466,9 @@ struct RemoteFileBrowserScreen: View {
         isPermissionSubmitting = false
     }
 
-    func validatedRemoteName(_ value: String) throws -> String {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw RemoteFileBrowserError.failed(String(localized: "Name cannot be empty."))
-        }
-        guard trimmed != ".", trimmed != ".." else {
-            throw RemoteFileBrowserError.failed(String(localized: "This name is not allowed."))
-        }
-        guard !trimmed.contains("/") else {
-            throw RemoteFileBrowserError.failed(String(localized: "Names cannot contain slashes."))
-        }
-        return trimmed
-    }
-
-    func validatedRemoteDirectoryPath(_ value: String, relativeTo currentPath: String) throws -> String {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw RemoteFileBrowserError.failed(String(localized: "Destination folder cannot be empty."))
-        }
-        return RemoteFilePath.normalize(trimmed, relativeTo: currentPath)
-    }
-
-    func temporaryDownloadURL(for entry: RemoteFileEntry) throws -> URL {
-        let fileManager = FileManager.default
-        let downloadDirectory = fileManager.temporaryDirectory
-            .appendingPathComponent("VVTermDownloads", isDirectory: true)
-        try fileManager.createDirectory(at: downloadDirectory, withIntermediateDirectories: true)
-
-        let uniquePrefix = UUID().uuidString
-        let filename = entry.name.isEmpty ? "download" : entry.name
-        return try RemoteFileLocalPath.descendant(
-            named: RemoteFileLeaf(validating: "\(uniquePrefix)-\(filename)"),
-            in: downloadDirectory,
-            operationRootURL: downloadDirectory,
-            isDirectory: false
-        )
-    }
-
     func cleanupDownloadExport() {
         if let sourceURL = downloadExportDocument?.sourceURL {
-            try? FileManager.default.removeItem(at: sourceURL)
+            browser.removeTemporaryTransferFile(at: sourceURL, in: fileTab)
         }
         downloadExportDocument = nil
         downloadExportFilename = ""
@@ -1597,7 +1476,7 @@ struct RemoteFileBrowserScreen: View {
 
     func cleanupShareItem() {
         if let sourceURL = shareItem?.sourceURL {
-            try? FileManager.default.removeItem(at: sourceURL)
+            browser.removeTemporaryTransferFile(at: sourceURL, in: fileTab)
         }
         shareItem = nil
     }

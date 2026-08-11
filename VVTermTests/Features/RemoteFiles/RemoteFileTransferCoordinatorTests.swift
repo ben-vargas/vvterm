@@ -206,24 +206,6 @@ struct RemoteFileTransferCoordinatorTests {
     }
 
     @Test
-    func validatedRemoteNameTrimsWhitespace() throws {
-        let store = RemoteFileBrowserStore(defaults: makeDefaults())
-
-        let result = try store.validatedRemoteName("  notes.txt \n")
-
-        #expect(result == "notes.txt")
-    }
-
-    @Test
-    func validatedRemoteNameRejectsSlashSeparatedPaths() {
-        let store = RemoteFileBrowserStore(defaults: makeDefaults())
-
-        #expect(throws: RemoteFileBrowserError.self) {
-            try store.validatedRemoteName("nested/path.txt")
-        }
-    }
-
-    @Test
     func uniqueTransferEntriesRemovesDuplicatePaths() {
         let store = RemoteFileBrowserStore(defaults: makeDefaults())
         let duplicate = makeEntry(name: "a.txt", path: "/tmp/a.txt")

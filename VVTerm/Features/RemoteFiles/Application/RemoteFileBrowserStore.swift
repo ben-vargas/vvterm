@@ -90,6 +90,7 @@ final class RemoteFileBrowserStore: ObservableObject {
 
     var persistedStates: [String: RemoteFileBrowserPersistedState] = [:]
     private var operationCoordinatorsByTabID: [UUID: RemoteFileOperationCoordinator] = [:]
+    private var temporaryTransferURLsByTabID: [UUID: Set<URL>] = [:]
     private(set) var activeDragPayload: RemoteFileDragPayload?
     nonisolated static let directoryEntryLimit = 2_000
     static let defaultPreviewBytes = 512 * 1_024
@@ -120,6 +121,9 @@ final class RemoteFileBrowserStore: ObservableObject {
 
     isolated deinit {
         operationCoordinatorsByTabID.values.forEach { $0.cancelAll() }
+        temporaryTransferURLsByTabID.values
+            .flatMap(Array.init)
+            .forEach(temporaryStorage.removeItem)
     }
 
     func prepareNewTab(_ tab: RemoteFileTab, duplicating sourceTab: RemoteFileTab?) {
@@ -336,6 +340,8 @@ final class RemoteFileBrowserStore: ObservableObject {
 
     func removeRuntimeState(for tabId: UUID) {
         operationCoordinatorsByTabID.removeValue(forKey: tabId)?.cancelAll()
+        temporaryTransferURLsByTabID.removeValue(forKey: tabId)?
+            .forEach(temporaryStorage.removeItem)
         temporaryStorage.removePreviewArtifact(for: states[tabId]?.viewerPayload)
         states.removeValue(forKey: tabId)
 
@@ -372,6 +378,23 @@ final class RemoteFileBrowserStore: ObservableObject {
         )
         operationCoordinatorsByTabID[tab.id] = coordinator
         return coordinator
+    }
+
+    func makeTemporaryTransferFileURL(
+        for entry: RemoteFileEntry,
+        in tab: RemoteFileTab
+    ) throws -> URL {
+        let url = try temporaryStorage.makeTransferFileURL(for: entry)
+        temporaryTransferURLsByTabID[tab.id, default: []].insert(url)
+        return url
+    }
+
+    func removeTemporaryTransferFile(at url: URL, in tab: RemoteFileTab) {
+        temporaryTransferURLsByTabID[tab.id]?.remove(url)
+        if temporaryTransferURLsByTabID[tab.id]?.isEmpty == true {
+            temporaryTransferURLsByTabID[tab.id] = nil
+        }
+        temporaryStorage.removeItem(at: url)
     }
 
     func goUp(in tab: RemoteFileTab, server: Server) async {

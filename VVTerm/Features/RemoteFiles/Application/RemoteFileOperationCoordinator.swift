@@ -36,7 +36,7 @@ final class RemoteFileOperationCoordinator: ObservableObject {
         var completion: Completion?
     }
 
-    typealias ProgressHandler = @MainActor (RemoteFileBrowserStore.TransferProgress) -> Void
+    typealias ProgressHandler = @MainActor @Sendable (RemoteFileBrowserStore.TransferProgress) -> Void
     typealias TransferOperation = (@escaping ProgressHandler) async throws -> Void
 
     private struct PendingApproval {

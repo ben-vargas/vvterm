@@ -119,7 +119,7 @@ extension RemoteFileBrowserScreen {
 
         let temporaryURL: URL
         do {
-            temporaryURL = try temporaryDownloadURL(for: entry)
+            temporaryURL = try browser.makeTemporaryTransferFileURL(for: entry, in: fileTab)
         } catch {
             downloadTransferNoticeID = nil
             presentOperationError(error)
@@ -139,11 +139,16 @@ extension RemoteFileBrowserScreen {
                 isDownloadExporterPresented = true
             }
         ) {
-            try await browser.downloadFile(
-                at: entry.path,
-                to: temporaryURL,
-                server: server
-            )
+            do {
+                try await browser.downloadFile(
+                    at: entry.path,
+                    to: temporaryURL,
+                    server: server
+                )
+            } catch {
+                browser.removeTemporaryTransferFile(at: temporaryURL, in: fileTab)
+                throw error
+            }
         }
     }
 
