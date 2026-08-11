@@ -9,6 +9,74 @@ import UIKit
 @MainActor
 struct GhosttyTerminalInteractionOwnershipTests {
     @Test
+    func splitCommandsRouteFromTextInputOwnerToTerminalResponder() throws {
+        let app = Ghostty.App()
+        defer { app.cleanup() }
+        let appHandle = try #require(app.app)
+        let terminal = GhosttyTerminalView(
+            frame: CGRect(x: 0, y: 0, width: 800, height: 600),
+            worktreePath: FileManager.default.currentDirectoryPath,
+            ghosttyApp: appHandle,
+            appWrapper: app,
+            paneId: "split-command-ownership",
+            terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
+                profile: .defaultValue(lastWriterDeviceId: "split-command-ownership-test"),
+                showsDismissKeyboardButton: true
+            ),
+            useCustomIO: true
+        )
+        defer { terminal.cleanup() }
+
+        let presenter = UIViewController()
+        let windowScene = try #require(
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first
+        )
+        let previousKeyWindow = windowScene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = CGRect(x: 0, y: 0, width: 800, height: 600)
+        window.rootViewController = presenter
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+            previousKeyWindow?.makeKey()
+        }
+        presenter.view.addSubview(terminal)
+        terminal.acceptsTerminalInput = true
+
+        #expect(terminal.becomeFirstResponder())
+        #expect(terminal.imeProxyTextView.isFirstResponder)
+
+        let proxySplitCommand = terminal.imeProxyTextView.keyCommands?.first {
+            $0.input == "d" && $0.modifierFlags == .command
+        }
+        #expect(proxySplitCommand == nil)
+
+        let command = try #require(terminal.keyCommands?.first {
+            $0.input == "d" && $0.modifierFlags == .command
+        })
+        let action = try #require(command.action)
+        let target = terminal.imeProxyTextView.target(
+            forAction: action,
+            withSender: command
+        )
+        #expect((target as AnyObject?) === terminal)
+
+        var routedCommand: TerminalSplitCommand?
+        terminal.onPaneKeyboardShortcut = { routedCommand = $0 }
+        #expect(
+            UIApplication.shared.sendAction(
+                action,
+                to: nil,
+                from: command,
+                for: nil
+            )
+        )
+        #expect(routedCommand == .splitRight)
+    }
+
+    @Test
     func textInteractionBeginsOnlyForSettledNativeSelection() throws {
         let app = Ghostty.App()
         defer { app.cleanup() }
