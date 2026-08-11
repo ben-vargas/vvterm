@@ -55,7 +55,7 @@ struct TerminalSessionStateStoreTests {
     }
 
     @Test
-    func snapshotRestoresTabPaneAndPersistedSelections() throws {
+    func snapshotRestoresTabPaneAndNormalizesStaleSelection() throws {
         let snapshot = StateStoreSnapshotMemory()
         let sourceSelections = ConnectionViewSelectionStore()
         let source = makeStore(snapshot: snapshot, selections: sourceSelections)
@@ -78,8 +78,8 @@ struct TerminalSessionStateStoreTests {
         let restored = makeStore(snapshot: snapshot, selections: restoredSelections)
 
         #expect(restored.tabs(for: tab.serverId) == [tab])
-        #expect(restored.selectedTabId(for: tab.serverId) == staleSelectedTabId)
-        #expect(restored.selectedTab(for: tab.serverId) == nil)
+        #expect(restored.selectedTabId(for: tab.serverId) == tab.id)
+        #expect(restored.selectedTab(for: tab.serverId) == tab)
         #expect(restoredSelections.selection(for: tab.serverId) == .stats)
         #expect(restored.paneState(for: tab.rootPaneId)?.presentationOverrides.fontSize == 18)
         #expect(restored.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)

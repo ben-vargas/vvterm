@@ -549,9 +549,10 @@ final class TerminalSessionStateStore: ObservableObject {
             let tabs = server.tabs.map { $0.toTerminalTab() }
             guard !tabs.isEmpty else { continue }
             restoredTabsByServer[server.serverId] = tabs
-            if let selected = server.selectedTabId {
-                restoredSelectedTabs[server.serverId] = selected
-            }
+            let selected = server.selectedTabId.flatMap { selectedTabId in
+                tabs.contains { $0.id == selectedTabId } ? selectedTabId : nil
+            } ?? tabs[0].id
+            restoredSelectedTabs[server.serverId] = selected
             if let view = server.selectedView.flatMap(ConnectionViewTabID.init(rawValue:)) {
                 restoredSelectedViews[server.serverId] = view
             }
