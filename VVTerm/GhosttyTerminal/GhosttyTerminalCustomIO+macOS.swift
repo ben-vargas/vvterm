@@ -29,13 +29,11 @@ extension GhosttyTerminalView {
         guard let surface = surface?.unsafeCValue else { return }
         guard let userdata = ghostty_surface_userdata(surface) else { return }
 
-        ghostty_surface_set_write_callback(surface, { userdata, data, len in
-            guard let view = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata) else { return }
-            guard let data = data, len > 0 else { return }
-            let swiftData = Data(bytes: data, count: len)
-            // Call directly - Ghostty calls this from main thread, no queue hop needed
-            view.writeCallback?(swiftData)
-        }, userdata)
+        ghostty_surface_set_write_callback(
+            surface,
+            ghosttyTerminalWriteCallback,
+            userdata
+        )
     }
 
     /// Send text to the terminal (used by voice input)

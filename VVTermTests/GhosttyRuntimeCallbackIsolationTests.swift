@@ -22,4 +22,17 @@ struct GhosttyRuntimeCallbackIsolationTests {
 
         #expect(ranOffMainThread)
     }
+
+    @Test
+    @MainActor
+    func nativeWriteCallbackAcceptsIOThreadInvocation() async {
+        let ranOffMainThread = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                ghosttyTerminalWriteCallback(nil, nil, 0)
+                continuation.resume(returning: !Thread.isMainThread)
+            }
+        }
+
+        #expect(ranOffMainThread)
+    }
 }
