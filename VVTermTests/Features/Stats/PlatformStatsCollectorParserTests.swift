@@ -541,6 +541,64 @@ final class PlatformStatsCollectorParserTests: XCTestCase {
         XCTAssertEqual(usage.coreSamples[1].systemPercent, 18.5)
     }
 
+    func testWindowsPeriodicStatsParserReadsOneBatchedResponse() {
+        let output = """
+        MEMORY|17179869184|10737418240|6442450944
+        UPTIME|86400
+        PROCESS_COUNT|137
+        NETWORK|123456789|987654321
+        """
+
+        let collector = WindowsStatsCollector()
+        let snapshot = collector.parsePeriodicStats(output)
+
+        XCTAssertEqual(snapshot.memory?.total, 17_179_869_184)
+        XCTAssertEqual(snapshot.memory?.used, 10_737_418_240)
+        XCTAssertEqual(snapshot.memory?.free, 6_442_450_944)
+        XCTAssertEqual(snapshot.uptime, 86_400)
+        XCTAssertEqual(snapshot.processCount, 137)
+        XCTAssertEqual(snapshot.network?.rx, 123_456_789)
+        XCTAssertEqual(snapshot.network?.tx, 987_654_321)
+    }
+
+    func testWindowsPeriodicStatsParserKeepsValidSectionsWhenOneSectionIsMalformed() {
+        let snapshot = WindowsStatsCollector().parsePeriodicStats(
+            """
+            MEMORY|invalid|20|30
+            UPTIME|42
+            PROCESS_COUNT|-1
+            NETWORK|18446744073709551615|9
+            """
+        )
+
+        XCTAssertNil(snapshot.memory)
+        XCTAssertEqual(snapshot.uptime, 42)
+        XCTAssertNil(snapshot.processCount)
+        XCTAssertEqual(snapshot.network?.rx, UInt64.max)
+        XCTAssertEqual(snapshot.network?.tx, 9)
+    }
+
+    func testWindowsPeriodicStatsScriptContainsAllCoreMetricsInOneScript() {
+        let script = WindowsStatsCollector().periodicStatsPowerShellScript()
+
+        XCTAssertFalse(script.contains("__VVTERM_CPU_BEGIN__"))
+        XCTAssertTrue(script.contains("MEMORY|"))
+        XCTAssertTrue(script.contains("UPTIME|"))
+        XCTAssertTrue(script.contains("PROCESS_COUNT|"))
+        XCTAssertTrue(script.contains("NETWORK|"))
+    }
+
+    func testWindowsPeriodicStatsCommandFitsCmdCommandLineLimit() {
+        let script = WindowsStatsCollector().periodicStatsPowerShellScript()
+        let powerShell = RemoteTerminalBootstrap.wrapPowerShellCommand(
+            script,
+            executableName: "powershell"
+        )
+        let command = RemoteTerminalBootstrap.wrapCmdExecCommand(powerShell)
+
+        XCTAssertLessThan(command.utf16.count, 8_191)
+    }
+
     func testWindowsProcessParserReturnsAllRows() {
         let output = """
         10|System|100.0|50.0|2147483648

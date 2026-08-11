@@ -107,6 +107,59 @@ struct RemoteEnvironmentTests {
     }
 
     @Test
+    func windowsPowerShellEnvironmentUsesOneCombinedWindowsProbe() async {
+        let executor = FakeExecutor(outputs: [
+            .success(""),
+            .success(
+                """
+                __VVTERM_PLATFORM__=Windows
+                __VVTERM_DEFAULT_SHELL_BEGIN__
+                HKEY_LOCAL_MACHINE\\SOFTWARE\\OpenSSH
+                    DefaultShell    REG_SZ    C:\\Program Files\\PowerShell\\7\\pwsh.exe
+                __VVTERM_WINDOWS_POWERSHELL_BEGIN__
+                C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe
+                __VVTERM_WINDOWS_PWSH_BEGIN__
+                C:\\Program Files\\PowerShell\\7\\pwsh.exe
+                __VVTERM_WINDOWS_PROBE_END__
+                """
+            )
+        ])
+
+        let environment = await RemoteEnvironmentResolver.resolve { command, timeout in
+            try await executor.run(command: command, timeout: timeout)
+        }
+
+        #expect(environment.platform == .windows)
+        #expect(environment.shellProfile.family == .powershell)
+        #expect(environment.activeShellName == "pwsh")
+        #expect(environment.powerShellExecutable == "pwsh")
+        let commands = await executor.recordedCommands()
+        #expect(commands.count == 2)
+        #expect(commands[1] == RemoteEnvironmentResolver.windowsEnvironmentProbeCommand())
+    }
+
+    @Test
+    func windowsCombinedProbeUsesCmdDefaultWhenOpenSSHHasNoOverride() {
+        let environment = RemoteEnvironmentResolver.parseWindowsEnvironmentProbe(
+            """
+            __VVTERM_PLATFORM__=Windows
+            __VVTERM_DEFAULT_SHELL_BEGIN__
+            ERROR: The system was unable to find the specified registry key or value.
+            __VVTERM_WINDOWS_POWERSHELL_BEGIN__
+            C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe
+            __VVTERM_WINDOWS_PWSH_BEGIN__
+            INFO: Could not find files for the given pattern(s).
+            __VVTERM_WINDOWS_PROBE_END__
+            """
+        )
+
+        #expect(environment?.platform == .windows)
+        #expect(environment?.shellProfile.family == .cmd)
+        #expect(environment?.activeShellName == "cmd.exe")
+        #expect(environment?.powerShellExecutable == "powershell")
+    }
+
+    @Test
     func nushellProfileStillCountsAsPOSIXRuntime() {
         let environment = RemoteEnvironment(
             platform: .linux,

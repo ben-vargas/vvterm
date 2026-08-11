@@ -148,6 +148,10 @@ nonisolated enum RemoteEnvironmentResolver {
     private static let probeTimeout: Duration = .seconds(2)
     private static let platformMarker = "__VVTERM_PLATFORM__="
     private static let shellMarker = "__VVTERM_SHELL__="
+    private static let windowsDefaultShellMarker = "__VVTERM_DEFAULT_SHELL_BEGIN__"
+    private static let windowsPowerShellMarker = "__VVTERM_WINDOWS_POWERSHELL_BEGIN__"
+    private static let windowsPwshMarker = "__VVTERM_WINDOWS_PWSH_BEGIN__"
+    private static let windowsProbeEndMarker = "__VVTERM_WINDOWS_PROBE_END__"
 
     static func resolve(using client: SSHClient) async -> RemoteEnvironment {
         await resolve { command, timeout in
@@ -158,6 +162,11 @@ nonisolated enum RemoteEnvironmentResolver {
     static func resolve(execute: CommandExecutor) async -> RemoteEnvironment {
         if let output = await probe(posixEnvironmentProbeCommand(), execute: execute),
            let environment = parsePOSIXEnvironmentProbe(output) {
+            return environment
+        }
+
+        if let output = await probe(windowsEnvironmentProbeCommand(), execute: execute),
+           let environment = parseWindowsEnvironmentProbe(output) {
             return environment
         }
 
@@ -234,6 +243,72 @@ nonisolated enum RemoteEnvironmentResolver {
             shellProfile: resolveUnixProfile(shellName: shellName),
             activeShellName: shellName,
             powerShellExecutable: nil
+        )
+    }
+
+    nonisolated static func windowsEnvironmentProbeCommand() -> String {
+        #"cmd.exe /d /c "echo __VVTERM_PLATFORM__=Windows & echo __VVTERM_DEFAULT_SHELL_BEGIN__ & reg query HKLM\SOFTWARE\OpenSSH /v DefaultShell 2>nul & echo __VVTERM_WINDOWS_POWERSHELL_BEGIN__ & where powershell.exe 2>nul & echo __VVTERM_WINDOWS_PWSH_BEGIN__ & where pwsh.exe 2>nul & echo __VVTERM_WINDOWS_PROBE_END__""#
+    }
+
+    nonisolated static func parseWindowsEnvironmentProbe(_ output: String) -> RemoteEnvironment? {
+        let lines = output.components(separatedBy: .newlines).map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard lines.contains("\(platformMarker)Windows") else { return nil }
+
+        func section(after startMarker: String, before endMarker: String) -> String {
+            guard
+                let start = lines.firstIndex(of: startMarker),
+                let end = lines[start...].firstIndex(of: endMarker),
+                start < end
+            else {
+                return ""
+            }
+            return lines[lines.index(after: start)..<end].joined(separator: "\n")
+        }
+
+        let defaultShellOutput = section(
+            after: windowsDefaultShellMarker,
+            before: windowsPowerShellMarker
+        )
+        let windowsPowerShellOutput = section(
+            after: windowsPowerShellMarker,
+            before: windowsPwshMarker
+        )
+        let pwshOutput = section(
+            after: windowsPwshMarker,
+            before: windowsProbeEndMarker
+        )
+
+        let preferredPowerShell = powerShellExecutableName(inWindowsShellOutput: defaultShellOutput)
+        let normalizedDefaultShell = defaultShellOutput.lowercased()
+        let profile: RemoteShellProfile
+        if let preferredPowerShell {
+            profile = .powershell(executableName: preferredPowerShell)
+        } else if normalizedDefaultShell.contains("defaultshell") {
+            if normalizedDefaultShell.contains("cmd.exe") {
+                profile = .cmd
+            } else {
+                profile = .unknown(shellName: nil)
+            }
+        } else {
+            // Windows OpenSSH uses cmd.exe when DefaultShell is not configured.
+            profile = .cmd
+        }
+
+        let availableWindowsPowerShell = powerShellExecutableName(
+            inWindowsShellOutput: windowsPowerShellOutput
+        )
+        let availablePwsh = powerShellExecutableName(inWindowsShellOutput: pwshOutput)
+        let powerShellExecutable = preferredPowerShell
+            ?? availableWindowsPowerShell
+            ?? availablePwsh
+
+        return RemoteEnvironment(
+            platform: .windows,
+            shellProfile: profile,
+            activeShellName: profile.shellName,
+            powerShellExecutable: powerShellExecutable
         )
     }
 

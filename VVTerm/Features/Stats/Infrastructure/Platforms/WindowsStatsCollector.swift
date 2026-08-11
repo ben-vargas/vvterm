@@ -120,6 +120,7 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
         var stats = ServerStats()
         let environment = await client.remoteEnvironment()
         let preferCMD = environment.shellProfile.family == .cmd
+        let periodicSnapshot = try? await collectPeriodicStatsPowerShell(client: client)
 
         if let cpuUsage = try? await collectCPUUsagePowerShell(client: client) {
             applyCPU(cpuUsage, to: &stats)
@@ -137,7 +138,11 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
             applyCPU(cpuPercent, to: &stats)
         }
 
-        if preferCMD {
+        if let memory = periodicSnapshot?.memory {
+            stats.memoryTotal = memory.total
+            stats.memoryUsed = memory.used
+            stats.memoryFree = memory.free
+        } else if preferCMD {
             if let memory = try? await collectMemoryCMD(client: client) {
                 stats.memoryTotal = memory.total
                 stats.memoryUsed = memory.used
@@ -170,7 +175,9 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
         stats.memoryCached = 0
         stats.memoryBuffers = 0
 
-        if preferCMD {
+        if let uptime = periodicSnapshot?.uptime {
+            stats.uptime = uptime
+        } else if preferCMD {
             if let uptime = try? await collectUptimeCMD(client: client) {
                 stats.uptime = uptime
             }
@@ -186,7 +193,9 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
             stats.uptime = TimeInterval(uptimeOutput.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
         }
 
-        if preferCMD, let tasklistOutput = try? await executeCMD("tasklist /NH", using: client, timeout: processCountTimeout) {
+        if let processCount = periodicSnapshot?.processCount {
+            stats.processCount = processCount
+        } else if preferCMD, let tasklistOutput = try? await executeCMD("tasklist /NH", using: client, timeout: processCountTimeout) {
             stats.processCount = tasklistOutput
                 .components(separatedBy: .newlines)
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -201,7 +210,13 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
             stats.processCount = Int(processCountOutput.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
         }
 
-        if let network = try? await (preferCMD ? collectNetworkStatsCMD(client: client) : collectNetworkStats(client: client)) {
+        let network: (rx: UInt64, tx: UInt64)?
+        if let periodicNetwork = periodicSnapshot?.network {
+            network = periodicNetwork
+        } else {
+            network = try? await (preferCMD ? collectNetworkStatsCMD(client: client) : collectNetworkStats(client: client))
+        }
+        if let network {
             let netRx = network.rx
             stats.networkRxTotal = netRx
 
@@ -362,6 +377,42 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
         if !cpuUsage.coreSamples.isEmpty {
             stats.cpuCores = cpuUsage.coreSamples.count
         }
+    }
+
+    private func collectPeriodicStatsPowerShell(client: SSHClient) async throws -> WindowsPeriodicStatsSnapshot {
+        let output = try await executePowerShell(
+            using: client,
+            script: periodicStatsPowerShellScript(),
+            timeout: memoryTimeout,
+            probeName: "periodic_stats"
+        )
+        return parsePeriodicStats(output)
+    }
+
+    func periodicStatsPowerShellScript() -> String {
+        """
+        try {
+          $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop;
+          [uint64]$memoryTotal = [uint64]$os.TotalVisibleMemorySize * 1024;
+          [uint64]$memoryFree = [uint64]$os.FreePhysicalMemory * 1024;
+          [uint64]$memoryUsed = 0;
+          if ($memoryTotal -ge $memoryFree) { $memoryUsed = $memoryTotal - $memoryFree };
+          Write-Output ('MEMORY|{0}|{1}|{2}' -f $memoryTotal, $memoryUsed, $memoryFree);
+          [long]$uptime = [long]((Get-Date) - $os.LastBootUpTime).TotalSeconds;
+          if ($uptime -lt 0) { $uptime = 0 };
+          Write-Output ('UPTIME|{0}' -f $uptime);
+        } catch {}
+        try {
+          $processes = @(Get-Process -ErrorAction Stop);
+          Write-Output ('PROCESS_COUNT|{0}' -f $processes.Count);
+        } catch {}
+        try {
+          $networkStats = @(Get-NetAdapterStatistics -ErrorAction Stop | Where-Object {$_.Name -notlike '*Loopback*'});
+          [uint64]$networkRx = [uint64](($networkStats | Measure-Object -Property ReceivedBytes -Sum).Sum);
+          [uint64]$networkTx = [uint64](($networkStats | Measure-Object -Property SentBytes -Sum).Sum);
+          Write-Output ('NETWORK|{0}|{1}' -f $networkRx, $networkTx);
+        } catch {}
+        """
     }
 
     private func collectCPUUsagePowerShell(client: SSHClient) async throws -> WindowsCPUUsage {
@@ -618,6 +669,54 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
     }
 
     // MARK: - Parsers
+
+    func parsePeriodicStats(_ output: String) -> WindowsPeriodicStatsSnapshot {
+        var memory: (total: UInt64, used: UInt64, free: UInt64)?
+        var uptime: TimeInterval?
+        var processCount: Int?
+        var network: (rx: UInt64, tx: UInt64)?
+
+        for rawLine in output.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+
+            let fields = line.components(separatedBy: "|")
+            switch fields.first {
+            case "MEMORY" where fields.count == 4:
+                guard
+                    let total = UInt64(fields[1]),
+                    let used = UInt64(fields[2]),
+                    let free = UInt64(fields[3]),
+                    used <= total,
+                    free <= total
+                else {
+                    continue
+                }
+                memory = (total, used, free)
+            case "UPTIME" where fields.count == 2:
+                if let seconds = UInt64(fields[1]) {
+                    uptime = TimeInterval(seconds)
+                }
+            case "PROCESS_COUNT" where fields.count == 2:
+                if let count = Int(fields[1]), count >= 0 {
+                    processCount = count
+                }
+            case "NETWORK" where fields.count == 3:
+                if let rx = UInt64(fields[1]), let tx = UInt64(fields[2]) {
+                    network = (rx, tx)
+                }
+            default:
+                continue
+            }
+        }
+
+        return WindowsPeriodicStatsSnapshot(
+            memory: memory,
+            uptime: uptime,
+            processCount: processCount,
+            network: network
+        )
+    }
 
     func parseProcesses(_ output: String) -> [ProcessInfo] {
         var processes: [ProcessInfo] = []
@@ -1195,4 +1294,11 @@ nonisolated struct WindowsCPUUsage: Sendable {
     let userPercent: Double
     let systemPercent: Double
     let coreSamples: [CPUCoreSample]
+}
+
+nonisolated struct WindowsPeriodicStatsSnapshot: Sendable {
+    let memory: (total: UInt64, used: UInt64, free: UInt64)?
+    let uptime: TimeInterval?
+    let processCount: Int?
+    let network: (rx: UInt64, tx: UInt64)?
 }
