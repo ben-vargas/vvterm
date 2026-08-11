@@ -175,6 +175,7 @@ Architecture non-goals:
 - use direct cutovers; do not add compatibility service locators or a second app dependency graph
 
 Apple platform UI split pattern:
+- Prefer `Type+iOS.swift` and `Type+macOS.swift` whenever app composition, lifecycle, adapters, or presentation behavior differs by platform. Keep the shared `Type.swift` focused on neutral contracts and shared state.
 - Do not let shared SwiftUI files accumulate large inline `#if os(iOS)` / `#if os(macOS)` branches. If platform layout, lifecycle, modifiers, or state diverge, keep the shared feature shell neutral and move platform presentation into `Type+iOS.swift` and `Type+macOS.swift` files with file-level compile gates.
 - Because VVTerm uses one multiplatform target, platform-specific files must still be guarded with `#if os(...)` unless target membership is explicitly changed; folder names such as `iOS/` or `macOS/` are not enough.
 - Avoid `iOS`, `Mac`, `macOS`, and `MacOS` prefixes in product UI type names. Prefer feature/domain names and put platform ownership in the filename or folder.
