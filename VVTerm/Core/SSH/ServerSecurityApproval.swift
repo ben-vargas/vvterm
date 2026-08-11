@@ -12,14 +12,15 @@ nonisolated enum ServerSecurityApprovalRequest: Identifiable, Equatable, Sendabl
 
     static func detect(
         _ error: Error,
-        server: Server,
-        knownHosts: KnownHostsManager = .shared
+        host: String,
+        port: Int,
+        knownHosts: KnownHostsManager
     ) -> Self? {
         if let sshError = error as? SSHError,
            case .hostKeyApprovalRequired = sshError,
            let challenge = knownHosts.pendingChallenge(
-               for: server.host,
-               port: server.port
+               for: host,
+               port: port
            ) {
             return .hostKey(challenge)
         }

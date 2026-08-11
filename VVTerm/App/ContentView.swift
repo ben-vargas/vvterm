@@ -601,10 +601,7 @@ struct ContentView: View {
         engagementTracker: engagementTracker,
         tabManager: tabManager,
         fileTabs: RemoteFileTabManager(),
-        fileBrowser: VVTermApp.makeRemoteFileBrowserStore(
-            tabManager: tabManager,
-            serverManager: serverManager
-        ),
+        fileBrowser: RemoteFileBrowserStore(defaults: defaults),
         statsDependencies: statsDependencies,
         terminalSecurityActions: terminalSecurityActions,
         serverFormDependencies: serverFormDependencies,

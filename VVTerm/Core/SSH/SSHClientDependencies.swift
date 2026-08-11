@@ -91,13 +91,6 @@ nonisolated enum SSHClientLiveComposition {
             moshBootstrap: remoteMoshManager
         )
     }
-
-    /// DEV-228-only compatibility for Remote Files default composition.
-    static let dev228CompatibilityFactory = makeFactory(
-        defaults: .standard,
-        knownHostsManager: .shared,
-        remoteMoshManager: .shared
-    )
 }
 
 extension KnownHostsManager: SSHHostKeyVerifying {

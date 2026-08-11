@@ -51,15 +51,8 @@ struct TerminalTabManagerLifecycleTests {
     private func withCleanManager(
         _ body: @MainActor (TerminalTabManager) async throws -> Void
     ) async rethrows {
-        let manager = TerminalTabManager.shared
-        await manager.resetForTesting()
-        do {
-            try await body(manager)
-            await manager.resetForTesting()
-        } catch {
-            await manager.resetForTesting()
-            throw error
-        }
+        let manager = TerminalTestComposition.makeManager()
+        try await body(manager)
     }
 
     private func withTmuxEnabled(

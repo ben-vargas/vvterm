@@ -126,8 +126,7 @@ struct EternalTerminalResumeCredentialStoreTests {
 
     @Test
     func explicitCloseDeletesCredentialsButApplicationTerminationPreservesThem() async throws {
-        let manager = TerminalTabManager.shared
-        await manager.resetForTesting()
+        let manager = TerminalTestComposition.makeManager()
 
         do {
             let store = InMemoryETResumeStore()

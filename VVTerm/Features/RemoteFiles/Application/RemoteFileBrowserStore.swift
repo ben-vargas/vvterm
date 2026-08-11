@@ -80,15 +80,17 @@ final class RemoteFileBrowserStore: ObservableObject {
     let persistenceKey = "remoteFileBrowserState.v2"
     let legacyPersistenceKey = "remoteFileBrowserState.v1"
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "RemoteFiles")
-    let remoteFileServiceAdapter: SSHSFTPAdapter
+    let remoteFileServiceAdapter: SSHSFTPAdapter?
     let temporaryStorage: RemoteFileTemporaryStorage
     let previewLoader: RemoteFilePreviewLoader
     let conflictResolver: RemoteFileConflictResolver
+    let securityApprovalActions: RemoteFileSecurityApprovalActions
     let serverProvider: ServerProvider
     let workingDirectoryProvider: WorkingDirectoryProvider
 
     var persistedStates: [String: RemoteFileBrowserPersistedState] = [:]
     private var uploadRuntimesByTabID: [UUID: RemoteFileUploadRuntime] = [:]
+    private(set) var activeDragPayload: RemoteFileDragPayload?
     nonisolated static let directoryEntryLimit = 2_000
     static let defaultPreviewBytes = 512 * 1_024
     static let hardPreviewBytes = 2 * 1_024 * 1_024
@@ -101,18 +103,16 @@ final class RemoteFileBrowserStore: ObservableObject {
         temporaryStorage: RemoteFileTemporaryStorage = RemoteFileTemporaryStorage(),
         previewLoader: RemoteFilePreviewLoader = RemoteFilePreviewLoader(),
         conflictResolver: RemoteFileConflictResolver = RemoteFileConflictResolver(),
-        serverProvider: @escaping ServerProvider = { serverId in
-            ServerManager.shared.servers.first { $0.id == serverId }
-        },
-        workingDirectoryProvider: @escaping WorkingDirectoryProvider = { serverId in
-            TerminalTabManager.shared.workingDirectoryCandidate(for: serverId)
-        }
+        securityApprovalActions: RemoteFileSecurityApprovalActions = .unavailable,
+        serverProvider: @escaping ServerProvider = { _ in nil },
+        workingDirectoryProvider: @escaping WorkingDirectoryProvider = { _ in nil }
     ) {
         self.defaults = defaults
-        self.remoteFileServiceAdapter = remoteFileServiceAdapter ?? SSHSFTPAdapter()
+        self.remoteFileServiceAdapter = remoteFileServiceAdapter
         self.temporaryStorage = temporaryStorage
         self.previewLoader = previewLoader
         self.conflictResolver = conflictResolver
+        self.securityApprovalActions = securityApprovalActions
         self.serverProvider = serverProvider
         self.workingDirectoryProvider = workingDirectoryProvider
         loadPersistedStates()
@@ -148,6 +148,14 @@ final class RemoteFileBrowserStore: ObservableObject {
             lastVisitedPath: tab.seedPath ?? tab.lastKnownPath
         )
         persistStates()
+    }
+
+    func beginDrag(_ payload: RemoteFileDragPayload) {
+        activeDragPayload = payload
+    }
+
+    func endDrag() {
+        activeDragPayload = nil
     }
 
     func state(for tab: RemoteFileTab) -> BrowserState {
@@ -347,7 +355,7 @@ final class RemoteFileBrowserStore: ObservableObject {
             removeRuntimeState(for: tabId)
         }
 
-        remoteFileServiceAdapter.disconnect(serverId: serverId)
+        remoteFileServiceAdapter?.disconnect(serverId: serverId)
     }
 
     func uploadRuntime(for tab: RemoteFileTab, server: Server) -> RemoteFileUploadRuntime {
@@ -355,7 +363,10 @@ final class RemoteFileBrowserStore: ObservableObject {
         if let runtime = uploadRuntimesByTabID[tab.id] {
             return runtime
         }
-        let runtime = RemoteFileUploadRuntime(server: server)
+        let runtime = RemoteFileUploadRuntime(
+            server: server,
+            securityApprovalActions: securityApprovalActions
+        )
         uploadRuntimesByTabID[tab.id] = runtime
         return runtime
     }
@@ -493,7 +504,10 @@ final class RemoteFileBrowserStore: ObservableObject {
         for server: Server,
         operation: @MainActor @escaping @Sendable (any RemoteFileService) async throws -> T
     ) async throws -> T {
-        try await remoteFileServiceAdapter.withService(for: server, operation: operation)
+        guard let remoteFileServiceAdapter else {
+            throw RemoteFileBrowserError.disconnected
+        }
+        return try await remoteFileServiceAdapter.withService(for: server, operation: operation)
     }
 
     func bestWorkingDirectory(for serverId: UUID) -> String? {

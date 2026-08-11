@@ -55,20 +55,7 @@ extension RemoteFileBrowserScreen {
     ) -> Bool {
         guard effectiveSecurityApprovalRequest == nil else { return false }
 
-        let request: ServerSecurityApprovalRequest?
-        if let detected = ServerSecurityApprovalRequest.detect(error, server: server) {
-            request = detected
-        } else {
-            switch RemoteFileBrowserError.map(error) {
-            case .hostKeyApprovalRequired:
-                request = KnownHostsManager.shared.pendingChallenge(
-                    for: server.host,
-                    port: server.port
-                ).map(ServerSecurityApprovalRequest.hostKey)
-            default:
-                request = nil
-            }
-        }
+        let request = browser.securityApprovalActions.pendingRequest(error, server)
 
         guard let request else {
             if case .hostKeyApprovalRequired = RemoteFileBrowserError.map(error) {
@@ -86,7 +73,7 @@ extension RemoteFileBrowserScreen {
 
     @MainActor
     func isSecurityApprovalError(_ error: Error) -> Bool {
-        if ServerSecurityApprovalRequest.detect(error, server: server) != nil {
+        if browser.securityApprovalActions.pendingRequest(error, server) != nil {
             return true
         }
         switch RemoteFileBrowserError.map(error) {
@@ -125,9 +112,7 @@ extension RemoteFileBrowserScreen {
             return
         }
         guard let request = securityApprovalRequest else { return }
-        if case .hostKey(let challenge) = request {
-            KnownHostsManager.shared.reject(challenge)
-        }
+        browser.securityApprovalActions.reject(request)
         let cancellation = securityApprovalCancellation
         clearSecurityApproval()
         operationErrorMessage = ServerSecurityApprovalError.cancelled.localizedDescription
@@ -140,8 +125,8 @@ extension RemoteFileBrowserScreen {
             uploadRuntime.approveSecurityRequest()
             return
         }
-        guard let challenge = hostKeyApprovalChallenge else { return }
-        guard KnownHostsManager.shared.approve(challenge) else {
+        guard let request = securityApprovalRequest else { return }
+        guard browser.securityApprovalActions.approve(request) else {
             clearSecurityApproval()
             operationErrorMessage = ServerSecurityApprovalError.expired.localizedDescription
             return

@@ -334,7 +334,13 @@ struct VVTermApp: App {
         _remoteFileBrowserStore = StateObject(
             wrappedValue: Self.makeRemoteFileBrowserStore(
                 tabManager: tabManager,
-                serverManager: serverManager
+                serverManager: serverManager,
+                credentialRepository: keychainManager,
+                connectionOperations: connectionOperations,
+                clientFactory: sshClientFactory,
+                securityApprovalActions: Self.makeRemoteFileSecurityApprovalActions(
+                    knownHostsManager: knownHostsManager
+                )
             )
         )
         #if os(macOS)
@@ -574,6 +580,7 @@ struct VVTermApp: App {
             TerminalReconnectUITestHarness(
                 tabManager: tabManager,
                 serverManager: serverManager,
+                fileBrowser: remoteFileBrowserStore,
                 engagementTracker: engagementTracker,
                 statsDependencies: statsDependencies,
                 terminalSecurityActions: terminalSecurityActions,
@@ -704,6 +711,42 @@ private enum VVTermLauncherWidgetRefresh {
 #endif
 
 extension VVTermApp {
+    static func makeRemoteFileSecurityApprovalActions(
+        knownHostsManager: KnownHostsManager
+    ) -> RemoteFileSecurityApprovalActions {
+        RemoteFileSecurityApprovalActions(
+            pendingRequest: { error, server in
+                if let request = ServerSecurityApprovalRequest.detect(
+                    error,
+                    host: server.host,
+                    port: server.port,
+                    knownHosts: knownHostsManager
+                ) {
+                    return request
+                }
+                guard RemoteFileBrowserError.map(error) == .hostKeyApprovalRequired else {
+                    return nil
+                }
+                return knownHostsManager.pendingChallenge(
+                    for: server.host,
+                    port: server.port
+                ).map(ServerSecurityApprovalRequest.hostKey)
+            },
+            approve: { request in
+                switch request {
+                case .hostKey(let challenge):
+                    return knownHostsManager.approve(challenge)
+                }
+            },
+            reject: { request in
+                switch request {
+                case .hostKey(let challenge):
+                    knownHostsManager.reject(challenge)
+                }
+            }
+        )
+    }
+
     static func makeStatsCollectorFactory(
         keychainManager: KeychainManager,
         knownHostsManager: KnownHostsManager,
@@ -776,15 +819,25 @@ extension VVTermApp {
     static func makeRemoteFileBrowserStore(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
+        credentialRepository: any ServerCredentialTransactionRepository,
+        connectionOperations: SSHConnectionOperationService,
+        clientFactory: SSHClientFactory,
+        securityApprovalActions: RemoteFileSecurityApprovalActions,
         defaults: UserDefaults = .standard
     ) -> RemoteFileBrowserStore {
-        let adapter = SSHSFTPAdapter(borrowedClientProvider: { serverId in
-            tabManager.transportCoordinator.sharedStatsClient(for: serverId)
-        })
+        let adapter = SSHSFTPAdapter(
+            borrowedClientProvider: { serverId in
+                tabManager.transportCoordinator.sharedStatsClient(for: serverId)
+            },
+            credentialRepository: credentialRepository,
+            connectionOperations: connectionOperations,
+            clientFactory: clientFactory
+        )
 
         return RemoteFileBrowserStore(
             defaults: defaults,
             remoteFileServiceAdapter: adapter,
+            securityApprovalActions: securityApprovalActions,
             serverProvider: { serverId in
                 serverManager.servers.first { $0.id == serverId }
             },

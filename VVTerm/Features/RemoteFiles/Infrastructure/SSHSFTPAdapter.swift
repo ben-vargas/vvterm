@@ -16,13 +16,20 @@ final class SSHSFTPAdapter {
 
     private var clients: [UUID: ClientRegistration] = [:]
     private let borrowedClientProvider: BorrowedClientProvider
+    private let credentialRepository: any ServerCredentialTransactionRepository
+    private let connectionOperations: SSHConnectionOperationService
+    private let clientFactory: SSHClientFactory
 
     init(
-        borrowedClientProvider: @escaping BorrowedClientProvider = { serverId in
-            TerminalTabManager.shared.sharedStatsClient(for: serverId)
-        }
+        borrowedClientProvider: @escaping BorrowedClientProvider,
+        credentialRepository: any ServerCredentialTransactionRepository,
+        connectionOperations: SSHConnectionOperationService,
+        clientFactory: SSHClientFactory
     ) {
         self.borrowedClientProvider = borrowedClientProvider
+        self.credentialRepository = credentialRepository
+        self.connectionOperations = connectionOperations
+        self.clientFactory = clientFactory
     }
 
     func withService<T: Sendable>(
@@ -30,10 +37,10 @@ final class SSHSFTPAdapter {
         operation: @MainActor @escaping @Sendable (any RemoteFileService) async throws -> T
     ) async throws -> T {
         let registration = clientRegistration(for: server)
-        let credentials = try KeychainManager.shared.getCredentials(for: server)
+        let credentials = try credentialRepository.getCredentials(for: server)
 
         do {
-            return try await SSHConnectionOperationService.shared.runWithConnection(
+            return try await connectionOperations.runWithConnection(
                 using: registration.client,
                 server: server,
                 credentials: credentials,
@@ -78,7 +85,7 @@ final class SSHSFTPAdapter {
         }
 
         let registration = ClientRegistration(
-            client: SSHClientLiveComposition.dev228CompatibilityFactory.makeClient(),
+            client: clientFactory.makeClient(),
             ownership: .owned
         )
         clients[server.id] = registration

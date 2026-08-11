@@ -34,6 +34,7 @@ final class RemoteFileUploadRuntime: ObservableObject {
     @Published private var pendingApproval: PendingApproval?
 
     private let server: Server
+    private let securityApprovalActions: RemoteFileSecurityApprovalActions
     private var tasksByOperationID: [UUID: Task<Void, Never>] = [:]
     private var dismissalTasksByOperationID: [UUID: Task<Void, Never>] = [:]
 
@@ -41,8 +42,12 @@ final class RemoteFileUploadRuntime: ObservableObject {
         pendingApproval?.request
     }
 
-    init(server: Server) {
+    init(
+        server: Server,
+        securityApprovalActions: RemoteFileSecurityApprovalActions
+    ) {
         self.server = server
+        self.securityApprovalActions = securityApprovalActions
     }
 
     @discardableResult
@@ -94,16 +99,13 @@ final class RemoteFileUploadRuntime: ObservableObject {
 
     func approveSecurityRequest() {
         guard let pendingApproval else { return }
-        switch pendingApproval.request {
-        case .hostKey(let challenge):
-            guard KnownHostsManager.shared.approve(challenge) else {
-                fail(
-                    operationID: pendingApproval.operationID,
-                    message: ServerSecurityApprovalError.expired.localizedDescription
-                )
-                clearPendingApproval()
-                return
-            }
+        guard securityApprovalActions.approve(pendingApproval.request) else {
+            fail(
+                operationID: pendingApproval.operationID,
+                message: ServerSecurityApprovalError.expired.localizedDescription
+            )
+            clearPendingApproval()
+            return
         }
 
         let retry = pendingApproval.retry
@@ -226,8 +228,7 @@ final class RemoteFileUploadRuntime: ObservableObject {
     ) -> Bool {
         guard pendingApproval == nil else { return false }
 
-        let request = ServerSecurityApprovalRequest.detect(error, server: server)
-            ?? fallbackApprovalRequest(for: error)
+        let request = securityApprovalActions.pendingRequest(error, server)
         guard let request else { return false }
 
         pendingApproval = PendingApproval(
@@ -245,14 +246,6 @@ final class RemoteFileUploadRuntime: ObservableObject {
             ))
         }
         return true
-    }
-
-    private func fallbackApprovalRequest(for error: Error) -> ServerSecurityApprovalRequest? {
-        guard RemoteFileBrowserError.map(error) == .hostKeyApprovalRequired else { return nil }
-        return KnownHostsManager.shared.pendingChallenge(
-            for: server.host,
-            port: server.port
-        ).map(ServerSecurityApprovalRequest.hostKey)
     }
 
     private func fail(operationID: UUID, message: String) {
@@ -289,9 +282,7 @@ final class RemoteFileUploadRuntime: ObservableObject {
 
     private func rejectPendingChallenge() {
         guard let request = pendingApproval?.request else { return }
-        if case .hostKey(let challenge) = request {
-            KnownHostsManager.shared.reject(challenge)
-        }
+        securityApprovalActions.reject(request)
     }
 
     private func clearPendingApproval() {

@@ -278,6 +278,15 @@ extension RemoteFileBrowserScreen {
             onDropRemotePayload: { payload, destinationPath in
                 handleDroppedRemotePayload(payload, to: destinationPath)
             },
+            onBeginRemoteDrag: { payload in
+                browser.beginDrag(payload)
+            },
+            onEndRemoteDrag: {
+                browser.endDrag()
+            },
+            activeRemoteDragPayload: {
+                browser.activeDragPayload
+            },
             menuForEntry: { entry in
                 appKitEntryMenu(for: entry)
             },

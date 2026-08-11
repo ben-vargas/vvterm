@@ -1,9 +1,4 @@
 actor SSHConnectionOperationService {
-    /// DEV-228-only compatibility for Remote Files default composition.
-    static let shared = SSHConnectionOperationService(
-        clientFactory: SSHClientLiveComposition.dev228CompatibilityFactory
-    )
-
     private let clientFactory: SSHClientFactory
 
     init(clientFactory: SSHClientFactory) {

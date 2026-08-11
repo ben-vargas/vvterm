@@ -182,15 +182,6 @@ struct MacOSWindowTopInsetBridge: NSViewRepresentable {
     }
 }
 
-@MainActor
-final class MacOSRemoteFileDragSessionStore {
-    static let shared = MacOSRemoteFileDragSessionStore()
-
-    var payload: RemoteFileDragPayload?
-
-    private init() {}
-}
-
 struct MacOSRemoteFileTableView: NSViewRepresentable {
     let entries: [RemoteFileEntry]
     let currentPath: String
@@ -206,6 +197,9 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
     let onSortChange: @MainActor (RemoteFileSort, RemoteFileSortDirection) -> Void
     let onUploadDroppedURLs: @MainActor ([URL], String) -> Void
     let onDropRemotePayload: @MainActor (RemoteFileDragPayload, String) -> Void
+    let onBeginRemoteDrag: @MainActor (RemoteFileDragPayload) -> Void
+    let onEndRemoteDrag: @MainActor () -> Void
+    let activeRemoteDragPayload: @MainActor () -> RemoteFileDragPayload?
     let menuForEntry: @MainActor (RemoteFileEntry) -> NSMenu
     let menuForBackground: @MainActor () -> NSMenu
     let exportEntry: @MainActor (RemoteFileEntry, URL) async throws -> Void
@@ -498,14 +492,14 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
                 guard case .entry(let entryIndex) = rowKind(for: index) else { return nil }
                 return parent.entries[entryIndex]
             }
-            MacOSRemoteFileDragSessionStore.shared.payload = RemoteFileDragPayload(
+            parent.onBeginRemoteDrag(RemoteFileDragPayload(
                 serverId: parent.serverId,
                 entries: draggedEntries
-            )
+            ))
         }
 
         func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
-            MacOSRemoteFileDragSessionStore.shared.payload = nil
+            parent.onEndRemoteDrag()
             promiseDelegates.removeAll()
         }
 
@@ -517,7 +511,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             )
             guard destinationPath != nil else { return [] }
 
-            if let source = MacOSRemoteFileDragSessionStore.shared.payload, !source.entries.isEmpty {
+            if let source = parent.activeRemoteDragPayload(), !source.entries.isEmpty {
                 return source.serverId == parent.serverId ? .move : .copy
             }
 
@@ -531,7 +525,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
                 dropOperation: currentDropOperation
             ) else { return false }
 
-            if let payload = MacOSRemoteFileDragSessionStore.shared.payload, !payload.entries.isEmpty {
+            if let payload = parent.activeRemoteDragPayload(), !payload.entries.isEmpty {
                 parent.onDropRemotePayload(payload, destinationPath)
                 return true
             }

@@ -52,7 +52,8 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
             await disconnect()
             if let request = ServerSecurityApprovalRequest.detect(
                 error,
-                server: server,
+                host: server.host,
+                port: server.port,
                 knownHosts: knownHostsManager
             ) {
                 throw ServerStatsApprovalRequired(

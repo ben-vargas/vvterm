@@ -24,7 +24,8 @@ final class ServerSecurityApprovalTests: XCTestCase {
         XCTAssertEqual(
             ServerSecurityApprovalRequest.detect(
                 SSHError.hostKeyApprovalRequired,
-                server: server,
+                host: server.host,
+                port: server.port,
                 knownHosts: knownHosts
             ),
             .hostKey(challenge)
@@ -40,10 +41,12 @@ final class ServerSecurityApprovalTests: XCTestCase {
             storageKey: "known-hosts"
         )
 
+        let server = makeServer()
         XCTAssertNil(
             ServerSecurityApprovalRequest.detect(
                 SSHError.hostKeyApprovalRequired,
-                server: makeServer(),
+                host: server.host,
+                port: server.port,
                 knownHosts: knownHosts
             )
         )

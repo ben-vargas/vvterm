@@ -45,12 +45,13 @@ struct TerminalReconnectUITestHarness: View {
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     private let analyticsOptOutAction = AnalyticsOptOutAction(emitAnalyticsDisabled: {})
     @StateObject private var fileTabs: RemoteFileTabManager
-    @StateObject private var fileBrowser: RemoteFileBrowserStore
+    @ObservedObject private var fileBrowser: RemoteFileBrowserStore
     @State private var fixtureState = FixtureState.preparing
 
     init(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
+        fileBrowser: RemoteFileBrowserStore,
         engagementTracker: EngagementTracker,
         statsDependencies: ServerStatsScreenDependencies,
         terminalSecurityActions: TerminalSecurityActions,
@@ -61,6 +62,7 @@ struct TerminalReconnectUITestHarness: View {
     ) {
         self.tabManager = tabManager
         _serverManager = ObservedObject(wrappedValue: serverManager)
+        _fileBrowser = ObservedObject(wrappedValue: fileBrowser)
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         self.statsDependencies = statsDependencies
         self.terminalSecurityActions = terminalSecurityActions
@@ -70,13 +72,6 @@ struct TerminalReconnectUITestHarness: View {
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         _fileTabs = StateObject(
             wrappedValue: RemoteFileTabManager(defaults: Self.fixtureDefaults)
-        )
-        _fileBrowser = StateObject(
-            wrappedValue: VVTermApp.makeRemoteFileBrowserStore(
-                tabManager: tabManager,
-                serverManager: serverManager,
-                defaults: Self.fixtureDefaults
-            )
         )
     }
 
