@@ -166,14 +166,24 @@ struct RemoteFileBrowserStoreTests {
         attributes.flags = UInt(LIBSSH2_SFTP_ATTR_PERMISSIONS)
         attributes.permissions = UInt(LIBSSH2_SFTP_S_IFLNK | LIBSSH2_SFTP_S_IRUSR)
 
-        let entry = SSHSession.directoryListingEntry(
+        let transportEntry = SSHSession.directoryListingEntry(
             name: "current",
             path: "/srv/current",
             attributes: attributes
         )
+        let entry = SFTPRemoteFileService.mapEntry(transportEntry)
 
         #expect(entry.type == .symlink)
         #expect(entry.symlinkTarget == nil)
+    }
+
+    @Test
+    func sftpTransportErrorsMapAtTheFeatureBoundary() {
+        #expect(SFTPRemoteFileService.mapError(.permissionDenied) == .permissionDenied)
+        #expect(SFTPRemoteFileService.mapError(.pathNotFound) == .pathNotFound)
+        #expect(SFTPRemoteFileService.mapError(.disconnected) == .disconnected)
+        #expect(SFTPRemoteFileService.mapError(.invalidEntryName) == .invalidEntryName)
+        #expect(SFTPRemoteFileService.mapError(.resourceLimitExceeded) == .resourceLimitExceeded)
     }
 
     private func makeEntry(name: String, path: String, type: RemoteFileType) -> RemoteFileEntry {

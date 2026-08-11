@@ -536,14 +536,14 @@ actor SSHSession {
 
     // MARK: - Remote Files
 
-    func listDirectory(at path: String, maxEntries: Int? = nil) async throws -> [RemoteFileEntry] {
+    func listDirectory(at path: String, maxEntries: Int? = nil) async throws -> [SFTPFileEntry] {
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         let handle = try await openDirectoryHandle(at: normalizedPath, sftp: sftp)
         defer { libssh2_sftp_close_handle(handle) }
 
         let limit = maxEntries ?? .max
-        var entries: [RemoteFileEntry] = []
+        var entries: [SFTPFileEntry] = []
         var nameBuffer = [CChar](repeating: 0, count: 4096)
 
         while entries.count < limit {
@@ -571,8 +571,7 @@ actor SSHSession {
                 let name = Self.string(from: nameBuffer, length: bytesRead)
                 guard name != "." && name != ".." else { continue }
 
-                let leaf = try RemoteFileLeaf(validating: name)
-                let entryPath = RemoteFilePath.appending(leaf, to: normalizedPath)
+                let entryPath = try SFTPRemotePath.appending(name, to: normalizedPath)
                 // Resolve link targets only when an operation needs one.
                 entries.append(
                     Self.directoryListingEntry(
@@ -603,8 +602,8 @@ actor SSHSession {
         name: String,
         path: String,
         attributes: LIBSSH2_SFTP_ATTRIBUTES
-    ) -> RemoteFileEntry {
-        RemoteFileEntry.from(
+    ) -> SFTPFileEntry {
+        SFTPFileEntry.from(
             name: name,
             path: path,
             attributes: attributes,
@@ -612,11 +611,11 @@ actor SSHSession {
         )
     }
 
-    func stat(at path: String) async throws -> RemoteFileEntry {
+    func stat(at path: String) async throws -> SFTPFileEntry {
         try await stat(at: path, statType: Int32(LIBSSH2_SFTP_STAT))
     }
 
-    func lstat(at path: String) async throws -> RemoteFileEntry {
+    func lstat(at path: String) async throws -> SFTPFileEntry {
         try await stat(at: path, statType: Int32(LIBSSH2_SFTP_LSTAT))
     }
 
@@ -629,7 +628,7 @@ actor SSHSession {
         guard maxBytes > 0 else { return Data() }
 
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         let handle = try await openFileHandle(
             at: normalizedPath,
             sftp: sftp,
@@ -683,7 +682,7 @@ actor SSHSession {
 
     func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         let handle = try await openFileHandle(
             at: normalizedPath,
             sftp: sftp,
@@ -699,7 +698,7 @@ actor SSHSession {
             try fileManager.removeItem(at: localURL)
         }
         guard fileManager.createFile(atPath: localURL.path, contents: nil) else {
-            throw RemoteFileBrowserError.failed(String(localized: "Unable to create the local download file."))
+            throw SFTPTransportError.failed(String(localized: "Unable to create the local download file."))
         }
 
         let localFileHandle = try FileHandle(forWritingTo: localURL)
@@ -725,7 +724,7 @@ actor SSHSession {
                 if bytesRead > 0 {
                     let chunkBytes = UInt64(bytesRead)
                     if chunkBytes > maxBytes - min(totalBytesWritten, maxBytes) {
-                        throw RemoteFileBrowserError.resourceLimitExceeded
+                        throw SFTPTransportError.resourceLimitExceeded
                     }
                     try localFileHandle.write(contentsOf: Data(buffer.prefix(bytesRead)))
                     totalBytesWritten += chunkBytes
@@ -754,7 +753,7 @@ actor SSHSession {
 
     func writeFile(_ data: Data, to path: String, permissions: Int32 = 0o644) async throws {
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         let handle = try await openFileHandle(
             at: normalizedPath,
             sftp: sftp,
@@ -799,7 +798,7 @@ actor SSHSession {
     ) async throws {
         let descriptor = Darwin.open(localURL.path, O_RDONLY | O_NOFOLLOW)
         guard descriptor >= 0 else {
-            throw RemoteFileBrowserError.resourceLimitExceeded
+            throw SFTPTransportError.resourceLimitExceeded
         }
         let localFile = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? localFile.close() }
@@ -809,11 +808,11 @@ actor SSHSession {
               localStatus.st_mode & S_IFMT == S_IFREG,
               localStatus.st_size >= 0,
               UInt64(localStatus.st_size) == expectedBytes else {
-            throw RemoteFileBrowserError.resourceLimitExceeded
+            throw SFTPTransportError.resourceLimitExceeded
         }
 
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         let remoteHandle = try await openFileHandle(
             at: normalizedPath,
             sftp: sftp,
@@ -827,7 +826,7 @@ actor SSHSession {
                 try Task.checkCancellation()
                 let chunkBytes = UInt64(chunk.count)
                 guard chunkBytes <= expectedBytes - min(totalBytesWritten, expectedBytes) else {
-                    throw RemoteFileBrowserError.resourceLimitExceeded
+                    throw SFTPTransportError.resourceLimitExceeded
                 }
 
                 var chunkOffset = 0
@@ -865,7 +864,7 @@ actor SSHSession {
             }
 
             guard totalBytesWritten == expectedBytes else {
-                throw RemoteFileBrowserError.resourceLimitExceeded
+                throw SFTPTransportError.resourceLimitExceeded
             }
             libssh2_sftp_close_handle(remoteHandle)
         } catch {
@@ -893,9 +892,9 @@ actor SSHSession {
         return path.isEmpty ? "/" : path
     }
 
-    func fileSystemCapacity(at path: String) async throws -> RemoteFileFilesystemCapacity {
+    func fileSystemCapacity(at path: String) async throws -> SFTPFilesystemCapacity {
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         var status = LIBSSH2_SFTP_STATVFS()
 
         while true {
@@ -913,7 +912,7 @@ actor SSHSession {
             if result == 0 {
                 let fragmentSize = UInt64(status.f_frsize)
                 let blockSize = fragmentSize > 0 ? fragmentSize : UInt64(status.f_bsize)
-                return .known(RemoteFileFilesystemStatus(
+                return .known(SFTPFilesystemStatus(
                     blockSize: blockSize,
                     totalBlocks: UInt64(status.f_blocks),
                     freeBlocks: UInt64(status.f_bfree),
@@ -939,7 +938,7 @@ actor SSHSession {
 
     func createDirectory(at path: String, permissions: Int32 = 0o755) async throws {
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         try await performSFTPMutation(
             at: normalizedPath,
             sftp: sftp,
@@ -958,7 +957,7 @@ actor SSHSession {
 
     func setPermissions(at path: String, permissions: UInt32) async throws {
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         var attributes = LIBSSH2_SFTP_ATTRIBUTES()
         attributes.flags = UInt(LIBSSH2_SFTP_ATTR_PERMISSIONS)
         attributes.permissions = UInt(permissions)
@@ -991,8 +990,8 @@ actor SSHSession {
 
     func renameItem(at sourcePath: String, to destinationPath: String) async throws {
         let sftp = try await ensureSFTPSession()
-        let normalizedSource = RemoteFilePath.normalize(sourcePath)
-        let normalizedDestination = RemoteFilePath.normalize(destinationPath)
+        let normalizedSource = SFTPRemotePath.normalize(sourcePath)
+        let normalizedDestination = SFTPRemotePath.normalize(destinationPath)
         let renameFlagCandidates: [Int] = [
             Int(LIBSSH2_SFTP_RENAME_OVERWRITE) |
                 Int(LIBSSH2_SFTP_RENAME_ATOMIC) |
@@ -1031,12 +1030,12 @@ actor SSHSession {
             }
         }
 
-        throw lastError ?? RemoteFileBrowserError.failed(String(localized: "Failed to rename item."))
+        throw lastError ?? SFTPTransportError.failed(String(localized: "Failed to rename item."))
     }
 
     func deleteFile(at path: String) async throws {
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         try await performSFTPMutation(
             at: normalizedPath,
             sftp: sftp,
@@ -1054,7 +1053,7 @@ actor SSHSession {
 
     func deleteDirectory(at path: String) async throws {
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         try await performSFTPMutation(
             at: normalizedPath,
             sftp: sftp,
@@ -2187,7 +2186,7 @@ actor SSHSession {
         }
 
         guard let session = libssh2Session else {
-            throw RemoteFileBrowserError.disconnected
+            throw SFTPTransportError.disconnected
         }
 
         while true {
@@ -2245,7 +2244,7 @@ actor SSHSession {
         operation: String
     ) async throws -> OpaquePointer {
         guard let session = libssh2Session else {
-            throw RemoteFileBrowserError.disconnected
+            throw SFTPTransportError.disconnected
         }
 
         let pathLength = UInt32(path.utf8.count)
@@ -2282,7 +2281,7 @@ actor SSHSession {
         mutation: (OpaquePointer, UnsafePointer<CChar>, UInt32) -> Int
     ) async throws {
         guard libssh2Session != nil else {
-            throw RemoteFileBrowserError.disconnected
+            throw SFTPTransportError.disconnected
         }
 
         let pathLength = UInt32(path.utf8.count)
@@ -2306,9 +2305,9 @@ actor SSHSession {
         }
     }
 
-    private func stat(at path: String, statType: Int32) async throws -> RemoteFileEntry {
+    private func stat(at path: String, statType: Int32) async throws -> SFTPFileEntry {
         let sftp = try await ensureSFTPSession()
-        let normalizedPath = RemoteFilePath.normalize(path)
+        let normalizedPath = SFTPRemotePath.normalize(path)
         var attributes = LIBSSH2_SFTP_ATTRIBUTES()
 
         while true {
@@ -2327,11 +2326,11 @@ actor SSHSession {
             if result == 0 {
                 let entryName = Self.fileName(for: normalizedPath)
                 var symlinkTarget: String?
-                let entry = RemoteFileEntry.from(name: entryName, path: normalizedPath, attributes: attributes)
+                let entry = SFTPFileEntry.from(name: entryName, path: normalizedPath, attributes: attributes)
                 if statType == Int32(LIBSSH2_SFTP_LSTAT), entry.type == .symlink {
                     symlinkTarget = try? await readlink(at: normalizedPath)
                 }
-                return RemoteFileEntry.from(
+                return SFTPFileEntry.from(
                     name: entryName,
                     path: normalizedPath,
                     attributes: attributes,
@@ -2358,7 +2357,7 @@ actor SSHSession {
         sftp: OpaquePointer
     ) async throws -> String {
         guard let session = libssh2Session else {
-            throw RemoteFileBrowserError.disconnected
+            throw SFTPTransportError.disconnected
         }
 
         let requestPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2406,7 +2405,7 @@ actor SSHSession {
     }
 
     private static func fileName(for path: String) -> String {
-        let normalized = RemoteFilePath.normalize(path)
+        let normalized = SFTPRemotePath.normalize(path)
         guard normalized != "/" else { return "/" }
         return normalized.split(separator: "/").last.map(String.init) ?? normalized
     }
@@ -2420,7 +2419,7 @@ actor SSHSession {
         from sftp: OpaquePointer?,
         operation: String,
         path: String?
-    ) -> RemoteFileBrowserError {
+    ) -> SFTPTransportError {
         let code = sftp.map { libssh2_sftp_last_error($0) } ?? 0
         return remoteFileError(lastError: UInt(code), operation: operation, path: path)
     }
@@ -2429,7 +2428,7 @@ actor SSHSession {
         lastError: UInt,
         operation: String,
         path: String?
-    ) -> RemoteFileBrowserError {
+    ) -> SFTPTransportError {
         switch lastError {
         case UInt(LIBSSH2_FX_PERMISSION_DENIED):
             return .permissionDenied

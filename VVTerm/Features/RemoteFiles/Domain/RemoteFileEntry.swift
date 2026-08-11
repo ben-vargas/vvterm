@@ -77,57 +77,9 @@ nonisolated struct RemoteFileEntry: Identifiable, Hashable, Codable, Sendable {
         }
 
         return [
-            bits(UInt32(LIBSSH2_SFTP_S_IRUSR), UInt32(LIBSSH2_SFTP_S_IWUSR), UInt32(LIBSSH2_SFTP_S_IXUSR)),
-            bits(UInt32(LIBSSH2_SFTP_S_IRGRP), UInt32(LIBSSH2_SFTP_S_IWGRP), UInt32(LIBSSH2_SFTP_S_IXGRP)),
-            bits(UInt32(LIBSSH2_SFTP_S_IROTH), UInt32(LIBSSH2_SFTP_S_IWOTH), UInt32(LIBSSH2_SFTP_S_IXOTH))
+            bits(0o400, 0o200, 0o100),
+            bits(0o040, 0o020, 0o010),
+            bits(0o004, 0o002, 0o001)
         ].joined()
-    }
-
-    static func from(
-        name: String,
-        path: String,
-        attributes: LIBSSH2_SFTP_ATTRIBUTES,
-        symlinkTarget: String? = nil
-    ) -> RemoteFileEntry {
-        let flags = UInt32(attributes.flags)
-        let permissionBits = UInt32(attributes.permissions)
-        let type = Self.fileType(from: permissionBits, flags: flags)
-        let size = flags & UInt32(LIBSSH2_SFTP_ATTR_SIZE) != 0
-            ? UInt64(attributes.filesize)
-            : nil
-        let modifiedAt = flags & UInt32(LIBSSH2_SFTP_ATTR_ACMODTIME) != 0
-            ? Date(timeIntervalSince1970: TimeInterval(attributes.mtime))
-            : nil
-        let permissions = flags & UInt32(LIBSSH2_SFTP_ATTR_PERMISSIONS) != 0
-            ? permissionBits
-            : nil
-
-        return RemoteFileEntry(
-            name: name,
-            path: path,
-            type: type,
-            size: size,
-            modifiedAt: modifiedAt,
-            permissions: permissions,
-            symlinkTarget: symlinkTarget
-        )
-    }
-
-    private static func fileType(from permissions: UInt32, flags: UInt32) -> RemoteFileType {
-        guard flags & UInt32(LIBSSH2_SFTP_ATTR_PERMISSIONS) != 0 else {
-            return .other
-        }
-
-        let typeMask = permissions & UInt32(LIBSSH2_SFTP_S_IFMT)
-        switch typeMask {
-        case UInt32(LIBSSH2_SFTP_S_IFDIR):
-            return .directory
-        case UInt32(LIBSSH2_SFTP_S_IFLNK):
-            return .symlink
-        case UInt32(LIBSSH2_SFTP_S_IFREG):
-            return .file
-        default:
-            return .other
-        }
     }
 }
