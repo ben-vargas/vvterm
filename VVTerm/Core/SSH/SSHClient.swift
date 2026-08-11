@@ -65,6 +65,7 @@ actor SSHClient {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "SSH")
     private var keepAliveTask: Task<Void, Never>?
     private var lifecycle: Lifecycle = .disconnected
+    private var moshRuntimeGeneration = UUID()
     private var moshShells: [UUID: MoshShellRuntime] = [:]
     private var pendingMoshServerLeases: [UUID: RemoteMoshServerLease] = [:]
     private let cloudflareTransportManager = CloudflareTransportManager()
@@ -195,6 +196,7 @@ actor SSHClient {
 
     /// Interrupts an active or pending transport before bounded cleanup starts.
     func abortConnection() {
+        moshRuntimeGeneration = UUID()
         switch lifecycle {
         case .connecting(let state):
             state.task.cancel()
@@ -502,6 +504,8 @@ actor SSHClient {
             await operation.task.value
             return
         }
+
+        moshRuntimeGeneration = UUID()
 
         let activeSession: SSHSession?
         switch lifecycle {
@@ -1190,23 +1194,41 @@ actor SSHClient {
             throw SSHError.unknown("Invalid terminal size \(cols)x\(rows)")
         }
 
-        let restoredSession = try await MoshClientSession.restore(from: snapshot)
-        do {
-            try await restoredSession.start()
-            try await restoredSession.enqueue(
-                .resize(cols: wireSize.cols, rows: wireSize.rows)
-            )
-            return registerMoshShell(
-                PreparedMoshShell(
-                    session: restoredSession,
-                    pendingOps: []
-                ),
-                origin: .restored
-            )
-        } catch {
+        let generation = moshRuntimeGeneration
+        let restoredSession = try await MoshRestoreStartup.run(
+            restore: {
+                try await MoshClientSession.restore(from: snapshot)
+            },
+            start: { session in
+                try await session.start()
+            },
+            resize: { session in
+                try await session.enqueue(
+                    .resize(cols: wireSize.cols, rows: wireSize.rows)
+                )
+            },
+            isCurrent: {
+                await self.acceptsMoshRestore(generation)
+            },
+            stop: { session in
+                await session.stop()
+            }
+        )
+        guard acceptsMoshRestore(generation) else {
             await restoredSession.stop()
-            throw error
+            throw CancellationError()
         }
+        return registerMoshShell(
+            PreparedMoshShell(
+                session: restoredSession,
+                pendingOps: []
+            ),
+            origin: .restored
+        )
+    }
+
+    private func acceptsMoshRestore(_ generation: UUID) -> Bool {
+        moshRuntimeGeneration == generation && !isAborted
     }
 
     private func prepareMoshShell(
