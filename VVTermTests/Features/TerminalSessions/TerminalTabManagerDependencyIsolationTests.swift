@@ -30,9 +30,35 @@ private final class DependencyTestETResumeStore: EternalTerminalResumeStoring, @
     func deleteResumeState(for paneId: UUID) throws {}
 }
 
+private actor TerminalAuthorizationGate {
+    private var continuation: CheckedContinuation<Bool, Never>?
+
+    func wait() async -> Bool {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func waitUntilBlocked() async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(1))
+        while clock.now < deadline {
+            if continuation != nil { return true }
+            await Task.yield()
+        }
+        return continuation != nil
+    }
+
+    func resolve(_ result: Bool) {
+        continuation?.resume(returning: result)
+        continuation = nil
+    }
+}
+
 @MainActor
 private final class TerminalEffectRecorder {
     var authorizeResult = true
+    var authorizationGate: TerminalAuthorizationGate?
     private(set) var authorizationRequests: [UUID] = []
     private(set) var liveActivityRefreshCount = 0
     private(set) var successfulConnections: [(UUID, String)] = []
@@ -43,6 +69,9 @@ private final class TerminalEffectRecorder {
         TerminalSessionApplicationEffects(
             authorizeServer: { [self] server in
                 authorizationRequests.append(server.id)
+                if let authorizationGate {
+                    return await authorizationGate.wait()
+                }
                 return authorizeResult
             },
             refreshLiveActivity: { [self] _ in
@@ -146,6 +175,41 @@ private actor RecordingTerminalRemoteMoshService: TerminalRemoteMoshServicing {
 @Suite(.serialized)
 @MainActor
 struct TerminalTabManagerDependencyIsolationTests {
+    @Test
+    func disconnectInvalidatesAuthorizedTabOpenBeforeItMutatesSessionState() async throws {
+        let effects = TerminalEffectRecorder()
+        let gate = TerminalAuthorizationGate()
+        effects.authorizationGate = gate
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: effects,
+            remoteTmux: RecordingTerminalRemoteTmuxService(),
+            remoteMosh: RecordingTerminalRemoteMoshService(),
+            deviceID: "tab-open-generation"
+        )
+        let server = makeServer()
+        let staleOpen = Task {
+            try await manager.openTab(for: server)
+        }
+        #expect(await gate.waitUntilBlocked())
+
+        manager.disconnectServer(server.id)
+        effects.authorizationGate = nil
+        let replacement = try await manager.openTab(for: server)
+        await gate.resolve(true)
+
+        do {
+            _ = try await staleOpen.value
+            Issue.record("The stale authorized tab open should be cancelled")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            Issue.record("Expected CancellationError, got \(error)")
+        }
+        #expect(manager.sessionState.tabs(for: server.id) == [replacement])
+        await manager.resetForTesting()
+    }
+
     @Test
     func disabledTmuxProducesPlainStartupPlanWithoutRemoteProbe() async throws {
         let remoteTmux = RecordingTerminalRemoteTmuxService()

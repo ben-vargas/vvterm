@@ -25,8 +25,8 @@ final class TerminalTabManager {
     let terminalSurfaceStore: any TerminalSurfaceStoring
     private(set) var transportCoordinator: TerminalTransportCoordinator!
     lazy var reconnectCoordinator = makeReconnectCoordinator()
-    /// Server IDs with an in-flight tab-open request to avoid queued duplicates.
-    private var tabOpensInFlight: Set<UUID> = []
+    /// The current tab-open authorization attempt for each server.
+    private var tabOpenAttemptsByServer: [UUID: UUID] = [:]
 
     let titleStore = TerminalPaneTitleStore()
     #if os(iOS)
@@ -351,13 +351,23 @@ final class TerminalTabManager {
     /// Open a new tab for a server
     @discardableResult
     func openTab(for server: Server) async throws -> TerminalTab {
-        if tabOpensInFlight.contains(server.id) {
+        if tabOpenAttemptsByServer[server.id] != nil {
             throw TerminalTabOpeningError.alreadyOpening
         }
-        tabOpensInFlight.insert(server.id)
-        defer { tabOpensInFlight.remove(server.id) }
+        let attemptID = UUID()
+        tabOpenAttemptsByServer[server.id] = attemptID
+        defer {
+            if tabOpenAttemptsByServer[server.id] == attemptID {
+                tabOpenAttemptsByServer[server.id] = nil
+            }
+        }
 
-        guard await dependencies.effects.authorizeServer(server) else {
+        let isAuthorized = await dependencies.effects.authorizeServer(server)
+        try Task.checkCancellation()
+        guard tabOpenAttemptsByServer[server.id] == attemptID else {
+            throw CancellationError()
+        }
+        guard isAuthorized else {
             throw VVTermError.authenticationFailed
         }
 
@@ -406,6 +416,7 @@ final class TerminalTabManager {
 
     /// Close all tabs for a server
     func closeAllTabs(for serverId: UUID) {
+        tabOpenAttemptsByServer[serverId] = nil
         closeAllTabs(for: serverId, intent: .explicitClose)
     }
 
@@ -421,6 +432,7 @@ final class TerminalTabManager {
 
     /// Disconnect all terminal tabs for a specific server.
     func disconnectServer(_ serverId: UUID) {
+        tabOpenAttemptsByServer[serverId] = nil
         closeAllTabs(for: serverId, intent: .explicitServerDisconnect)
         sessionState.removeServer(serverId)
         sessionState.selectView(nil, for: serverId)
@@ -430,6 +442,7 @@ final class TerminalTabManager {
 
     /// Disconnect every active terminal tab.
     func disconnectAll() {
+        tabOpenAttemptsByServer.removeAll()
         for serverId in sessionState.serverIdsWithTabs {
             disconnectServer(serverId)
         }
@@ -444,7 +457,7 @@ final class TerminalTabManager {
         let paneIds = sessionState.prepareForApplicationTermination()
             .union(transportCoordinator.ownedPaneIds)
         reconnectCoordinator.prepareForApplicationTermination()
-        tabOpensInFlight.removeAll()
+        tabOpenAttemptsByServer.removeAll()
         for paneId in paneIds {
             detachTerminalRegistration(for: paneId)
         }
@@ -1190,7 +1203,7 @@ extension TerminalTabManager {
         #endif
         drainTerminalSurfaces()
         reconnectCoordinator.reset()
-        tabOpensInFlight.removeAll()
+        tabOpenAttemptsByServer.removeAll()
         await transportCoordinator.resetForTesting()
     }
 }
