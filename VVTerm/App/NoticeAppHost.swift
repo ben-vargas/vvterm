@@ -1,10 +1,11 @@
 import SwiftUI
 
 struct NoticeAppHost<Content: View>: View {
-    @ObservedObject private var networkMonitor: NetworkMonitor = .shared
+    @ObservedObject private var networkMonitor: NetworkMonitor
     let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    init(networkMonitor: NetworkMonitor, @ViewBuilder content: () -> Content) {
+        self.networkMonitor = networkMonitor
         self.content = content()
     }
 

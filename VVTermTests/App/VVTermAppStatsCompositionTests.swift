@@ -99,7 +99,7 @@ struct VVTermAppStatsCompositionTests {
             for: server
         )
         secondBacking.rejectReads()
-        let firstFactory = VVTermApp.makeStatsCollectorFactory(
+        let firstFactory = AppComposition.makeStatsCollectorFactory(
             keychainManager: firstKeychain,
             knownHostsManager: firstKnownHosts,
             connectionOperations: SSHConnectionOperationService(
@@ -107,7 +107,7 @@ struct VVTermAppStatsCompositionTests {
             ),
             sshClientFactory: firstSSHClientFactory
         )
-        let secondFactory = VVTermApp.makeStatsCollectorFactory(
+        let secondFactory = AppComposition.makeStatsCollectorFactory(
             keychainManager: secondKeychain,
             knownHostsManager: secondKnownHosts,
             connectionOperations: SSHConnectionOperationService(
@@ -189,7 +189,7 @@ struct VVTermAppStatsCompositionTests {
     private func makeActions(
         knownHosts: KnownHostsManager? = nil
     ) -> ServerStatsSecurityApprovalActions {
-        VVTermApp.makeStatsSecurityApprovalActions(
+        AppComposition.makeStatsSecurityApprovalActions(
             knownHostsManager: knownHosts ?? makeKnownHostsManager()
         )
     }

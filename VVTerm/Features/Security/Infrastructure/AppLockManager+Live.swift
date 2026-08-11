@@ -1,10 +1,6 @@
 import Foundation
 
 extension AppLockManager {
-    /// Compatibility composition for legacy defaults outside the app root.
-    /// App roots must construct and inject their own manager instead.
-    static let shared = AppLockManager()
-
     convenience init(
         defaults: UserDefaults = .standard,
         authService: (any BiometricAuthServing)? = nil,

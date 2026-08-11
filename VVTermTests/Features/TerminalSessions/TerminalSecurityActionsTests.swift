@@ -78,11 +78,11 @@ struct TerminalSecurityActionsTests {
             ServerCredentials(serverId: server.id, password: "second"),
             for: server
         )
-        let firstActions = VVTermApp.makeTerminalSecurityActions(
+        let firstActions = AppComposition.makeTerminalSecurityActions(
             keychainManager: firstKeychain,
             knownHostsManager: makeKnownHostsManager()
         )
-        let secondActions = VVTermApp.makeTerminalSecurityActions(
+        let secondActions = AppComposition.makeTerminalSecurityActions(
             keychainManager: secondKeychain,
             knownHostsManager: makeKnownHostsManager()
         )
@@ -95,11 +95,11 @@ struct TerminalSecurityActionsTests {
         let server = makeServer()
         let firstKnownHosts = makeKnownHostsManager()
         let secondKnownHosts = makeKnownHostsManager()
-        let firstActions = VVTermApp.makeTerminalSecurityActions(
+        let firstActions = AppComposition.makeTerminalSecurityActions(
             keychainManager: makeKeychainManager(),
             knownHostsManager: firstKnownHosts
         )
-        let secondActions = VVTermApp.makeTerminalSecurityActions(
+        let secondActions = AppComposition.makeTerminalSecurityActions(
             keychainManager: makeKeychainManager(),
             knownHostsManager: secondKnownHosts
         )

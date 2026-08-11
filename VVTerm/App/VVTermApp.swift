@@ -14,366 +14,63 @@ import AppKit
 @main
 struct VVTermApp: App {
     init() {
-        let defaults = UserDefaults.standard
-        TerminalDefaults.applyIfNeeded(defaults: defaults)
-        #if os(macOS)
-        let terminalOptionAsAltMode = defaults.string(
-            forKey: TerminalDefaults.optionAsAltModeKey
-        ) ?? TerminalOptionAsAltMode.none.rawValue
-        #else
-        let terminalOptionAsAltMode = TerminalOptionAsAltMode.none.rawValue
-        #endif
-        let ghosttyRuntimeConfiguration = Ghostty.RuntimeConfiguration(
-            fontName: defaults.string(forKey: TerminalDefaults.fontNameKey)
-                ?? TerminalDefaults.defaultFontName,
-            fontSize: defaults.object(forKey: TerminalDefaults.fontSizeKey) as? Double
-                ?? TerminalDefaults.defaultFontSize,
-            cursorStyleRawValue: defaults.string(forKey: TerminalDefaults.cursorStyleKey)
-                ?? TerminalDefaults.defaultCursorStyle.rawValue,
-            cursorBlink: defaults.object(forKey: TerminalDefaults.cursorBlinkKey) as? Bool
-                ?? TerminalDefaults.defaultCursorBlink,
-            optionAsAltModeRawValue: terminalOptionAsAltMode,
-            remoteClipboardReadPolicyRawValue: defaults.string(
-                forKey: TerminalRemoteClipboardReadPolicy.userDefaultsKey
-            ) ?? TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
-        )
-        let notificationCenter = NotificationCenter.default
-        let calendar = Calendar.current
-        let now: @Sendable () -> Date = Date.init
-        let makeID: @Sendable () -> UUID = UUID.init
-        let defaultWorkspaceName: () -> String = {
-            AppLanguage.localizedString(
-                "My Servers",
-                rawValue: defaults.string(forKey: AppLanguage.storageKey)
-            )
-        }
-        let canonicalDefaultWorkspaceNames: () -> Set<String> = {
-            AppLanguage.localizedValues(for: "My Servers")
-        }
-        let networkMonitor = NetworkMonitor.shared
-        let analyticsTracker = AnalyticsTracker.shared
-        let cloudKitManager = CloudKitManager.shared
-        let keychainManager = KeychainManager.shared
-        let knownHostsManager = KnownHostsManager.shared
-        let liveActivityManager = LiveActivityManager.shared
-        let remoteMosh = RemoteMoshManager.shared
-        let sshClientFactory = SSHClientLiveComposition.makeFactory(
-            defaults: defaults,
-            knownHostsManager: knownHostsManager,
-            remoteMoshManager: remoteMosh
-        )
-        let connectionOperations = SSHConnectionOperationService(
-            clientFactory: sshClientFactory
-        )
-        let remoteTmux = RemoteTmuxManager.shared
-        let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
-        let moshResumeStore = MoshResumeStore.shared
-        let terminalSurfaceStore = GhosttyTerminalSurfaceStore()
-        let deviceID = DeviceIdentity.id
-        let applicationIsActive: @MainActor @Sendable () -> Bool = {
-            #if os(iOS)
-            UIApplication.shared.applicationState == .active
-            #else
-            NSApplication.shared.isActive
-            #endif
-        }
-        let appLockManager = AppLockManager()
-        let syncLifecycle = CloudKitSyncLifecycleDriver(
-            defaults: defaults,
-            notificationCenter: notificationCenter,
-            now: now
-        )
-        let isSyncEnabled = { SyncSettings.isEnabled(in: defaults) }
-        let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
-            transport: cloudKitManager,
-            defaults: defaults,
-            now: now,
-            makeID: makeID
-        )
-        let cloudKitSyncCoordinator = cloudKitSync.coordinator
-        let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory = {
-            LocalSSHDiscoveryManager(
-                dependencies: .live(
-                    networkConnectionType: { networkMonitor.connectionType },
-                    makeScanID: makeID
-                )
-            )
-        }
-        let serverManager = ServerManager(
-            dependencies: .live(
-                defaults: defaults,
-                serverCloud: cloudKitSync.serverCloud,
-                credentialRepository: keychainManager,
-                knownHosts: knownHostsManager,
-                freePlanTracker: analyticsTracker,
-                actionAuthorizer: appLockManager,
-                syncRepository: cloudKitSyncCoordinator,
-                defaultWorkspaceName: defaultWorkspaceName,
-                canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames,
-                now: now,
-                makeID: makeID
-            )
-        )
-        let serverFormDependencies = ServerFormDependencies.live(
-            credentials: keychainManager,
-            hostKeys: knownHostsManager,
-            connectionOperations: connectionOperations,
-            remoteMosh: remoteMosh,
-            defaultTmuxEnabled: {
-                defaults.object(forKey: "terminalTmuxEnabledDefault") == nil
-                    ? true
-                    : defaults.bool(forKey: "terminalTmuxEnabledDefault")
-            },
-            defaultTmuxStartupBehavior: {
-                defaults.string(forKey: "terminalTmuxStartupBehaviorDefault")
-                    .flatMap(TmuxStartupBehavior.init(rawValue:)) ?? .askEveryTime
-            },
-            now: now,
-            makeID: makeID
-        )
-        let engagementTracker = EngagementTracker(
-            dependencies: .live(
-                defaults: defaults,
-                analytics: analyticsTracker,
-                now: now,
-                calendar: calendar,
-                applicationIsActive: applicationIsActive
-            )
-        )
-        let terminalThemeManager = TerminalThemeManager(
-            dependencies: .live(
-                defaults: defaults,
-                notificationCenter: notificationCenter,
-                cloud: cloudKitSync.terminalThemeCloud,
-                mutationQueue: cloudKitSyncCoordinator,
-                syncLifecycle: syncLifecycle,
-                themeFiles: TerminalThemeFileStore.appStorage,
-                builtInThemeCatalog: BundleTerminalThemeCatalog(),
-                paletteResolver: ThemeColorParserPaletteResolver(),
-                isSyncEnabled: isSyncEnabled,
-                now: now
-            )
-        )
-        let tabManager = TerminalTabManagerLiveComposition.makeManager(
-            defaults: defaults,
-            sshClientFactory: sshClientFactory,
-            networkMonitor: networkMonitor,
-            appLockManager: appLockManager,
-            serverManager: serverManager,
-            engagementTracker: engagementTracker,
-            analyticsTracker: analyticsTracker,
-            liveActivityManager: liveActivityManager,
-            remoteMosh: remoteMosh,
-            remoteTmux: remoteTmux,
-            eternalTerminalResumeStore: eternalTerminalResumeStore,
-            moshResumeStore: moshResumeStore,
-            terminalSurfaceStore: terminalSurfaceStore,
-            deviceID: deviceID,
-            themeStyle: {
-                TerminalTmuxSessionLiveComposition.themeStyle(
-                    for: terminalThemeManager.themeSelection.darkThemeName
-                )
-            },
-            applicationIsActive: applicationIsActive
-        )
-        let storeManager = StoreManager(
-            client: AppStoreKitClient(),
-            effects: .live(
-                analytics: analyticsTracker,
-                engagementTracker: engagementTracker
-            )
-        )
-        let terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager(
-            dependencies: .live(
-                defaults: defaults,
-                cloud: cloudKitSync.terminalAccessoryCloud,
-                mutationQueue: cloudKitSyncCoordinator,
-                syncLifecycle: syncLifecycle,
-                resolutionSource: cloudKitSync.terminalAccessoryResolutions,
-                writerID: deviceID,
-                isSyncEnabled: isSyncEnabled,
-                now: now,
-                makeID: makeID,
-                trackCustomActionCreated: { kind in
-                    analyticsTracker.trackCustomActionCreated(kind: kind.rawValue)
-                }
-            )
-        )
-        let statsPreferencesStore = PreferencesStore(
-            dependencies: .live(
-                defaults: defaults,
-                cloud: cloudKitSync.statsPreferencesCloud,
-                mutationQueue: cloudKitSyncCoordinator,
-                syncLifecycle: syncLifecycle,
-                resolutionSource: cloudKitSync.statsPreferencesResolutions,
-                writerID: deviceID,
-                isSyncEnabled: isSyncEnabled,
-                now: now
-            )
-        )
-        let serverVolumeVisibilityStore = ServerVolumeVisibilityStore.live
-        #if os(macOS)
-        let workspaceSelectionStore = WorkspaceSelectionLiveComposition.makeStore(
-            defaults: defaults
-        )
-        #endif
-        let viewTabConfigurationManager = ViewTabConfigurationManager(defaults: defaults)
-        let voiceSettingsPersistence = UserDefaultsVoiceSettingsPersistence(defaults: defaults)
-        let voiceSettingsStore = VoiceSettingsStore(persistence: voiceSettingsPersistence)
-        let voiceModelManagers = VoiceSettingsModelManagerOwner(
-            settingsStore: voiceSettingsStore,
-            makeManager: { kind, selectedModelID in
-                MLXModelManager(
-                    kind: kind,
-                    selectedModelID: selectedModelID,
-                    storageRoot: MLXModelManager.modelsRoot,
-                    sessionLifecycle: .live,
-                    operations: .live
-                )
-            }
-        )
-        let voiceInputRuntimeStore = VoiceInputRuntimeStore(
-            settingsStore: voiceSettingsStore,
-            makeRuntime: VoiceInputRuntimeLiveComposition.makeFactory(
-                settingsStore: voiceSettingsStore
-            )
-        )
-        let makeStatsCollector = Self.makeStatsCollectorFactory(
-            keychainManager: keychainManager,
-            knownHostsManager: knownHostsManager,
-            connectionOperations: connectionOperations,
-            sshClientFactory: sshClientFactory
-        )
-        let statsRuntimeStore = ServerStatsRuntimeStore(
-            makeCollector: makeStatsCollector
-        )
-        terminalSecurityActions = Self.makeTerminalSecurityActions(
-            keychainManager: keychainManager,
-            knownHostsManager: knownHostsManager
-        )
-        let analyticsOptOutAction = AnalyticsOptOutAction(
-            emitAnalyticsDisabled: {
-                analyticsTracker.trackAnalyticsDisabled()
-            }
-        )
-        let onWelcomeCompleted: @MainActor () -> Void = {
-            analyticsTracker.trackWelcomeCompleted()
-        }
-        let syncSettingsCoordinator = SyncSettingsLiveComposition.makeCoordinator(
-            cloudKit: cloudKitManager,
-            keychain: keychainManager,
-            serverManager: serverManager,
-            terminalAccessory: terminalAccessoryPreferencesManager
-        )
-        let sshKeySettingsCoordinator = SSHKeySettingsLiveComposition.makeCoordinator(
-            keychain: keychainManager
-        )
-        let knownHostSettingsCoordinator = KnownHostSettingsLiveComposition.makeCoordinator(
-            knownHosts: knownHostsManager
-        )
-        #if os(iOS)
-        let appLifecycleDependencies = AppLifecycleDependencies(
-            subscribeToRemoteChanges: {
-                await cloudKitManager.subscribeToChanges()
-            },
-            refreshNetwork: {
-                networkMonitor.refreshCurrentPath()
-            },
-            endLiveActivitiesForApplicationTermination: {
-                liveActivityManager.endForApplicationTermination()
-            }
-        )
-        #else
-        let appLifecycleDependencies = AppLifecycleDependencies(
-            subscribeToRemoteChanges: {
-                await cloudKitManager.subscribeToChanges()
-            },
-            refreshNetwork: {
-                networkMonitor.refreshCurrentPath()
-            }
-        )
-        #endif
-        #if os(iOS)
-        self.analyticsOptOutAction = analyticsOptOutAction
-        #endif
-        self.onWelcomeCompleted = onWelcomeCompleted
-        self.tabManager = tabManager
-        _ghosttyApp = StateObject(
-            wrappedValue: Ghostty.App(
-                configuration: ghosttyRuntimeConfiguration,
-                autoStart: false
-            )
-        )
-        _storeManager = StateObject(wrappedValue: storeManager)
-        _appLockManager = StateObject(wrappedValue: appLockManager)
-        _serverManager = StateObject(wrappedValue: serverManager)
-        _engagementTracker = StateObject(wrappedValue: engagementTracker)
-        _terminalThemeManager = StateObject(wrappedValue: terminalThemeManager)
+        let composition = AppComposition.live()
+        networkMonitor = composition.networkMonitor
+        tabManager = composition.tabManager
+        voiceInputRuntimeStore = composition.voiceInputRuntimeStore
+        statsRuntimeStore = composition.statsRuntimeStore
+        makeLocalDiscoveryManager = composition.makeLocalDiscoveryManager
+        serverFormDependencies = composition.serverFormDependencies
+        voiceModelManagers = composition.voiceModelManagers
+        statsSecurityApprovalActions = composition.statsSecurityApprovalActions
+        terminalSecurityActions = composition.terminalSecurityActions
+        onWelcomeCompleted = composition.onWelcomeCompleted
+        _ghosttyApp = StateObject(wrappedValue: composition.ghosttyApp)
+        _storeManager = StateObject(wrappedValue: composition.storeManager)
+        _appLockManager = StateObject(wrappedValue: composition.appLockManager)
+        _serverManager = StateObject(wrappedValue: composition.serverManager)
+        _engagementTracker = StateObject(wrappedValue: composition.engagementTracker)
+        _remoteFileBrowserStore = StateObject(wrappedValue: composition.remoteFileBrowserStore)
+        _terminalThemeManager = StateObject(wrappedValue: composition.terminalThemeManager)
         _terminalAccessoryPreferencesManager = StateObject(
-            wrappedValue: terminalAccessoryPreferencesManager
+            wrappedValue: composition.terminalAccessoryPreferencesManager
         )
-        _statsPreferencesStore = StateObject(wrappedValue: statsPreferencesStore)
-        _serverVolumeVisibilityStore = StateObject(wrappedValue: serverVolumeVisibilityStore)
-        #if os(macOS)
-        _workspaceSelectionStore = StateObject(wrappedValue: workspaceSelectionStore)
-        #endif
-        self.voiceInputRuntimeStore = voiceInputRuntimeStore
-        self.statsRuntimeStore = statsRuntimeStore
-        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
-        self.serverFormDependencies = serverFormDependencies
-        self.voiceModelManagers = voiceModelManagers
-        statsSecurityApprovalActions = Self.makeStatsSecurityApprovalActions(
-            knownHostsManager: knownHostsManager
+        _statsPreferencesStore = StateObject(wrappedValue: composition.statsPreferencesStore)
+        _serverVolumeVisibilityStore = StateObject(
+            wrappedValue: composition.serverVolumeVisibilityStore
         )
         _viewTabConfigurationManager = StateObject(
-            wrappedValue: viewTabConfigurationManager
+            wrappedValue: composition.viewTabConfigurationManager
         )
-        _syncSettingsCoordinator = StateObject(wrappedValue: syncSettingsCoordinator)
-        _sshKeySettingsCoordinator = StateObject(wrappedValue: sshKeySettingsCoordinator)
-        _knownHostSettingsCoordinator = StateObject(wrappedValue: knownHostSettingsCoordinator)
-        _remoteFileBrowserStore = StateObject(
-            wrappedValue: Self.makeRemoteFileBrowserStore(
-                tabManager: tabManager,
-                serverManager: serverManager,
-                credentialRepository: keychainManager,
-                connectionOperations: connectionOperations,
-                clientFactory: sshClientFactory,
-                securityApprovalActions: Self.makeRemoteFileSecurityApprovalActions(
-                    knownHostsManager: knownHostsManager
-                )
-            )
+        _syncSettingsCoordinator = StateObject(wrappedValue: composition.syncSettingsCoordinator)
+        _sshKeySettingsCoordinator = StateObject(
+            wrappedValue: composition.sshKeySettingsCoordinator
         )
-        #if os(macOS)
-        aboutWindowPresenter = AboutWindowPresenter()
-        settingsWindowPresenter = SettingsWindowPresenter(
-            appLockManager: appLockManager,
-            serverManager: serverManager,
-            terminalThemeManager: terminalThemeManager,
-            terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
-            viewTabConfigurationManager: viewTabConfigurationManager,
-            storeManager: storeManager,
-            statsPreferencesStore: statsPreferencesStore,
-            syncSettingsCoordinator: syncSettingsCoordinator,
-            sshKeySettingsCoordinator: sshKeySettingsCoordinator,
-            knownHostSettingsCoordinator: knownHostSettingsCoordinator,
-            voiceModelManagers: voiceModelManagers,
-            analyticsOptOutAction: analyticsOptOutAction
+        _knownHostSettingsCoordinator = StateObject(
+            wrappedValue: composition.knownHostSettingsCoordinator
         )
+        #if os(iOS)
+        analyticsOptOutAction = composition.analyticsOptOutAction
+        #else
+        _workspaceSelectionStore = StateObject(wrappedValue: composition.workspaceSelectionStore)
+        aboutWindowPresenter = composition.aboutWindowPresenter
+        settingsWindowPresenter = composition.settingsWindowPresenter
         #endif
+
         appDelegate.configure(
-            tabManager: tabManager,
-            serverManager: serverManager,
-            appLockManager: appLockManager,
-            lifecycleDependencies: appLifecycleDependencies
+            tabManager: composition.tabManager,
+            serverManager: composition.serverManager,
+            appLockManager: composition.appLockManager,
+            lifecycleDependencies: composition.appLifecycleDependencies
         )
         #if os(macOS)
-        MacConnectionToolbarController.shared.configure(tabManager: tabManager)
+        MacConnectionToolbarController.shared.configure(tabManager: composition.tabManager)
         #endif
-        storeManager.start()
+        composition.storeManager.start()
 
         #if os(iOS)
         VVTermLauncherWidgetRefresh.refreshIfNeeded()
-        analyticsTracker.prepareAppleAdsAttribution()
+        composition.analyticsTracker.prepareAppleAdsAttribution()
         #endif
     }
 
@@ -391,6 +88,7 @@ struct VVTermApp: App {
     @StateObject private var appLockManager: AppLockManager
     @StateObject private var serverManager: ServerManager
     @StateObject private var engagementTracker: EngagementTracker
+    private let networkMonitor: NetworkMonitor
     private let tabManager: TerminalTabManager
     @StateObject private var storeManager: StoreManager
     @StateObject private var remoteFileTabManager = RemoteFileTabManager()
@@ -652,7 +350,7 @@ struct VVTermApp: App {
         WindowGroup("", id: "main") {
             let appLocale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
             AppLockContainer {
-                NoticeAppHost {
+                NoticeAppHost(networkMonitor: networkMonitor) {
                     Group {
                         #if os(iOS)
                         iOSRootContent
@@ -709,141 +407,3 @@ private enum VVTermLauncherWidgetRefresh {
     }
 }
 #endif
-
-extension VVTermApp {
-    static func makeRemoteFileSecurityApprovalActions(
-        knownHostsManager: KnownHostsManager
-    ) -> RemoteFileSecurityApprovalActions {
-        RemoteFileSecurityApprovalActions(
-            pendingRequest: { error, server in
-                if let request = ServerSecurityApprovalRequest.detect(
-                    error,
-                    host: server.host,
-                    port: server.port,
-                    knownHosts: knownHostsManager
-                ) {
-                    return request
-                }
-                guard RemoteFileBrowserError.map(error) == .hostKeyApprovalRequired else {
-                    return nil
-                }
-                return knownHostsManager.pendingChallenge(
-                    for: server.host,
-                    port: server.port
-                ).map(ServerSecurityApprovalRequest.hostKey)
-            },
-            approve: { request in
-                switch request {
-                case .hostKey(let challenge):
-                    return knownHostsManager.approve(challenge)
-                }
-            },
-            reject: { request in
-                switch request {
-                case .hostKey(let challenge):
-                    knownHostsManager.reject(challenge)
-                }
-            }
-        )
-    }
-
-    static func makeStatsCollectorFactory(
-        keychainManager: KeychainManager,
-        knownHostsManager: KnownHostsManager,
-        connectionOperations: SSHConnectionOperationService,
-        sshClientFactory: SSHClientFactory
-    ) -> @MainActor () -> ServerStatsCollector {
-        let dependencies = ServerStatsCollectorDependencies.live(
-            keychainManager: keychainManager,
-            knownHostsManager: knownHostsManager,
-            connectionOperations: connectionOperations,
-            sshClientFactory: sshClientFactory
-        )
-        return {
-            ServerStatsCollector(dependencies: dependencies)
-        }
-    }
-
-    static func makeTerminalSecurityActions(
-        keychainManager: KeychainManager,
-        knownHostsManager: KnownHostsManager
-    ) -> TerminalSecurityActions {
-        TerminalSecurityActions(
-            loadCredentials: { server in
-                try keychainManager.getCredentials(for: server)
-            },
-            pendingHostKeyApproval: { server in
-                knownHostsManager.pendingChallenge(
-                    for: server.host,
-                    port: server.port
-                ).map(ServerSecurityApprovalRequest.hostKey)
-            },
-            approve: { request, _ in
-                switch request {
-                case .hostKey(let challenge):
-                    return knownHostsManager.approve(challenge)
-                        ? .approved
-                        : .failed(.expired)
-                }
-            },
-            reject: { request in
-                switch request {
-                case .hostKey(let challenge):
-                    knownHostsManager.reject(challenge)
-                }
-            }
-        )
-    }
-
-    static func makeStatsSecurityApprovalActions(
-        knownHostsManager: KnownHostsManager
-    ) -> ServerStatsSecurityApprovalActions {
-        ServerStatsSecurityApprovalActions(
-            approve: { request in
-                switch request {
-                case .hostKey(let challenge):
-                    return knownHostsManager.approve(challenge)
-                        ? .approved
-                        : .failed(.expired)
-                }
-            },
-            reject: { request in
-                switch request {
-                case .hostKey(let challenge):
-                    knownHostsManager.reject(challenge)
-                }
-            }
-        )
-    }
-
-    static func makeRemoteFileBrowserStore(
-        tabManager: TerminalTabManager,
-        serverManager: ServerManager,
-        credentialRepository: any ServerCredentialTransactionRepository,
-        connectionOperations: SSHConnectionOperationService,
-        clientFactory: SSHClientFactory,
-        securityApprovalActions: RemoteFileSecurityApprovalActions,
-        defaults: UserDefaults = .standard
-    ) -> RemoteFileBrowserStore {
-        let adapter = SSHSFTPAdapter(
-            borrowedClientProvider: { serverId in
-                tabManager.transportCoordinator.sharedStatsClient(for: serverId)
-            },
-            credentialRepository: credentialRepository,
-            connectionOperations: connectionOperations,
-            clientFactory: clientFactory
-        )
-
-        return RemoteFileBrowserStore(
-            defaults: defaults,
-            remoteFileServiceAdapter: adapter,
-            securityApprovalActions: securityApprovalActions,
-            serverProvider: { serverId in
-                serverManager.servers.first { $0.id == serverId }
-            },
-            workingDirectoryProvider: { serverId in
-                tabManager.workingDirectoryCandidate(for: serverId)
-            }
-        )
-    }
-}
