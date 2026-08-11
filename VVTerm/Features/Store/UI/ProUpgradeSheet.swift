@@ -61,7 +61,7 @@ struct ProUpgradeSheet: View {
             set: { isPresented in
                 if !isPresented {
                     if alertInfo?.isRestore == true {
-                        storeManager.restoreState = .idle
+                        storeManager.dismissRestoreResult()
                     }
                     alertInfo = nil
                 }
@@ -69,7 +69,7 @@ struct ProUpgradeSheet: View {
         ), presenting: alertInfo) { info in
             Button("OK") {
                 if info.isRestore {
-                    storeManager.restoreState = .idle
+                    storeManager.dismissRestoreResult()
                 }
                 alertInfo = nil
             }

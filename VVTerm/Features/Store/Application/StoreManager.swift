@@ -38,9 +38,9 @@ final class StoreManager: ObservableObject {
     private final class TransactionListenerToken {}
 
     @Published private(set) var entitlementSnapshot = StoreEntitlementSnapshot.checking
-    @Published var products: [StoreProduct] = []
-    @Published var purchaseState: PurchaseState = .idle
-    @Published var restoreState: RestoreState = .idle
+    @Published private(set) var products: [StoreProduct] = []
+    @Published private(set) var purchaseState: PurchaseState = .idle
+    @Published private(set) var restoreState: RestoreState = .idle
     @Published private(set) var lastPurchasedProductId: String?
     private(set) var activePaywallSource: PaywallSource = .general
     private(set) var hasPresentedPaywallThisLaunch = false
@@ -49,6 +49,10 @@ final class StoreManager: ObservableObject {
     private var startupToken: StartupToken?
     private var updateListenerTask: Task<Void, Never>?
     private var transactionListenerToken: TransactionListenerToken?
+    private var productOperationID: UUID?
+    private var entitlementOperationID: UUID?
+    private var purchaseOperationID: UUID?
+    private var restoreOperationID: UUID?
     private let client: any StoreClient
     private let effects: StoreManagerEffects
     private let logger = Logger(
@@ -106,6 +110,10 @@ final class StoreManager: ObservableObject {
         startTransactionListener()
         let token = StartupToken()
         startupToken = token
+        let productOperationID = UUID()
+        self.productOperationID = productOperationID
+        let entitlementOperationID = UUID()
+        self.entitlementOperationID = entitlementOperationID
         let client = self.client
         let logger = self.logger
         startupTask = Task { [weak self, client, logger, token] in
@@ -116,17 +124,29 @@ final class StoreManager: ObservableObject {
 
             let result = await loadedEntitlements
             guard !Task.isCancelled else { return }
-            self?.applyStartupEntitlementResult(result, token: token)
+            self?.applyStartupEntitlementResult(
+                result,
+                token: token,
+                operationID: entitlementOperationID
+            )
 
             guard let products = await loadedProducts,
                   !Task.isCancelled else { return }
-            self?.applyStartupProducts(products, token: token)
+            self?.applyStartupProducts(
+                products,
+                token: token,
+                operationID: productOperationID
+            )
         }
     }
 
     func stop() {
         startupToken = nil
         transactionListenerToken = nil
+        productOperationID = nil
+        entitlementOperationID = nil
+        purchaseOperationID = nil
+        restoreOperationID = nil
         startupTask?.cancel()
         updateListenerTask?.cancel()
         startupTask = nil
@@ -141,10 +161,17 @@ final class StoreManager: ObservableObject {
     // MARK: - Load Products
 
     func loadProducts() async {
+        let operationID = UUID()
+        productOperationID = operationID
         guard let loadedProducts = await Self.loadProducts(using: client, logger: logger) else {
+            if productOperationID == operationID {
+                productOperationID = nil
+            }
             return
         }
+        guard productOperationID == operationID else { return }
         products = loadedProducts
+        productOperationID = nil
     }
 
     private static func loadProducts(
@@ -216,21 +243,31 @@ final class StoreManager: ObservableObject {
     // MARK: - Purchase
 
     func purchase(_ product: StoreProduct) async {
+        let operationID = UUID()
+        purchaseOperationID = operationID
+        defer {
+            if purchaseOperationID == operationID {
+                purchaseOperationID = nil
+            }
+        }
+        let source = activePaywallSource
         purchaseState = .purchasing
         lastPurchasedProductId = nil
         effects.record(.purchaseStarted(
-            source: activePaywallSource,
+            source: source,
             productID: product.id
         ))
         logger.info("Purchasing \(product.id)")
 
         do {
             let result = try await client.purchase(productId: product.id)
+            guard purchaseOperationID == operationID else { return }
 
             switch result {
             case .verified:
                 await checkEntitlements()
-                applySuccessfulPurchase(of: product)
+                guard purchaseOperationID == operationID else { return }
+                applySuccessfulPurchase(of: product, source: source)
 
             case .unverified(let productId):
                 logger.error(
@@ -240,14 +277,14 @@ final class StoreManager: ObservableObject {
 
             case .userCancelled:
                 effects.record(.purchaseCancelled(
-                    source: activePaywallSource,
+                    source: source,
                     productID: product.id
                 ))
                 applyIdlePurchaseState(logMessage: "Purchase cancelled by user")
 
             case .pending:
                 effects.record(.purchasePending(
-                    source: activePaywallSource,
+                    source: source,
                     productID: product.id
                 ))
                 applyIdlePurchaseState(logMessage: "Purchase pending")
@@ -256,8 +293,9 @@ final class StoreManager: ObservableObject {
                 purchaseState = .idle
             }
         } catch {
+            guard purchaseOperationID == operationID else { return }
             effects.record(.purchaseFailed(
-                source: activePaywallSource,
+                source: source,
                 productID: product.id,
                 reason: String(describing: type(of: error))
             ))
@@ -269,13 +307,23 @@ final class StoreManager: ObservableObject {
     // MARK: - Restore Purchases
 
     func restorePurchases() async {
+        let operationID = UUID()
+        restoreOperationID = operationID
+        defer {
+            if restoreOperationID == operationID {
+                restoreOperationID = nil
+            }
+        }
         restoreState = .restoring
         logger.info("Restoring purchases")
         do {
             try await client.sync()
+            guard restoreOperationID == operationID else { return }
             await checkEntitlements()
+            guard restoreOperationID == operationID else { return }
             applyRestoreResult(hasAccess: isPro)
         } catch {
+            guard restoreOperationID == operationID else { return }
             restoreState = .failed(error.localizedDescription)
             logger.error("Failed to restore purchases: \(error.localizedDescription)")
         }
@@ -284,27 +332,45 @@ final class StoreManager: ObservableObject {
     // MARK: - Check Entitlements
 
     func checkEntitlements() async {
+        let operationID = UUID()
+        entitlementOperationID = operationID
         let result = await client.entitlements(
             subscriptionProductIds: Self.subscriptionProductIds
         )
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+            if entitlementOperationID == operationID {
+                entitlementOperationID = nil
+            }
+            return
+        }
+        guard entitlementOperationID == operationID else { return }
         applyEntitlementResult(result)
+        entitlementOperationID = nil
+    }
+
+    func dismissRestoreResult() {
+        guard restoreState != .restoring else { return }
+        restoreState = .idle
     }
 
     private func applyStartupEntitlementResult(
         _ result: StoreEntitlementResult,
-        token: StartupToken
+        token: StartupToken,
+        operationID: UUID
     ) {
-        guard startupToken === token else { return }
+        guard startupToken === token, entitlementOperationID == operationID else { return }
         applyEntitlementResult(result)
+        entitlementOperationID = nil
     }
 
     private func applyStartupProducts(
         _ products: [StoreProduct],
-        token: StartupToken
+        token: StartupToken,
+        operationID: UUID
     ) {
-        guard startupToken === token else { return }
+        guard startupToken === token, productOperationID == operationID else { return }
         self.products = products
+        productOperationID = nil
     }
 
     private func applyEntitlementResult(_ result: StoreEntitlementResult) {
@@ -336,11 +402,18 @@ final class StoreManager: ObservableObject {
                 guard !Task.isCancelled else { return }
                 switch update {
                 case .verified:
+                    guard let self else { return }
+                    let operationID = UUID()
+                    self.entitlementOperationID = operationID
                     let result = await client.entitlements(
                         subscriptionProductIds: Self.subscriptionProductIds
                     )
                     guard !Task.isCancelled else { return }
-                    self?.applyTransactionEntitlementResult(result, token: token)
+                    self.applyTransactionEntitlementResult(
+                        result,
+                        token: token,
+                        operationID: operationID
+                    )
                 case .unverified(let productId):
                     logger.error(
                         "Ignored unverified StoreKit update for product \(productId, privacy: .public)"
@@ -352,10 +425,13 @@ final class StoreManager: ObservableObject {
 
     private func applyTransactionEntitlementResult(
         _ result: StoreEntitlementResult,
-        token: TransactionListenerToken
+        token: TransactionListenerToken,
+        operationID: UUID
     ) {
-        guard transactionListenerToken === token else { return }
+        guard transactionListenerToken === token,
+              entitlementOperationID == operationID else { return }
         applyEntitlementResult(result)
+        entitlementOperationID = nil
     }
 
     // MARK: - Subscription Info
@@ -374,11 +450,11 @@ final class StoreManager: ObservableObject {
         return status.state == .subscribed || status.state == .inGracePeriod
     }
 
-    private func applySuccessfulPurchase(of product: StoreProduct) {
+    private func applySuccessfulPurchase(of product: StoreProduct, source: PaywallSource) {
         lastPurchasedProductId = product.id
         purchaseState = .purchased
         effects.record(.purchaseSucceeded(
-            source: activePaywallSource,
+            source: source,
             productID: product.id
         ))
         logger.info("Purchase successful: \(product.id)")

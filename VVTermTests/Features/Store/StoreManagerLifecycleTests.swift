@@ -42,6 +42,45 @@ final class StoreManagerLifecycleTests: XCTestCase {
         )
     }
 
+    func testLatePurchaseResultCannotOverwriteANewerPurchase() async {
+        let client = StoreClientFake()
+        let firstGate = StoreValueGate<StorePurchaseResult>()
+        let secondGate = StoreValueGate<StorePurchaseResult>()
+        var purchaseIndex = 0
+        client.purchaseHandler = { _ in
+            let index = purchaseIndex
+            purchaseIndex += 1
+            return await (index == 0 ? firstGate : secondGate).wait()
+        }
+        var effects: [StoreManagerEffect] = []
+        let manager = StoreManager(
+            client: client,
+            effects: StoreManagerEffects { effects.append($0) }
+        )
+
+        let firstPurchase = Task { await manager.purchase(monthlyProduct) }
+        await firstGate.waitUntilEntered()
+        let secondPurchase = Task { await manager.purchase(monthlyProduct) }
+        await secondGate.waitUntilEntered()
+
+        secondGate.resume(with: .pending)
+        await secondPurchase.value
+        firstGate.resume(with: .verified(productId: VVTermProducts.proMonthly))
+        await firstPurchase.value
+
+        XCTAssertEqual(manager.purchaseState, .idle)
+        XCTAssertNil(manager.lastPurchasedProductId)
+        XCTAssertEqual(client.entitlementRequestCount, 0)
+        XCTAssertEqual(
+            effects,
+            [
+                .purchaseStarted(source: .general, productID: VVTermProducts.proMonthly),
+                .purchaseStarted(source: .general, productID: VVTermProducts.proMonthly),
+                .purchasePending(source: .general, productID: VVTermProducts.proMonthly)
+            ]
+        )
+    }
+
     func testUnverifiedPurchaseFailsWithoutGrantingAccess() async {
         let client = StoreClientFake()
         client.purchaseResult = .unverified(productId: VVTermProducts.proMonthly)
@@ -93,6 +132,66 @@ final class StoreManagerLifecycleTests: XCTestCase {
         XCTAssertEqual(manager.restoreState, .restored(hasAccess: true))
         XCTAssertTrue(manager.isPro)
         XCTAssertTrue(manager.isLifetime)
+        manager.dismissRestoreResult()
+        XCTAssertEqual(manager.restoreState, .idle)
+    }
+
+    func testLateRestoreCannotOverwriteANewerRestore() async {
+        let client = StoreClientFake()
+        let firstGate = StoreValueGate<Void>()
+        let secondGate = StoreValueGate<Void>()
+        var syncIndex = 0
+        client.syncHandler = {
+            let index = syncIndex
+            syncIndex += 1
+            await (index == 0 ? firstGate : secondGate).wait()
+        }
+        let manager = makeManager(client)
+
+        let firstRestore = Task { await manager.restorePurchases() }
+        await firstGate.waitUntilEntered()
+        let secondRestore = Task { await manager.restorePurchases() }
+        await secondGate.waitUntilEntered()
+
+        secondGate.resume(with: ())
+        await secondRestore.value
+        firstGate.resume(with: ())
+        await firstRestore.value
+
+        XCTAssertEqual(client.syncCount, 2)
+        XCTAssertEqual(client.entitlementRequestCount, 1)
+        XCTAssertEqual(manager.restoreState, .restored(hasAccess: false))
+    }
+
+    func testLateEntitlementResultCannotOverwriteANewerCheck() async {
+        let client = StoreClientFake()
+        let firstGate = StoreValueGate<StoreEntitlementResult>()
+        let secondGate = StoreValueGate<StoreEntitlementResult>()
+        var requestIndex = 0
+        client.entitlementsHandler = {
+            let index = requestIndex
+            requestIndex += 1
+            return await (index == 0 ? firstGate : secondGate).wait()
+        }
+        var effects: [StoreManagerEffect] = []
+        let manager = StoreManager(
+            client: client,
+            effects: StoreManagerEffects { effects.append($0) }
+        )
+
+        let firstCheck = Task { await manager.checkEntitlements() }
+        await firstGate.waitUntilEntered()
+        let secondCheck = Task { await manager.checkEntitlements() }
+        await secondGate.waitUntilEntered()
+
+        secondGate.resume(with: .free)
+        await secondCheck.value
+        firstGate.resume(with: entitlementResult(productIds: [VVTermProducts.proLifetime]))
+        await firstCheck.value
+
+        XCTAssertEqual(manager.accessState, .free)
+        XCTAssertFalse(manager.isPro)
+        XCTAssertEqual(effects, [.entitlementsUpdated(isPro: false)])
     }
 
     func testVerifiedGraceAndBillingRetryStatesKeepAccess() async {
@@ -563,6 +662,8 @@ private final class StoreClientFake: StoreClient {
     var onProductRequest: (() -> Void)?
     var onTransactionStreamTermination: (() -> Void)?
     var productsHandler: (() async throws -> [StoreProduct])?
+    var purchaseHandler: ((String) async throws -> StorePurchaseResult)?
+    var syncHandler: (() async throws -> Void)?
     var entitlementsHandler: (() async -> StoreEntitlementResult)?
 
     private(set) var events: [String] = []
@@ -587,11 +688,17 @@ private final class StoreClientFake: StoreClient {
 
     func purchase(productId: String) async throws -> StorePurchaseResult {
         purchasedProductIds.append(productId)
+        if let purchaseHandler {
+            return try await purchaseHandler(productId)
+        }
         return purchaseResult
     }
 
     func sync() async throws {
         syncCount += 1
+        if let syncHandler {
+            try await syncHandler()
+        }
     }
 
     func entitlements(subscriptionProductIds: [String]) async -> StoreEntitlementResult {
@@ -644,5 +751,34 @@ private final class StoreEntitlementGate {
     func resume(with result: StoreEntitlementResult) {
         continuation?.resume(returning: result)
         continuation = nil
+    }
+}
+
+@MainActor
+private final class StoreValueGate<Value: Sendable> {
+    private var entered = false
+    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
+    private var valueContinuation: CheckedContinuation<Value, Never>?
+
+    func wait() async -> Value {
+        entered = true
+        let waiters = entryWaiters
+        entryWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+        return await withCheckedContinuation { continuation in
+            valueContinuation = continuation
+        }
+    }
+
+    func waitUntilEntered() async {
+        guard !entered else { return }
+        await withCheckedContinuation { continuation in
+            entryWaiters.append(continuation)
+        }
+    }
+
+    func resume(with value: Value) {
+        valueContinuation?.resume(returning: value)
+        valueContinuation = nil
     }
 }
