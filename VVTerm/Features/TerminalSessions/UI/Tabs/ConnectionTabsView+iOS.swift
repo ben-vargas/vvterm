@@ -111,8 +111,7 @@ extension ConnectionTerminalContainer {
             SharedTerminalTabsBar(
                 tabs: serverTabs,
                 selectedTabId: selectedTabIdBinding,
-                titleForTab: { tabManager.titleStore.displayTitle(for: $0) },
-                paneState: { tabManager.sessionState.paneState(for: $0.focusedPaneId) },
+                projection: terminalToolbarProjection.tabStrip,
                 onClose: { tabManager.closeTab($0) }
             )
         }
@@ -231,8 +230,7 @@ extension ConnectionTerminalContainer {
 private struct SharedTerminalTabsBar: View {
     let tabs: [TerminalTab]
     @Binding var selectedTabId: UUID?
-    let titleForTab: (TerminalTab) -> String
-    let paneState: (TerminalTab) -> TerminalPaneState?
+    @ObservedObject var projection: TerminalServerToolbarTabStripProjection
     let onClose: (TerminalTab) -> Void
 
     private let minTabWidth: CGFloat = 120
@@ -249,9 +247,10 @@ private struct SharedTerminalTabsBar: View {
                 if useEqualWidth {
                     HStack(spacing: ServerViewTopTabBarMetrics.tabSpacing) {
                         ForEach(tabs) { tab in
+                            let item = tabItem(for: tab)
                             SharedTerminalTabButton(
-                                title: titleForTab(tab),
-                                statusColor: statusColor(for: tab),
+                                title: item?.title ?? tab.title,
+                                statusColor: statusColor(for: item),
                                 isSelected: selectedTabId == tab.id,
                                 fixedWidth: itemWidth,
                                 onSelect: { selectedTabId = tab.id },
@@ -266,9 +265,10 @@ private struct SharedTerminalTabsBar: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: ServerViewTopTabBarMetrics.tabSpacing) {
                             ForEach(tabs) { tab in
+                                let item = tabItem(for: tab)
                                 SharedTerminalTabButton(
-                                    title: titleForTab(tab),
-                                    statusColor: statusColor(for: tab),
+                                    title: item?.title ?? tab.title,
+                                    statusColor: statusColor(for: item),
                                     isSelected: selectedTabId == tab.id,
                                     fixedWidth: nil,
                                     onSelect: { selectedTabId = tab.id },
@@ -301,8 +301,12 @@ private struct SharedTerminalTabsBar: View {
         .padding(.vertical, 6)
     }
 
-    private func statusColor(for tab: TerminalTab) -> Color {
-        switch paneState(tab)?.connectionState ?? .idle {
+    private func tabItem(for tab: TerminalTab) -> TerminalServerToolbarTabItem? {
+        projection.state.items.first { $0.id == tab.id }
+    }
+
+    private func statusColor(for item: TerminalServerToolbarTabItem?) -> Color {
+        switch item?.connectionState ?? .idle {
         case .connected:
             return .green
         case .connecting, .reconnecting:

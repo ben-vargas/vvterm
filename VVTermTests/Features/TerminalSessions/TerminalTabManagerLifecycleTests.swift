@@ -475,6 +475,17 @@ struct TerminalTabManagerLifecycleTests {
             #expect(contentUpdates == 0)
             #expect(menuUpdates == 0)
             #expect(tabStripUpdates == 1)
+            #expect(projection.tabStrip.state.items.first?.title == "Output title")
+            #if os(iOS)
+            #expect(floatingControlUpdates == 0)
+            #endif
+            #expect(routeUpdates == 0)
+
+            manager.updatePaneTitle(observedTab.rootPaneId, rawTitle: "Output title")
+            manager.updatePaneTitle(otherTab.rootPaneId, rawTitle: "Other output title")
+            #expect(contentUpdates == 0)
+            #expect(menuUpdates == 0)
+            #expect(tabStripUpdates == 1)
             #if os(iOS)
             #expect(floatingControlUpdates == 0)
             #endif
