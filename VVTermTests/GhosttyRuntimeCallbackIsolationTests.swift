@@ -7,7 +7,7 @@ struct GhosttyRuntimeCallbackIsolationTests {
     @Test
     @MainActor
     func nativeWakeupCallbackAcceptsRendererThreadInvocation() async {
-        let runtimeConfiguration = Ghostty.App.makeRuntimeConfiguration(
+        let runtimeConfiguration = GhosttyRuntime.makeRuntimeConfiguration(
             userdata: nil,
             supportsSelectionClipboard: false
         )

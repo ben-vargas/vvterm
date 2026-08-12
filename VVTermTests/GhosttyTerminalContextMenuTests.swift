@@ -9,7 +9,7 @@ import Testing
 struct GhosttyTerminalContextMenuTests {
     @Test
     func uncapturedRightClickFallsBackToNativeContextMenu() throws {
-        let app = Ghostty.App()
+        let app = GhosttyRuntime()
         let appHandle = try #require(app.app)
         let terminal = GhosttyTerminalView(
             frame: CGRect(x: 0, y: 0, width: 800, height: 600),
@@ -33,7 +33,7 @@ struct GhosttyTerminalContextMenuTests {
 
     @Test
     func capturedRightClickReportsToTerminalAndBlocksControlClickMenu() async throws {
-        let app = Ghostty.App()
+        let app = GhosttyRuntime()
         let appHandle = try #require(app.app)
         let terminal = GhosttyTerminalView(
             frame: CGRect(x: 0, y: 0, width: 800, height: 600),

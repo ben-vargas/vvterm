@@ -35,7 +35,7 @@ struct ContentView: View {
     #if os(macOS)
     // Re-injected into the AppKit-hosted sidebar/detail panes, since environment
     // values do not cross an NSHostingController boundary automatically.
-    @EnvironmentObject private var ghosttyApp: Ghostty.App
+    @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @Environment(\.locale) private var locale
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled

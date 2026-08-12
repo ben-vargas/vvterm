@@ -8,7 +8,7 @@ import Testing
 struct GhosttyScrollbackSemanticsTests {
     @Test
     func csiTwoJPreservesHistoryAndCsiThreeJErasesIt() throws {
-        let app = Ghostty.App()
+        let app = GhosttyRuntime()
         let appHandle = try #require(app.app)
         let terminal: GhosttyTerminalView
         #if os(iOS)

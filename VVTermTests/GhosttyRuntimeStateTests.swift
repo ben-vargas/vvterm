@@ -6,7 +6,7 @@ import Testing
 struct GhosttyRuntimeStateTests {
     @Test
     func deferredRuntimeStartsIdle() {
-        let runtime = Ghostty.App(autoStart: false)
+        let runtime = GhosttyRuntime(autoStart: false)
         defer { runtime.cleanup() }
 
         #expect(runtime.app == nil)
@@ -15,7 +15,7 @@ struct GhosttyRuntimeStateTests {
 
     @Test
     func startedRuntimeIsReadyAndSecondStartIsIdempotent() throws {
-        let runtime = Ghostty.App()
+        let runtime = GhosttyRuntime()
         defer { runtime.cleanup() }
         let initialApp = try #require(runtime.app)
 
@@ -29,7 +29,7 @@ struct GhosttyRuntimeStateTests {
 
     @Test
     func cleanupStopsRuntimeWithoutAllowingRestart() throws {
-        let runtime = Ghostty.App()
+        let runtime = GhosttyRuntime()
         _ = try #require(runtime.app)
 
         runtime.cleanup()

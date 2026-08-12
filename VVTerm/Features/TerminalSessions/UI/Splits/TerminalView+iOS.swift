@@ -430,7 +430,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
     let onVoiceTrigger: (() -> Void)?
 
-    @EnvironmentObject var ghosttyApp: Ghostty.App
+    @EnvironmentObject var ghosttyApp: GhosttyRuntime
     @Environment(\.scenePhase) private var scenePhase
 
     func makeCoordinator() -> TerminalPaneConnectionCoordinator {

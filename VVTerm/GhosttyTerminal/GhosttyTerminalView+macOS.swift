@@ -22,7 +22,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     // MARK: - Properties
 
     var ghosttyApp: ghostty_app_t?
-    weak var ghosttyAppWrapper: Ghostty.App?
+    weak var ghosttyAppWrapper: GhosttyRuntime?
     internal var surface: Ghostty.Surface?
     var surfaceReference: Ghostty.SurfaceReference?
     let worktreePath: String
@@ -113,11 +113,11 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     ///   - frame: The initial frame for the view
     ///   - worktreePath: Working directory for the terminal session
     ///   - ghosttyApp: The shared Ghostty app instance (C pointer)
-    ///   - appWrapper: The Ghostty.App wrapper for surface tracking (optional)
+    ///   - appWrapper: The GhosttyRuntime wrapper for surface tracking (optional)
     ///   - paneId: Unique identifier for this pane (used for tmux session persistence)
     ///   - command: Optional command to run instead of default shell
     ///   - useCustomIO: If true, uses callback backend for custom I/O (SSH clients)
-    init(frame: NSRect, worktreePath: String, ghosttyApp: ghostty_app_t, appWrapper: Ghostty.App? = nil, paneId: String? = nil, command: String? = nil, useCustomIO: Bool = false) {
+    init(frame: NSRect, worktreePath: String, ghosttyApp: ghostty_app_t, appWrapper: GhosttyRuntime? = nil, paneId: String? = nil, command: String? = nil, useCustomIO: Bool = false) {
         self.worktreePath = worktreePath
         self.ghosttyApp = ghosttyApp
         self.ghosttyAppWrapper = appWrapper

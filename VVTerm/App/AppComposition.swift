@@ -5,7 +5,7 @@ import Foundation
 struct AppComposition {
     let networkMonitor: NetworkMonitor
     let analyticsTracker: AnalyticsTracker
-    let ghosttyApp: Ghostty.App
+    let ghosttyApp: GhosttyRuntime
     let storeManager: StoreManager
     let appLockManager: AppLockManager
     let serverManager: ServerManager
@@ -300,7 +300,7 @@ struct AppComposition {
             knownHosts: knownHostsManager
         )
         let appLifecycleDependencies = platform.lifecycleDependencies
-        let ghosttyApp = Ghostty.App(
+        let ghosttyApp = GhosttyRuntime(
             configuration: ghosttyRuntimeConfiguration,
             autoStart: false
         )

@@ -88,7 +88,7 @@ struct TerminalKeyboardUITestHarness: View {
         }
     }
 
-    @EnvironmentObject private var ghosttyApp: Ghostty.App
+    @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var appLockManager: AppLockManager
     private let tabManager: TerminalTabManager
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
@@ -1023,7 +1023,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
     private static let firstPaneId = UUID(uuidString: "98B81AB0-ACF4-4555-A94D-399AE384C61E")!
     private static let secondPaneId = UUID(uuidString: "4405E542-FE33-4D06-9F8A-ABF93A0CFA8F")!
 
-    @EnvironmentObject private var ghosttyApp: Ghostty.App
+    @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     private let tabManager: TerminalTabManager
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @State private var firstTerminal: GhosttyTerminalView?
@@ -1288,7 +1288,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
 }
 
 struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
-    @EnvironmentObject private var ghosttyApp: Ghostty.App
+    @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     let tabManager: TerminalTabManager
     @Binding var terminalView: GhosttyTerminalView?
     @Binding var terminalReady: Bool
@@ -1371,7 +1371,7 @@ final class TerminalKeyboardHarnessContainerView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func installTerminalIfNeeded(app: ghostty_app_t?, appWrapper: Ghostty.App) {
+    func installTerminalIfNeeded(app: ghostty_app_t?, appWrapper: GhosttyRuntime) {
         guard terminalView == nil, let app else { return }
 
         let initialSize = bounds.size == .zero ? CGSize(width: 390, height: 844) : bounds.size

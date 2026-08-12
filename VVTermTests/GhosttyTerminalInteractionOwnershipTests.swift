@@ -10,7 +10,7 @@ import UIKit
 struct GhosttyTerminalInteractionOwnershipTests {
     @Test
     func splitCommandsRouteFromTextInputOwnerToTerminalResponder() throws {
-        let app = Ghostty.App()
+        let app = GhosttyRuntime()
         defer { app.cleanup() }
         let appHandle = try #require(app.app)
         let terminal = GhosttyTerminalView(
@@ -78,7 +78,7 @@ struct GhosttyTerminalInteractionOwnershipTests {
 
     @Test
     func textInteractionBeginsOnlyForSettledNativeSelection() throws {
-        let app = Ghostty.App()
+        let app = GhosttyRuntime()
         defer { app.cleanup() }
         let appHandle = try #require(app.app)
         let terminal = GhosttyTerminalView(
@@ -119,7 +119,7 @@ struct GhosttyTerminalInteractionOwnershipTests {
 
     @Test
     func terminalInteractionsAreInstalledAndReleased() async throws {
-        let app = Ghostty.App()
+        let app = GhosttyRuntime()
         defer { app.cleanup() }
         let appHandle = try #require(app.app)
         let terminal = GhosttyTerminalView(

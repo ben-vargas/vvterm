@@ -125,7 +125,7 @@ struct TerminalTabManagerIndependenceTests {
         install(tab, in: first)
         install(tab, in: second)
 
-        let ghosttyApp = Ghostty.App()
+        let ghosttyApp = GhosttyRuntime()
         let appHandle = try #require(ghosttyApp.app)
         let terminal: GhosttyTerminalView
         #if os(iOS)

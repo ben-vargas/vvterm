@@ -23,7 +23,7 @@ struct GhosttyConfigBuilderTests {
             lightTheme: lightTheme,
             darkTheme: darkTheme
         )
-        let app = Ghostty.App(appearance: initial, autoStart: false)
+        let app = GhosttyRuntime(appearance: initial, autoStart: false)
 
         app.applyAppearance(updated)
 
@@ -179,17 +179,17 @@ struct GhosttyConfigBuilderTests {
     @Test
     func ghosttyClipboardRequestsMapToExplicitPrompts() {
         #expect(
-            Ghostty.App.clipboardConfirmationKind(
+            GhosttyRuntime.clipboardConfirmationKind(
                 request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ
             ) == .remoteRead
         )
         #expect(
-            Ghostty.App.clipboardConfirmationKind(
+            GhosttyRuntime.clipboardConfirmationKind(
                 request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE
             ) == .remoteWrite
         )
         #expect(
-            Ghostty.App.clipboardConfirmationKind(
+            GhosttyRuntime.clipboardConfirmationKind(
                 request: GHOSTTY_CLIPBOARD_REQUEST_PASTE
             ) == .unsafePaste
         )

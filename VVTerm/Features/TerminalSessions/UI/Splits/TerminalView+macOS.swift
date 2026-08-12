@@ -38,7 +38,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     let onProcessExit: () -> Void
     let onReady: () -> Void
 
-    @EnvironmentObject var ghosttyApp: Ghostty.App
+    @EnvironmentObject var ghosttyApp: GhosttyRuntime
 
     func makeNSView(context: Context) -> NSView {
         // Ensure Ghostty app is ready

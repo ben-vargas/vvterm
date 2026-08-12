@@ -4,7 +4,7 @@ import SwiftUI
 struct TerminalZenModeUITestHarness: View {
     private static let paneId = UUID(uuidString: "5E798DA7-3488-4D78-BEE0-7E01E241A31E")!
 
-    @EnvironmentObject private var ghosttyApp: Ghostty.App
+    @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     private let tabManager: TerminalTabManager
     @State private var isZenModeEnabled = false
     @State private var showingZenPanel = false

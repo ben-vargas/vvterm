@@ -34,7 +34,7 @@ struct TerminalTabView: View {
     @State private var showingCloseConfirmation = false
     @State private var showingSplitPaneUpgradeAlert = false
 
-    @EnvironmentObject var ghosttyApp: Ghostty.App
+    @EnvironmentObject var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var storeManager: StoreManager
     @Environment(\.scenePhase) private var scenePhase
 
@@ -548,7 +548,7 @@ struct TerminalPaneView: View {
     let showsVoiceButton: Bool
     let onVoiceTrigger: () -> Void
 
-    @EnvironmentObject var ghosttyApp: Ghostty.App
+    @EnvironmentObject var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var appLockManager: AppLockManager
     @Environment(\.scenePhase) private var scenePhase
 

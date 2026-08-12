@@ -28,7 +28,6 @@ private nonisolated enum GhosttyRuntimeAction: Sendable {
     case scrollbar(Ghostty.Action.Scrollbar)
     case readonly(Bool)
 }
-
 private nonisolated enum GhosttyRuntimeActionDisposition: Sendable {
     case deliver(GhosttyRuntimeAction)
     case handled
@@ -36,14 +35,14 @@ private nonisolated enum GhosttyRuntimeActionDisposition: Sendable {
 }
 
 private nonisolated struct GhosttyRuntimeActionTarget: Sendable {
-    let app: Ghostty.App?
+    let app: GhosttyRuntime?
     let surfaceAddress: UInt?
     let fallbackTerminalView: GhosttyTerminalView?
     let description: String
     let tagRawValue: UInt32
 }
 
-extension Ghostty.App {
+extension GhosttyRuntime {
     @MainActor
     private struct TitleDeliveryLogCache {
         static var lastUndeliveredTitleBySurface: [String: String] = [:]
@@ -58,16 +57,16 @@ extension Ghostty.App {
         ghostty_runtime_config_s(
             userdata: userdata,
             supports_selection_clipboard: supportsSelectionClipboard,
-            wakeup_cb: { userdata in Ghostty.App.wakeup(userdata) },
+            wakeup_cb: { userdata in GhosttyRuntime.wakeup(userdata) },
             action_cb: { app, target, action in
                 guard let app else { return false }
-                return Ghostty.App.runtimeAction(app, target: target, action: action)
+                return GhosttyRuntime.runtimeAction(app, target: target, action: action)
             },
             read_clipboard_cb: { userdata, location, state in
-                Ghostty.App.readClipboard(userdata, location: location, state: state)
+                GhosttyRuntime.readClipboard(userdata, location: location, state: state)
             },
             confirm_read_clipboard_cb: { userdata, string, state, request in
-                Ghostty.App.confirmReadClipboard(
+                GhosttyRuntime.confirmReadClipboard(
                     userdata,
                     string: string,
                     state: state,
@@ -75,7 +74,7 @@ extension Ghostty.App {
                 )
             },
             write_clipboard_cb: { userdata, location, contents, count, confirm in
-                Ghostty.App.writeClipboard(
+                GhosttyRuntime.writeClipboard(
                     userdata,
                     location: location,
                     contents: contents,
@@ -84,7 +83,7 @@ extension Ghostty.App {
                 )
             },
             close_surface_cb: { userdata, processAlive in
-                Ghostty.App.closeSurface(userdata, processAlive: processAlive)
+                GhosttyRuntime.closeSurface(userdata, processAlive: processAlive)
             }
         )
     }
@@ -92,7 +91,7 @@ extension Ghostty.App {
     // MARK: - Native callback boundary
 
     nonisolated private static func wakeup(_ userdata: UnsafeMutableRawPointer?) {
-        guard let app = Ghostty.CallbackContext<Ghostty.App>.resolve(userdata) else { return }
+        guard let app = Ghostty.CallbackContext<GhosttyRuntime>.resolve(userdata) else { return }
         DispatchQueue.main.async {
             app.appTick()
         }
@@ -140,7 +139,7 @@ extension Ghostty.App {
         }
 
         let appOwner = ghostty_app_userdata(app).flatMap {
-            Ghostty.CallbackContext<Ghostty.App>.resolve($0)
+            Ghostty.CallbackContext<GhosttyRuntime>.resolve($0)
         }
         let fallbackTerminalView = ghostty_surface_userdata(surface).flatMap {
             Ghostty.CallbackContext<GhosttyTerminalView>.resolve($0)

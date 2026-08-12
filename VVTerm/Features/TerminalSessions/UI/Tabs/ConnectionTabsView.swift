@@ -51,7 +51,7 @@ struct ConnectionTerminalContainer: View {
     let onLeaveRoute: (() -> Void)?
     let onDisconnectRoute: (() -> Void)?
 
-    @EnvironmentObject var ghosttyApp: Ghostty.App
+    @EnvironmentObject var ghosttyApp: GhosttyRuntime
     @EnvironmentObject var storeManager: StoreManager
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @Environment(\.colorScheme) private var colorScheme

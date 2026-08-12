@@ -11,7 +11,7 @@ import UIKit
 struct GhosttySurfaceRegistryTests {
     @Test
     func repeatedTerminalCleanupRemovesSurfaceFromRegistryOnce() throws {
-        let app = Ghostty.App()
+        let app = GhosttyRuntime()
         let appHandle = try #require(app.app)
         let terminal: GhosttyTerminalView
         #if os(iOS)
@@ -82,7 +82,7 @@ struct GhosttySurfaceRegistryTests {
 
     @Test
     func nativeSurfaceReleaseLetsDeinitFinishTerminalTeardown() async throws {
-        let app = Ghostty.App()
+        let app = GhosttyRuntime()
         let appHandle = try #require(app.app)
         let probe = try makeTerminalReleaseProbe(app: app, appHandle: appHandle)
         defer {
@@ -108,7 +108,7 @@ struct GhosttySurfaceRegistryTests {
     }
 
     private func makeTerminalReleaseProbe(
-        app: Ghostty.App,
+        app: GhosttyRuntime,
         appHandle: ghostty_app_t
     ) throws -> TerminalReleaseProbe {
         let terminal: GhosttyTerminalView
@@ -153,7 +153,7 @@ struct GhosttySurfaceRegistryTests {
 
     @Test
     func surfaceReferenceWithoutTerminalViewIsPrunedFromRegistry() throws {
-        let app = Ghostty.App()
+        let app = GhosttyRuntime()
         let appHandle = try #require(app.app)
         var terminal: GhosttyTerminalView?
         #if os(iOS)

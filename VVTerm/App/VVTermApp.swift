@@ -80,7 +80,7 @@ struct VVTermApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
 
-    @StateObject private var ghosttyApp: Ghostty.App
+    @StateObject private var ghosttyApp: GhosttyRuntime
     #if os(iOS)
     @StateObject private var screenAwakeCoordinator = TerminalScreenAwakeCoordinator()
     private let analyticsOptOutAction: AnalyticsOptOutAction

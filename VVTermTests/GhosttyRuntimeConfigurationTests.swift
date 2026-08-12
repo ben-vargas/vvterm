@@ -32,7 +32,7 @@ struct GhosttyRuntimeConfigurationTests {
             optionAsAltModeRawValue: TerminalOptionAsAltMode.left.rawValue,
             remoteClipboardReadPolicyRawValue: TerminalRemoteClipboardReadPolicy.deny.rawValue
         )
-        let app = Ghostty.App(autoStart: false)
+        let app = GhosttyRuntime(autoStart: false)
 
         app.applyConfiguration(configuration)
 

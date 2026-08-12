@@ -49,7 +49,7 @@ class GhosttyTerminalView: UIView {
     // MARK: - Properties
 
     var ghosttyApp: ghostty_app_t?
-    weak var ghosttyAppWrapper: Ghostty.App?
+    weak var ghosttyAppWrapper: GhosttyRuntime?
     internal var surface: Ghostty.Surface?
     var surfaceReference: Ghostty.SurfaceReference?
     let worktreePath: String
@@ -317,7 +317,7 @@ class GhosttyTerminalView: UIView {
     ///   - frame: The initial frame for the view
     ///   - worktreePath: Working directory for the terminal session
     ///   - ghosttyApp: The shared Ghostty app instance (C pointer)
-    ///   - appWrapper: The Ghostty.App wrapper for surface tracking (optional)
+    ///   - appWrapper: The GhosttyRuntime wrapper for surface tracking (optional)
     ///   - paneId: Unique identifier for this pane
     ///   - command: Optional command to run instead of default shell
     ///   - terminalAccessoryInputSnapshot: App-owned keyboard accessory configuration
@@ -326,7 +326,7 @@ class GhosttyTerminalView: UIView {
         frame: CGRect,
         worktreePath: String,
         ghosttyApp: ghostty_app_t,
-        appWrapper: Ghostty.App? = nil,
+        appWrapper: GhosttyRuntime? = nil,
         paneId: String? = nil,
         command: String? = nil,
         terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot,
