@@ -36,7 +36,7 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
             forceFullFetch: forceFullFetch,
             desiredKeys: Self.desiredKeys
         )
-        return decode(rawChanges, fallbackDate: now())
+        return try decode(rawChanges, fallbackDate: now())
     }
 
     func acceptServerChanges(_ checkpoint: ServerRemoteChangeCheckpoint) throws {
@@ -105,7 +105,7 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
     private func decode(
         _ rawChanges: CloudKitRawRecordChanges,
         fallbackDate: Date
-    ) -> ServerRemoteChanges {
+    ) throws -> ServerRemoteChanges {
         var serversByID: [UUID: Server] = [:]
         var workspacesByID: [UUID: Workspace] = [:]
         var deletedServerIDs: Set<UUID> = []
@@ -119,26 +119,47 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
                     guard let server = ServerCloudKitRecordCodec.server(
                         from: record,
                         now: fallbackDate
-                    ) else { continue }
+                    ) else {
+                        throw ServerCloudKitDecodingError.malformedKnownRecord(
+                            recordType: record.recordType,
+                            recordName: record.recordID.recordName
+                        )
+                    }
                     serversByID[server.id] = server
                     deletedServerIDs.remove(server.id)
                 case WorkspaceCloudKitRecordCodec.recordType:
                     guard let workspace = WorkspaceCloudKitRecordCodec.workspace(
                         from: record,
                         now: fallbackDate
-                    ) else { continue }
+                    ) else {
+                        throw ServerCloudKitDecodingError.malformedKnownRecord(
+                            recordType: record.recordType,
+                            recordName: record.recordID.recordName
+                        )
+                    }
                     workspacesByID[workspace.id] = workspace
                     deletedWorkspaceIDs.remove(workspace.id)
                 default:
                     continue
                 }
             case .deletion(let recordID, let recordType):
-                guard let id = UUID(uuidString: recordID.recordName) else { continue }
                 switch recordType {
                 case ServerCloudKitRecordCodec.recordType:
+                    guard let id = UUID(uuidString: recordID.recordName) else {
+                        throw ServerCloudKitDecodingError.malformedKnownRecord(
+                            recordType: recordType,
+                            recordName: recordID.recordName
+                        )
+                    }
                     serversByID.removeValue(forKey: id)
                     deletedServerIDs.insert(id)
                 case WorkspaceCloudKitRecordCodec.recordType:
+                    guard let id = UUID(uuidString: recordID.recordName) else {
+                        throw ServerCloudKitDecodingError.malformedKnownRecord(
+                            recordType: recordType,
+                            recordName: recordID.recordName
+                        )
+                    }
                     workspacesByID.removeValue(forKey: id)
                     deletedWorkspaceIDs.insert(id)
                 default:
@@ -190,6 +211,17 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         } catch {
             logger.error("\(failureMessage): \(error.localizedDescription)")
             throw error
+        }
+    }
+}
+
+nonisolated enum ServerCloudKitDecodingError: LocalizedError, Equatable, Sendable {
+    case malformedKnownRecord(recordType: String, recordName: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .malformedKnownRecord(let recordType, let recordName):
+            return "The iCloud \(recordType) record \(recordName) is malformed. Sync will retry without advancing its checkpoint."
         }
     }
 }

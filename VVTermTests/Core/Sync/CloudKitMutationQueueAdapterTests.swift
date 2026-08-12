@@ -61,9 +61,10 @@ struct CloudKitMutationQueueAdapterTests {
             .workspaceDelete(deletedWorkspace)
         ]
         #expect(coordinator.snapshot().map(\.payload) == expectedPayloads)
-        #expect(repository.pendingServerMutations().map(\.payload) == expectedServerPayloads)
+        let pendingServerMutations = try repository.pendingServerMutations()
+        #expect(pendingServerMutations.map(\.payload) == expectedServerPayloads)
 
-        let firstServerMutation = try #require(repository.pendingServerMutations().first)
+        let firstServerMutation = try #require(pendingServerMutations.first)
         try repository.removePendingServerMutation(firstServerMutation.id)
         try repository.clearPendingServerAndWorkspaceMutations()
 

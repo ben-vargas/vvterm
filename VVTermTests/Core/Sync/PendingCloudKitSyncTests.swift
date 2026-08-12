@@ -76,6 +76,47 @@ struct PendingCloudKitSyncTests {
     }
 
     @Test
+    func migrationPersistenceFailureBlocksNewMutationsUntilRetry() throws {
+        let fixtures = PendingSyncFixtures()
+        let storage = makeRejectingStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suiteName) }
+        let legacyData = try JSONSerialization.data(
+            withJSONObject: [try jsonObject(LegacyMutationFixture(
+                id: fixtures.mutationIDs[0],
+                entity: "server",
+                operation: "upsert",
+                entityKey: fixtures.server.id.uuidString,
+                server: fixtures.server
+            ))]
+        )
+        storage.defaults.set(legacyData, forKey: storage.storageKey)
+        storage.defaults.rejectWrites = true
+
+        let queue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults,
+            legacyMigrator: CloudKitPendingMutationLegacyMigrator()
+        )
+        let newMutation = PendingCloudKitMutation(
+            payload: try .workspaceUpsert(fixtures.workspace)
+        )
+
+        #expect(throws: PendingCloudKitSyncQueueError.self) {
+            try queue.enqueue(newMutation)
+        }
+        #expect(throws: PendingCloudKitSyncQueueError.self) {
+            try queue.remove(fixtures.mutationIDs[0])
+        }
+        #expect(storage.defaults.data(forKey: storage.storageKey) == legacyData)
+
+        storage.defaults.rejectWrites = false
+        try queue.retryMigration()
+        try queue.enqueue(newMutation)
+
+        #expect(queue.snapshot().map(\.id) == [fixtures.mutationIDs[0], newMutation.id])
+    }
+
+    @Test
     func everyAssociatedLegacyPayloadMigratesWithoutQuarantine() throws {
         let fixtures = PendingSyncFixtures()
         let storage = makeStorage()

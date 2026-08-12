@@ -23,7 +23,7 @@ protocol ServerSyncRepository:
     WorkspaceDeletionMutationEnqueuing,
     EnvironmentDeletionMutationEnqueuing,
     AnyObject {
-    func pendingServerMutations() -> [ServerPendingMutation]
+    func pendingServerMutations() throws -> [ServerPendingMutation]
     func clearPendingServerAndWorkspaceMutations() throws
     func removePendingServerMutation(_ mutationID: UUID) throws
     func enqueueServerUpsert(_ server: Server) throws

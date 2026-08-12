@@ -137,7 +137,7 @@ struct ServerCloudKitClientTests {
     }
 
     @Test
-    func invalidRecordsAndDeletionIdentitiesAreIgnored() async throws {
+    func malformedKnownRecordFailsTheCompleteBatch() async {
         let transport = ServerCloudKitRecordTransportStub()
         let invalidServer = CKRecord(
             recordType: ServerCloudKitRecordCodec.recordType,
@@ -168,13 +168,35 @@ struct ServerCloudKitClientTests {
         )
         let client = ServerCloudKitClient(transport: transport, now: Date.init)
 
+        await #expect(throws: ServerCloudKitDecodingError.self) {
+            try await client.fetchServerChanges(forceFullFetch: false)
+        }
+        #expect(transport.committedCheckpoints.isEmpty)
+    }
+
+    @Test
+    func unknownRecordTypesRemainIgnorable() async throws {
+        let transport = ServerCloudKitRecordTransportStub()
+        transport.changesResult = .success(
+            CloudKitRawRecordChanges(
+                changes: [
+                    .record(
+                        CKRecord(
+                            recordType: "Unrelated",
+                            recordID: recordID(UUID(), transport: transport)
+                        )
+                    )
+                ],
+                isFullFetch: false,
+                checkpoint: CloudKitRecordChangeCheckpoint(id: UUID())
+            )
+        )
+        let client = ServerCloudKitClient(transport: transport, now: Date.init)
+
         let changes = try await client.fetchServerChanges(forceFullFetch: false)
 
         #expect(changes.servers.isEmpty)
         #expect(changes.workspaces.isEmpty)
-        #expect(changes.deletedServerIDs.isEmpty)
-        #expect(changes.deletedWorkspaceIDs.isEmpty)
-        #expect(!changes.isFullFetch)
     }
 
     @Test

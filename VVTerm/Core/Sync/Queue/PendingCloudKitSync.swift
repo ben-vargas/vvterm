@@ -125,6 +125,11 @@ nonisolated struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identi
 }
 
 nonisolated final class PendingCloudKitSyncQueue {
+    private enum State {
+        case ready
+        case migrationFailed(String)
+    }
+
     private static let quarantineStorageKeySuffix = ".quarantine.v1"
 
     private let storageKey: String
@@ -133,6 +138,7 @@ nonisolated final class PendingCloudKitSyncQueue {
     private let legacyMigrator: (any PendingCloudKitLegacyMutationMigrating)?
     private var items: [PendingCloudKitMutation]
     private var quarantinedItems: [PendingCloudKitMutationQuarantine]
+    private var state: State
 
     init(
         storageKey: String = CloudKitSyncConstants.pendingCloudKitSyncQueueStorageKey,
@@ -145,12 +151,18 @@ nonisolated final class PendingCloudKitSyncQueue {
         self.legacyMigrator = legacyMigrator
         self.items = []
         self.quarantinedItems = []
+        self.state = .ready
         loadQuarantine()
         load()
     }
 
     func snapshot() -> [PendingCloudKitMutation] {
         items
+    }
+
+    func readySnapshot() throws -> [PendingCloudKitMutation] {
+        try requireReady()
+        return items
     }
 
     func quarantineSnapshot() -> [PendingCloudKitMutationQuarantine] {
@@ -162,6 +174,7 @@ nonisolated final class PendingCloudKitSyncQueue {
     }
 
     func enqueueAtomically(_ mutations: [PendingCloudKitMutation]) throws {
+        try requireReady()
         var updatedItems = items
         for mutation in mutations {
             updatedItems.removeAll {
@@ -174,12 +187,14 @@ nonisolated final class PendingCloudKitSyncQueue {
     }
 
     func remove(_ mutationID: UUID) throws {
+        try requireReady()
         var updatedItems = items
         updatedItems.removeAll { $0.id == mutationID }
         try persistItems(updatedItems)
     }
 
     func removeAll(where shouldRemove: (PendingCloudKitMutation) -> Bool) throws {
+        try requireReady()
         var updatedItems = items
         updatedItems.removeAll(where: shouldRemove)
         try persistItems(updatedItems)
@@ -194,6 +209,7 @@ nonisolated final class PendingCloudKitSyncQueue {
         error: Error,
         at date: Date
     ) throws {
+        try requireReady()
         guard let index = items.firstIndex(where: { $0.id == mutation.id }) else {
             return
         }
@@ -210,6 +226,7 @@ nonisolated final class PendingCloudKitSyncQueue {
 
         if let decoded = try? JSONDecoder().decode([PendingCloudKitMutation].self, from: data) {
             items = decoded
+            state = .ready
             return
         }
 
@@ -226,7 +243,7 @@ nonisolated final class PendingCloudKitSyncQueue {
                 reason: .unreadableLegacyRecord,
                 in: &updatedQuarantinedItems
             )
-            try? persistMigratedState(
+            persistMigrationOrBlock(
                 items: [],
                 quarantinedItems: updatedQuarantinedItems
             )
@@ -275,10 +292,41 @@ nonisolated final class PendingCloudKitSyncQueue {
             }
         }
 
-        try? persistMigratedState(
+        persistMigrationOrBlock(
             items: migratedItems,
             quarantinedItems: updatedQuarantinedItems
         )
+    }
+
+    func retryMigration() throws {
+        guard case .migrationFailed = state else { return }
+        state = .ready
+        load()
+        try requireReady()
+    }
+
+    private func persistMigrationOrBlock(
+        items: [PendingCloudKitMutation],
+        quarantinedItems: [PendingCloudKitMutationQuarantine]
+    ) {
+        do {
+            try persistMigratedState(
+                items: items,
+                quarantinedItems: quarantinedItems
+            )
+            state = .ready
+        } catch {
+            state = .migrationFailed(error.localizedDescription)
+        }
+    }
+
+    private func requireReady() throws {
+        switch state {
+        case .ready:
+            return
+        case .migrationFailed(let reason):
+            throw PendingCloudKitSyncQueueError.migrationFailed(reason)
+        }
     }
 
     private func quarantine(
@@ -373,8 +421,14 @@ nonisolated final class PendingCloudKitSyncQueue {
 
 nonisolated enum PendingCloudKitSyncQueueError: LocalizedError, Sendable {
     case persistenceFailed
+    case migrationFailed(String)
 
     var errorDescription: String? {
-        "The pending CloudKit mutation queue could not be saved."
+        switch self {
+        case .persistenceFailed:
+            return "The pending CloudKit mutation queue could not be saved."
+        case .migrationFailed(let reason):
+            return "The pending CloudKit mutation queue migration is blocked: \(reason)"
+        }
     }
 }

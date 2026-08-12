@@ -270,6 +270,8 @@ extension CloudKitManager {
                         logger.error(
                             "Failed to fetch record \(recordID.recordName): \(error.localizedDescription)"
                         )
+                        zoneError = error
+                        operation.cancel()
                     }
                 }
 

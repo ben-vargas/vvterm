@@ -87,6 +87,185 @@ struct ServerManagerLoadLifecycleTests {
     }
 
     @Test
+    func clearAndResyncForcesFullReplacementWithoutClearingFirst() async throws {
+        let oldWorkspace = makeWorkspace(name: "Old Local")
+        let oldServer = makeServer(workspaceID: oldWorkspace.id)
+        let remoteWorkspace = makeWorkspace(name: "Remote")
+        let remoteServer = makeServer(workspaceID: remoteWorkspace.id)
+        let local = ServerLocalRepositoryFake(
+            servers: [oldServer],
+            workspaces: [oldWorkspace]
+        )
+        let checkpoint = ServerRemoteChangeCheckpoint(id: UUID())
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { forceFullFetch, _ in
+            #expect(forceFullFetch)
+            return ServerRemoteChanges(
+                servers: [remoteServer],
+                workspaces: [remoteWorkspace],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: true,
+                checkpoint: checkpoint
+            )
+        }
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { true }
+        )
+
+        try await manager.clearLocalDataAndResync()
+
+        #expect(manager.workspaces == [remoteWorkspace])
+        #expect(manager.servers == [remoteServer])
+        #expect(local.workspaces == [remoteWorkspace])
+        #expect(local.servers == [remoteServer])
+        #expect(remote.acceptedCheckpoints == [checkpoint])
+        #expect(sync.clearCount == 1)
+    }
+
+    @Test
+    func clearAndResyncFailureKeepsExistingLocalSnapshot() async {
+        let workspace = makeWorkspace(name: "Existing")
+        let server = makeServer(workspaceID: workspace.id)
+        let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in throw ServerRemoteTestError.schema }
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: ServerSyncRepositoryFake(),
+            isSyncEnabled: { true }
+        )
+
+        await #expect(throws: ServerRemoteTestError.self) {
+            try await manager.clearLocalDataAndResync()
+        }
+
+        #expect(manager.workspaces == [workspace])
+        #expect(manager.servers == [server])
+        #expect(local.workspaces == [workspace])
+        #expect(local.servers == [server])
+        #expect(remote.acceptedCheckpoints.isEmpty)
+    }
+
+    @Test
+    func clearAndResyncPersistenceFailureKeepsExistingLocalSnapshot() async {
+        let oldWorkspace = makeWorkspace(name: "Existing")
+        let oldServer = makeServer(workspaceID: oldWorkspace.id)
+        let remoteWorkspace = makeWorkspace(name: "Remote")
+        let local = ServerLocalRepositoryFake(
+            servers: [oldServer],
+            workspaces: [oldWorkspace]
+        )
+        local.persistError = TestTransactionError.persistence
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [],
+                workspaces: [remoteWorkspace],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: true,
+                checkpoint: ServerRemoteChangeCheckpoint(id: UUID())
+            )
+        }
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { true }
+        )
+
+        await #expect(throws: TestTransactionError.self) {
+            try await manager.clearLocalDataAndResync()
+        }
+
+        #expect(manager.workspaces == [oldWorkspace])
+        #expect(manager.servers == [oldServer])
+        #expect(local.workspaces == [oldWorkspace])
+        #expect(local.servers == [oldServer])
+        #expect(remote.acceptedCheckpoints.isEmpty)
+        #expect(sync.clearCount == 0)
+    }
+
+    @Test
+    func clearAndResyncQueueFailureRollsBackSnapshotAndCheckpoint() async {
+        let oldWorkspace = makeWorkspace(name: "Existing")
+        let oldServer = makeServer(workspaceID: oldWorkspace.id)
+        let remoteWorkspace = makeWorkspace(name: "Remote")
+        let local = ServerLocalRepositoryFake(
+            servers: [oldServer],
+            workspaces: [oldWorkspace]
+        )
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [],
+                workspaces: [remoteWorkspace],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: true,
+                checkpoint: ServerRemoteChangeCheckpoint(id: UUID())
+            )
+        }
+        let sync = ServerSyncRepositoryFake()
+        sync.clearError = ServerSyncRepositoryTestError.rejected
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { true }
+        )
+
+        await #expect(throws: ServerSyncRepositoryTestError.self) {
+            try await manager.clearLocalDataAndResync()
+        }
+
+        #expect(manager.workspaces == [oldWorkspace])
+        #expect(manager.servers == [oldServer])
+        #expect(local.workspaces == [oldWorkspace])
+        #expect(local.servers == [oldServer])
+        #expect(remote.acceptedCheckpoints.isEmpty)
+    }
+
+    @Test
+    func fullFetchRemoteDeletionDoesNotBackfillStaleLocalServer() async {
+        let workspace = makeWorkspace(name: "Workspace")
+        let staleServer = makeServer(workspaceID: workspace.id)
+        let local = ServerLocalRepositoryFake(
+            servers: [staleServer],
+            workspaces: [workspace]
+        )
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [],
+                workspaces: [workspace],
+                deletedServerIDs: [staleServer.id],
+                deletedWorkspaceIDs: [],
+                isFullFetch: true,
+                checkpoint: ServerRemoteChangeCheckpoint(id: UUID())
+            )
+        }
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: ServerSyncRepositoryFake(),
+            isSyncEnabled: { true }
+        )
+
+        await manager.loadData()
+
+        #expect(manager.servers.isEmpty)
+        #expect(remote.savedServers.isEmpty)
+    }
+
+    @Test
     func failedFullFetchRestoresBootstrapFetchIdentityUntilCheckpointAcceptance() async {
         let workspace = makeWorkspace(name: "Bootstrap")
         let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])
@@ -492,8 +671,11 @@ struct ServerManagerLoadLifecycleTests {
         )
         let server = makeServer(workspaceID: workspace.id)
 
-        await #expect(throws: ServerSyncRepositoryTestError.self) {
-            try await manager.apply(.create(server))
+        await #expect(throws: VVTermError.self) {
+            try await manager.apply(
+                .create(server),
+                credentials: ServerCredentials(serverId: server.id)
+            )
         }
 
         #expect(sync.drainCount == 0)
@@ -564,4 +746,3 @@ struct ServerManagerLoadLifecycleTests {
         return local
     }
 }
-

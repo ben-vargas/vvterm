@@ -42,21 +42,8 @@ struct ServerManagerBootstrapTests {
     }
 
     @Test
-    func backfillCandidatesIgnoreTransientBootstrapWorkspace() {
-        let bootstrapWorkspace = Workspace(
-            id: UUID(),
-            name: AppLanguage.localizedString("My Servers", rawValue: AppLanguage.en.rawValue),
-            order: 0
-        )
+    func backfillCandidatesUseOnlyExplicitPendingUpserts() {
         let remoteWorkspace = Workspace(id: UUID(), name: "Remote", order: 1)
-
-        let bootstrapServer = Server(
-            id: UUID(),
-            workspaceId: bootstrapWorkspace.id,
-            name: "Placeholder",
-            host: "bootstrap.example.com",
-            username: "root"
-        )
         let remoteServer = Server(
             id: UUID(),
             workspaceId: remoteWorkspace.id,
@@ -66,11 +53,17 @@ struct ServerManagerBootstrapTests {
         )
 
         let candidates = ServerStateStore.backfillCandidates(
-            localWorkspaces: [bootstrapWorkspace, remoteWorkspace],
-            localServers: [bootstrapServer, remoteServer],
+            pendingMutations: [
+                ServerPendingMutation(
+                    id: UUID(),
+                    payload: .serverUpsert(remoteServer),
+                    createdAt: .distantPast
+                )
+            ],
             cloudWorkspaceIDs: [remoteWorkspace.id],
             cloudServerIDs: [],
-            transientBootstrapWorkspaceID: bootstrapWorkspace.id
+            deletedWorkspaceIDs: [],
+            deletedServerIDs: []
         )
 
         #expect(candidates.workspaces.isEmpty)
@@ -101,14 +94,53 @@ struct ServerManagerBootstrapTests {
         )
 
         let candidates = ServerStateStore.backfillCandidates(
-            localWorkspaces: [bootstrapWorkspace],
-            localServers: [],
+            pendingMutations: [
+                ServerPendingMutation(
+                    id: UUID(),
+                    payload: .workspaceUpsert(bootstrapWorkspace),
+                    createdAt: .distantPast
+                )
+            ],
             cloudWorkspaceIDs: [],
             cloudServerIDs: [],
-            transientBootstrapWorkspaceID: nil
+            deletedWorkspaceIDs: [],
+            deletedServerIDs: []
         )
 
         #expect(candidates.workspaces.map(\.id) == [bootstrapWorkspace.id])
+        #expect(candidates.servers.isEmpty)
+    }
+
+    @Test
+    func remoteDeletionExcludesPendingBackfillCandidate() {
+        let workspace = Workspace(id: UUID(), name: "Workspace", order: 0)
+        let server = Server(
+            id: UUID(),
+            workspaceId: workspace.id,
+            name: "Deleted Elsewhere",
+            host: "deleted.example.com",
+            username: "root"
+        )
+        let candidates = ServerStateStore.backfillCandidates(
+            pendingMutations: [
+                ServerPendingMutation(
+                    id: UUID(),
+                    payload: .workspaceUpsert(workspace),
+                    createdAt: .distantPast
+                ),
+                ServerPendingMutation(
+                    id: UUID(),
+                    payload: .serverUpsert(server),
+                    createdAt: .distantPast
+                )
+            ],
+            cloudWorkspaceIDs: [],
+            cloudServerIDs: [],
+            deletedWorkspaceIDs: [],
+            deletedServerIDs: [server.id]
+        )
+
+        #expect(candidates.workspaces.map(\.id) == [workspace.id])
         #expect(candidates.servers.isEmpty)
     }
 

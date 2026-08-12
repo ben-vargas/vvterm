@@ -86,18 +86,49 @@ final class ServerRemoteSyncCoordinator {
     }
 
     func clearLocalDataAndResync() async throws {
-        logger.info("Clearing local data and re-syncing from CloudKit...")
+        logger.info("Replacing local server data from an authoritative CloudKit fetch...")
 
         if let activeLoad {
             await activeLoad.task.value
         }
 
-        try dependencies.syncRepository.clearPendingServerAndWorkspaceMutations()
-        stateStore.clearLocalDataAndState()
-        await loadData()
+        guard stateStore.isSyncEnabled, dependencies.remoteRepository.isAvailable else {
+            throw AuthoritativeServerResyncError.remoteUnavailable
+        }
+
+        let previousServers = stateStore.servers
+        let previousWorkspaces = stateStore.workspaces
+        let previousBootstrapWorkspaceID = stateStore.transientBootstrapWorkspaceID
+        let changes = try await dependencies.remoteRepository.fetchServerChanges(
+            forceFullFetch: true
+        )
+        guard changes.isFullFetch else {
+            throw AuthoritativeServerResyncError.incompleteSnapshot
+        }
+
+        stateStore.applyRemoteChanges(changes)
+        do {
+            try stateStore.persistCurrentCollectionsForRemoteAcceptance()
+            try dependencies.syncRepository.clearPendingServerAndWorkspaceMutations()
+        } catch {
+            stateStore.replaceCollections(
+                servers: previousServers,
+                workspaces: previousWorkspaces
+            )
+            stateStore.restorePendingBootstrapWorkspaceID(previousBootstrapWorkspaceID)
+            try? stateStore.persistCurrentCollectionsForRemoteAcceptance()
+            throw error
+        }
+
+        stateStore.restorePendingBootstrapWorkspaceID(nil)
+        try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
+        stateStore.refreshFreePlanGeneration(
+            persistCurrentIfNeeded: true,
+            reason: "authoritative_resync"
+        )
 
         logger.info(
-            "Clear and re-sync complete: \(self.stateStore.workspaces.count) workspaces, \(self.stateStore.servers.count) servers"
+            "Authoritative re-sync complete: \(self.stateStore.workspaces.count) workspaces, \(self.stateStore.servers.count) servers"
         )
     }
 
@@ -251,7 +282,7 @@ final class ServerRemoteSyncCoordinator {
             canReplaceLocalState: backfillResult.canReplaceLocalState
         )
         try reconcilePendingServerAndWorkspaceUpsertsAgainstRemote(changes)
-        applyPendingSyncOverlay()
+        try applyPendingSyncOverlay()
         _ = stateStore.reconcilePendingBootstrapWorkspaceState()
         try repairOrphanedServers()
 
@@ -344,23 +375,15 @@ final class ServerRemoteSyncCoordinator {
             return FullFetchBackfillResult(changes: changes, canReplaceLocalState: true)
         }
 
-        if changes.workspaces.isEmpty
-            && changes.servers.isEmpty
-            && stateStore.localCacheContainsUserData {
-            logger.warning(
-                "CloudKit full fetch returned no workspaces or servers while local cache contains user data; preserving local state until an explicit recovery path resolves the mismatch"
-            )
-            return FullFetchBackfillResult(changes: changes, canReplaceLocalState: false)
-        }
-
         let cloudWorkspaceIDs = Set(changes.workspaces.map(\.id))
         let cloudServerIDs = Set(changes.servers.map(\.id))
+        let pendingMutations = try dependencies.syncRepository.pendingServerMutations()
         let missingCandidates = ServerStateStore.backfillCandidates(
-            localWorkspaces: stateStore.workspaces,
-            localServers: stateStore.servers,
+            pendingMutations: pendingMutations,
             cloudWorkspaceIDs: cloudWorkspaceIDs,
             cloudServerIDs: cloudServerIDs,
-            transientBootstrapWorkspaceID: stateStore.transientBootstrapWorkspaceID
+            deletedWorkspaceIDs: Set(changes.deletedWorkspaceIDs),
+            deletedServerIDs: Set(changes.deletedServerIDs)
         )
         let missingWorkspaces = missingCandidates.workspaces
         let missingServers = missingCandidates.servers
@@ -370,15 +393,8 @@ final class ServerRemoteSyncCoordinator {
         }
 
         logger.warning(
-            "CloudKit full fetch is missing \(missingWorkspaces.count) local workspaces and \(missingServers.count) local servers; queuing recovery upserts and attempting backfill"
+            "CloudKit full fetch is missing \(missingWorkspaces.count) pending workspaces and \(missingServers.count) pending servers; attempting explicit pending-upsert recovery"
         )
-
-        for workspace in missingWorkspaces {
-            try dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
-        }
-        for server in missingServers {
-            try dependencies.syncRepository.enqueueServerUpsert(server)
-        }
 
         var uploadedWorkspaces: [Workspace] = []
         for workspace in missingWorkspaces {
@@ -490,16 +506,16 @@ final class ServerRemoteSyncCoordinator {
         )
     }
 
-    private func applyPendingSyncOverlay() {
+    private func applyPendingSyncOverlay() throws {
         stateStore.applyPendingSyncOverlay(
-            dependencies.syncRepository.pendingServerMutations()
+            try dependencies.syncRepository.pendingServerMutations()
         )
     }
 
     private func reconcilePendingServerAndWorkspaceUpsertsAgainstRemote(
         _ changes: ServerRemoteChanges
     ) throws {
-        let snapshot = dependencies.syncRepository.pendingServerMutations()
+        let snapshot = try dependencies.syncRepository.pendingServerMutations()
         let fetchedServersByID = Dictionary(
             uniqueKeysWithValues: changes.servers.map { ($0.id, $0) }
         )
@@ -646,5 +662,19 @@ final class ServerRemoteSyncCoordinator {
             try dependencies.syncRepository.enqueueServerUpsert(server)
         }
         logger.warning("Repaired \(repair.servers.count) orphaned servers")
+    }
+}
+
+private enum AuthoritativeServerResyncError: LocalizedError {
+    case remoteUnavailable
+    case incompleteSnapshot
+
+    var errorDescription: String? {
+        switch self {
+        case .remoteUnavailable:
+            return "iCloud is not available for a full server data refresh."
+        case .incompleteSnapshot:
+            return "iCloud did not return a complete server data snapshot."
+        }
     }
 }

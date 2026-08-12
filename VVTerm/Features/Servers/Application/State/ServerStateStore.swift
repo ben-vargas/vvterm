@@ -616,23 +616,41 @@ final class ServerStateStore: ObservableObject {
     }
 
     static func backfillCandidates(
-        localWorkspaces: [Workspace],
-        localServers: [Server],
+        pendingMutations: [ServerPendingMutation],
         cloudWorkspaceIDs: Set<UUID>,
         cloudServerIDs: Set<UUID>,
-        transientBootstrapWorkspaceID: UUID?
+        deletedWorkspaceIDs: Set<UUID>,
+        deletedServerIDs: Set<UUID>
     ) -> (workspaces: [Workspace], servers: [Server]) {
-        let missingWorkspaces = localWorkspaces.filter {
-            !cloudWorkspaceIDs.contains($0.id) && $0.id != transientBootstrapWorkspaceID
+        var pendingWorkspacesByID: [UUID: Workspace] = [:]
+        var pendingServersByID: [UUID: Server] = [:]
+        for mutation in pendingMutations {
+            switch mutation.payload {
+            case .workspaceUpsert(let workspace):
+                pendingWorkspacesByID[workspace.id] = workspace
+            case .serverUpsert(let server):
+                pendingServersByID[server.id] = server
+            case .workspaceDelete, .serverDelete:
+                continue
+            }
+        }
+
+        let missingWorkspaces = pendingWorkspacesByID.values.filter {
+            !cloudWorkspaceIDs.contains($0.id)
+                && !deletedWorkspaceIDs.contains($0.id)
         }
         let missingWorkspaceIDs = Set(missingWorkspaces.map(\.id))
-        let missingServers = localServers.filter {
+        let missingServers = pendingServersByID.values.filter {
             !cloudServerIDs.contains($0.id)
-                && $0.workspaceId != transientBootstrapWorkspaceID
+                && !deletedServerIDs.contains($0.id)
+                && !deletedWorkspaceIDs.contains($0.workspaceId)
                 && (cloudWorkspaceIDs.contains($0.workspaceId)
                     || missingWorkspaceIDs.contains($0.workspaceId))
         }
-        return (missingWorkspaces, missingServers)
+        return (
+            missingWorkspaces.sorted { $0.id.uuidString < $1.id.uuidString },
+            missingServers.sorted { $0.id.uuidString < $1.id.uuidString }
+        )
     }
 
     static func workspaceForOrphanRepair(

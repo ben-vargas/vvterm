@@ -25,8 +25,8 @@ extension CloudKitSyncCoordinator: ServerSyncRepository {
         try enqueue(.workspaceDelete(workspace))
     }
 
-    func pendingServerMutations() -> [ServerPendingMutation] {
-        snapshot().compactMap(ServerPendingMutation.init)
+    func pendingServerMutations() throws -> [ServerPendingMutation] {
+        try readySnapshot().compactMap(ServerPendingMutation.init)
     }
 
     func removePendingServerMutation(_ mutationID: UUID) throws {

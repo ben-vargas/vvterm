@@ -37,6 +37,10 @@ final class CloudKitSyncCoordinator {
         queue.snapshot()
     }
 
+    func readySnapshot() throws -> [PendingCloudKitMutation] {
+        try queue.readySnapshot()
+    }
+
     func quarantineSnapshot() -> [PendingCloudKitMutationQuarantine] {
         queue.quarantineSnapshot()
     }
@@ -87,7 +91,13 @@ final class CloudKitSyncCoordinator {
             guard isCurrent(generation) else { return }
             let drainRequestedDuringIteration = shouldDrainAgain
             shouldDrainAgain = false
-            let snapshot = queue.snapshot()
+            let snapshot: [PendingCloudKitMutation]
+            do {
+                snapshot = try queue.readySnapshot()
+            } catch {
+                logQueuePersistenceFailure("read pending mutations", error: error)
+                return
+            }
             guard !snapshot.isEmpty else { return }
 
             var didProgress = false

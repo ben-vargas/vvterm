@@ -139,6 +139,7 @@ final class ServerRemoteRepositoryFake: ServerRemoteRepository {
     var fetchHandler: (@MainActor (Bool, Int) async throws -> ServerRemoteChanges)?
     var saveServerHandler: (@MainActor (Server) async throws -> Void)?
     var saveWorkspaceHandler: (@MainActor (Workspace) async throws -> Void)?
+    var acceptError: Error?
     private(set) var fetchCount = 0
     private(set) var fetchForceFullModes: [Bool] = []
     private(set) var savedServers: [Server] = []
@@ -168,6 +169,7 @@ final class ServerRemoteRepositoryFake: ServerRemoteRepository {
     }
 
     func acceptServerChanges(_ checkpoint: ServerRemoteChangeCheckpoint) throws {
+        if let acceptError { throw acceptError }
         acceptedCheckpoints.append(checkpoint)
     }
 
@@ -190,10 +192,16 @@ final class ServerSyncRepositoryFake: ServerSyncRepository {
     private(set) var completedDrainCount = 0
     var drainHandler: (@MainActor () async -> Void)?
     var enqueueError: Error?
+    var clearError: Error?
+    private(set) var clearCount = 0
     var environmentDeletionMutations: [ServerPendingMutation] = []
 
-    func pendingServerMutations() -> [ServerPendingMutation] { [] }
-    func clearPendingServerAndWorkspaceMutations() {}
+    func pendingServerMutations() -> [ServerPendingMutation] { enqueuedServerMutations }
+    func clearPendingServerAndWorkspaceMutations() throws {
+        clearCount += 1
+        if let clearError { throw clearError }
+        enqueuedServerMutations.removeAll()
+    }
     func removePendingServerMutation(_ mutationID: UUID) {}
     func enqueueServerUpsert(_ server: Server) throws {
         if let enqueueError { throw enqueueError }
