@@ -111,12 +111,57 @@ struct ServerLocalStoreTests {
         #expect(loadedServers == [server])
         #expect(loadedWorkspaces == [workspace])
 
-        store.clearServerData()
+        try store.clearServerData()
         guard case .missing = store.loadSnapshot().servers,
               case .missing = store.loadSnapshot().workspaces else {
             Issue.record("Expected cleared repository collections")
             return
         }
+    }
+
+    @Test
+    func normalPersistenceIsRejectedWhileServerTransactionJournalExists() throws {
+        let fixture = try makeDefaults()
+        let defaults = fixture.defaults
+        defer { defaults.removePersistentDomain(forName: fixture.suiteName) }
+        let store = ServerLocalStore(defaults: defaults)
+        let workspace = Workspace(name: "Workspace", order: 0)
+        let server = Server(
+            workspaceId: workspace.id,
+            name: "Server",
+            host: "server.example.test",
+            username: "root"
+        )
+        let plan = ServerMutationTransactionPlan(
+            id: UUID(),
+            previousServers: [server],
+            previousWorkspaces: [workspace],
+            resultingServers: [server],
+            resultingWorkspaces: [workspace],
+            pendingMutation: ServerPendingMutation(
+                id: UUID(),
+                payload: .serverUpsert(server),
+                createdAt: .distantPast
+            ),
+            credentialAction: .delete(server)
+        )
+        try store.storeServerMutationTransactionJournal(
+            ServerMutationTransactionJournal(plan: plan)
+        )
+
+        #expect(throws: ServerLocalStoreError.serverMutationPending) {
+            try store.persist(servers: [], workspaces: [])
+        }
+        #expect(throws: ServerLocalStoreError.serverMutationPending) {
+            try store.clearServerData()
+        }
+
+        try store.materializeServerMutation(plan)
+        guard case .loaded(let servers) = store.loadServers() else {
+            Issue.record("Expected transaction state")
+            return
+        }
+        #expect(servers == plan.previousServers)
     }
 
     private func makeDefaults() throws -> (defaults: UserDefaults, suiteName: String) {

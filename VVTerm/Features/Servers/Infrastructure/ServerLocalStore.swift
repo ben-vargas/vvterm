@@ -58,10 +58,12 @@ struct ServerLocalStore {
     }
 
     func storeServers(_ servers: [Server]) throws {
+        try requireNoPendingServerMutation()
         try store(servers, forKey: serversKey)
     }
 
     func storeWorkspaces(_ workspaces: [Workspace]) throws {
+        try requireNoPendingServerMutation()
         try store(workspaces, forKey: workspacesKey)
     }
 
@@ -118,7 +120,7 @@ extension ServerLocalStore: ServerMutationTransactionJournalStoring {
     }
 
     func materializeServerMutation(_ plan: ServerMutationTransactionPlan) throws {
-        try persist(
+        try persistCollections(
             servers: plan.resultingServers,
             workspaces: plan.resultingWorkspaces
         )
@@ -141,6 +143,23 @@ extension ServerLocalStore: ServerLocalRepository {
     }
 
     func persist(servers: [Server], workspaces: [Workspace]) throws {
+        try requireNoPendingServerMutation()
+        try persistCollections(servers: servers, workspaces: workspaces)
+    }
+
+    func clearServerData() throws {
+        try requireNoPendingServerMutation()
+        defaults.removeObject(forKey: serversKey)
+        defaults.removeObject(forKey: workspacesKey)
+    }
+
+    private func requireNoPendingServerMutation() throws {
+        guard try loadServerMutationTransactionJournal() == nil else {
+            throw ServerLocalStoreError.serverMutationPending
+        }
+    }
+
+    private func persistCollections(servers: [Server], workspaces: [Workspace]) throws {
         let encoder = JSONEncoder()
         let serverData = try encoder.encode(servers)
         let workspaceData = try encoder.encode(workspaces)
@@ -157,11 +176,6 @@ extension ServerLocalStore: ServerLocalRepository {
         }
     }
 
-    func clearServerData() {
-        defaults.removeObject(forKey: serversKey)
-        defaults.removeObject(forKey: workspacesKey)
-    }
-
     private func restore(_ data: Data?, forKey key: String) {
         if let data {
             defaults.set(data, forKey: key)
@@ -171,8 +185,9 @@ extension ServerLocalStore: ServerLocalRepository {
     }
 }
 
-private enum ServerLocalStoreError: Error {
+nonisolated enum ServerLocalStoreError: Error, Equatable, Sendable {
     case persistenceFailed
+    case serverMutationPending
 }
 
 extension ServerLocalStore: WorkspaceDeletionJournalStoring {
@@ -184,6 +199,7 @@ extension ServerLocalStore: WorkspaceDeletionJournalStoring {
     }
 
     func storeWorkspaceDeletionJournal(_ journal: WorkspaceDeletionJournal) throws {
+        try requireNoPendingServerMutation()
         defaults.set(
             try JSONEncoder().encode(journal),
             forKey: Self.workspaceDeletionJournalKey
@@ -191,7 +207,7 @@ extension ServerLocalStore: WorkspaceDeletionJournalStoring {
     }
 
     func materializeWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) throws {
-        try persist(
+        try persistCollections(
             servers: plan.remainingServers,
             workspaces: plan.remainingWorkspaces
         )
@@ -209,11 +225,12 @@ extension ServerLocalStore: EnvironmentDeletionJournalStoring {
     }
 
     func storeEnvironmentDeletionJournal(_ journal: EnvironmentDeletionJournal) throws {
+        try requireNoPendingServerMutation()
         defaults.set(try JSONEncoder().encode(journal), forKey: Self.environmentDeletionJournalKey)
     }
 
     func materializeEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) throws {
-        try persist(servers: plan.resultingServers, workspaces: plan.resultingWorkspaces)
+        try persistCollections(servers: plan.resultingServers, workspaces: plan.resultingWorkspaces)
     }
 
     func clearEnvironmentDeletionJournal() throws {

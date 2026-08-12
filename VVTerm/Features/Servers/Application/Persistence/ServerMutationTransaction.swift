@@ -18,12 +18,6 @@ nonisolated struct ServerMutationTransactionPlan: Codable, Equatable, Identifiab
     let pendingMutation: ServerPendingMutation
     let credentialAction: CredentialAction
 
-    var presentsResultingStateAfterMaterialization: Bool {
-        if case .delete = credentialAction {
-            return true
-        }
-        return false
-    }
 }
 
 nonisolated struct ServerMutationTransactionJournal: Codable, Equatable, Sendable {
@@ -74,16 +68,13 @@ nonisolated struct ServerMutationTransactionJournal: Codable, Equatable, Sendabl
     var phase: Phase {
         if !didPrepareCredentials { return .preparingCredentials }
         if !didMaterializeLocalState { return .materializing }
-        if !didEnqueuePendingMutation { return .enqueueing }
         if !didFinalizeCredentials { return .finalizingCredentials }
+        if !didEnqueuePendingMutation { return .enqueueing }
         if !didCleanCredentialStaging { return .cleaningCredentialStaging }
         return didFinalize ? .complete : .finalizing
     }
 
     var presentsResultingState: Bool {
-        if plan.presentsResultingStateAfterMaterialization {
-            return didMaterializeLocalState && didEnqueuePendingMutation
-        }
         return didFinalizeCredentials
     }
 }
@@ -213,17 +204,6 @@ struct ServerMutationTransaction {
             }
         }
 
-        if !journal.didEnqueuePendingMutation {
-            do {
-                try mutationQueue.enqueueServerMutation(journal.plan.pendingMutation)
-                journal.didEnqueuePendingMutation = true
-                journal.lastFailure = nil
-                try store.storeServerMutationTransactionJournal(journal)
-            } catch {
-                return recording(error, at: .pendingSyncQueue, in: journal)
-            }
-        }
-
         if !journal.didFinalizeCredentials {
             do {
                 switch journal.plan.credentialAction {
@@ -241,6 +221,23 @@ struct ServerMutationTransaction {
                 try store.storeServerMutationTransactionJournal(journal)
             } catch {
                 return recording(error, at: .credentialFinalization, in: journal)
+            }
+        }
+
+        do {
+            try store.materializeServerMutation(journal.plan)
+        } catch {
+            return recording(error, at: .localPersistence, in: journal)
+        }
+
+        if !journal.didEnqueuePendingMutation {
+            do {
+                try mutationQueue.enqueueServerMutation(journal.plan.pendingMutation)
+                journal.didEnqueuePendingMutation = true
+                journal.lastFailure = nil
+                try store.storeServerMutationTransactionJournal(journal)
+            } catch {
+                return recording(error, at: .pendingSyncQueue, in: journal)
             }
         }
 

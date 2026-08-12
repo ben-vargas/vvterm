@@ -210,8 +210,8 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         )
     }
 
-    func updateLastConnected(for server: Server) async {
-        stateStore.updateLastConnected(for: server.id, at: dependencies.now())
+    func updateLastConnected(for server: Server) async throws {
+        try stateStore.updateLastConnected(for: server.id, at: dependencies.now())
     }
 
     // MARK: - Workspace CRUD
@@ -292,7 +292,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
     }
 
     func reorderWorkspaces(from source: IndexSet, to destination: Int) async throws {
-        let reordered = stateStore.reorderWorkspaces(
+        let reordered = try stateStore.reorderWorkspaces(
             from: source,
             to: destination,
             at: dependencies.now()

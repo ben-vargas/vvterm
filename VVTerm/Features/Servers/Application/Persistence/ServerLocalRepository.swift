@@ -30,5 +30,5 @@ protocol ServerLocalRepository:
     EnvironmentDeletionJournalStoring {
     func loadSnapshot() -> ServerLocalRepositorySnapshot
     func persist(servers: [Server], workspaces: [Workspace]) throws
-    func clearServerData()
+    func clearServerData() throws
 }

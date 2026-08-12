@@ -6,7 +6,7 @@ import Testing
 @MainActor
 struct ServerManagerMutationTransactionTests {
     @Test
-    func createQueueFailureKeepsPreviousViewAndResumesWithoutLosingCredentials() async throws {
+    func createQueueFailureKeepsCommittedMetadataAndCredentialsForRecovery() async throws {
         let workspace = makeWorkspace()
         let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])
         let credentials = ServerManagerCredentialRepositoryFake()
@@ -26,8 +26,9 @@ struct ServerManagerMutationTransactionTests {
             )
         }
 
-        #expect(manager.servers.isEmpty)
-        #expect(credentials.values[server.id] == nil)
+        #expect(manager.servers.map(\.id) == [server.id])
+        #expect(manager.servers.first?.host == server.host)
+        #expect(credentials.values[server.id]?.password == "new-password")
         let pending = try #require(local.serverMutationJournal)
         #expect(pending.phase == .enqueueing)
 
@@ -46,7 +47,7 @@ struct ServerManagerMutationTransactionTests {
     }
 
     @Test
-    func editQueueFailureCannotMixNewMetadataWithOldCredentials() async throws {
+    func editQueueFailureKeepsNewMetadataWithNewCredentials() async throws {
         let workspace = makeWorkspace()
         let storedServer = makeServer(workspaceID: workspace.id, host: "old.example.test")
         var editedServer = storedServer
@@ -71,8 +72,8 @@ struct ServerManagerMutationTransactionTests {
             )
         }
 
-        #expect(manager.servers == [storedServer])
-        #expect(credentials.values[storedServer.id]?.password == "old-password")
+        #expect(manager.servers.first?.host == "new.example.test")
+        #expect(credentials.values[storedServer.id]?.password == "new-password")
 
         sync.enqueueError = nil
         let resumed = try #require(
@@ -88,7 +89,7 @@ struct ServerManagerMutationTransactionTests {
     }
 
     @Test
-    func deleteQueueFailureKeepsServerAndCredentialsUntilRecovery() async throws {
+    func deleteQueueFailureKeepsCompletedLocalDeletionForRecovery() async throws {
         let workspace = makeWorkspace()
         let server = makeServer(workspaceID: workspace.id)
         let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
@@ -102,8 +103,8 @@ struct ServerManagerMutationTransactionTests {
             try await manager.deleteServer(server)
         }
 
-        #expect(manager.servers == [server])
-        #expect(credentials.values[server.id] != nil)
+        #expect(manager.servers.isEmpty)
+        #expect(credentials.values[server.id] == nil)
         #expect(local.serverMutationJournal?.phase == .enqueueing)
 
         sync.enqueueError = nil
@@ -120,7 +121,7 @@ struct ServerManagerMutationTransactionTests {
     }
 
     @Test
-    func deleteCredentialFailureLeavesRecoverableJournalAfterMetadataAndQueueCommit() async {
+    func deleteCredentialFailureLeavesRecoverableJournalBeforeQueueCommit() async {
         let workspace = makeWorkspace()
         let server = makeServer(workspaceID: workspace.id)
         let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
@@ -134,10 +135,77 @@ struct ServerManagerMutationTransactionTests {
             try await manager.deleteServer(server)
         }
 
-        #expect(manager.servers.isEmpty)
+        #expect(manager.servers == [server])
         #expect(credentials.values[server.id] != nil)
         #expect(local.serverMutationJournal?.phase == .finalizingCredentials)
-        #expect(sync.enqueuedServerMutations.count == 1)
+        #expect(sync.enqueuedServerMutations.isEmpty)
+    }
+
+    @Test
+    func pendingServerSaveBlocksWorkspacePersistenceUntilRecovery() async throws {
+        let workspace = makeWorkspace()
+        let server = makeServer(workspaceID: workspace.id)
+        let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
+        let credentials = ServerManagerCredentialRepositoryFake()
+        credentials.values[server.id] = ServerCredentials(serverId: server.id)
+        credentials.commitError = TestTransactionError.persistence
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+        var editedServer = server
+        editedServer.host = "new.example.test"
+
+        await #expect(throws: VVTermError.self) {
+            try await manager.apply(
+                .update(editedServer),
+                credentials: ServerCredentials(serverId: server.id)
+            )
+        }
+        var editedWorkspace = workspace
+        editedWorkspace.name = "Changed"
+        await #expect(throws: ServerLocalStoreError.self) {
+            try await manager.updateWorkspace(editedWorkspace)
+        }
+
+        #expect(local.workspaces == [workspace])
+        #expect(sync.enqueuedServerMutations.isEmpty)
+        credentials.commitError = nil
+        let resumed = try #require(
+            try manager.stateStore.makeServerMutationTransaction(
+                mutationQueue: sync,
+                credentials: credentials
+            ).resumePending()
+        )
+        #expect(resumed.phase == .complete)
+        #expect(local.servers.first?.host == "new.example.test")
+        #expect(local.workspaces == [workspace])
+    }
+
+    @Test
+    func pendingServerSaveBlocksLastConnectedAndAuthoritativeResync() async throws {
+        let workspace = makeWorkspace()
+        let server = makeServer(workspaceID: workspace.id)
+        let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
+        let credentials = ServerManagerCredentialRepositoryFake()
+        credentials.commitError = TestTransactionError.persistence
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+
+        await #expect(throws: VVTermError.self) {
+            try await manager.apply(
+                .update(server),
+                credentials: ServerCredentials(serverId: server.id)
+            )
+        }
+        await #expect(throws: ServerMutationTransactionError.self) {
+            try await manager.updateLastConnected(for: server)
+        }
+        await #expect(throws: ServerMutationTransactionError.self) {
+            try await manager.clearLocalDataAndResync()
+        }
+
+        #expect(manager.servers.first?.lastConnected == nil)
+        #expect(local.servers.first?.lastConnected == nil)
+        #expect(sync.clearCount == 0)
     }
 
     private func makeManager(

@@ -266,12 +266,14 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
 
     func persist(servers: [Server], workspaces: [Workspace]) throws {
         persistAttempts += 1
+        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
         if let persistError { throw persistError }
         self.servers = servers
         self.workspaces = workspaces
     }
 
-    func clearServerData() {
+    func clearServerData() throws {
+        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
         servers = []
         workspaces = []
     }
@@ -285,7 +287,9 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
         serverMutationJournal = journal
     }
     func materializeServerMutation(_ plan: ServerMutationTransactionPlan) throws {
-        try persist(servers: plan.resultingServers, workspaces: plan.resultingWorkspaces)
+        if let persistError { throw persistError }
+        servers = plan.resultingServers
+        workspaces = plan.resultingWorkspaces
     }
     func clearServerMutationTransactionJournal() throws {
         serverMutationJournal = nil
@@ -293,6 +297,7 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
 
     func loadWorkspaceDeletionJournal() throws -> WorkspaceDeletionJournal? { journal }
     func storeWorkspaceDeletionJournal(_ journal: WorkspaceDeletionJournal) throws {
+        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
         self.journal = journal
     }
     func materializeWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) throws {
@@ -302,6 +307,7 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
     func clearWorkspaceDeletionJournal() throws { journal = nil }
     func loadEnvironmentDeletionJournal() throws -> EnvironmentDeletionJournal? { environmentDeletionJournal }
     func storeEnvironmentDeletionJournal(_ journal: EnvironmentDeletionJournal) throws {
+        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
         environmentDeletionJournal = journal
     }
     func materializeEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) throws {

@@ -88,6 +88,8 @@ final class ServerRemoteSyncCoordinator {
     func clearLocalDataAndResync() async throws {
         logger.info("Replacing local server data from an authoritative CloudKit fetch...")
 
+        try stateStore.requireNoPendingServerMutation()
+
         if let activeLoad {
             await activeLoad.task.value
         }
@@ -148,7 +150,7 @@ final class ServerRemoteSyncCoordinator {
     }
 
     func drainPendingMutations() async {
-        guard stateStore.isSyncEnabled else { return }
+        guard stateStore.isSyncEnabled, !stateStore.hasPendingServerMutation else { return }
         await dependencies.syncRepository.drainPendingMutations()
     }
 

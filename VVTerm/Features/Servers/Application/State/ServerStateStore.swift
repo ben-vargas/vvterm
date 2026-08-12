@@ -52,6 +52,10 @@ final class ServerStateStore: ObservableObject {
     var transientBootstrapWorkspaceID: UUID? { pendingBootstrapWorkspaceID }
     var shouldForceRemoteFullFetchForBootstrap: Bool { pendingBootstrapWorkspaceID != nil }
 
+    var hasPendingServerMutation: Bool {
+        (try? dependencies.localRepository.loadServerMutationTransactionJournal()) != nil
+    }
+
     var localCacheContainsUserData: Bool {
         if !servers.isEmpty {
             return true
@@ -135,8 +139,8 @@ final class ServerStateStore: ObservableObject {
         pendingBootstrapWorkspaceID = workspaceID
     }
 
-    func clearLocalDataAndState() {
-        dependencies.localRepository.clearServerData()
+    func clearLocalDataAndState() throws {
+        try dependencies.localRepository.clearServerData()
         pendingBootstrapWorkspaceID = nil
         var nextSnapshot = snapshot
         nextSnapshot.servers = []
@@ -344,7 +348,8 @@ final class ServerStateStore: ObservableObject {
         return (repairWorkspace, repairedServers)
     }
 
-    func updateLastConnected(for serverID: UUID, at date: Date) {
+    func updateLastConnected(for serverID: UUID, at date: Date) throws {
+        try requireNoPendingServerMutation()
         guard let index = servers.firstIndex(where: { $0.id == serverID }) else { return }
         updateSnapshot { $0.servers[index].lastConnected = date }
         persistCurrentCollections()
@@ -354,7 +359,8 @@ final class ServerStateStore: ObservableObject {
         from source: IndexSet,
         to destination: Int,
         at date: Date
-    ) -> [Workspace] {
+    ) throws -> [Workspace] {
+        try requireNoPendingServerMutation()
         var reordered = workspaces
         reordered.moveElements(fromOffsets: source, toOffset: destination)
         for index in reordered.indices {
@@ -428,6 +434,7 @@ final class ServerStateStore: ObservableObject {
     }
 
     func handleAppLanguageChange() {
+        guard !hasPendingServerMutation else { return }
         guard refreshPendingBootstrapWorkspaceLocalizationIfNeeded() else { return }
         persistCurrentCollections()
     }
@@ -680,6 +687,7 @@ final class ServerStateStore: ObservableObject {
     private func loadLocalData() {
         let persisted = dependencies.localRepository.loadSnapshot()
         applyPersistedCollections(persisted)
+        guard !hasPendingServerMutation else { return }
         var shouldPersist = reconcilePendingBootstrapWorkspaceState()
         if Self.shouldCreateBootstrapWorkspace(
             didBootstrapDefaultWorkspace: didBootstrapDefaultWorkspace,
@@ -692,6 +700,12 @@ final class ServerStateStore: ObservableObject {
         }
         if shouldPersist {
             persistCurrentCollections()
+        }
+    }
+
+    func requireNoPendingServerMutation() throws {
+        guard !hasPendingServerMutation else {
+            throw ServerMutationTransactionError.recoveryPending
         }
     }
 
