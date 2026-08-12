@@ -165,6 +165,8 @@ For every feature:
 - prefer view-owned dependencies to be injected from the app/screen boundary instead of created inside leaf views
 - if shared cross-feature primitives are needed, extract them into `Core` instead of creating new app-wide bucket folders
 - prefer one primary type per file and match the filename to that type
+- When one type remains the clear lifecycle owner but has distinct capabilities, keep stored state, initialization, and lifecycle in `Type.swift`, then split cohesive capabilities into `Type+Capability.swift` extension files such as `Type+Commands.swift` or `Type+Parsing.swift`.
+- Use capability extension files to clarify one owner, not to hide separate owners. Extract a new type when a capability owns independent state or lifecycle. Swift extensions cannot add stored properties.
 - order files as inputs and owned state, initialization, public intents, then private helpers
 - keep view-owned state private; comments explain reasons and invariants instead of repeating code
 - review ownership when a file exceeds 600 lines; a file over 1,000 lines needs a clear reason
