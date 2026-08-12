@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RemoteFileBrowserScreen: View {
     @ObservedObject var browser: RemoteFileBrowserStore
