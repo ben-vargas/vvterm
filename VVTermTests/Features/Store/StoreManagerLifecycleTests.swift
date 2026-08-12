@@ -434,10 +434,46 @@ final class StoreManagerLifecycleTests: XCTestCase {
 
         XCTAssertEqual(manager.products, [monthlyProduct])
         XCTAssertTrue(manager.isPro)
-        XCTAssertEqual(client.events.first, "updates")
+        XCTAssertEqual(client.events, ["updates", "products", "entitlements"])
         XCTAssertEqual(client.productRequestCount, 1)
         XCTAssertEqual(client.entitlementRequestCount, 1)
         XCTAssertEqual(client.transactionUpdateRequestCount, 1)
+        manager.stop()
+    }
+
+    func testStartLoadsProductsBeforeRecoveringSubscriptionEntitlements() async {
+        let client = StoreClientFake()
+        let productGate = StoreValueGate<[StoreProduct]>()
+        let entitlementStarted = expectation(description: "Entitlement request started")
+        client.productsHandler = {
+            await productGate.wait()
+        }
+        client.entitlementResult = StoreEntitlementResult(
+            verifiedProductIds: [],
+            subscriptionEntitlements: [
+                StoreSubscriptionEntitlement(
+                    state: .inBillingRetryPeriod,
+                    isVerified: true
+                )
+            ],
+            subscriptionStatus: nil
+        )
+        client.onEntitlementRequest = { entitlementStarted.fulfill() }
+        let manager = makeManager(client)
+
+        manager.start()
+        await productGate.waitUntilEntered()
+
+        XCTAssertEqual(client.entitlementRequestCount, 0)
+        XCTAssertEqual(manager.accessState, .checking)
+
+        productGate.resume(with: [monthlyProduct])
+        await fulfillment(of: [entitlementStarted], timeout: 1)
+        await Task.yield()
+
+        XCTAssertEqual(client.events, ["updates", "products", "entitlements"])
+        XCTAssertEqual(manager.products, [monthlyProduct])
+        XCTAssertEqual(manager.accessState, .pro)
         manager.stop()
     }
 

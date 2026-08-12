@@ -117,25 +117,22 @@ final class StoreManager: ObservableObject {
         let client = self.client
         let logger = self.logger
         startupTask = Task { [weak self, client, logger, token] in
-            async let loadedProducts = Self.loadProducts(using: client, logger: logger)
-            async let loadedEntitlements = client.entitlements(
-                subscriptionProductIds: Self.subscriptionProductIds
+            let loadedProducts = await Self.loadProducts(using: client, logger: logger)
+            guard !Task.isCancelled else { return }
+            self?.applyStartupProducts(
+                loadedProducts,
+                token: token,
+                operationID: productOperationID
             )
 
-            let result = await loadedEntitlements
+            let result = await client.entitlements(
+                subscriptionProductIds: Self.subscriptionProductIds
+            )
             guard !Task.isCancelled else { return }
             self?.applyStartupEntitlementResult(
                 result,
                 token: token,
                 operationID: entitlementOperationID
-            )
-
-            guard let products = await loadedProducts,
-                  !Task.isCancelled else { return }
-            self?.applyStartupProducts(
-                products,
-                token: token,
-                operationID: productOperationID
             )
         }
     }
@@ -364,12 +361,14 @@ final class StoreManager: ObservableObject {
     }
 
     private func applyStartupProducts(
-        _ products: [StoreProduct],
+        _ products: [StoreProduct]?,
         token: StartupToken,
         operationID: UUID
     ) {
         guard startupToken === token, productOperationID == operationID else { return }
-        self.products = products
+        if let products {
+            self.products = products
+        }
         productOperationID = nil
     }
 
