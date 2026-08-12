@@ -2,6 +2,7 @@
 import XCTest
 
 final class TerminalSessionRestoreUITests: TerminalReconnectUITestCase {
+    @MainActor
     func testColdRelaunchRestoresTabsSplitsSelectionAndReconnects() throws {
         let app = XCUIApplication()
         app.terminate()
@@ -56,7 +57,5 @@ final class TerminalSessionRestoreUITests: TerminalReconnectUITestCase {
         )
     }
 
-    @MainActor
 }
 #endif
-

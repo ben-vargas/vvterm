@@ -71,7 +71,5 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
         )
     }
 
-    @MainActor
 }
 #endif
-

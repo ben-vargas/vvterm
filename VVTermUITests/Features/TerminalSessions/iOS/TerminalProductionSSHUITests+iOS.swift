@@ -2,6 +2,7 @@
 import XCTest
 
 final class TerminalProductionSSHUITests: TerminalReconnectUITestCase {
+    @MainActor
     func testProductionSSHBackgroundPreservesSessionKeyboardAndTyping() throws {
         let app = XCUIApplication()
         app.terminate()
@@ -296,4 +297,3 @@ final class TerminalProductionSSHUITests: TerminalReconnectUITestCase {
 
 }
 #endif
-
