@@ -234,6 +234,7 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
     var persistError: Error?
     var persistAttempts = 0
     var journal: WorkspaceDeletionJournal?
+    var environmentDeletionJournal: EnvironmentDeletionJournal?
 
     private let serverLoadResult: ServerLocalLoadResult<[Server]>?
     private let workspaceLoadResult: ServerLocalLoadResult<[Workspace]>?
@@ -283,6 +284,14 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
         workspaces = plan.remainingWorkspaces
     }
     func clearWorkspaceDeletionJournal() throws { journal = nil }
+    func loadEnvironmentDeletionJournal() throws -> EnvironmentDeletionJournal? { environmentDeletionJournal }
+    func storeEnvironmentDeletionJournal(_ journal: EnvironmentDeletionJournal) throws {
+        environmentDeletionJournal = journal
+    }
+    func materializeEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) throws {
+        try persist(servers: plan.resultingServers, workspaces: plan.resultingWorkspaces)
+    }
+    func clearEnvironmentDeletionJournal() throws { environmentDeletionJournal = nil }
 }
 
 @MainActor

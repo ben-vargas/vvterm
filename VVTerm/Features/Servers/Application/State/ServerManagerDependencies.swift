@@ -18,7 +18,7 @@ protocol ServerRemoteMutationClient: AnyObject {
 }
 
 @MainActor
-protocol ServerSyncRepository: WorkspaceDeletionMutationEnqueuing, AnyObject {
+protocol ServerSyncRepository: WorkspaceDeletionMutationEnqueuing, EnvironmentDeletionMutationEnqueuing, AnyObject {
     func pendingServerMutations() -> [ServerPendingMutation]
     func clearPendingServerAndWorkspaceMutations() throws
     func removePendingServerMutation(_ mutationID: UUID) throws

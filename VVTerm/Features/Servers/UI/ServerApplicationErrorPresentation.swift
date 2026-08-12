@@ -55,6 +55,14 @@ extension VVTermError: LocalizedError {
             return String(localized: "Server no longer exists.")
         case .workspaceNotFound:
             return String(localized: "Workspace no longer exists.")
+        case .environmentNotFound:
+            return String(localized: "Environment no longer exists.")
+        case .environmentDeletionNotAllowed:
+            return String(localized: "Built-in environments cannot be deleted.")
+        case .environmentFallbackUnavailable:
+            return String(localized: "The fallback environment is not available.")
+        case .environmentDeletionRecoveryPending:
+            return String(localized: "The environment was deleted, but sync recovery is still pending.")
         case .workspaceDeletionChanged:
             return String(localized: "The workspace changed while deletion was authorized. Review it and try again.")
         case .workspaceDeletionRecoveryPending:

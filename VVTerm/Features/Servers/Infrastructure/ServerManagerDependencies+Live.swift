@@ -35,6 +35,21 @@ extension CloudKitSyncCoordinator: ServerSyncRepository {
         }
         try enqueueAtomically(try mutations.map(PendingCloudKitMutation.init))
     }
+
+    func enqueueEnvironmentDeletionMutations(_ mutations: [ServerPendingMutation]) throws {
+        let isEnvironmentUpdate = mutations.allSatisfy { mutation in
+            switch mutation.payload {
+            case .serverUpsert, .workspaceUpsert:
+                true
+            case .serverDelete, .workspaceDelete:
+                false
+            }
+        }
+        guard isEnvironmentUpdate else {
+            throw EnvironmentDeletionTransactionError.invalidPendingMutation
+        }
+        try enqueueAtomically(try mutations.map(PendingCloudKitMutation.init))
+    }
 }
 
 extension KeychainManager: ServerManagerCredentialRepository {
@@ -137,5 +152,13 @@ private enum WorkspaceDeletionTransactionError: LocalizedError {
         case .credentialCleanupIncomplete:
             return "The server credentials are still present after cleanup."
         }
+    }
+}
+
+private enum EnvironmentDeletionTransactionError: LocalizedError {
+    case invalidPendingMutation
+
+    var errorDescription: String? {
+        String(localized: "The environment deletion sync transaction is invalid.")
     }
 }

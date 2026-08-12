@@ -19,6 +19,10 @@ nonisolated enum VVTermError: Error, Equatable, Sendable {
     case authorizationRequired
     case serverNotFound
     case workspaceNotFound
+    case environmentNotFound
+    case environmentDeletionNotAllowed
+    case environmentFallbackUnavailable
+    case environmentDeletionRecoveryPending
     case workspaceDeletionChanged
     case workspaceDeletionRecoveryPending
     case timeout

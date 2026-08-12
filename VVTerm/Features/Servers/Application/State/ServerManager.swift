@@ -372,7 +372,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
     func deleteEnvironment(
         _ environment: ServerEnvironment,
         in workspace: Workspace
-    ) async throws -> Workspace {
+    ) async throws -> EnvironmentDeletionResult {
         try await deleteEnvironment(environment, in: workspace, fallback: .production)
     }
 
@@ -380,23 +380,30 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         _ environment: ServerEnvironment,
         in workspace: Workspace,
         fallback: ServerEnvironment
-    ) async throws -> Workspace {
-        var updatedWorkspace = workspace
-        updatedWorkspace.environments.removeAll { $0.id == environment.id }
-        if updatedWorkspace.lastSelectedEnvironmentId == environment.id {
-            updatedWorkspace.lastSelectedEnvironmentId = fallback.id
+    ) async throws -> EnvironmentDeletionResult {
+        let affectedServerCount = servers.lazy.filter {
+            $0.workspaceId == workspace.id && $0.environment.id == environment.id
+        }.count
+        let plan = try EnvironmentDeletionPlan(
+            workspaceID: workspace.id,
+            environmentID: environment.id,
+            fallbackID: fallback.id,
+            servers: servers,
+            workspaces: workspaces,
+            id: dependencies.makeID(),
+            mutationIDs: (0...affectedServerCount).map { _ in dependencies.makeID() },
+            mutationDate: dependencies.now()
+        )
+        let journal = try remoteSyncCoordinator.commitEnvironmentDeletion(plan)
+        await remoteSyncCoordinator.drainPendingMutations()
+        guard journal.phase == .complete else {
+            throw VVTermError.environmentDeletionRecoveryPending
         }
-
-        try await updateWorkspace(updatedWorkspace)
-
-        let serversToUpdate = servers.filter { $0.workspaceId == workspace.id && $0.environment.id == environment.id }
-        for server in serversToUpdate {
-            var updatedServer = server
-            updatedServer.environment = fallback
-            _ = try await apply(.update(updatedServer))
-        }
-
-        return updatedWorkspace
+        logger.info("Deleted environment: \(environment.name)")
+        return EnvironmentDeletionResult(
+            workspace: plan.updatedWorkspace,
+            selectedEnvironment: plan.fallback
+        )
     }
 
     func handleAppLanguageChange() {

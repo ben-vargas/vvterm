@@ -207,6 +207,22 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
+    func makeEnvironmentDeletionTransaction(
+        mutationQueue: any EnvironmentDeletionMutationEnqueuing
+    ) -> EnvironmentDeletionTransaction {
+        EnvironmentDeletionTransaction(
+            store: dependencies.localRepository,
+            mutationQueue: mutationQueue
+        )
+    }
+
+    func applyCommittedEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) {
+        replaceCollections(
+            servers: plan.resultingServers,
+            workspaces: plan.resultingWorkspaces
+        )
+    }
+
     func applyPendingSyncOverlay(_ mutations: [ServerPendingMutation]) {
         var updatedServers = servers
         var updatedWorkspaces = workspaces

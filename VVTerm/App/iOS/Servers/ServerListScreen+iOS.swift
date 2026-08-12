@@ -32,6 +32,7 @@ struct ServerListScreen: View {
     @State private var showingCreateEnvironment = false
     @State private var editingEnvironment: ServerEnvironment?
     @State private var environmentToDelete: ServerEnvironment?
+    @State private var environmentDeletionError: String?
     @State private var searchText = ""
     @State private var serverToEdit: Server?
     @State private var serverToMove: Server?
@@ -230,25 +231,35 @@ struct ServerListScreen: View {
                     return
                 }
                 Task {
-                    let updatedWorkspace = try? await serverManager.deleteEnvironment(
-                        environment,
-                        in: workspace,
-                        fallback: .production
-                    )
-                    await MainActor.run {
-                        if let updatedWorkspace {
-                            selectedWorkspace = updatedWorkspace
-                        }
-                        if selectedEnvironment?.id == environment.id {
-                            selectedEnvironment = .production
-                        }
-                        environmentToDelete = nil
+                    defer { environmentToDelete = nil }
+                    do {
+                        let result = try await serverManager.deleteEnvironment(
+                            environment,
+                            in: workspace,
+                            fallback: .production
+                        )
+                        selectedWorkspace = result.workspace
+                        selectedEnvironment = WorkspaceSelectionPolicy.environment(
+                            current: selectedEnvironment,
+                            afterDeleting: environment.id,
+                            result: result
+                        )
+                    } catch {
+                        environmentDeletionError = error.localizedDescription
                     }
                 }
             }
         } message: {
             let name = environmentToDelete?.displayName ?? String(localized: "Custom")
             Text(String(format: String(localized: "Servers in '%@' will be moved to Production."), name))
+        }
+        .alert(String(localized: "Environment Not Deleted"), isPresented: Binding(
+            get: { environmentDeletionError != nil },
+            set: { if !$0 { environmentDeletionError = nil } }
+        )) {
+            Button(String(localized: "OK"), role: .cancel) {}
+        } message: {
+            Text(environmentDeletionError ?? "")
         }
         .lockedItemAlert(
             .server,
@@ -471,15 +482,20 @@ struct ServerListScreen: View {
 
     private func presentAddServer(prefill: ServerFormPrefill? = nil) {
         addServerPrefill = prefill
-        guard canAddServer else {
+        switch ServerCreationPresentationPolicy.initialStep(canAddServer: canAddServer) {
+        case .createWorkspace:
             showingAddWorkspace = true
-            return
+        case .createServer:
+            showingAddServer = true
         }
-        showingAddServer = true
     }
 
     private func resumePendingPrefilledAddServerIfNeeded() {
-        guard addServerPrefill != nil, canAddServer, !showingAddServer else { return }
+        guard ServerCreationPresentationPolicy.shouldResumePrefilledServer(
+            hasPrefill: addServerPrefill != nil,
+            canAddServer: canAddServer,
+            isPresentingServer: showingAddServer
+        ) else { return }
         showingAddServer = true
     }
 

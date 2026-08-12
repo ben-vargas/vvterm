@@ -45,6 +45,46 @@ struct WorkspaceSelectionPolicyTests {
     }
 
     @Test
+    func environmentDeletionSelectsFallbackOnlyWhenDeletedEnvironmentWasSelected() {
+        let custom = ServerEnvironment(name: "Custom", shortName: "C", colorHex: "#000000")
+        let workspace = Workspace(
+            name: "Workspace",
+            environments: [.production, .staging]
+        )
+        let result = EnvironmentDeletionResult(
+            workspace: workspace,
+            selectedEnvironment: .production
+        )
+
+        #expect(WorkspaceSelectionPolicy.environment(
+            current: custom,
+            afterDeleting: custom.id,
+            result: result
+        ) == .production)
+        #expect(WorkspaceSelectionPolicy.environment(
+            current: .staging,
+            afterDeleting: custom.id,
+            result: result
+        ) == .staging)
+    }
+
+    @Test
+    func pendingPrefilledServerResumesOnlyAfterWorkspaceExists() {
+        #expect(ServerCreationPresentationPolicy.initialStep(canAddServer: false) == .createWorkspace)
+        #expect(ServerCreationPresentationPolicy.initialStep(canAddServer: true) == .createServer)
+        #expect(ServerCreationPresentationPolicy.shouldResumePrefilledServer(
+            hasPrefill: true,
+            canAddServer: true,
+            isPresentingServer: false
+        ))
+        #expect(!ServerCreationPresentationPolicy.shouldResumePrefilledServer(
+            hasPrefill: true,
+            canAddServer: false,
+            isPresentingServer: false
+        ))
+    }
+
+    @Test
     func storesAndReconcilesFilterIDsByWorkspace() {
         let foreignID = UUID()
         let first = Workspace(

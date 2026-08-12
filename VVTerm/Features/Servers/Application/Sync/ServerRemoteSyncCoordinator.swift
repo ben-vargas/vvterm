@@ -53,7 +53,9 @@ final class ServerRemoteSyncCoordinator {
         let stateStore = dependencies.stateStore
         let syncRepository = dependencies.syncRepository
         startupTask = Task { [weak self, stateStore, syncRepository] in
-            let recoveredPendingDeletion = self?.recoverPendingWorkspaceDeletion() ?? false
+            let recoveredWorkspaceDeletion = self?.recoverPendingWorkspaceDeletion() ?? false
+            let recoveredEnvironmentDeletion = self?.recoverPendingEnvironmentDeletion() ?? false
+            let recoveredPendingDeletion = recoveredWorkspaceDeletion || recoveredEnvironmentDeletion
             if recoveredPendingDeletion, stateStore.isSyncEnabled {
                 await syncRepository.drainPendingMutations()
             }
@@ -118,6 +120,14 @@ final class ServerRemoteSyncCoordinator {
     ) throws -> WorkspaceDeletionJournal {
         let journal = try workspaceDeletionTransaction.commit(plan)
         applyCommittedWorkspaceDeletion(plan)
+        return journal
+    }
+
+    func commitEnvironmentDeletion(
+        _ plan: EnvironmentDeletionPlan
+    ) throws -> EnvironmentDeletionJournal {
+        let journal = try environmentDeletionTransaction.commit(plan)
+        stateStore.applyCommittedEnvironmentDeletion(plan)
         return journal
     }
 
@@ -518,6 +528,12 @@ final class ServerRemoteSyncCoordinator {
         )
     }
 
+    private var environmentDeletionTransaction: EnvironmentDeletionTransaction {
+        stateStore.makeEnvironmentDeletionTransaction(
+            mutationQueue: dependencies.syncRepository
+        )
+    }
+
     private func recoverPendingWorkspaceDeletion() -> Bool {
         do {
             guard let journal = try workspaceDeletionTransaction.resumePending() else {
@@ -532,6 +548,22 @@ final class ServerRemoteSyncCoordinator {
             logger.error(
                 "Could not resume workspace deletion: \(error.localizedDescription)"
             )
+            return false
+        }
+    }
+
+    private func recoverPendingEnvironmentDeletion() -> Bool {
+        do {
+            guard let journal = try environmentDeletionTransaction.resumePending() else {
+                return false
+            }
+            stateStore.applyCommittedEnvironmentDeletion(journal.plan)
+            if journal.phase != .complete {
+                logger.error("Environment deletion recovery remains pending")
+            }
+            return true
+        } catch {
+            logger.error("Could not resume environment deletion: \(error.localizedDescription)")
             return false
         }
     }

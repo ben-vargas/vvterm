@@ -27,6 +27,23 @@ enum WorkspaceSelectionPolicy {
         return workspace.environment(withId: current.id)
     }
 
+    static func environment(
+        current: ServerEnvironment?,
+        afterDeleting environmentID: UUID,
+        result: EnvironmentDeletionResult
+    ) -> ServerEnvironment? {
+        guard let current else { return nil }
+        if current.id == environmentID {
+            return result.selectedEnvironment
+        }
+        return result.workspace.environment(withId: current.id)
+    }
+
+    static func server(current: Server?, available: [Server]) -> Server? {
+        guard let current else { return nil }
+        return available.first { $0.id == current.id }
+    }
+
     static func environmentFilterIDs(
         in filters: WorkspaceEnvironmentFilters,
         workspace: Workspace?
@@ -70,5 +87,24 @@ enum WorkspaceSelectionPolicy {
             result[item.key] = normalized
         }
         return WorkspaceEnvironmentFilters(selectionsByWorkspace: reconciled)
+    }
+}
+
+nonisolated enum ServerCreationPresentationStep: Equatable, Sendable {
+    case createWorkspace
+    case createServer
+}
+
+nonisolated enum ServerCreationPresentationPolicy {
+    static func initialStep(canAddServer: Bool) -> ServerCreationPresentationStep {
+        canAddServer ? .createServer : .createWorkspace
+    }
+
+    static func shouldResumePrefilledServer(
+        hasPrefill: Bool,
+        canAddServer: Bool,
+        isPresentingServer: Bool
+    ) -> Bool {
+        hasPrefill && canAddServer && !isPresentingServer
     }
 }

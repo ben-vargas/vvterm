@@ -51,6 +51,7 @@ final class ServerLocalRepositoryFake: ServerLocalRepository {
     var workspaces: [Workspace]
     var persistError: Error?
     var journal: WorkspaceDeletionJournal?
+    var environmentDeletionJournal: EnvironmentDeletionJournal?
 
     init(servers: [Server], workspaces: [Workspace]) {
         self.servers = servers
@@ -84,6 +85,16 @@ final class ServerLocalRepositoryFake: ServerLocalRepository {
         workspaces = plan.remainingWorkspaces
     }
     func clearWorkspaceDeletionJournal() throws { journal = nil }
+    func loadEnvironmentDeletionJournal() throws -> EnvironmentDeletionJournal? { environmentDeletionJournal }
+    func storeEnvironmentDeletionJournal(_ journal: EnvironmentDeletionJournal) throws {
+        environmentDeletionJournal = journal
+    }
+    func materializeEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) throws {
+        if let persistError { throw persistError }
+        servers = plan.resultingServers
+        workspaces = plan.resultingWorkspaces
+    }
+    func clearEnvironmentDeletionJournal() throws { environmentDeletionJournal = nil }
 }
 
 @MainActor
@@ -142,6 +153,7 @@ final class ServerSyncRepositoryFake: ServerSyncRepository {
     private(set) var completedDrainCount = 0
     var drainHandler: (@MainActor () async -> Void)?
     var enqueueError: Error?
+    var environmentDeletionMutations: [ServerPendingMutation] = []
 
     func pendingServerMutations() -> [ServerPendingMutation] { [] }
     func clearPendingServerAndWorkspaceMutations() {}
@@ -165,6 +177,10 @@ final class ServerSyncRepositoryFake: ServerSyncRepository {
         completedDrainCount += 1
     }
     func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws {}
+    func enqueueEnvironmentDeletionMutations(_ mutations: [ServerPendingMutation]) throws {
+        if let enqueueError { throw enqueueError }
+        environmentDeletionMutations = mutations
+    }
 }
 
 enum ServerSyncRepositoryTestError: Error {
@@ -239,4 +255,3 @@ enum TestTransactionError: Error {
 enum ServerRemoteTestError: Error {
     case schema
 }
-

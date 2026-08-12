@@ -5,6 +5,7 @@ struct ServerLocalStore {
     static let serversStorageKey = "com.vivy.vvterm.servers"
     static let workspacesStorageKey = "com.vivy.vvterm.workspaces"
     private static let workspaceDeletionJournalKey = "com.vivy.vvterm.workspaceDeletionJournal.v1"
+    private static let environmentDeletionJournalKey = "com.vivy.vvterm.environmentDeletionJournal.v1"
 
     private let defaults: UserDefaults
     private let serversKey: String
@@ -24,12 +25,18 @@ struct ServerLocalStore {
         if let plan = try? loadWorkspaceDeletionJournal()?.plan {
             return .loaded(plan.remainingServers)
         }
+        if let plan = try? loadEnvironmentDeletionJournal()?.plan {
+            return .loaded(plan.resultingServers)
+        }
         return load([Server].self, forKey: serversKey, collection: .servers)
     }
 
     func loadWorkspaces() -> ServerLocalLoadResult<[Workspace]> {
         if let plan = try? loadWorkspaceDeletionJournal()?.plan {
             return .loaded(plan.remainingWorkspaces)
+        }
+        if let plan = try? loadEnvironmentDeletionJournal()?.plan {
+            return .loaded(plan.resultingWorkspaces)
         }
         return load([Workspace].self, forKey: workspacesKey, collection: .workspaces)
     }
@@ -143,5 +150,24 @@ extension ServerLocalStore: WorkspaceDeletionJournalStoring {
 
     func clearWorkspaceDeletionJournal() throws {
         defaults.removeObject(forKey: Self.workspaceDeletionJournalKey)
+    }
+}
+
+extension ServerLocalStore: EnvironmentDeletionJournalStoring {
+    func loadEnvironmentDeletionJournal() throws -> EnvironmentDeletionJournal? {
+        guard let data = defaults.data(forKey: Self.environmentDeletionJournalKey) else { return nil }
+        return try JSONDecoder().decode(EnvironmentDeletionJournal.self, from: data)
+    }
+
+    func storeEnvironmentDeletionJournal(_ journal: EnvironmentDeletionJournal) throws {
+        defaults.set(try JSONEncoder().encode(journal), forKey: Self.environmentDeletionJournalKey)
+    }
+
+    func materializeEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) throws {
+        try persist(servers: plan.resultingServers, workspaces: plan.resultingWorkspaces)
+    }
+
+    func clearEnvironmentDeletionJournal() throws {
+        defaults.removeObject(forKey: Self.environmentDeletionJournalKey)
     }
 }
