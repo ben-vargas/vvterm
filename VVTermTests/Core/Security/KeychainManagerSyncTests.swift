@@ -44,7 +44,21 @@ struct KeychainManagerSyncTests {
 
         for (key, value) in credentialValues {
             #expect(try fixture.credentialStore.get(key, scope: .deviceOnly) == nil)
-            #expect(try fixture.credentialStore.get(key, scope: .iCloud) == value)
+            let storedCloudValue = try fixture.credentialStore.get(key, scope: .iCloud)
+            let cloudValue = try #require(storedCloudValue)
+            if key == "vvterm.sshkeys.index" {
+                #expect(
+                    try JSONDecoder().decode([SSHKeyEntry].self, from: cloudValue)
+                        == JSONDecoder().decode([SSHKeyEntry].self, from: value)
+                )
+            } else if key.hasSuffix(".credential-binding.v1") {
+                #expect(
+                    try JSONDecoder().decode(ServerCredentialBinding.self, from: cloudValue)
+                        == JSONDecoder().decode(ServerCredentialBinding.self, from: value)
+                )
+            } else {
+                #expect(cloudValue == value, "Cloud value mismatch for \(key)")
+            }
         }
         #expect(
             try fixture.oauthStore.get("oauth.example.com", scope: .iCloud)
@@ -358,7 +372,12 @@ struct KeychainManagerSyncTests {
         try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
 
         #expect(try fixture.credentialStore.get(passwordKey, scope: .iCloud) == Data("P3".utf8))
-        #expect(try fixture.credentialStore.get(bindingKey, scope: .iCloud) == binding)
+        let storedCloudBinding = try fixture.credentialStore.get(bindingKey, scope: .iCloud)
+        let cloudBindingData = try #require(storedCloudBinding)
+        #expect(
+            try JSONDecoder().decode(ServerCredentialBinding.self, from: cloudBindingData)
+                == ServerCredentialBinding(server: server)
+        )
         #expect(try fixture.credentialStore.get(passwordKey, scope: .deviceOnly) == nil)
     }
 
@@ -381,6 +400,192 @@ struct KeychainManagerSyncTests {
         #expect(try fixture.credentialStore.get(passwordKey, scope: .iCloud) == nil)
         #expect(try fixture.credentialStore.get(bindingKey, scope: .iCloud) == nil)
         #expect(try fixture.credentialStore.get(passwordKey, scope: .deviceOnly) == nil)
+    }
+
+    @Test
+    func offlineSSHKeyRenameKeepsAKeyAddedByAnotherDevice() throws {
+        let fixture = Fixture(syncEnabled: false)
+        let keyX = SSHKeyEntry(
+            id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
+            name: "Key X",
+            hasPassphrase: false
+        )
+        let keyY = SSHKeyEntry(
+            id: UUID(uuidString: "20000000-0000-0000-0000-000000000002")!,
+            name: "Key Y",
+            hasPassphrase: false
+        )
+        try storeSSHLibrary(
+            entries: [keyX],
+            privateKeys: [keyX.id: Data("private-x".utf8)],
+            scope: .iCloud,
+            in: fixture.credentialStore
+        )
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+
+        try storeSSHLibrary(
+            entries: [keyX, keyY],
+            privateKeys: [
+                keyX.id: Data("private-x".utf8),
+                keyY.id: Data("private-y".utf8)
+            ],
+            scope: .iCloud,
+            in: fixture.credentialStore
+        )
+        try fixture.manager.updateStoredSSHKeyName(keyX.id, name: "Renamed X")
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+
+        let cloudEntries = try loadSSHLibrary(scope: .iCloud, from: fixture.credentialStore)
+        #expect(cloudEntries.first(where: { $0.id == keyX.id })?.name == "Renamed X")
+        #expect(cloudEntries.contains(where: { $0.id == keyY.id }))
+        #expect(
+            try fixture.credentialStore.get(
+                "sshkey.\(keyY.id.uuidString).data",
+                scope: .iCloud
+            ) == Data("private-y".utf8)
+        )
+    }
+
+    @Test
+    func offlineSSHKeyDeletionRemovesOnlyThatKey() throws {
+        let fixture = Fixture(syncEnabled: false)
+        let keyX = SSHKeyEntry(id: UUID(), name: "Key X", hasPassphrase: false)
+        let keyY = SSHKeyEntry(id: UUID(), name: "Key Y", hasPassphrase: false)
+        try storeSSHLibrary(
+            entries: [keyX, keyY],
+            privateKeys: [
+                keyX.id: Data("private-x".utf8),
+                keyY.id: Data("private-y".utf8)
+            ],
+            scope: .iCloud,
+            in: fixture.credentialStore
+        )
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+
+        try fixture.manager.deleteStoredSSHKey(keyX.id)
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+
+        let cloudEntries = try loadSSHLibrary(scope: .iCloud, from: fixture.credentialStore)
+        #expect(!cloudEntries.contains(where: { $0.id == keyX.id }))
+        #expect(cloudEntries.contains(where: { $0.id == keyY.id }))
+        #expect(
+            try fixture.credentialStore.get(
+                "sshkey.\(keyY.id.uuidString).data",
+                scope: .iCloud
+            ) == Data("private-y".utf8)
+        )
+    }
+
+    @Test
+    func newOfflineSSHKeyMergesIntoTheCurrentCloudIndex() throws {
+        let fixture = Fixture(syncEnabled: false)
+        let cloudKey = SSHKeyEntry(id: UUID(), name: "Cloud key", hasPassphrase: false)
+        try storeSSHLibrary(
+            entries: [cloudKey],
+            privateKeys: [cloudKey.id: Data("cloud-private".utf8)],
+            scope: .iCloud,
+            in: fixture.credentialStore
+        )
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        let localKey = try fixture.manager.storeSSHKeyEntry(
+            name: "Local key",
+            privateKey: Data("local-private".utf8),
+            passphrase: nil
+        )
+
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+
+        let cloudEntries = try loadSSHLibrary(scope: .iCloud, from: fixture.credentialStore)
+        #expect(cloudEntries.contains(where: { $0.id == cloudKey.id }))
+        #expect(cloudEntries.contains(where: { $0.id == localKey.id }))
+    }
+
+    @Test
+    func newerCloudSSHKeyMetadataWinsOverAnOlderOfflineRename() throws {
+        let fixture = Fixture(syncEnabled: false)
+        let keyID = UUID()
+        let original = SSHKeyEntry(
+            id: keyID,
+            name: "Original",
+            hasPassphrase: false,
+            createdAt: .distantPast
+        )
+        try storeSSHLibrary(
+            entries: [original],
+            privateKeys: [keyID: Data("private".utf8)],
+            scope: .iCloud,
+            in: fixture.credentialStore
+        )
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        try fixture.manager.updateStoredSSHKeyName(keyID, name: "Offline rename")
+
+        let newerCloudEntry = SSHKeyEntry(
+            id: keyID,
+            name: "Newer cloud name",
+            hasPassphrase: false,
+            createdAt: .distantPast,
+            updatedAt: .distantFuture
+        )
+        try storeSSHLibrary(
+            entries: [newerCloudEntry],
+            privateKeys: [keyID: Data("newer-private".utf8)],
+            scope: .iCloud,
+            in: fixture.credentialStore
+        )
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+
+        let cloudEntries = try loadSSHLibrary(scope: .iCloud, from: fixture.credentialStore)
+        #expect(cloudEntries.first?.name == "Newer cloud name")
+        #expect(
+            try fixture.credentialStore.get(
+                "sshkey.\(keyID.uuidString).data",
+                scope: .iCloud
+            ) == Data("newer-private".utf8)
+        )
+    }
+
+    @Test
+    func newerCloudSSHKeyUpdateWinsOverAnOlderOfflineDeletion() throws {
+        let fixture = Fixture(syncEnabled: false)
+        let keyID = UUID()
+        let original = SSHKeyEntry(
+            id: keyID,
+            name: "Original",
+            hasPassphrase: false,
+            createdAt: .distantPast
+        )
+        try storeSSHLibrary(
+            entries: [original],
+            privateKeys: [keyID: Data("private".utf8)],
+            scope: .iCloud,
+            in: fixture.credentialStore
+        )
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        try fixture.manager.deleteStoredSSHKey(keyID)
+
+        let newerCloudEntry = SSHKeyEntry(
+            id: keyID,
+            name: "Restored remotely",
+            hasPassphrase: false,
+            createdAt: .distantPast,
+            updatedAt: .distantFuture
+        )
+        try storeSSHLibrary(
+            entries: [newerCloudEntry],
+            privateKeys: [keyID: Data("newer-private".utf8)],
+            scope: .iCloud,
+            in: fixture.credentialStore
+        )
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+
+        let cloudEntries = try loadSSHLibrary(scope: .iCloud, from: fixture.credentialStore)
+        #expect(cloudEntries.first?.name == "Restored remotely")
+        #expect(
+            try fixture.credentialStore.get(
+                "sshkey.\(keyID.uuidString).data",
+                scope: .iCloud
+            ) == Data("newer-private".utf8)
+        )
     }
 
     @Test
@@ -620,5 +825,34 @@ struct KeychainManagerSyncTests {
                 ? "app.example.com"
                 : nil
         )
+    }
+
+    private func storeSSHLibrary(
+        entries: [SSHKeyEntry],
+        privateKeys: [UUID: Data],
+        scope: KeychainStorageScope,
+        in store: KeychainStore
+    ) throws {
+        try store.set(
+            try JSONEncoder().encode(entries),
+            forKey: "vvterm.sshkeys.index",
+            scope: scope
+        )
+        for (id, privateKey) in privateKeys {
+            try store.set(
+                privateKey,
+                forKey: "sshkey.\(id.uuidString).data",
+                scope: scope
+            )
+        }
+    }
+
+    private func loadSSHLibrary(
+        scope: KeychainStorageScope,
+        from store: KeychainStore
+    ) throws -> [SSHKeyEntry] {
+        let storedData = try store.get("vvterm.sshkeys.index", scope: scope)
+        let data = try #require(storedData)
+        return try JSONDecoder().decode([SSHKeyEntry].self, from: data)
     }
 }

@@ -13,14 +13,17 @@ nonisolated enum CredentialReconciliationPhase: String, Codable, Equatable, Send
 
 nonisolated enum CredentialSyncUnit: Hashable, Sendable {
     case server(UUID)
-    case sshLibrary
+    case sshKey(UUID)
+    case legacySSHLibrary
     case oauth(String)
 
     var storageKey: String {
         switch self {
         case .server(let id):
             return "server:\(id.uuidString)"
-        case .sshLibrary:
+        case .sshKey(let id):
+            return "ssh-key:\(id.uuidString)"
+        case .legacySSHLibrary:
             return "ssh-library"
         case .oauth(let key):
             return "oauth:\(key)"
@@ -29,7 +32,12 @@ nonisolated enum CredentialSyncUnit: Hashable, Sendable {
 
     fileprivate init?(storageKey: String) {
         if storageKey == "ssh-library" {
-            self = .sshLibrary
+            self = .legacySSHLibrary
+            return
+        }
+        if storageKey.hasPrefix("ssh-key:"),
+           let id = UUID(uuidString: String(storageKey.dropFirst("ssh-key:".count))) {
+            self = .sshKey(id)
             return
         }
         if storageKey.hasPrefix("server:"),
@@ -51,6 +59,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
     private static let stateKey = "vvterm.keychain.offlineChanges.v1"
     private static let trackingKey = "vvterm.keychain.offlineTracking.v1"
     private static let phaseKey = "vvterm.keychain.offlineReconciliationPhase.v2"
+    private static let changeDatesKey = "vvterm.keychain.offlineChangeDates.v2"
 
     private let defaults: UserDefaults
     private let lock = NSLock()
@@ -80,6 +89,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
                 }
             )
             defaults.set(values, forKey: Self.stateKey)
+            defaults.removeObject(forKey: Self.changeDatesKey)
             defaults.set(CredentialReconciliationPhase.remoteChanges.rawValue, forKey: Self.phaseKey)
             defaults.set(true, forKey: Self.trackingKey)
             try verify(values: values, phase: .remoteChanges)
@@ -91,7 +101,11 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
             var values = storedValues()
             values[unit.storageKey] = change.rawValue
             defaults.set(values, forKey: Self.stateKey)
-            guard storedValues() == values else {
+            var dates = storedChangeDates()
+            dates[unit.storageKey] = Date().timeIntervalSinceReferenceDate
+            defaults.set(dates, forKey: Self.changeDatesKey)
+            guard storedValues() == values,
+                  storedChangeDates() == dates else {
                 throw CredentialOfflineChangeStoreError.persistenceFailed
             }
         }
@@ -100,6 +114,12 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
     func change(for unit: CredentialSyncUnit) -> CredentialOfflineChange? {
         withLock {
             storedValues()[unit.storageKey].flatMap(CredentialOfflineChange.init(rawValue:))
+        }
+    }
+
+    func changeDate(for unit: CredentialSyncUnit) -> Date? {
+        withLock {
+            storedChangeDates()[unit.storageKey].map(Date.init(timeIntervalSinceReferenceDate:))
         }
     }
 
@@ -129,9 +149,11 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         try withLock {
             defaults.removeObject(forKey: Self.stateKey)
             defaults.removeObject(forKey: Self.phaseKey)
+            defaults.removeObject(forKey: Self.changeDatesKey)
             defaults.set(false, forKey: Self.trackingKey)
             guard defaults.object(forKey: Self.stateKey) == nil,
                   defaults.object(forKey: Self.phaseKey) == nil,
+                  defaults.object(forKey: Self.changeDatesKey) == nil,
                   !defaults.bool(forKey: Self.trackingKey) else {
                 throw CredentialOfflineChangeStoreError.persistenceFailed
             }
@@ -151,6 +173,15 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
 
     private func storedValues() -> [String: String] {
         defaults.dictionary(forKey: Self.stateKey) as? [String: String] ?? [:]
+    }
+
+    private func storedChangeDates() -> [String: Double] {
+        let values = defaults.dictionary(forKey: Self.changeDatesKey) ?? [:]
+        return values.reduce(into: [:]) { result, element in
+            if let number = element.value as? NSNumber {
+                result[element.key] = number.doubleValue
+            }
+        }
     }
 
     private func withLock<Result>(_ body: () throws -> Result) rethrows -> Result {

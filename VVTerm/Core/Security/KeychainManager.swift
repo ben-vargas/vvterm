@@ -704,7 +704,14 @@ final class KeychainManager {
                 units.insert(.oauth(key))
             }
 
+            try reconcileSSHKeyChanges(offlineChanges.snapshot())
             for unit in units.sorted(by: { $0.storageKey < $1.storageKey }) {
+                switch unit {
+                case .sshKey, .legacySSHLibrary:
+                    continue
+                case .server, .oauth:
+                    break
+                }
                 switch offlineChanges.change(for: unit) {
                 case .updated:
                     try replaceCloudUnitFromDevice(unit)
@@ -728,6 +735,86 @@ final class KeychainManager {
             logger.error(
                 "Credential sync is active, but local credential cleanup remains pending: \(error.localizedDescription)"
             )
+        }
+    }
+
+    private func reconcileSSHKeyChanges(
+        _ snapshot: [CredentialSyncUnit: CredentialOfflineChange]
+    ) throws {
+        let localEntries = try sshKeyEntries(in: .deviceOnly)
+        var changes: [UUID: CredentialOfflineChange] = [:]
+        for (unit, change) in snapshot {
+            if case .sshKey(let id) = unit {
+                changes[id] = change
+            }
+        }
+        if snapshot[.legacySSHLibrary] == .updated {
+            for entry in localEntries where changes[entry.id] == nil {
+                changes[entry.id] = .updated
+            }
+        }
+        guard changes.values.contains(where: { $0 != .unchanged }) else { return }
+
+        let localEntriesByID = Dictionary(uniqueKeysWithValues: localEntries.map { ($0.id, $0) })
+        var cloudEntries = try sshKeyEntries(in: .iCloud)
+        for (id, change) in changes.sorted(by: { $0.key.uuidString < $1.key.uuidString }) {
+            switch change {
+            case .unchanged:
+                continue
+            case .updated:
+                guard let entry = localEntriesByID[id],
+                      let privateKey = try store.get(storedKeyDataKey(for: id), scope: .deviceOnly) else {
+                    throw KeychainError.itemNotFound
+                }
+                if let cloudEntry = cloudEntries.first(where: { $0.id == id }),
+                   cloudEntry.updatedAt > entry.updatedAt {
+                    continue
+                }
+                try store.set(privateKey, forKey: storedKeyDataKey(for: id), scope: .iCloud)
+                guard try store.get(storedKeyDataKey(for: id), scope: .iCloud) == privateKey else {
+                    throw KeychainError.copyVerificationFailed
+                }
+
+                let passphraseKey = storedKeyPassphraseKey(for: id)
+                if let passphrase = try store.get(passphraseKey, scope: .deviceOnly) {
+                    try store.set(passphrase, forKey: passphraseKey, scope: .iCloud)
+                    guard try store.get(passphraseKey, scope: .iCloud) == passphrase else {
+                        throw KeychainError.copyVerificationFailed
+                    }
+                } else {
+                    try store.delete(passphraseKey, scope: .iCloud)
+                }
+
+                if let index = cloudEntries.firstIndex(where: { $0.id == id }) {
+                    cloudEntries[index] = entry
+                } else {
+                    cloudEntries.append(entry)
+                }
+            case .deleted:
+                if let deletionDate = offlineChanges.changeDate(for: .sshKey(id)),
+                   let cloudEntry = cloudEntries.first(where: { $0.id == id }),
+                   cloudEntry.updatedAt > deletionDate {
+                    continue
+                }
+                cloudEntries.removeAll { $0.id == id }
+                try store.delete(storedKeyDataKey(for: id), scope: .iCloud)
+                try store.delete(storedKeyPassphraseKey(for: id), scope: .iCloud)
+            }
+        }
+
+        let indexData = try JSONEncoder().encode(cloudEntries)
+        try store.set(indexData, forKey: sshKeysIndexKey, scope: .iCloud)
+        guard try store.get(sshKeysIndexKey, scope: .iCloud) == indexData else {
+            throw KeychainError.copyVerificationFailed
+        }
+    }
+
+    private func sshKeyEntries(in scope: KeychainStorageScope) throws -> [SSHKeyEntry] {
+        guard let data = try store.get(sshKeysIndexKey, scope: scope) else { return [] }
+        do {
+            return try JSONDecoder().decode([SSHKeyEntry].self, from: data)
+        } catch {
+            throw KeychainError.decodingFailed
         }
     }
 
@@ -787,7 +874,11 @@ final class KeychainManager {
             return credentialBundleKeys(for: id).filter {
                 (try? selectedStore.contains($0, scope: scope)) == true
             }
-        case .sshLibrary:
+        case .sshKey(let id):
+            return [storedKeyDataKey(for: id), storedKeyPassphraseKey(for: id)].filter {
+                (try? selectedStore.contains($0, scope: scope)) == true
+            }
+        case .legacySSHLibrary:
             let allKeys = try selectedStore.keys(in: scope)
             guard !includingOrphans,
                   let indexData = try selectedStore.get(sshKeysIndexKey, scope: scope),
@@ -806,8 +897,16 @@ final class KeychainManager {
     }
 
     private func credentialSyncUnit(forCredentialKey key: String) -> CredentialSyncUnit? {
-        if key == sshKeysIndexKey || key.hasPrefix("sshkey.") {
-            return .sshLibrary
+        if key == sshKeysIndexKey {
+            return nil
+        }
+        if key.hasPrefix("sshkey.") {
+            let components = key.split(separator: ".", maxSplits: 2)
+            guard components.count == 3,
+                  let id = UUID(uuidString: String(components[1])) else {
+                return nil
+            }
+            return .sshKey(id)
         }
         guard key.hasPrefix("server.") else { return nil }
         let components = key.split(separator: ".", maxSplits: 2)
@@ -911,7 +1010,7 @@ final class KeychainManager {
         keys.append(entry)
         try saveSSHKeysIndex(keys)
         if !isSyncEnabled() {
-            try offlineChanges.record(.updated, for: .sshLibrary)
+            try offlineChanges.record(.updated, for: .sshKey(entry.id))
         }
 
         logger.info("Stored SSH key '\(name)' in keychain library")
@@ -945,7 +1044,7 @@ final class KeychainManager {
     /// Delete a stored SSH key from the library
     func deleteStoredSSHKey(_ keyId: UUID) throws {
         if !isSyncEnabled() {
-            try offlineChanges.record(.updated, for: .sshLibrary)
+            try offlineChanges.record(.deleted, for: .sshKey(keyId))
         }
         var keys = getStoredSSHKeys()
         keys.removeAll { $0.id == keyId }
@@ -971,9 +1070,10 @@ final class KeychainManager {
             throw KeychainError.itemNotFound
         }
         keys[index].name = name
+        keys[index].updatedAt = Date()
         try saveSSHKeysIndex(keys)
         if !isSyncEnabled() {
-            try offlineChanges.record(.updated, for: .sshLibrary)
+            try offlineChanges.record(.updated, for: .sshKey(keyId))
         }
         logger.info("Updated SSH key name to '\(name)'")
     }
