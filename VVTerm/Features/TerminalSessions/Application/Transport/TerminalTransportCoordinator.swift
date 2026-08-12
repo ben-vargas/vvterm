@@ -745,7 +745,7 @@ final class TerminalTransportCoordinator {
     private static func cleanupSSHOwnership(
         _ ownership: SSHOwnership,
         registry: TerminalTransportRegistry<EternalTerminalRuntime>,
-        tmuxCoordinator: TerminalTmuxSessionCoordinator?,
+        tmuxCoordinator: TerminalTmuxSessionCoordinator,
         killingManagedTmuxSessionNamed tmuxSessionName: String?,
         beforeCleanup: (@MainActor @Sendable () async -> Void)?
     ) async {
@@ -848,7 +848,7 @@ final class TerminalTransportCoordinator {
         client: SSHClient,
         registry: TerminalTransportRegistry<EternalTerminalRuntime>?,
         sessionAccess: TerminalTransportSessionAccess,
-        tmuxCoordinator: TerminalTmuxSessionCoordinator,
+        tmuxCoordinator: TerminalTmuxSessionCoordinator?,
         moshRecovery: any TerminalMoshRecoveryServicing
     ) -> TerminalSSHConnectionContext? {
         guard let registry else { return nil }
