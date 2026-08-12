@@ -1,0 +1,215 @@
+#if os(iOS)
+import Combine
+import CoreGraphics
+import Foundation
+import Testing
+import UIKit
+@testable import VVTerm
+
+extension TerminalKeyboardCoordinatorTests {
+    @Suite
+    struct InputPolicy {
+        @Test
+        func reconnectInputEligibilityRequiresPriorTypingIntent() {
+            #expect(TerminalKeyboardCoordinator.paneInputEligible(
+                connectionState: .connected,
+                shouldRestoreOnReconnect: false
+            ))
+            #expect(!TerminalKeyboardCoordinator.paneInputEligible(
+                connectionState: .connecting,
+                shouldRestoreOnReconnect: false
+            ))
+            #expect(TerminalKeyboardCoordinator.paneInputEligible(
+                connectionState: .reconnecting(attempt: 1),
+                shouldRestoreOnReconnect: true
+            ))
+            #expect(!TerminalKeyboardCoordinator.paneInputEligible(
+                connectionState: .disconnected,
+                shouldRestoreOnReconnect: true
+            ))
+        }
+    
+        @Test
+        func desiredInputSessionAndKeyboardPresentationContract() {
+            struct Case {
+                let name: String
+                let inputs: TerminalKeyboardCoordinator.StateInputs
+                let expectedInputSessionActive: Bool
+                let expectedKeyboardVisible: Bool
+            }
+    
+            let visible = TerminalKeyboardCoordinator.StateInputs(
+                viewActive: true,
+                activePaneInputEligible: true,
+                activePaneWindowAttached: true,
+                allowsLocalInputOwnership: true,
+                userHidKeyboard: false,
+                findNavigatorActive: false
+            )
+    
+            let cases = [
+                Case(
+                    name: "connected active attached",
+                    inputs: visible,
+                    expectedInputSessionActive: true,
+                    expectedKeyboardVisible: true
+                ),
+                Case(
+                    name: "user hidden",
+                    inputs: .init(
+                        viewActive: true,
+                        activePaneInputEligible: true,
+                        activePaneWindowAttached: true,
+                        allowsLocalInputOwnership: true,
+                        userHidKeyboard: true,
+                        findNavigatorActive: false
+                    ),
+                    expectedInputSessionActive: true,
+                    expectedKeyboardVisible: false
+                ),
+                Case(
+                    name: "user shown again",
+                    inputs: visible,
+                    expectedInputSessionActive: true,
+                    expectedKeyboardVisible: true
+                ),
+                Case(
+                    name: "left terminal view",
+                    inputs: .init(
+                        viewActive: false,
+                        activePaneInputEligible: true,
+                        activePaneWindowAttached: true,
+                        allowsLocalInputOwnership: true,
+                        userHidKeyboard: false,
+                        findNavigatorActive: false
+                    ),
+                    expectedInputSessionActive: false,
+                    expectedKeyboardVisible: false
+                ),
+                Case(
+                    name: "window not attached",
+                    inputs: .init(
+                        viewActive: true,
+                        activePaneInputEligible: true,
+                        activePaneWindowAttached: false,
+                        allowsLocalInputOwnership: true,
+                        userHidKeyboard: false,
+                        findNavigatorActive: false
+                    ),
+                    expectedInputSessionActive: false,
+                    expectedKeyboardVisible: false
+                ),
+                Case(
+                    name: "window attached after mount",
+                    inputs: visible,
+                    expectedInputSessionActive: true,
+                    expectedKeyboardVisible: true
+                ),
+                Case(
+                    name: "find navigator active",
+                    inputs: .init(
+                        viewActive: true,
+                        activePaneInputEligible: true,
+                        activePaneWindowAttached: true,
+                        allowsLocalInputOwnership: true,
+                        userHidKeyboard: false,
+                        findNavigatorActive: true
+                    ),
+                    expectedInputSessionActive: false,
+                    expectedKeyboardVisible: false
+                ),
+                Case(
+                    name: "reconnect restores when visible before",
+                    inputs: visible,
+                    expectedInputSessionActive: true,
+                    expectedKeyboardVisible: true
+                ),
+                Case(
+                    name: "reconnect stays hidden when hidden before",
+                    inputs: .init(
+                        viewActive: true,
+                        activePaneInputEligible: true,
+                        activePaneWindowAttached: true,
+                        allowsLocalInputOwnership: true,
+                        userHidKeyboard: true,
+                        findNavigatorActive: false
+                    ),
+                    expectedInputSessionActive: true,
+                    expectedKeyboardVisible: false
+                ),
+                Case(
+                    name: "external app owns input",
+                    inputs: .init(
+                        viewActive: true,
+                        activePaneInputEligible: true,
+                        activePaneWindowAttached: true,
+                        allowsLocalInputOwnership: false,
+                        userHidKeyboard: false,
+                        findNavigatorActive: false
+                    ),
+                    expectedInputSessionActive: false,
+                    expectedKeyboardVisible: false
+                ),
+            ]
+    
+            for testCase in cases {
+                #expect(
+                    TerminalKeyboardCoordinator.desiredInputSessionActive(inputs: testCase.inputs) == testCase.expectedInputSessionActive,
+                    "\(testCase.name) input session"
+                )
+                #expect(
+                    TerminalKeyboardCoordinator.desiredKeyboardVisible(inputs: testCase.inputs) == testCase.expectedKeyboardVisible,
+                    "\(testCase.name) keyboard presentation"
+                )
+            }
+        }
+    
+        @Test
+        @MainActor
+        func directTouchDoesNotRestoreKeyboardAfterUserHide() {
+            let coordinator = TerminalKeyboardCoordinator()
+    
+            coordinator.userRequestedHide()
+            #expect(coordinator.isUserHidden)
+    
+            coordinator.directTouchOnTerminal(isFocusTap: false)
+            #expect(coordinator.isUserHidden)
+    
+            coordinator.directTouchOnTerminal(isFocusTap: true)
+            #expect(coordinator.isUserHidden)
+        }
+    
+        @Test
+        @MainActor
+        func repeatedAccessoryDismissRepublishesHiddenState() {
+            let coordinator = TerminalKeyboardCoordinator()
+            coordinator.userRequestedHide()
+    
+            var publicationCount = 0
+            let observation = coordinator.objectWillChange.sink {
+                publicationCount += 1
+            }
+    
+            coordinator.userRequestedHide()
+    
+            #expect(coordinator.isUserHidden)
+            #expect(publicationCount > 0)
+            _ = observation
+        }
+    
+        @Test
+        @MainActor
+        func explicitShowRestoresKeyboardAfterUserHide() {
+            let coordinator = TerminalKeyboardCoordinator()
+    
+            coordinator.userRequestedHide()
+            #expect(coordinator.isUserHidden)
+    
+            coordinator.userRequestedShow()
+            #expect(!coordinator.isUserHidden)
+        }
+    
+    }
+}
+#endif
+
