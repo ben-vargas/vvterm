@@ -21,7 +21,7 @@ struct RemoteFileDownloadDocument: FileDocument {
 }
 
 struct RemoteFileShareItem: Identifiable {
-    let id = UUID()
+    let id: UUID
     let sourceURL: URL
     let title: String
 }

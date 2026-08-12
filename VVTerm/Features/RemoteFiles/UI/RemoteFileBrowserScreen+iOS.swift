@@ -114,47 +114,18 @@ extension RemoteFileBrowserScreen {
 
     func platformBeginDownload(_ entry: RemoteFileEntry) {
         cleanupDownloadExport()
-        if let pendingDownloadTransferID {
-            operationCoordinator.cancel(pendingDownloadTransferID)
-        }
-
-        let transferID = UUID()
-        pendingDownloadTransferID = transferID
-
-        let temporaryURL: URL
-        do {
-            temporaryURL = try browser.makeTemporaryTransferFileURL(for: entry, in: fileTab)
-        } catch {
-            pendingDownloadTransferID = nil
-            presentOperationError(error)
-            return
-        }
-
-        performTransfer(
-            id: transferID,
-            title: String(localized: "Downloading"),
-            initialMessage: String(localized: "Preparing remote file."),
-            successMessage: String(localized: "Download ready to export."),
-            keepsSuccessVisible: true,
-            onSuccess: {
-                guard pendingDownloadTransferID == transferID else { return }
+        operationCoordinator.prepareFile(
+            entry,
+            purpose: .downloadExport,
+            browser: browser,
+            tab: fileTab,
+            server: server
+        ) { file in
                 presentation = .downloadExport(.init(
-                    document: RemoteFileDownloadDocument(sourceURL: temporaryURL),
-                    filename: entry.name,
-                    transferID: transferID
+                    document: RemoteFileDownloadDocument(sourceURL: file.url),
+                    filename: file.filename,
+                    transferID: file.id
                 ))
-            }
-        ) {
-            do {
-                try await browser.downloadFile(
-                    at: entry.path,
-                    to: temporaryURL,
-                    server: server
-                )
-            } catch {
-                browser.removeTemporaryTransferFile(at: temporaryURL, in: fileTab)
-                throw error
-            }
         }
     }
 

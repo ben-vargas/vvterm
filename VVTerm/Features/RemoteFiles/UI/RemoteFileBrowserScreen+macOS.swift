@@ -333,47 +333,25 @@ extension RemoteFileBrowserScreen {
     }
 
     func beginInlineCreateFolder(in remotePath: String) {
-        let destinationPath = RemoteFilePath.normalize(remotePath, relativeTo: snapshot.currentPath)
-
-        Task {
-            if snapshot.currentPath != destinationPath {
-                await browser.openBreadcrumb(
-                    RemoteFileBreadcrumb(title: "", path: destinationPath),
-                    in: fileTab,
-                    server: server
+        operationCoordinator.createUniqueFolder(
+            in: remotePath,
+            browser: browser,
+            tab: fileTab,
+            server: server,
+            onSuccess: { createdPath, folderName in
+                platformState.selectedPaths = [createdPath]
+                browser.clearViewer(for: fileTab)
+                platformState.inlineEditor = .rename(
+                    entryPath: createdPath,
+                    originalName: folderName,
+                    proposedName: folderName,
+                    isSubmitting: false
                 )
+            },
+            onFailure: { error in
+                presentOperationError(error)
             }
-
-            let folderName = await MainActor.run {
-                uniqueFolderName(in: browser.entries(for: fileTab))
-            }
-
-            let createdPath = RemoteFilePath.appending(folderName, to: destinationPath)
-
-            do {
-                try await browser.createDirectory(
-                    named: folderName,
-                    in: destinationPath,
-                    tab: fileTab,
-                    server: server
-                )
-
-                await MainActor.run {
-                    platformState.selectedPaths = [createdPath]
-                    browser.clearViewer(for: fileTab)
-                    platformState.inlineEditor = .rename(
-                        entryPath: createdPath,
-                        originalName: folderName,
-                        proposedName: folderName,
-                        isSubmitting: false
-                    )
-                }
-            } catch {
-                await MainActor.run {
-                    presentOperationError(error)
-                }
-            }
-        }
+        )
     }
 
     func cancelInlineEdit() {
@@ -391,98 +369,62 @@ extension RemoteFileBrowserScreen {
                 platformState.inlineEditor = nil
                 return
             }
-            do {
-                let validatedName = try RemoteFilePathPolicy.validatedName(proposedName)
-                let createdPath = RemoteFilePath.appending(validatedName, to: parentPath)
-                platformState.inlineEditor = .createFolder(
-                    parentPath: parentPath,
-                    proposedName: proposedName,
-                    isSubmitting: true
-                )
-
-                performOperation(
-                    operation: {
-                        try await browser.createDirectory(
-                            named: validatedName,
-                            in: parentPath,
-                            tab: fileTab,
-                            server: server
-                        )
-                    },
-                    onSuccess: { _ in
-                        platformState.inlineEditor = nil
-                        selectEntry(at: createdPath)
-                    },
-                    onFailure: { error in
-                        platformState.inlineEditor = .createFolder(
-                            parentPath: parentPath,
-                            proposedName: proposedName,
-                            isSubmitting: false
-                        )
-                        presentOperationError(error)
-                    }
-                )
-            } catch {
-                platformState.inlineEditor = .createFolder(
-                    parentPath: parentPath,
-                    proposedName: proposedName,
-                    isSubmitting: false
-                )
-                presentOperationError(error)
-            }
+            platformState.inlineEditor = .createFolder(
+                parentPath: parentPath,
+                proposedName: proposedName,
+                isSubmitting: true
+            )
+            operationCoordinator.createFolder(
+                named: proposedName,
+                in: parentPath,
+                browser: browser,
+                tab: fileTab,
+                server: server,
+                onSuccess: { createdPath in
+                    platformState.inlineEditor = nil
+                    selectEntry(at: createdPath)
+                },
+                onFailure: { error in
+                    platformState.inlineEditor = .createFolder(
+                        parentPath: parentPath,
+                        proposedName: proposedName,
+                        isSubmitting: false
+                    )
+                    presentOperationError(error)
+                }
+            )
 
         case .rename(let entryPath, let originalName, _, _):
-            do {
-                let validatedName = try RemoteFilePathPolicy.validatedName(proposedName)
-                if validatedName == originalName {
-                    platformState.inlineEditor = nil
-                    return
-                }
-
-                let destinationPath = RemoteFilePath.appending(
-                    validatedName,
-                    to: RemoteFilePath.parent(of: entryPath)
-                )
-
-                platformState.inlineEditor = .rename(
-                    entryPath: entryPath,
-                    originalName: originalName,
-                    proposedName: proposedName,
-                    isSubmitting: true
-                )
-
-                performOperation(
-                    operation: {
-                        try await browser.renameItem(
-                            at: entryPath,
-                            to: destinationPath,
-                            in: fileTab,
-                            server: server
-                        )
-                    },
-                    onSuccess: { _ in
-                        platformState.inlineEditor = nil
-                        selectEntry(at: destinationPath)
-                    },
-                    onFailure: { error in
-                        platformState.inlineEditor = .rename(
-                            entryPath: entryPath,
-                            originalName: originalName,
-                            proposedName: proposedName,
-                            isSubmitting: false
-                        )
-                        presentOperationError(error)
-                    }
-                )
-            } catch {
-                platformState.inlineEditor = .rename(
-                    entryPath: entryPath,
-                    originalName: originalName,
-                    proposedName: proposedName,
-                    isSubmitting: false
-                )
-                presentOperationError(error)
+            guard let entry = browser.entries(for: fileTab).first(where: { $0.path == entryPath }) else {
+                platformState.inlineEditor = nil
+                return
             }
+            platformState.inlineEditor = .rename(
+                entryPath: entryPath,
+                originalName: originalName,
+                proposedName: proposedName,
+                isSubmitting: true
+            )
+            operationCoordinator.rename(
+                entry,
+                to: proposedName,
+                browser: browser,
+                tab: fileTab,
+                server: server,
+                onSuccess: { destinationPath in
+                    platformState.inlineEditor = nil
+                    selectEntry(at: destinationPath)
+                },
+                onFailure: { error in
+                    platformState.inlineEditor = .rename(
+                        entryPath: entryPath,
+                        originalName: originalName,
+                        proposedName: proposedName,
+                        isSubmitting: false
+                    )
+                    presentOperationError(error)
+                }
+            )
         }
     }
 
@@ -493,25 +435,6 @@ extension RemoteFileBrowserScreen {
         } else {
             browser.clearViewer(for: fileTab)
         }
-    }
-
-    func uniqueFolderName(in entries: [RemoteFileEntry]) -> String {
-        let baseName = String(localized: "Untitled Folder")
-        let existingNames = Set(entries.map { $0.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current) })
-
-        guard !existingNames.contains(baseName.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)) else {
-            for index in 2...10_000 {
-                let candidate = "\(baseName) \(index)"
-                let foldedCandidate = candidate.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-                if !existingNames.contains(foldedCandidate) {
-                    return candidate
-                }
-            }
-
-            return "\(baseName) \(UUID().uuidString.prefix(4))"
-        }
-
-        return baseName
     }
 
     func previewPanel(_ snapshot: Snapshot) -> some View {
@@ -675,18 +598,13 @@ extension RemoteFileBrowserScreen {
     }
 
     func handleDroppedRemotePayload(_ payload: RemoteFileDragPayload, to destinationPath: String) {
-        performTransfer(
-            title: String(localized: "Transferring"),
-            initialMessage: String(localized: "Preparing remote items."),
-            successMessage: String(localized: "Transfer complete.")
-        ) { onProgress in
-            try await browser.transferDroppedRemoteItems(
-                [payload],
-                to: destinationPath,
-                destinationTab: fileTab,
-                destinationServer: server,
-                onProgress: onProgress
-            )
+        operationCoordinator.transferDroppedItems(
+            to: destinationPath,
+            browser: browser,
+            tab: fileTab,
+            server: server
+        ) {
+            [payload]
         }
     }
 
@@ -724,20 +642,7 @@ extension RemoteFileBrowserScreen {
         let response = panel.runModal()
         guard response == .OK, let destinationURL = panel.url else { return }
 
-        performTransfer(
-            title: String(localized: "Downloading"),
-            initialMessage: String(localized: "Downloading remote file."),
-            successMessage: String(localized: "Download complete."),
-            successFileURL: destinationURL,
-            successFileName: destinationURL.lastPathComponent,
-            successFilePath: destinationURL.path
-        ) {
-            try await browser.downloadFile(
-                at: entry.path,
-                to: destinationURL,
-                server: server
-            )
-        }
+        operationCoordinator.download(entry, to: destinationURL, browser: browser, server: server)
     }
 
     func presentDeleteConfirmation(for entries: [RemoteFileEntry]) {

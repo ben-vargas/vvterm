@@ -4,6 +4,18 @@ import Foundation
 /// Owns asynchronous operations for one Remote Files tab.
 @MainActor
 final class RemoteFileOperationCoordinator: ObservableObject {
+    enum PreparedFilePurpose: Hashable {
+        case downloadExport
+        case share
+    }
+
+    struct PreparedFile: Identifiable {
+        let id: UUID
+        let purpose: PreparedFilePurpose
+        let url: URL
+        let filename: String
+    }
+
     enum Kind: Equatable {
         case upload
         case transfer
@@ -37,7 +49,12 @@ final class RemoteFileOperationCoordinator: ObservableObject {
     }
 
     typealias ProgressHandler = @MainActor @Sendable (RemoteFileBrowserStore.TransferProgress) -> Void
-    typealias TransferOperation = (@escaping ProgressHandler) async throws -> Void
+    typealias TransferOperation = @MainActor (@escaping ProgressHandler) async throws -> Void
+
+    private struct PreparedFileRecord {
+        let file: PreparedFile
+        let cleanup: @MainActor () -> Void
+    }
 
     private struct PendingApproval {
         let taskID: UUID?
@@ -55,6 +72,8 @@ final class RemoteFileOperationCoordinator: ObservableObject {
     private let securityApprovalActions: RemoteFileSecurityApprovalActions
     private var tasksByID: [UUID: Task<Void, Never>] = [:]
     private var dismissalTasksByID: [UUID: Task<Void, Never>] = [:]
+    private var preparedFilesByID: [UUID: PreparedFileRecord] = [:]
+    private var latestPreparedFileRequestByPurpose: [PreparedFilePurpose: UUID] = [:]
 
     var securityApprovalRequest: ServerSecurityApprovalRequest? {
         pendingApproval?.request
@@ -153,6 +172,35 @@ final class RemoteFileOperationCoordinator: ObservableObject {
         removeOperation(id)
     }
 
+    func releasePreparedFile(_ id: UUID) {
+        guard let record = preparedFilesByID.removeValue(forKey: id) else { return }
+        if latestPreparedFileRequestByPurpose[record.file.purpose] == id {
+            latestPreparedFileRequestByPurpose[record.file.purpose] = nil
+        }
+        record.cleanup()
+    }
+
+    func beginPreparedFileRequest(_ id: UUID, purpose: PreparedFilePurpose) {
+        if let previousID = latestPreparedFileRequestByPurpose[purpose], previousID != id {
+            cancel(previousID)
+            releasePreparedFile(previousID)
+        }
+        latestPreparedFileRequestByPurpose[purpose] = id
+    }
+
+    func publishPreparedFile(
+        _ file: PreparedFile,
+        cleanup: @escaping @MainActor () -> Void,
+        onPrepared: @escaping @MainActor (PreparedFile) -> Void
+    ) {
+        guard latestPreparedFileRequestByPurpose[file.purpose] == file.id else {
+            cleanup()
+            return
+        }
+        preparedFilesByID[file.id] = PreparedFileRecord(file: file, cleanup: cleanup)
+        onPrepared(file)
+    }
+
     func approveSecurityRequest() -> Error? {
         guard let pendingApproval else { return nil }
         guard securityApprovalActions.approve(pendingApproval.request) else {
@@ -192,6 +240,10 @@ final class RemoteFileOperationCoordinator: ObservableObject {
         tasksByID.removeAll(keepingCapacity: false)
         dismissalTasksByID.removeAll(keepingCapacity: false)
         tasks.forEach { $0.cancel() }
+        let preparedFiles = Array(preparedFilesByID.values)
+        preparedFilesByID.removeAll(keepingCapacity: false)
+        latestPreparedFileRequestByPurpose.removeAll(keepingCapacity: false)
+        preparedFiles.forEach { $0.cleanup() }
         rejectPendingApproval()
         clearPendingApproval()
         operations.removeAll(keepingCapacity: false)
