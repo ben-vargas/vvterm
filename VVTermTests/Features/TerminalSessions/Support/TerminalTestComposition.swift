@@ -11,7 +11,6 @@ enum TerminalTestComposition {
             networkReadinessPublisher: Empty<TerminalNetworkReadiness, Never>()
                 .eraseToAnyPublisher(),
             liveActivityRefresh: { _ in },
-            tmuxCoordinator: TerminalTmuxSessionCoordinator(),
             terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
             eternalTerminalResumeStore: ResumeStore(),
             moshRecovery: UnavailableTerminalMoshRecoveryService()

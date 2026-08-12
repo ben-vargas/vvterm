@@ -15,18 +15,6 @@ struct TerminalTmuxShellRegistration {
     let serverId: UUID
 }
 
-@MainActor
-struct TerminalTmuxTransportAccess {
-    let shellRegistration: (UUID) -> TerminalTmuxShellRegistration?
-    let ownsShell: (UUID, TerminalTmuxShellRegistration) -> Bool
-    let ownsShellStart: (UUID, SSHClient, SSHShellRegistry.StartToken) -> Bool
-    let eternalTerminalRuntime: (UUID) -> EternalTerminalRuntime?
-    let ownsEternalTerminalRuntime: (UUID, EternalTerminalRuntime) -> Bool
-    let ownsEternalTerminalRuntimeToken: (UUID, UUID) -> Bool
-    let unregisterShell: (UUID, TerminalTmuxShellRegistration) async -> Void
-    let unregisterEternalTerminalRuntime: (UUID) async -> Void
-}
-
 /// Owns tmux attachment state, prompt lifetime, startup planning, installation,
 /// cleanup, and remote-session termination for terminal panes.
 @MainActor
@@ -45,37 +33,30 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
     private let configuration: TerminalTmuxConfiguration
     private let remoteTmux: any TerminalRemoteTmuxServicing
     private let resolver: TmuxAttachResolver
+    private let sessionState: TerminalSessionStateStore
+    private let transportLifetime: TerminalTransportLifetime
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "VVTerm",
         category: "TerminalTmuxSessionCoordinator"
     )
-    private weak var sessionState: TerminalSessionStateStore?
-    private var transportAccess: TerminalTmuxTransportAccess?
     private var cleanupServers: Set<UUID> = []
     private var cancellables: Set<AnyCancellable> = []
 
     init(
         configuration: TerminalTmuxConfiguration,
-        remoteTmux: any TerminalRemoteTmuxServicing
+        remoteTmux: any TerminalRemoteTmuxServicing,
+        resolver: TmuxAttachResolver,
+        sessionState: TerminalSessionStateStore,
+        transportLifetime: TerminalTransportLifetime
     ) {
         self.configuration = configuration
         self.remoteTmux = remoteTmux
-        self.resolver = TmuxAttachResolver(
-            configuration: configuration,
-            remoteTmux: remoteTmux
-        )
+        self.resolver = resolver
+        self.sessionState = sessionState
+        self.transportLifetime = transportLifetime
         resolver.objectWillChange
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &cancellables)
-    }
-
-    func bind(
-        sessionState: TerminalSessionStateStore,
-        transportAccess: TerminalTmuxTransportAccess
-    ) {
-        precondition(self.sessionState == nil, "Tmux coordinator can only bind once")
-        self.sessionState = sessionState
-        self.transportAccess = transportAccess
     }
 
     // MARK: - Settings and attachment state
@@ -105,27 +86,11 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
     }
 
     func attachment(for paneId: UUID) -> TerminalTmuxAttachmentState? {
-        guard let sessionName = resolver.sessionNames[paneId],
-              let ownership = resolver.sessionOwnership[paneId] else {
-            return nil
-        }
-        return TerminalTmuxAttachmentState(
-            sessionName: sessionName,
-            ownership: ownership,
-            managedSessionConfirmed: ownership == .managed
-                && resolver.hasConfirmedManagedSession(for: paneId)
-        )
+        resolver.attachment(for: paneId)
     }
 
     func restoreAttachments(_ attachments: [UUID: TerminalTmuxAttachmentState]) {
-        resolver.clearAllAttachmentState()
-        for (paneId, attachment) in attachments {
-            resolver.sessionNames[paneId] = attachment.sessionName
-            resolver.sessionOwnership[paneId] = attachment.ownership
-            if attachment.managedSessionConfirmed == true {
-                resolver.confirmManagedSession(for: paneId)
-            }
-        }
+        resolver.restoreAttachments(attachments)
     }
 
     func clearAllAttachmentState() {
@@ -243,12 +208,11 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
     // MARK: - Pane state
 
     func status(for paneId: UUID) -> TmuxStatus? {
-        sessionState?.paneState(for: paneId)?.tmuxStatus
+        sessionState.paneState(for: paneId)?.tmuxStatus
     }
 
     func updateStatus(_ status: TmuxStatus, for paneId: UUID) {
-        guard let sessionState,
-              let previousStatus = sessionState.paneState(for: paneId)?.tmuxStatus,
+        guard let previousStatus = sessionState.paneState(for: paneId)?.tmuxStatus,
               previousStatus != status else { return }
         sessionState.updatePane(paneId) { $0.tmuxStatus = status }
         logger.info(
@@ -262,7 +226,6 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
     }
 
     func updateSelectionStatuses(selectedTabs: [UUID: UUID]) {
-        guard let sessionState else { return }
         for serverId in sessionState.serverIdsWithTabs {
             for tab in sessionState.tabs(for: serverId) {
                 updateFocus(
@@ -276,12 +239,11 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
     func updateFocus(for tab: TerminalTab) {
         updateFocus(
             for: tab,
-            isSelectedTab: sessionState?.selectedTabId(for: tab.serverId) == tab.id
+            isSelectedTab: sessionState.selectedTabId(for: tab.serverId) == tab.id
         )
     }
 
     private func updateFocus(for tab: TerminalTab, isSelectedTab: Bool) {
-        guard let sessionState else { return }
         for paneId in tab.allPaneIds {
             guard let state = sessionState.paneState(for: paneId),
                   state.tmuxStatus == .foreground || state.tmuxStatus == .background else {
@@ -295,7 +257,6 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
     }
 
     func disable(for serverId: UUID) {
-        guard let sessionState else { return }
         for state in sessionState.paneStates(forServer: serverId) {
             updateStatus(.off, for: state.paneId)
             clearRuntimeState(for: state.paneId)
@@ -348,17 +309,16 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
             requestId: runtimeToken,
             validateOwner: {
                 try Task.checkCancellation()
-                guard self.transportAccess?.ownsEternalTerminalRuntimeToken(
-                    paneId,
-                    runtimeToken
-                ) == true else {
+                guard self.transportLifetime.registry.runtime(for: paneId)?.identityToken
+                    == runtimeToken else {
                     throw CancellationError()
                 }
             }
         )
         if let command = plan.command, plan.tmuxLifecycle != nil {
             try Task.checkCancellation()
-            guard transportAccess?.ownsEternalTerminalRuntimeToken(paneId, runtimeToken) == true else {
+            guard transportLifetime.registry.runtime(for: paneId)?.identityToken
+                == runtimeToken else {
                 throw CancellationError()
             }
 
@@ -379,7 +339,7 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
         }
 
         guard plan.command == nil,
-              let workingDirectory = sessionState?.paneState(for: paneId)?.workingDirectory,
+              let workingDirectory = sessionState.paneState(for: paneId)?.workingDirectory,
               !workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return plan
         }
@@ -447,7 +407,7 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
         )
         try validateOwner()
         updateAttachmentState(for: paneId, selection: selection)
-        sessionState?.requestPersistence()
+        sessionState.requestPersistence()
 
         if case .skipTmux = selection {
             updateStatus(.off, for: paneId)
@@ -477,7 +437,7 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
         )
         try validateOwner()
         if workingDirectory != "~" {
-            sessionState?.updatePane(paneId) { $0.workingDirectory = workingDirectory }
+            sessionState.updatePane(paneId) { $0.workingDirectory = workingDirectory }
         }
         guard let ownership = resolver.sessionOwnership[paneId] else {
             throw SSHError.unknown("tmux attachment state was lost during startup")
@@ -521,7 +481,12 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
         startToken: SSHShellRegistry.StartToken
     ) throws {
         try Task.checkCancellation()
-        guard transportAccess?.ownsShellStart(paneId, client, startToken) == true else {
+        guard sessionState.containsPane(paneId),
+              transportLifetime.registry.ownsConnection(
+                  client: client,
+                  startToken: startToken,
+                  for: paneId
+              ) else {
             logger.info("Ignoring stale tmux startup result for pane \(paneId.uuidString, privacy: .public)")
             throw CancellationError()
         }
@@ -533,7 +498,6 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
     }
 
     private func managedSessionNames(for serverId: UUID) -> Set<String> {
-        guard let sessionState else { return [] }
         var names: Set<String> = []
         for tab in sessionState.tabs(for: serverId) {
             for paneId in tab.allPaneIds {
@@ -589,8 +553,8 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
         using client: SSHClient,
         backend: RemoteTmuxBackend
     ) async {
-        let selectedTab = sessionState?.selectedTab(for: serverId)
-        let selectedTabId = sessionState?.selectedTabId(for: serverId)
+        let selectedTab = sessionState.selectedTab(for: serverId)
+        let selectedTabId = sessionState.selectedTabId(for: serverId)
         let isForeground = selectedTab?.id == selectedTabId
             && selectedTab?.focusedPaneId == paneId
         updateStatus(isForeground ? .foreground : .background, for: paneId)
@@ -653,7 +617,7 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
         using client: SSHClient,
         backend: RemoteTmuxBackend? = nil
     ) async -> String {
-        if let seedPaneId = sessionState?.paneState(for: paneId)?.seedPaneId,
+        if let seedPaneId = sessionState.paneState(for: paneId)?.seedPaneId,
            let path = await remoteTmux.currentPath(
                sessionName: resolver.sessionName(for: seedPaneId),
                using: client,
@@ -670,7 +634,7 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
             return path
         }
 
-        if let candidate = sessionState?.paneState(for: paneId)?.workingDirectory?
+        if let candidate = sessionState.paneState(for: paneId)?.workingDirectory?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !candidate.isEmpty {
             return candidate
@@ -684,8 +648,7 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
         for paneId: UUID,
         onInstalled: @MainActor @escaping () -> Void
     ) async {
-        guard let transportAccess else { return }
-        if let runtime = transportAccess.eternalTerminalRuntime(paneId) {
+        if let runtime = transportLifetime.registry.runtime(for: paneId) {
             await startEternalTerminalInstall(
                 for: paneId,
                 runtime: runtime,
@@ -694,7 +657,7 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
             return
         }
 
-        guard let registration = transportAccess.shellRegistration(paneId),
+        guard let registration = shellRegistration(for: paneId),
               isEnabled(for: registration.serverId) else { return }
 
         updateStatus(.installing, for: paneId)
@@ -710,22 +673,25 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
                     )
                 },
                 validateOwner: {
-                    transportAccess.ownsShell(paneId, registration)
+                    self.ownsShell(registration, for: paneId)
                 }
             )
-            guard transportAccess.ownsShell(paneId, registration) else { return }
+            guard ownsShell(registration, for: paneId) else { return }
             await finishInstall(
                 outcome,
                 for: paneId,
                 onInstalled: onInstalled,
                 beforeReconnect: {
-                    await transportAccess.unregisterShell(paneId, registration)
+                    await self.transportLifetime.unregisterShell(
+                        for: paneId,
+                        ifOwnedBy: registration
+                    )
                 }
             )
         } catch is CancellationError {
             return
         } catch {
-            guard transportAccess.ownsShell(paneId, registration) else { return }
+            guard ownsShell(registration, for: paneId) else { return }
             logger.warning("tmux installation failed: \(error.localizedDescription, privacy: .public)")
             updateStatus(.unknown, for: paneId)
         }
@@ -736,11 +702,9 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
         runtime: EternalTerminalRuntime,
         onInstalled: @MainActor @escaping () -> Void
     ) async {
-        guard let sessionState,
-              let transportAccess,
-              let serverId = sessionState.paneState(for: paneId)?.serverId,
+        guard let serverId = sessionState.paneState(for: paneId)?.serverId,
               isEnabled(for: serverId),
-              transportAccess.ownsEternalTerminalRuntime(paneId, runtime) else { return }
+              transportLifetime.registry.isCurrentRuntime(runtime, for: paneId) else { return }
 
         updateStatus(.installing, for: paneId)
         do {
@@ -752,23 +716,28 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
                         try await runtime.sendInteractiveScript(script)
                     },
                     validateOwner: {
-                        transportAccess.ownsEternalTerminalRuntime(paneId, runtime)
+                        self.transportLifetime.registry.isCurrentRuntime(runtime, for: paneId)
                     }
                 )
             }
-            guard transportAccess.ownsEternalTerminalRuntime(paneId, runtime) else { return }
+            guard transportLifetime.registry.isCurrentRuntime(runtime, for: paneId) else { return }
             await finishInstall(
                 outcome,
                 for: paneId,
                 onInstalled: onInstalled,
                 beforeReconnect: {
-                    await transportAccess.unregisterEternalTerminalRuntime(paneId)
+                    if await self.transportLifetime.unregisterRuntime(
+                        for: paneId,
+                        ifOwnedBy: runtime
+                    ) {
+                        self.sessionState.updatePane(paneId) { $0.transportState = .ssh }
+                    }
                 }
             )
         } catch is CancellationError {
             return
         } catch {
-            guard transportAccess.ownsEternalTerminalRuntime(paneId, runtime) else { return }
+            guard transportLifetime.registry.isCurrentRuntime(runtime, for: paneId) else { return }
             logger.warning("ET tmux installation failed: \(error.localizedDescription, privacy: .public)")
             updateStatus(.unknown, for: paneId)
         }
@@ -859,11 +828,11 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
         sessionName: String,
         onInstalled: () -> Void
     ) {
-        guard sessionState?.containsPane(paneId) == true else { return }
+        guard sessionState.containsPane(paneId) else { return }
         resolver.clearAttachmentState(for: paneId)
         resolver.sessionNames[paneId] = sessionName
         resolver.sessionOwnership[paneId] = .managed
-        sessionState?.requestPersistence()
+        sessionState.requestPersistence()
         onInstalled()
     }
 
@@ -877,7 +846,7 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
     }
 
     func killIfNeeded(for paneId: UUID) {
-        guard let registration = transportAccess?.shellRegistration(paneId) else { return }
+        guard let registration = shellRegistration(for: paneId) else { return }
         let ownership = resolver.sessionOwnership[paneId] ?? .managed
         guard ownership == .managed else { return }
 
@@ -906,16 +875,58 @@ final class TerminalTmuxSessionCoordinator: ObservableObject {
         resolver.cancelAllPrompts()
         cleanupServers.removeAll()
     }
+
+    private func shellRegistration(for paneId: UUID) -> TerminalTmuxShellRegistration? {
+        transportLifetime.registry.shellRegistration(for: paneId).map {
+            TerminalTmuxShellRegistration(
+                client: $0.client,
+                shellId: $0.shellId,
+                serverId: $0.serverId
+            )
+        }
+    }
+
+    private func ownsShell(
+        _ registration: TerminalTmuxShellRegistration,
+        for paneId: UUID
+    ) -> Bool {
+        transportLifetime.registry.ownsShell(
+            client: registration.client,
+            shellId: registration.shellId,
+            for: paneId
+        )
+    }
 }
 
 #if DEBUG
 extension TerminalTmuxSessionCoordinator {
     convenience init() {
+        let configuration = TerminalTmuxConfiguration.testing
+        let remoteTmux = UnavailableTerminalRemoteTmuxService()
+        let resolver = TmuxAttachResolver(
+            configuration: configuration,
+            remoteTmux: remoteTmux
+        )
+        let sessionState = TerminalSessionStateStore(
+            snapshotStore: EmptyTerminalTabSnapshotStore(),
+            connectionViewSelections: ConnectionViewSelectionStore(),
+            tmuxResolver: resolver
+        )
         self.init(
-            configuration: .testing,
-            remoteTmux: UnavailableTerminalRemoteTmuxService()
+            configuration: configuration,
+            remoteTmux: remoteTmux,
+            resolver: resolver,
+            sessionState: sessionState,
+            transportLifetime: TerminalTransportLifetime()
         )
     }
+}
+
+@MainActor
+private final class EmptyTerminalTabSnapshotStore: TerminalTabSnapshotStoring {
+    func loadSnapshotData() -> Data? { nil }
+    func saveSnapshotData(_ data: Data) {}
+    func removeSnapshotData() {}
 }
 
 extension TerminalTmuxConfiguration {

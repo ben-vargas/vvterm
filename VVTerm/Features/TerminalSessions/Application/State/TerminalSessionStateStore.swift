@@ -25,7 +25,7 @@ final class TerminalSessionStateStore: ObservableObject {
 
     private let snapshotStore: any TerminalTabSnapshotStoring
     private let connectionViewSelections: ConnectionViewSelectionStore
-    private let tmuxCoordinator: TerminalTmuxSessionCoordinator
+    private let tmuxResolver: TmuxAttachResolver
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "VVTerm",
         category: "TerminalSessionStateStore"
@@ -36,11 +36,11 @@ final class TerminalSessionStateStore: ObservableObject {
     init(
         snapshotStore: any TerminalTabSnapshotStoring,
         connectionViewSelections: ConnectionViewSelectionStore,
-        tmuxCoordinator: TerminalTmuxSessionCoordinator
+        tmuxResolver: TmuxAttachResolver
     ) {
         self.snapshotStore = snapshotStore
         self.connectionViewSelections = connectionViewSelections
-        self.tmuxCoordinator = tmuxCoordinator
+        self.tmuxResolver = tmuxResolver
         restoreSnapshot()
     }
 
@@ -492,7 +492,7 @@ final class TerminalSessionStateStore: ObservableObject {
                     TerminalTabsSnapshot.TabSnapshot(
                         from: $0,
                         paneStates: paneStates,
-                        tmuxCoordinator: tmuxCoordinator
+                        tmuxResolver: tmuxResolver
                     )
                 },
                 selectedTabId: selectedTabByServer[serverId],
@@ -520,7 +520,7 @@ final class TerminalSessionStateStore: ObservableObject {
                     )
                     paneState.connectionState = .disconnected
                     paneState.markConnectionEstablished()
-                    if !tmuxCoordinator.isEnabled(for: tab.serverId) {
+                    if !tmuxResolver.isTmuxEnabled(for: tab.serverId) {
                         paneState.tmuxStatus = .off
                     }
                     paneState.presentationOverrides = snapshotsByTabId[tab.id]?
@@ -567,7 +567,7 @@ final class TerminalSessionStateStore: ObservableObject {
                 restoredAttachments[paneId] = attachment
             }
         }
-        tmuxCoordinator.restoreAttachments(restoredAttachments)
+        tmuxResolver.restoreAttachments(restoredAttachments)
         paneStates = makeRestoredPaneStates(
             from: restoredTabsByServer,
             snapshotsByTabId: snapshotsByTabId
@@ -610,7 +610,7 @@ final class TerminalSessionStateStore: ObservableObject {
         persistTask?.cancel()
         persistTask = nil
         persistSnapshot()
-        tmuxCoordinator.clearAllAttachmentState()
+        tmuxResolver.clearAllAttachmentState()
         restoreSnapshot()
     }
 
@@ -691,7 +691,7 @@ private struct TerminalTabsSnapshot: Codable {
         init(
             from tab: TerminalTab,
             paneStates: [UUID: TerminalPaneState],
-            tmuxCoordinator: TerminalTmuxSessionCoordinator
+            tmuxResolver: TmuxAttachResolver
         ) {
             id = tab.id
             serverId = tab.serverId
@@ -726,7 +726,7 @@ private struct TerminalTabsSnapshot: Codable {
             eternalTerminalTmuxResumeContexts = resumeContexts.isEmpty ? nil : resumeContexts
             let attachments: [UUID: TerminalTmuxAttachmentState] = Dictionary(
                 uniqueKeysWithValues: tab.allPaneIds.compactMap { paneId in
-                    tmuxCoordinator.attachment(for: paneId).map { (paneId, $0) }
+                    tmuxResolver.attachment(for: paneId).map { (paneId, $0) }
                 }
             )
             tmuxAttachments = attachments.isEmpty ? nil : attachments

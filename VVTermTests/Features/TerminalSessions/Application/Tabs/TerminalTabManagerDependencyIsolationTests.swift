@@ -362,16 +362,14 @@ struct TerminalTabManagerDependencyIsolationTests {
                 remoteMosh: remoteMosh,
                 eternalTerminalRuntime: .testing
             ),
-            tmuxCoordinator: TerminalTmuxSessionCoordinator(
-                configuration: TerminalTmuxConfiguration(
-                    deviceID: deviceID,
-                    enabledByDefault: { false },
-                    startupBehaviorByDefault: { .skipTmux },
-                    serverSettings: { _ in nil },
-                    themeStyle: { TerminalTmuxSessionLiveComposition.themeStyle(for: nil) }
-                ),
-                remoteTmux: remoteTmux
+            tmuxConfiguration: TerminalTmuxConfiguration(
+                deviceID: deviceID,
+                enabledByDefault: { false },
+                startupBehaviorByDefault: { .skipTmux },
+                serverSettings: { _ in nil },
+                themeStyle: { TerminalTmuxSessionLiveComposition.themeStyle(for: nil) }
             ),
+            remoteTmux: remoteTmux,
             terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
             eternalTerminalResumeStore: DependencyTestETResumeStore(),
             moshRecovery: UnavailableTerminalMoshRecoveryService()

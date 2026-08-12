@@ -58,6 +58,30 @@ final class TmuxAttachResolver: ObservableObject {
 
     // MARK: - Attachment State
 
+    func attachment(for entityId: UUID) -> TerminalTmuxAttachmentState? {
+        guard let sessionName = sessionNames[entityId],
+              let ownership = sessionOwnership[entityId] else {
+            return nil
+        }
+        return TerminalTmuxAttachmentState(
+            sessionName: sessionName,
+            ownership: ownership,
+            managedSessionConfirmed: ownership == .managed
+                && hasConfirmedManagedSession(for: entityId)
+        )
+    }
+
+    func restoreAttachments(_ attachments: [UUID: TerminalTmuxAttachmentState]) {
+        clearAllAttachmentState()
+        for (entityId, attachment) in attachments {
+            sessionNames[entityId] = attachment.sessionName
+            sessionOwnership[entityId] = attachment.ownership
+            if attachment.managedSessionConfirmed == true {
+                confirmManagedSession(for: entityId)
+            }
+        }
+    }
+
     func clearAttachmentState(for entityId: UUID) {
         sessionNames.removeValue(forKey: entityId)
         sessionOwnership.removeValue(forKey: entityId)

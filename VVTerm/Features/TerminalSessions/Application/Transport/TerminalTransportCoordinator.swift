@@ -13,32 +13,17 @@ struct TerminalTransportSessionAccess {
     let selectedTab: (UUID) -> TerminalTab?
     let tabs: (UUID) -> [TerminalTab]
     let containsPane: (UUID) -> Bool
-    let updateActiveTransport: (UUID, ShellTransportState) -> Void
-    let updateEternalTerminalResumeContext: (UUID, EternalTerminalTmuxResumeContext?) -> Void
-    let updateConnectionState: (UUID, ConnectionState) -> Void
-    let updateTitle: (UUID, String) -> Void
-    let handleShellEnd: (UUID, TerminalShellEndReason, TerminalTransportEndOwnership?) -> Void
     let workingDirectory: (UUID) -> String?
     let shouldApplyWorkingDirectory: (UUID) -> Bool
+    let send: (TerminalTransportSessionEvent) -> Void
 }
 
-@MainActor
-struct TerminalTransportTmuxAccess {
-    let cancelPrompt: (UUID) -> Void
-    let startupPlan: (
-        _ paneId: UUID,
-        _ serverId: UUID,
-        _ client: SSHClient,
-        _ startToken: SSHShellRegistry.StartToken
-    ) async throws -> TerminalShellStartupPlan
-    let eternalTerminalStartupPlan: (
-        _ paneId: UUID,
-        _ serverId: UUID,
-        _ client: SSHClient,
-        _ runtimeToken: UUID
-    ) async throws -> TerminalShellStartupPlan
-    let killSSHSession: (_ sessionName: String, _ client: SSHClient) async -> Void
-    let killEternalTerminalSession: (_ sessionName: String, _ runtime: EternalTerminalRuntime) async -> Void
+nonisolated enum TerminalTransportSessionEvent: Sendable {
+    case activeTransport(UUID, ShellTransportState)
+    case eternalTerminalResumeContext(UUID, EternalTerminalTmuxResumeContext?)
+    case connectionState(UUID, ConnectionState)
+    case title(UUID, String)
+    case shellEnd(UUID, TerminalShellEndReason, TerminalTransportEndOwnership?)
 }
 
 /// Owns terminal transport identities, tasks, resumable state, and cleanup.
@@ -49,15 +34,10 @@ final class TerminalTransportCoordinator {
         pendingStart: SSHShellRegistry.StartContext?
     )
 
-    private struct SSHResizeState {
-        let clientIdentity: ObjectIdentifier
-        let shellId: UUID
-        let cols: Int
-        let rows: Int
-        let pixelSize: TerminalPixelSize?
+    private let lifetime: TerminalTransportLifetime
+    private var registry: TerminalTransportRegistry<EternalTerminalRuntime> {
+        lifetime.registry
     }
-
-    private let registry: TerminalTransportRegistry<EternalTerminalRuntime>
     private let sshClientFactory: SSHClientFactory
     #if DEBUG
     private var eternalTerminalResumeStore: any EternalTerminalResumeStoring
@@ -69,27 +49,23 @@ final class TerminalTransportCoordinator {
     private let remoteMosh: any TerminalRemoteMoshServicing
     private let eternalTerminalRuntimeDependencies: EternalTerminalRuntimeDependencies
     private let sessionAccess: TerminalTransportSessionAccess
-    private let tmuxAccess: TerminalTransportTmuxAccess
-    private var writeQueuesByPane: [UUID: TerminalTransportWriteQueue] = [:]
-    private var lastSSHResizeByPane: [UUID: SSHResizeState] = [:]
+    private let tmuxCoordinator: TerminalTmuxSessionCoordinator
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "VVTerm",
         category: "TerminalTransportCoordinator"
     )
 
     init(
-        staleShellStartThreshold: TimeInterval = 120,
+        lifetime: TerminalTransportLifetime,
         sshClientFactory: SSHClientFactory,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshRecovery: any TerminalMoshRecoveryServicing,
         remoteMosh: any TerminalRemoteMoshServicing,
         eternalTerminalRuntimeDependencies: EternalTerminalRuntimeDependencies,
         sessionAccess: TerminalTransportSessionAccess,
-        tmuxAccess: TerminalTransportTmuxAccess
+        tmuxCoordinator: TerminalTmuxSessionCoordinator
     ) {
-        registry = TerminalTransportRegistry(
-            staleShellStartThreshold: staleShellStartThreshold
-        )
+        self.lifetime = lifetime
         self.sshClientFactory = sshClientFactory
         self.eternalTerminalResumeStore = eternalTerminalResumeStore
         #if DEBUG
@@ -99,22 +75,7 @@ final class TerminalTransportCoordinator {
         self.remoteMosh = remoteMosh
         self.eternalTerminalRuntimeDependencies = eternalTerminalRuntimeDependencies
         self.sessionAccess = sessionAccess
-        self.tmuxAccess = tmuxAccess
-    }
-
-    isolated deinit {
-        let drainedTransports = registry.drain()
-        let queues = Array(writeQueuesByPane.values)
-        writeQueuesByPane.removeAll()
-        for queue in queues {
-            queue.cancel()
-        }
-        for client in drainedTransports.clients {
-            Task { await client.disconnect() }
-        }
-        for runtime in drainedTransports.runtimes {
-            Task { @MainActor in await runtime.close() }
-        }
+        self.tmuxCoordinator = tmuxCoordinator
     }
 
     var ownedPaneIds: Set<UUID> {
@@ -134,31 +95,6 @@ final class TerminalTransportCoordinator {
         return (route.client, route.shellId)
     }
 
-    func tmuxShellRegistration(for paneId: UUID) -> TerminalTmuxShellRegistration? {
-        registry.shellRegistration(for: paneId).map {
-            TerminalTmuxShellRegistration(
-                client: $0.client,
-                shellId: $0.shellId,
-                serverId: $0.serverId
-            )
-        }
-    }
-
-    func ownsShell(
-        _ registration: TerminalTmuxShellRegistration,
-        for paneId: UUID
-    ) -> Bool {
-        registry.ownsShell(
-            client: registration.client,
-            shellId: registration.shellId,
-            for: paneId
-        )
-    }
-
-    func ownsShell(client: SSHClient, shellId: UUID, for paneId: UUID) -> Bool {
-        registry.ownsShell(client: client, shellId: shellId, for: paneId)
-    }
-
     func handleShellEnd(
         for paneId: UUID,
         client: SSHClient,
@@ -169,15 +105,11 @@ final class TerminalTransportCoordinator {
             logger.info("Ignoring stale shell end for pane \(paneId.uuidString, privacy: .public)")
             return
         }
-        sessionAccess.handleShellEnd(
+        sessionAccess.send(.shellEnd(
             paneId,
             reason,
             .ssh(client: client, shellId: shellId)
-        )
-    }
-
-    func existingEternalTerminalRuntime(for paneId: UUID) -> EternalTerminalRuntime? {
-        registry.runtime(for: paneId)
+        ))
     }
 
     func connectionOwnershipToken(for paneId: UUID) -> SSHShellRegistry.StartToken? {
@@ -186,8 +118,7 @@ final class TerminalTransportCoordinator {
 
     func sendSSHInput(_ data: Data, for paneId: UUID) {
         guard let route = registry.shellRoute(for: paneId) else { return }
-        let queue = writeQueuesByPane[paneId] ?? TerminalTransportWriteQueue()
-        writeQueuesByPane[paneId] = queue
+        let queue = lifetime.writeQueue(for: paneId)
         let registry = registry
         let logger = logger
         queue.enqueue { [weak registry] in
@@ -212,22 +143,14 @@ final class TerminalTransportCoordinator {
     ) {
         guard cols > 0, rows > 0,
               let route = registry.shellRoute(for: paneId) else { return }
-        let state = SSHResizeState(
-            clientIdentity: ObjectIdentifier(route.client),
+        guard lifetime.shouldScheduleResize(
+            for: paneId,
+            client: route.client,
             shellId: route.shellId,
             cols: cols,
             rows: rows,
             pixelSize: pixelSize
-        )
-        if let previous = lastSSHResizeByPane[paneId],
-           previous.clientIdentity == state.clientIdentity,
-           previous.shellId == state.shellId,
-           previous.cols == state.cols,
-           previous.rows == state.rows,
-           previous.pixelSize == state.pixelSize {
-            return
-        }
-        lastSSHResizeByPane[paneId] = state
+        ) else { return }
         let registry = registry
         let logger = logger
         Task(priority: .userInitiated) { [weak registry] in
@@ -296,10 +219,6 @@ final class TerminalTransportCoordinator {
         registry.isCurrentRuntime(runtime, for: paneId)
     }
 
-    func isCurrentEternalTerminalRuntime(token: UUID, for paneId: UUID) -> Bool {
-        registry.runtime(for: paneId)?.identityToken == token
-    }
-
     func unregisterEternalTerminalRuntime(
         for paneId: UUID,
         killingManagedTmuxSessionNamed tmuxSessionName: String? = nil
@@ -307,7 +226,7 @@ final class TerminalTransportCoordinator {
         guard let runtime = registry.runtime(for: paneId),
               detachEternalTerminalRuntime(for: paneId, ifOwnedBy: runtime) else { return }
         if let tmuxSessionName {
-            await tmuxAccess.killEternalTerminalSession(tmuxSessionName, runtime)
+            await tmuxCoordinator.killSession(named: tmuxSessionName, using: runtime)
         }
         await runtime.close()
     }
@@ -343,7 +262,7 @@ final class TerminalTransportCoordinator {
     ) -> Bool {
         guard registry.detachRuntime(runtime, for: paneId) else { return false }
         if sessionAccess.containsPane(paneId) {
-            sessionAccess.updateActiveTransport(paneId, .ssh)
+            sessionAccess.send(.activeTransport(paneId, .ssh))
         }
         return true
     }
@@ -510,7 +429,7 @@ final class TerminalTransportCoordinator {
         logger.info(
             "Shell registered monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public) pane=\(paneId.uuidString, privacy: .public) start=\(startToken.id.uuidString, privacy: .public)"
         )
-        sessionAccess.updateActiveTransport(paneId, transportState)
+        sessionAccess.send(.activeTransport(paneId, transportState))
         return true
     }
 
@@ -552,9 +471,9 @@ final class TerminalTransportCoordinator {
 
         let registry = registry
         let sessionAccess = sessionAccess
-        let tmuxAccess = tmuxAccess
+        let tmuxCoordinator = tmuxCoordinator
         let moshRecovery = moshRecovery
-        let taskId = registry.startConnectionTask(for: paneId) { [weak registry] taskId in
+        let taskId = registry.startConnectionTask(for: paneId) { [weak registry, weak tmuxCoordinator] taskId in
             guard let context = await Self.makeSSHConnectionContext(
                 taskId: taskId,
                 startToken: startToken,
@@ -563,7 +482,7 @@ final class TerminalTransportCoordinator {
                 client: client,
                 registry: registry,
                 sessionAccess: sessionAccess,
-                tmuxAccess: tmuxAccess,
+                tmuxCoordinator: tmuxCoordinator,
                 moshRecovery: moshRecovery
             ) else { return }
             await operation(context)
@@ -630,18 +549,18 @@ final class TerminalTransportCoordinator {
         }
 
         let registry = registry
-        let tmuxAccess = tmuxAccess
+        let tmuxCoordinator = tmuxCoordinator
         Task { @MainActor in
             await Self.cleanupSSHOwnership(
                 shellOwnership,
                 registry: registry,
-                tmuxAccess: tmuxAccess,
+                tmuxCoordinator: tmuxCoordinator,
                 killingManagedTmuxSessionNamed: tmuxSessionName,
                 beforeCleanup: nil
             )
             if let runtime {
                 if let tmuxSessionName {
-                    await tmuxAccess.killEternalTerminalSession(tmuxSessionName, runtime)
+                    await tmuxCoordinator.killSession(named: tmuxSessionName, using: runtime)
                 }
                 await runtime.close()
             }
@@ -679,13 +598,7 @@ final class TerminalTransportCoordinator {
     }
 
     func resetForTesting() async {
-        let drainedTransports = registry.drain()
-        let queues = Array(writeQueuesByPane.values)
-        writeQueuesByPane.removeAll()
-        lastSSHResizeByPane.removeAll()
-        for queue in queues {
-            queue.cancel()
-        }
+        let drainedTransports = lifetime.drain()
         eternalTerminalResumeStore = defaultEternalTerminalResumeStore
         for client in drainedTransports.clients {
             await client.disconnect()
@@ -699,44 +612,45 @@ final class TerminalTransportCoordinator {
     private func makeEternalTerminalOwnerAccess() -> EternalTerminalRuntimeOwnerAccess {
         let registry = registry
         let sessionAccess = sessionAccess
-        let tmuxAccess = tmuxAccess
+        let tmuxCoordinator = tmuxCoordinator
         return EternalTerminalRuntimeOwnerAccess(
             isCurrent: { [weak registry] paneId, token in
                 registry?.runtime(for: paneId)?.identityToken == token
             },
-            startupPlan: { paneId, serverId, client, token in
-                try await tmuxAccess.eternalTerminalStartupPlan(
-                    paneId,
-                    serverId,
-                    client,
-                    token
+            startupPlan: { [weak tmuxCoordinator] paneId, serverId, client, token in
+                guard let tmuxCoordinator else { throw CancellationError() }
+                return try await tmuxCoordinator.eternalTerminalStartupPlan(
+                    for: paneId,
+                    serverId: serverId,
+                    client: client,
+                    runtimeToken: token
                 )
             },
             resumeContext: { paneId in
                 sessionAccess.paneState(paneId)?.eternalTerminalTmuxResumeContext
             },
             setResumeContext: { paneId, context in
-                sessionAccess.updateEternalTerminalResumeContext(paneId, context)
+                sessionAccess.send(.eternalTerminalResumeContext(paneId, context))
             },
             updateConnectionState: { paneId, state in
-                sessionAccess.updateConnectionState(paneId, state)
+                sessionAccess.send(.connectionState(paneId, state))
             },
             markEternalTerminalTransport: { paneId in
-                sessionAccess.updateActiveTransport(paneId, .eternalTerminal)
+                sessionAccess.send(.activeTransport(paneId, .eternalTerminal))
             },
             handleShellEnd: { paneId, token, reason in
-                sessionAccess.handleShellEnd(
+                sessionAccess.send(.shellEnd(
                     paneId,
                     reason,
                     .eternalTerminal(runtimeToken: token)
-                )
+                ))
             },
             unregister: { [weak registry] paneId, token in
                 guard let runtime = registry?.runtime(for: paneId),
                       runtime.identityToken == token,
                       registry?.detachRuntime(runtime, for: paneId) == true else { return }
                 if sessionAccess.containsPane(paneId) {
-                    sessionAccess.updateActiveTransport(paneId, .ssh)
+                    sessionAccess.send(.activeTransport(paneId, .ssh))
                 }
                 await runtime.close()
             }
@@ -780,7 +694,7 @@ final class TerminalTransportCoordinator {
     ) {
         guard let staleContext else { return }
         logger.warning("\(logMessage) \(paneId.uuidString, privacy: .public)")
-        tmuxAccess.cancelPrompt(staleContext.token.id)
+        tmuxCoordinator.cancelPrompt(requestId: staleContext.token.id)
         if !registry.hasClientReferences(staleContext.client) {
             let registry = registry
             Task { @MainActor [weak registry] in
@@ -800,12 +714,12 @@ final class TerminalTransportCoordinator {
     ) async {
         let ownership = detachSSHOwnership(for: paneId)
         if sessionAccess.containsPane(paneId), !registry.hasLiveTransport(for: paneId) {
-            sessionAccess.updateActiveTransport(paneId, .ssh)
+            sessionAccess.send(.activeTransport(paneId, .ssh))
         }
         await Self.cleanupSSHOwnership(
             ownership,
             registry: registry,
-            tmuxAccess: tmuxAccess,
+            tmuxCoordinator: tmuxCoordinator,
             killingManagedTmuxSessionNamed: tmuxSessionName,
             beforeCleanup: beforeCleanup
         )
@@ -820,10 +734,10 @@ final class TerminalTransportCoordinator {
 
     private func detachSSHOwnership(for paneId: UUID) -> SSHOwnership {
         registry.cancelConnectionTask(for: paneId)
-        cancelQueuedIO(for: paneId)
+        lifetime.cancelQueuedIO(for: paneId)
         let ownership = registry.unregisterShell(for: paneId)
         if let pendingStart = ownership.pendingStart {
-            tmuxAccess.cancelPrompt(pendingStart.token.id)
+            tmuxCoordinator.cancelPrompt(requestId: pendingStart.token.id)
         }
         return ownership
     }
@@ -831,7 +745,7 @@ final class TerminalTransportCoordinator {
     private static func cleanupSSHOwnership(
         _ ownership: SSHOwnership,
         registry: TerminalTransportRegistry<EternalTerminalRuntime>,
-        tmuxAccess: TerminalTransportTmuxAccess,
+        tmuxCoordinator: TerminalTmuxSessionCoordinator?,
         killingManagedTmuxSessionNamed tmuxSessionName: String?,
         beforeCleanup: (@MainActor @Sendable () async -> Void)?
     ) async {
@@ -850,7 +764,10 @@ final class TerminalTransportCoordinator {
         await registry.performTrackedCleanup(for: registration.client) {
             if let beforeCleanup { await beforeCleanup() }
             if let tmuxSessionName {
-                await tmuxAccess.killSSHSession(tmuxSessionName, registration.client)
+                await tmuxCoordinator.killSession(
+                    named: tmuxSessionName,
+                    using: registration.client
+                )
             }
             if !registry.hasClientReferences(registration.client) {
                 await registration.client.disconnect()
@@ -907,7 +824,7 @@ final class TerminalTransportCoordinator {
     }
 
     private func markEternalTerminalTransport(for paneId: UUID) {
-        sessionAccess.updateActiveTransport(paneId, .eternalTerminal)
+        sessionAccess.send(.activeTransport(paneId, .eternalTerminal))
     }
 
     private func deleteResumableState(for paneId: UUID) {
@@ -923,11 +840,6 @@ final class TerminalTransportCoordinator {
         }
     }
 
-    private func cancelQueuedIO(for paneId: UUID) {
-        writeQueuesByPane.removeValue(forKey: paneId)?.cancel()
-        lastSSHResizeByPane.removeValue(forKey: paneId)
-    }
-
     private static func makeSSHConnectionContext(
         taskId: UUID,
         startToken: SSHShellRegistry.StartToken,
@@ -936,7 +848,7 @@ final class TerminalTransportCoordinator {
         client: SSHClient,
         registry: TerminalTransportRegistry<EternalTerminalRuntime>?,
         sessionAccess: TerminalTransportSessionAccess,
-        tmuxAccess: TerminalTransportTmuxAccess,
+        tmuxCoordinator: TerminalTmuxSessionCoordinator,
         moshRecovery: any TerminalMoshRecoveryServicing
     ) -> TerminalSSHConnectionContext? {
         guard let registry else { return nil }
@@ -954,15 +866,16 @@ final class TerminalTransportCoordinator {
             isCurrent: ownsConnection,
             updateConnectionState: { state in
                 guard ownsConnection() else { return }
-                sessionAccess.updateConnectionState(paneId, state)
+                sessionAccess.send(.connectionState(paneId, state))
             },
-            startupPlan: {
+            startupPlan: { [weak tmuxCoordinator] in
                 guard ownsConnection() else { throw CancellationError() }
-                return try await tmuxAccess.startupPlan(
-                    paneId,
-                    server.id,
-                    client,
-                    startToken
+                guard let tmuxCoordinator else { throw CancellationError() }
+                return try await tmuxCoordinator.startupPlan(
+                    for: paneId,
+                    serverId: server.id,
+                    client: client,
+                    startToken: startToken
                 )
             },
             restoreMoshShell: { cols, rows in
@@ -987,7 +900,7 @@ final class TerminalTransportCoordinator {
                     await client.closeShell(shell.id)
                     return false
                 }
-                sessionAccess.updateActiveTransport(paneId, shell.transportState)
+                sessionAccess.send(.activeTransport(paneId, shell.transportState))
                 return true
             },
             persistMoshCheckpoint: { shellId in
@@ -1001,7 +914,7 @@ final class TerminalTransportCoordinator {
             },
             updateTitle: { title in
                 guard ownsConnection() else { return }
-                sessionAccess.updateTitle(paneId, title)
+                sessionAccess.send(.title(paneId, title))
             },
             hasOtherRegistrations: { [weak registry] in
                 guard ownsConnection() else { return false }
@@ -1010,15 +923,15 @@ final class TerminalTransportCoordinator {
             handleShellEnd: { [weak registry] shellId, reason in
                 guard ownsConnection(),
                       registry?.ownsShell(client: client, shellId: shellId, for: paneId) == true else { return }
-                sessionAccess.handleShellEnd(
+                sessionAccess.send(.shellEnd(
                     paneId,
                     reason,
                     .ssh(client: client, shellId: shellId)
-                )
+                ))
             },
             handleFailure: { failure in
                 guard ownsConnection() else { return }
-                sessionAccess.updateConnectionState(paneId, .failed(failure))
+                sessionAccess.send(.connectionState(paneId, .failed(failure)))
             },
             workingDirectory: {
                 guard ownsConnection(), sessionAccess.shouldApplyWorkingDirectory(paneId) else {

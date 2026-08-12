@@ -287,10 +287,15 @@ struct TerminalSessionStateStoreTests {
         snapshot: StateStoreSnapshotMemory,
         selections: ConnectionViewSelectionStore
     ) -> TerminalSessionStateStore {
-        TerminalSessionStateStore(
+        let configuration = TerminalTmuxConfiguration.testing
+        let remoteTmux = UnavailableTerminalRemoteTmuxService()
+        return TerminalSessionStateStore(
             snapshotStore: snapshot,
             connectionViewSelections: selections,
-            tmuxCoordinator: TerminalTmuxSessionCoordinator()
+            tmuxResolver: TmuxAttachResolver(
+                configuration: configuration,
+                remoteTmux: remoteTmux
+            )
         )
     }
 }

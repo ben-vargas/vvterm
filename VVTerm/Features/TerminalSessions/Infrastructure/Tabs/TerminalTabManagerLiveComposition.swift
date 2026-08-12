@@ -23,10 +23,9 @@ enum TerminalTabManagerLiveComposition {
         themeStyle: @escaping @MainActor () -> RemoteTmuxThemeStyle,
         applicationIsActive: @escaping @MainActor @Sendable () -> Bool
     ) -> TerminalTabManager {
-        let tmuxCoordinator = TerminalTmuxSessionLiveComposition.makeCoordinator(
+        let tmuxConfiguration = TerminalTmuxSessionLiveComposition.makeConfiguration(
             defaults: defaults,
             serverManager: serverManager,
-            remoteTmux: remoteTmux,
             deviceID: deviceID,
             themeStyle: themeStyle
         )
@@ -83,7 +82,8 @@ enum TerminalTabManagerLiveComposition {
                 key: persistenceKey
             ),
             dependencies: dependencies,
-            tmuxCoordinator: tmuxCoordinator,
+            tmuxConfiguration: tmuxConfiguration,
+            remoteTmux: remoteTmux,
             terminalSurfaceStore: terminalSurfaceStore,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: TerminalMoshRecoveryService(

@@ -2,43 +2,39 @@ import Foundation
 
 @MainActor
 enum TerminalTmuxSessionLiveComposition {
-    static func makeCoordinator(
+    static func makeConfiguration(
         defaults: UserDefaults,
         serverManager: ServerManager,
-        remoteTmux: any TerminalRemoteTmuxServicing,
         deviceID: String,
         themeStyle: @escaping @MainActor () -> RemoteTmuxThemeStyle
-    ) -> TerminalTmuxSessionCoordinator {
-        TerminalTmuxSessionCoordinator(
-            configuration: TerminalTmuxConfiguration(
-                deviceID: deviceID,
-                enabledByDefault: {
-                    guard defaults.object(forKey: "terminalTmuxEnabledDefault") != nil else {
-                        return true
+    ) -> TerminalTmuxConfiguration {
+        TerminalTmuxConfiguration(
+            deviceID: deviceID,
+            enabledByDefault: {
+                guard defaults.object(forKey: "terminalTmuxEnabledDefault") != nil else {
+                    return true
+                }
+                return defaults.bool(forKey: "terminalTmuxEnabledDefault")
+            },
+            startupBehaviorByDefault: {
+                guard let rawValue = defaults.string(
+                    forKey: "terminalTmuxStartupBehaviorDefault"
+                ) else {
+                    return .askEveryTime
+                }
+                return TmuxStartupBehavior(rawValue: rawValue) ?? .askEveryTime
+            },
+            serverSettings: { serverId in
+                serverManager.servers
+                    .first(where: { $0.id == serverId })
+                    .map {
+                        TerminalTmuxConfiguration.ServerSettings(
+                            enabledOverride: $0.tmuxEnabledOverride,
+                            startupBehaviorOverride: $0.tmuxStartupBehaviorOverride
+                        )
                     }
-                    return defaults.bool(forKey: "terminalTmuxEnabledDefault")
-                },
-                startupBehaviorByDefault: {
-                    guard let rawValue = defaults.string(
-                        forKey: "terminalTmuxStartupBehaviorDefault"
-                    ) else {
-                        return .askEveryTime
-                    }
-                    return TmuxStartupBehavior(rawValue: rawValue) ?? .askEveryTime
-                },
-                serverSettings: { serverId in
-                    serverManager.servers
-                        .first(where: { $0.id == serverId })
-                        .map {
-                            TerminalTmuxConfiguration.ServerSettings(
-                                enabledOverride: $0.tmuxEnabledOverride,
-                                startupBehaviorOverride: $0.tmuxStartupBehaviorOverride
-                            )
-                        }
-                },
-                themeStyle: themeStyle
-            ),
-            remoteTmux: remoteTmux
+            },
+            themeStyle: themeStyle
         )
     }
 

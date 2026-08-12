@@ -23,7 +23,7 @@ final class TerminalTabManager {
     // MARK: - Terminal Registry
 
     let terminalSurfaceStore: any TerminalSurfaceStoring
-    private(set) var transportCoordinator: TerminalTransportCoordinator!
+    let transportCoordinator: TerminalTransportCoordinator
     lazy var reconnectCoordinator = makeReconnectCoordinator()
     /// The current tab-open authorization attempt for each server.
     private var tabOpenAttemptsByServer: [UUID: UUID] = [:]
@@ -44,136 +44,76 @@ final class TerminalTabManager {
     init(
         snapshotStore: any TerminalTabSnapshotStoring,
         dependencies: TerminalTabManagerDependencies,
-        tmuxCoordinator: TerminalTmuxSessionCoordinator,
+        tmuxConfiguration: TerminalTmuxConfiguration,
+        remoteTmux: any TerminalRemoteTmuxServicing,
         terminalSurfaceStore: any TerminalSurfaceStoring,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshRecovery: any TerminalMoshRecoveryServicing
     ) {
         self.dependencies = dependencies
         let connectionViewSelections = ConnectionViewSelectionStore()
-        self.tmuxCoordinator = tmuxCoordinator
+        let tmuxResolver = TmuxAttachResolver(
+            configuration: tmuxConfiguration,
+            remoteTmux: remoteTmux
+        )
+        let transportLifetime = TerminalTransportLifetime()
+        let runtimeEvents = PassthroughSubject<TerminalTransportSessionEvent, Never>()
         self.connectionViewSelections = connectionViewSelections
-        self.sessionState = TerminalSessionStateStore(
+        let sessionState = TerminalSessionStateStore(
             snapshotStore: snapshotStore,
             connectionViewSelections: connectionViewSelections,
-            tmuxCoordinator: tmuxCoordinator
+            tmuxResolver: tmuxResolver
         )
+        self.sessionState = sessionState
+        let tmuxCoordinator = TerminalTmuxSessionCoordinator(
+            configuration: tmuxConfiguration,
+            remoteTmux: remoteTmux,
+            resolver: tmuxResolver,
+            sessionState: sessionState,
+            transportLifetime: transportLifetime
+        )
+        self.tmuxCoordinator = tmuxCoordinator
         self.terminalSurfaceStore = terminalSurfaceStore
-        transportCoordinator = TerminalTransportCoordinator(
+        self.transportCoordinator = TerminalTransportCoordinator(
+            lifetime: transportLifetime,
             sshClientFactory: dependencies.sshClientFactory,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: moshRecovery,
             remoteMosh: dependencies.remoteMosh,
             eternalTerminalRuntimeDependencies: dependencies.eternalTerminalRuntime,
             sessionAccess: TerminalTransportSessionAccess(
-                paneState: { [weak self] paneId in
-                    self?.sessionState.paneState(for: paneId)
+                paneState: { paneId in
+                    sessionState.paneState(for: paneId)
                 },
-                allPaneStates: { [weak self] in
-                    self?.sessionState.allPaneStates ?? []
+                allPaneStates: {
+                    sessionState.allPaneStates
                 },
-                selectedTab: { [weak self] serverId in
-                    self?.sessionState.selectedTab(for: serverId)
+                selectedTab: { serverId in
+                    sessionState.selectedTab(for: serverId)
                 },
-                tabs: { [weak self] serverId in
-                    self?.sessionState.tabs(for: serverId) ?? []
+                tabs: { serverId in
+                    sessionState.tabs(for: serverId)
                 },
-                containsPane: { [weak self] paneId in
-                    self?.sessionState.containsPane(paneId) == true
+                containsPane: { paneId in
+                    sessionState.containsPane(paneId)
                 },
-                updateActiveTransport: { [weak self] paneId, state in
-                    self?.setPaneTransport(state, for: paneId)
+                workingDirectory: { paneId in
+                    sessionState.paneState(for: paneId)?.workingDirectory
                 },
-                updateEternalTerminalResumeContext: { [weak self] paneId, context in
-                    self?.setEternalTerminalTmuxResumeContext(context, for: paneId)
+                shouldApplyWorkingDirectory: { paneId in
+                    tmuxCoordinator.shouldApplyWorkingDirectory(for: paneId)
                 },
-                updateConnectionState: { [weak self] paneId, state in
-                    self?.updatePaneState(paneId, connectionState: state)
-                },
-                updateTitle: { [weak self] paneId, title in
-                    self?.updatePaneTitle(paneId, rawTitle: title)
-                },
-                handleShellEnd: { [weak self] paneId, reason, ownership in
-                    self?.handleShellEnd(
-                        for: paneId,
-                        reason: reason,
-                        ownership: ownership
-                    )
-                },
-                workingDirectory: { [weak self] paneId in
-                    self?.sessionState.paneState(for: paneId)?.workingDirectory
-                },
-                shouldApplyWorkingDirectory: { [weak self] paneId in
-                    self?.tmuxCoordinator.shouldApplyWorkingDirectory(for: paneId) == true
+                send: { event in
+                    runtimeEvents.send(event)
                 }
             ),
-            tmuxAccess: TerminalTransportTmuxAccess(
-                cancelPrompt: { [weak tmuxCoordinator] requestId in
-                    tmuxCoordinator?.cancelPrompt(requestId: requestId)
-                },
-                startupPlan: { [weak tmuxCoordinator] paneId, serverId, client, startToken in
-                    guard let tmuxCoordinator else { throw CancellationError() }
-                    return try await tmuxCoordinator.startupPlan(
-                        for: paneId,
-                        serverId: serverId,
-                        client: client,
-                        startToken: startToken
-                    )
-                },
-                eternalTerminalStartupPlan: { [weak tmuxCoordinator] paneId, serverId, client, token in
-                    guard let tmuxCoordinator else { throw CancellationError() }
-                    return try await tmuxCoordinator.eternalTerminalStartupPlan(
-                        for: paneId,
-                        serverId: serverId,
-                        client: client,
-                        runtimeToken: token
-                    )
-                },
-                killSSHSession: { [weak tmuxCoordinator] name, client in
-                    await tmuxCoordinator?.killSession(named: name, using: client)
-                },
-                killEternalTerminalSession: { [weak tmuxCoordinator] name, runtime in
-                    await tmuxCoordinator?.killSession(named: name, using: runtime)
-                }
-            )
+            tmuxCoordinator: tmuxCoordinator
         )
-        tmuxCoordinator.bind(
-            sessionState: sessionState,
-            transportAccess: TerminalTmuxTransportAccess(
-                shellRegistration: { [weak self] paneId in
-                    self?.transportCoordinator.tmuxShellRegistration(for: paneId)
-                },
-                ownsShell: { [weak self] paneId, registration in
-                    self?.transportCoordinator.ownsShell(registration, for: paneId) == true
-                },
-                ownsShellStart: { [weak self] paneId, client, startToken in
-                    self?.transportCoordinator.isCurrentShellOwner(
-                        for: paneId,
-                        client: client,
-                        startToken: startToken
-                    ) == true
-                },
-                eternalTerminalRuntime: { [weak self] paneId in
-                    self?.transportCoordinator.existingEternalTerminalRuntime(for: paneId)
-                },
-                ownsEternalTerminalRuntime: { [weak self] paneId, runtime in
-                    self?.transportCoordinator.isCurrentEternalTerminalRuntime(runtime, for: paneId) == true
-                },
-                ownsEternalTerminalRuntimeToken: { [weak self] paneId, token in
-                    self?.transportCoordinator.isCurrentEternalTerminalRuntime(token: token, for: paneId) == true
-                },
-                unregisterShell: { [weak self] paneId, registration in
-                    await self?.transportCoordinator.unregisterSSHClient(
-                        for: paneId,
-                        ifOwnedBy: registration.client,
-                        shellId: registration.shellId
-                    )
-                },
-                unregisterEternalTerminalRuntime: { [weak self] paneId in
-                    await self?.transportCoordinator.unregisterEternalTerminalRuntime(for: paneId)
-                }
-            )
-        )
+        runtimeEvents
+            .sink { [weak self] event in
+                self?.handleTransportSessionEvent(event)
+            }
+            .store(in: &stateCancellables)
         #if os(iOS)
         keyboardCoordinator.terminalProvider = { [weak self] paneId in
             self?.terminalSurfaceStore.surface(for: paneId)?.keyboardInputSession
@@ -195,6 +135,21 @@ final class TerminalTabManager {
         dependencies.effects.refreshLiveActivity(
             sessionState.connectionStates
         )
+    }
+
+    private func handleTransportSessionEvent(_ event: TerminalTransportSessionEvent) {
+        switch event {
+        case .activeTransport(let paneId, let state):
+            setPaneTransport(state, for: paneId)
+        case .eternalTerminalResumeContext(let paneId, let context):
+            setEternalTerminalTmuxResumeContext(context, for: paneId)
+        case .connectionState(let paneId, let state):
+            updatePaneState(paneId, connectionState: state)
+        case .title(let paneId, let title):
+            updatePaneTitle(paneId, rawTitle: title)
+        case .shellEnd(let paneId, let reason, let ownership):
+            handleShellEnd(for: paneId, reason: reason, ownership: ownership)
+        }
     }
 
     private func makeReconnectCoordinator() -> TerminalReconnectCoordinator {
@@ -285,7 +240,8 @@ final class TerminalTabManager {
         snapshotStore: any TerminalTabSnapshotStoring,
         networkReadinessPublisher: AnyPublisher<TerminalNetworkReadiness, Never>?,
         liveActivityRefresh: @escaping ([ConnectionState]) -> Void,
-        tmuxCoordinator: TerminalTmuxSessionCoordinator,
+        tmuxConfiguration: TerminalTmuxConfiguration = .testing,
+        remoteTmux: any TerminalRemoteTmuxServicing = UnavailableTerminalRemoteTmuxService(),
         terminalSurfaceStore: any TerminalSurfaceStoring,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshRecovery: any TerminalMoshRecoveryServicing
@@ -296,7 +252,8 @@ final class TerminalTabManager {
                 networkReadinessPublisher: networkReadinessPublisher,
                 liveActivityRefresh: liveActivityRefresh
             ),
-            tmuxCoordinator: tmuxCoordinator,
+            tmuxConfiguration: tmuxConfiguration,
+            remoteTmux: remoteTmux,
             terminalSurfaceStore: terminalSurfaceStore,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: moshRecovery

@@ -110,10 +110,14 @@ struct TerminalTabManagerIndependenceTests {
 
         weak let releasedManager = manager
         weak let releasedTransportOwner = manager?.transportCoordinator
+        weak let releasedTmuxOwner = manager?.tmuxCoordinator
+        weak let releasedSessionState = manager?.sessionState
         manager = nil
 
         #expect(releasedManager == nil)
         #expect(releasedTransportOwner == nil)
+        #expect(releasedTmuxOwner == nil)
+        #expect(releasedSessionState == nil)
         #expect(await probe.waitUntilCancelled())
     }
 
@@ -234,7 +238,6 @@ struct TerminalTabManagerIndependenceTests {
             snapshotStore: snapshotStore,
             networkReadinessPublisher: nil,
             liveActivityRefresh: { _ in },
-            tmuxCoordinator: TerminalTmuxSessionCoordinator(),
             terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
             eternalTerminalResumeStore: IsolatedEternalTerminalResumeStore(),
             moshRecovery: UnavailableTerminalMoshRecoveryService()
