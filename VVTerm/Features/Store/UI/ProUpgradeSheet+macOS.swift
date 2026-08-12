@@ -88,14 +88,14 @@ private struct ProUpgradeWindowPresentationHost: ViewModifier {
                     presentWindow()
                 }
             }
-            .onChangeCompat(of: isPresented) { shouldPresent in
+            .onChange(of: isPresented) { shouldPresent in
                 if shouldPresent {
                     presentWindow()
                 } else {
                     presenter.close()
                 }
             }
-            .onChangeCompat(of: source) { _ in
+            .onChange(of: source) { _ in
                 if isPresented {
                     presentWindow()
                 }

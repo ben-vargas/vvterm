@@ -191,7 +191,7 @@ struct SyncSettingsView: View {
         } message: {
             Text("This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device.")
         }
-        .onChangeCompat(of: syncEnabled) { enabled in
+        .onChange(of: syncEnabled) { enabled in
             if ignoresNextSyncToggleChange {
                 ignoresNextSyncToggleChange = false
                 return

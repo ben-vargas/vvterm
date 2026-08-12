@@ -256,7 +256,7 @@ struct ConnectionTerminalContainer: View {
                 platformHandleSelectedViewChange(newValue)
                 ensureInitialFileTabIfNeeded()
             }
-            .onChangeCompat(of: serverTabs.map(\.id)) { tabIDs in
+            .onChange(of: serverTabs.map(\.id)) { tabIDs in
                 voiceInputRuntimeStore.synchronize(
                     tabIDs: Set(tabIDs),
                     for: server.id

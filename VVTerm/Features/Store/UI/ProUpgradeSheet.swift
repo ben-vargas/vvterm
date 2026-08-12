@@ -45,10 +45,10 @@ struct ProUpgradeSheet: View {
         .task {
             await preparePaywall()
         }
-        .onChangeCompat(of: storeManager.purchaseState) { newState in
+        .onChange(of: storeManager.purchaseState) { newState in
             handlePurchaseStateChange(newState)
         }
-        .onChangeCompat(of: storeManager.restoreState) { newState in
+        .onChange(of: storeManager.restoreState) { newState in
             handleRestoreStateChange(newState)
         }
         .overlay {

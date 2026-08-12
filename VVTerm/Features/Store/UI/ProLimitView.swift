@@ -127,7 +127,7 @@ struct LimitReachedAlert: ViewModifier {
             } message: {
                 Text(limitType.message(serverLimit: serverManager.freeServerLimit))
             }
-            .onChangeCompat(of: isPresented) { presented in
+            .onChange(of: isPresented) { presented in
                 if presented {
                     trackLimitHit()
                 }

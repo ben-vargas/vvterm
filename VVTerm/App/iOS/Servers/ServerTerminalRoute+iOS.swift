@@ -244,12 +244,12 @@ struct ServerTerminalRoute: View {
             .onReceive(tabManager.terminalSurfaceStore.changes) { _ in
                 updateTerminalRouteActivation()
             }
-            .onChangeCompat(of: terminalContent.state.tabs) { _ in
+            .onChange(of: terminalContent.state.tabs) { _ in
                 dismissIfContextEnded()
                 reconcileZenMode()
                 updateTerminalRouteActivation()
             }
-            .onChangeCompat(of: fileTabs.tabsByServer) { _ in
+            .onChange(of: fileTabs.tabsByServer) { _ in
                 dismissIfContextEnded()
                 updateTerminalRouteActivation()
             }
