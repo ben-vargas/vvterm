@@ -87,7 +87,6 @@ VVTerm/
 │   └── Welcome/
 │       ├── Domain/
 │       └── UI/
-├── Generated/                    # Build-time generated sources
 └── Resources/                    # Bundled assets, themes, terminfo, l10n
 ```
 
