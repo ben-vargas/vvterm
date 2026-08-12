@@ -164,8 +164,13 @@ extension GhosttyTerminalView {
     @discardableResult
     func focusTerminalInputWithoutShowingSoftwareKeyboard() -> Bool {
         guard !isFindNavigatorActive else { return false }
+        let previousInputConfiguration = terminalInputConfiguration
+        keyboardFocusPolicy.dismissForUser()
         refreshHardwareKeyboardAttachmentFromSystem()
         clearNativeSelectionStateForTerminalInput()
+        notifyKeyboardBrowseModeChange(
+            previousInputConfiguration: previousInputConfiguration
+        )
         return becomeFirstResponder()
     }
 

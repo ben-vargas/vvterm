@@ -97,7 +97,7 @@ extension TerminalKeyboardCoordinatorTests {
     
         @Test
         @MainActor
-        func appSwitchReleasesResponderWhilePreservingTypingIntent() async {
+        func appSwitchPreservesResponderAndTypingIntent() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             let coordinator = TerminalKeyboardCoordinator()
@@ -117,18 +117,18 @@ extension TerminalKeyboardCoordinatorTests {
             coordinator.activeTerminalSceneWillDeactivate(for: paneId)
             coordinator.keyboardUITestSetSoftwareKeyboardEndFrame(nil)
             await drainMainQueue()
-    
+
             #expect(session.accessorySuppressionRequests.isEmpty)
-            #expect(session.releaseCount == 1)
+            #expect(session.releaseCount == 0)
             #expect(session.rebuildCount == 0)
-            #expect(!session.snapshot.isSoftwareInputActive)
-    
+            #expect(session.snapshot.isSoftwareInputActive)
+
             coordinator.activeTerminalSceneDidActivate(for: paneId)
             await drainMainQueue()
-    
-            #expect(session.releaseCount == 1)
+
+            #expect(session.releaseCount == 0)
             #expect(session.rebuildCount == 0)
-            #expect(session.acquireCount == 1)
+            #expect(session.acquireCount == 0)
             #expect(session.snapshot.isSoftwareInputActive)
     
             coordinator.keyboardUITestSetSoftwareKeyboardEndFrame(
@@ -137,7 +137,7 @@ extension TerminalKeyboardCoordinatorTests {
             try? await Task.sleep(nanoseconds: 1_100_000_000)
             await drainMainQueue()
     
-            #expect(session.releaseCount == 1)
+            #expect(session.releaseCount == 0)
             #expect(session.rebuildCount == 0)
             #expect(session.accessorySuppressionRequests.last == false)
         }
@@ -352,7 +352,7 @@ extension TerminalKeyboardCoordinatorTests {
     
             #expect(coordinator.softwareKeyboardPresentation == .hidden)
             #expect(session.accessorySuppressionRequests == [])
-            #expect(!session.snapshot.isSoftwareInputActive)
+            #expect(session.snapshot.isSoftwareInputActive)
         }
     
         @Test

@@ -12,6 +12,7 @@ nonisolated struct TerminalKeyboardCoordinatorDiagnosticSnapshot: Equatable, Sen
     var screenFrame: CGRect? = nil
     var screenIdentifier: ObjectIdentifier? = nil
     var isSoftwareKeyboardSuppressed = false
+    var isKeyboardInBrowseMode = false
 
     var lifecycleDescription: String {
         [
@@ -21,6 +22,7 @@ nonisolated struct TerminalKeyboardCoordinatorDiagnosticSnapshot: Equatable, Sen
             "firstResponder=\(isFirstResponder)",
             "softwareInput=\(isSoftwareInputActive)",
             "softwareSuppressed=\(isSoftwareKeyboardSuppressed)",
+            "browse=\(isKeyboardInBrowseMode)",
             "keyboardLayoutFrame=\(keyboardLayoutFrame?.debugDescription ?? "nil")",
         ].joined(separator: " ")
     }

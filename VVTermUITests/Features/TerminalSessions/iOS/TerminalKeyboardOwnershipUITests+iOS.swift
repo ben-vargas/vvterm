@@ -157,6 +157,20 @@ final class TerminalKeyboardOwnershipUITests: TerminalKeyboardUITestCase {
             "Voice input recovery control did not replace the dismissed accessory. \(diagnosticsText(in: app))"
         )
 
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(waitForBackgroundState(of: app, timeout: 8), diagnosticsText(in: app))
+        app.activate()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 8), diagnosticsText(in: app))
+        wait(for: diagnostics, labelContaining: "userHidden=true", timeout: 5, diagnostics: diagnosticsText(in: app))
+        wait(for: diagnostics, labelContaining: "browse=true", timeout: 5, diagnostics: diagnosticsText(in: app))
+        wait(for: diagnostics, labelContaining: "coordinatorKeyboardVisible=false", timeout: 5, diagnostics: diagnosticsText(in: app))
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForNonExistence(timeout: 5),
+            "The software keyboard returned while dismissed. \(diagnosticsText(in: app))"
+        )
+        XCTAssertTrue(floatingKeyboardButton.exists, diagnosticsText(in: app))
+        XCTAssertTrue(floatingVoiceButton.exists, diagnosticsText(in: app))
+
         // UIKit can deliver another accessory dismissal after our model has
         // already recorded the hidden state. The explicit action must still
         // republish that state so both recovery controls remain rendered.
@@ -310,4 +324,3 @@ final class TerminalKeyboardOwnershipUITests: TerminalKeyboardUITestCase {
 
 }
 #endif
-

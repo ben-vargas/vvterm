@@ -201,6 +201,18 @@ struct GhosttyTerminalInteractionOwnershipTests {
         #expect(textInput.inputAccessoryView != nil)
         #expect(!terminal.keyboardCoordinatorDiagnosticSnapshot().isSoftwareKeyboardSuppressed)
 
+        #expect(terminal.focusTerminalInputWithoutShowingSoftwareKeyboard())
+        #expect(terminal.isKeyboardInBrowseMode)
+        #expect(terminal.terminalInputConfiguration == .suppressed)
+        #expect(textInput.inputView === terminal.hiddenKeyboardInputView)
+        #expect(textInput.inputAccessoryView == nil)
+
+        #expect(terminal.forceSoftwareKeyboardInput())
+        #expect(!terminal.isKeyboardInBrowseMode)
+        #expect(terminal.terminalInputConfiguration == .systemWithAccessory)
+        #expect(textInput.inputView == nil)
+        #expect(textInput.inputAccessoryView != nil)
+
         terminal.nativeSelectionLifecycle.prepare(restoreTerminalInput: true)
         terminal.nativeSelectionLifecycle.beginInteraction(restoreTerminalInput: true)
         _ = terminal.nativeSelectionLifecycle.setSelection(

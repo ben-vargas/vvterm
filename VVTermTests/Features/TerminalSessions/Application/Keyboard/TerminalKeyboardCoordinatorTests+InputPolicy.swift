@@ -196,6 +196,58 @@ extension TerminalKeyboardCoordinatorTests {
             #expect(publicationCount > 0)
             _ = observation
         }
+
+        @Test
+        @MainActor
+        func userHiddenModeRejectsVisibleKeyboardFrames() async {
+            let paneId = UUID()
+            let session = TerminalKeyboardInputSessionSpy()
+            let coordinator = TerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { requestedPaneId in
+                requestedPaneId == paneId ? session : nil
+            }
+            coordinator.setActivePane(paneId)
+            coordinator.setViewActive(true)
+            coordinator.setPaneInputEligible(true, for: paneId)
+            coordinator.setWindowAttached(true, for: paneId)
+            await drainMainQueue()
+            coordinator.userRequestedHide()
+            await drainMainQueue()
+
+            coordinator.keyboardUITestReceiveKeyboardEndFrame(
+                CGRect(x: 0, y: 700, width: 1_024, height: 300),
+                isLocal: true
+            )
+            await drainMainQueue()
+
+            #expect(coordinator.softwareKeyboardPresentation == .hidden)
+            #expect(coordinator.isUserHidden)
+            #expect(session.forceSoftwareKeyboardCount == 0)
+            #expect(session.rebuildCount == 0)
+        }
+
+        @Test
+        @MainActor
+        func userHiddenModeMovesAnActiveReplacementSessionIntoBrowseMode() async {
+            let paneId = UUID()
+            let session = TerminalKeyboardInputSessionSpy()
+            let coordinator = TerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { requestedPaneId in
+                requestedPaneId == paneId ? session : nil
+            }
+            coordinator.userRequestedHide()
+            coordinator.setActivePane(paneId)
+            coordinator.setViewActive(true)
+            coordinator.setPaneInputEligible(true, for: paneId)
+            coordinator.setWindowAttached(true, for: paneId)
+            await drainMainQueue()
+
+            #expect(coordinator.isUserHidden)
+            #expect(session.focusWithoutSoftwareKeyboardCount == 1)
+            #expect(session.snapshot.isKeyboardInBrowseMode)
+            #expect(session.snapshot.isSoftwareKeyboardSuppressed)
+            #expect(session.forceSoftwareKeyboardCount == 0)
+        }
     
         @Test
         @MainActor

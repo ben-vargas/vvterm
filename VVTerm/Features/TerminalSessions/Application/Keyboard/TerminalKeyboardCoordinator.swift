@@ -605,7 +605,6 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         }
         explicitPresentationRecovery = nil
         clearSoftwareKeyboardObservation()
-        releaseTerminalInputIfOwned()
     }
 
     func activeTerminalWindowDidBecomeKey(for paneId: UUID) {
@@ -771,6 +770,10 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         #if DEBUG
         guard !Self.usesUITestKeyboardFrameSimulation else { return }
         #endif
+        guard Self.desiredKeyboardVisible(inputs: currentInputs) else {
+            clearSoftwareKeyboardObservation()
+            return
+        }
         guard activeTerminalSceneIsForeground,
               inputOwnership.allowsLocalAcquisition,
               viewActive,
@@ -1102,6 +1105,22 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             terminal: terminal,
             snapshot: before
         )
+        if inputSessionDesired,
+           inputs.userHidKeyboard,
+           !before.isKeyboardInBrowseMode {
+            _ = terminal.focusTerminalInputWithoutShowingSoftwareKeyboard()
+            let after = terminal.keyboardCoordinatorDiagnosticSnapshot()
+            recordLocalInputOwnershipIfNeeded(snapshot: after)
+            logCommand(
+                inputSessionDesired: inputSessionDesired,
+                keyboardPresentationDesired: keyboardPresentationDesired,
+                reason: reason,
+                inputs: inputs,
+                before: before,
+                after: after
+            )
+            return
+        }
         if keyboardPresentationDesired,
            presentationRequest.waitsForWindowOwnership,
            (!before.windowAttached || !before.windowIsKey) {
@@ -1675,6 +1694,10 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     ) {
         guard isLocal else {
             noteExternalKeyboardOwnership()
+            return
+        }
+        guard Self.desiredKeyboardVisible(inputs: currentInputs) else {
+            setSoftwareKeyboardPresentation(.hidden)
             return
         }
         let snapshot = activeTerminal?.keyboardCoordinatorDiagnosticSnapshot()

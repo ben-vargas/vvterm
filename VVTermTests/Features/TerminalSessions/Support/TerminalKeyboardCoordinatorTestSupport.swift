@@ -42,6 +42,9 @@ final class TerminalKeyboardInputSessionSpy: TerminalKeyboardInputSession {
         let observed = acquireObservedStates.isEmpty ? result : acquireObservedStates.removeFirst()
         snapshot.isFirstResponder = observed
         snapshot.isSoftwareInputActive = observed
+        if observed {
+            snapshot.isKeyboardInBrowseMode = false
+        }
         return result
     }
 
@@ -55,6 +58,9 @@ final class TerminalKeyboardInputSessionSpy: TerminalKeyboardInputSession {
             : forceSoftwareKeyboardObservedStates.removeFirst()
         snapshot.isFirstResponder = observed
         snapshot.isSoftwareInputActive = observed
+        if observed {
+            snapshot.isKeyboardInBrowseMode = false
+        }
         return result
     }
 
@@ -62,6 +68,8 @@ final class TerminalKeyboardInputSessionSpy: TerminalKeyboardInputSession {
         focusWithoutSoftwareKeyboardCount += 1
         snapshot.isFirstResponder = true
         snapshot.isSoftwareInputActive = true
+        snapshot.isSoftwareKeyboardSuppressed = true
+        snapshot.isKeyboardInBrowseMode = true
         return true
     }
 
