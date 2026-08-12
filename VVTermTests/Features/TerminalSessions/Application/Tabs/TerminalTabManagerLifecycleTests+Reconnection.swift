@@ -4,7 +4,7 @@ import Testing
 @testable import VVTerm
 
 extension TerminalTabManagerLifecycleTests {
-    @Suite
+    @Suite(.serialized)
     @MainActor
     struct Reconnection: TerminalTabManagerTestSupport {
         @Test
@@ -341,4 +341,3 @@ extension TerminalTabManagerLifecycleTests {
     
     }
 }
-

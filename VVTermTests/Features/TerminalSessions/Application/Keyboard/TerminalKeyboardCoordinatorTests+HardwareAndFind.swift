@@ -7,7 +7,7 @@ import UIKit
 @testable import VVTerm
 
 extension TerminalKeyboardCoordinatorTests {
-    @Suite
+    @Suite(.serialized)
     struct HardwareAndFind {
         @Test
         @MainActor
@@ -398,4 +398,3 @@ extension TerminalKeyboardCoordinatorTests {
     }
 }
 #endif
-

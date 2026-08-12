@@ -7,7 +7,7 @@ import UIKit
 @testable import VVTerm
 
 extension TerminalKeyboardCoordinatorTests {
-    @Suite
+    @Suite(.serialized)
     struct Lifecycle {
         @Test
         @MainActor

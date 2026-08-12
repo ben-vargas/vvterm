@@ -7,7 +7,7 @@ import UIKit
 @testable import VVTerm
 
 extension TerminalKeyboardCoordinatorTests {
-    @Suite
+    @Suite(.serialized)
     struct InputPolicy {
         @Test
         func reconnectInputEligibilityRequiresPriorTypingIntent() {
@@ -212,4 +212,3 @@ extension TerminalKeyboardCoordinatorTests {
     }
 }
 #endif
-

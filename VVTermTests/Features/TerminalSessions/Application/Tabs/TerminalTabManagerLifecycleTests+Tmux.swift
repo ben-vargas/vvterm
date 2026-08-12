@@ -4,7 +4,7 @@ import Testing
 @testable import VVTerm
 
 extension TerminalTabManagerLifecycleTests {
-    @Suite
+    @Suite(.serialized)
     @MainActor
     struct Tmux: TerminalTabManagerTestSupport {
         @Test
@@ -576,4 +576,3 @@ extension TerminalTabManagerLifecycleTests {
         }
     }
 }
-
