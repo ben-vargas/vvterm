@@ -15,6 +15,7 @@ final class TerminalProductionSSHUITests: TerminalReconnectUITestCase {
             "-iCloudSyncEnabled", "NO",
             "-sshAutoReconnect", "YES",
             "-terminalTmuxEnabledDefault", "NO",
+            "-terminalVoiceButtonEnabled", "YES",
             "-terminalUsePerAppearanceTheme", "NO",
             "-terminalThemeName", "Aizen Dark",
             "-security.privacyModeEnabled", "NO",

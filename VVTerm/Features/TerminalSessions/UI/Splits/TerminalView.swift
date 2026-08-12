@@ -212,11 +212,12 @@ struct TerminalTabView: View {
                 terminalContextMenuActions: terminalContextMenuActions(for: paneId),
                 onPaneKeyboardShortcut: handleSplitCommand,
                 appearance: appearance,
-                showsVoiceButton: isSelected
-                    && voiceSettingsStore.settings.terminalVoiceButtonEnabled
-                    && !showingVoiceRecording
-                    && tab.focusedPaneId == paneId
-                    && hasFocusedTerminal,
+                showsVoiceButton: TerminalVoiceButtonVisibilityPolicy.isVisible(
+                    settingEnabled: voiceSettingsStore.settings.terminalVoiceButtonEnabled,
+                    tabSelected: isSelected,
+                    paneFocused: tab.focusedPaneId == paneId,
+                    recording: showingVoiceRecording
+                ),
                 onVoiceTrigger: { startVoiceRecording() }
             )
             .id("\(paneId)-\(layoutVersion)")

@@ -28,6 +28,7 @@ class TerminalReconnectUITestCase: XCTestCase {
             "-iCloudSyncEnabled", "NO",
             "-sshAutoReconnect", "YES",
             "-terminalTmuxEnabledDefault", "NO",
+            "-terminalVoiceButtonEnabled", "YES",
             "-security.privacyModeEnabled", "NO",
             "-security.fullAppLockEnabled", "NO",
             "-security.lockOnBackground", "NO",
@@ -235,6 +236,11 @@ class TerminalReconnectUITestCase: XCTestCase {
                 .waitForExistence(timeout: 5),
             diagnosticText(in: app)
         )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["vvterm.keyboard.accessory.voice"]
+                .waitForExistence(timeout: 5),
+            "The terminal voice button was not stable. \(diagnosticText(in: app))"
+        )
     }
 
     @MainActor
@@ -307,4 +313,3 @@ class TerminalReconnectUITestCase: XCTestCase {
     }
 }
 #endif
-
