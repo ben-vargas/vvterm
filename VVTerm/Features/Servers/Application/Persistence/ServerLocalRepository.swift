@@ -31,4 +31,7 @@ protocol ServerLocalRepository:
     func loadSnapshot() -> ServerLocalRepositorySnapshot
     func persist(servers: [Server], workspaces: [Workspace]) throws
     func clearServerData() throws
+    func loadAmbiguousCloudRecoveryBackup() throws -> AmbiguousCloudRecoveryBackup?
+    func storeAmbiguousCloudRecoveryBackup(_ backup: AmbiguousCloudRecoveryBackup) throws
+    func clearAmbiguousCloudRecoveryBackup() throws
 }

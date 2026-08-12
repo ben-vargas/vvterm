@@ -164,6 +164,39 @@ struct ServerLocalStoreTests {
         #expect(servers == plan.previousServers)
     }
 
+    @Test
+    func ambiguousCloudRecoveryBackupSurvivesRestartAndKeepsFirstSnapshot() throws {
+        let fixture = try makeDefaults()
+        let defaults = fixture.defaults
+        defer { defaults.removePersistentDomain(forName: fixture.suiteName) }
+        let workspace = Workspace(name: "Original", order: 0)
+        let server = Server(
+            workspaceId: workspace.id,
+            name: "Server",
+            host: "server.example.test",
+            username: "root"
+        )
+        let backup = AmbiguousCloudRecoveryBackup(
+            servers: [server],
+            workspaces: [workspace]
+        )
+        let store = ServerLocalStore(defaults: defaults)
+
+        try store.storeAmbiguousCloudRecoveryBackup(backup)
+        try store.storeAmbiguousCloudRecoveryBackup(
+            AmbiguousCloudRecoveryBackup(
+                servers: [],
+                workspaces: []
+            )
+        )
+
+        let restartedStore = ServerLocalStore(defaults: defaults)
+        #expect(try restartedStore.loadAmbiguousCloudRecoveryBackup() == backup)
+
+        try restartedStore.clearAmbiguousCloudRecoveryBackup()
+        #expect(try store.loadAmbiguousCloudRecoveryBackup() == nil)
+    }
+
     private func makeDefaults() throws -> (defaults: UserDefaults, suiteName: String) {
         let suiteName = "ServerLocalStoreTests.\(UUID().uuidString)"
         return (try #require(UserDefaults(suiteName: suiteName)), suiteName)

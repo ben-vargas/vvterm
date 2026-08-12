@@ -60,6 +60,12 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         try await remoteSyncCoordinator.clearLocalDataAndResync()
     }
 
+    func resolveAmbiguousCloudRecovery(
+        _ choice: AmbiguousCloudRecoveryChoice
+    ) async throws {
+        try await remoteSyncCoordinator.resolveAmbiguousCloudRecovery(choice)
+    }
+
     // MARK: - Data Loading
 
     func loadData() async {

@@ -36,6 +36,7 @@ final class ServerRemoteSyncCoordinator {
     )
     private var activeLoad: ActiveLoad?
     private var startupTask: Task<Void, Never>?
+    private var pendingAmbiguousFullFetch: ServerRemoteChanges?
 
     init(dependencies: ServerRemoteSyncCoordinatorDependencies) {
         self.dependencies = dependencies
@@ -78,6 +79,7 @@ final class ServerRemoteSyncCoordinator {
     func handleSyncDisabled() {
         startupTask?.cancel()
         startupTask = nil
+        pendingAmbiguousFullFetch = nil
         invalidateActiveLoad()
         stateStore.refreshFreePlanGeneration(
             persistCurrentIfNeeded: true,
@@ -124,6 +126,7 @@ final class ServerRemoteSyncCoordinator {
 
         stateStore.restorePendingBootstrapWorkspaceID(nil)
         try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
+        try clearAmbiguousCloudRecoveryIfNeeded()
         stateStore.refreshFreePlanGeneration(
             persistCurrentIfNeeded: true,
             reason: "authoritative_resync"
@@ -132,6 +135,70 @@ final class ServerRemoteSyncCoordinator {
         logger.info(
             "Authoritative re-sync complete: \(self.stateStore.workspaces.count) workspaces, \(self.stateStore.servers.count) servers"
         )
+    }
+
+    func resolveAmbiguousCloudRecovery(
+        _ choice: AmbiguousCloudRecoveryChoice
+    ) async throws {
+        if let activeLoad {
+            await activeLoad.task.value
+        }
+        guard stateStore.ambiguousCloudRecovery != nil else { return }
+        try stateStore.requireNoPendingServerMutation()
+        guard stateStore.isSyncEnabled,
+              dependencies.remoteRepository.isAvailable,
+              let changes = pendingAmbiguousFullFetch else {
+            throw AmbiguousCloudRecoveryError.remoteUnavailable
+        }
+        guard changes.isFullFetch else {
+            throw AmbiguousCloudRecoveryError.incompleteSnapshot
+        }
+
+        switch choice {
+        case .keepLocal:
+            try stateStore.persistCurrentCollectionsForRemoteAcceptance()
+            try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
+
+        case .uploadLocal:
+            try stateStore.persistCurrentCollectionsForRemoteAcceptance()
+            for workspace in stateStore.workspaces {
+                try await dependencies.remoteRepository.saveWorkspace(workspace)
+            }
+            for server in stateStore.servers {
+                try await dependencies.remoteRepository.saveServer(server)
+            }
+            try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
+
+        case .replaceWithCloud:
+            let previousServers = stateStore.servers
+            let previousWorkspaces = stateStore.workspaces
+            let previousBootstrapWorkspaceID = stateStore.transientBootstrapWorkspaceID
+            stateStore.applyRemoteChanges(changes)
+            do {
+                try stateStore.persistCurrentCollectionsForRemoteAcceptance()
+                try dependencies.syncRepository.clearPendingServerAndWorkspaceMutations()
+            } catch {
+                stateStore.replaceCollections(
+                    servers: previousServers,
+                    workspaces: previousWorkspaces
+                )
+                stateStore.restorePendingBootstrapWorkspaceID(previousBootstrapWorkspaceID)
+                try? stateStore.persistCurrentCollectionsForRemoteAcceptance()
+                throw error
+            }
+            stateStore.restorePendingBootstrapWorkspaceID(nil)
+            try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
+        }
+
+        try clearAmbiguousCloudRecoveryIfNeeded()
+        stateStore.resetLoading()
+        stateStore.refreshFreePlanGeneration(
+            persistCurrentIfNeeded: true,
+            reason: "ambiguous_cloud_recovery"
+        )
+        if choice == .uploadLocal {
+            await drainPendingMutations()
+        }
     }
 
     func enqueue(_ effect: ServerMutationEffect) throws {
@@ -274,6 +341,12 @@ final class ServerRemoteSyncCoordinator {
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
         let changes = backfillResult.changes
 
+        if stateStore.automaticEmptyFullFetchNeedsRecovery(changes) {
+            try stateStore.preserveAmbiguousCloudRecoveryBackup()
+            pendingAmbiguousFullFetch = changes
+            throw AmbiguousCloudRecoveryError.emptyFullFetchNeedsDecision
+        }
+
         logger.info(
             "CloudKit returned \(changes.workspaces.count) workspaces, \(changes.servers.count) servers (full fetch: \(changes.isFullFetch))"
         )
@@ -307,6 +380,7 @@ final class ServerRemoteSyncCoordinator {
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
         do {
             try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
+            try clearAmbiguousCloudRecoveryIfNeeded()
         } catch {
             await failLoad(error, operationID: operationID, generation: generation)
             return
@@ -325,6 +399,13 @@ final class ServerRemoteSyncCoordinator {
             "Loaded \(self.stateStore.workspaces.count) workspaces and \(self.stateStore.servers.count) servers from CloudKit"
         )
         finishActiveLoad(operationID: operationID, generation: generation)
+    }
+
+    private func clearAmbiguousCloudRecoveryIfNeeded() throws {
+        if stateStore.ambiguousCloudRecovery != nil {
+            try stateStore.clearAmbiguousCloudRecovery()
+        }
+        pendingAmbiguousFullFetch = nil
     }
 
     private func failLoad(

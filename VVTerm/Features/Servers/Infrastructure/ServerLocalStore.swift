@@ -8,6 +8,8 @@ struct ServerLocalStore {
         "com.vivy.vvterm.serverMutationTransactionJournal.v1"
     private static let workspaceDeletionJournalKey = "com.vivy.vvterm.workspaceDeletionJournal.v1"
     private static let environmentDeletionJournalKey = "com.vivy.vvterm.environmentDeletionJournal.v1"
+    private static let ambiguousCloudRecoveryBackupKey =
+        "com.vivy.vvterm.ambiguousCloudRecoveryBackup.v1"
 
     private let defaults: UserDefaults
     private let serversKey: String
@@ -151,6 +153,32 @@ extension ServerLocalStore: ServerLocalRepository {
         try requireNoPendingServerMutation()
         defaults.removeObject(forKey: serversKey)
         defaults.removeObject(forKey: workspacesKey)
+    }
+
+    func loadAmbiguousCloudRecoveryBackup() throws -> AmbiguousCloudRecoveryBackup? {
+        guard let data = defaults.data(forKey: Self.ambiguousCloudRecoveryBackupKey) else {
+            return nil
+        }
+        return try JSONDecoder().decode(AmbiguousCloudRecoveryBackup.self, from: data)
+    }
+
+    func storeAmbiguousCloudRecoveryBackup(_ backup: AmbiguousCloudRecoveryBackup) throws {
+        if try loadAmbiguousCloudRecoveryBackup() != nil {
+            return
+        }
+        let data = try JSONEncoder().encode(backup)
+        defaults.set(data, forKey: Self.ambiguousCloudRecoveryBackupKey)
+        guard defaults.data(forKey: Self.ambiguousCloudRecoveryBackupKey) == data,
+              try loadAmbiguousCloudRecoveryBackup() == backup else {
+            throw ServerLocalStoreError.persistenceFailed
+        }
+    }
+
+    func clearAmbiguousCloudRecoveryBackup() throws {
+        defaults.removeObject(forKey: Self.ambiguousCloudRecoveryBackupKey)
+        guard defaults.object(forKey: Self.ambiguousCloudRecoveryBackupKey) == nil else {
+            throw ServerLocalStoreError.persistenceFailed
+        }
     }
 
     private func requireNoPendingServerMutation() throws {

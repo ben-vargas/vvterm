@@ -52,6 +52,7 @@ nonisolated struct ServerManagerSnapshot: Equatable, Sendable {
     var workspaces: [Workspace]
     var loadState: ServerDataLoadState
     var localStorageIssues: [ServerLocalStorageIssue]
+    var ambiguousCloudRecovery: AmbiguousCloudRecoveryState?
     var freePlanGeneration: FreePlanGeneration
 
     init(
@@ -59,12 +60,14 @@ nonisolated struct ServerManagerSnapshot: Equatable, Sendable {
         workspaces: [Workspace] = [],
         loadState: ServerDataLoadState = ServerDataLoadState(),
         localStorageIssues: [ServerLocalStorageIssue] = [],
+        ambiguousCloudRecovery: AmbiguousCloudRecoveryState? = nil,
         freePlanGeneration: FreePlanGeneration
     ) {
         self.servers = servers
         self.workspaces = workspaces
         self.loadState = loadState
         self.localStorageIssues = localStorageIssues
+        self.ambiguousCloudRecovery = ambiguousCloudRecovery
         self.freePlanGeneration = freePlanGeneration
     }
 }

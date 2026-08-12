@@ -29,6 +29,40 @@ nonisolated struct ServerRemoteChanges: Equatable, Sendable {
     }
 }
 
+nonisolated enum AmbiguousCloudRecoveryChoice: Equatable, Sendable {
+    case keepLocal
+    case uploadLocal
+    case replaceWithCloud
+}
+
+nonisolated struct AmbiguousCloudRecoveryBackup: Codable, Equatable, Sendable {
+    let servers: [Server]
+    let workspaces: [Workspace]
+}
+
+nonisolated enum AmbiguousCloudRecoveryState: Equatable, Sendable {
+    case decisionRequired
+}
+
+nonisolated enum AmbiguousCloudRecoveryError: LocalizedError, Equatable, Sendable {
+    case emptyFullFetchNeedsDecision
+    case remoteUnavailable
+    case incompleteSnapshot
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyFullFetchNeedsDecision:
+            return String(
+                localized: "Cloud data is unexpectedly empty. Choose how VVTerm should recover."
+            )
+        case .remoteUnavailable:
+            return String(localized: "iCloud is not available. Try again when sync is available.")
+        case .incompleteSnapshot:
+            return String(localized: "iCloud did not return a complete server snapshot.")
+        }
+    }
+}
+
 nonisolated struct ServerPendingMutation: Codable, Equatable, Identifiable, Sendable {
     nonisolated enum Payload: Codable, Equatable, Sendable {
         case serverUpsert(Server)

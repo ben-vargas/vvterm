@@ -55,6 +55,7 @@ final class ServerLocalRepositoryFake: ServerLocalRepository {
     var serverMutationJournal: ServerMutationTransactionJournal?
     var journal: WorkspaceDeletionJournal?
     var environmentDeletionJournal: EnvironmentDeletionJournal?
+    var ambiguousCloudRecoveryBackup: AmbiguousCloudRecoveryBackup?
 
     init(servers: [Server], workspaces: [Workspace]) {
         self.servers = servers
@@ -93,6 +94,18 @@ final class ServerLocalRepositoryFake: ServerLocalRepository {
         if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
         servers = []
         workspaces = []
+    }
+
+    func loadAmbiguousCloudRecoveryBackup() throws -> AmbiguousCloudRecoveryBackup? {
+        ambiguousCloudRecoveryBackup
+    }
+    func storeAmbiguousCloudRecoveryBackup(_ backup: AmbiguousCloudRecoveryBackup) throws {
+        if ambiguousCloudRecoveryBackup == nil {
+            ambiguousCloudRecoveryBackup = backup
+        }
+    }
+    func clearAmbiguousCloudRecoveryBackup() throws {
+        ambiguousCloudRecoveryBackup = nil
     }
 
     func loadServerMutationTransactionJournal() throws -> ServerMutationTransactionJournal? {

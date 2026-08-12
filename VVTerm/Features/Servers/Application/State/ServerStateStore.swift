@@ -45,6 +45,9 @@ final class ServerStateStore: ObservableObject {
     var workspaces: [Workspace] { snapshot.workspaces }
     var loadState: ServerDataLoadState { snapshot.loadState }
     var localStorageIssues: [ServerLocalStorageIssue] { snapshot.localStorageIssues }
+    var ambiguousCloudRecovery: AmbiguousCloudRecoveryState? {
+        snapshot.ambiguousCloudRecovery
+    }
     var freePlanGeneration: FreePlanGeneration { snapshot.freePlanGeneration }
     var isLoading: Bool { loadState.isLoading }
     var error: String? { loadState.errorMessage }
@@ -114,6 +117,42 @@ final class ServerStateStore: ObservableObject {
 
     func dismissLocalStorageIssues() {
         updateSnapshot { $0.localStorageIssues.removeAll() }
+    }
+
+    func automaticEmptyFullFetchNeedsRecovery(_ changes: ServerRemoteChanges) -> Bool {
+        guard changes.isFullFetch,
+              changes.servers.isEmpty,
+              changes.workspaces.isEmpty,
+              localCacheContainsUserData else {
+            return false
+        }
+
+        let deletedServerIDs = Set(changes.deletedServerIDs)
+        let deletedWorkspaceIDs = Set(changes.deletedWorkspaceIDs)
+        let localServerIDs = Set(servers.map(\.id))
+        let localWorkspaceIDs = Set(
+            workspaces.lazy
+                .filter { $0.id != self.transientBootstrapWorkspaceID }
+                .map(\.id)
+        )
+        return !localServerIDs.isSubset(of: deletedServerIDs)
+            || !localWorkspaceIDs.isSubset(of: deletedWorkspaceIDs)
+    }
+
+    func preserveAmbiguousCloudRecoveryBackup() throws {
+        let backup = AmbiguousCloudRecoveryBackup(
+            servers: servers,
+            workspaces: workspaces
+        )
+        try dependencies.localRepository.storeAmbiguousCloudRecoveryBackup(backup)
+        let storedBackup = try dependencies.localRepository.loadAmbiguousCloudRecoveryBackup()
+        guard storedBackup != nil else { throw ServerLocalStoreError.persistenceFailed }
+        updateSnapshot { $0.ambiguousCloudRecovery = .decisionRequired }
+    }
+
+    func clearAmbiguousCloudRecovery() throws {
+        try dependencies.localRepository.clearAmbiguousCloudRecoveryBackup()
+        updateSnapshot { $0.ambiguousCloudRecovery = nil }
     }
 
     func persistCurrentCollections() {
@@ -687,6 +726,9 @@ final class ServerStateStore: ObservableObject {
     private func loadLocalData() {
         let persisted = dependencies.localRepository.loadSnapshot()
         applyPersistedCollections(persisted)
+        if (try? dependencies.localRepository.loadAmbiguousCloudRecoveryBackup()) != nil {
+            updateSnapshot { $0.ambiguousCloudRecovery = .decisionRequired }
+        }
         guard !hasPendingServerMutation else { return }
         var shouldPersist = reconcilePendingBootstrapWorkspaceState()
         if Self.shouldCreateBootstrapWorkspace(

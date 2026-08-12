@@ -1,28 +1,95 @@
 import SwiftUI
 
 struct ServerLocalStorageNotice: View {
+    let serverManager: ServerManager
     @ObservedObject var stateStore: ServerStateStore
+    @State private var isShowingCloudRecovery = false
+    @State private var recoveryFailure: String?
 
-    init(stateStore: ServerStateStore) {
-        _stateStore = ObservedObject(wrappedValue: stateStore)
+    init(serverManager: ServerManager) {
+        self.serverManager = serverManager
+        _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
     }
 
     var body: some View {
-        if !stateStore.localStorageIssues.isEmpty {
-            NoticeBannerView(
-                item: NoticeItem(
-                    id: "server-local-storage-unreadable",
-                    lane: .topBanner,
-                    level: .warning,
-                    leading: .icon("externaldrive.badge.exclamationmark"),
-                    title: String(localized: "Local data could not be read"),
-                    message: String(localized: "VVTerm preserved a backup before using replacement data."),
-                    dismissAction: stateStore.dismissLocalStorageIssues
-                )
-            )
+        if stateStore.ambiguousCloudRecovery != nil || !stateStore.localStorageIssues.isEmpty {
+            Group {
+                if stateStore.ambiguousCloudRecovery != nil {
+                    NoticeBannerView(
+                        item: NoticeItem(
+                            id: "server-empty-cloud-recovery",
+                            lane: .topBanner,
+                            level: .warning,
+                            leading: .icon("icloud.slash"),
+                            title: String(localized: "Cloud server data is empty"),
+                            message: String(localized: "Your local data is safe. Choose how to continue."),
+                            action: NoticeAction(
+                                id: "review-cloud-recovery",
+                                title: String(localized: "Review"),
+                                handler: { isShowingCloudRecovery = true }
+                            )
+                        )
+                    )
+                } else {
+                    NoticeBannerView(
+                        item: NoticeItem(
+                            id: "server-local-storage-unreadable",
+                            lane: .topBanner,
+                            level: .warning,
+                            leading: .icon("externaldrive.badge.exclamationmark"),
+                            title: String(localized: "Local data could not be read"),
+                            message: String(localized: "VVTerm preserved a backup before using replacement data."),
+                            dismissAction: stateStore.dismissLocalStorageIssues
+                        )
+                    )
+                }
+            }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .confirmationDialog(
+                String(localized: "Cloud server data is empty"),
+                isPresented: $isShowingCloudRecovery,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "Keep Local Data")) {
+                    resolve(.keepLocal)
+                }
+                Button(String(localized: "Upload Local Data")) {
+                    resolve(.uploadLocal)
+                }
+                Button(String(localized: "Replace with Empty Cloud Data"), role: .destructive) {
+                    resolve(.replaceWithCloud)
+                }
+                Button(String(localized: "Cancel"), role: .cancel) {}
+            } message: {
+                Text(
+                    String(
+                        localized: "VVTerm could not confirm that the empty cloud state is intentional."
+                    )
+                )
+            }
+            .alert(
+                String(localized: "Recovery Failed"),
+                isPresented: Binding(
+                    get: { recoveryFailure != nil },
+                    set: { if !$0 { recoveryFailure = nil } }
+                )
+            ) {
+                Button(String(localized: "OK"), role: .cancel) {}
+            } message: {
+                Text(recoveryFailure ?? "")
+            }
+        }
+    }
+
+    private func resolve(_ choice: AmbiguousCloudRecoveryChoice) {
+        Task {
+            do {
+                try await serverManager.resolveAmbiguousCloudRecovery(choice)
+            } catch {
+                recoveryFailure = error.localizedDescription
+            }
         }
     }
 }
