@@ -104,7 +104,6 @@ VVTerm/
 │   ├── TerminalThemes/
 │   ├── VoiceInput/
 │   └── Welcome/
-├── Compatibility/               # Version/platform helpers
 ├── Generated/                   # Build-time generated sources
 └── Resources/                   # Bundled assets, themes, terminfo, localizations
 ```
