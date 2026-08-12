@@ -397,6 +397,13 @@ final class RemoteFileBrowserStore: ObservableObject {
         temporaryStorage.removeItem(at: url)
     }
 
+    func prepareDragExport(for entry: RemoteFileEntry, server: Server) async throws -> URL {
+        try await temporaryStorage.prepareDragExport(for: entry) { [weak self] temporaryURL in
+            guard let self else { throw CancellationError() }
+            try await downloadItem(entry, to: temporaryURL, server: server)
+        }
+    }
+
     func goUp(in tab: RemoteFileTab, server: Server) async {
         guard tab.serverId == server.id else { return }
         let currentPath = currentPath(for: tab)

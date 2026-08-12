@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct RemoteFileBrowserScreen: View {
     @ObservedObject var browser: RemoteFileBrowserStore
@@ -92,7 +91,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     var remoteRowDropTypeIdentifiers: [String] {
-        [UTType.vvtermRemoteFileEntry.identifier, UTType.fileURL.identifier]
+        RemoteFileItemProviderAdapter.acceptedTypeIdentifiers
     }
 
     var terminalThemeBackgroundColor: Color {
@@ -980,51 +979,39 @@ struct RemoteFileBrowserScreen: View {
     }
 
     func handleCurrentDirectoryDrop(_ providers: [NSItemProvider], to destinationPath: String) -> Bool {
-        if handleRemoteDrop(providers, to: destinationPath) {
-            return true
-        }
-
-        return handleLocalDrop(providers, to: destinationPath)
+        RemoteFileItemProviderAdapter.acceptsRemoteItems(providers)
+            ? handleRemoteDrop(providers, to: destinationPath)
+            : handleLocalDrop(providers, to: destinationPath)
     }
 
     func handleLocalDrop(_ providers: [NSItemProvider], to destinationPath: String) -> Bool {
-        let fileURLProviders = providers.filter { provider in
-            provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
-        }
-        guard !fileURLProviders.isEmpty else { return false }
-
-        Task {
-            do {
-                let urls = try await loadDroppedURLs(from: fileURLProviders)
-                await MainActor.run {
+        guard RemoteFileItemProviderAdapter.acceptsLocalItems(providers) else { return false }
+        RemoteFileItemProviderAdapter.loadLocalItems(from: providers) { result in
+            switch result {
+            case .success(let urls):
+                if !urls.isEmpty {
                     beginUploadFlow(
                         urls: urls,
                         to: destinationPath,
                         initialMessage: String(localized: "Preparing dropped files.")
                     )
                 }
-            } catch {
-                await MainActor.run {
-                    presentOperationError(error)
-                }
+            case .failure(let error):
+                presentOperationError(error)
             }
         }
-
         return true
     }
 
     func handleRemoteDrop(_ providers: [NSItemProvider], to destinationPath: String) -> Bool {
-        let remoteProviders = providers.filter { provider in
-            provider.hasItemConformingToTypeIdentifier(UTType.vvtermRemoteFileEntry.identifier)
-        }
-        guard !remoteProviders.isEmpty else { return false }
+        guard RemoteFileItemProviderAdapter.acceptsRemoteItems(providers) else { return false }
 
         performTransfer(
             title: String(localized: "Transferring"),
             initialMessage: String(localized: "Preparing remote items."),
             successMessage: String(localized: "Transfer complete.")
         ) { onProgress in
-            let payloads = try await loadDroppedRemotePayloads(from: remoteProviders)
+            let payloads = try await RemoteFileItemProviderAdapter.loadRemotePayloads(from: providers)
             try await browser.transferDroppedRemoteItems(
                 payloads,
                 to: destinationPath,
@@ -1043,176 +1030,12 @@ struct RemoteFileBrowserScreen: View {
     }
 
     func dragItemProvider(for entry: RemoteFileEntry) -> NSItemProvider {
-        let provider = NSItemProvider()
-        provider.suggestedName = dragSuggestedName(for: [entry])
-        registerRemoteDragPayload(for: [entry], in: provider)
-        registerFileRepresentation(for: entry, in: provider)
-        return provider
-    }
-
-    func registerRemoteDragPayload(for entries: [RemoteFileEntry], in provider: NSItemProvider) {
-        let encodedPayload = Result {
-            try JSONEncoder().encode(RemoteFileDragPayload(serverId: server.id, entries: entries))
+        RemoteFileItemProviderAdapter.makeProvider(
+            payload: RemoteFileDragPayload(serverId: server.id, entries: [entry]),
+            entry: entry
+        ) { entry in
+            try await browser.prepareDragExport(for: entry, server: server)
         }
-        provider.registerDataRepresentation(
-            forTypeIdentifier: UTType.vvtermRemoteFileEntry.identifier,
-            visibility: .ownProcess
-        ) { completion in
-            do {
-                let data = try encodedPayload.get()
-                completion(data, nil)
-            } catch {
-                completion(nil, error)
-            }
-            return nil
-        }
-    }
-
-    func registerFileRepresentation(for entry: RemoteFileEntry, in provider: NSItemProvider) {
-        let typeIdentifier = dragFileTypeIdentifier(for: entry)
-        provider.registerFileRepresentation(
-            forTypeIdentifier: typeIdentifier,
-            fileOptions: [],
-            visibility: .all
-        ) { completion in
-            let progress = Progress(totalUnitCount: 1)
-
-            let exportTask = Task {
-                do {
-                    let temporaryURL = try await browser.temporaryStorage.prepareDragExport(
-                        for: entry
-                    ) { temporaryURL in
-                        try await browser.downloadItem(entry, to: temporaryURL, server: server)
-                        guard !progress.isCancelled else { throw CancellationError() }
-                    }
-                    completion(temporaryURL, false, nil)
-                    progress.completedUnitCount = 1
-                } catch {
-                    completion(nil, false, error)
-                }
-            }
-            progress.cancellationHandler = {
-                exportTask.cancel()
-            }
-
-            return progress
-        }
-    }
-
-    func dragFileTypeIdentifier(for entry: RemoteFileEntry) -> String {
-        if entry.type == .directory {
-            return UTType.folder.identifier
-        }
-
-        let pathExtension = URL(fileURLWithPath: entry.name).pathExtension
-        return UTType(filenameExtension: pathExtension)?.identifier ?? UTType.data.identifier
-    }
-
-    func loadDroppedURLs(from providers: [NSItemProvider]) async throws -> [URL] {
-        var urls: [URL] = []
-
-        for provider in providers {
-            urls.append(try await loadDroppedURL(from: provider))
-        }
-
-        let uniqueURLs = Array(NSOrderedSet(array: urls).compactMap { $0 as? URL })
-        guard !uniqueURLs.isEmpty else {
-            throw RemoteFileBrowserError.failed(String(localized: "No valid files or folders were dropped."))
-        }
-        return uniqueURLs
-    }
-
-    func loadDroppedURL(from provider: NSItemProvider) async throws -> URL {
-        try await withCheckedThrowingContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                if let url = item as? URL {
-                    continuation.resume(returning: url)
-                    return
-                }
-
-                if let url = item as? NSURL {
-                    continuation.resume(returning: url as URL)
-                    return
-                }
-
-                if let data = item as? Data,
-                   let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    continuation.resume(returning: url)
-                    return
-                }
-
-                if let text = item as? String,
-                   let url = URL(string: text) {
-                    continuation.resume(returning: url)
-                    return
-                }
-
-                continuation.resume(
-                    throwing: RemoteFileBrowserError.failed(
-                        String(localized: "The dropped item could not be resolved to a local file or folder.")
-                    )
-                )
-            }
-        }
-    }
-
-    func loadDroppedRemotePayloads(from providers: [NSItemProvider]) async throws -> [RemoteFileDragPayload] {
-        var payloads: [RemoteFileDragPayload] = []
-
-        for provider in providers {
-            payloads.append(try await loadDroppedRemotePayload(from: provider))
-        }
-
-        guard payloads.contains(where: { !$0.entries.isEmpty }) else {
-            throw RemoteFileBrowserError.failed(String(localized: "No valid remote items were dropped."))
-        }
-        return payloads
-    }
-
-    func loadDroppedRemotePayload(from provider: NSItemProvider) async throws -> RemoteFileDragPayload {
-        try await withCheckedThrowingContinuation { continuation in
-            provider.loadDataRepresentation(forTypeIdentifier: UTType.vvtermRemoteFileEntry.identifier) { data, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                guard let data else {
-                    continuation.resume(
-                        throwing: RemoteFileBrowserError.failed(
-                            String(localized: "The dragged remote item could not be decoded.")
-                        )
-                    )
-                    return
-                }
-
-                Task { @MainActor in
-                    do {
-                        let payload = try JSONDecoder().decode(RemoteFileDragPayload.self, from: data)
-                        continuation.resume(returning: payload)
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
-        }
-    }
-
-    func dragSuggestedName(for entries: [RemoteFileEntry]) -> String? {
-        guard entries.count > 1 else {
-            guard let name = entries.first?.name, !name.isEmpty else { return nil }
-            return name
-        }
-
-        return String(
-            format: String(localized: "%lld items"),
-            Int64(entries.count)
-        )
     }
 
     func createFolder() {

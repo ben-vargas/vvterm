@@ -25,7 +25,3 @@ struct RemoteFileShareItem: Identifiable {
     let sourceURL: URL
     let title: String
 }
-
-extension UTType {
-    static let vvtermRemoteFileEntry = UTType(exportedAs: "app.vivy.vvterm.remote-file-entry")
-}

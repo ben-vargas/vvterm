@@ -306,7 +306,7 @@ extension RemoteFileBrowserScreen {
                 try await browser.downloadItem(entry, to: destinationURL, server: server)
             },
             fileTypeIdentifier: { entry in
-                dragFileTypeIdentifier(for: entry)
+                RemoteFileItemProviderAdapter.fileTypeIdentifier(for: entry)
             },
             kindLabel: { entry in
                 kindLabel(for: entry)
