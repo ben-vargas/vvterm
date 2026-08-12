@@ -82,26 +82,26 @@ final class TerminalTabManager {
             remoteMosh: dependencies.remoteMosh,
             eternalTerminalRuntimeDependencies: dependencies.eternalTerminalRuntime,
             sessionAccess: TerminalTransportSessionAccess(
-                paneState: { paneId in
-                    sessionState.paneState(for: paneId)
+                paneState: { [weak sessionState] paneId in
+                    sessionState?.paneState(for: paneId)
                 },
-                allPaneStates: {
-                    sessionState.allPaneStates
+                allPaneStates: { [weak sessionState] in
+                    sessionState?.allPaneStates ?? []
                 },
-                selectedTab: { serverId in
-                    sessionState.selectedTab(for: serverId)
+                selectedTab: { [weak sessionState] serverId in
+                    sessionState?.selectedTab(for: serverId)
                 },
-                tabs: { serverId in
-                    sessionState.tabs(for: serverId)
+                tabs: { [weak sessionState] serverId in
+                    sessionState?.tabs(for: serverId) ?? []
                 },
-                containsPane: { paneId in
-                    sessionState.containsPane(paneId)
+                containsPane: { [weak sessionState] paneId in
+                    sessionState?.containsPane(paneId) == true
                 },
-                workingDirectory: { paneId in
-                    sessionState.paneState(for: paneId)?.workingDirectory
+                workingDirectory: { [weak sessionState] paneId in
+                    sessionState?.paneState(for: paneId)?.workingDirectory
                 },
-                shouldApplyWorkingDirectory: { paneId in
-                    tmuxCoordinator.shouldApplyWorkingDirectory(for: paneId)
+                shouldApplyWorkingDirectory: { [weak tmuxCoordinator] paneId in
+                    tmuxCoordinator?.shouldApplyWorkingDirectory(for: paneId) == true
                 },
                 send: { event in
                     runtimeEvents.send(event)
