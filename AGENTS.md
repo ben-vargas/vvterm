@@ -25,6 +25,7 @@ VVTerm/
 │   ├── Security/
 │   ├── Sync/
 │   └── Terminal/
+│       └── Ghostty/              # Shared libghostty bridge
 ├── Features/                     # Feature-first product features
 │   ├── ConnectionViews/
 │   │   ├── Domain/
@@ -76,6 +77,7 @@ VVTerm/
 │   ├── TerminalSessions/
 │   │   ├── Domain/
 │   │   ├── Application/
+│   │   ├── Infrastructure/       # Session runtimes and Ghostty surfaces
 │   │   └── UI/
 │   ├── Stats/
 │   │   ├── Domain/
@@ -85,7 +87,6 @@ VVTerm/
 │   └── Welcome/
 │       ├── Domain/
 │       └── UI/
-├── GhosttyTerminal/              # libghostty terminal emulation
 ├── Compatibility/                # Version/platform compatibility helpers
 ├── Generated/                    # Build-time generated sources
 └── Resources/                    # Bundled assets, themes, terminfo, l10n
@@ -101,7 +102,7 @@ Current architecture:
 - `Core/Security` owns keychain, device identity, and privacy-mode infrastructure.
 - `Core/Network` owns shared connectivity monitoring and Cloudflare transport support.
 - `Core/UI` owns shared view primitives and presentation helpers reused across features.
-- `Core/Terminal` owns shared clipboard, paste, and terminal text/default helpers.
+- `Core/Terminal` owns shared clipboard, paste, terminal text/default helpers, and the shared libghostty bridge.
 - `Core/Logging` owns shared logging utilities.
 - `Core/SSH` owns shared SSH bootstrap, known-hosts, key generation, environment detection, rich-paste support, tmux/mosh runtime helpers, and `SSHClient`.
 - `Features/ConnectionViews` owns connection view tab configuration types and state.
@@ -116,7 +117,7 @@ Current architecture:
 - `Features/TerminalThemes` owns theme models, validation, storage paths, parsing, and theme management.
 - `Features/TerminalAccessories` owns keyboard accessory models, preferences, settings UI, and accessory validation flows.
 - `Features/TerminalPresets` owns terminal preset models, persistence, and preset form UI.
-- `Features/TerminalSessions` owns terminal session/tab domain models, session/tab managers, tmux prompt coordination, live activity support, and terminal session UI.
+- `Features/TerminalSessions` owns terminal session/tab domain models, session/tab managers, tmux prompt coordination, live activity support, Ghostty runtime surfaces, and platform terminal UI.
 - `Features/VoiceInput` owns transcription/audio capture infrastructure, MLX model management, and transcription settings UI.
 - `Features/Welcome` owns welcome/onboarding copy and presentation.
 - New app code should land in `Features`, `Core`, or `App` based on ownership.
