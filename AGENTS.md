@@ -243,6 +243,19 @@ Safe refactor expectation:
 - Do not rely on "checked on my phone" or manual Xcode testing as the only validation for keyboard/input regressions. Keep simulator UI tests or unit tests that can be rerun by future agents.
 - Before finishing non-documentation code changes, run the narrowest reliable build/test commands that exercise the touched behavior and report exactly what was run. If a test cannot run because of tooling or environment issues, report that as a residual risk.
 
+## Test Source Organization
+
+- Put each new test under the same `App`, `Core`, or `Features/<FeatureName>` owner as the production behavior that it verifies. Do not add unrelated tests to the `VVTermTests` or `VVTermUITests` root.
+- In a dense feature test folder, use `Domain`, `Application`, `Infrastructure`, and `UI` when those boundaries identify real owners. Mirror deeper production capability folders only when they prevent another flat list or make ownership clearer.
+- Keep a small single-owner test folder flat. File count and line count are review signals, not design targets. Do not create a folder only to reduce a number.
+- Put environment-dependent tests that cross product owners under `Integration/<Boundary>`, such as `Integration/SSH`. Keep their external prerequisites and skip conditions explicit.
+- Keep test support beside the feature or boundary that owns it. Use top-level `Support` only for helpers with real cross-feature users. Do not create generic `Utils`, `Common`, or broad `Mocks` folders.
+- Name unit files `TypeTests.swift`, cross-boundary files `FlowIntegrationTests.swift`, and UI files `FlowUITests+iOS.swift` or `FlowUITests+macOS.swift`.
+- Group UI tests by feature and platform. Keep file-level `#if os(iOS)` or `#if os(macOS)` gates; a platform folder or filename is not enough for the multiplatform test target.
+- Split an oversized test file only when it contains independent behaviors or suite owners. Prefer separate behavior-named suites and local shared support. Do not split one suite into extensions only to reduce line count.
+- Preserve serialized execution, actor isolation, reset hooks, environment gates, and test identifiers when reorganizing tests. Compare the meaningful test inventory before and after a large test refactor.
+- Do not combine test-source reorganization with XCTest-to-Swift-Testing migration, new product behavior, or unrelated coverage work.
+
 ## Commits
 
 - Use **atomic commits**.
