@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import VVTerm
 
-struct ServerMoveSupportTests {
+struct ServerMoveSupportEdgeCaseTests {
     private func makeWorkspace(
         id: UUID = UUID(),
         name: String,
