@@ -6,12 +6,17 @@ nonisolated enum CredentialOfflineChange: String, Codable, Equatable, Sendable {
     case deleted
 }
 
+nonisolated enum CredentialReconciliationPhase: String, Codable, Equatable, Sendable {
+    case remoteChanges
+    case localCleanup
+}
+
 nonisolated enum CredentialSyncUnit: Hashable, Sendable {
     case server(UUID)
     case sshLibrary
     case oauth(String)
 
-    fileprivate var storageKey: String {
+    var storageKey: String {
         switch self {
         case .server(let id):
             return "server:\(id.uuidString)"
@@ -45,6 +50,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
 
     private static let stateKey = "vvterm.keychain.offlineChanges.v1"
     private static let trackingKey = "vvterm.keychain.offlineTracking.v1"
+    private static let phaseKey = "vvterm.keychain.offlineReconciliationPhase.v2"
 
     private let defaults: UserDefaults
     private let lock = NSLock()
@@ -54,42 +60,46 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
     }
 
     var isTrackingOfflineChanges: Bool {
-        withLock { defaults.bool(forKey: Self.trackingKey) }
+        reconciliationPhase != nil
     }
 
-    func beginOfflineTracking(units: Set<CredentialSyncUnit>) {
+    var reconciliationPhase: CredentialReconciliationPhase? {
         withLock {
-            defaults.set(
-                Dictionary(
-                    uniqueKeysWithValues: units.map {
-                        ($0.storageKey, CredentialOfflineChange.unchanged.rawValue)
-                    }
-                ),
-                forKey: Self.stateKey
-            )
-            defaults.set(true, forKey: Self.trackingKey)
+            if let rawValue = defaults.string(forKey: Self.phaseKey) {
+                return CredentialReconciliationPhase(rawValue: rawValue)
+            }
+            return defaults.bool(forKey: Self.trackingKey) ? .remoteChanges : nil
         }
     }
 
-    func record(_ change: CredentialOfflineChange, for unit: CredentialSyncUnit) {
-        withLock {
+    func beginOfflineTracking(units: Set<CredentialSyncUnit>) throws {
+        try withLock {
+            let values = Dictionary(
+                uniqueKeysWithValues: units.map {
+                    ($0.storageKey, CredentialOfflineChange.unchanged.rawValue)
+                }
+            )
+            defaults.set(values, forKey: Self.stateKey)
+            defaults.set(CredentialReconciliationPhase.remoteChanges.rawValue, forKey: Self.phaseKey)
+            defaults.set(true, forKey: Self.trackingKey)
+            try verify(values: values, phase: .remoteChanges)
+        }
+    }
+
+    func record(_ change: CredentialOfflineChange, for unit: CredentialSyncUnit) throws {
+        try withLock {
             var values = storedValues()
             values[unit.storageKey] = change.rawValue
             defaults.set(values, forKey: Self.stateKey)
+            guard storedValues() == values else {
+                throw CredentialOfflineChangeStoreError.persistenceFailed
+            }
         }
     }
 
     func change(for unit: CredentialSyncUnit) -> CredentialOfflineChange? {
         withLock {
             storedValues()[unit.storageKey].flatMap(CredentialOfflineChange.init(rawValue:))
-        }
-    }
-
-    func clearChange(for unit: CredentialSyncUnit) {
-        withLock {
-            var values = storedValues()
-            values[unit.storageKey] = nil
-            defaults.set(values, forKey: Self.stateKey)
         }
     }
 
@@ -107,10 +117,35 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
-    func finishOnlineReconciliation() {
-        withLock {
+    func markRemoteChangesApplied() throws {
+        try withLock {
+            defaults.set(CredentialReconciliationPhase.localCleanup.rawValue, forKey: Self.phaseKey)
+            defaults.set(true, forKey: Self.trackingKey)
+            try verify(values: storedValues(), phase: .localCleanup)
+        }
+    }
+
+    func finishOnlineReconciliation() throws {
+        try withLock {
             defaults.removeObject(forKey: Self.stateKey)
+            defaults.removeObject(forKey: Self.phaseKey)
             defaults.set(false, forKey: Self.trackingKey)
+            guard defaults.object(forKey: Self.stateKey) == nil,
+                  defaults.object(forKey: Self.phaseKey) == nil,
+                  !defaults.bool(forKey: Self.trackingKey) else {
+                throw CredentialOfflineChangeStoreError.persistenceFailed
+            }
+        }
+    }
+
+    private func verify(
+        values: [String: String],
+        phase: CredentialReconciliationPhase
+    ) throws {
+        guard storedValues() == values,
+              defaults.string(forKey: Self.phaseKey) == phase.rawValue,
+              defaults.bool(forKey: Self.trackingKey) else {
+            throw CredentialOfflineChangeStoreError.persistenceFailed
         }
     }
 
@@ -122,5 +157,17 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return try body()
+    }
+}
+
+nonisolated enum CredentialOfflineChangeStoreError: Error, Equatable, Sendable {
+    case persistenceFailed
+}
+
+nonisolated enum CredentialSyncError: LocalizedError, Equatable, Sendable {
+    case offlineReconciliationPending
+
+    var errorDescription: String? {
+        "Credential reconciliation must finish before iCloud credentials can be removed."
     }
 }

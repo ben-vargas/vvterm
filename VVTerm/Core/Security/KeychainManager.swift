@@ -65,10 +65,13 @@ final class KeychainManager {
         self.offlineChanges = offlineChanges
         if performsInitialMigration,
            isSyncEnabled(),
-           !UserDefaults.standard.bool(forKey: Self.iCloudMigrationKey) {
+           (offlineChanges.isTrackingOfflineChanges
+               || !UserDefaults.standard.bool(forKey: Self.iCloudMigrationKey)) {
             do {
                 try synchronizeCredentialStorage(isEnabled: true)
-                UserDefaults.standard.set(true, forKey: Self.iCloudMigrationKey)
+                if !offlineChanges.isTrackingOfflineChanges {
+                    UserDefaults.standard.set(true, forKey: Self.iCloudMigrationKey)
+                }
             } catch {
                 logger.error("Could not prepare credential sync: \(error.localizedDescription)")
             }
@@ -256,7 +259,7 @@ final class KeychainManager {
 
         try bindCredentials(to: server, scope: scope)
         if !isSyncEnabled() {
-            offlineChanges.record(.updated, for: .server(server.id))
+            try offlineChanges.record(.updated, for: .server(server.id))
         }
     }
 
@@ -322,7 +325,7 @@ final class KeychainManager {
                 scope: staged.replacementScope
             )
             if staged.replacementScope == .deviceOnly {
-                offlineChanges.record(.updated, for: .server(server.id))
+                try offlineChanges.record(.updated, for: .server(server.id))
             }
         } catch {
             do {
@@ -418,7 +421,7 @@ final class KeychainManager {
 
     func deleteCredentials(for serverId: UUID) throws {
         if !isSyncEnabled() {
-            offlineChanges.record(.deleted, for: .server(serverId))
+            try offlineChanges.record(.deleted, for: .server(serverId))
         }
         let passwordKey = passwordKey(for: serverId)
         let keyKey = sshKeyKey(for: serverId)
@@ -644,6 +647,7 @@ final class KeychainManager {
     }
 
     private func prepareOfflineCredentialSnapshot() throws {
+        guard !offlineChanges.isTrackingOfflineChanges else { return }
         try store.deleteAll(in: .deviceOnly, where: Self.isSynchronizableCredentialKey)
         try cloudflareTokenStore.deleteAll(
             in: .deviceOnly,
@@ -667,57 +671,64 @@ final class KeychainManager {
                 .filter { $0.hasPrefix("oauth.") }
                 .map(CredentialSyncUnit.oauth)
         )
-        offlineChanges.beginOfflineTracking(units: units)
+        try offlineChanges.beginOfflineTracking(units: units)
     }
 
     private func reconcileOfflineCredentialChanges() throws {
-        guard offlineChanges.isTrackingOfflineChanges else {
-            try migrateLegacyDeviceOnlyCredentials()
-            return
-        }
-
-        var units = Set(offlineChanges.snapshot().keys)
-        for key in try store.keys(in: .deviceOnly) where Self.isSynchronizableCredentialKey(key) {
-            if let unit = credentialSyncUnit(forCredentialKey: key) {
-                units.insert(unit)
+        if offlineChanges.reconciliationPhase == nil {
+            let existingChanges = offlineChanges.snapshot()
+            var units = Set(existingChanges.keys)
+            for key in try store.keys(in: .deviceOnly) where Self.isSynchronizableCredentialKey(key) {
+                if let unit = credentialSyncUnit(forCredentialKey: key) {
+                    units.insert(unit)
+                }
+            }
+            for key in try cloudflareTokenStore.keys(in: .deviceOnly) where key.hasPrefix("oauth.") {
+                units.insert(.oauth(key))
+            }
+            guard !units.isEmpty else { return }
+            try offlineChanges.beginOfflineTracking(units: units)
+            for unit in units {
+                try offlineChanges.record(existingChanges[unit] ?? .updated, for: unit)
             }
         }
-        for key in try cloudflareTokenStore.keys(in: .deviceOnly) where key.hasPrefix("oauth.") {
-            units.insert(.oauth(key))
-        }
 
-        for unit in units {
-            switch offlineChanges.change(for: unit) {
-            case .unchanged:
-                try deleteCredentialUnit(unit, scopes: [.deviceOnly])
-            case .updated:
-                try replaceCloudUnitFromDevice(unit)
-            case .deleted:
-                try deleteCredentialUnit(unit, scopes: KeychainStorageScope.allCases)
-            case nil:
-                try deleteCredentialUnit(unit, scopes: [.deviceOnly])
+        if offlineChanges.reconciliationPhase == .remoteChanges {
+            var units = Set(offlineChanges.snapshot().keys)
+            for key in try store.keys(in: .deviceOnly) where Self.isSynchronizableCredentialKey(key) {
+                if let unit = credentialSyncUnit(forCredentialKey: key) {
+                    units.insert(unit)
+                }
             }
-            offlineChanges.clearChange(for: unit)
-        }
-        offlineChanges.finishOnlineReconciliation()
-    }
+            for key in try cloudflareTokenStore.keys(in: .deviceOnly) where key.hasPrefix("oauth.") {
+                units.insert(.oauth(key))
+            }
 
-    private func migrateLegacyDeviceOnlyCredentials() throws {
-        try store.copyAll(
-            from: .deviceOnly,
-            to: .iCloud,
-            where: Self.isSynchronizableCredentialKey
-        )
-        try cloudflareTokenStore.copyAll(
-            from: .deviceOnly,
-            to: .iCloud,
-            where: { $0.hasPrefix("oauth.") }
-        )
-        try store.deleteAll(in: .deviceOnly, where: Self.isSynchronizableCredentialKey)
-        try cloudflareTokenStore.deleteAll(
-            in: .deviceOnly,
-            where: { $0.hasPrefix("oauth.") }
-        )
+            for unit in units.sorted(by: { $0.storageKey < $1.storageKey }) {
+                switch offlineChanges.change(for: unit) {
+                case .updated:
+                    try replaceCloudUnitFromDevice(unit)
+                case .deleted:
+                    try deleteCredentialUnit(unit, scopes: [.iCloud])
+                case .unchanged, nil:
+                    break
+                }
+            }
+            try offlineChanges.markRemoteChangesApplied()
+        }
+
+        do {
+            try store.deleteAll(in: .deviceOnly, where: Self.isSynchronizableCredentialKey)
+            try cloudflareTokenStore.deleteAll(
+                in: .deviceOnly,
+                where: { $0.hasPrefix("oauth.") }
+            )
+            try offlineChanges.finishOnlineReconciliation()
+        } catch {
+            logger.error(
+                "Credential sync is active, but local credential cleanup remains pending: \(error.localizedDescription)"
+            )
+        }
     }
 
     private func replaceCloudUnitFromDevice(_ unit: CredentialSyncUnit) throws {
@@ -745,7 +756,6 @@ final class KeychainManager {
                 throw KeychainError.copyVerificationFailed
             }
         }
-        try deleteCredentialUnit(unit, scopes: [.deviceOnly])
     }
 
     private func deleteCredentialUnit(
@@ -809,6 +819,9 @@ final class KeychainManager {
     }
 
     func removeCredentialsFromICloud() throws {
+        guard !offlineChanges.isTrackingOfflineChanges else {
+            throw CredentialSyncError.offlineReconciliationPending
+        }
         try store.deleteAll(
             in: .iCloud,
             where: Self.isSynchronizableCredentialKey
@@ -898,7 +911,7 @@ final class KeychainManager {
         keys.append(entry)
         try saveSSHKeysIndex(keys)
         if !isSyncEnabled() {
-            offlineChanges.record(.updated, for: .sshLibrary)
+            try offlineChanges.record(.updated, for: .sshLibrary)
         }
 
         logger.info("Stored SSH key '\(name)' in keychain library")
@@ -932,7 +945,7 @@ final class KeychainManager {
     /// Delete a stored SSH key from the library
     func deleteStoredSSHKey(_ keyId: UUID) throws {
         if !isSyncEnabled() {
-            offlineChanges.record(.updated, for: .sshLibrary)
+            try offlineChanges.record(.updated, for: .sshLibrary)
         }
         var keys = getStoredSSHKeys()
         keys.removeAll { $0.id == keyId }
@@ -960,7 +973,7 @@ final class KeychainManager {
         keys[index].name = name
         try saveSSHKeysIndex(keys)
         if !isSyncEnabled() {
-            offlineChanges.record(.updated, for: .sshLibrary)
+            try offlineChanges.record(.updated, for: .sshLibrary)
         }
         logger.info("Updated SSH key name to '\(name)'")
     }

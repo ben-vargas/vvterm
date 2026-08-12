@@ -36,14 +36,14 @@ actor CloudflareTokenStoreAdapter: TokenStore {
             scope: storageScope
         )
         if !isSyncEnabled() {
-            offlineChanges.record(.updated, for: .oauth(namespacedKey))
+            try offlineChanges.record(.updated, for: .oauth(namespacedKey))
         }
     }
 
     func removeToken(for key: String) async throws {
         let namespacedKey = namespacedKey(for: key)
         if !isSyncEnabled() {
-            offlineChanges.record(.deleted, for: .oauth(namespacedKey))
+            try offlineChanges.record(.deleted, for: .oauth(namespacedKey))
         }
         for scope in KeychainStorageScope.allCases {
             try store.delete(namespacedKey, scope: scope)
