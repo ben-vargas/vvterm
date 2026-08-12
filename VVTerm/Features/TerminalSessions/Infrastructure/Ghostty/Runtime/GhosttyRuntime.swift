@@ -1,5 +1,5 @@
 //
-//  Ghostty.App.swift
+//  GhosttyRuntime.swift
 //  VVTerm
 //
 //  Minimal Ghostty app wrapper
