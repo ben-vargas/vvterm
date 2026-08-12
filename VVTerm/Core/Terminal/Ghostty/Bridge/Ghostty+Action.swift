@@ -1,5 +1,5 @@
 //
-//  Ghostty.Action.swift
+//  Ghostty+Action.swift
 //  VVTerm
 //
 //  Action types for Ghostty terminal events

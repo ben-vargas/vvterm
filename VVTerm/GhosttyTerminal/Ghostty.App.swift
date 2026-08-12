@@ -9,14 +9,7 @@ import Foundation
 import Combine
 import OSLog
 
-// MARK: - Ghostty Namespace
-
-enum Ghostty {
-    static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.vvterm", category: "Ghostty")
-
-    /// Notification posted when terminal config is reloaded and views should refresh
-    static let configDidReloadNotification = Notification.Name("GhosttyConfigDidReload")
-
+extension Ghostty {
     /// Wrapper to hold reference to a surface for tracking
     /// Note: ghostty_surface_t is an opaque pointer, so we store it directly
     /// The surface is freed when the GhosttyTerminalView is deallocated
