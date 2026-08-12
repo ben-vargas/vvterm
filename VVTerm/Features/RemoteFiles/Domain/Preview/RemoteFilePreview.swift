@@ -1,5 +1,4 @@
 import Foundation
-import UniformTypeIdentifiers
 
 nonisolated struct RemoteFileViewerPayload: Identifiable, Hashable, Sendable {
     let previewKind: RemoteFilePreviewKind
@@ -31,26 +30,6 @@ nonisolated enum RemoteFilePreviewKind: Hashable, Sendable {
 
 nonisolated enum RemoteFilePreviewDetector {
     private static let nullByte = UInt8(ascii: "\0")
-
-    static func previewKind(for entry: RemoteFileEntry, data: Data) -> RemoteFilePreviewKind {
-        if decodeTextPreview(from: data) != nil {
-            return .text
-        }
-
-        guard let contentType = contentType(for: entry) else {
-            return .unavailable
-        }
-
-        if contentType.conforms(to: .image) {
-            return .image
-        }
-
-        if contentType.conforms(to: .movie) || contentType.conforms(to: .audiovisualContent) {
-            return .video
-        }
-
-        return .unavailable
-    }
 
     static func decodeTextPreview(from data: Data) -> String? {
         guard isProbablyText(data) else { return nil }
@@ -85,11 +64,5 @@ nonisolated enum RemoteFilePreviewDetector {
 
         return String(data: sample, encoding: .utf16LittleEndian) != nil
             || String(data: sample, encoding: .utf16BigEndian) != nil
-    }
-
-    private static func contentType(for entry: RemoteFileEntry) -> UTType? {
-        let fileExtension = URL(fileURLWithPath: entry.name).pathExtension
-        guard !fileExtension.isEmpty else { return nil }
-        return UTType(filenameExtension: fileExtension)
     }
 }

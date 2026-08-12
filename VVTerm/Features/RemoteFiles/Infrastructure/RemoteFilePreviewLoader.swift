@@ -1,13 +1,29 @@
 import AVFoundation
 import Foundation
 import ImageIO
+import UniformTypeIdentifiers
 import os.log
 
 struct RemoteFilePreviewLoader {
     nonisolated init() {}
 
     func previewKind(for entry: RemoteFileEntry, data: Data) -> RemoteFilePreviewKind {
-        RemoteFilePreviewDetector.previewKind(for: entry, data: data)
+        if RemoteFilePreviewDetector.decodeTextPreview(from: data) != nil {
+            return .text
+        }
+
+        let fileExtension = URL(fileURLWithPath: entry.name).pathExtension
+        guard !fileExtension.isEmpty,
+              let contentType = UTType(filenameExtension: fileExtension) else {
+            return .unavailable
+        }
+        if contentType.conforms(to: .image) {
+            return .image
+        }
+        if contentType.conforms(to: .movie) || contentType.conforms(to: .audiovisualContent) {
+            return .video
+        }
+        return .unavailable
     }
 
     func decodeTextPreview(from data: Data) -> String? {
