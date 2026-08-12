@@ -283,6 +283,7 @@ struct ConnectionTerminalContainer: View {
                 browser: fileBrowser,
                 server: server,
                 fileTab: selectedFileTab,
+                appearance: terminalAppearanceSnapshot,
                 initialPath: selectedFileTab.seedPath
             ) { currentPath in
                 fileTabManager.updateLastKnownPath(currentPath, for: selectedFileTab.id)

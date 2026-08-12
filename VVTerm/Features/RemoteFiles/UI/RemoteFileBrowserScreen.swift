@@ -6,14 +6,12 @@ struct RemoteFileBrowserScreen: View {
     @ObservedObject var operationCoordinator: RemoteFileOperationCoordinator
     let server: Server
     let fileTab: RemoteFileTab
+    let appearance: TerminalAppearanceSnapshot
     let initialPath: String?
     let onCurrentPathChange: @MainActor (String?) -> Void
 
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var appLockManager: AppLockManager
-    @AppStorage(TerminalThemeUserDefaultsKeys.live.darkTheme) var terminalThemeName = "Aizen Dark"
-    @AppStorage(TerminalThemeUserDefaultsKeys.live.lightTheme) var terminalThemeNameLight = "Aizen Light"
-    @AppStorage(TerminalThemeUserDefaultsKeys.live.usesPerAppearanceTheme) var usePerAppearanceTheme = true
     @State var presentedPreviewPath: String?
     @State var uploadDestinationPath: String?
     @State var uploadImportRequest: UploadImportRequest?
@@ -124,12 +122,14 @@ struct RemoteFileBrowserScreen: View {
         browser: RemoteFileBrowserStore,
         server: Server,
         fileTab: RemoteFileTab,
+        appearance: TerminalAppearanceSnapshot,
         initialPath: String? = nil,
         onCurrentPathChange: @escaping @MainActor (String?) -> Void = { _ in }
     ) {
         self.browser = browser
         self.server = server
         self.fileTab = fileTab
+        self.appearance = appearance
         self.initialPath = initialPath
         self.onCurrentPathChange = onCurrentPathChange
         _operationCoordinator = ObservedObject(
@@ -170,21 +170,8 @@ struct RemoteFileBrowserScreen: View {
         [UTType.vvtermRemoteFileEntry.identifier, UTType.fileURL.identifier]
     }
 
-    var effectiveThemeName: String {
-        guard usePerAppearanceTheme else { return terminalThemeName }
-        return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight
-    }
-
     var terminalThemeBackgroundColor: Color {
-        if let color = ThemeColorParser.backgroundColor(for: effectiveThemeName) {
-            return color
-        }
-
-        if let cachedHex = UserDefaults.standard.string(forKey: "terminalBackgroundColor") {
-            return Color.fromHex(cachedHex)
-        }
-
-        return colorScheme == .dark ? .black : .white
+        Color.fromHex(appearance.activeTheme.palette.backgroundHex)
     }
 
     var operationErrorText: String {
