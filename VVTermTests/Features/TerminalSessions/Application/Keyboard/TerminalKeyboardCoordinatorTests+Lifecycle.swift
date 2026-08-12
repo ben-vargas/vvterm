@@ -182,7 +182,7 @@ extension TerminalKeyboardCoordinatorTests {
             let docked = CGRect(x: 0, y: 700, width: 1_024, height: 300)
             let session = TerminalKeyboardInputSessionSpy()
             session.snapshot.screenFrame = screen
-            let eventSource = TerminalKeyboardEventSourceSpy()
+            let eventSource = TerminalKeyboardCoordinatorEventSourceSpy()
             let coordinator = TerminalKeyboardCoordinator(
                 keyboardEventSource: eventSource,
                 lifecycleLoggingEnabled: false
@@ -221,7 +221,7 @@ extension TerminalKeyboardCoordinatorTests {
             let docked = CGRect(x: 0, y: 700, width: 1_024, height: 300)
             let session = TerminalKeyboardInputSessionSpy()
             session.snapshot.screenFrame = screen
-            let eventSource = TerminalKeyboardEventSourceSpy()
+            let eventSource = TerminalKeyboardCoordinatorEventSourceSpy()
             let coordinator = TerminalKeyboardCoordinator(
                 keyboardEventSource: eventSource,
                 lifecycleLoggingEnabled: false
@@ -556,4 +556,3 @@ extension TerminalKeyboardCoordinatorTests {
     }
 }
 #endif
-

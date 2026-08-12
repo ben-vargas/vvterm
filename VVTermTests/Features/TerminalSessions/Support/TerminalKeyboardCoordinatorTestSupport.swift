@@ -119,7 +119,7 @@ final class TerminalKeyboardInputSessionSpy: TerminalKeyboardInputSession {
 }
 
 @MainActor
-final class TerminalKeyboardEventSourceSpy: TerminalKeyboardEventSource {
+final class TerminalKeyboardCoordinatorEventSourceSpy: TerminalKeyboardEventSource {
     private var handler: (@MainActor @Sendable (TerminalKeyboardEvent) -> Void)?
 
     func start(
@@ -165,4 +165,3 @@ func waitForMainActorCondition(
     }
 }
 #endif
-
