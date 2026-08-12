@@ -8,7 +8,7 @@
 import Foundation
 import Security
 
-nonisolated enum KeychainStorageScope: CaseIterable, Hashable, Sendable {
+nonisolated enum KeychainStorageScope: String, CaseIterable, Codable, Hashable, Sendable {
     case deviceOnly
     case iCloud
 
@@ -255,6 +255,10 @@ nonisolated final class KeychainStore: @unchecked Sendable {
         for key in try matchingKeys(in: scope, where: shouldDelete) {
             try delete(key, scope: scope)
         }
+    }
+
+    func keys(in scope: KeychainStorageScope) throws -> [String] {
+        try backing.keys(service: service, scope: scope).sorted()
     }
 
     private func matchingKeys(

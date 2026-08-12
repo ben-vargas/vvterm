@@ -85,10 +85,7 @@ struct ServerFormSheet: View {
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.now = dependencies.now
         self.makeID = dependencies.makeID
-        let saveUseCase = ServerSaveUseCase(
-            mutations: serverManager,
-            credentials: dependencies.credentials
-        )
+        let saveUseCase = ServerSaveUseCase(mutations: serverManager)
         self.onSave = onSave
         _operations = StateObject(
             wrappedValue: ServerFormOperationController(

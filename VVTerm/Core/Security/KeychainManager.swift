@@ -14,7 +14,41 @@ final class KeychainManager {
     private let store: KeychainStore
     private let cloudflareTokenStore: KeychainStore
     private let isSyncEnabled: @Sendable () -> Bool
+    private let offlineChanges: CredentialOfflineChangeStore
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "Keychain")
+
+    private struct CredentialBundle: Codable, Equatable {
+        let serverID: UUID
+        let binding: ServerCredentialBinding
+        let password: String?
+        let privateKey: Data?
+        let publicKey: Data?
+        let passphrase: String?
+        let cloudflareClientID: String?
+        let cloudflareClientSecret: String?
+
+        init(credentials: ServerCredentials, server: Server) {
+            serverID = server.id
+            binding = ServerCredentialBinding(server: server)
+            password = credentials.password
+            privateKey = credentials.privateKey
+            publicKey = credentials.publicKey
+            passphrase = credentials.passphrase
+            cloudflareClientID = credentials.cloudflareClientID
+            cloudflareClientSecret = credentials.cloudflareClientSecret
+        }
+    }
+
+    private struct StagedServerCredentialTransaction: Codable {
+        struct Previous: Codable {
+            let bundle: CredentialBundle
+            let scope: KeychainStorageScope
+        }
+
+        let previous: Previous?
+        let replacement: CredentialBundle
+        let replacementScope: KeychainStorageScope
+    }
 
     init(
         store: KeychainStore = KeychainStore(service: credentialService),
@@ -22,11 +56,13 @@ final class KeychainManager {
             service: cloudflareTokenService
         ),
         isSyncEnabled: @escaping @Sendable () -> Bool = { SyncSettings.isEnabled },
+        offlineChanges: CredentialOfflineChangeStore = .shared,
         performsInitialMigration: Bool = false
     ) {
         self.store = store
         self.cloudflareTokenStore = cloudflareTokenStore
         self.isSyncEnabled = isSyncEnabled
+        self.offlineChanges = offlineChanges
         if performsInitialMigration,
            isSyncEnabled(),
            !UserDefaults.standard.bool(forKey: Self.iCloudMigrationKey) {
@@ -212,10 +248,106 @@ final class KeychainManager {
                 scope: scope
             )
         } else {
-            deleteCloudflareServiceToken(for: server.id)
+            try deleteCloudflareServiceToken(
+                for: server.id,
+                scopes: [scope]
+            )
         }
 
         try bindCredentials(to: server, scope: scope)
+        if !isSyncEnabled() {
+            offlineChanges.record(.updated, for: .server(server.id))
+        }
+    }
+
+    func prepareServerCredentialTransaction(
+        id: UUID,
+        previousServer: Server?,
+        server: Server,
+        credentials: ServerCredentials
+    ) throws {
+        guard credentials.serverId == server.id else {
+            throw KeychainError.credentialServerMismatch
+        }
+
+        let previous: StagedServerCredentialTransaction.Previous?
+        if let previousServer,
+           let resolution = try credentialStorageResolution(for: previousServer) {
+            previous = StagedServerCredentialTransaction.Previous(
+                bundle: try credentialBundle(
+                    for: previousServer,
+                    scope: resolution.scope
+                ),
+                scope: resolution.scope
+            )
+        } else {
+            previous = nil
+        }
+
+        let staged = StagedServerCredentialTransaction(
+            previous: previous,
+            replacement: CredentialBundle(credentials: credentials, server: server),
+            replacementScope: preferredStorageScope
+        )
+        let data = try JSONEncoder().encode(staged)
+        let key = serverCredentialTransactionKey(id)
+        try store.set(data, forKey: key, scope: .deviceOnly)
+        guard try store.get(key, scope: .deviceOnly) == data else {
+            throw KeychainError.encodingFailed
+        }
+    }
+
+    func commitServerCredentialTransaction(
+        id: UUID,
+        previousServer: Server?,
+        server: Server
+    ) throws {
+        let key = serverCredentialTransactionKey(id)
+        guard let data = try store.get(key, scope: .deviceOnly) else {
+            throw KeychainError.itemNotFound
+        }
+        let staged = try JSONDecoder().decode(
+            StagedServerCredentialTransaction.self,
+            from: data
+        )
+        guard staged.replacement.serverID == server.id,
+              staged.replacement.binding == ServerCredentialBinding(server: server) else {
+            throw KeychainError.credentialServerMismatch
+        }
+
+        do {
+            try replaceCredentialBundle(
+                staged.replacement,
+                for: server,
+                scope: staged.replacementScope
+            )
+            if staged.replacementScope == .deviceOnly {
+                offlineChanges.record(.updated, for: .server(server.id))
+            }
+        } catch {
+            do {
+                try restoreCredentialBundle(
+                    staged.previous,
+                    previousServer: previousServer,
+                    replacementServerID: server.id,
+                    replacementScope: staged.replacementScope
+                )
+            } catch let rollbackError {
+                throw ServerCredentialTransactionCommitError(
+                    originalError: error,
+                    rollbackError: rollbackError
+                )
+            }
+            throw error
+        }
+    }
+
+    func discardServerCredentialTransaction(id: UUID) throws {
+        let key = serverCredentialTransactionKey(id)
+        try store.delete(key, scope: .deviceOnly)
+        guard try !store.contains(key, scope: .deviceOnly) else {
+            throw KeychainError.itemNotFound
+        }
     }
 
     func hasCredentials(for server: Server) throws -> Bool {
@@ -274,14 +406,20 @@ final class KeychainManager {
         return (clientID: clientID, clientSecret: clientSecret)
     }
 
-    private func deleteCloudflareServiceToken(for serverId: UUID) {
-        deleteCredentialKey(cloudflareClientIDKey(for: serverId))
-        deleteCredentialKey(cloudflareClientSecretKey(for: serverId))
+    private func deleteCloudflareServiceToken(
+        for serverId: UUID,
+        scopes: [KeychainStorageScope]
+    ) throws {
+        try deleteCredentialKey(cloudflareClientIDKey(for: serverId), scopes: scopes)
+        try deleteCredentialKey(cloudflareClientSecretKey(for: serverId), scopes: scopes)
     }
 
     // MARK: - Delete Operations
 
     func deleteCredentials(for serverId: UUID) throws {
+        if !isSyncEnabled() {
+            offlineChanges.record(.deleted, for: .server(serverId))
+        }
         let passwordKey = passwordKey(for: serverId)
         let keyKey = sshKeyKey(for: serverId)
         let passphraseKey = sshPassphraseKey(for: serverId)
@@ -299,7 +437,7 @@ final class KeychainManager {
             cloudflareSecretKey,
             bindingKey
         ] {
-            deleteCredentialKey(key)
+            try deleteCredentialKey(key, scopes: KeychainStorageScope.allCases)
         }
 
         logger.info("Deleted credentials for server \(serverId.uuidString)")
@@ -346,6 +484,86 @@ final class KeychainManager {
         ]
     }
 
+    private func credentialBundleKeys(for serverID: UUID) -> [String] {
+        credentialKeys(for: serverID) + [credentialBindingKey(for: serverID)]
+    }
+
+    private func serverCredentialTransactionKey(_ id: UUID) -> String {
+        "server-credential-transaction.\(id.uuidString).v1"
+    }
+
+    private func credentialBundle(
+        for server: Server,
+        scope: KeychainStorageScope
+    ) throws -> CredentialBundle {
+        var credentials = ServerCredentials(serverId: server.id)
+        credentials.password = try getPassword(for: server.id, scope: scope)
+        if let key = try getSSHKey(for: server.id, scope: scope) {
+            credentials.privateKey = key.key
+            credentials.publicKey = key.publicKey
+            credentials.passphrase = key.passphrase
+        }
+        if let token = try getCloudflareServiceToken(for: server.id, scope: scope) {
+            credentials.cloudflareClientID = token.clientID
+            credentials.cloudflareClientSecret = token.clientSecret
+        }
+        return CredentialBundle(credentials: credentials, server: server)
+    }
+
+    private func replaceCredentialBundle(
+        _ bundle: CredentialBundle,
+        for server: Server,
+        scope: KeychainStorageScope
+    ) throws {
+        for key in credentialBundleKeys(for: server.id) {
+            try store.delete(key, scope: scope)
+        }
+
+        if let password = bundle.password {
+            try storePassword(for: server.id, password: password, scope: scope)
+        }
+        if let privateKey = bundle.privateKey {
+            try storeSSHKey(
+                for: server.id,
+                privateKey: privateKey,
+                passphrase: bundle.passphrase,
+                publicKey: bundle.publicKey,
+                scope: scope
+            )
+        }
+        if let clientID = bundle.cloudflareClientID,
+           let clientSecret = bundle.cloudflareClientSecret {
+            try storeCloudflareServiceToken(
+                for: server.id,
+                clientID: clientID,
+                clientSecret: clientSecret,
+                scope: scope
+            )
+        }
+        try bindCredentials(to: server, scope: scope)
+
+        guard try credentialBundle(for: server, scope: scope) == bundle else {
+            throw KeychainError.decodingFailed
+        }
+    }
+
+    private func restoreCredentialBundle(
+        _ previous: StagedServerCredentialTransaction.Previous?,
+        previousServer: Server?,
+        replacementServerID: UUID,
+        replacementScope: KeychainStorageScope
+    ) throws {
+        for key in credentialBundleKeys(for: replacementServerID) {
+            try store.delete(key, scope: replacementScope)
+        }
+        guard let previous, let previousServer else { return }
+        try replaceCredentialBundle(
+            previous.bundle,
+            for: previousServer,
+            scope: previous.scope
+        )
+    }
+
     private struct CredentialStorageResolution {
         let scope: KeychainStorageScope
         let bindingMatches: Bool
@@ -356,10 +574,6 @@ final class KeychainManager {
     }
 
     private var readScopes: [KeychainStorageScope] {
-        isSyncEnabled() ? [.iCloud, .deviceOnly] : [.deviceOnly]
-    }
-
-    private var credentialDeletionScopes: [KeychainStorageScope] {
         isSyncEnabled() ? [.iCloud, .deviceOnly] : [.deviceOnly]
     }
 
@@ -402,36 +616,20 @@ final class KeychainManager {
         return firstStoredResolution
     }
 
-    private func deleteCredentialKey(_ key: String) {
-        for scope in credentialDeletionScopes {
-            try? store.delete(key, scope: scope)
+    private func deleteCredentialKey(
+        _ key: String,
+        scopes: [KeychainStorageScope]
+    ) throws {
+        for scope in scopes {
+            try store.delete(key, scope: scope)
         }
     }
 
     func synchronizeCredentialStorage(isEnabled: Bool) throws {
-        let source: KeychainStorageScope = isEnabled ? .deviceOnly : .iCloud
-        let destination: KeychainStorageScope = isEnabled ? .iCloud : .deviceOnly
-
-        try store.copyAll(
-            from: source,
-            to: destination,
-            where: Self.isSynchronizableCredentialKey
-        )
-        try cloudflareTokenStore.copyAll(
-            from: source,
-            to: destination,
-            where: { $0.hasPrefix("oauth.") }
-        )
-
         if isEnabled {
-            try store.deleteAll(
-                in: source,
-                where: Self.isSynchronizableCredentialKey
-            )
-            try cloudflareTokenStore.deleteAll(
-                in: source,
-                where: { $0.hasPrefix("oauth.") }
-            )
+            try reconcileOfflineCredentialChanges()
+        } else {
+            try prepareOfflineCredentialSnapshot()
         }
         logger.info(
             "Prepared credential storage for iCloud sync enabled=\(isEnabled)"
@@ -443,6 +641,171 @@ final class KeychainManager {
         if isEnabled {
             UserDefaults.standard.set(true, forKey: Self.iCloudMigrationKey)
         }
+    }
+
+    private func prepareOfflineCredentialSnapshot() throws {
+        try store.deleteAll(in: .deviceOnly, where: Self.isSynchronizableCredentialKey)
+        try cloudflareTokenStore.deleteAll(
+            in: .deviceOnly,
+            where: { $0.hasPrefix("oauth.") }
+        )
+        try store.copyAll(
+            from: .iCloud,
+            to: .deviceOnly,
+            where: Self.isSynchronizableCredentialKey
+        )
+        try cloudflareTokenStore.copyAll(
+            from: .iCloud,
+            to: .deviceOnly,
+            where: { $0.hasPrefix("oauth.") }
+        )
+        var units = Set(
+            try store.keys(in: .deviceOnly).compactMap(credentialSyncUnit(forCredentialKey:))
+        )
+        units.formUnion(
+            try cloudflareTokenStore.keys(in: .deviceOnly)
+                .filter { $0.hasPrefix("oauth.") }
+                .map(CredentialSyncUnit.oauth)
+        )
+        offlineChanges.beginOfflineTracking(units: units)
+    }
+
+    private func reconcileOfflineCredentialChanges() throws {
+        guard offlineChanges.isTrackingOfflineChanges else {
+            try migrateLegacyDeviceOnlyCredentials()
+            return
+        }
+
+        var units = Set(offlineChanges.snapshot().keys)
+        for key in try store.keys(in: .deviceOnly) where Self.isSynchronizableCredentialKey(key) {
+            if let unit = credentialSyncUnit(forCredentialKey: key) {
+                units.insert(unit)
+            }
+        }
+        for key in try cloudflareTokenStore.keys(in: .deviceOnly) where key.hasPrefix("oauth.") {
+            units.insert(.oauth(key))
+        }
+
+        for unit in units {
+            switch offlineChanges.change(for: unit) {
+            case .unchanged:
+                try deleteCredentialUnit(unit, scopes: [.deviceOnly])
+            case .updated:
+                try replaceCloudUnitFromDevice(unit)
+            case .deleted:
+                try deleteCredentialUnit(unit, scopes: KeychainStorageScope.allCases)
+            case nil:
+                try deleteCredentialUnit(unit, scopes: [.deviceOnly])
+            }
+            offlineChanges.clearChange(for: unit)
+        }
+        offlineChanges.finishOnlineReconciliation()
+    }
+
+    private func migrateLegacyDeviceOnlyCredentials() throws {
+        try store.copyAll(
+            from: .deviceOnly,
+            to: .iCloud,
+            where: Self.isSynchronizableCredentialKey
+        )
+        try cloudflareTokenStore.copyAll(
+            from: .deviceOnly,
+            to: .iCloud,
+            where: { $0.hasPrefix("oauth.") }
+        )
+        try store.deleteAll(in: .deviceOnly, where: Self.isSynchronizableCredentialKey)
+        try cloudflareTokenStore.deleteAll(
+            in: .deviceOnly,
+            where: { $0.hasPrefix("oauth.") }
+        )
+    }
+
+    private func replaceCloudUnitFromDevice(_ unit: CredentialSyncUnit) throws {
+        let selectedStore = keychainStore(for: unit)
+        let keys = try credentialKeys(
+            for: unit,
+            store: selectedStore,
+            scope: .deviceOnly,
+            includingOrphans: false
+        )
+        let values = try Dictionary(uniqueKeysWithValues: keys.map { key in
+            guard let value = try selectedStore.get(key, scope: .deviceOnly) else {
+                throw KeychainError.itemNotFound
+            }
+            return (key, value)
+        })
+
+        try deleteCredentialUnit(unit, scopes: [.iCloud])
+        for key in keys {
+            guard let value = values[key] else { throw KeychainError.itemNotFound }
+            try selectedStore.set(value, forKey: key, scope: .iCloud)
+        }
+        for key in keys {
+            guard try selectedStore.get(key, scope: .iCloud) == values[key] else {
+                throw KeychainError.copyVerificationFailed
+            }
+        }
+        try deleteCredentialUnit(unit, scopes: [.deviceOnly])
+    }
+
+    private func deleteCredentialUnit(
+        _ unit: CredentialSyncUnit,
+        scopes: [KeychainStorageScope]
+    ) throws {
+        let selectedStore = keychainStore(for: unit)
+        for scope in scopes {
+            let keys = try credentialKeys(for: unit, store: selectedStore, scope: scope)
+            for key in keys {
+                try selectedStore.delete(key, scope: scope)
+            }
+        }
+    }
+
+    private func keychainStore(for unit: CredentialSyncUnit) -> KeychainStore {
+        if case .oauth = unit { return cloudflareTokenStore }
+        return store
+    }
+
+    private func credentialKeys(
+        for unit: CredentialSyncUnit,
+        store selectedStore: KeychainStore,
+        scope: KeychainStorageScope,
+        includingOrphans: Bool = true
+    ) throws -> [String] {
+        switch unit {
+        case .server(let id):
+            return credentialBundleKeys(for: id).filter {
+                (try? selectedStore.contains($0, scope: scope)) == true
+            }
+        case .sshLibrary:
+            let allKeys = try selectedStore.keys(in: scope)
+            guard !includingOrphans,
+                  let indexData = try selectedStore.get(sshKeysIndexKey, scope: scope),
+                  let entries = try? JSONDecoder().decode([SSHKeyEntry].self, from: indexData) else {
+                return allKeys.filter {
+                    $0 == sshKeysIndexKey || $0.hasPrefix("sshkey.")
+                }
+            }
+            let selectedKeys = Set(entries.flatMap { entry in
+                [storedKeyDataKey(for: entry.id), storedKeyPassphraseKey(for: entry.id)]
+            })
+            return allKeys.filter { $0 == sshKeysIndexKey || selectedKeys.contains($0) }
+        case .oauth(let key):
+            return try selectedStore.contains(key, scope: scope) ? [key] : []
+        }
+    }
+
+    private func credentialSyncUnit(forCredentialKey key: String) -> CredentialSyncUnit? {
+        if key == sshKeysIndexKey || key.hasPrefix("sshkey.") {
+            return .sshLibrary
+        }
+        guard key.hasPrefix("server.") else { return nil }
+        let components = key.split(separator: ".", maxSplits: 2)
+        guard components.count >= 2,
+              let id = UUID(uuidString: String(components[1])) else {
+            return nil
+        }
+        return .server(id)
     }
 
     func removeCredentialsFromICloud() throws {
@@ -534,6 +897,9 @@ final class KeychainManager {
         var keys = getStoredSSHKeys()
         keys.append(entry)
         try saveSSHKeysIndex(keys)
+        if !isSyncEnabled() {
+            offlineChanges.record(.updated, for: .sshLibrary)
+        }
 
         logger.info("Stored SSH key '\(name)' in keychain library")
         return entry
@@ -565,14 +931,22 @@ final class KeychainManager {
 
     /// Delete a stored SSH key from the library
     func deleteStoredSSHKey(_ keyId: UUID) throws {
-        // Delete key data
-        deleteCredentialKey(storedKeyDataKey(for: keyId))
-        deleteCredentialKey(storedKeyPassphraseKey(for: keyId))
-
-        // Update index
+        if !isSyncEnabled() {
+            offlineChanges.record(.updated, for: .sshLibrary)
+        }
         var keys = getStoredSSHKeys()
         keys.removeAll { $0.id == keyId }
         try saveSSHKeysIndex(keys)
+
+        // Delete key data
+        try deleteCredentialKey(
+            storedKeyDataKey(for: keyId),
+            scopes: KeychainStorageScope.allCases
+        )
+        try deleteCredentialKey(
+            storedKeyPassphraseKey(for: keyId),
+            scopes: KeychainStorageScope.allCases
+        )
 
         logger.info("Deleted SSH key \(keyId.uuidString) from keychain library")
     }
@@ -585,6 +959,9 @@ final class KeychainManager {
         }
         keys[index].name = name
         try saveSSHKeysIndex(keys)
+        if !isSyncEnabled() {
+            offlineChanges.record(.updated, for: .sshLibrary)
+        }
         logger.info("Updated SSH key name to '\(name)'")
     }
 
@@ -594,6 +971,16 @@ final class KeychainManager {
 
     private func storedKeyPassphraseKey(for keyId: UUID) -> String {
         "sshkey.\(keyId.uuidString).passphrase"
+    }
+}
+
+nonisolated struct ServerCredentialTransactionCommitError: Error, Sendable {
+    let originalErrorDescription: String
+    let rollbackErrorDescription: String
+
+    init(originalError: Error, rollbackError: Error) {
+        originalErrorDescription = String(describing: originalError)
+        rollbackErrorDescription = String(describing: rollbackError)
     }
 }
 

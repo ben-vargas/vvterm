@@ -85,7 +85,10 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         }
     }
 
-    func apply(_ mutation: ServerMutation) async throws -> Server {
+    func apply(
+        _ mutation: ServerMutation,
+        credentials: ServerCredentials
+    ) async throws -> Server {
         let command: ServerMutationCommand
         switch mutation {
         case .create(let server):
@@ -94,16 +97,53 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         case .update(let server):
             command = .updateServer(server)
         }
-        let result = try stateStore.commitMutation(
+        let previousServers = servers
+        let previousWorkspaces = workspaces
+        let result = try stateStore.planMutation(
             command,
             now: dependencies.now()
         )
-        try remoteSyncCoordinator.enqueue(result.effect)
-        await remoteSyncCoordinator.drainPendingMutations()
 
         guard case .serverUpsert(let savedServer) = result.effect else {
             preconditionFailure("A server save command must produce a server upsert")
         }
+        let previousServer: Server?
+        switch mutation {
+        case .create:
+            previousServer = nil
+        case .update:
+            previousServer = previousServers.first { $0.id == savedServer.id }
+        }
+        let transactionID = dependencies.makeID()
+        let plan = ServerMutationTransactionPlan(
+            id: transactionID,
+            previousServers: previousServers,
+            previousWorkspaces: previousWorkspaces,
+            resultingServers: result.servers,
+            resultingWorkspaces: result.workspaces,
+            pendingMutation: ServerPendingMutation(
+                id: dependencies.makeID(),
+                payload: .serverUpsert(savedServer),
+                createdAt: dependencies.now()
+            ),
+            credentialAction: .replace(
+                transactionID: transactionID,
+                previousServer: previousServer,
+                server: savedServer
+            )
+        )
+        let journal = try serverMutationTransaction.commitSave(
+            plan,
+            credentials: credentials
+        )
+        if journal.presentsResultingState {
+            stateStore.applyCommittedServerMutation(plan)
+        }
+        guard journal.phase == .complete else {
+            throw VVTermError.serverMutationRecoveryPending
+        }
+        await remoteSyncCoordinator.drainPendingMutations()
+
         if case .create = mutation {
             stateStore.promotePendingBootstrapWorkspaceIfNeeded(
                 for: savedServer.workspaceId,
@@ -134,15 +174,40 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
     }
 
     private func deleteServerData(_ server: Server) async throws {
-        try dependencies.credentialRepository.deleteCredentials(for: server.id)
-
-        remoteSyncCoordinator.removeKnownHostIfUnused(for: server)
         let result = try stateStore.planMutation(
             .deleteServer(server.id),
             now: dependencies.now()
         )
-        try applyMutationResult(result)
-        await persistLocalMutations(logMessage: "Deleted server: \(server.name)")
+        let plan = ServerMutationTransactionPlan(
+            id: dependencies.makeID(),
+            previousServers: servers,
+            previousWorkspaces: workspaces,
+            resultingServers: result.servers,
+            resultingWorkspaces: result.workspaces,
+            pendingMutation: ServerPendingMutation(
+                id: dependencies.makeID(),
+                payload: .serverDelete(server),
+                createdAt: dependencies.now()
+            ),
+            credentialAction: .delete(server)
+        )
+        let journal = try serverMutationTransaction.commitDeletion(plan)
+        if journal.presentsResultingState {
+            stateStore.applyCommittedServerMutation(plan)
+            remoteSyncCoordinator.removeKnownHostIfUnused(for: server)
+        }
+        guard journal.phase == .complete else {
+            throw VVTermError.serverMutationRecoveryPending
+        }
+        await remoteSyncCoordinator.drainPendingMutations()
+        logger.info("Deleted server: \(server.name)")
+    }
+
+    private var serverMutationTransaction: ServerMutationTransaction {
+        stateStore.makeServerMutationTransaction(
+            mutationQueue: dependencies.syncRepository,
+            credentials: dependencies.credentialRepository
+        )
     }
 
     func updateLastConnected(for server: Server) async {
@@ -282,7 +347,10 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         updatedServer.workspaceId = refreshedDestination.id
         updatedServer.environment = resolvedEnvironment
 
-        _ = try await apply(.update(updatedServer))
+        _ = try await apply(
+            .update(updatedServer),
+            credentials: try dependencies.credentialRepository.getCredentials(for: server)
+        )
         try await updateWorkspaceSelectionMetadataAfterMove(
             serverId: server.id,
             from: sourceWorkspace,
@@ -363,7 +431,10 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         for server in serversToUpdate {
             var updatedServer = server
             updatedServer.environment = environment
-            _ = try await apply(.update(updatedServer))
+            _ = try await apply(
+                .update(updatedServer),
+                credentials: try dependencies.credentialRepository.getCredentials(for: server)
+            )
         }
 
         return updatedWorkspace

@@ -233,6 +233,7 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
     var workspaces: [Workspace]
     var persistError: Error?
     var persistAttempts = 0
+    var serverMutationJournal: ServerMutationTransactionJournal?
     var journal: WorkspaceDeletionJournal?
     var environmentDeletionJournal: EnvironmentDeletionJournal?
 
@@ -273,6 +274,21 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
     func clearServerData() {
         servers = []
         workspaces = []
+    }
+
+    func loadServerMutationTransactionJournal() throws -> ServerMutationTransactionJournal? {
+        serverMutationJournal
+    }
+    func storeServerMutationTransactionJournal(
+        _ journal: ServerMutationTransactionJournal
+    ) throws {
+        serverMutationJournal = journal
+    }
+    func materializeServerMutation(_ plan: ServerMutationTransactionPlan) throws {
+        try persist(servers: plan.resultingServers, workspaces: plan.resultingWorkspaces)
+    }
+    func clearServerMutationTransactionJournal() throws {
+        serverMutationJournal = nil
     }
 
     func loadWorkspaceDeletionJournal() throws -> WorkspaceDeletionJournal? { journal }

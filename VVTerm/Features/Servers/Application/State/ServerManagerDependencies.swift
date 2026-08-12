@@ -18,7 +18,11 @@ protocol ServerRemoteMutationClient: AnyObject {
 }
 
 @MainActor
-protocol ServerSyncRepository: WorkspaceDeletionMutationEnqueuing, EnvironmentDeletionMutationEnqueuing, AnyObject {
+protocol ServerSyncRepository:
+    ServerMutationTransactionEnqueuing,
+    WorkspaceDeletionMutationEnqueuing,
+    EnvironmentDeletionMutationEnqueuing,
+    AnyObject {
     func pendingServerMutations() -> [ServerPendingMutation]
     func clearPendingServerAndWorkspaceMutations() throws
     func removePendingServerMutation(_ mutationID: UUID) throws
@@ -30,7 +34,11 @@ protocol ServerSyncRepository: WorkspaceDeletionMutationEnqueuing, EnvironmentDe
 }
 
 @MainActor
-protocol ServerManagerCredentialRepository: WorkspaceDeletionCredentialCleaning, AnyObject {
+protocol ServerManagerCredentialRepository:
+    ServerCredentialTransactionRepository,
+    ServerMutationCredentialTransacting,
+    WorkspaceDeletionCredentialCleaning,
+    AnyObject {
     func deleteCredentials(for serverId: UUID) throws
 }
 
@@ -64,6 +72,7 @@ protocol FreePlanAssignmentTracking: AnyObject {
 struct ServerManagerDependencies {
     let stateStore: ServerStateStore
     let remoteSyncCoordinator: ServerRemoteSyncCoordinator
+    let syncRepository: any ServerSyncRepository
     let credentialRepository: any ServerManagerCredentialRepository
     let actionAuthorizer: any ProtectedServerActionAuthorizing
     let now: () -> Date
@@ -81,6 +90,7 @@ struct ServerManagerDependencies {
         makeID: @escaping () -> UUID
     ) {
         self.stateStore = stateStore
+        self.syncRepository = syncRepository
         self.credentialRepository = credentialRepository
         self.actionAuthorizer = actionAuthorizer
         self.now = now

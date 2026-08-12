@@ -50,6 +50,9 @@ final class ServerLocalRepositoryFake: ServerLocalRepository {
     var servers: [Server]
     var workspaces: [Workspace]
     var persistError: Error?
+    var serverMutationJournalStoreError: Error?
+    var serverMutationJournalClearError: Error?
+    var serverMutationJournal: ServerMutationTransactionJournal?
     var journal: WorkspaceDeletionJournal?
     var environmentDeletionJournal: EnvironmentDeletionJournal?
 
@@ -59,7 +62,21 @@ final class ServerLocalRepositoryFake: ServerLocalRepository {
     }
 
     func loadSnapshot() -> ServerLocalRepositorySnapshot {
-        ServerLocalRepositorySnapshot(
+        if let journal = serverMutationJournal {
+            return ServerLocalRepositorySnapshot(
+                servers: .loaded(
+                    journal.presentsResultingState
+                        ? journal.plan.resultingServers
+                        : journal.plan.previousServers
+                ),
+                workspaces: .loaded(
+                    journal.presentsResultingState
+                        ? journal.plan.resultingWorkspaces
+                        : journal.plan.previousWorkspaces
+                )
+            )
+        }
+        return ServerLocalRepositorySnapshot(
             servers: .loaded(servers),
             workspaces: .loaded(workspaces)
         )
@@ -74,6 +91,25 @@ final class ServerLocalRepositoryFake: ServerLocalRepository {
     func clearServerData() {
         servers = []
         workspaces = []
+    }
+
+    func loadServerMutationTransactionJournal() throws -> ServerMutationTransactionJournal? {
+        serverMutationJournal
+    }
+    func storeServerMutationTransactionJournal(
+        _ journal: ServerMutationTransactionJournal
+    ) throws {
+        if let serverMutationJournalStoreError { throw serverMutationJournalStoreError }
+        serverMutationJournal = journal
+    }
+    func materializeServerMutation(_ plan: ServerMutationTransactionPlan) throws {
+        if let persistError { throw persistError }
+        servers = plan.resultingServers
+        workspaces = plan.resultingWorkspaces
+    }
+    func clearServerMutationTransactionJournal() throws {
+        if let serverMutationJournalClearError { throw serverMutationJournalClearError }
+        serverMutationJournal = nil
     }
 
     func loadWorkspaceDeletionJournal() throws -> WorkspaceDeletionJournal? { journal }
@@ -149,6 +185,7 @@ final class ServerRemoteRepositoryFake: ServerRemoteRepository {
 @MainActor
 final class ServerSyncRepositoryFake: ServerSyncRepository {
     var enqueuedServerUpserts: [Server] = []
+    var enqueuedServerMutations: [ServerPendingMutation] = []
     private(set) var drainCount = 0
     private(set) var completedDrainCount = 0
     var drainHandler: (@MainActor () async -> Void)?
@@ -164,6 +201,13 @@ final class ServerSyncRepositoryFake: ServerSyncRepository {
     }
     func enqueueServerDelete(_ server: Server) throws {
         if let enqueueError { throw enqueueError }
+    }
+    func enqueueServerMutation(_ mutation: ServerPendingMutation) throws {
+        if let enqueueError { throw enqueueError }
+        enqueuedServerMutations.removeAll {
+            $0.payload.coalescingIdentity == mutation.payload.coalescingIdentity
+        }
+        enqueuedServerMutations.append(mutation)
     }
     func enqueueWorkspaceUpsert(_ workspace: Workspace) throws {
         if let enqueueError { throw enqueueError }
@@ -195,6 +239,40 @@ final class ServerManagerCredentialRepositoryFake:
     var storedServers: [Server] = []
     var storedPasswords: [String?] = []
     var deletedServerIDs: [UUID] = []
+    var preparedTransactions: [UUID: (Server?, Server, ServerCredentials)] = [:]
+    var committedTransactionIDs: [UUID] = []
+    var discardedTransactionIDs: [UUID] = []
+    var prepareError: Error?
+    var commitError: Error?
+    var deleteError: Error?
+
+    func prepareServerCredentialTransaction(
+        id: UUID,
+        previousServer: Server?,
+        server: Server,
+        credentials: ServerCredentials
+    ) throws {
+        if let prepareError { throw prepareError }
+        preparedTransactions[id] = (previousServer, server, credentials)
+    }
+
+    func commitServerCredentialTransaction(
+        id: UUID,
+        previousServer: Server?,
+        server: Server
+    ) throws {
+        if let commitError { throw commitError }
+        guard let prepared = preparedTransactions[id] else {
+            throw TestTransactionError.persistence
+        }
+        committedTransactionIDs.append(id)
+        try storeCredentials(prepared.2, for: server)
+    }
+
+    func discardServerCredentialTransaction(id: UUID) throws {
+        discardedTransactionIDs.append(id)
+        preparedTransactions[id] = nil
+    }
 
     func storeCredentials(_ credentials: ServerCredentials, for server: Server) throws {
         storedServers.append(server)
@@ -207,12 +285,24 @@ final class ServerManagerCredentialRepositoryFake:
     }
 
     func deleteCredentials(for serverId: UUID) throws {
+        if let deleteError { throw deleteError }
         deletedServerIDs.append(serverId)
         values[serverId] = nil
     }
 
     func cleanupCredentials(for server: Server) throws {
         try deleteCredentials(for: server.id)
+    }
+}
+
+private extension ServerPendingMutation.Payload {
+    var coalescingIdentity: String {
+        switch self {
+        case .serverUpsert(let server), .serverDelete(let server):
+            return "server:\(server.id.uuidString)"
+        case .workspaceUpsert(let workspace), .workspaceDelete(let workspace):
+            return "workspace:\(workspace.id.uuidString)"
+        }
     }
 }
 

@@ -84,7 +84,10 @@ private final class ServerMutationRepositoryGate: ServerMutationRepository {
         nil
     }
 
-    func apply(_ mutation: ServerMutation) async throws -> Server {
+    func apply(
+        _ mutation: ServerMutation,
+        credentials: ServerCredentials
+    ) async throws -> Server {
         let waiters = startWaiters
         startWaiters.removeAll(keepingCapacity: false)
         waiters.forEach { $0.resume() }
@@ -710,8 +713,7 @@ struct ServerFormOperationControllerTests {
             connectionTester: connectionTester,
             hostKeys: hostKeys,
             saveUseCase: ServerSaveUseCase(
-                mutations: mutations ?? ServerMutationRepositoryGate(),
-                credentials: ServerCredentialStoreStub()
+                mutations: mutations ?? ServerMutationRepositoryGate()
             ),
             now: now,
             makeID: { idSequence.next() }

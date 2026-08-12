@@ -24,7 +24,10 @@ nonisolated struct ServerLocalRepositorySnapshot {
 }
 
 @MainActor
-protocol ServerLocalRepository: WorkspaceDeletionJournalStoring, EnvironmentDeletionJournalStoring {
+protocol ServerLocalRepository:
+    ServerMutationTransactionJournalStoring,
+    WorkspaceDeletionJournalStoring,
+    EnvironmentDeletionJournalStoring {
     func loadSnapshot() -> ServerLocalRepositorySnapshot
     func persist(servers: [Server], workspaces: [Workspace]) throws
     func clearServerData()

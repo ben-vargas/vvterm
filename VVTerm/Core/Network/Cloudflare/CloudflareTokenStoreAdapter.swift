@@ -4,15 +4,18 @@ import Cloudflared
 actor CloudflareTokenStoreAdapter: TokenStore {
     private let store: KeychainStore
     private let isSyncEnabled: @Sendable () -> Bool
+    private let offlineChanges: CredentialOfflineChangeStore
 
     init(
         store: KeychainStore = KeychainStore(
             service: KeychainManager.cloudflareTokenService
         ),
-        isSyncEnabled: @escaping @Sendable () -> Bool = { SyncSettings.isEnabled }
+        isSyncEnabled: @escaping @Sendable () -> Bool = { SyncSettings.isEnabled },
+        offlineChanges: CredentialOfflineChangeStore = .shared
     ) {
         self.store = store
         self.isSyncEnabled = isSyncEnabled
+        self.offlineChanges = offlineChanges
     }
 
     func readToken(for key: String) async throws -> String? {
@@ -26,15 +29,25 @@ actor CloudflareTokenStoreAdapter: TokenStore {
     }
 
     func writeToken(_ token: String, for key: String) async throws {
+        let namespacedKey = namespacedKey(for: key)
         try store.setString(
             token,
-            forKey: namespacedKey(for: key),
+            forKey: namespacedKey,
             scope: storageScope
         )
+        if !isSyncEnabled() {
+            offlineChanges.record(.updated, for: .oauth(namespacedKey))
+        }
     }
 
     func removeToken(for key: String) async throws {
-        try store.delete(namespacedKey(for: key), scope: storageScope)
+        let namespacedKey = namespacedKey(for: key)
+        if !isSyncEnabled() {
+            offlineChanges.record(.deleted, for: .oauth(namespacedKey))
+        }
+        for scope in KeychainStorageScope.allCases {
+            try store.delete(namespacedKey, scope: scope)
+        }
     }
 
     private var storageScope: KeychainStorageScope {

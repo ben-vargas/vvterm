@@ -53,6 +53,8 @@ extension VVTermError: LocalizedError {
             return String(localized: "Authorization is required")
         case .serverNotFound:
             return String(localized: "Server no longer exists.")
+        case .serverMutationRecoveryPending:
+            return String(localized: "The server change is still being recovered. Try again after recovery completes.")
         case .workspaceNotFound:
             return String(localized: "Workspace no longer exists.")
         case .environmentNotFound:
@@ -70,15 +72,5 @@ extension VVTermError: LocalizedError {
         case .timeout:
             return String(localized: "Connection timed out")
         }
-    }
-}
-
-extension ServerSaveTransactionError: LocalizedError {
-    nonisolated var errorDescription: String? {
-        String(
-            format: String(localized: "The server was not saved, and its credentials could not be restored (%@). Retry the save. Original error: %@"),
-            rollbackErrorDescription,
-            originalErrorDescription
-        )
     }
 }

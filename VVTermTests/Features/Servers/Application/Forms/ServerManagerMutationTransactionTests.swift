@@ -6,68 +6,150 @@ import Testing
 @MainActor
 struct ServerManagerMutationTransactionTests {
     @Test
-    func createMetadataPersistenceFailureRollsBackCredentialsAndVisibleState() async {
+    func createQueueFailureKeepsPreviousViewAndResumesWithoutLosingCredentials() async throws {
         let workspace = makeWorkspace()
         let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])
-        local.persistError = TestTransactionError.persistence
         let credentials = ServerManagerCredentialRepositoryFake()
         let sync = ServerSyncRepositoryFake()
+        sync.enqueueError = ServerSyncRepositoryTestError.rejected
         let manager = makeManager(local: local, credentials: credentials, sync: sync)
-        let useCase = ServerSaveUseCase(mutations: manager, credentials: credentials)
+        let useCase = ServerSaveUseCase(mutations: manager)
         let server = makeServer(workspaceID: workspace.id)
+        var newCredentials = ServerCredentials(serverId: server.id)
+        newCredentials.password = "new-password"
 
-        await #expect(throws: TestTransactionError.self) {
+        await #expect(throws: VVTermError.self) {
             try await useCase.execute(
                 .create(server),
-                credentials: ServerCredentials(serverId: server.id),
+                credentials: newCredentials,
                 hasProAccess: true
             )
         }
 
-        #expect(manager.stateStore.servers.isEmpty)
-        #expect(credentials.deletedServerIDs == [server.id])
-        #expect(sync.enqueuedServerUpserts.isEmpty)
+        #expect(manager.servers.isEmpty)
+        #expect(credentials.values[server.id] == nil)
+        let pending = try #require(local.serverMutationJournal)
+        #expect(pending.phase == .enqueueing)
+
+        sync.enqueueError = nil
+        let resumed = try #require(
+            try manager.stateStore.makeServerMutationTransaction(
+                mutationQueue: sync,
+                credentials: credentials
+            ).resumePending()
+        )
+
+        #expect(resumed.phase == .complete)
+        #expect(local.servers == [resumed.plan.resultingServers[0]])
+        #expect(credentials.values[server.id]?.password == "new-password")
+        #expect(sync.enqueuedServerMutations.count == 1)
     }
 
     @Test
-    func editMetadataPersistenceFailureRestoresOldCredentialsAndServer() async {
+    func editQueueFailureCannotMixNewMetadataWithOldCredentials() async throws {
         let workspace = makeWorkspace()
         let storedServer = makeServer(workspaceID: workspace.id, host: "old.example.test")
         var editedServer = storedServer
         editedServer.host = "new.example.test"
         let local = ServerLocalRepositoryFake(servers: [storedServer], workspaces: [workspace])
-        local.persistError = TestTransactionError.persistence
         let credentials = ServerManagerCredentialRepositoryFake()
-        var previousCredentials = ServerCredentials(serverId: storedServer.id)
-        previousCredentials.password = "old-password"
-        credentials.values[storedServer.id] = previousCredentials
-        let manager = makeManager(local: local, credentials: credentials)
-        let useCase = ServerSaveUseCase(mutations: manager, credentials: credentials)
-        var editedCredentials = ServerCredentials(serverId: editedServer.id)
-        editedCredentials.password = "new-password"
+        var oldCredentials = ServerCredentials(serverId: storedServer.id)
+        oldCredentials.password = "old-password"
+        credentials.values[storedServer.id] = oldCredentials
+        let sync = ServerSyncRepositoryFake()
+        sync.enqueueError = ServerSyncRepositoryTestError.rejected
+        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+        let useCase = ServerSaveUseCase(mutations: manager)
+        var newCredentials = ServerCredentials(serverId: editedServer.id)
+        newCredentials.password = "new-password"
 
-        await #expect(throws: TestTransactionError.self) {
+        await #expect(throws: VVTermError.self) {
             try await useCase.execute(
                 .update(editedServer),
-                credentials: editedCredentials,
+                credentials: newCredentials,
                 hasProAccess: true
             )
         }
 
-        #expect(manager.stateStore.servers == [storedServer])
-        #expect(credentials.storedServers == [editedServer, storedServer])
-        #expect(credentials.storedPasswords == ["new-password", "old-password"])
-        #expect(credentials.deletedServerIDs == [storedServer.id])
+        #expect(manager.servers == [storedServer])
+        #expect(credentials.values[storedServer.id]?.password == "old-password")
+
+        sync.enqueueError = nil
+        let resumed = try #require(
+            try manager.stateStore.makeServerMutationTransaction(
+                mutationQueue: sync,
+                credentials: credentials
+            ).resumePending()
+        )
+
+        #expect(resumed.phase == .complete)
+        #expect(resumed.plan.resultingServers.first?.host == "new.example.test")
+        #expect(credentials.values[storedServer.id]?.password == "new-password")
+    }
+
+    @Test
+    func deleteQueueFailureKeepsServerAndCredentialsUntilRecovery() async throws {
+        let workspace = makeWorkspace()
+        let server = makeServer(workspaceID: workspace.id)
+        let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
+        let credentials = ServerManagerCredentialRepositoryFake()
+        credentials.values[server.id] = ServerCredentials(serverId: server.id)
+        let sync = ServerSyncRepositoryFake()
+        sync.enqueueError = ServerSyncRepositoryTestError.rejected
+        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+
+        await #expect(throws: VVTermError.self) {
+            try await manager.deleteServer(server)
+        }
+
+        #expect(manager.servers == [server])
+        #expect(credentials.values[server.id] != nil)
+        #expect(local.serverMutationJournal?.phase == .enqueueing)
+
+        sync.enqueueError = nil
+        let resumed = try #require(
+            try manager.stateStore.makeServerMutationTransaction(
+                mutationQueue: sync,
+                credentials: credentials
+            ).resumePending()
+        )
+
+        #expect(resumed.phase == .complete)
+        #expect(local.servers.isEmpty)
+        #expect(credentials.values[server.id] == nil)
+    }
+
+    @Test
+    func deleteCredentialFailureLeavesRecoverableJournalAfterMetadataAndQueueCommit() async {
+        let workspace = makeWorkspace()
+        let server = makeServer(workspaceID: workspace.id)
+        let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
+        let credentials = ServerManagerCredentialRepositoryFake()
+        credentials.values[server.id] = ServerCredentials(serverId: server.id)
+        credentials.deleteError = TestTransactionError.persistence
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+
+        await #expect(throws: VVTermError.self) {
+            try await manager.deleteServer(server)
+        }
+
+        #expect(manager.servers.isEmpty)
+        #expect(credentials.values[server.id] != nil)
+        #expect(local.serverMutationJournal?.phase == .finalizingCredentials)
+        #expect(sync.enqueuedServerMutations.count == 1)
     }
 
     private func makeManager(
         local: ServerLocalRepositoryFake,
         credentials: ServerManagerCredentialRepositoryFake,
-        sync: ServerSyncRepositoryFake? = nil
+        sync: ServerSyncRepositoryFake
     ) -> ServerManager {
-        let sync = sync ?? ServerSyncRepositoryFake()
         let now = { Date(timeIntervalSinceReferenceDate: 10_000) }
-        let makeID = { UUID(uuidString: "90000000-0000-0000-0000-000000000001")! }
+        var ids = (1...20).map {
+            UUID(uuidString: String(format: "90000000-0000-0000-0000-%012d", $0))!
+        }
+        let makeID = { ids.removeFirst() }
         let stateStore = ServerStateStore(
             dependencies: ServerStateStoreDependencies(
                 localRepository: local,

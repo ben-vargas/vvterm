@@ -112,6 +112,10 @@ struct ServerApplicationErrorPresentationTests {
                 .workspaceDeletionRecoveryPending,
                 String(localized: "The workspace was deleted, but cleanup is still pending and will retry.")
             ),
+            (
+                .serverMutationRecoveryPending,
+                String(localized: "The server change is still being recovered. Try again after recovery completes.")
+            ),
             (.timeout, String(localized: "Connection timed out"))
         ]
 
@@ -121,27 +125,4 @@ struct ServerApplicationErrorPresentationTests {
         }
     }
 
-    @Test
-    func saveTransactionErrorKeepsItsExactDescription() {
-        let error = ServerSaveTransactionError(
-            originalError: FixedDescriptionError(description: "Metadata write failed"),
-            rollbackError: FixedDescriptionError(description: "Credential restore failed")
-        )
-        let expected = String(
-            format: String(localized: "The server was not saved, and its credentials could not be restored (%@). Retry the save. Original error: %@"),
-            "Credential restore failed",
-            "Metadata write failed"
-        )
-
-        #expect(error.originalErrorDescription == "Metadata write failed")
-        #expect(error.rollbackErrorDescription == "Credential restore failed")
-        #expect(error.errorDescription == expected)
-        #expect(error.localizedDescription == expected)
-    }
-}
-
-nonisolated private struct FixedDescriptionError: LocalizedError {
-    let description: String
-
-    nonisolated var errorDescription: String? { description }
 }

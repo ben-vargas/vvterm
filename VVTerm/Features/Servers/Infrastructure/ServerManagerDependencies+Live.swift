@@ -13,6 +13,10 @@ extension CloudKitSyncCoordinator: ServerSyncRepository {
         try enqueue(.serverDelete(server))
     }
 
+    func enqueueServerMutation(_ mutation: ServerPendingMutation) throws {
+        try enqueueAtomically([try PendingCloudKitMutation(mutation)])
+    }
+
     func enqueueWorkspaceUpsert(_ workspace: Workspace) throws {
         try enqueue(.workspaceUpsert(workspace))
     }

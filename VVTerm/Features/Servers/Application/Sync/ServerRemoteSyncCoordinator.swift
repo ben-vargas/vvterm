@@ -53,10 +53,16 @@ final class ServerRemoteSyncCoordinator {
         let stateStore = dependencies.stateStore
         let syncRepository = dependencies.syncRepository
         startupTask = Task { [weak self, stateStore, syncRepository] in
+            let serverMutationRecovery = self?.recoverPendingServerMutation()
+            if case .pending? = serverMutationRecovery {
+                return
+            }
             let recoveredWorkspaceDeletion = self?.recoverPendingWorkspaceDeletion() ?? false
             let recoveredEnvironmentDeletion = self?.recoverPendingEnvironmentDeletion() ?? false
-            let recoveredPendingDeletion = recoveredWorkspaceDeletion || recoveredEnvironmentDeletion
-            if recoveredPendingDeletion, stateStore.isSyncEnabled {
+            let recoveredPendingMutation = serverMutationRecovery == .complete
+                || recoveredWorkspaceDeletion
+                || recoveredEnvironmentDeletion
+            if recoveredPendingMutation, stateStore.isSyncEnabled {
                 await syncRepository.drainPendingMutations()
             }
             guard !Task.isCancelled else { return }
@@ -526,6 +532,39 @@ final class ServerRemoteSyncCoordinator {
             mutationQueue: dependencies.syncRepository,
             credentialCleaner: dependencies.credentialRepository
         )
+    }
+
+    private var serverMutationTransaction: ServerMutationTransaction {
+        stateStore.makeServerMutationTransaction(
+            mutationQueue: dependencies.syncRepository,
+            credentials: dependencies.credentialRepository
+        )
+    }
+
+    private enum ServerMutationRecoveryResult: Equatable {
+        case none
+        case complete
+        case pending
+    }
+
+    private func recoverPendingServerMutation() -> ServerMutationRecoveryResult {
+        do {
+            guard let journal = try serverMutationTransaction.resumePending() else {
+                stateStore.restorePersistedCollections()
+                return .none
+            }
+            if journal.presentsResultingState {
+                stateStore.applyCommittedServerMutation(journal.plan)
+            }
+            guard journal.phase == .complete else {
+                logger.error("Server mutation recovery remains pending")
+                return .pending
+            }
+            return .complete
+        } catch {
+            logger.error("Could not resume server mutation: \(error.localizedDescription)")
+            return .pending
+        }
     }
 
     private var environmentDeletionTransaction: EnvironmentDeletionTransaction {

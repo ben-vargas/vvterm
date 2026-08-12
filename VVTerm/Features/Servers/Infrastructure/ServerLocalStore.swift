@@ -4,6 +4,8 @@ import Foundation
 struct ServerLocalStore {
     static let serversStorageKey = "com.vivy.vvterm.servers"
     static let workspacesStorageKey = "com.vivy.vvterm.workspaces"
+    private static let serverMutationTransactionJournalKey =
+        "com.vivy.vvterm.serverMutationTransactionJournal.v1"
     private static let workspaceDeletionJournalKey = "com.vivy.vvterm.workspaceDeletionJournal.v1"
     private static let environmentDeletionJournalKey = "com.vivy.vvterm.environmentDeletionJournal.v1"
 
@@ -22,6 +24,13 @@ struct ServerLocalStore {
     }
 
     func loadServers() -> ServerLocalLoadResult<[Server]> {
+        if let journal = try? loadServerMutationTransactionJournal() {
+            return .loaded(
+                journal.presentsResultingState
+                    ? journal.plan.resultingServers
+                    : journal.plan.previousServers
+            )
+        }
         if let plan = try? loadWorkspaceDeletionJournal()?.plan {
             return .loaded(plan.remainingServers)
         }
@@ -32,6 +41,13 @@ struct ServerLocalStore {
     }
 
     func loadWorkspaces() -> ServerLocalLoadResult<[Workspace]> {
+        if let journal = try? loadServerMutationTransactionJournal() {
+            return .loaded(
+                journal.presentsResultingState
+                    ? journal.plan.resultingWorkspaces
+                    : journal.plan.previousWorkspaces
+            )
+        }
         if let plan = try? loadWorkspaceDeletionJournal()?.plan {
             return .loaded(plan.remainingWorkspaces)
         }
@@ -80,6 +96,39 @@ struct ServerLocalStore {
 
     private func quarantineKey(for storageKey: String) -> String {
         "\(storageKey).unreadable-backup.v1"
+    }
+}
+
+extension ServerLocalStore: ServerMutationTransactionJournalStoring {
+    func loadServerMutationTransactionJournal() throws -> ServerMutationTransactionJournal? {
+        guard let data = defaults.data(forKey: Self.serverMutationTransactionJournalKey) else {
+            return nil
+        }
+        return try JSONDecoder().decode(ServerMutationTransactionJournal.self, from: data)
+    }
+
+    func storeServerMutationTransactionJournal(
+        _ journal: ServerMutationTransactionJournal
+    ) throws {
+        let data = try JSONEncoder().encode(journal)
+        defaults.set(data, forKey: Self.serverMutationTransactionJournalKey)
+        guard defaults.data(forKey: Self.serverMutationTransactionJournalKey) == data else {
+            throw ServerLocalStoreError.persistenceFailed
+        }
+    }
+
+    func materializeServerMutation(_ plan: ServerMutationTransactionPlan) throws {
+        try persist(
+            servers: plan.resultingServers,
+            workspaces: plan.resultingWorkspaces
+        )
+    }
+
+    func clearServerMutationTransactionJournal() throws {
+        defaults.removeObject(forKey: Self.serverMutationTransactionJournalKey)
+        guard defaults.object(forKey: Self.serverMutationTransactionJournalKey) == nil else {
+            throw ServerLocalStoreError.persistenceFailed
+        }
     }
 }
 

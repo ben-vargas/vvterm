@@ -179,6 +179,24 @@ final class ServerStateStore: ObservableObject {
         replaceCollections(servers: result.servers, workspaces: result.workspaces)
     }
 
+    func makeServerMutationTransaction(
+        mutationQueue: any ServerMutationTransactionEnqueuing,
+        credentials: any ServerMutationCredentialTransacting
+    ) -> ServerMutationTransaction {
+        ServerMutationTransaction(
+            store: dependencies.localRepository,
+            mutationQueue: mutationQueue,
+            credentials: credentials
+        )
+    }
+
+    func applyCommittedServerMutation(_ plan: ServerMutationTransactionPlan) {
+        replaceCollections(
+            servers: plan.resultingServers,
+            workspaces: plan.resultingWorkspaces
+        )
+    }
+
     func replaceCollections(servers: [Server], workspaces: [Workspace]) {
         updateSnapshot { snapshot in
             snapshot.servers = servers

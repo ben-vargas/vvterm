@@ -165,12 +165,14 @@ nonisolated final class InMemoryKeychainStoreBacking: KeychainStoreBacking, @unc
 
     enum Failure: Error, Equatable {
         case writeRejected
+        case deleteRejected
     }
 
     private let lock = NSLock()
     private var values: [Item: Data] = [:]
     private var failedWriteScopes: Set<KeychainStorageScope> = []
     private var failedWriteItems: Set<Item> = []
+    private var failedDeleteItems: Set<Item> = []
     private var corruptedReadItems: Set<Item> = []
 
     func set(
@@ -220,7 +222,11 @@ nonisolated final class InMemoryKeychainStoreBacking: KeychainStoreBacking, @unc
     ) throws {
         lock.lock()
         defer { lock.unlock() }
-        values.removeValue(forKey: Item(service: service, key: key, scope: scope))
+        let item = Item(service: service, key: key, scope: scope)
+        guard !failedDeleteItems.contains(item) else {
+            throw Failure.deleteRejected
+        }
+        values.removeValue(forKey: item)
     }
 
     func keys(
@@ -257,6 +263,26 @@ nonisolated final class InMemoryKeychainStoreBacking: KeychainStoreBacking, @unc
     ) {
         lock.lock()
         corruptedReadItems.insert(Item(service: service, key: key, scope: scope))
+        lock.unlock()
+    }
+
+    func failDeletes(
+        from scope: KeychainStorageScope,
+        service: String,
+        key: String
+    ) {
+        lock.lock()
+        failedDeleteItems.insert(Item(service: service, key: key, scope: scope))
+        lock.unlock()
+    }
+
+    func allowDeletes(
+        from scope: KeychainStorageScope,
+        service: String,
+        key: String
+    ) {
+        lock.lock()
+        failedDeleteItems.remove(Item(service: service, key: key, scope: scope))
         lock.unlock()
     }
 
