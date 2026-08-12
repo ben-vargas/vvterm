@@ -1,7 +1,7 @@
 #if os(macOS)
 import XCTest
 
-final class MacTerminalRecoveryUITests: XCTestCase {
+final class TerminalRecoveryUITests: XCTestCase {
     @MainActor
     func testEightHourWakeReachesOneConnectedReplacement() {
         let app = launchHarness()

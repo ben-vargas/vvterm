@@ -1,3 +1,4 @@
+#if os(iOS)
 import XCTest
 
 final class ServerNavigationUITests: XCTestCase {
@@ -347,3 +348,4 @@ final class ServerNavigationUITests: XCTestCase {
         app.staticTexts["vvterm.reconnectTest.diagnostics"].label
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(iOS)
 import XCTest
 
 final class NoticePresentationUITests: XCTestCase {
@@ -242,3 +243,4 @@ final class NoticePresentationUITests: XCTestCase {
         return app
     }
 }
+#endif

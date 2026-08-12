@@ -1,3 +1,4 @@
+#if os(macOS)
 import XCTest
 
 final class StatsAppearancePresentationUITests: XCTestCase {
@@ -5,7 +6,6 @@ final class StatsAppearancePresentationUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    #if os(macOS)
     @MainActor
     func testStatsAppearanceCanBeClosedFromGeneralSettings() throws {
         let app = XCUIApplication()
@@ -27,5 +27,5 @@ final class StatsAppearancePresentationUITests: XCTestCase {
 
         XCTAssertTrue(statsAppearance.waitForExistence(timeout: 5))
     }
-    #endif
 }
+#endif

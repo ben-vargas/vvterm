@@ -1,3 +1,4 @@
+#if os(iOS)
 import CryptoKit
 import XCTest
 
@@ -141,3 +142,4 @@ final class StatsStorageUITests: XCTestCase {
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
     }
 }
+#endif

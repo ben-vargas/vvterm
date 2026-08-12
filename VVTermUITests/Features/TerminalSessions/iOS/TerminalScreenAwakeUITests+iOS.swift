@@ -1,3 +1,4 @@
+#if os(iOS)
 import XCTest
 
 final class TerminalScreenAwakeUITests: XCTestCase {
@@ -107,3 +108,4 @@ final class TerminalScreenAwakeUITests: XCTestCase {
         return false
     }
 }
+#endif

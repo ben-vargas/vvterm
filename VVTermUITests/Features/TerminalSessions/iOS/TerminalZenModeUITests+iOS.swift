@@ -1,3 +1,4 @@
+#if os(iOS)
 import XCTest
 
 final class TerminalZenModeUITests: XCTestCase {
@@ -86,3 +87,4 @@ final class TerminalZenModeUITests: XCTestCase {
         )
     }
 }
+#endif
