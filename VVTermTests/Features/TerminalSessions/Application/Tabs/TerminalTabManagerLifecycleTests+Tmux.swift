@@ -111,7 +111,10 @@ extension TerminalTabManagerLifecycleTests {
                             for: tab.rootPaneId,
                             serverId: tab.serverId,
                             client: disconnectedClient,
-                            startToken: startToken
+                            startToken: startToken,
+                            availabilityResolver: {
+                                .indeterminate(.disconnected)
+                            }
                         )
                         Issue.record("An indeterminate tmux probe should retry the connection")
                     } catch {
