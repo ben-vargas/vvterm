@@ -28,7 +28,7 @@ extension RemoteFileBrowserScreen {
         ) {
             return
         }
-        operationErrorMessage = remoteOperationErrorMessage(for: error)
+        presentation = .operationError(remoteOperationErrorMessage(for: error))
     }
 
     var hostKeyApprovalChallenge: KnownHostsManager.Challenge? {
@@ -60,7 +60,7 @@ extension RemoteFileBrowserScreen {
             onCancellation: onCancellation ?? {}
         ) else {
             if case .hostKeyApprovalRequired = RemoteFileBrowserError.map(error) {
-                operationErrorMessage = ServerSecurityApprovalError.unavailable.localizedDescription
+                presentation = .operationError(ServerSecurityApprovalError.unavailable.localizedDescription)
                 return true
             }
             return false
@@ -93,7 +93,7 @@ extension RemoteFileBrowserScreen {
     func cancelSecurityApproval() {
         guard effectiveSecurityApprovalRequest != nil else { return }
         if let error = operationCoordinator.cancelSecurityRequest() {
-            operationErrorMessage = error.localizedDescription
+            presentation = .operationError(error.localizedDescription)
         }
     }
 
@@ -101,7 +101,7 @@ extension RemoteFileBrowserScreen {
     func approveHostKeyAndRetry() {
         guard effectiveSecurityApprovalRequest != nil else { return }
         if let error = operationCoordinator.approveSecurityRequest() {
-            operationErrorMessage = error.localizedDescription
+            presentation = .operationError(error.localizedDescription)
         }
     }
 }

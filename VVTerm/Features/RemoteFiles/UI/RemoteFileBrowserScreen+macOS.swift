@@ -51,48 +51,57 @@ extension RemoteFileBrowserScreen {
         browserContent(snapshot)
     }
 
-    func platformUploadImportPresentation<Content: View>(_ content: Content) -> some View {
-        content
-            .fileImporter(
-                isPresented: uploadImporterBinding,
-                allowedContentTypes: [.item, .folder],
-                allowsMultipleSelection: true
-            ) { result in
-                handleUploadSelection(result)
-            }
-    }
-
     func platformSearchPresentation<Content: View>(_ content: Content) -> some View {
         content
     }
 
-    func platformSharePresentation<Content: View>(_ content: Content) -> some View {
+    func platformPresentation<Content: View>(_ content: Content) -> some View {
         content
             .overlay(alignment: .topTrailing) {
-                if let shareItem {
-                    RemoteFileSharePicker(item: shareItem) {
-                        finishSharing(shareItem)
+                if case .share(let item) = presentation {
+                    RemoteFileSharePicker(item: item) {
+                        finishSharing(item)
                     }
                     .frame(width: 1, height: 1)
                     .padding(.top, 12)
                     .padding(.trailing, 12)
                 }
             }
+            .sheet(item: macOSSheetPresentationBinding, onDismiss: dismissPresentation) { route in
+                macOSSheet(for: route)
+                    .adaptiveSoftScrollEdges()
+            }
+    }
+
+    var macOSSheetPresentationBinding: Binding<RemoteFileBrowserPresentation?> {
+        Binding(
+            get: {
+                guard presentation?.isMacOSSheet == true else { return nil }
+                return presentation
+            },
+            set: { route in
+                if let route {
+                    presentation = route
+                } else if presentation?.isMacOSSheet == true {
+                    dismissPresentation()
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    func macOSSheet(for route: RemoteFileBrowserPresentation) -> some View {
+        switch route {
+        case .move(let draft):
+            moveSheet(entry: draft.entry)
+        case .permissions(let draft):
+            permissionSheet(entry: draft.entry)
+        default:
+            EmptyView()
+        }
     }
 
     func platformDropPresentation<Content: View>(_ content: Content, snapshot: Snapshot) -> some View {
-        content
-    }
-
-    func platformNewFolderPresentation<Content: View>(_ content: Content) -> some View {
-        content
-    }
-
-    func platformRenamePresentation<Content: View>(_ content: Content) -> some View {
-        content
-    }
-
-    func platformDeletePresentation<Content: View>(_ content: Content) -> some View {
         content
     }
 
