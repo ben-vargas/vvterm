@@ -22,17 +22,6 @@ struct SettingsView: View {
         SettingsRoutePersistence.route(for: selectedRouteRaw)
     }
 
-    var selectedRouteBinding: Binding<SettingsRoute?> {
-        Binding(
-            get: { selectedRoute },
-            set: { route in
-                if let route {
-                    selectedRouteRaw = route.rawValue
-                }
-            }
-        )
-    }
-
     func visibleRoutes(in group: SettingsGroup) -> [SettingsRoute] {
         SettingsRouteCatalog.visibleRoutes(
             from: SettingsRouteCatalog.routes(in: group),
@@ -42,6 +31,13 @@ struct SettingsView: View {
 
     func visibleRoutes(from routes: [SettingsRoute]) -> [SettingsRoute] {
         SettingsRouteCatalog.visibleRoutes(from: routes, matching: searchText)
+    }
+
+    var visibleDetailRoute: SettingsRoute? {
+        SettingsRouteCatalog.visibleDetailRoute(
+            selectedRoute: selectedRoute,
+            matching: searchText
+        )
     }
 
     @ViewBuilder

@@ -3,6 +3,7 @@ import Testing
 @testable import VVTerm
 
 @Suite("Settings route catalog")
+@MainActor
 struct SettingsRouteCatalogTests {
     @Test("Catalog follows the approved grouped order")
     func approvedGroupedOrder() {
@@ -46,6 +47,30 @@ struct SettingsRouteCatalogTests {
     ])
     func search(query: String, expectedRoute: SettingsRoute) {
         #expect(SettingsRouteCatalog.routes(matching: query).contains(expectedRoute))
+    }
+
+    @Test("Search includes localized setting labels")
+    func localizedSearchTerms() {
+        #expect(
+            SettingsRouteCatalog.routes(matching: "Option als Alt")
+                .contains(.keyboardAndInput)
+        )
+    }
+
+    @Test("A filtered-out macOS selection has no visible detail route")
+    func filteredSelection() {
+        #expect(
+            SettingsRouteCatalog.visibleDetailRoute(
+                selectedRoute: .terminalAppearance,
+                matching: "tmux"
+            ) == nil
+        )
+        #expect(
+            SettingsRouteCatalog.visibleDetailRoute(
+                selectedRoute: .sessionsAndConnections,
+                matching: "tmux"
+            ) == .sessionsAndConnections
+        )
     }
 
     @Test("Empty search returns every route")
