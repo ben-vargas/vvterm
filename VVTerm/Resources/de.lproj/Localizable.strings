@@ -1750,7 +1750,7 @@
 "Data stays on this device." = "Daten bleiben auf diesem Gerät.";
 "Last synced %@" = "Zuletzt synchronisiert: %@";
 "Pending Changes" = "Ausstehende Änderungen";
-"Copy Sync Diagnostics" = "Synchronisierungsdiagnose kopieren";
+"Copy Diagnostics" = "Diagnose kopieren";
 "Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again." = "Die Anmeldedaten bleiben auf diesem Gerät. Wenn du die Synchronisierung wieder aktivierst, speichert VVTerm sie erneut im iCloud-Schlüsselbund.";
 "Last Successful Sync" = "Letzte erfolgreiche Synchronisierung";
 "Remove Credentials from iCloud Keychain" = "Anmeldedaten aus dem iCloud-Schlüsselbund entfernen";

@@ -1747,7 +1747,7 @@
 "Data stays on this device." = "数据会保留在此设备上。";
 "Last synced %@" = "上次同步：%@";
 "Pending Changes" = "待同步更改";
-"Copy Sync Diagnostics" = "拷贝同步诊断";
+"Copy Diagnostics" = "拷贝诊断信息";
 "Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again." = "凭据会保留在此设备上。如果再次启用同步，VVTerm 会将它们重新存储到 iCloud 钥匙串中。";
 "Last Successful Sync" = "上次成功同步";
 "Remove Credentials from iCloud Keychain" = "从 iCloud 钥匙串中移除凭据";

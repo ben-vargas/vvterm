@@ -49,6 +49,9 @@ final class SyncSettingsUITests: XCTestCase {
         XCTAssertTrue(scrollToElement(lastSuccessful, in: app))
         let copyDiagnostics = app.buttons["vvterm.settings.sync.copyDiagnostics"]
         XCTAssertTrue(scrollToElement(copyDiagnostics, in: app, requireHittable: true))
+        XCTAssertTrue(copyDiagnostics.label.contains("Copy Diagnostics"))
+        copyDiagnostics.click()
+        XCTAssertTrue(copyDiagnostics.label.contains("Copied"))
     }
 
     @MainActor

@@ -10,6 +10,8 @@ struct SyncSettingsDetailsSections: View {
     let diagnostics: String
     let requestCredentialRemoval: () -> Void
 
+    @State private var copiedDiagnostics: String?
+
     var body: some View {
         syncedDataSection
         deviceOnlySection
@@ -144,8 +146,19 @@ struct SyncSettingsDetailsSections: View {
 
             Button {
                 Clipboard.copy(diagnostics)
+                copiedDiagnostics = diagnostics
+                SyncSettingsAccessibilityAnnouncement.post(
+                    String(localized: "Copied")
+                )
             } label: {
-                Label("Copy Sync Diagnostics", systemImage: "doc.on.doc")
+                Label(
+                    copiedDiagnostics == diagnostics
+                        ? String(localized: "Copied")
+                        : String(localized: "Copy Diagnostics"),
+                    systemImage: copiedDiagnostics == diagnostics
+                        ? "checkmark"
+                        : "doc.on.doc"
+                )
             }
             .accessibilityIdentifier("vvterm.settings.sync.copyDiagnostics")
         }

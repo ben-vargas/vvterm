@@ -1750,7 +1750,7 @@
 "Data stays on this device." = "データはこのデバイスに残ります。";
 "Last synced %@" = "最終同期：%@";
 "Pending Changes" = "保留中の変更";
-"Copy Sync Diagnostics" = "同期診断をコピー";
+"Copy Diagnostics" = "診断をコピー";
 "Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again." = "認証情報はこのデバイスに残ります。同期を再度有効にすると、VVTermは認証情報をiCloudキーチェーンに再保存します。";
 "Last Successful Sync" = "前回の正常な同期";
 "Remove Credentials from iCloud Keychain" = "iCloudキーチェーンから認証情報を削除";

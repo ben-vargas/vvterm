@@ -1750,7 +1750,7 @@
 "Data stays on this device." = "ข้อมูลจะอยู่บนอุปกรณ์นี้";
 "Last synced %@" = "ซิงค์ล่าสุด: %@";
 "Pending Changes" = "การเปลี่ยนแปลงที่รอดำเนินการ";
-"Copy Sync Diagnostics" = "คัดลอกข้อมูลวินิจฉัยการซิงค์";
+"Copy Diagnostics" = "คัดลอกข้อมูลวินิจฉัย";
 "Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again." = "ข้อมูลประจำตัวยังคงอยู่บนอุปกรณ์นี้ หากเปิดการซิงค์อีกครั้ง VVTerm จะจัดเก็บข้อมูลในพวงกุญแจ iCloud อีกครั้ง";
 "Last Successful Sync" = "การซิงค์สำเร็จครั้งล่าสุด";
 "Remove Credentials from iCloud Keychain" = "ลบข้อมูลประจำตัวออกจากพวงกุญแจ iCloud";

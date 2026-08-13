@@ -1795,7 +1795,7 @@
 "Data stays on this device." = "Dữ liệu vẫn ở trên thiết bị này.";
 "Last synced %@" = "Đồng bộ gần nhất: %@";
 "Pending Changes" = "Thay đổi đang chờ";
-"Copy Sync Diagnostics" = "Sao chép chẩn đoán đồng bộ";
+"Copy Diagnostics" = "Sao chép chẩn đoán";
 "Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again." = "Thông tin xác thực vẫn còn trên thiết bị này. Nếu bạn bật lại đồng bộ, VVTerm sẽ lưu chúng vào Chuỗi khóa iCloud lần nữa.";
 "Last Successful Sync" = "Lần đồng bộ thành công gần nhất";
 "Remove Credentials from iCloud Keychain" = "Xóa thông tin xác thực khỏi Chuỗi khóa iCloud";

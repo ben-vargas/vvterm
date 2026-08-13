@@ -1749,7 +1749,7 @@
 "Data stays on this device." = "데이터는 이 기기에 남습니다.";
 "Last synced %@" = "마지막 동기화: %@";
 "Pending Changes" = "대기 중인 변경 사항";
-"Copy Sync Diagnostics" = "동기화 진단 복사";
+"Copy Diagnostics" = "진단 복사";
 "Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again." = "자격 증명은 이 기기에 남습니다. 동기화를 다시 켜면 VVTerm이 자격 증명을 iCloud 키체인에 다시 저장합니다.";
 "Last Successful Sync" = "마지막 성공한 동기화";
 "Remove Credentials from iCloud Keychain" = "iCloud 키체인에서 자격 증명 제거";

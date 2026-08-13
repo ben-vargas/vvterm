@@ -1750,7 +1750,7 @@
 "Data stays on this device." = "Данные остаются на этом устройстве.";
 "Last synced %@" = "Последняя синхронизация: %@";
 "Pending Changes" = "Ожидающие изменения";
-"Copy Sync Diagnostics" = "Скопировать диагностику синхронизации";
+"Copy Diagnostics" = "Скопировать диагностику";
 "Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again." = "Учётные данные останутся на этом устройстве. Если снова включить синхронизацию, VVTerm опять сохранит их в Связке ключей iCloud.";
 "Last Successful Sync" = "Последняя успешная синхронизация";
 "Remove Credentials from iCloud Keychain" = "Удалить учётные данные из Связки ключей iCloud";

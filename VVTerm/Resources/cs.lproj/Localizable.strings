@@ -1751,7 +1751,7 @@
 "Data stays on this device." = "Data zůstanou v tomto zařízení.";
 "Last synced %@" = "Poslední synchronizace: %@";
 "Pending Changes" = "Čekající změny";
-"Copy Sync Diagnostics" = "Kopírovat diagnostiku synchronizace";
+"Copy Diagnostics" = "Kopírovat diagnostiku";
 "Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again." = "Přihlašovací údaje zůstanou v tomto zařízení. Pokud synchronizaci znovu zapnete, VVTerm je znovu uloží do Klíčenky na iCloudu.";
 "Last Successful Sync" = "Poslední úspěšná synchronizace";
 "Remove Credentials from iCloud Keychain" = "Odstranit přihlašovací údaje z Klíčenky na iCloudu";

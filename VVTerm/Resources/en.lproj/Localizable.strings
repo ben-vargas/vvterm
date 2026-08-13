@@ -1802,7 +1802,7 @@
 "Data stays on this device." = "Data stays on this device.";
 "Last synced %@" = "Last synced %@";
 "Pending Changes" = "Pending Changes";
-"Copy Sync Diagnostics" = "Copy Sync Diagnostics";
+"Copy Diagnostics" = "Copy Diagnostics";
 "Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again." = "Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again.";
 "Last Successful Sync" = "Last Successful Sync";
 "Remove Credentials from iCloud Keychain" = "Remove Credentials from iCloud Keychain";
