@@ -115,6 +115,14 @@ final class TerminalThemeManager: ObservableObject {
         observerCleanupRequest.perform()
     }
 
+    func refreshFromCloud() async throws {
+        startupSyncTask?.cancel()
+        startupSyncTask = nil
+        lifecycleSyncTask?.cancel()
+        lifecycleSyncTask = nil
+        try await synchronizeWithCloud()
+    }
+
     var customThemeNames: [String] {
         customThemes
             .filter { !$0.isDeleted && $0.canApply }
@@ -538,48 +546,41 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     private func makeCloudSyncTask() -> Task<Void, Never> {
-        let localThemesSnapshot = customThemes
-        let cloud = dependencies.cloud
-        let isSyncEnabled = dependencies.isSyncEnabled
-        let mutationQueue = dependencies.mutationQueue
-        let logger = logger
-
-        return Task { [weak self, cloud, isSyncEnabled, mutationQueue, logger, localThemesSnapshot] in
-            guard !Task.isCancelled, isSyncEnabled() else { return }
+        Task { [weak self] in
+            guard let self else { return }
             do {
-                let remoteThemes = try await cloud.fetchTerminalThemes()
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                if let manager = self {
-                    try manager.applyRemoteThemesAndEnqueueMissing(
-                        remoteThemes,
-                        localThemesSnapshot: localThemesSnapshot,
-                        mutationQueue: mutationQueue
-                    )
-                } else {
-                    return
-                }
-
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                let remotePreference = try await cloud.fetchTerminalThemePreference()
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                if let manager = self {
-                    try manager.applyRemotePreferenceOrEnqueueLocal(
-                        remotePreference,
-                        mutationQueue: mutationQueue
-                    )
-                } else {
-                    return
-                }
-
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                await mutationQueue.drainPendingMutations()
+                try await self.synchronizeWithCloud()
             } catch is CancellationError {
                 return
             } catch {
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                logger.warning("Custom theme CloudKit sync failed: \(error.localizedDescription)")
+                guard !Task.isCancelled, self.dependencies.isSyncEnabled() else { return }
+                self.logger.warning("Custom theme CloudKit sync failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func synchronizeWithCloud() async throws {
+        try Task.checkCancellation()
+        guard dependencies.isSyncEnabled() else { return }
+        let localThemesSnapshot = customThemes
+        let remoteThemes = try await dependencies.cloud.fetchTerminalThemes()
+        try Task.checkCancellation()
+        guard dependencies.isSyncEnabled() else { throw CancellationError() }
+        try applyRemoteThemesAndEnqueueMissing(
+            remoteThemes,
+            localThemesSnapshot: localThemesSnapshot,
+            mutationQueue: dependencies.mutationQueue
+        )
+
+        let remotePreference = try await dependencies.cloud.fetchTerminalThemePreference()
+        try Task.checkCancellation()
+        guard dependencies.isSyncEnabled() else { throw CancellationError() }
+        try applyRemotePreferenceOrEnqueueLocal(
+            remotePreference,
+            mutationQueue: dependencies.mutationQueue
+        )
+
+        await dependencies.mutationQueue.drainPendingMutations()
     }
 
     private func applyRemoteThemesAndEnqueueMissing(

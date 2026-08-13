@@ -1,4 +1,5 @@
 import CloudKit
+import Combine
 import Foundation
 
 nonisolated struct PendingCloudKitMutation: Codable, Equatable, Identifiable, Sendable {
@@ -124,6 +125,25 @@ nonisolated struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identi
     let quarantinedAt: Date
 }
 
+nonisolated enum PendingCloudKitQueueHealth: Equatable, Sendable {
+    case ready
+    case migrationBlocked
+}
+
+nonisolated struct PendingCloudKitQueueSummary: Equatable, Sendable {
+    let pendingOperationCount: Int
+    let hasPendingFailure: Bool
+    let quarantinedOperationCount: Int
+    let health: PendingCloudKitQueueHealth
+
+    static let empty = PendingCloudKitQueueSummary(
+        pendingOperationCount: 0,
+        hasPendingFailure: false,
+        quarantinedOperationCount: 0,
+        health: .ready
+    )
+}
+
 nonisolated final class PendingCloudKitSyncQueue {
     private enum State {
         case ready
@@ -136,6 +156,7 @@ nonisolated final class PendingCloudKitSyncQueue {
     private let quarantineStorageKey: String
     private let defaults: UserDefaults
     private let legacyMigrator: (any PendingCloudKitLegacyMutationMigrating)?
+    private let summarySubject: CurrentValueSubject<PendingCloudKitQueueSummary, Never>
     private var items: [PendingCloudKitMutation]
     private var quarantinedItems: [PendingCloudKitMutationQuarantine]
     private var state: State
@@ -149,11 +170,28 @@ nonisolated final class PendingCloudKitSyncQueue {
         self.quarantineStorageKey = storageKey + Self.quarantineStorageKeySuffix
         self.defaults = defaults
         self.legacyMigrator = legacyMigrator
+        self.summarySubject = CurrentValueSubject(.empty)
         self.items = []
         self.quarantinedItems = []
         self.state = .ready
         loadQuarantine()
         load()
+        publishSummary()
+    }
+
+    var summary: PendingCloudKitQueueSummary {
+        PendingCloudKitQueueSummary(
+            pendingOperationCount: items.count,
+            hasPendingFailure: items.contains {
+                $0.lastErrorCode != nil || $0.lastErrorDescription != nil
+            },
+            quarantinedOperationCount: quarantinedItems.count,
+            health: queueHealth
+        )
+    }
+
+    var summaryUpdates: AnyPublisher<PendingCloudKitQueueSummary, Never> {
+        summarySubject.eraseToAnyPublisher()
     }
 
     func snapshot() -> [PendingCloudKitMutation] {
@@ -303,6 +341,7 @@ nonisolated final class PendingCloudKitSyncQueue {
         state = .ready
         load()
         try requireReady()
+        publishSummary()
     }
 
     private func persistMigrationOrBlock(
@@ -318,6 +357,7 @@ nonisolated final class PendingCloudKitSyncQueue {
         } catch {
             state = .migrationFailed(error.localizedDescription)
         }
+        publishSummary()
     }
 
     private func requireReady() throws {
@@ -369,6 +409,7 @@ nonisolated final class PendingCloudKitSyncQueue {
         let data = try JSONEncoder().encode(updatedItems)
         try writeAndVerify(data, forKey: storageKey)
         items = updatedItems
+        publishSummary()
     }
 
     private func persistMigratedState(
@@ -392,6 +433,20 @@ nonisolated final class PendingCloudKitSyncQueue {
 
         items = updatedItems
         quarantinedItems = updatedQuarantinedItems
+        publishSummary()
+    }
+
+    private var queueHealth: PendingCloudKitQueueHealth {
+        switch state {
+        case .ready:
+            .ready
+        case .migrationFailed:
+            .migrationBlocked
+        }
+    }
+
+    private func publishSummary() {
+        summarySubject.send(summary)
     }
 
     private func writeAndVerify(_ data: Data, forKey key: String) throws {

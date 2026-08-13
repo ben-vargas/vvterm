@@ -164,14 +164,20 @@ struct AppearancePickerView: View {
     var body: some View {
         HStack(spacing: 0) {
             ForEach(AppearanceMode.allCases, id: \.self) { mode in
-                AppearanceOptionView(
-                    mode: mode,
-                    isSelected: selection == mode.rawValue
-                )
-                .frame(maxWidth: .infinity)
-                .onTapGesture {
+                let isSelected = selection == mode.rawValue
+                Button {
                     selection = mode.rawValue
+                } label: {
+                    AppearanceOptionView(
+                        mode: mode,
+                        isSelected: isSelected
+                    )
+                    .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(mode.label)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityIdentifier("vvterm.settings.appearance.\(mode.rawValue)")
             }
         }
     }

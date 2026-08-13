@@ -110,7 +110,7 @@ struct AboutSettingsView: View {
                 .padding(.vertical, 20)
             }
 
-            Section("Support") {
+            Section("Help & Feedback") {
                 Link(destination: URL(string: "https://apps.apple.com/app/id6757482822?action=write-review")!) {
                     Label("Rate VVTerm", systemImage: "star")
                 }
@@ -122,37 +122,7 @@ struct AboutSettingsView: View {
                 }
                 .tint(.primary)
                 .foregroundStyle(.primary)
-            }
 
-            Section("Links") {
-                Link(destination: URL(string: "https://vvterm.com")!) {
-                    Label("Visit Website", systemImage: "globe")
-                }
-                .tint(.primary)
-                .foregroundStyle(.primary)
-
-                Link(destination: URL(string: "https://github.com/vivy-company/vvterm")!) {
-                    Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-                .tint(.primary)
-                .foregroundStyle(.primary)
-            }
-
-            Section("Legal") {
-                Link(destination: URL(string: "https://vvterm.com/privacy")!) {
-                    Label("Privacy Policy", systemImage: "hand.raised")
-                }
-                .tint(.primary)
-                .foregroundStyle(.primary)
-
-                Link(destination: URL(string: "https://vvterm.com/terms")!) {
-                    Label("Terms of Use (EULA)", systemImage: "doc.text")
-                }
-                .tint(.primary)
-                .foregroundStyle(.primary)
-            }
-
-            Section("Get in Touch") {
                 ForEach(contactOptions) { option in
                     Button {
                         openExternalURL(option.url)
@@ -193,6 +163,20 @@ struct AboutSettingsView: View {
                     .buttonStyle(.plain)
                     .tint(.primary)
                 }
+            }
+
+            Section("Links") {
+                Link(destination: URL(string: "https://vvterm.com")!) {
+                    Label("Visit Website", systemImage: "globe")
+                }
+                .tint(.primary)
+                .foregroundStyle(.primary)
+
+                Link(destination: URL(string: "https://github.com/vivy-company/vvterm")!) {
+                    Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+                .tint(.primary)
+                .foregroundStyle(.primary)
             }
 
             Section {

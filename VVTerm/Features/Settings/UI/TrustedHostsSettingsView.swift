@@ -57,21 +57,6 @@ struct TrustedHostsSettingsView: View {
         )
     }
 
-    func hostActionsMenu(for knownHost: KnownHostSettingsItem) -> some View {
-        Menu {
-            resetAction(for: knownHost)
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
-        }
-        .accessibilityLabel("Reset Trusted Host")
-        .accessibilityIdentifier(
-            "vvterm.settings.trustedHosts.actions.\(knownHost.id)"
-        )
-    }
-
     @ViewBuilder
     func resetAction(for knownHost: KnownHostSettingsItem) -> some View {
         Button(role: .destructive) {
@@ -129,31 +114,27 @@ struct TrustedHostSettingsRow: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(verbatim: knownHost.endpoint)
-                        .font(.body.weight(.medium))
-                        .lineLimit(1)
-
-                    Spacer(minLength: 4)
-
-                    Label {
-                        Text(
-                            knownHost.lastSeenAt,
-                            format: .relative(presentation: .named)
-                        )
-                    } icon: {
-                        Image(systemName: "clock")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-
-                Text(verbatim: knownHost.fingerprint)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+                Text(verbatim: knownHost.endpoint)
+                    .font(.body.weight(.medium))
                     .lineLimit(1)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                        .accessibilityHidden(true)
+                    Text("Last used")
+                    Text(
+                        knownHost.lastSeenAt,
+                        format: .dateTime
+                            .year()
+                            .month(.abbreviated)
+                            .day()
+                            .hour()
+                            .minute()
+                    )
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
             }
         }
         .padding(.vertical, 4)

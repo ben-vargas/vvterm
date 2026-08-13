@@ -1,15 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-struct TerminalScreenAwakeSettingRow: View {
-    @AppStorage(TerminalDefaults.keepScreenAwakeKey) private var isEnabled = TerminalDefaults.defaultKeepScreenAwake
-
-    var body: some View {
-        Toggle("Keep screen awake", isOn: $isEnabled)
-            .accessibilityIdentifier("vvterm.settings.terminal.keepScreenAwake")
-    }
-}
-
 struct TerminalKeyboardInputPlatformSettingsView: View {
     @AppStorage(TerminalDefaults.optionAsAltModeKey) private var optionAsAltModeRaw = TerminalOptionAsAltMode.none.rawValue
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) private var preserveTerminalSizeForKeyboard = false
@@ -24,19 +15,32 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Terminal Behavior") {
-                TerminalScreenAwakeSettingRow()
-            }
-
             Section {
                 Picker("Option as Alt", selection: optionAsAltModeBinding) {
                     ForEach(TerminalOptionAsAltMode.allCases) { mode in
                         Text(mode.displayName).tag(mode)
                     }
                 }
+            } header: {
+                Text("Hardware Keyboard")
+            } footer: {
+                Text("Choose which Option key sends Alt. The other key still types layout characters.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
-                Toggle("Keep terminal size when keyboard opens", isOn: $preserveTerminalSizeForKeyboard)
-                Toggle("Show keyboard dismiss button", isOn: $keyboardDismissButtonEnabled)
+            Section {
+                Toggle("Keep terminal size", isOn: $preserveTerminalSizeForKeyboard)
+            } header: {
+                Text("Software Keyboard")
+            } footer: {
+                Text("Prevents tmux and other terminal apps from resizing when the keyboard opens.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Show dismiss button", isOn: $keyboardDismissButtonEnabled)
 
                 NavigationLink {
                     TerminalAccessoryCustomizationView()
@@ -47,17 +51,10 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
                 NavigationLink {
                     TerminalCustomActionLibraryView()
                 } label: {
-                    Text("Manage Custom Actions")
+                    Text("Custom Actions")
                 }
             } header: {
-                Text("Keyboard")
-            } footer: {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters.")
-                    Text("Keeping the terminal size prevents keyboard-driven window resizes in remote apps such as tmux. VVTerm moves the terminal to keep the cursor visible instead.")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("Accessory Bar")
             }
         }
         .formStyle(.grouped)

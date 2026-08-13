@@ -13,16 +13,25 @@ private struct CursorStyleOptionView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            ZStack {
-                TerminalCursorPreview(style: style, blinks: blinks, palette: palette)
-                    .frame(width: 72, height: 52)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
-                    )
-                    .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-            }
+            TerminalCursorPreview(style: style, blinks: blinks, palette: palette)
+                .frame(maxWidth: .infinity)
+                .frame(height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(
+                            isSelected ? Color.accentColor : palette.foreground.opacity(0.14),
+                            lineWidth: isSelected ? 2 : 1
+                        )
+                )
+                .overlay(alignment: .topTrailing) {
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color.accentColor)
+                            .padding(6)
+                            .accessibilityHidden(true)
+                    }
+                }
 
             Text(style.displayName)
                 .font(.caption)
@@ -57,7 +66,7 @@ private struct TerminalCursorPreview: View {
 
     private func previewContent(isVisible: Bool) -> some View {
         HStack(spacing: 0) {
-            Text("~ ")
+            Text(verbatim: "~ ")
                 .foregroundStyle(palette.foreground.opacity(0.55))
             cursorSample(isVisible: isVisible)
         }
@@ -67,17 +76,13 @@ private struct TerminalCursorPreview: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(palette.background)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(palette.foreground.opacity(0.14), lineWidth: 1)
-        )
     }
 
     @ViewBuilder
     private func cursorSample(isVisible: Bool) -> some View {
         switch style {
         case .block:
-            Text("A")
+            Text(verbatim: "A")
                 .foregroundStyle(isVisible ? palette.cursorText : palette.foreground.opacity(0.75))
                 .padding(.horizontal, 1)
                 .background(
@@ -86,7 +91,7 @@ private struct TerminalCursorPreview: View {
                 )
         case .bar:
             ZStack(alignment: .leading) {
-                Text("A")
+                Text(verbatim: "A")
                     .foregroundStyle(palette.foreground.opacity(0.75))
                 Rectangle()
                     .fill(isVisible ? palette.cursor : Color.clear)
@@ -94,14 +99,14 @@ private struct TerminalCursorPreview: View {
             }
         case .underline:
             ZStack(alignment: .bottom) {
-                Text("A")
+                Text(verbatim: "A")
                     .foregroundStyle(palette.foreground.opacity(0.75))
                 Rectangle()
                     .fill(isVisible ? palette.cursor : Color.clear)
                     .frame(width: 13, height: 2)
             }
         case .blockHollow:
-            Text("A")
+            Text(verbatim: "A")
                 .foregroundStyle(palette.foreground.opacity(0.75))
                 .padding(.horizontal, 1)
                 .overlay(
@@ -174,16 +179,19 @@ struct TerminalAppearanceSettingsView: View {
 
     private var fontSection: some View {
         Section("Font") {
-            Picker("Font Family", selection: $fontName) {
+            Picker("Family", selection: $fontName) {
                 ForEach(availableFonts, id: \.self) { font in
                     Text(font).tag(font)
                 }
             }
             .disabled(availableFonts.isEmpty)
 
-            HStack {
-                Text(String(format: String(localized: "Size: %lldpt"), Int64(fontSize)))
-                    .frame(width: 80, alignment: .leading)
+            VStack(spacing: 10) {
+                LabeledContent("Size") {
+                    Text(fontSizeLabel)
+                        .foregroundStyle(.secondary)
+                }
+
                 Slider(
                     value: Binding(
                         get: { fontSize },
@@ -191,43 +199,50 @@ struct TerminalAppearanceSettingsView: View {
                     ),
                     in: 4...32,
                     step: 1
-                )
-                Stepper("", value: $fontSize, in: 4...32, step: 1)
-                    .labelsHidden()
+                ) {
+                    Text("Size")
+                } minimumValueLabel: {
+                    Text(verbatim: "A")
+                        .font(.caption2)
+                } maximumValueLabel: {
+                    Text(verbatim: "A")
+                        .font(.title3)
+                }
+                .accessibilityValue(fontSizeLabel)
             }
         }
     }
 
     private var cursorSection: some View {
         Section("Cursor") {
-            VStack(spacing: 16) {
-                HStack(spacing: 0) {
-                    ForEach(TerminalCursorStyle.allCases) { style in
+            HStack(spacing: 8) {
+                ForEach(TerminalCursorStyle.allCases) { style in
+                    let isSelected = selectedCursorStyle == style
+                    Button {
+                        cursorStyleRaw = style.rawValue
+                    } label: {
                         CursorStyleOptionView(
                             style: style,
-                            isSelected: selectedCursorStyle == style,
+                            isSelected: isSelected,
                             blinks: cursorBlink,
                             palette: cursorPreviewPalette
                         )
                         .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            cursorStyleRaw = style.rawValue
-                        }
-                        .accessibilityLabel(style.displayName)
                     }
-                }
-
-                Divider()
-
-                HStack {
-                    Text("Blink")
-                    Spacer()
-                    Toggle("Blink", isOn: $cursorBlink)
-                        .labelsHidden()
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(style.displayName)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    .accessibilityIdentifier("vvterm.settings.cursor.\(style.rawValue)")
                 }
             }
+            .padding(.vertical, 4)
+
+            Toggle("Blink", isOn: $cursorBlink)
         }
+    }
+
+    private var fontSizeLabel: String {
+        String(format: String(localized: "%lld pt"), Int64(fontSize))
     }
 
     nonisolated static func fontListEnsuringCurrentFont(

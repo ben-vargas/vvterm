@@ -26,54 +26,62 @@ struct NavigationStatsSettingsView: View {
                     }
                     .onMove(perform: viewTabConfig.moveTab)
                 }
+
+                Button {
+                    viewTabConfig.resetToDefaults()
+                } label: {
+                    Label("Reset to Defaults", systemImage: "arrow.counterclockwise")
+                }
             } header: {
                 HStack {
-                    Text("Server Views")
+                    Text("Views")
                     Spacer()
                     #if os(iOS)
                     EditButton()
                     #endif
                 }
             } footer: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Hide views you do not use. The server selector and Zen mode will only show enabled views.")
-                    Text("The default view falls back automatically if it is hidden.")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("Choose which views appear. Drag rows to change their order.")
             }
 
             Section {
-                Picker("Default View", selection: defaultTabBinding) {
+                Picker("Open Servers In", selection: defaultTabBinding) {
                     ForEach(viewTabConfig.currentVisibleTabs) { tab in
                         Label(tab.localizedKey, systemImage: tab.icon)
                             .tag(tab.id)
                     }
                 }
             } header: {
-                Text("Default View")
+                Text("Startup")
             } footer: {
-                Text("This view is shown when a server opens or when a hidden selection needs to fall back.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text("VVTerm uses the first enabled view if this view is unavailable.")
             }
 
-            Section(String(localized: "Stats")) {
+            Section("View Options") {
                 Button {
                     isShowingStatsAppearance = true
                 } label: {
-                    Label(String(localized: "Stats Appearance"), systemImage: "chart.bar.xaxis")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
+                    HStack(spacing: 12) {
+                        Image(systemName: "chart.bar.xaxis")
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Stats")
+                            Text("Appearance and layout")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("vvterm.settings.navigationAndStats.statsAppearance")
-            }
-
-            Section {
-                Button("Reset Server Views") {
-                    viewTabConfig.resetToDefaults()
-                }
             }
         }
         .statsDetailPresentation(

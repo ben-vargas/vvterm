@@ -4,7 +4,9 @@ struct TerminalThemeSettingsSection: View {
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
 
     @State private var customThemeErrorMessage: String?
+    #if os(macOS)
     @State private var showingCustomThemeManager = false
+    #endif
 
     private var builtInThemeOptions: [String] {
         Set(terminalThemeManager.builtInThemeNames)
@@ -51,13 +53,6 @@ struct TerminalThemeSettingsSection: View {
         )
     }
 
-    private var customThemeCountLabel: String {
-        let count = Int64(customThemes.count)
-        return count == 1
-            ? String(format: String(localized: "%lld custom theme"), count)
-            : String(format: String(localized: "%lld custom themes"), count)
-    }
-
     private var customThemeErrorAlertBinding: Binding<Bool> {
         Binding(
             get: { customThemeErrorMessage != nil },
@@ -91,17 +86,17 @@ struct TerminalThemeSettingsSection: View {
     var body: some View {
         Section("Theme") {
             Toggle(
-                "Use different themes for Light/Dark mode",
+                "Separate Light and Dark Themes",
                 isOn: usePerAppearanceThemeBinding
             )
 
             if themeSelection.usePerAppearanceTheme {
-                Picker("Dark Mode Theme", selection: darkThemeNameBinding) {
+                Picker("Dark Theme", selection: darkThemeNameBinding) {
                     themePickerRows
                 }
                 .disabled(allThemeNames.isEmpty)
 
-                Picker("Light Mode Theme", selection: lightThemeNameBinding) {
+                Picker("Light Theme", selection: lightThemeNameBinding) {
                     themePickerRows
                 }
                 .disabled(allThemeNames.isEmpty)
@@ -112,58 +107,84 @@ struct TerminalThemeSettingsSection: View {
                 .disabled(allThemeNames.isEmpty)
             }
 
-            HStack(spacing: 10) {
-                Button("Manage custom themes") {
-                    showingCustomThemeManager = true
-                }
-                .buttonStyle(.bordered)
-
-                Spacer(minLength: 0)
-
-                Text(customThemeCountLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Text("Clipboard content or imported files must be Ghostty-compatible theme text.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            customThemesControl
         }
+        #if os(macOS)
         .sheet(isPresented: $showingCustomThemeManager) {
-            ManageCustomThemesSheet(
-                customThemes: customThemes,
-                themeSelection: themeSelection,
-                onSuggestThemeName: { source in
-                    terminalThemeManager.suggestThemeName(from: source)
-                },
-                onCreateTheme: { name, content, applyTarget in
-                    try createAndApplyCustomTheme(
-                        name: name,
-                        content: content,
-                        applyTarget: applyTarget
-                    )
-                },
-                onApplyTheme: { themeName, applyTarget in
-                    applyThemeSelection(themeName: themeName, applyTarget: applyTarget)
-                },
-                onDelete: { themeID in
-                    terminalThemeManager.deleteCustomTheme(id: themeID)
-                },
-                onSaveEdit: { themeID, name, content in
-                    try terminalThemeManager.updateCustomTheme(
-                        id: themeID,
-                        name: name,
-                        content: content
-                    )
-                }
-            )
+            customThemesManager {
+                showingCustomThemeManager = false
+            }
             .adaptiveSoftScrollEdges()
         }
+        #endif
         .alert("Custom Theme", isPresented: customThemeErrorAlertBinding) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(customThemeErrorMessage ?? "")
         }
+    }
+
+    @ViewBuilder
+    private var customThemesControl: some View {
+        #if os(iOS)
+        NavigationLink {
+            customThemesManager(onClose: {})
+        } label: {
+            customThemesLabel
+        }
+        .accessibilityIdentifier("vvterm.settings.appearance.customThemes")
+        #else
+        Button {
+            showingCustomThemeManager = true
+        } label: {
+            customThemesLabel
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("vvterm.settings.appearance.customThemes")
+        #endif
+    }
+
+    private var customThemesLabel: some View {
+        HStack(spacing: 10) {
+            Text("Custom Themes")
+
+            Spacer(minLength: 8)
+
+            Text(customThemes.count, format: .number)
+                .foregroundStyle(.secondary)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func customThemesManager(onClose: @escaping () -> Void) -> some View {
+        ManageCustomThemesSheet(
+            customThemes: customThemes,
+            themeSelection: themeSelection,
+            onClose: onClose,
+            onSuggestThemeName: { source in
+                terminalThemeManager.suggestThemeName(from: source)
+            },
+            onCreateTheme: { name, content, applyTarget in
+                try createAndApplyCustomTheme(
+                    name: name,
+                    content: content,
+                    applyTarget: applyTarget
+                )
+            },
+            onApplyTheme: { themeName, applyTarget in
+                applyThemeSelection(themeName: themeName, applyTarget: applyTarget)
+            },
+            onDelete: { themeID in
+                terminalThemeManager.deleteCustomTheme(id: themeID)
+            },
+            onSaveEdit: { themeID, name, content in
+                try terminalThemeManager.updateCustomTheme(
+                    id: themeID,
+                    name: name,
+                    content: content
+                )
+            }
+        )
     }
 
     private func createAndApplyCustomTheme(

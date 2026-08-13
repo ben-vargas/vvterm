@@ -13,7 +13,13 @@ struct PrivacyAppLockSettingsView: View {
         Form {
             Section {
                 Toggle("Privacy Mode", isOn: $privacyModeEnabled)
+            } header: {
+                Text("Privacy")
+            } footer: {
+                Text("Privacy mode hides server addresses and usernames in the app UI and when the app is inactive.")
+            }
 
+            Section {
                 Toggle(
                     "Help Improve VVTerm",
                     isOn: Binding(
@@ -26,7 +32,13 @@ struct PrivacyAppLockSettingsView: View {
                         }
                     )
                 )
+            } header: {
+                Text("Analytics")
+            } footer: {
+                Text("Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you.")
+            }
 
+            Section {
                 Toggle(
                     String(
                         format: String(localized: "Require %@ to open VVTerm"),
@@ -74,15 +86,9 @@ struct PrivacyAppLockSettingsView: View {
                         .foregroundStyle(.red)
                 }
             } header: {
-                Text("Security")
+                Text("App Lock")
             } footer: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Privacy mode hides server addresses and usernames in the app UI and when the app is inactive.")
-                    Text("Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you.")
-                    Text("Biometric lock protects app and server access on this device.")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("Biometric lock protects app and server access on this device.")
             }
         }
         .formStyle(.grouped)

@@ -3,20 +3,20 @@ import Testing
 @testable import VVTerm
 
 @Suite("Settings route catalog")
+@MainActor
 struct SettingsRouteCatalogTests {
     @Test("Catalog follows the approved grouped order")
     func approvedGroupedOrder() {
         #expect(SettingsRoute.defaultRoute == .appearanceAndLanguage)
         #expect(SettingsRoute.defaultRoute != .pro)
+        #expect(SettingsRouteCatalog.leadingRoutes == [.pro])
         #expect(SettingsRouteCatalog.groups == [
-            .account,
-            .app,
+            .general,
             .terminal,
-            .dataAndSecurity,
-            .support,
+            .connections,
+            .privacyAndData,
         ])
-        #expect(SettingsRouteCatalog.routes(in: .account) == [.pro])
-        #expect(SettingsRouteCatalog.routes(in: .app) == [
+        #expect(SettingsRouteCatalog.routes(in: .general) == [
             .appearanceAndLanguage,
             .navigationAndStats,
         ])
@@ -24,16 +24,18 @@ struct SettingsRouteCatalogTests {
             .terminalAppearance,
             .keyboardAndInput,
             .transcription,
-            .sessionsAndConnections,
             .clipboardAndPaste,
         ])
-        #expect(SettingsRouteCatalog.routes(in: .dataAndSecurity) == [
-            .privacyAndAppLock,
-            .iCloudSync,
+        #expect(SettingsRouteCatalog.routes(in: .connections) == [
+            .sessionsAndConnections,
             .sshKeys,
             .trustedHosts,
         ])
-        #expect(SettingsRouteCatalog.routes(in: .support) == [.aboutAndSupport])
+        #expect(SettingsRouteCatalog.routes(in: .privacyAndData) == [
+            .privacyAndAppLock,
+            .iCloudSync,
+        ])
+        #expect(SettingsRouteCatalog.trailingRoutes == [.aboutAndSupport])
     }
 
     @Test("Search finds page titles, labels, and common terms", arguments: [
@@ -45,6 +47,30 @@ struct SettingsRouteCatalogTests {
     ])
     func search(query: String, expectedRoute: SettingsRoute) {
         #expect(SettingsRouteCatalog.routes(matching: query).contains(expectedRoute))
+    }
+
+    @Test("Search includes localized setting labels")
+    func localizedSearchTerms() {
+        #expect(
+            SettingsRouteCatalog.routes(matching: "Option als Alt")
+                .contains(.keyboardAndInput)
+        )
+    }
+
+    @Test("A filtered-out macOS selection has no visible detail route")
+    func filteredSelection() {
+        #expect(
+            SettingsRouteCatalog.visibleDetailRoute(
+                selectedRoute: .terminalAppearance,
+                matching: "tmux"
+            ) == nil
+        )
+        #expect(
+            SettingsRouteCatalog.visibleDetailRoute(
+                selectedRoute: .sessionsAndConnections,
+                matching: "tmux"
+            ) == .sessionsAndConnections
+        )
     }
 
     @Test("Empty search returns every route")

@@ -78,7 +78,6 @@ struct KnownHostSettingsCoordinatorTests {
         KnownHostSettingsItem(
             host: host,
             port: port,
-            fingerprint: "SHA256:example",
             lastSeenAt: Date(timeIntervalSince1970: 1_000)
         )
     }

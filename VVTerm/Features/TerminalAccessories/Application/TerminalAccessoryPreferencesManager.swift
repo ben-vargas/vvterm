@@ -261,13 +261,12 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         }
     }
 
-    func refreshFromCloud() async {
+    func refreshFromCloud() async throws {
         startupSyncTask?.cancel()
         startupSyncTask = nil
         lifecycleSyncTask?.cancel()
-        let task = makeCloudSyncTask()
-        lifecycleSyncTask = task
-        await task.value
+        lifecycleSyncTask = nil
+        try await synchronizeWithCloud()
     }
 
     private func updateLayoutItems(_ items: [TerminalAccessoryItemRef]) {
@@ -360,27 +359,28 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
     }
 
     private func makeCloudSyncTask() -> Task<Void, Never> {
-        let localSnapshot = profile
-        let cloud = dependencies.cloud
-        let isSyncEnabled = dependencies.isSyncEnabled
-        let mutationQueue = dependencies.mutationQueue
-        let logger = logger
-
-        return Task { [weak self, cloud, isSyncEnabled, mutationQueue, logger, localSnapshot] in
-            guard !Task.isCancelled, isSyncEnabled() else { return }
+        Task { [weak self] in
+            guard let self else { return }
             do {
-                let cloudResolved = try await cloud.syncTerminalAccessoryProfile(localSnapshot)
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                self?.applyCloudResolution(cloudResolved)
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                await mutationQueue.drainPendingMutations()
+                try await self.synchronizeWithCloud()
             } catch is CancellationError {
                 return
             } catch {
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                logger.warning("Terminal accessory CloudKit sync failed: \(error.localizedDescription)")
+                guard !Task.isCancelled, self.dependencies.isSyncEnabled() else { return }
+                self.logger.warning("Terminal accessory CloudKit sync failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func synchronizeWithCloud() async throws {
+        try Task.checkCancellation()
+        guard dependencies.isSyncEnabled() else { return }
+        let localSnapshot = profile
+        let cloudResolved = try await dependencies.cloud.syncTerminalAccessoryProfile(localSnapshot)
+        try Task.checkCancellation()
+        guard dependencies.isSyncEnabled() else { throw CancellationError() }
+        applyCloudResolution(cloudResolved)
+        await dependencies.mutationQueue.drainPendingMutations()
     }
 
     private func applyCloudResolution(_ cloudResolved: TerminalAccessoryProfile) {

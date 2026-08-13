@@ -1,26 +1,23 @@
 import Foundation
 
 nonisolated enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Sendable {
-    case account
-    case app
+    case general
     case terminal
-    case dataAndSecurity
-    case support
+    case connections
+    case privacyAndData
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .account:
-            String(localized: "Account")
-        case .app:
-            String(localized: "App")
+        case .general:
+            String(localized: "General")
         case .terminal:
             String(localized: "Terminal")
-        case .dataAndSecurity:
-            String(localized: "Data & Security")
-        case .support:
-            String(localized: "Support")
+        case .connections:
+            String(localized: "Connections")
+        case .privacyAndData:
+            String(localized: "Privacy & Data")
         }
     }
 }
@@ -32,31 +29,32 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
     case terminalAppearance
     case keyboardAndInput
     case transcription
-    case sessionsAndConnections
     case clipboardAndPaste
-    case privacyAndAppLock
-    case iCloudSync
+    case sessionsAndConnections
     case sshKeys
     case trustedHosts
+    case privacyAndAppLock
+    case iCloudSync
     case aboutAndSupport
 
     static let defaultRoute = SettingsRoute.appearanceAndLanguage
 
     var id: String { rawValue }
 
-    var group: SettingsGroup {
+    var group: SettingsGroup? {
         switch self {
         case .pro:
-            .account
+            nil
         case .appearanceAndLanguage, .navigationAndStats:
-            .app
-        case .terminalAppearance, .keyboardAndInput, .transcription,
-             .sessionsAndConnections, .clipboardAndPaste:
+            .general
+        case .terminalAppearance, .keyboardAndInput, .transcription, .clipboardAndPaste:
             .terminal
-        case .privacyAndAppLock, .iCloudSync, .sshKeys, .trustedHosts:
-            .dataAndSecurity
+        case .sessionsAndConnections, .sshKeys, .trustedHosts:
+            .connections
+        case .privacyAndAppLock, .iCloudSync:
+            .privacyAndData
         case .aboutAndSupport:
-            .support
+            nil
         }
     }
 
@@ -67,7 +65,7 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .appearanceAndLanguage:
             String(localized: "Appearance & Language")
         case .navigationAndStats:
-            String(localized: "Navigation & Stats")
+            String(localized: "Server Views")
         case .privacyAndAppLock:
             String(localized: "Privacy & App Lock")
         case .terminalAppearance:
@@ -75,7 +73,7 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .keyboardAndInput:
             String(localized: "Keyboard & Input")
         case .sessionsAndConnections:
-            String(localized: "Sessions & Connections")
+            String(localized: "Sessions & SSH")
         case .clipboardAndPaste:
             String(localized: "Clipboard & Paste")
         case .sshKeys:
@@ -85,9 +83,9 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .iCloudSync:
             String(localized: "iCloud Sync")
         case .transcription:
-            String(localized: "Transcription")
+            String(localized: "Voice Input")
         case .aboutAndSupport:
-            String(localized: "About & Support")
+            String(localized: "Help & About")
         }
     }
 
@@ -129,13 +127,16 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .appearanceAndLanguage:
             ["language", "system", "light", "dark", "theme", "color scheme"]
         case .navigationAndStats:
-            ["server views", "view order", "default view", "reset views", "stats", "metrics", "dashboard"]
+            [
+                "server views", "view order", "open servers in", "reset views",
+                "stats", "appearance and layout", "metrics", "dashboard",
+            ]
         case .privacyAndAppLock:
             ["privacy", "analytics", "biometric", "face id", "touch id", "lock", "background", "grace period"]
         case .terminalAppearance:
             ["font", "font size", "cursor", "blink", "light theme", "dark theme", "custom theme"]
         case .keyboardAndInput:
-            ["keyboard", "input", "option", "alt", "terminal size", "dismiss", "screen awake", "accessory bar", "custom actions"]
+            ["keyboard", "input", "option", "alt", "terminal size", "dismiss", "accessory bar", "custom actions"]
         case .sessionsAndConnections:
             ["tmux", "session", "connect", "auto reconnect", "ssh", "keep alive", "keep-alive", "interval"]
         case .clipboardAndPaste:
@@ -145,29 +146,116 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .trustedHosts:
             ["trusted host", "fingerprint", "known hosts", "host key", "reset"]
         case .iCloudSync:
-            ["icloud", "sync", "cloudkit", "keychain", "resync"]
+            [
+                "icloud", "sync", "sync now", "cloudkit", "keychain", "credentials",
+                "diagnostics", "network", "resync"
+            ]
         case .transcription:
             ["voice", "speech", "transcription", "whisper", "parakeet", "model", "microphone"]
         case .aboutAndSupport:
             ["about", "support", "version", "help", "email", "discord", "website", "privacy policy", "terms"]
         }
     }
+
+    var searchLocalizationKeys: [String] {
+        switch self {
+        case .pro:
+            [
+                "VVTerm Pro",
+                "Free Tier",
+                "Pro Monthly",
+                "Pro Yearly",
+                "Pro Lifetime",
+                "Manage Subscription",
+                "Restore Purchases",
+                "Unlimited",
+                "Included",
+            ]
+        case .appearanceAndLanguage:
+            ["Appearance & Language", "Language", "System", "Light", "Dark"]
+        case .navigationAndStats:
+            [
+                "Server Views", "Views", "Open Servers In", "View Options",
+                "Stats", "Appearance and layout",
+            ]
+        case .privacyAndAppLock:
+            ["Privacy & App Lock", "Privacy Mode", "Help Improve VVTerm", "App Lock"]
+        case .terminalAppearance:
+            [
+                "Appearance", "Font", "Family", "Size", "Cursor", "Blink", "Theme",
+                "Separate Light and Dark Themes", "Dark Theme", "Light Theme", "Custom Themes",
+            ]
+        case .keyboardAndInput:
+            [
+                "Keyboard & Input",
+                "Hardware Keyboard",
+                "Option as Alt",
+                "Software Keyboard",
+                "Keep terminal size",
+                "Accessory Bar",
+                "Show dismiss button",
+                "Customize Accessory Bar",
+                "Custom Actions",
+            ]
+        case .sessionsAndConnections:
+            ["Sessions & SSH", "Enable tmux by default", "On connect", "Keep screen awake", "Auto-reconnect on disconnect", "Send keep-alive packets"]
+        case .clipboardAndPaste:
+            ["Clipboard & Paste", "Copy", "Paste", "Image"]
+        case .sshKeys:
+            ["SSH Keys", "SSH Key", "Private Key", "Add SSH Key", "Generate SSH Key"]
+        case .trustedHosts:
+            ["Trusted Hosts", "Reset Trusted Host"]
+        case .iCloudSync:
+            ["iCloud Sync", "Sync with iCloud", "Sync Now", "Copy Diagnostics"]
+        case .transcription:
+            ["Voice Input", "Transcription", "Speech", "Microphone"]
+        case .aboutAndSupport:
+            ["Help & About", "Rate VVTerm", "Report an Issue", "Visit Website", "Discord", "Email"]
+        }
+    }
+
+    @MainActor
+    var localizedSearchTerms: Set<String> {
+        searchLocalizationKeys.reduce(into: Set(searchKeywords)) { terms, key in
+            terms.formUnion(AppLanguage.localizedValues(for: key))
+        }
+    }
 }
 
 nonisolated enum SettingsRouteCatalog {
+    static let leadingRoutes: [SettingsRoute] = [.pro]
     static let groups = SettingsGroup.allCases
+    static let trailingRoutes: [SettingsRoute] = [.aboutAndSupport]
 
     static func routes(in group: SettingsGroup) -> [SettingsRoute] {
         SettingsRoute.allCases.filter { $0.group == group }
     }
 
+    @MainActor
+    static func visibleRoutes(
+        from routes: [SettingsRoute],
+        matching query: String
+    ) -> [SettingsRoute] {
+        let matches = Set(Self.routes(matching: query))
+        return routes.filter(matches.contains)
+    }
+
+    @MainActor
     static func routes(matching query: String) -> [SettingsRoute] {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedQuery.isEmpty else { return SettingsRoute.allCases }
 
         return SettingsRoute.allCases.filter { route in
-            ([route.group.title, route.title] + route.searchKeywords)
+            ([route.group?.title, route.title].compactMap { $0 } + Array(route.localizedSearchTerms))
                 .contains { $0.localizedCaseInsensitiveContains(normalizedQuery) }
         }
+    }
+
+    @MainActor
+    static func visibleDetailRoute(
+        selectedRoute: SettingsRoute,
+        matching query: String
+    ) -> SettingsRoute? {
+        routes(matching: query).contains(selectedRoute) ? selectedRoute : nil
     }
 }

@@ -1,8 +1,42 @@
+import Combine
 import Foundation
 import Testing
 @testable import VVTerm
 
 struct PendingCloudKitSyncTests {
+    @Test
+    func queueSummaryPublishesEnqueueFailureAndRemoval() throws {
+        let fixtures = PendingSyncFixtures()
+        let storage = makeStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suiteName) }
+        let queue = PendingCloudKitSyncQueue(
+            storageKey: storage.storageKey,
+            defaults: storage.defaults
+        )
+        var summaries: [PendingCloudKitQueueSummary] = []
+        let observation = queue.summaryUpdates.sink { summaries.append($0) }
+        defer { observation.cancel() }
+        let mutation = PendingCloudKitMutation(
+            payload: try .serverUpsert(fixtures.server)
+        )
+
+        try queue.enqueue(mutation)
+        try queue.recordFailure(
+            for: mutation,
+            error: RetryTestError(),
+            at: fixtures.createdAt
+        )
+        try queue.remove(mutation.id)
+
+        #expect(summaries.count == 4)
+        #expect(summaries[0] == .empty)
+        #expect(summaries[1].pendingOperationCount == 1)
+        #expect(!summaries[1].hasPendingFailure)
+        #expect(summaries[2].pendingOperationCount == 1)
+        #expect(summaries[2].hasPendingFailure)
+        #expect(summaries[3] == .empty)
+    }
+
     @Test
     func everySupportedMutationRoundTrips() throws {
         let fixtures = PendingSyncFixtures()
@@ -107,6 +141,7 @@ struct PendingCloudKitSyncTests {
         #expect(throws: PendingCloudKitSyncQueueError.self) {
             try queue.remove(fixtures.mutationIDs[0])
         }
+        #expect(queue.summary.health == .migrationBlocked)
         #expect(storage.defaults.data(forKey: storage.storageKey) == legacyData)
 
         storage.defaults.rejectWrites = false
@@ -114,6 +149,7 @@ struct PendingCloudKitSyncTests {
         try queue.enqueue(newMutation)
 
         #expect(queue.snapshot().map(\.id) == [fixtures.mutationIDs[0], newMutation.id])
+        #expect(queue.summary.health == .ready)
     }
 
     @Test
@@ -239,6 +275,8 @@ struct PendingCloudKitSyncTests {
         let expectedPayload = try PendingCloudKitMutationPayload.serverUpsert(fixtures.server)
         #expect(queue.snapshot().map(\.payload) == [expectedPayload])
         #expect(queue.quarantineSnapshot().count == 5)
+        #expect(queue.summary.quarantinedOperationCount == 5)
+        #expect(queue.summary.health == .ready)
         #expect(queue.quarantineSnapshot().allSatisfy { !$0.encodedLegacyRecord.isEmpty })
         #expect(queue.quarantineSnapshot().contains { $0.reason == .missingOrConflictingPayload })
         #expect(queue.quarantineSnapshot().contains { $0.reason == .mismatchedEntityKey })

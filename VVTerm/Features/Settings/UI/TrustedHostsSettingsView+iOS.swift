@@ -3,13 +3,11 @@ import SwiftUI
 
 extension TrustedHostsSettingsView {
     func platformHostRow(for knownHost: KnownHostSettingsItem) -> some View {
-        HStack(spacing: 8) {
-            TrustedHostSettingsRow(knownHost: knownHost)
-            hostActionsMenu(for: knownHost)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            resetAction(for: knownHost)
-        }
+        TrustedHostSettingsRow(knownHost: knownHost)
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                resetAction(for: knownHost)
+            }
     }
 }
 #endif

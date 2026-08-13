@@ -3,37 +3,33 @@ import SwiftUI
 
 extension ManageCustomThemesSheet {
     var platformBody: some View {
-        NavigationStack {
-            Group {
-                if sortedThemes.isEmpty {
-                    customThemesEmptyState
-                } else {
-                    List {
+        Group {
+            if sortedThemes.isEmpty {
+                customThemesEmptyState
+            } else {
+                List {
+                    Section {
                         ForEach(sortedThemes) { theme in
                             themeRow(theme)
                         }
-                    }
-                }
-            }
-            .navigationTitle("Custom Themes")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Label("Back", systemImage: "chevron.backward")
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        createThemeMenuItems
-                    } label: {
-                        Image(systemName: "plus")
+                    } footer: {
+                        customThemeCompatibilityNote
                     }
                 }
             }
         }
+        .navigationTitle("Custom Themes")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    createThemeMenuItems
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        .accessibilityIdentifier("vvterm.settings.customThemes.page")
     }
 
     private func themeRow(_ theme: TerminalTheme) -> some View {

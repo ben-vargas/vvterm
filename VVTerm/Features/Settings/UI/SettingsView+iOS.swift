@@ -5,6 +5,12 @@ extension SettingsView {
     var platformBody: some View {
         NavigationStack {
             List {
+                ForEach(visibleRoutes(from: SettingsRouteCatalog.leadingRoutes)) { route in
+                    NavigationLink(value: route) {
+                        routeLabel(for: route)
+                    }
+                }
+
                 ForEach(SettingsRouteCatalog.groups) { group in
                     let routes = visibleRoutes(in: group)
                     if !routes.isEmpty {
@@ -15,6 +21,12 @@ extension SettingsView {
                                 }
                             }
                         }
+                    }
+                }
+
+                ForEach(visibleRoutes(from: SettingsRouteCatalog.trailingRoutes)) { route in
+                    NavigationLink(value: route) {
+                        routeLabel(for: route)
                     }
                 }
             }

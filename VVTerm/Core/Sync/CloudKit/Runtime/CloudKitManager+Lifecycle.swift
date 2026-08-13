@@ -4,18 +4,15 @@ import os.log
 
 @MainActor
 extension CloudKitManager {
-    // MARK: - Force Sync
+    // MARK: - Account Status
 
-    func forceSync() async {
-        statusStore.lastSyncDate = nil
-        clearChangeToken()
-        let generation = advanceSyncGeneration()
+    func refreshAccountStatus() async {
+        let generation = cloudKitSyncGeneration
         guard isSyncEnabled else {
             applySyncDisabledState()
             return
         }
         statusStore.accountState = .checking
-        statusStore.syncState.markCheckingAccount()
         await checkAccountStatus(for: generation)
     }
 

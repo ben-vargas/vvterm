@@ -13,6 +13,7 @@ struct TranscriptionSettingsView: View {
     @ObservedObject private var parakeetManager: MLXModelManager
 
     private let modelManagers: VoiceSettingsModelManagerOwner
+    @State private var isShowingRemoveAllConfirmation = false
 
     private let mlxAvailable = MLXAudioSupport.isSupported
 
@@ -39,11 +40,12 @@ struct TranscriptionSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Show voice input button", isOn: terminalVoiceButtonBinding)
+                Toggle("Show in Terminal", isOn: terminalVoiceButtonBinding)
             } header: {
-                Text("Terminal")
+                Text("Access")
+                    .padding(.top, 8)
             } footer: {
-                Text("Cmd + Shift + M always works, even when the button is hidden.")
+                Text("You can also use Command–Shift–M with a hardware keyboard.")
             }
 
             Section {
@@ -56,23 +58,22 @@ struct TranscriptionSettingsView: View {
                     }
                     #endif
                 }
-            } header: {
-                Text("Provider")
-            } footer: {
-                Text(providerDescription)
-            }
 
-            if provider == .system || provider == .mlxWhisper {
-                Section {
+                if provider == .system || provider == .mlxWhisper {
                     Picker("Language", selection: languageBinding) {
                         ForEach(languages, id: \.0) { code, name in
                             Text(name).tag(code)
                         }
                     }
-                } header: {
-                    Text("Language")
-                } footer: {
-                    if language == TranscriptionSettingsDefaults.autoLanguageCode {
+                }
+            } header: {
+                Text("Transcription")
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(providerDescription)
+
+                    if (provider == .system || provider == .mlxWhisper),
+                       language == TranscriptionSettingsDefaults.autoLanguageCode {
                         if provider == .system {
                             Text("Auto-detect uses your device language.")
                         } else {
@@ -101,9 +102,23 @@ struct TranscriptionSettingsView: View {
             }
             #endif
 
-            storageSection
+            downloadedModelsSection
         }
         .formStyle(.grouped)
+        .adaptiveSoftScrollEdges()
+        .accessibilityIdentifier("vvterm.settings.page.transcription")
+        .confirmationDialog(
+            "Remove All Downloaded Models?",
+            isPresented: $isShowingRemoveAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Remove All Downloaded Models", role: .destructive) {
+                modelManagers.clearAllStorage()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Voice input models must be downloaded again before they can work offline.")
+        }
         .onAppear {
             if !mlxAvailable {
                 settingsStore.useSystemProviderWhenMLXIsUnavailable()
@@ -164,9 +179,9 @@ struct TranscriptionSettingsView: View {
         case .system:
             return String(localized: "Uses Apple's built-in speech recognition. Requires network for best results.")
         case .mlxWhisper:
-            return String(localized: "OpenAI Whisper runs locally using MLX. Works offline after download.")
+            return String(localized: "Whisper runs on this device and works offline after download.")
         case .mlxParakeet:
-            return String(localized: "NVIDIA Parakeet runs locally using MLX. Optimized for real-time transcription.")
+            return String(localized: "Parakeet runs on this device and works offline after download.")
         }
     }
 
@@ -193,6 +208,18 @@ struct TranscriptionSettingsView: View {
 
             modelStatusRow(manager: manager)
 
+            if manager.localStorageBytes > 0 {
+                LabeledContent("On This Device") {
+                    Text(storageSizeLabel(manager.localStorageBytes))
+                        .foregroundStyle(.secondary)
+                }
+            } else if let repoSize = manager.repoSizeBytes {
+                LabeledContent("Download Size") {
+                    Text(storageSizeLabel(repoSize))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if case .downloading(let progress) = manager.state {
                 VStack(alignment: .leading, spacing: 4) {
                     ProgressView(value: progress.fraction)
@@ -215,22 +242,16 @@ struct TranscriptionSettingsView: View {
             }
 
             if manager.isModelAvailable {
-                Button("Delete Model", role: .destructive) {
+                Button("Remove Download", role: .destructive) {
                     manager.removeModel()
                 }
                 .padding(.top, 4)
             }
         } header: {
-            Text("Model")
+            Text("Offline Model")
         } footer: {
-            VStack(alignment: .leading, spacing: 4) {
-                if let footnote {
-                    Text(footnote)
-                }
-                if let repoSize = manager.repoSizeBytes {
-                    Text(String(format: String(localized: "Download size: %@"),
-                                ByteCountFormatter.string(fromByteCount: repoSize, countStyle: .file)))
-                }
+            if let footnote {
+                Text(footnote)
             }
         }
     }
@@ -282,6 +303,7 @@ struct TranscriptionSettingsView: View {
                 }
             }
         }
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
     }
 
     private func formatETA(_ seconds: Int) -> String {
@@ -298,31 +320,46 @@ struct TranscriptionSettingsView: View {
     }
 
     @ViewBuilder
-    private var storageSection: some View {
+    private var downloadedModelsSection: some View {
         #if arch(arm64)
-        if mlxAvailable {
-            let activeManager = provider == .mlxWhisper ? whisperManager : parakeetManager
-            if activeManager.totalStorageBytes > 0 {
-                Section("Storage") {
-                    HStack {
-                        Text("Model Storage")
-                        Spacer()
-                        Text(ByteCountFormatter.string(fromByteCount: activeManager.localStorageBytes, countStyle: .file))
-                            .foregroundStyle(.secondary)
-                    }
-                    HStack {
-                        Text("Total MLX Models")
-                        Spacer()
-                        Text(ByteCountFormatter.string(fromByteCount: activeManager.totalStorageBytes, countStyle: .file))
-                            .foregroundStyle(.secondary)
-                    }
-                    Button("Clear All Storage", role: .destructive) {
-                        modelManagers.clearAllStorage()
-                    }
+        if mlxAvailable && shouldShowDownloadedModels {
+            Section("Downloaded Models") {
+                LabeledContent("All Models") {
+                    Text(storageSizeLabel(totalModelStorageBytes))
+                        .foregroundStyle(.secondary)
+                }
+
+                Button("Remove All Downloaded Models", role: .destructive) {
+                    isShowingRemoveAllConfirmation = true
                 }
             }
         }
         #endif
+    }
+
+    private var activeMLXManager: MLXModelManager? {
+        switch provider {
+        case .system:
+            nil
+        case .mlxWhisper:
+            whisperManager
+        case .mlxParakeet:
+            parakeetManager
+        }
+    }
+
+    private var totalModelStorageBytes: Int64 {
+        max(whisperManager.totalStorageBytes, parakeetManager.totalStorageBytes)
+    }
+
+    private var shouldShowDownloadedModels: Bool {
+        guard totalModelStorageBytes > 0 else { return false }
+        guard let activeMLXManager else { return true }
+        return totalModelStorageBytes > activeMLXManager.localStorageBytes
+    }
+
+    private func storageSizeLabel(_ byteCount: Int64) -> String {
+        MLXModelStorageSizeFormatter.string(fromByteCount: byteCount)
     }
 
 }

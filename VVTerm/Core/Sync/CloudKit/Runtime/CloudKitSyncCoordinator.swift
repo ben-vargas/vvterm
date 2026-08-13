@@ -1,5 +1,6 @@
 import Foundation
 import CloudKit
+import Combine
 import os.log
 
 @MainActor
@@ -43,6 +44,14 @@ final class CloudKitSyncCoordinator {
 
     func quarantineSnapshot() -> [PendingCloudKitMutationQuarantine] {
         queue.quarantineSnapshot()
+    }
+
+    var queueSummary: PendingCloudKitQueueSummary {
+        queue.summary
+    }
+
+    var queueSummaryUpdates: AnyPublisher<PendingCloudKitQueueSummary, Never> {
+        queue.summaryUpdates
     }
 
     func remove(_ mutationID: UUID) throws {
