@@ -214,6 +214,13 @@ final class ServerStatsCollector: ObservableObject {
     @MainActor
     private final class TrackedOperationResult<Output> {
         var value: Result<Output, Error>?
+
+        #if compiler(<6.4)
+        // Xcode 26.5 crashes while optimizing the isolated destructor of a
+        // generic MainActor class. Xcode 27 fixes the compiler bug.
+        @_optimize(none)
+        deinit {}
+        #endif
     }
 
     private var activeAttempt: CollectionAttempt?
