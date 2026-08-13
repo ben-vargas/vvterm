@@ -146,6 +146,49 @@ struct KeychainManagerSyncTests {
     }
 
     @Test
+    func cloudRemovalPreservesAnInterruptedOfflineDeletion() throws {
+        let fixture = Fixture(syncEnabled: true)
+        let server = makeServer(connectionMode: .standard, authMethod: .password)
+        let passwordKey = "server.\(server.id.uuidString).password"
+        let bindingKey = "server.\(server.id.uuidString).credential-binding.v1"
+        let binding = try JSONEncoder().encode(ServerCredentialBinding(server: server))
+        try fixture.credentialStore.set(
+            Data("password".utf8),
+            forKey: passwordKey,
+            scope: .iCloud
+        )
+        try fixture.credentialStore.set(binding, forKey: bindingKey, scope: .iCloud)
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        fixture.backing.failDeletes(
+            from: .deviceOnly,
+            service: KeychainManager.credentialService,
+            key: bindingKey
+        )
+
+        #expect(throws: InMemoryKeychainStoreBacking.Failure.deleteRejected) {
+            try fixture.manager.deleteCredentials(for: server.id)
+        }
+        #expect(fixture.offlineChanges.change(for: .server(server.id)) == .deleted)
+        #expect(try fixture.credentialStore.get(bindingKey, scope: .deviceOnly) == binding)
+
+        try fixture.manager.removeCredentialsFromICloud()
+
+        #expect(fixture.offlineChanges.change(for: .server(server.id)) == .deleted)
+        #expect(try fixture.credentialStore.get(bindingKey, scope: .iCloud) == nil)
+
+        fixture.backing.allowDeletes(
+            from: .deviceOnly,
+            service: KeychainManager.credentialService,
+            key: bindingKey
+        )
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+
+        #expect(try fixture.credentialStore.get(passwordKey, scope: .iCloud) == nil)
+        #expect(try fixture.credentialStore.get(bindingKey, scope: .iCloud) == nil)
+        #expect(try fixture.credentialStore.get(bindingKey, scope: .deviceOnly) == nil)
+    }
+
+    @Test
     func removingCloudCredentialsRequiresSyncToBeDisabled() throws {
         let fixture = Fixture(syncEnabled: true)
 

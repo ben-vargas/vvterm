@@ -186,7 +186,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
-    func recordUpdated(_ units: Set<CredentialSyncUnit>) throws {
+    func recordCloudRemovalRestoreIntent(for units: Set<CredentialSyncUnit>) throws {
         guard !units.isEmpty else { return }
         try withLock {
             guard var state = storedState(),
@@ -195,11 +195,18 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
                 throw CredentialSyncError.offlineReconciliationPending
             }
             let changeDate = Date().timeIntervalSinceReferenceDate
+            var didChange = false
             for unit in units {
+                guard state.changes[unit.storageKey] == CredentialOfflineChange.unchanged.rawValue else {
+                    continue
+                }
                 state.changes[unit.storageKey] = CredentialOfflineChange.updated.rawValue
                 state.changeDates[unit.storageKey] = changeDate
+                didChange = true
             }
-            try persist(state)
+            if didChange {
+                try persist(state)
+            }
         }
     }
 

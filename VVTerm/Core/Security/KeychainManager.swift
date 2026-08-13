@@ -705,7 +705,7 @@ final class KeychainManager {
 
         // A later re-enable must restore every local credential. Persist that
         // intent before removing any iCloud Keychain item.
-        try offlineChanges.recordUpdated(units)
+        try offlineChanges.recordCloudRemovalRestoreIntent(for: units)
         try store.deleteAll(in: .iCloud, where: Self.isSynchronizableCredentialKey)
         try cloudflareTokenStore.deleteAll(in: .iCloud, where: { $0.hasPrefix("oauth.") })
     }
