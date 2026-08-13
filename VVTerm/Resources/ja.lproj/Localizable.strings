@@ -1719,7 +1719,6 @@
 "The remote terminal wants to replace your clipboard." = "リモートターミナルがクリップボードを置き換えようとしています。";
 "The clipboard text may contain commands or multiple lines." = "クリップボードのテキストにコマンドや複数行が含まれている可能性があります。";
 "Remote Clipboard Reads" = "リモートのクリップボード読み取り";
-"Remote programs can read clipboard data without asking." = "リモートプログラムが確認なしでクリップボードを読み取れます。";
 "Remote Clipboard" = "リモートクリップボード";
 "Server no longer exists." = "サーバーは存在しません。";
 "Workspace no longer exists." = "ワークスペースは存在しません。";

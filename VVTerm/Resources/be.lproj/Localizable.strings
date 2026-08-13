@@ -1720,7 +1720,6 @@
 "The remote terminal wants to replace your clipboard." = "Аддалены тэрмінал хоча замяніць ваш буфер абмену.";
 "The clipboard text may contain commands or multiple lines." = "Тэкст у буферы абмену можа змяшчаць каманды або некалькі радкоў.";
 "Remote Clipboard Reads" = "Аддаленае чытанне буфера абмену";
-"Remote programs can read clipboard data without asking." = "Аддаленыя праграмы могуць чытаць даныя буфера абмену без запыту.";
 "Remote Clipboard" = "Аддалены буфер абмену";
 "Server no longer exists." = "Сервер больш не існуе.";
 "Workspace no longer exists." = "Працоўная прастора больш не існуе.";

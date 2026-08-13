@@ -135,6 +135,40 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
     }
 
     @MainActor
+    func testRemoteClipboardShowsOneWarning() throws {
+        let app = XCUIApplication()
+        app.terminate()
+        app.launchArguments = [
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US",
+            "-hasSeenWelcome", "YES",
+            "-terminalRemoteClipboardReadPolicy", "allow",
+            "-iCloudSyncEnabled", "NO",
+            "-security.privacyModeEnabled", "NO",
+            "-security.fullAppLockEnabled", "NO",
+            "-security.lockOnBackground", "NO",
+        ]
+        app.launch()
+        defer { app.terminate() }
+
+        let settings = app.buttons["vvterm.serverList.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+
+        let clipboardRoute = app.buttons["vvterm.settings.route.clipboardAndPaste"]
+        XCTAssertTrue(clipboardRoute.waitForExistence(timeout: 8))
+        clipboardRoute.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["Warning: Remote programs can read your clipboard without asking."]
+                .waitForExistence(timeout: 5)
+        )
+        XCTAssertFalse(
+            app.staticTexts["Remote programs can read clipboard data without asking."].exists
+        )
+    }
+
+    @MainActor
     func testConnectedTerminalCanOpenSettingsFromItsToolbar() throws {
         let app = XCUIApplication()
         app.terminate()

@@ -1720,7 +1720,6 @@
 "The remote terminal wants to replace your clipboard." = "Vzdálený terminál chce nahradit obsah vaší schránky.";
 "The clipboard text may contain commands or multiple lines." = "Text ve schránce může obsahovat příkazy nebo více řádků.";
 "Remote Clipboard Reads" = "Vzdálené čtení schránky";
-"Remote programs can read clipboard data without asking." = "Vzdálené programy mohou číst data ze schránky bez dotazu.";
 "Remote Clipboard" = "Vzdálená schránka";
 "Server no longer exists." = "Server již neexistuje.";
 "Workspace no longer exists." = "Pracovní prostor již neexistuje.";

@@ -1716,7 +1716,6 @@
 "The remote terminal wants to replace your clipboard." = "远程终端想要替换你的剪贴板。";
 "The clipboard text may contain commands or multiple lines." = "剪贴板文本可能包含命令或多行内容。";
 "Remote Clipboard Reads" = "远程读取剪贴板";
-"Remote programs can read clipboard data without asking." = "远程程序可以不经询问读取剪贴板数据。";
 "Remote Clipboard" = "远程剪贴板";
 "Server no longer exists." = "服务器已不存在。";
 "Workspace no longer exists." = "工作区已不存在。";

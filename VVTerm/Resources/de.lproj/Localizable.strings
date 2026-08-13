@@ -1719,7 +1719,6 @@
 "The remote terminal wants to replace your clipboard." = "Das Remote-Terminal möchte Ihre Zwischenablage ersetzen.";
 "The clipboard text may contain commands or multiple lines." = "Der Text in der Zwischenablage kann Befehle oder mehrere Zeilen enthalten.";
 "Remote Clipboard Reads" = "Remote-Lesezugriff auf Zwischenablage";
-"Remote programs can read clipboard data without asking." = "Remote-Programme können Daten aus der Zwischenablage ohne Nachfrage lesen.";
 "Remote Clipboard" = "Remote-Zwischenablage";
 "Server no longer exists." = "Der Server ist nicht mehr vorhanden.";
 "Workspace no longer exists." = "Der Arbeitsbereich ist nicht mehr vorhanden.";

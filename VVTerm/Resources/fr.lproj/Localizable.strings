@@ -1721,7 +1721,6 @@
 "The remote terminal wants to replace your clipboard." = "Le terminal distant veut remplacer votre presse-papiers.";
 "The clipboard text may contain commands or multiple lines." = "Le texte du presse-papiers peut contenir des commandes ou plusieurs lignes.";
 "Remote Clipboard Reads" = "Lecture distante du presse-papiers";
-"Remote programs can read clipboard data without asking." = "Les programmes distants peuvent lire le presse-papiers sans demander.";
 "Remote Clipboard" = "Presse-papiers distant";
 "Server no longer exists." = "Le serveur n’existe plus.";
 "Workspace no longer exists." = "L’espace de travail n’existe plus.";

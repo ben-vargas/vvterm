@@ -1764,7 +1764,6 @@
 "The remote terminal wants to replace your clipboard." = "Thiết bị đầu cuối từ xa muốn thay thế bảng tạm của bạn.";
 "The clipboard text may contain commands or multiple lines." = "Văn bản trong bảng tạm có thể chứa lệnh hoặc nhiều dòng.";
 "Remote Clipboard Reads" = "Đọc bảng tạm từ xa";
-"Remote programs can read clipboard data without asking." = "Chương trình từ xa có thể đọc dữ liệu bảng tạm mà không cần hỏi.";
 "Remote Clipboard" = "Bảng tạm từ xa";
 "Server no longer exists." = "Máy chủ không còn tồn tại.";
 "Workspace no longer exists." = "Không gian làm việc không còn tồn tại.";

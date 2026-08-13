@@ -72,14 +72,6 @@ struct TerminalClipboardPasteSettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
-
-                if remoteClipboardReadPolicy == .allow {
-                    Label(
-                        "Remote programs can read clipboard data without asking.",
-                        systemImage: "exclamationmark.triangle.fill"
-                    )
-                    .foregroundStyle(.orange)
-                }
             } header: {
                 Text("Remote Clipboard")
             } footer: {

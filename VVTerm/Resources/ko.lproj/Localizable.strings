@@ -1718,7 +1718,6 @@
 "The remote terminal wants to replace your clipboard." = "원격 터미널이 클립보드를 바꾸려고 합니다.";
 "The clipboard text may contain commands or multiple lines." = "클립보드 텍스트에 명령이나 여러 줄이 포함될 수 있습니다.";
 "Remote Clipboard Reads" = "원격 클립보드 읽기";
-"Remote programs can read clipboard data without asking." = "원격 프로그램이 묻지 않고 클립보드 데이터를 읽을 수 있습니다.";
 "Remote Clipboard" = "원격 클립보드";
 "Server no longer exists." = "서버가 더 이상 존재하지 않습니다.";
 "Workspace no longer exists." = "작업 공간이 더 이상 존재하지 않습니다.";
