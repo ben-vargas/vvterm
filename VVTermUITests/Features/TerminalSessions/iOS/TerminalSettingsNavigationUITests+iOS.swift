@@ -58,7 +58,9 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
                 .waitForExistence(timeout: 8),
             "The Server Views page did not open."
         )
-        XCTAssertTrue(app.buttons["Stats Appearance"].exists)
+        XCTAssertTrue(
+            app.buttons["vvterm.settings.navigationAndStats.statsAppearance"].exists
+        )
 
         let settingsBackButton = app.navigationBars["Server Views"].buttons["Settings"]
         XCTAssertTrue(settingsBackButton.waitForExistence(timeout: 5))
@@ -128,10 +130,42 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
         let barCursor = app.buttons["vvterm.settings.cursor.bar"]
         XCTAssertTrue(blockCursor.waitForExistence(timeout: 5))
         let underlineCursor = app.buttons["vvterm.settings.cursor.underline"]
-        XCTAssertEqual([blockCursor, barCursor, underlineCursor].filter(\.isSelected).count, 1)
+        let hollowCursor = app.buttons["vvterm.settings.cursor.block_hollow"]
+        let cursorButtons = [blockCursor, barCursor, underlineCursor, hollowCursor]
+        XCTAssertTrue(hollowCursor.waitForExistence(timeout: 5))
+        XCTAssertEqual(cursorButtons.filter(\.isSelected).count, 1)
+        XCTAssertTrue(
+            cursorButtons.allSatisfy { abs($0.frame.midY - blockCursor.frame.midY) < 2 },
+            "All four cursor types must remain in one row."
+        )
         let cursorTarget = barCursor.isSelected ? blockCursor : barCursor
         cursorTarget.tap()
         XCTAssertTrue(cursorTarget.isSelected)
+
+        let customThemes = app.buttons["vvterm.settings.appearance.customThemes"]
+        if !customThemes.waitForExistence(timeout: 2) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(customThemes.waitForExistence(timeout: 5))
+        customThemes.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["vvterm.settings.customThemes.page"]
+                .waitForExistence(timeout: 5)
+        )
+        let customThemesBack = app.navigationBars["Custom Themes"].buttons.firstMatch
+        XCTAssertTrue(customThemesBack.exists)
+        customThemesBack.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["vvterm.settings.page.terminalAppearance"]
+                .waitForExistence(timeout: 5),
+            "Closing Custom Themes must return to Terminal Appearance."
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["vvterm.settings.root"].exists,
+            "Closing Custom Themes must not dismiss Settings."
+        )
     }
 
     @MainActor

@@ -4,7 +4,9 @@ struct TerminalThemeSettingsSection: View {
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
 
     @State private var customThemeErrorMessage: String?
+    #if os(macOS)
     @State private var showingCustomThemeManager = false
+    #endif
 
     private var builtInThemeOptions: [String] {
         Set(terminalThemeManager.builtInThemeNames)
@@ -105,62 +107,84 @@ struct TerminalThemeSettingsSection: View {
                 .disabled(allThemeNames.isEmpty)
             }
 
-            Button {
-                showingCustomThemeManager = true
-            } label: {
-                HStack(spacing: 10) {
-                    Text("Custom Themes")
-
-                    Spacer(minLength: 8)
-
-                    Text(customThemes.count, format: .number)
-                        .foregroundStyle(.secondary)
-
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("vvterm.settings.appearance.customThemes")
+            customThemesControl
         }
+        #if os(macOS)
         .sheet(isPresented: $showingCustomThemeManager) {
-            ManageCustomThemesSheet(
-                customThemes: customThemes,
-                themeSelection: themeSelection,
-                onSuggestThemeName: { source in
-                    terminalThemeManager.suggestThemeName(from: source)
-                },
-                onCreateTheme: { name, content, applyTarget in
-                    try createAndApplyCustomTheme(
-                        name: name,
-                        content: content,
-                        applyTarget: applyTarget
-                    )
-                },
-                onApplyTheme: { themeName, applyTarget in
-                    applyThemeSelection(themeName: themeName, applyTarget: applyTarget)
-                },
-                onDelete: { themeID in
-                    terminalThemeManager.deleteCustomTheme(id: themeID)
-                },
-                onSaveEdit: { themeID, name, content in
-                    try terminalThemeManager.updateCustomTheme(
-                        id: themeID,
-                        name: name,
-                        content: content
-                    )
-                }
-            )
+            customThemesManager {
+                showingCustomThemeManager = false
+            }
             .adaptiveSoftScrollEdges()
         }
+        #endif
         .alert("Custom Theme", isPresented: customThemeErrorAlertBinding) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(customThemeErrorMessage ?? "")
         }
+    }
+
+    @ViewBuilder
+    private var customThemesControl: some View {
+        #if os(iOS)
+        NavigationLink {
+            customThemesManager(onClose: {})
+        } label: {
+            customThemesLabel
+        }
+        .accessibilityIdentifier("vvterm.settings.appearance.customThemes")
+        #else
+        Button {
+            showingCustomThemeManager = true
+        } label: {
+            customThemesLabel
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("vvterm.settings.appearance.customThemes")
+        #endif
+    }
+
+    private var customThemesLabel: some View {
+        HStack(spacing: 10) {
+            Text("Custom Themes")
+
+            Spacer(minLength: 8)
+
+            Text(customThemes.count, format: .number)
+                .foregroundStyle(.secondary)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func customThemesManager(onClose: @escaping () -> Void) -> some View {
+        ManageCustomThemesSheet(
+            customThemes: customThemes,
+            themeSelection: themeSelection,
+            onClose: onClose,
+            onSuggestThemeName: { source in
+                terminalThemeManager.suggestThemeName(from: source)
+            },
+            onCreateTheme: { name, content, applyTarget in
+                try createAndApplyCustomTheme(
+                    name: name,
+                    content: content,
+                    applyTarget: applyTarget
+                )
+            },
+            onApplyTheme: { themeName, applyTarget in
+                applyThemeSelection(themeName: themeName, applyTarget: applyTarget)
+            },
+            onDelete: { themeID in
+                terminalThemeManager.deleteCustomTheme(id: themeID)
+            },
+            onSaveEdit: { themeID, name, content in
+                try terminalThemeManager.updateCustomTheme(
+                    id: themeID,
+                    name: name,
+                    content: content
+                )
+            }
+        )
     }
 
     private func createAndApplyCustomTheme(

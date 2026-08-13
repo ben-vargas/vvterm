@@ -10,13 +10,13 @@ private struct PendingCustomThemeSource: Identifiable {
 struct ManageCustomThemesSheet: View {
     let customThemes: [TerminalTheme]
     let themeSelection: TerminalThemeSelection
+    let onClose: () -> Void
     let onSuggestThemeName: (String) -> String
     let onCreateTheme: (String, String, TerminalThemeSelectionTarget) throws -> Void
     let onApplyTheme: (String, TerminalThemeSelectionTarget) -> Void
     let onDelete: (UUID) -> Void
     let onSaveEdit: (UUID, String, String) throws -> Void
 
-    @Environment(\.dismiss) var dismiss
     @State private var showingThemeImporter = false
     @State private var showingThemeBuilder = false
     @State private var pendingCustomThemeSource: PendingCustomThemeSource?

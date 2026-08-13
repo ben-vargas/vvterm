@@ -37,6 +37,7 @@ private struct CursorStyleOptionView: View {
                 .font(.caption)
                 .foregroundStyle(isSelected ? .primary : .secondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
         .contentShape(Rectangle())
     }
@@ -46,22 +47,6 @@ private struct TerminalCursorPreview: View {
     let style: TerminalCursorStyle
     let blinks: Bool
     let palette: TerminalThemePreviewPalette
-    let prefix: String
-    let previewFont: Font
-
-    init(
-        style: TerminalCursorStyle,
-        blinks: Bool,
-        palette: TerminalThemePreviewPalette,
-        prefix: String = "~ ",
-        previewFont: Font = .system(size: 19, weight: .medium, design: .monospaced)
-    ) {
-        self.style = style
-        self.blinks = blinks
-        self.palette = palette
-        self.prefix = prefix
-        self.previewFont = previewFont
-    }
 
     var body: some View {
         if blinks {
@@ -81,11 +66,11 @@ private struct TerminalCursorPreview: View {
 
     private func previewContent(isVisible: Bool) -> some View {
         HStack(spacing: 0) {
-            Text(verbatim: prefix)
+            Text(verbatim: "~ ")
                 .foregroundStyle(palette.foreground.opacity(0.55))
             cursorSample(isVisible: isVisible)
         }
-        .font(previewFont)
+        .font(.system(size: 19, weight: .medium, design: .monospaced))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 6)
@@ -175,7 +160,6 @@ struct TerminalAppearanceSettingsView: View {
 
     var body: some View {
         Form {
-            previewSection
             fontSection
             cursorSection
             TerminalThemeSettingsSection()
@@ -190,26 +174,6 @@ struct TerminalAppearanceSettingsView: View {
                     currentFontName: fontName
                 )
             }
-        }
-    }
-
-    private var previewSection: some View {
-        Section("Preview") {
-            TerminalCursorPreview(
-                style: selectedCursorStyle,
-                blinks: cursorBlink,
-                palette: cursorPreviewPalette,
-                prefix: "~ ssh ",
-                previewFont: .custom(fontName, fixedSize: CGFloat(fontSize))
-            )
-            .frame(maxWidth: .infinity)
-            .frame(height: 84)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(cursorPreviewPalette.foreground.opacity(0.14), lineWidth: 1)
-            )
-            .accessibilityHidden(true)
         }
     }
 
@@ -251,13 +215,7 @@ struct TerminalAppearanceSettingsView: View {
 
     private var cursorSection: some View {
         Section("Cursor") {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12),
-                ],
-                spacing: 12
-            ) {
+            HStack(spacing: 8) {
                 ForEach(TerminalCursorStyle.allCases) { style in
                     let isSelected = selectedCursorStyle == style
                     Button {

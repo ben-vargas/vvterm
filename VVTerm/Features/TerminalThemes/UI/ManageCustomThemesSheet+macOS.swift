@@ -5,7 +5,7 @@ extension ManageCustomThemesSheet {
     var platformBody: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(title: "Custom Themes") {
-                dismiss()
+                onClose()
             }
 
             Divider()
