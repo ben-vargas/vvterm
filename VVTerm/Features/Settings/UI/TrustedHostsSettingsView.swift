@@ -5,42 +5,28 @@ struct TrustedHostsSettingsView: View {
     @State private var resetTarget: TrustedHostResetTarget?
 
     var body: some View {
-        Form {
-            Section("Trusted Hosts") {
-                if coordinator.knownHosts.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("No Trusted Hosts", systemImage: "checkmark.shield")
-                            .font(.headline)
-                        Text("Hosts appear here after you approve their fingerprints.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+        Group {
+            if coordinator.knownHosts.isEmpty {
+                TrustedHostsEmptyView()
+            } else {
+                Form {
+                    Section {
+                        ForEach(coordinator.knownHosts) { knownHost in
+                            platformHostRow(for: knownHost)
+                        }
                     }
-                    .padding(.vertical, 4)
-                    .accessibilityElement(children: .combine)
-                } else {
-                    ForEach(coordinator.knownHosts) { knownHost in
-                        TrustedHostSettingsRow(knownHost: knownHost) {
-                            resetTarget = .host(knownHost)
+
+                    Section {
+                        Button(role: .destructive) {
+                            resetTarget = .all
+                        } label: {
+                            Label("Reset Trusted SSH Hosts", systemImage: "trash")
                         }
                     }
                 }
-            }
-
-            if !coordinator.knownHosts.isEmpty {
-                Section {
-                    Button(role: .destructive) {
-                        resetTarget = .all
-                    } label: {
-                        Label("Reset Trusted SSH Hosts", systemImage: "trash")
-                            .foregroundStyle(.red)
-                    }
-                    .tint(.red)
-                } header: {
-                    Text("Danger Zone")
-                }
+                .formStyle(.grouped)
             }
         }
-        .formStyle(.grouped)
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("vvterm.settings.page.trustedHosts")
         .alert(
@@ -71,6 +57,33 @@ struct TrustedHostsSettingsView: View {
         )
     }
 
+    func hostActionsMenu(for knownHost: KnownHostSettingsItem) -> some View {
+        Menu {
+            resetAction(for: knownHost)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+        }
+        .accessibilityLabel("Reset Trusted Host")
+        .accessibilityIdentifier(
+            "vvterm.settings.trustedHosts.actions.\(knownHost.id)"
+        )
+    }
+
+    @ViewBuilder
+    func resetAction(for knownHost: KnownHostSettingsItem) -> some View {
+        Button(role: .destructive) {
+            resetTarget = .host(knownHost)
+        } label: {
+            Label("Reset", systemImage: "trash")
+        }
+        .accessibilityIdentifier(
+            "vvterm.settings.trustedHosts.reset.\(knownHost.id)"
+        )
+    }
+
     private func reset(_ target: TrustedHostResetTarget) {
         switch target {
         case .host(let knownHost):
@@ -82,56 +95,69 @@ struct TrustedHostsSettingsView: View {
     }
 }
 
-private struct TrustedHostSettingsRow: View {
+private struct TrustedHostsEmptyView: View {
+    var body: some View {
+        if #available(iOS 17.0, macOS 14.0, *) {
+            ContentUnavailableView(
+                "No Trusted Hosts",
+                systemImage: "checkmark.shield",
+                description: Text("Hosts appear here after you approve their fingerprints.")
+            )
+        } else {
+            VStack(spacing: 8) {
+                Label("No Trusted Hosts", systemImage: "checkmark.shield")
+                    .font(.headline)
+                Text("Hosts appear here after you approve their fingerprints.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding()
+        }
+    }
+}
+
+struct TrustedHostSettingsRow: View {
     let knownHost: KnownHostSettingsItem
-    let requestReset: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(knownHost.host)
-                    .font(.headline)
-                    .textSelection(.enabled)
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.shield.fill")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .frame(width: 32)
+                .accessibilityHidden(true)
 
-                Spacer(minLength: 8)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(verbatim: knownHost.endpoint)
+                        .font(.body.weight(.medium))
+                        .lineLimit(1)
 
-                Button(action: requestReset) {
-                    Label("Reset", systemImage: "trash")
+                    Spacer(minLength: 4)
+
+                    Label {
+                        Text(
+                            knownHost.lastSeenAt,
+                            format: .relative(presentation: .named)
+                        )
+                    } icon: {
+                        Image(systemName: "clock")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.borderless)
-                .tint(.red)
-                .accessibilityIdentifier(
-                    "vvterm.settings.trustedHosts.reset.\(knownHost.id)"
-                )
-            }
 
-            HStack(spacing: 6) {
-                Text("Port")
-                Text(knownHost.port, format: .number)
-                    .monospacedDigit()
-                Text("·")
-                    .accessibilityHidden(true)
-                Label {
-                    Text(
-                        knownHost.lastSeenAt,
-                        format: .relative(presentation: .named)
-                    )
-                } icon: {
-                    Image(systemName: "clock")
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Fingerprint")
-                Text(knownHost.fingerprint)
+                Text(verbatim: knownHost.fingerprint)
                     .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                     .textSelection(.enabled)
             }
-            .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("vvterm.settings.trustedHosts.entry.\(knownHost.id)")
     }
 }
