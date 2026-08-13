@@ -2,10 +2,10 @@ import Foundation
 
 nonisolated enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Sendable {
     case account
+    case voice
     case app
     case terminal
     case dataAndSecurity
-    case voice
     case support
 
     var id: String { rawValue }
@@ -30,17 +30,17 @@ nonisolated enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Se
 
 nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Sendable {
     case pro
+    case transcription
     case appearanceAndLanguage
     case navigationAndStats
-    case privacyAndAppLock
     case terminalAppearance
     case keyboardAndInput
     case sessionsAndConnections
     case clipboardAndPaste
+    case privacyAndAppLock
+    case iCloudSync
     case sshKeys
     case trustedHosts
-    case iCloudSync
-    case transcription
     case aboutAndSupport
 
     static let defaultRoute = SettingsRoute.appearanceAndLanguage
@@ -51,14 +51,14 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         switch self {
         case .pro:
             .account
-        case .appearanceAndLanguage, .navigationAndStats, .privacyAndAppLock:
+        case .transcription:
+            .voice
+        case .appearanceAndLanguage, .navigationAndStats:
             .app
         case .terminalAppearance, .keyboardAndInput, .sessionsAndConnections, .clipboardAndPaste:
             .terminal
-        case .sshKeys, .trustedHosts, .iCloudSync:
+        case .privacyAndAppLock, .iCloudSync, .sshKeys, .trustedHosts:
             .dataAndSecurity
-        case .transcription:
-            .voice
         case .aboutAndSupport:
             .support
         }

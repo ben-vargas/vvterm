@@ -10,17 +10,17 @@ struct SettingsRouteCatalogTests {
         #expect(SettingsRoute.defaultRoute != .pro)
         #expect(SettingsRouteCatalog.groups == [
             .account,
+            .voice,
             .app,
             .terminal,
             .dataAndSecurity,
-            .voice,
             .support,
         ])
         #expect(SettingsRouteCatalog.routes(in: .account) == [.pro])
+        #expect(SettingsRouteCatalog.routes(in: .voice) == [.transcription])
         #expect(SettingsRouteCatalog.routes(in: .app) == [
             .appearanceAndLanguage,
             .navigationAndStats,
-            .privacyAndAppLock,
         ])
         #expect(SettingsRouteCatalog.routes(in: .terminal) == [
             .terminalAppearance,
@@ -29,11 +29,11 @@ struct SettingsRouteCatalogTests {
             .clipboardAndPaste,
         ])
         #expect(SettingsRouteCatalog.routes(in: .dataAndSecurity) == [
+            .privacyAndAppLock,
+            .iCloudSync,
             .sshKeys,
             .trustedHosts,
-            .iCloudSync,
         ])
-        #expect(SettingsRouteCatalog.routes(in: .voice) == [.transcription])
         #expect(SettingsRouteCatalog.routes(in: .support) == [.aboutAndSupport])
     }
 
