@@ -16,6 +16,14 @@
 "Last used" = "Last used";
 "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect.";
 "About & Support" = "About & Support";
+"Privacy & Data" = "Privacy & Data";
+"Voice Input" = "Voice Input";
+"Sessions & SSH" = "Sessions & SSH";
+"Help & About" = "Help & About";
+"Analytics" = "Analytics";
+"App Lock" = "App Lock";
+"Help & Feedback" = "Help & Feedback";
+"Terminal Session" = "Terminal Session";
 "Search Settings" = "Search Settings";
 "OK" = "OK";
 "Cancel" = "Cancel";

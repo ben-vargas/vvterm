@@ -16,6 +16,14 @@
 "Last used" = "上次使用";
 "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm 将忘记为 %@ 保存的 SSH 指纹。重新连接时请再次验证。";
 "About & Support" = "关于与支持";
+"Privacy & Data" = "隐私与数据";
+"Voice Input" = "语音输入";
+"Sessions & SSH" = "会话与 SSH";
+"Help & About" = "帮助与关于";
+"Analytics" = "分析";
+"App Lock" = "应用锁";
+"Help & Feedback" = "帮助与反馈";
+"Terminal Session" = "终端会话";
 "Search Settings" = "搜索设置";
 "OK" = "确定";
 "Cancel" = "取消";

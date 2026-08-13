@@ -1,26 +1,23 @@
 import Foundation
 
 nonisolated enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Sendable {
-    case account
-    case app
+    case general
     case terminal
-    case dataAndSecurity
-    case support
+    case connections
+    case privacyAndData
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .account:
-            String(localized: "Account")
-        case .app:
-            String(localized: "App")
+        case .general:
+            String(localized: "General")
         case .terminal:
             String(localized: "Terminal")
-        case .dataAndSecurity:
-            String(localized: "Data & Security")
-        case .support:
-            String(localized: "Support")
+        case .connections:
+            String(localized: "Connections")
+        case .privacyAndData:
+            String(localized: "Privacy & Data")
         }
     }
 }
@@ -32,31 +29,32 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
     case terminalAppearance
     case keyboardAndInput
     case transcription
-    case sessionsAndConnections
     case clipboardAndPaste
-    case privacyAndAppLock
-    case iCloudSync
+    case sessionsAndConnections
     case sshKeys
     case trustedHosts
+    case privacyAndAppLock
+    case iCloudSync
     case aboutAndSupport
 
     static let defaultRoute = SettingsRoute.appearanceAndLanguage
 
     var id: String { rawValue }
 
-    var group: SettingsGroup {
+    var group: SettingsGroup? {
         switch self {
         case .pro:
-            .account
+            nil
         case .appearanceAndLanguage, .navigationAndStats:
-            .app
-        case .terminalAppearance, .keyboardAndInput, .transcription,
-             .sessionsAndConnections, .clipboardAndPaste:
+            .general
+        case .terminalAppearance, .keyboardAndInput, .transcription, .clipboardAndPaste:
             .terminal
-        case .privacyAndAppLock, .iCloudSync, .sshKeys, .trustedHosts:
-            .dataAndSecurity
+        case .sessionsAndConnections, .sshKeys, .trustedHosts:
+            .connections
+        case .privacyAndAppLock, .iCloudSync:
+            .privacyAndData
         case .aboutAndSupport:
-            .support
+            nil
         }
     }
 
@@ -67,7 +65,7 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .appearanceAndLanguage:
             String(localized: "Appearance & Language")
         case .navigationAndStats:
-            String(localized: "Navigation & Stats")
+            String(localized: "Server Views")
         case .privacyAndAppLock:
             String(localized: "Privacy & App Lock")
         case .terminalAppearance:
@@ -75,7 +73,7 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .keyboardAndInput:
             String(localized: "Keyboard & Input")
         case .sessionsAndConnections:
-            String(localized: "Sessions & Connections")
+            String(localized: "Sessions & SSH")
         case .clipboardAndPaste:
             String(localized: "Clipboard & Paste")
         case .sshKeys:
@@ -85,9 +83,9 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .iCloudSync:
             String(localized: "iCloud Sync")
         case .transcription:
-            String(localized: "Transcription")
+            String(localized: "Voice Input")
         case .aboutAndSupport:
-            String(localized: "About & Support")
+            String(localized: "Help & About")
         }
     }
 
@@ -158,10 +156,20 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
 }
 
 nonisolated enum SettingsRouteCatalog {
+    static let leadingRoutes: [SettingsRoute] = [.pro]
     static let groups = SettingsGroup.allCases
+    static let trailingRoutes: [SettingsRoute] = [.aboutAndSupport]
 
     static func routes(in group: SettingsGroup) -> [SettingsRoute] {
         SettingsRoute.allCases.filter { $0.group == group }
+    }
+
+    static func visibleRoutes(
+        from routes: [SettingsRoute],
+        matching query: String
+    ) -> [SettingsRoute] {
+        let matches = Set(Self.routes(matching: query))
+        return routes.filter(matches.contains)
     }
 
     static func routes(matching query: String) -> [SettingsRoute] {

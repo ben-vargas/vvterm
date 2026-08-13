@@ -16,6 +16,11 @@ extension SettingsView {
     var platformBody: some View {
         NavigationSplitView {
             List(selection: selectedRouteBinding) {
+                ForEach(visibleRoutes(from: SettingsRouteCatalog.leadingRoutes)) { route in
+                    routeLabel(for: route)
+                        .tag(route)
+                }
+
                 ForEach(SettingsRouteCatalog.groups) { group in
                     let routes = visibleRoutes(in: group)
                     if !routes.isEmpty {
@@ -26,6 +31,11 @@ extension SettingsView {
                             }
                         }
                     }
+                }
+
+                ForEach(visibleRoutes(from: SettingsRouteCatalog.trailingRoutes)) { route in
+                    routeLabel(for: route)
+                        .tag(route)
                 }
             }
             .listStyle(.sidebar)

@@ -8,15 +8,14 @@ struct SettingsRouteCatalogTests {
     func approvedGroupedOrder() {
         #expect(SettingsRoute.defaultRoute == .appearanceAndLanguage)
         #expect(SettingsRoute.defaultRoute != .pro)
+        #expect(SettingsRouteCatalog.leadingRoutes == [.pro])
         #expect(SettingsRouteCatalog.groups == [
-            .account,
-            .app,
+            .general,
             .terminal,
-            .dataAndSecurity,
-            .support,
+            .connections,
+            .privacyAndData,
         ])
-        #expect(SettingsRouteCatalog.routes(in: .account) == [.pro])
-        #expect(SettingsRouteCatalog.routes(in: .app) == [
+        #expect(SettingsRouteCatalog.routes(in: .general) == [
             .appearanceAndLanguage,
             .navigationAndStats,
         ])
@@ -24,16 +23,18 @@ struct SettingsRouteCatalogTests {
             .terminalAppearance,
             .keyboardAndInput,
             .transcription,
-            .sessionsAndConnections,
             .clipboardAndPaste,
         ])
-        #expect(SettingsRouteCatalog.routes(in: .dataAndSecurity) == [
-            .privacyAndAppLock,
-            .iCloudSync,
+        #expect(SettingsRouteCatalog.routes(in: .connections) == [
+            .sessionsAndConnections,
             .sshKeys,
             .trustedHosts,
         ])
-        #expect(SettingsRouteCatalog.routes(in: .support) == [.aboutAndSupport])
+        #expect(SettingsRouteCatalog.routes(in: .privacyAndData) == [
+            .privacyAndAppLock,
+            .iCloudSync,
+        ])
+        #expect(SettingsRouteCatalog.trailingRoutes == [.aboutAndSupport])
     }
 
     @Test("Search finds page titles, labels, and common terms", arguments: [

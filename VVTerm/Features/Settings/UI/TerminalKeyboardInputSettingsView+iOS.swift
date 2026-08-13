@@ -1,15 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-struct TerminalScreenAwakeSettingRow: View {
-    @AppStorage(TerminalDefaults.keepScreenAwakeKey) private var isEnabled = TerminalDefaults.defaultKeepScreenAwake
-
-    var body: some View {
-        Toggle("Keep screen awake", isOn: $isEnabled)
-            .accessibilityIdentifier("vvterm.settings.terminal.keepScreenAwake")
-    }
-}
-
 struct TerminalKeyboardInputPlatformSettingsView: View {
     @AppStorage(TerminalDefaults.optionAsAltModeKey) private var optionAsAltModeRaw = TerminalOptionAsAltMode.none.rawValue
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) private var preserveTerminalSizeForKeyboard = false
@@ -24,10 +15,6 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Terminal Behavior") {
-                TerminalScreenAwakeSettingRow()
-            }
-
             Section {
                 Picker("Option as Alt", selection: optionAsAltModeBinding) {
                     ForEach(TerminalOptionAsAltMode.allCases) { mode in

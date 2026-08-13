@@ -34,8 +34,14 @@ struct SettingsView: View {
     }
 
     func visibleRoutes(in group: SettingsGroup) -> [SettingsRoute] {
-        let matches = Set(SettingsRouteCatalog.routes(matching: searchText))
-        return SettingsRouteCatalog.routes(in: group).filter(matches.contains)
+        SettingsRouteCatalog.visibleRoutes(
+            from: SettingsRouteCatalog.routes(in: group),
+            matching: searchText
+        )
+    }
+
+    func visibleRoutes(from routes: [SettingsRoute]) -> [SettingsRoute] {
+        SettingsRouteCatalog.visibleRoutes(from: routes, matching: searchText)
     }
 
     @ViewBuilder

@@ -16,6 +16,14 @@
 "Last used" = "Dùng lần cuối";
 "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm sẽ quên dấu vân tay SSH đã lưu cho %@. Hãy xác minh lại khi bạn kết nối lại.";
 "About & Support" = "Giới thiệu & hỗ trợ";
+"Privacy & Data" = "Quyền riêng tư & Dữ liệu";
+"Voice Input" = "Nhập bằng giọng nói";
+"Sessions & SSH" = "Phiên & SSH";
+"Help & About" = "Trợ giúp & Giới thiệu";
+"Analytics" = "Phân tích";
+"App Lock" = "Khóa ứng dụng";
+"Help & Feedback" = "Trợ giúp & Phản hồi";
+"Terminal Session" = "Phiên thiết bị đầu cuối";
 "Search Settings" = "Tìm kiếm cài đặt";
 "OK" = "Đồng ý";
 "Cancel" = "Hủy";

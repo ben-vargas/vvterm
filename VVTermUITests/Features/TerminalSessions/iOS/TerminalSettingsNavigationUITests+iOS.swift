@@ -56,11 +56,11 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
         XCTAssertTrue(
             app.descendants(matching: .any)["vvterm.settings.page.navigationAndStats"]
                 .waitForExistence(timeout: 8),
-            "The General-derived Navigation & Stats page did not open."
+            "The Server Views page did not open."
         )
         XCTAssertTrue(app.buttons["Stats Appearance"].exists)
 
-        let settingsBackButton = app.navigationBars["Navigation & Stats"].buttons["Settings"]
+        let settingsBackButton = app.navigationBars["Server Views"].buttons["Settings"]
         XCTAssertTrue(settingsBackButton.waitForExistence(timeout: 5))
         settingsBackButton.tap()
 
@@ -79,9 +79,10 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
         XCTAssertTrue(
             app.descendants(matching: .any)["vvterm.settings.page.sessionsAndConnections"]
                 .waitForExistence(timeout: 8),
-            "The Terminal-derived Sessions & Connections page did not open."
+            "The Sessions & SSH page did not open."
         )
         XCTAssertTrue(app.switches["Enable tmux by default"].exists)
+        XCTAssertTrue(app.switches["Keep screen awake"].exists)
     }
 
     @MainActor

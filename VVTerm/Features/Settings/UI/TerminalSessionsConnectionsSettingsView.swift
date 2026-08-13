@@ -20,6 +20,8 @@ struct TerminalSessionsConnectionsSettingsView: View {
 
     var body: some View {
         Form {
+            TerminalSessionPlatformSettingsSection()
+
             Section {
                 Toggle("Enable tmux by default", isOn: $tmuxEnabledDefault)
 

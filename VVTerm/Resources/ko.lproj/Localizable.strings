@@ -16,6 +16,14 @@
 "Last used" = "마지막 사용";
 "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm이 %@의 저장된 SSH 지문을 삭제합니다. 다시 연결할 때 지문을 다시 확인하십시오.";
 "About & Support" = "정보 및 지원";
+"Privacy & Data" = "개인정보 보호 및 데이터";
+"Voice Input" = "음성 입력";
+"Sessions & SSH" = "세션 및 SSH";
+"Help & About" = "도움말 및 정보";
+"Analytics" = "분석";
+"App Lock" = "앱 잠금";
+"Help & Feedback" = "도움말 및 피드백";
+"Terminal Session" = "터미널 세션";
 "Search Settings" = "설정 검색";
 "OK" = "확인";
 "Cancel" = "취소";

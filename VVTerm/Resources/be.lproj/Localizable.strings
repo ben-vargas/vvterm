@@ -16,6 +16,14 @@
 "Last used" = "Апошняе выкарыстанне";
 "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm забудзе захаваны адбітак SSH для %@. Пацвердзіце яго зноў пры паўторным падключэнні.";
 "About & Support" = "Аб праграме і падтрымка";
+"Privacy & Data" = "Прыватнасць і даныя";
+"Voice Input" = "Галасавы ўвод";
+"Sessions & SSH" = "Сеансы і SSH";
+"Help & About" = "Даведка і пра праграму";
+"Analytics" = "Аналітыка";
+"App Lock" = "Блакіроўка праграмы";
+"Help & Feedback" = "Даведка і водгукі";
+"Terminal Session" = "Сеанс тэрмінала";
 "Search Settings" = "Пошук налад";
 "OK" = "ОК";
 "Cancel" = "Скасаваць";
