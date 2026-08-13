@@ -1091,7 +1091,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld користувацьких дій. Натисніть рядок, щоб редагувати.";
 "Title length: %lld/%lld" = "Довжина назви: %lld/%lld";
 "Command length: %lld/%lld" = "Довжина команди: %lld/%lld";
-"Show keyboard dismiss button" = "Показувати кнопку приховування клавіатури";
 "Hide keyboard" = "Сховати клавіатуру";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Змінюйте порядок дій, додавайте користувацькі дії, показуйте або приховуйте кнопку приховування клавіатури та синхронізуйте панель аксесуарів між пристроями.";
 
@@ -1606,7 +1605,6 @@
 "Left Option Key" = "Ліва клавіша Option";
 "Right Option Key" = "Права клавіша Option";
 "Both Option Keys" = "Обидві клавіші Option";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "Виберіть фізичну клавішу Option, яка надсилає Alt до термінальних програм. Інші клавіші Option залишаються доступними для символів розкладки клавіатури.";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld видимих, %lld прихованих";
@@ -1789,3 +1787,10 @@
 "Sync Details" = "Відомості про синхронізацію";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Облікові дані залишаться на цьому пристрої. Наявні дані програми в iCloud не видаляються.";
 "Stored on This Device" = "Збережено на цьому пристрої";
+"Hardware Keyboard" = "Апаратна клавіатура";
+"Software Keyboard" = "Екранна клавіатура";
+"Accessory Bar" = "Панель аксесуарів";
+"Keep terminal size" = "Зберігати розмір термінала";
+"Show dismiss button" = "Показувати кнопку приховування";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Виберіть клавішу Option, яка надсилає Alt. Інша клавіша й далі вводить символи розкладки.";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Не дозволяє tmux та іншим термінальним програмам змінювати розмір під час відкриття клавіатури.";

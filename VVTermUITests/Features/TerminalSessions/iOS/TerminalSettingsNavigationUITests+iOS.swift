@@ -169,6 +169,44 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
     }
 
     @MainActor
+    func testKeyboardInputUsesFocusedSections() throws {
+        let app = XCUIApplication()
+        app.terminate()
+        app.launchArguments = [
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US",
+            "-hasSeenWelcome", "YES",
+            "-iCloudSyncEnabled", "NO",
+            "-security.privacyModeEnabled", "NO",
+            "-security.fullAppLockEnabled", "NO",
+            "-security.lockOnBackground", "NO",
+        ]
+        app.launch()
+        defer { app.terminate() }
+
+        let settings = app.buttons["vvterm.serverList.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+
+        let keyboardRoute = app.buttons["vvterm.settings.route.keyboardAndInput"]
+        if !keyboardRoute.waitForExistence(timeout: 3) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(keyboardRoute.waitForExistence(timeout: 5))
+        keyboardRoute.tap()
+
+        XCTAssertTrue(app.staticTexts["Hardware Keyboard"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Software Keyboard"].exists)
+        XCTAssertTrue(app.staticTexts["Accessory Bar"].exists)
+        XCTAssertTrue(app.switches["Keep terminal size"].exists)
+        XCTAssertTrue(app.switches["Show dismiss button"].exists)
+        XCTAssertTrue(app.buttons["Customize Accessory Bar"].exists)
+        XCTAssertTrue(app.buttons["Custom Actions"].exists)
+        XCTAssertFalse(app.switches["Keep terminal size when keyboard opens"].exists)
+        XCTAssertFalse(app.switches["Show keyboard dismiss button"].exists)
+    }
+
+    @MainActor
     func testConnectedTerminalCanOpenSettingsFromItsToolbar() throws {
         let app = XCUIApplication()
         app.terminate()

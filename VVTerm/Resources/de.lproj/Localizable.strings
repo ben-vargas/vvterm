@@ -1084,7 +1084,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld benutzerdefinierte Aktionen. Tippen Sie auf eine Zeile zum Bearbeiten.";
 "Title length: %lld/%lld" = "Titellänge: %lld/%lld";
 "Command length: %lld/%lld" = "Befehlslänge: %lld/%lld";
-"Show keyboard dismiss button" = "Schaltfläche zum Ausblenden der Tastatur anzeigen";
 "Hide keyboard" = "Tastatur ausblenden";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Ordnen Sie Aktionen neu an, fügen Sie benutzerdefinierte Aktionen hinzu, zeigen oder verbergen Sie die Schaltfläche zum Ausblenden der Tastatur und synchronisieren Sie Ihre Zubehörleiste auf allen Geräten.";
 
@@ -1599,7 +1598,6 @@
 "Left Option Key" = "Linke Wahltaste";
 "Right Option Key" = "Rechte Wahltaste";
 "Both Option Keys" = "Beide Wahltasten";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "Wähle, welche physische Wahltaste Alt an Terminal-Apps sendet. Andere Wahltasten bleiben für Zeichen des Tastaturlayouts verfügbar.";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld sichtbar, %lld ausgeblendet";
@@ -1782,3 +1780,10 @@
 "Sync Details" = "Synchronisierungsdetails";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Die Anmeldedaten bleiben auf diesem Gerät. Vorhandene App-Daten in iCloud werden nicht gelöscht.";
 "Stored on This Device" = "Auf diesem Gerät gespeichert";
+"Hardware Keyboard" = "Hardwaretastatur";
+"Software Keyboard" = "Bildschirmtastatur";
+"Accessory Bar" = "Zubehörleiste";
+"Keep terminal size" = "Terminalgröße beibehalten";
+"Show dismiss button" = "Taste zum Ausblenden anzeigen";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Lege fest, welche Wahltaste Alt sendet. Die andere Taste gibt weiter Layoutzeichen ein.";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Verhindert, dass tmux und andere Terminal-Apps ihre Größe ändern, wenn die Tastatur geöffnet wird.";

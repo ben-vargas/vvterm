@@ -1084,7 +1084,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld การทำงานกำหนดเอง แตะแถวเพื่อแก้ไข";
 "Title length: %lld/%lld" = "ความยาวชื่อ: %lld/%lld";
 "Command length: %lld/%lld" = "ความยาวคำสั่ง: %lld/%lld";
-"Show keyboard dismiss button" = "แสดงปุ่มซ่อนแป้นพิมพ์";
 "Hide keyboard" = "ซ่อนแป้นพิมพ์";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "จัดลำดับการทำงานใหม่ เพิ่มการทำงานกำหนดเอง แสดงหรือซ่อนปุ่มซ่อนแป้นพิมพ์ และซิงค์แถบอุปกรณ์เสริมของคุณระหว่างอุปกรณ์ต่างๆ";
 
@@ -1599,7 +1598,6 @@
 "Left Option Key" = "ปุ่ม Option ซ้าย";
 "Right Option Key" = "ปุ่ม Option ขวา";
 "Both Option Keys" = "ปุ่ม Option ทั้งสอง";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "เลือกปุ่ม Option จริงที่จะส่ง Alt ไปยังแอปเทอร์มินัล ปุ่ม Option อื่นยังคงใช้พิมพ์อักขระตามผังแป้นพิมพ์ได้";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "แสดง %lld รายการ ซ่อน %lld รายการ";
@@ -1782,3 +1780,10 @@
 "Sync Details" = "รายละเอียดการซิงค์";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "ข้อมูลประจำตัวยังคงอยู่บนอุปกรณ์นี้ ข้อมูลแอปที่มีอยู่ใน iCloud จะไม่ถูกลบ";
 "Stored on This Device" = "จัดเก็บบนอุปกรณ์นี้";
+"Hardware Keyboard" = "แป้นพิมพ์จริง";
+"Software Keyboard" = "แป้นพิมพ์บนหน้าจอ";
+"Accessory Bar" = "แถบอุปกรณ์เสริม";
+"Keep terminal size" = "คงขนาดเทอร์มินัล";
+"Show dismiss button" = "แสดงปุ่มซ่อน";
+"Choose which Option key sends Alt. The other key still types layout characters." = "เลือกปุ่ม Option ที่จะส่ง Alt ปุ่มอีกข้างยังคงใช้พิมพ์อักขระตามผังแป้นพิมพ์";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "ป้องกันไม่ให้ tmux และแอปเทอร์มินัลอื่นปรับขนาดเมื่อเปิดแป้นพิมพ์";

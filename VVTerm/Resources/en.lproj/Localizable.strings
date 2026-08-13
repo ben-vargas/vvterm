@@ -1083,7 +1083,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld custom actions. Tap a row to edit.";
 "Title length: %lld/%lld" = "Title length: %lld/%lld";
 "Command length: %lld/%lld" = "Command length: %lld/%lld";
-"Show keyboard dismiss button" = "Show keyboard dismiss button";
 "Hide keyboard" = "Hide keyboard";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices.";
 
@@ -1605,7 +1604,6 @@
 "Left Option Key" = "Left Option Key";
 "Right Option Key" = "Right Option Key";
 "Both Option Keys" = "Both Option Keys";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters.";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld visible, %lld hidden";
@@ -1834,3 +1832,10 @@
 "Sync Details" = "Sync Details";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Credentials remain on this device. Existing app data in iCloud is not deleted.";
 "Stored on This Device" = "Stored on This Device";
+"Hardware Keyboard" = "Hardware Keyboard";
+"Software Keyboard" = "Software Keyboard";
+"Accessory Bar" = "Accessory Bar";
+"Keep terminal size" = "Keep terminal size";
+"Show dismiss button" = "Show dismiss button";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Choose which Option key sends Alt. The other key still types layout characters.";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Prevents tmux and other terminal apps from resizing when the keyboard opens.";

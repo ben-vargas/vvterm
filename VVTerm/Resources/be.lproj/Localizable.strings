@@ -1085,7 +1085,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld карыстальніцкіх дзеянняў. Націсніце радок, каб рэдагаваць.";
 "Title length: %lld/%lld" = "Даўжыня назвы: %lld/%lld";
 "Command length: %lld/%lld" = "Даўжыня каманды: %lld/%lld";
-"Show keyboard dismiss button" = "Паказваць кнопку схавання клавіятуры";
 "Hide keyboard" = "Схаваць клавіятуру";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Змяняйце парадак дзеянняў, дадавайце карыстальніцкія дзеянні, паказвайце або хавайце кнопку схавання клавіятуры і сінхранізуйце панэль аксесуараў паміж прыладамі.";
 
@@ -1600,7 +1599,6 @@
 "Left Option Key" = "Левая клавіша Option";
 "Right Option Key" = "Правая клавіша Option";
 "Both Option Keys" = "Абедзве клавішы Option";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "Выберыце фізічную клавішу Option, якая адпраўляе Alt у тэрмінальныя праграмы. Іншыя клавішы Option застаюцца даступнымі для сімвалаў раскладкі клавіятуры.";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld бачных, %lld схаваных";
@@ -1783,3 +1781,10 @@
 "Sync Details" = "Падрабязнасці сінхранізацыі";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Уліковыя даныя застануцца на гэтай прыладзе. Існуючыя даныя праграмы ў iCloud не выдаляюцца.";
 "Stored on This Device" = "Захавана на гэтай прыладзе";
+"Hardware Keyboard" = "Апаратная клавіятура";
+"Software Keyboard" = "Экранная клавіятура";
+"Accessory Bar" = "Панэль аксесуараў";
+"Keep terminal size" = "Захоўваць памер тэрмінала";
+"Show dismiss button" = "Паказваць кнопку схавання";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Выберыце клавішу Option, якая адпраўляе Alt. Іншая клавіша па-ранейшаму ўводзіць сімвалы раскладкі.";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Не дазваляе tmux і іншым тэрмінальным праграмам змяняць памер пры адкрыцці клавіятуры.";

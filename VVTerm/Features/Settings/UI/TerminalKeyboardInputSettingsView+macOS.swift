@@ -20,9 +20,9 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
                     }
                 }
             } header: {
-                Text("Keyboard")
+                Text("Hardware Keyboard")
             } footer: {
-                Text("Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters.")
+                Text("Choose which Option key sends Alt. The other key still types layout characters.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

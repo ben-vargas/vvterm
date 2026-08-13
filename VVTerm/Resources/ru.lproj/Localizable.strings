@@ -1084,7 +1084,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld пользовательских действий. Нажмите на строку, чтобы отредактировать.";
 "Title length: %lld/%lld" = "Длина названия: %lld/%lld";
 "Command length: %lld/%lld" = "Длина команды: %lld/%lld";
-"Show keyboard dismiss button" = "Показывать кнопку скрытия клавиатуры";
 "Hide keyboard" = "Скрыть клавиатуру";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Меняйте порядок действий, добавляйте пользовательские действия, показывайте или скрывайте кнопку скрытия клавиатуры и синхронизируйте панель аксессуаров между устройствами.";
 
@@ -1599,7 +1598,6 @@
 "Left Option Key" = "Левая клавиша Option";
 "Right Option Key" = "Правая клавиша Option";
 "Both Option Keys" = "Обе клавиши Option";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "Выберите физическую клавишу Option, которая отправляет Alt в терминальные приложения. Остальные клавиши Option остаются доступны для ввода символов раскладки клавиатуры.";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld видно, %lld скрыто";
@@ -1782,3 +1780,10 @@
 "Sync Details" = "Сведения о синхронизации";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Учётные данные останутся на этом устройстве. Существующие данные приложения в iCloud не удаляются.";
 "Stored on This Device" = "Сохранено на этом устройстве";
+"Hardware Keyboard" = "Аппаратная клавиатура";
+"Software Keyboard" = "Экранная клавиатура";
+"Accessory Bar" = "Панель аксессуаров";
+"Keep terminal size" = "Сохранять размер терминала";
+"Show dismiss button" = "Показывать кнопку скрытия";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Выберите клавишу Option, которая отправляет Alt. Другая клавиша продолжит вводить символы раскладки.";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Не позволяет tmux и другим терминальным приложениям менять размер при открытии клавиатуры.";

@@ -167,7 +167,17 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .terminalAppearance:
             ["Appearance", "Font Family", "Cursor", "Blink"]
         case .keyboardAndInput:
-            ["Keyboard & Input", "Option as Alt", "Show keyboard dismiss button", "Customize Accessory Bar", "Manage Custom Actions"]
+            [
+                "Keyboard & Input",
+                "Hardware Keyboard",
+                "Option as Alt",
+                "Software Keyboard",
+                "Keep terminal size",
+                "Accessory Bar",
+                "Show dismiss button",
+                "Customize Accessory Bar",
+                "Custom Actions",
+            ]
         case .sessionsAndConnections:
             ["Sessions & SSH", "Enable tmux by default", "On connect", "Keep screen awake", "Auto-reconnect on disconnect", "Send keep-alive packets"]
         case .clipboardAndPaste:

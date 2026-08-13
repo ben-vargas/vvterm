@@ -1081,7 +1081,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld 个自定义操作。点按一行进行编辑。";
 "Title length: %lld/%lld" = "标题长度：%lld/%lld";
 "Command length: %lld/%lld" = "命令长度：%lld/%lld";
-"Show keyboard dismiss button" = "显示隐藏键盘按钮";
 "Hide keyboard" = "隐藏键盘";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "重新排序操作，添加自定义操作，显示或隐藏隐藏键盘按钮，并在设备之间同步您的辅助栏。";
 
@@ -1596,7 +1595,6 @@
 "Left Option Key" = "左 Option 键";
 "Right Option Key" = "右 Option 键";
 "Both Option Keys" = "两个 Option 键";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "选择哪个实体 Option 键向终端应用发送 Alt。其他 Option 键仍可用于输入键盘布局字符。";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld 个可见，%lld 个已隐藏";
@@ -1779,3 +1777,10 @@
 "Sync Details" = "同步详情";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "凭据会保留在此设备上。iCloud 中现有的 App 数据不会被删除。";
 "Stored on This Device" = "已存储在此设备上";
+"Hardware Keyboard" = "硬件键盘";
+"Software Keyboard" = "屏幕键盘";
+"Accessory Bar" = "配件栏";
+"Keep terminal size" = "保持终端大小";
+"Show dismiss button" = "显示隐藏按钮";
+"Choose which Option key sends Alt. The other key still types layout characters." = "选择发送 Alt 的 Option 键。另一个键仍用于输入键盘布局字符。";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "防止 tmux 和其他终端应用在键盘打开时调整大小。";

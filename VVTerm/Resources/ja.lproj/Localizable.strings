@@ -1084,7 +1084,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld カスタムアクション。行をタップして編集します。";
 "Title length: %lld/%lld" = "タイトルの長さ: %lld/%lld";
 "Command length: %lld/%lld" = "コマンドの長さ: %lld/%lld";
-"Show keyboard dismiss button" = "キーボードを閉じるボタンを表示";
 "Hide keyboard" = "キーボードを閉じる";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "アクションを並べ替え、カスタムアクションを追加し、キーボードを閉じるボタンの表示/非表示を切り替え、アクセサリバーをデバイス間で同期します。";
 
@@ -1599,7 +1598,6 @@
 "Left Option Key" = "左Optionキー";
 "Right Option Key" = "右Optionキー";
 "Both Option Keys" = "両方のOptionキー";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "ターミナルアプリにAltを送信する物理Optionキーを選択します。その他のOptionキーはキーボード配列の文字入力に引き続き使用できます。";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld個表示、%lld個非表示";
@@ -1782,3 +1780,10 @@
 "Sync Details" = "同期の詳細";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "認証情報はこのデバイスに残ります。iCloudにある既存のAppデータは削除されません。";
 "Stored on This Device" = "このデバイスに保存済み";
+"Hardware Keyboard" = "ハードウェアキーボード";
+"Software Keyboard" = "ソフトウェアキーボード";
+"Accessory Bar" = "アクセサリーバー";
+"Keep terminal size" = "ターミナルのサイズを維持";
+"Show dismiss button" = "閉じるボタンを表示";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Altを送信するOptionキーを選択します。もう一方のキーは引き続き配列文字を入力します。";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "キーボードを開いたときにtmuxなどのターミナルアプリがサイズ変更されるのを防ぎます。";

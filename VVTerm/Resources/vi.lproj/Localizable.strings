@@ -1129,7 +1129,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld hành động tùy chỉnh. Chạm vào một hàng để chỉnh sửa.";
 "Title length: %lld/%lld" = "Độ dài tiêu đề: %lld/%lld";
 "Command length: %lld/%lld" = "Độ dài lệnh: %lld/%lld";
-"Show keyboard dismiss button" = "Hiển thị nút ẩn bàn phím";
 "Hide keyboard" = "Ẩn bàn phím";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Sắp xếp lại hành động, thêm hành động tùy chỉnh, hiển thị hoặc ẩn nút ẩn bàn phím và đồng bộ thanh phụ kiện giữa các thiết bị.";
 
@@ -1644,7 +1643,6 @@
 "Left Option Key" = "Phím Option trái";
 "Right Option Key" = "Phím Option phải";
 "Both Option Keys" = "Cả hai phím Option";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "Chọn phím Option vật lý sẽ gửi Alt đến ứng dụng terminal. Các phím Option khác vẫn dùng được để nhập ký tự theo bố cục bàn phím.";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld hiển thị, %lld ẩn";
@@ -1827,3 +1825,10 @@
 "Sync Details" = "Chi tiết đồng bộ";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Thông tin xác thực vẫn còn trên thiết bị này. Dữ liệu ứng dụng hiện có trong iCloud không bị xóa.";
 "Stored on This Device" = "Đã lưu trên thiết bị này";
+"Hardware Keyboard" = "Bàn phím vật lý";
+"Software Keyboard" = "Bàn phím ảo";
+"Accessory Bar" = "Thanh phụ kiện";
+"Keep terminal size" = "Giữ kích thước terminal";
+"Show dismiss button" = "Hiển thị nút ẩn";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Chọn phím Option gửi Alt. Phím còn lại vẫn nhập ký tự theo bố cục.";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Ngăn tmux và các ứng dụng terminal khác đổi kích thước khi bàn phím mở.";

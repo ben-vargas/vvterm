@@ -1085,7 +1085,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld vlastních akcí. Klepnutím na řádek upravíte.";
 "Title length: %lld/%lld" = "Délka názvu: %lld/%lld";
 "Command length: %lld/%lld" = "Délka příkazu: %lld/%lld";
-"Show keyboard dismiss button" = "Zobrazit tlačítko pro skrytí klávesnice";
 "Hide keyboard" = "Skrýt klávesnici";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Měňte pořadí akcí, přidávejte vlastní akce, zobrazujte nebo skrývejte tlačítko pro skrytí klávesnice a synchronizujte panel příslušenství mezi zařízeními.";
 
@@ -1600,7 +1599,6 @@
 "Left Option Key" = "Levá klávesa Option";
 "Right Option Key" = "Pravá klávesa Option";
 "Both Option Keys" = "Obě klávesy Option";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "Vyberte fyzickou klávesu Option, která odesílá Alt do terminálových aplikací. Ostatní klávesy Option zůstanou dostupné pro znaky rozložení klávesnice.";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld viditelných, %lld skrytých";
@@ -1783,3 +1781,10 @@
 "Sync Details" = "Podrobnosti synchronizace";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Přihlašovací údaje zůstanou v tomto zařízení. Existující data aplikace na iCloudu se nesmažou.";
 "Stored on This Device" = "Uloženo v tomto zařízení";
+"Hardware Keyboard" = "Hardwarová klávesnice";
+"Software Keyboard" = "Klávesnice na obrazovce";
+"Accessory Bar" = "Lišta příslušenství";
+"Keep terminal size" = "Zachovat velikost terminálu";
+"Show dismiss button" = "Zobrazit tlačítko pro skrytí";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Vyberte klávesu Option, která odesílá Alt. Druhá klávesa dál píše znaky rozložení.";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Zabrání změně velikosti tmuxu a dalších terminálových aplikací při otevření klávesnice.";

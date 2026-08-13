@@ -1086,7 +1086,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld akcji niestandardowych. Stuknij w wiersz, aby edytować.";
 "Title length: %lld/%lld" = "Długość tytułu: %lld/%lld";
 "Command length: %lld/%lld" = "Długość polecenia: %lld/%lld";
-"Show keyboard dismiss button" = "Pokaż przycisk ukrywania klawiatury";
 "Hide keyboard" = "Ukryj klawiaturę";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Zmieniaj kolejność akcji, dodawaj akcje niestandardowe, pokazuj lub ukrywaj przycisk ukrywania klawiatury i synchronizuj pasek akcesoriów między urządzeniami.";
 
@@ -1601,7 +1600,6 @@
 "Left Option Key" = "Lewy klawisz Option";
 "Right Option Key" = "Prawy klawisz Option";
 "Both Option Keys" = "Oba klawisze Option";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "Wybierz fizyczny klawisz Option, który wysyła Alt do aplikacji terminalowych. Pozostałe klawisze Option nadal służą do wpisywania znaków układu klawiatury.";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld widocznych, %lld ukrytych";
@@ -1784,3 +1782,10 @@
 "Sync Details" = "Szczegóły synchronizacji";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Dane logowania pozostają na tym urządzeniu. Istniejące dane aplikacji w iCloud nie są usuwane.";
 "Stored on This Device" = "Zapisano na tym urządzeniu";
+"Hardware Keyboard" = "Klawiatura sprzętowa";
+"Software Keyboard" = "Klawiatura ekranowa";
+"Accessory Bar" = "Pasek akcesoriów";
+"Keep terminal size" = "Zachowaj rozmiar terminala";
+"Show dismiss button" = "Pokaż przycisk ukrywania";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Wybierz klawisz Option wysyłający Alt. Drugi nadal wpisuje znaki układu klawiatury.";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Zapobiega zmianie rozmiaru tmux i innych aplikacji terminalowych po otwarciu klawiatury.";

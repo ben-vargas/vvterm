@@ -1086,7 +1086,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld actions personnalisées. Touchez une ligne pour la modifier.";
 "Title length: %lld/%lld" = "Longueur du titre : %lld/%lld";
 "Command length: %lld/%lld" = "Longueur de la commande : %lld/%lld";
-"Show keyboard dismiss button" = "Afficher le bouton de masquage du clavier";
 "Hide keyboard" = "Masquer le clavier";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Réorganisez les actions, ajoutez des actions personnalisées, affichez ou masquez le bouton de masquage du clavier et synchronisez votre barre d'accessoires sur tous vos appareils.";
 
@@ -1601,7 +1600,6 @@
 "Left Option Key" = "Touche Option gauche";
 "Right Option Key" = "Touche Option droite";
 "Both Option Keys" = "Les deux touches Option";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "Choisissez quelle touche Option physique envoie Alt aux apps de terminal. Les autres touches Option restent disponibles pour les caractères de la disposition du clavier.";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld visibles, %lld masqués";
@@ -1784,3 +1782,10 @@
 "Sync Details" = "Détails de la synchronisation";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Les identifiants restent sur cet appareil. Les données existantes de l’app dans iCloud ne sont pas supprimées.";
 "Stored on This Device" = "Stocké sur cet appareil";
+"Hardware Keyboard" = "Clavier physique";
+"Software Keyboard" = "Clavier à l’écran";
+"Accessory Bar" = "Barre d’accessoires";
+"Keep terminal size" = "Conserver la taille du terminal";
+"Show dismiss button" = "Afficher le bouton de masquage";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Choisissez la touche Option qui envoie Alt. L’autre continue de saisir les caractères de la disposition.";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Empêche tmux et les autres apps de terminal de se redimensionner à l’ouverture du clavier.";

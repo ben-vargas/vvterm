@@ -1084,7 +1084,6 @@
 "%lld/%lld custom actions. Tap a row to edit." = "%lld/%lld acciones personalizadas. Toque una fila para editar.";
 "Title length: %lld/%lld" = "Longitud del título: %lld/%lld";
 "Command length: %lld/%lld" = "Longitud del comando: %lld/%lld";
-"Show keyboard dismiss button" = "Mostrar botón para ocultar el teclado";
 "Hide keyboard" = "Ocultar teclado";
 "Reorder actions, add custom actions, show or hide the keyboard dismiss button, and sync your accessory bar across devices." = "Reordene acciones, agregue acciones personalizadas, muestre u oculte el botón para ocultar el teclado y sincronice la barra accesoria en todos sus dispositivos.";
 
@@ -1599,7 +1598,6 @@
 "Left Option Key" = "Tecla Opción izquierda";
 "Right Option Key" = "Tecla Opción derecha";
 "Both Option Keys" = "Ambas teclas Opción";
-"Choose which physical Option key sends Alt to terminal apps. Other Option keys remain available for keyboard-layout characters." = "Elige qué tecla Opción física envía Alt a las apps de terminal. Las demás teclas Opción siguen disponibles para los caracteres de la distribución del teclado.";
 
 /* DEV-206 Storage */
 "%lld visible, %lld hidden" = "%lld visibles, %lld ocultos";
@@ -1782,3 +1780,10 @@
 "Sync Details" = "Detalles de sincronización";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Las credenciales permanecen en este dispositivo. Los datos existentes de la app en iCloud no se eliminan.";
 "Stored on This Device" = "Guardado en este dispositivo";
+"Hardware Keyboard" = "Teclado físico";
+"Software Keyboard" = "Teclado en pantalla";
+"Accessory Bar" = "Barra de accesorios";
+"Keep terminal size" = "Mantener el tamaño del terminal";
+"Show dismiss button" = "Mostrar botón para ocultar";
+"Choose which Option key sends Alt. The other key still types layout characters." = "Elige qué tecla Opción envía Alt. La otra sigue escribiendo caracteres de la distribución.";
+"Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Evita que tmux y otras apps de terminal cambien de tamaño al abrir el teclado.";
