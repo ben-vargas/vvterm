@@ -1125,7 +1125,6 @@
 "All terminal and file tabs for this server will be closed." = "Усе ўкладкі тэрміналаў і файлаў для гэтага сервера будуць зачыненыя.";
 "Also on Mac" = "Таксама на Mac";
 "Also on iPhone and iPad" = "Таксама на iPhone і iPad";
-"App Review" = "Агляд прыкладання";
 "Apply" = "Ужыць";
 "Archive" = "Архіў";
 "At least one server view must remain enabled." = "Прынамсі адзін выгляд сервера павінен заставацца ўключаным.";
@@ -1202,7 +1201,6 @@
 "Empty Folder" = "Пустая тэчка";
 "Enable Review Mode" = "Уключыць рэжым агляду";
 "Enter Zen Mode" = "Увайдзіце ў рэжым дзэн";
-"Enter the review code to enable Pro access for App Review." = "Увядзіце код агляду, каб уключыць доступ Pro для праверкі прыкладанняў.";
 "Environments" = "Асяроддзі";
 "Everyone" = "Усе";
 "Exit Zen Mode" = "Выйдзіце з рэжыму дзэн";
@@ -1246,7 +1244,6 @@
 "Install tmux?" = "Усталяваць tmux?";
 "Installing mosh-server" = "Ўстаноўка mosh сервера";
 "Installing tmux" = "Ўстаноўка tmux";
-"Invalid review code." = "Няправільны код агляду.";
 "Item" = "Пункт";
 "JSON Document" = "Дакумент JSON";
 "Keep every command one tap away." = "Трымайце кожную каманду адным націскам.";
@@ -1420,7 +1417,8 @@
 "Support" = "Падтрымка";
 "Swift Source" = "Swift Source";
 "Symlink" = "Сімвалная спасылка";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "Сінхранізуйце серверы, працоўныя прасторы, тэмы і налады клавіятуры на ўсіх вашых прыладах Apple.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Серверы, уліковыя даныя і ключы SSH сінхранізуюцца паміж вашымі прыладамі Apple праз iCloud і Вязку ключоў iCloud.";
+"Credentials could not be copied. Existing credentials were kept." = "Не ўдалося скапіяваць уліковыя даныя. Існуючыя ўліковыя даныя захаваны.";
 "Tab \\(number)" = "Укладка \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Умовы";
@@ -1474,7 +1472,6 @@
 "Unlock unlimited custom actions" = "Адкрыйце неабмежаваную колькасць карыстальніцкіх дзеянняў";
 "Unlock unlimited servers" = "Адкрыйце неабмежаваную колькасць сервераў";
 "Unlock unlimited workspaces" = "Адкрыйце неабмежаваную колькасць працоўных прастор";
-"Unlocks Pro features and loads demo servers for App Review." = "Разблакуе функцыі Pro і загружае дэма-серверы для праверкі прыкладанняў.";
 "Untitled Folder" = "Папка без назвы";
 "Up" = "Уверх";
 "Upgrade to Pro to move servers into locked workspaces" = "Абнавіце да Pro, каб перамясціць серверы ў заблакіраваныя працоўныя прасторы";
@@ -1685,3 +1682,22 @@
 "Then %@ per year." = "Затым %@ у год.";
 "Start 7-Day Free Trial" = "Пачаць 7-дзённы бясплатны пробны перыяд";
 "7 days free, then %@ per year. Auto-renews until canceled." = "7 дзён бясплатна, затым %@ у год. Аўтаматычна падаўжаецца, пакуль не будзе скасавана.";
+"Deny" = "Забараніць";
+"Ask Every Time" = "Пытацца кожны раз";
+"Always Allow" = "Заўсёды дазваляць";
+"Remote programs cannot read your clipboard." = "Аддаленыя праграмы не могуць чытаць ваш буфер абмену.";
+"VVTerm asks before a remote program reads your clipboard." = "VVTerm пытаецца перад тым, як аддаленая праграма прачытае ваш буфер абмену.";
+"Warning: Remote programs can read your clipboard without asking." = "Папярэджанне: аддаленыя праграмы могуць чытаць ваш буфер абмену без запыту.";
+"Allow Clipboard Read?" = "Дазволіць чытанне буфера абмену?";
+"Allow Clipboard Change?" = "Дазволіць змяненне буфера абмену?";
+"Allow Paste?" = "Дазволіць устаўку?";
+"The remote terminal wants to read your clipboard." = "Аддалены тэрмінал хоча прачытаць ваш буфер абмену.";
+"The remote terminal wants to replace your clipboard." = "Аддалены тэрмінал хоча замяніць ваш буфер абмену.";
+"The clipboard text may contain commands or multiple lines." = "Тэкст у буферы абмену можа змяшчаць каманды або некалькі радкоў.";
+"Remote Clipboard Reads" = "Аддаленае чытанне буфера абмену";
+"Remote programs can read clipboard data without asking." = "Аддаленыя праграмы могуць чытаць даныя буфера абмену без запыту.";
+"Remote Clipboard" = "Аддалены буфер абмену";
+"Server no longer exists." = "Сервер больш не існуе.";
+"Workspace no longer exists." = "Працоўная прастора больш не існуе.";
+"Local data could not be read" = "Не ўдалося прачытаць лакальныя даныя";
+"VVTerm preserved a backup before using replacement data." = "VVTerm захаваў рэзервовую копію перад выкарыстаннем новых даных.";

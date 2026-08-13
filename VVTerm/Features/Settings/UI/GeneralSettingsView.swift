@@ -265,12 +265,15 @@ struct AppearancePreviewCard: View {
 }
 
 struct GeneralSettingsView: View {
+    let statsPreferencesStore: PreferencesStore
+    let analyticsOptOutAction: AnalyticsOptOutAction
+
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.system.rawValue
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.system.rawValue
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
     @AppStorage(AnalyticsTracker.enabledKey) private var analyticsEnabled = true
     @EnvironmentObject private var appLockManager: AppLockManager
-    @StateObject private var viewTabConfig = ViewTabConfigurationManager.shared
+    @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @State private var isShowingStatsAppearance = false
 
     private let authGraceOptions = [0, 15, 30, 60, 120, 300]
@@ -311,7 +314,7 @@ struct GeneralSettingsView: View {
 
                             Toggle(
                                 "",
-                                isOn: viewTabConfig.visibilityBinding(for: tab.id)
+                                isOn: visibilityBinding(for: tab.id)
                             )
                             .labelsHidden()
                         }
@@ -336,7 +339,7 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Picker("Default View", selection: viewTabConfig.defaultTabBinding()) {
+                Picker("Default View", selection: defaultTabBinding) {
                     ForEach(viewTabConfig.currentVisibleTabs) { tab in
                         Label(tab.localizedKey, systemImage: tab.icon)
                             .tag(tab.id)
@@ -375,10 +378,12 @@ struct GeneralSettingsView: View {
                     isOn: Binding(
                         get: { analyticsEnabled },
                         set: { newValue in
-                            if analyticsEnabled && !newValue {
-                                AnalyticsTracker.shared.trackAnalyticsDisabled()
+                            analyticsOptOutAction.applyTransition(
+                                from: analyticsEnabled,
+                                to: newValue
+                            ) { persistedValue in
+                                analyticsEnabled = persistedValue
                             }
-                            analyticsEnabled = newValue
                         }
                     )
                 )
@@ -440,7 +445,7 @@ struct GeneralSettingsView: View {
             isPresented: $isShowingStatsAppearance,
             size: StatsPresentationSize.large
         ) {
-            StatsAppearanceSettingsSheet()
+            StatsAppearanceSettingsSheet(store: statsPreferencesStore)
         }
         .formStyle(.grouped)
         .onAppear {
@@ -450,9 +455,26 @@ struct GeneralSettingsView: View {
             AppLanguage.applySelection(newValue)
         }
     }
-}
 
-#Preview {
-    GeneralSettingsView()
-        .frame(width: 500, height: 400)
+    private func visibilityBinding(for tabID: ConnectionViewTabID) -> Binding<Bool> {
+        Binding(
+            get: {
+                viewTabConfig.isTabVisible(tabID)
+            },
+            set: { isVisible in
+                viewTabConfig.setVisibility(for: tabID, isVisible: isVisible)
+            }
+        )
+    }
+
+    private var defaultTabBinding: Binding<ConnectionViewTabID> {
+        Binding(
+            get: {
+                viewTabConfig.effectiveDefaultTab()
+            },
+            set: { tabID in
+                viewTabConfig.setDefaultTab(tabID)
+            }
+        )
+    }
 }

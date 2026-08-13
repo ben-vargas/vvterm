@@ -1126,7 +1126,6 @@
 "All terminal and file tabs for this server will be closed." = "Wszystkie karty terminali i plików dla tego serwera zostaną zamknięte.";
 "Also on Mac" = "Również na Macu";
 "Also on iPhone and iPad" = "Również na iPhonie i iPadzie";
-"App Review" = "Przegląd aplikacji";
 "Apply" = "Zastosuj";
 "Archive" = "Archiwum";
 "At least one server view must remain enabled." = "Przynajmniej jeden widok serwera musi pozostać włączony.";
@@ -1203,7 +1202,6 @@
 "Empty Folder" = "Pusty folder";
 "Enable Review Mode" = "Włącz tryb recenzji";
 "Enter Zen Mode" = "Wejdź w tryb Zen";
-"Enter the review code to enable Pro access for App Review." = "Wprowadź kod recenzji, aby włączyć dostęp Pro do przeglądu aplikacji.";
 "Environments" = "Środowiska";
 "Everyone" = "Wszyscy";
 "Exit Zen Mode" = "Wyjdź z trybu Zen";
@@ -1247,7 +1245,6 @@
 "Install tmux?" = "Zainstalować tmuxa?";
 "Installing mosh-server" = "Instalowanie serwera mosh";
 "Installing tmux" = "Instalowanie tmuxa";
-"Invalid review code." = "Nieprawidłowy kod recenzji.";
 "Item" = "Przedmiot";
 "JSON Document" = "Dokument JSON";
 "Keep every command one tap away." = "Zachowaj każde polecenie jednym dotknięciem.";
@@ -1421,7 +1418,8 @@
 "Support" = "Wsparcie";
 "Swift Source" = "Szybkie źródło";
 "Symlink" = "Dowiązanie symboliczne";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "Synchronizuj serwery, obszary robocze, motywy i ustawienia akcesoriów klawiaturowych na wszystkich swoich urządzeniach Apple.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Serwery, dane uwierzytelniające i klucze SSH synchronizują się między urządzeniami Apple za pomocą iCloud i pęku kluczy iCloud.";
+"Credentials could not be copied. Existing credentials were kept." = "Nie udało się skopiować danych uwierzytelniających. Zachowano istniejące dane.";
 "Tab \\(number)" = "Zakładka \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Warunki";
@@ -1475,7 +1473,6 @@
 "Unlock unlimited custom actions" = "Odblokuj nieograniczone akcje niestandardowe";
 "Unlock unlimited servers" = "Odblokuj nieograniczoną liczbę serwerów";
 "Unlock unlimited workspaces" = "Odblokuj nieograniczone obszary robocze";
-"Unlocks Pro features and loads demo servers for App Review." = "Odblokowuje funkcje Pro i ładuje serwery demonstracyjne do przeglądu aplikacji.";
 "Untitled Folder" = "Folder bez tytułu";
 "Up" = "W górę";
 "Upgrade to Pro to move servers into locked workspaces" = "Przejdź na wersję Pro, aby przenieść serwery do zablokowanych obszarów roboczych";
@@ -1686,3 +1683,22 @@
 "Then %@ per year." = "Następnie %@ rocznie.";
 "Start 7-Day Free Trial" = "Rozpocznij 7-dniowy bezpłatny okres próbny";
 "7 days free, then %@ per year. Auto-renews until canceled." = "7 dni za darmo, następnie %@ rocznie. Odnawia się automatycznie do momentu anulowania.";
+"Deny" = "Odmów";
+"Ask Every Time" = "Pytaj za każdym razem";
+"Always Allow" = "Zawsze zezwalaj";
+"Remote programs cannot read your clipboard." = "Programy zdalne nie mogą odczytywać schowka.";
+"VVTerm asks before a remote program reads your clipboard." = "VVTerm pyta, zanim program zdalny odczyta schowek.";
+"Warning: Remote programs can read your clipboard without asking." = "Ostrzeżenie: Programy zdalne mogą odczytywać schowek bez pytania.";
+"Allow Clipboard Read?" = "Zezwolić na odczyt schowka?";
+"Allow Clipboard Change?" = "Zezwolić na zmianę schowka?";
+"Allow Paste?" = "Zezwolić na wklejenie?";
+"The remote terminal wants to read your clipboard." = "Terminal zdalny chce odczytać schowek.";
+"The remote terminal wants to replace your clipboard." = "Terminal zdalny chce zastąpić zawartość schowka.";
+"The clipboard text may contain commands or multiple lines." = "Tekst w schowku może zawierać polecenia lub wiele wierszy.";
+"Remote Clipboard Reads" = "Zdalny odczyt schowka";
+"Remote programs can read clipboard data without asking." = "Programy zdalne mogą odczytywać dane schowka bez pytania.";
+"Remote Clipboard" = "Zdalny schowek";
+"Server no longer exists." = "Serwer już nie istnieje.";
+"Workspace no longer exists." = "Obszar roboczy już nie istnieje.";
+"Local data could not be read" = "Nie można odczytać danych lokalnych";
+"VVTerm preserved a backup before using replacement data." = "VVTerm zachował kopię zapasową przed użyciem danych zastępczych.";

@@ -1,12 +1,11 @@
 import SwiftUI
-import StoreKit
 
 // MARK: - Pro Upgrade Sheet
 
 struct ProUpgradeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var storeManager: StoreManager
-    @ObservedObject private var serverManager = ServerManager.shared
+    @EnvironmentObject private var serverManager: ServerManager
     private let source: PaywallSource
     private let onDismiss: (() -> Void)?
 
@@ -30,64 +29,26 @@ struct ProUpgradeSheet: View {
     }
 
     var body: some View {
-        #if os(iOS)
-        NavigationStack {
-            sheetContent
-                .navigationTitle("")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        VStack(spacing: 1) {
-                            Text(source.paywallTitle)
-                                .font(.headline)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            Text(source.paywallSubtitle)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                    }
-
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            close()
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .semibold))
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-        }
-        .adaptiveSoftScrollEdges()
-        #else
-        macSheetContent
-        #endif
+        platformBody(
+            sheetContent: sheetContent,
+            source: source,
+            onClose: close
+        )
     }
 
     private var sheetContent: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                contentStack
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-                    .padding(.bottom, 18)
-            }
-            .scrollIndicators(.visible)
-
-            purchaseFooter
-        }
-        .background(sheetBackground.ignoresSafeArea())
+        platformSheetLayout(
+            content: contentStack,
+            footer: purchaseFooter,
+            source: source
+        )
         .task {
             await preparePaywall()
         }
-        .onChangeCompat(of: storeManager.purchaseState) { newState in
+        .onChange(of: storeManager.purchaseState) { newState in
             handlePurchaseStateChange(newState)
         }
-        .onChangeCompat(of: storeManager.restoreState) { newState in
+        .onChange(of: storeManager.restoreState) { newState in
             handleRestoreStateChange(newState)
         }
         .overlay {
@@ -100,7 +61,7 @@ struct ProUpgradeSheet: View {
             set: { isPresented in
                 if !isPresented {
                     if alertInfo?.isRestore == true {
-                        storeManager.restoreState = .idle
+                        storeManager.dismissRestoreResult()
                     }
                     alertInfo = nil
                 }
@@ -108,7 +69,7 @@ struct ProUpgradeSheet: View {
         ), presenting: alertInfo) { info in
             Button("OK") {
                 if info.isRestore {
-                    storeManager.restoreState = .idle
+                    storeManager.dismissRestoreResult()
                 }
                 alertInfo = nil
             }
@@ -135,79 +96,6 @@ struct ProUpgradeSheet: View {
         )
         #endif
     }
-
-    #if os(macOS)
-    private var macSheetContent: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                contentStack
-                    .padding(.horizontal, 22)
-                    .padding(.top, 18)
-                    .padding(.bottom, 18)
-            }
-            .scrollIndicators(.automatic)
-
-            purchaseFooter
-        }
-        .frame(
-            minWidth: 500,
-            idealWidth: 520,
-            maxWidth: .infinity,
-            minHeight: 620,
-            idealHeight: 780,
-            maxHeight: .infinity
-        )
-        .background(sheetBackground)
-        .background(ProUpgradeWindowConfigurator(source: source))
-        .task {
-            await preparePaywall()
-        }
-        .onChangeCompat(of: storeManager.purchaseState) { newState in
-            handlePurchaseStateChange(newState)
-        }
-        .onChangeCompat(of: storeManager.restoreState) { newState in
-            handleRestoreStateChange(newState)
-        }
-        .overlay {
-            if showSuccess {
-                successOverlay
-            }
-        }
-        .alert(alertInfo?.title ?? "", isPresented: .init(
-            get: { alertInfo != nil },
-            set: { isPresented in
-                if !isPresented {
-                    if alertInfo?.isRestore == true {
-                        storeManager.restoreState = .idle
-                    }
-                    alertInfo = nil
-                }
-            }
-        ), presenting: alertInfo) { info in
-            Button("OK") {
-                if info.isRestore {
-                    storeManager.restoreState = .idle
-                }
-                alertInfo = nil
-            }
-        } message: { info in
-            Text(info.message)
-        }
-        .alert(String(localized: "Cancel Subscription?"), isPresented: $showCancelSubscriptionAlert) {
-            Button(String(localized: "Manage Subscription")) {
-                openSubscriptionManagement()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    close()
-                }
-            }
-            Button(String(localized: "Later"), role: .cancel) {
-                close()
-            }
-        } message: {
-            Text("You now have lifetime access. You should cancel your existing subscription to avoid being charged.")
-        }
-    }
-    #endif
 
     private var contentStack: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -312,7 +200,7 @@ struct ProUpgradeSheet: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(selectedProduct == nil)
+            .disabled(selectedProduct == nil || storeManager.accessState == .checking)
             .allowsHitTesting(storeManager.purchaseState != .purchasing)
             .accessibilityLabel(selectedPresentation?.purchaseButtonAccessibilityLabel ?? subscribeButtonTitle)
 
@@ -418,7 +306,7 @@ struct ProUpgradeSheet: View {
         ProPlanKind.displayOrder.filter { product(for: $0) != nil }
     }
 
-    private var selectedProduct: Product? {
+    private var selectedProduct: StoreProduct? {
         product(for: selectedPlan)
     }
 
@@ -433,7 +321,7 @@ struct ProUpgradeSheet: View {
         return .yearly
     }
 
-    private func product(for plan: ProPlanKind) -> Product? {
+    private func product(for plan: ProPlanKind) -> StoreProduct? {
         switch plan {
         case .monthly:
             return storeManager.monthlyProduct
@@ -444,7 +332,7 @@ struct ProUpgradeSheet: View {
         }
     }
 
-    private func presentation(for plan: ProPlanKind, product: Product) -> ProPlanPresentation {
+    private func presentation(for plan: ProPlanKind, product: StoreProduct) -> ProPlanPresentation {
         ProPlanPresentation(
             plan: plan,
             displayPrice: product.displayPrice,
@@ -579,7 +467,7 @@ struct ProUpgradeSheet: View {
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     close()
-                    EngagementTracker.shared.requestReviewAfterPurchase()
+                    storeManager.requestReviewAfterPurchase()
                 }
             }
         case .failed(let message):
@@ -655,6 +543,8 @@ extension View {
 struct ProUpgradePresentationModifier: ViewModifier {
     @Binding var isPresented: Bool
     let source: PaywallSource
+    @EnvironmentObject var storeManager: StoreManager
+    @EnvironmentObject var serverManager: ServerManager
 
     func body(content: Content) -> some View {
         platformBody(content: content)
@@ -1000,10 +890,4 @@ private struct NativeSectionCard<Content: View>: View {
     private var cardStroke: Color {
         paywallCardBorderColor
     }
-}
-
-// MARK: - Preview
-
-#Preview {
-    ProUpgradeSheet()
 }

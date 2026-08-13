@@ -1123,7 +1123,6 @@
 "All terminal and file tabs for this server will be closed." = "All terminal and file tabs for this server will be closed.";
 "Also on Mac" = "Also on Mac";
 "Also on iPhone and iPad" = "Also on iPhone and iPad";
-"App Review" = "App Review";
 "Apply" = "Apply";
 "Archive" = "Archive";
 "At least one server view must remain enabled." = "At least one server view must remain enabled.";
@@ -1200,7 +1199,6 @@
 "Empty Folder" = "Empty Folder";
 "Enable Review Mode" = "Enable Review Mode";
 "Enter Zen Mode" = "Enter Zen Mode";
-"Enter the review code to enable Pro access for App Review." = "Enter the review code to enable Pro access for App Review.";
 "Environments" = "Environments";
 "Everyone" = "Everyone";
 "Exit Zen Mode" = "Exit Zen Mode";
@@ -1244,7 +1242,6 @@
 "Install tmux?" = "Install tmux?";
 "Installing mosh-server" = "Installing mosh-server";
 "Installing tmux" = "Installing tmux";
-"Invalid review code." = "Invalid review code.";
 "Item" = "Item";
 "JSON Document" = "JSON Document";
 "Keep every command one tap away." = "Keep every command one tap away.";
@@ -1418,7 +1415,8 @@
 "Support" = "Support";
 "Swift Source" = "Swift Source";
 "Symlink" = "Symlink";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain.";
+"Credentials could not be copied. Existing credentials were kept." = "Credentials could not be copied. Existing credentials were kept.";
 "Tab \\(number)" = "Tab \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Terms";
@@ -1472,7 +1470,6 @@
 "Unlock unlimited custom actions" = "Unlock unlimited custom actions";
 "Unlock unlimited servers" = "Unlock unlimited servers";
 "Unlock unlimited workspaces" = "Unlock unlimited workspaces";
-"Unlocks Pro features and loads demo servers for App Review." = "Unlocks Pro features and loads demo servers for App Review.";
 "Untitled Folder" = "Untitled Folder";
 "Up" = "Up";
 "Upgrade to Pro to move servers into locked workspaces" = "Upgrade to Pro to move servers into locked workspaces";
@@ -1736,3 +1733,22 @@
 "Then %@ per year." = "Then %@ per year.";
 "Start 7-Day Free Trial" = "Start 7-Day Free Trial";
 "7 days free, then %@ per year. Auto-renews until canceled." = "7 days free, then %@ per year. Auto-renews until canceled.";
+"Deny" = "Deny";
+"Ask Every Time" = "Ask Every Time";
+"Always Allow" = "Always Allow";
+"Remote programs cannot read your clipboard." = "Remote programs cannot read your clipboard.";
+"VVTerm asks before a remote program reads your clipboard." = "VVTerm asks before a remote program reads your clipboard.";
+"Warning: Remote programs can read your clipboard without asking." = "Warning: Remote programs can read your clipboard without asking.";
+"Allow Clipboard Read?" = "Allow Clipboard Read?";
+"Allow Clipboard Change?" = "Allow Clipboard Change?";
+"Allow Paste?" = "Allow Paste?";
+"The remote terminal wants to read your clipboard." = "The remote terminal wants to read your clipboard.";
+"The remote terminal wants to replace your clipboard." = "The remote terminal wants to replace your clipboard.";
+"The clipboard text may contain commands or multiple lines." = "The clipboard text may contain commands or multiple lines.";
+"Remote Clipboard Reads" = "Remote Clipboard Reads";
+"Remote programs can read clipboard data without asking." = "Remote programs can read clipboard data without asking.";
+"Remote Clipboard" = "Remote Clipboard";
+"Server no longer exists." = "Server no longer exists.";
+"Workspace no longer exists." = "Workspace no longer exists.";
+"Local data could not be read" = "Local data could not be read";
+"VVTerm preserved a backup before using replacement data." = "VVTerm preserved a backup before using replacement data.";

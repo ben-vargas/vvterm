@@ -7,15 +7,16 @@ import SwiftUI
 import StoreKit
 
 struct ProSettingsView: View {
-    @ObservedObject private var storeManager = StoreManager.shared
-    @ObservedObject private var serverManager = ServerManager.shared
+    @Environment(\.openURL) private var openURL
+    @EnvironmentObject private var storeManager: StoreManager
+    @EnvironmentObject private var serverManager: ServerManager
     @State private var showingPlans = false
     @State private var showingManageSubscription = false
 
     var body: some View {
         Form {
             // Upgrade banner (only when not Pro)
-            if !storeManager.isPro {
+            if storeManager.accessState == .free {
                 Section {
                     upgradeBanner
                 }
@@ -46,7 +47,7 @@ struct ProSettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                } else {
+                } else if storeManager.accessState == .free {
                     // Show usage for free tier
                     HStack {
                         Text("Servers")
@@ -68,6 +69,13 @@ struct ProSettingsView: View {
                         Text(String(format: String(localized: "%lld max"), Int64(FreeTierLimits.maxTabs)))
                             .foregroundStyle(.secondary)
                     }
+                } else {
+                    HStack {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Checking...")
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -84,13 +92,7 @@ struct ProSettingsView: View {
             if storeManager.isPro && !storeManager.isLifetime {
                 Section("Billing") {
                     Button("Manage Subscription") {
-                        #if os(iOS)
-                        showingManageSubscription = true
-                        #else
-                        if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
-                            NSWorkspace.shared.open(url)
-                        }
-                        #endif
+                        openSubscriptionManagement()
                     }
                 }
             }
@@ -129,13 +131,23 @@ struct ProSettingsView: View {
 
     @ViewBuilder
     private var statusBadge: some View {
-        Text(storeManager.isPro ? String(localized: "Active") : String(localized: "Free Tier"))
+        let title: String = switch storeManager.accessState {
+        case .checking:
+            String(localized: "Checking...")
+        case .free:
+            String(localized: "Free Tier")
+        case .pro:
+            String(localized: "Active")
+        }
+        let isActive = storeManager.accessState == .pro
+
+        Text(title)
             .font(.caption2)
             .fontWeight(.medium)
-            .foregroundStyle(storeManager.isPro ? .green : .secondary)
+            .foregroundStyle(isActive ? .green : .secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background((storeManager.isPro ? Color.green : Color.secondary).opacity(0.15), in: Capsule())
+            .background((isActive ? Color.green : Color.secondary).opacity(0.15), in: Capsule())
     }
 
     private var planName: String {
@@ -153,6 +165,26 @@ struct ProSettingsView: View {
             return String(localized: "Pro Yearly")
         default:
             return String(localized: "Pro")
+        }
+    }
+
+    private func openSubscriptionManagement() {
+        let route: SubscriptionManagementRoute
+        #if os(iOS)
+        if #available(iOS 17.0, *) {
+            route = .resolve(nativeSheetAvailable: true)
+        } else {
+            route = .resolve(nativeSheetAvailable: false)
+        }
+        #else
+        route = .resolve(nativeSheetAvailable: false)
+        #endif
+
+        switch route {
+        case .nativeSheet:
+            showingManageSubscription = true
+        case .web(let url):
+            openURL(url)
         }
     }
 
@@ -242,9 +274,3 @@ extension View {
     }
 }
 #endif
-
-// MARK: - Preview
-
-#Preview {
-    ProSettingsView()
-}

@@ -1123,7 +1123,6 @@
 "All terminal and file tabs for this server will be closed." = "이 서버의 모든 터미널 및 파일 탭이 닫힙니다.";
 "Also on Mac" = "맥에서도";
 "Also on iPhone and iPad" = "아이폰, 아이패드에서도";
-"App Review" = "앱 리뷰";
 "Apply" = "적용";
 "Archive" = "아카이브";
 "At least one server view must remain enabled." = "하나 이상의 서버 보기가 활성화된 상태로 유지되어야 합니다.";
@@ -1200,7 +1199,6 @@
 "Empty Folder" = "빈 폴더";
 "Enable Review Mode" = "검토 모드 활성화";
 "Enter Zen Mode" = "젠 모드 시작";
-"Enter the review code to enable Pro access for App Review." = "App Review에 대한 Pro 액세스를 활성화하려면 리뷰 코드를 입력하세요.";
 "Environments" = "환경";
 "Everyone" = "모두";
 "Exit Zen Mode" = "젠 모드 종료";
@@ -1244,7 +1242,6 @@
 "Install tmux?" = "tmux를 설치하시겠습니까?";
 "Installing mosh-server" = "mosh 서버 설치";
 "Installing tmux" = "tmux 설치";
-"Invalid review code." = "잘못된 리뷰 코드입니다.";
 "Item" = "품목";
 "JSON Document" = "JSON 문서";
 "Keep every command one tap away." = "모든 명령을 탭 한 번으로 유지하세요.";
@@ -1418,7 +1415,8 @@
 "Support" = "지원";
 "Swift Source" = "스위프트 소스";
 "Symlink" = "심링크";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "모든 Apple 기기에서 서버, 작업 공간, 테마 및 키보드 액세서리 설정을 동기화하세요.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "서버, 자격 증명 및 SSH 키는 iCloud와 iCloud 키체인을 사용하여 Apple 기기 간에 동기화됩니다.";
+"Credentials could not be copied. Existing credentials were kept." = "자격 증명을 복사할 수 없습니다. 기존 자격 증명은 유지되었습니다.";
 "Tab \\(number)" = "탭 \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "용어";
@@ -1472,7 +1470,6 @@
 "Unlock unlimited custom actions" = "무제한 사용자 정의 작업 잠금 해제";
 "Unlock unlimited servers" = "무제한 서버 잠금 해제";
 "Unlock unlimited workspaces" = "무제한 작업 공간 잠금 해제";
-"Unlocks Pro features and loads demo servers for App Review." = "Pro 기능을 잠금 해제하고 App Review를 위한 데모 서버를 로드합니다.";
 "Untitled Folder" = "제목 없는 폴더";
 "Up" = "위로";
 "Upgrade to Pro to move servers into locked workspaces" = "서버를 잠긴 작업 공간으로 이동하려면 Pro로 업그레이드하세요.";
@@ -1683,3 +1680,22 @@
 "Then %@ per year." = "이후 연간 %@입니다.";
 "Start 7-Day Free Trial" = "7일 무료 체험 시작";
 "7 days free, then %@ per year. Auto-renews until canceled." = "7일 무료 후 연간 %@입니다. 취소할 때까지 자동 갱신됩니다.";
+"Deny" = "거부";
+"Ask Every Time" = "매번 묻기";
+"Always Allow" = "항상 허용";
+"Remote programs cannot read your clipboard." = "원격 프로그램이 클립보드를 읽을 수 없습니다.";
+"VVTerm asks before a remote program reads your clipboard." = "원격 프로그램이 클립보드를 읽기 전에 VVTerm이 묻습니다.";
+"Warning: Remote programs can read your clipboard without asking." = "경고: 원격 프로그램이 묻지 않고 클립보드를 읽을 수 있습니다.";
+"Allow Clipboard Read?" = "클립보드 읽기를 허용할까요?";
+"Allow Clipboard Change?" = "클립보드 변경을 허용할까요?";
+"Allow Paste?" = "붙여넣기를 허용할까요?";
+"The remote terminal wants to read your clipboard." = "원격 터미널이 클립보드를 읽으려고 합니다.";
+"The remote terminal wants to replace your clipboard." = "원격 터미널이 클립보드를 바꾸려고 합니다.";
+"The clipboard text may contain commands or multiple lines." = "클립보드 텍스트에 명령이나 여러 줄이 포함될 수 있습니다.";
+"Remote Clipboard Reads" = "원격 클립보드 읽기";
+"Remote programs can read clipboard data without asking." = "원격 프로그램이 묻지 않고 클립보드 데이터를 읽을 수 있습니다.";
+"Remote Clipboard" = "원격 클립보드";
+"Server no longer exists." = "서버가 더 이상 존재하지 않습니다.";
+"Workspace no longer exists." = "작업 공간이 더 이상 존재하지 않습니다.";
+"Local data could not be read" = "로컬 데이터를 읽을 수 없습니다";
+"VVTerm preserved a backup before using replacement data." = "VVTerm은 대체 데이터를 사용하기 전에 백업을 보존했습니다.";

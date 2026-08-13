@@ -1124,7 +1124,6 @@
 "All terminal and file tabs for this server will be closed." = "このサーバーのすべてのターミナルとファイルのタブが閉じられます。";
 "Also on Mac" = "Macでも";
 "Also on iPhone and iPad" = "iPhoneやiPadでも";
-"App Review" = "アプリレビュー";
 "Apply" = "申し込む";
 "Archive" = "アーカイブ";
 "At least one server view must remain enabled." = "少なくとも 1 つのサーバー ビューを有効にしておく必要があります。";
@@ -1201,7 +1200,6 @@
 "Empty Folder" = "空のフォルダー";
 "Enable Review Mode" = "レビューモードを有効にする";
 "Enter Zen Mode" = "禅モードに入る";
-"Enter the review code to enable Pro access for App Review." = "レビュー コードを入力して、アプリ レビューのプロ アクセスを有効にします。";
 "Environments" = "環境";
 "Everyone" = "みんな";
 "Exit Zen Mode" = "禅モードを終了する";
@@ -1245,7 +1243,6 @@
 "Install tmux?" = "tmuxをインストールしますか?";
 "Installing mosh-server" = "モッシュサーバーのインストール";
 "Installing tmux" = "tmux のインストール";
-"Invalid review code." = "レビューコードが無効です。";
 "Item" = "アイテム";
 "JSON Document" = "JSONドキュメント";
 "Keep every command one tap away." = "すべてのコマンドを 1 回タップするだけで済みます。";
@@ -1419,7 +1416,8 @@
 "Support" = "サポート";
 "Swift Source" = "スウィフトソース";
 "Symlink" = "シンボリックリンク";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "すべての Apple デバイス間でサーバー、ワークスペース、テーマ、キーボード アクセサリの設定を同期します。";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "サーバー、認証情報、SSHキーは、iCloudとiCloudキーチェーンを使用してAppleデバイス間で同期されます。";
+"Credentials could not be copied. Existing credentials were kept." = "認証情報をコピーできませんでした。既存の認証情報は保持されました。";
 "Tab \\(number)" = "タブ \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "規約";
@@ -1473,7 +1471,6 @@
 "Unlock unlimited custom actions" = "無制限のカスタム アクションのロックを解除する";
 "Unlock unlimited servers" = "無制限のサーバーのロックを解除する";
 "Unlock unlimited workspaces" = "無制限のワークスペースのロックを解除する";
-"Unlocks Pro features and loads demo servers for App Review." = "Pro 機能のロックを解除し、アプリ レビュー用のデモ サーバーをロードします。";
 "Untitled Folder" = "無題のフォルダー";
 "Up" = "上へ";
 "Upgrade to Pro to move servers into locked workspaces" = "Pro にアップグレードして、サーバーをロックされたワークスペースに移動します";
@@ -1684,3 +1681,22 @@
 "Then %@ per year." = "その後は年額%@です。";
 "Start 7-Day Free Trial" = "7日間の無料トライアルを開始";
 "7 days free, then %@ per year. Auto-renews until canceled." = "7日間無料、その後は年額%@。キャンセルするまで自動更新されます。";
+"Deny" = "拒否";
+"Ask Every Time" = "毎回確認";
+"Always Allow" = "常に許可";
+"Remote programs cannot read your clipboard." = "リモートプログラムはクリップボードを読み取れません。";
+"VVTerm asks before a remote program reads your clipboard." = "リモートプログラムがクリップボードを読む前に VVTerm が確認します。";
+"Warning: Remote programs can read your clipboard without asking." = "警告：リモートプログラムが確認なしでクリップボードを読み取れます。";
+"Allow Clipboard Read?" = "クリップボードの読み取りを許可しますか？";
+"Allow Clipboard Change?" = "クリップボードの変更を許可しますか？";
+"Allow Paste?" = "貼り付けを許可しますか？";
+"The remote terminal wants to read your clipboard." = "リモートターミナルがクリップボードを読み取ろうとしています。";
+"The remote terminal wants to replace your clipboard." = "リモートターミナルがクリップボードを置き換えようとしています。";
+"The clipboard text may contain commands or multiple lines." = "クリップボードのテキストにコマンドや複数行が含まれている可能性があります。";
+"Remote Clipboard Reads" = "リモートのクリップボード読み取り";
+"Remote programs can read clipboard data without asking." = "リモートプログラムが確認なしでクリップボードを読み取れます。";
+"Remote Clipboard" = "リモートクリップボード";
+"Server no longer exists." = "サーバーは存在しません。";
+"Workspace no longer exists." = "ワークスペースは存在しません。";
+"Local data could not be read" = "ローカルデータを読み込めませんでした";
+"VVTerm preserved a backup before using replacement data." = "VVTermは代替データを使用する前にバックアップを保存しました。";

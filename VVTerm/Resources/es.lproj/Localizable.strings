@@ -1124,7 +1124,6 @@
 "All terminal and file tabs for this server will be closed." = "Se cerrarán todas las pestañas de terminal y archivos de este servidor.";
 "Also on Mac" = "También en Mac";
 "Also on iPhone and iPad" = "También en iPhone y iPad";
-"App Review" = "Revisión de la aplicación";
 "Apply" = "Aplicar";
 "Archive" = "Archivo";
 "At least one server view must remain enabled." = "Al menos una vista del servidor debe permanecer habilitada.";
@@ -1201,7 +1200,6 @@
 "Empty Folder" = "Carpeta vacía";
 "Enable Review Mode" = "Habilitar el modo de revisión";
 "Enter Zen Mode" = "Ingrese al modo Zen";
-"Enter the review code to enable Pro access for App Review." = "Ingrese el código de revisión para habilitar el acceso Pro para la revisión de aplicaciones.";
 "Environments" = "Ambientes";
 "Everyone" = "todos";
 "Exit Zen Mode" = "Salir del modo Zen";
@@ -1245,7 +1243,6 @@
 "Install tmux?" = "¿Instalar tmux?";
 "Installing mosh-server" = "Instalación del servidor mosh";
 "Installing tmux" = "Instalando tmux";
-"Invalid review code." = "Código de revisión no válido.";
 "Item" = "Artículo";
 "JSON Document" = "Documento JSON";
 "Keep every command one tap away." = "Mantenga cada comando a un toque de distancia.";
@@ -1419,7 +1416,8 @@
 "Support" = "Soporte";
 "Swift Source" = "Fuente rápida";
 "Symlink" = "Enlace simbólico";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "Sincronice servidores, espacios de trabajo, temas y configuraciones de accesorios de teclado en todos sus dispositivos Apple.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Los servidores, las credenciales y las claves SSH se sincronizan entre tus dispositivos Apple mediante iCloud y el Llavero de iCloud.";
+"Credentials could not be copied. Existing credentials were kept." = "No se pudieron copiar las credenciales. Se conservaron las credenciales existentes.";
 "Tab \\(number)" = "Pestaña \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Términos";
@@ -1473,7 +1471,6 @@
 "Unlock unlimited custom actions" = "Desbloquea acciones personalizadas ilimitadas";
 "Unlock unlimited servers" = "Desbloquea servidores ilimitados";
 "Unlock unlimited workspaces" = "Desbloquea espacios de trabajo ilimitados";
-"Unlocks Pro features and loads demo servers for App Review." = "Desbloquea funciones Pro y carga servidores de demostración para revisión de aplicaciones.";
 "Untitled Folder" = "Carpeta sin título";
 "Up" = "arriba";
 "Upgrade to Pro to move servers into locked workspaces" = "Actualice a Pro para mover servidores a espacios de trabajo bloqueados";
@@ -1684,3 +1681,22 @@
 "Then %@ per year." = "Después, %@ al año.";
 "Start 7-Day Free Trial" = "Iniciar prueba gratuita de 7 días";
 "7 days free, then %@ per year. Auto-renews until canceled." = "7 días gratis, después %@ al año. Se renueva automáticamente hasta que canceles.";
+"Deny" = "Denegar";
+"Ask Every Time" = "Preguntar siempre";
+"Always Allow" = "Permitir siempre";
+"Remote programs cannot read your clipboard." = "Los programas remotos no pueden leer tu portapapeles.";
+"VVTerm asks before a remote program reads your clipboard." = "VVTerm pregunta antes de que un programa remoto lea tu portapapeles.";
+"Warning: Remote programs can read your clipboard without asking." = "Advertencia: los programas remotos pueden leer tu portapapeles sin preguntar.";
+"Allow Clipboard Read?" = "¿Permitir leer el portapapeles?";
+"Allow Clipboard Change?" = "¿Permitir cambiar el portapapeles?";
+"Allow Paste?" = "¿Permitir pegar?";
+"The remote terminal wants to read your clipboard." = "El terminal remoto quiere leer tu portapapeles.";
+"The remote terminal wants to replace your clipboard." = "El terminal remoto quiere reemplazar tu portapapeles.";
+"The clipboard text may contain commands or multiple lines." = "El texto del portapapeles puede contener comandos o varias líneas.";
+"Remote Clipboard Reads" = "Lectura remota del portapapeles";
+"Remote programs can read clipboard data without asking." = "Los programas remotos pueden leer datos del portapapeles sin preguntar.";
+"Remote Clipboard" = "Portapapeles remoto";
+"Server no longer exists." = "El servidor ya no existe.";
+"Workspace no longer exists." = "El espacio de trabajo ya no existe.";
+"Local data could not be read" = "No se pudieron leer los datos locales";
+"VVTerm preserved a backup before using replacement data." = "VVTerm conservó una copia de seguridad antes de usar datos de reemplazo.";

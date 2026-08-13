@@ -1125,7 +1125,6 @@
 "All terminal and file tabs for this server will be closed." = "Všechny karty terminálu a souborů pro tento server budou uzavřeny.";
 "Also on Mac" = "Také na Macu";
 "Also on iPhone and iPad" = "Také na iPhone a iPad";
-"App Review" = "Recenze aplikace";
 "Apply" = "Použít";
 "Archive" = "Archiv";
 "At least one server view must remain enabled." = "Musí zůstat povoleno alespoň jedno zobrazení serveru.";
@@ -1202,7 +1201,6 @@
 "Empty Folder" = "Prázdná složka";
 "Enable Review Mode" = "Povolit režim prohlížení";
 "Enter Zen Mode" = "Vstupte do režimu Zen";
-"Enter the review code to enable Pro access for App Review." = "Chcete-li povolit přístup Pro pro kontrolu aplikací, zadejte kód recenze.";
 "Environments" = "Prostředí";
 "Everyone" = "Všichni";
 "Exit Zen Mode" = "Ukončete režim Zen";
@@ -1246,7 +1244,6 @@
 "Install tmux?" = "Nainstalovat tmux?";
 "Installing mosh-server" = "Instalace mosh serveru";
 "Installing tmux" = "Instalace tmux";
-"Invalid review code." = "Neplatný kód recenze.";
 "Item" = "Položka";
 "JSON Document" = "Dokument JSON";
 "Keep every command one tap away." = "Udržujte každý příkaz jedním klepnutím.";
@@ -1420,7 +1417,8 @@
 "Support" = "Podpora";
 "Swift Source" = "Rychlý zdroj";
 "Symlink" = "Symbolický odkaz";
-"Sync servers, workspaces, themes, and keyboard accessory settings across all your Apple devices." = "Synchronizujte servery, pracovní prostory, motivy a nastavení příslušenství klávesnice na všech vašich zařízeních Apple.";
+"Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Servery, přihlašovací údaje a klíče SSH se synchronizují mezi vašimi zařízeními Apple pomocí iCloudu a Klíčenky na iCloudu.";
+"Credentials could not be copied. Existing credentials were kept." = "Přihlašovací údaje se nepodařilo zkopírovat. Stávající přihlašovací údaje byly zachovány.";
 "Tab \\(number)" = "Karta \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Podmínky";
@@ -1474,7 +1472,6 @@
 "Unlock unlimited custom actions" = "Odemkněte neomezené vlastní akce";
 "Unlock unlimited servers" = "Odemkněte neomezený počet serverů";
 "Unlock unlimited workspaces" = "Odemkněte neomezené pracovní prostory";
-"Unlocks Pro features and loads demo servers for App Review." = "Odemkne funkce Pro a načte demo servery pro kontrolu aplikací.";
 "Untitled Folder" = "Složka bez názvu";
 "Up" = "Nahoru";
 "Upgrade to Pro to move servers into locked workspaces" = "Upgradujte na verzi Pro a přesuňte servery do uzamčených pracovních prostorů";
@@ -1685,3 +1682,22 @@
 "Then %@ per year." = "Poté %@ ročně.";
 "Start 7-Day Free Trial" = "Zahájit 7denní bezplatnou zkušební verzi";
 "7 days free, then %@ per year. Auto-renews until canceled." = "7 dní zdarma, poté %@ ročně. Automaticky se obnovuje, dokud předplatné nezrušíte.";
+"Deny" = "Zamítnout";
+"Ask Every Time" = "Vždy se zeptat";
+"Always Allow" = "Vždy povolit";
+"Remote programs cannot read your clipboard." = "Vzdálené programy nemohou číst vaši schránku.";
+"VVTerm asks before a remote program reads your clipboard." = "VVTerm se zeptá, než vzdálený program přečte vaši schránku.";
+"Warning: Remote programs can read your clipboard without asking." = "Varování: Vzdálené programy mohou číst vaši schránku bez dotazu.";
+"Allow Clipboard Read?" = "Povolit čtení schránky?";
+"Allow Clipboard Change?" = "Povolit změnu schránky?";
+"Allow Paste?" = "Povolit vložení?";
+"The remote terminal wants to read your clipboard." = "Vzdálený terminál chce přečíst vaši schránku.";
+"The remote terminal wants to replace your clipboard." = "Vzdálený terminál chce nahradit obsah vaší schránky.";
+"The clipboard text may contain commands or multiple lines." = "Text ve schránce může obsahovat příkazy nebo více řádků.";
+"Remote Clipboard Reads" = "Vzdálené čtení schránky";
+"Remote programs can read clipboard data without asking." = "Vzdálené programy mohou číst data ze schránky bez dotazu.";
+"Remote Clipboard" = "Vzdálená schránka";
+"Server no longer exists." = "Server již neexistuje.";
+"Workspace no longer exists." = "Pracovní prostor již neexistuje.";
+"Local data could not be read" = "Místní data se nepodařilo přečíst";
+"VVTerm preserved a backup before using replacement data." = "VVTerm zachoval zálohu před použitím náhradních dat.";
