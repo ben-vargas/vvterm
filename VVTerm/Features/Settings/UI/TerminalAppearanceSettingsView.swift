@@ -203,18 +203,22 @@ struct TerminalAppearanceSettingsView: View {
             VStack(spacing: 16) {
                 HStack(spacing: 0) {
                     ForEach(TerminalCursorStyle.allCases) { style in
-                        CursorStyleOptionView(
-                            style: style,
-                            isSelected: selectedCursorStyle == style,
-                            blinks: cursorBlink,
-                            palette: cursorPreviewPalette
-                        )
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
+                        let isSelected = selectedCursorStyle == style
+                        Button {
                             cursorStyleRaw = style.rawValue
+                        } label: {
+                            CursorStyleOptionView(
+                                style: style,
+                                isSelected: isSelected,
+                                blinks: cursorBlink,
+                                palette: cursorPreviewPalette
+                            )
+                            .frame(maxWidth: .infinity)
                         }
+                        .buttonStyle(.plain)
                         .accessibilityLabel(style.displayName)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                        .accessibilityIdentifier("vvterm.settings.cursor.\(style.rawValue)")
                     }
                 }
 

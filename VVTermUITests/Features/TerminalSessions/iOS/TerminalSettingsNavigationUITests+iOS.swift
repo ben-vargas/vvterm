@@ -86,6 +86,55 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
     }
 
     @MainActor
+    func testAppearanceAndCursorChoicesAreSelectedButtons() throws {
+        let app = XCUIApplication()
+        app.terminate()
+        app.launchArguments = [
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US",
+            "-hasSeenWelcome", "YES",
+            "-iCloudSyncEnabled", "NO",
+            "-security.privacyModeEnabled", "NO",
+            "-security.fullAppLockEnabled", "NO",
+            "-security.lockOnBackground", "NO",
+        ]
+        app.launch()
+        defer { app.terminate() }
+
+        let settings = app.buttons["vvterm.serverList.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+
+        let appearanceRoute = app.buttons["vvterm.settings.route.appearanceAndLanguage"]
+        XCTAssertTrue(appearanceRoute.waitForExistence(timeout: 8))
+        appearanceRoute.tap()
+
+        let systemAppearance = app.buttons["vvterm.settings.appearance.system"]
+        let lightAppearance = app.buttons["vvterm.settings.appearance.light"]
+        let darkAppearance = app.buttons["vvterm.settings.appearance.dark"]
+        XCTAssertTrue(systemAppearance.waitForExistence(timeout: 5))
+        XCTAssertEqual([systemAppearance, lightAppearance, darkAppearance].filter(\.isSelected).count, 1)
+        let appearanceTarget = darkAppearance.isSelected ? lightAppearance : darkAppearance
+        appearanceTarget.tap()
+        XCTAssertTrue(appearanceTarget.isSelected)
+
+        app.navigationBars["Appearance & Language"].buttons["Settings"].tap()
+
+        let terminalAppearanceRoute = app.buttons["vvterm.settings.route.terminalAppearance"]
+        XCTAssertTrue(terminalAppearanceRoute.waitForExistence(timeout: 5))
+        terminalAppearanceRoute.tap()
+
+        let blockCursor = app.buttons["vvterm.settings.cursor.block"]
+        let barCursor = app.buttons["vvterm.settings.cursor.bar"]
+        XCTAssertTrue(blockCursor.waitForExistence(timeout: 5))
+        let underlineCursor = app.buttons["vvterm.settings.cursor.underline"]
+        XCTAssertEqual([blockCursor, barCursor, underlineCursor].filter(\.isSelected).count, 1)
+        let cursorTarget = barCursor.isSelected ? blockCursor : barCursor
+        cursorTarget.tap()
+        XCTAssertTrue(cursorTarget.isSelected)
+    }
+
+    @MainActor
     func testConnectedTerminalCanOpenSettingsFromItsToolbar() throws {
         let app = XCUIApplication()
         app.terminate()
