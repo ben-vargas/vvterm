@@ -1,4 +1,21 @@
 /* General */
+"Account" = "Уліковы запіс";
+"App" = "Праграма";
+"Data & Security" = "Даныя і бяспека";
+"Voice" = "Голас";
+"Appearance & Language" = "Выгляд і мова";
+"Navigation & Stats" = "Навігацыя і статыстыка";
+"Privacy & App Lock" = "Прыватнасць і блакіроўка праграмы";
+"Keyboard & Input" = "Клавіятура і ўвод";
+"Sessions & Connections" = "Сеансы і злучэнні";
+"Clipboard & Paste" = "Буфер абмену і ўстаўка";
+"Trusted Hosts" = "Давераныя хосты";
+"No Trusted Hosts" = "Няма давераных хостаў";
+"Hosts appear here after you approve their fingerprints." = "Хосты з'явяцца тут пасля таго, як вы пацвердзіце іх адбіткі.";
+"Reset Trusted Host" = "Скінуць давераны хост";
+"VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm забудзе захаваны адбітак SSH для %@. Пацвердзіце яго зноў пры паўторным падключэнні.";
+"About & Support" = "Аб праграме і падтрымка";
+"Search Settings" = "Пошук налад";
 "OK" = "ОК";
 "Cancel" = "Скасаваць";
 "Save" = "Захаваць";

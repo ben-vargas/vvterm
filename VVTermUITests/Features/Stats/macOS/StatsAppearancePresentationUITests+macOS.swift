@@ -7,15 +7,15 @@ final class StatsAppearancePresentationUITests: XCTestCase {
     }
 
     @MainActor
-    func testStatsAppearanceCanBeClosedFromGeneralSettings() throws {
+    func testStatsAppearanceCanBeClosedFromNavigationSettings() throws {
         let app = XCUIApplication()
         app.launch()
 
         app.typeKey(",", modifierFlags: .command)
 
-        let general = app.staticTexts["General"]
-        XCTAssertTrue(general.waitForExistence(timeout: 5))
-        general.click()
+        let navigationAndStats = app.staticTexts["Navigation & Stats"]
+        XCTAssertTrue(navigationAndStats.waitForExistence(timeout: 5))
+        navigationAndStats.click()
 
         let statsAppearance = app.staticTexts["Stats Appearance"]
         XCTAssertTrue(statsAppearance.waitForExistence(timeout: 5))

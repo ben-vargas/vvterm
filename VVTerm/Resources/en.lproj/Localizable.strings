@@ -1,4 +1,21 @@
 /* General */
+"Account" = "Account";
+"App" = "App";
+"Data & Security" = "Data & Security";
+"Voice" = "Voice";
+"Appearance & Language" = "Appearance & Language";
+"Navigation & Stats" = "Navigation & Stats";
+"Privacy & App Lock" = "Privacy & App Lock";
+"Keyboard & Input" = "Keyboard & Input";
+"Sessions & Connections" = "Sessions & Connections";
+"Clipboard & Paste" = "Clipboard & Paste";
+"Trusted Hosts" = "Trusted Hosts";
+"No Trusted Hosts" = "No Trusted Hosts";
+"Hosts appear here after you approve their fingerprints." = "Hosts appear here after you approve their fingerprints.";
+"Reset Trusted Host" = "Reset Trusted Host";
+"VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect.";
+"About & Support" = "About & Support";
+"Search Settings" = "Search Settings";
 "OK" = "OK";
 "Cancel" = "Cancel";
 "Save" = "Save";

@@ -6,8 +6,19 @@ private final class AppKnownHostSettingsRepository: KnownHostSettingsRepository 
         self.knownHosts = knownHosts
     }
 
-    func loadKnownHostCount() -> Int {
-        knownHosts.entries().count
+    func loadKnownHosts() -> [KnownHostSettingsItem] {
+        knownHosts.entries().map { entry in
+            KnownHostSettingsItem(
+                host: entry.host,
+                port: entry.port,
+                fingerprint: entry.fingerprint,
+                lastSeenAt: entry.lastSeenAt
+            )
+        }
+    }
+
+    func removeKnownHost(host: String, port: Int) {
+        knownHosts.remove(host: host, port: port)
     }
 
     func removeAllKnownHosts() {
