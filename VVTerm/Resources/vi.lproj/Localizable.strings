@@ -10,6 +10,10 @@
 "Sessions & Connections" = "Phiên & kết nối";
 "Clipboard & Paste" = "Bảng nhớ tạm & dán";
 "Trusted Hosts" = "Máy chủ tin cậy";
+"No Trusted Hosts" = "Không có máy chủ tin cậy";
+"Hosts appear here after you approve their fingerprints." = "Máy chủ sẽ xuất hiện ở đây sau khi bạn chấp thuận dấu vân tay.";
+"Reset Trusted Host" = "Đặt lại máy chủ tin cậy";
+"VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm sẽ quên dấu vân tay SSH đã lưu cho %@. Hãy xác minh lại khi bạn kết nối lại.";
 "About & Support" = "Giới thiệu & hỗ trợ";
 "Search Settings" = "Tìm kiếm cài đặt";
 "OK" = "Đồng ý";

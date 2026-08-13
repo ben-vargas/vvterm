@@ -10,6 +10,10 @@
 "Sessions & Connections" = "Relace a připojení";
 "Clipboard & Paste" = "Schránka a vkládání";
 "Trusted Hosts" = "Důvěryhodní hostitelé";
+"No Trusted Hosts" = "Žádní důvěryhodní hostitelé";
+"Hosts appear here after you approve their fingerprints." = "Hostitelé se zde zobrazí po schválení jejich otisků.";
+"Reset Trusted Host" = "Resetovat důvěryhodného hostitele";
+"VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm zapomene uložený otisk SSH pro %@. Při dalším připojení jej znovu ověřte.";
 "About & Support" = "O aplikaci a podpora";
 "Search Settings" = "Hledat v nastavení";
 "OK" = "OK";

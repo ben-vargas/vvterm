@@ -10,6 +10,10 @@
 "Sessions & Connections" = "세션 및 연결";
 "Clipboard & Paste" = "클립보드 및 붙여넣기";
 "Trusted Hosts" = "신뢰할 수 있는 호스트";
+"No Trusted Hosts" = "신뢰할 수 있는 호스트 없음";
+"Hosts appear here after you approve their fingerprints." = "지문을 승인한 호스트가 여기에 표시됩니다.";
+"Reset Trusted Host" = "신뢰할 수 있는 호스트 재설정";
+"VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm이 %@의 저장된 SSH 지문을 삭제합니다. 다시 연결할 때 지문을 다시 확인하십시오.";
 "About & Support" = "정보 및 지원";
 "Search Settings" = "설정 검색";
 "OK" = "확인";

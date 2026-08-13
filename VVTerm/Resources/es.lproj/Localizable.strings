@@ -10,6 +10,10 @@
 "Sessions & Connections" = "Sesiones y conexiones";
 "Clipboard & Paste" = "Portapapeles y pegado";
 "Trusted Hosts" = "Hosts de confianza";
+"No Trusted Hosts" = "No hay hosts de confianza";
+"Hosts appear here after you approve their fingerprints." = "Los hosts aparecerán aquí después de aprobar sus huellas digitales.";
+"Reset Trusted Host" = "Restablecer host de confianza";
+"VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm olvidará la huella SSH guardada de %@. Verifícala de nuevo al volver a conectarte.";
 "About & Support" = "Acerca de y soporte";
 "Search Settings" = "Buscar en Ajustes";
 "OK" = "OK";
