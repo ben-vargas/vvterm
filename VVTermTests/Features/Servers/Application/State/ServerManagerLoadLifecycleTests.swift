@@ -954,7 +954,9 @@ struct ServerManagerLoadLifecycleTests {
             mutationDate: .distantPast
         ))
         let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])
-        local.journal = WorkspaceDeletionJournal(plan: plan)
+        local.serverMutationJournal = ServerDataMutationJournal(
+            plan: ServerDataMutationPlan(workspaceDeletion: plan)
+        )
         return local
     }
 }

@@ -109,12 +109,8 @@ struct ServerApplicationErrorPresentationTests {
                 String(localized: "The workspace changed while deletion was authorized. Review it and try again.")
             ),
             (
-                .workspaceDeletionRecoveryPending,
-                String(localized: "The workspace was deleted, but cleanup is still pending and will retry.")
-            ),
-            (
-                .serverMutationRecoveryPending,
-                String(localized: "The server change is still being recovered. Try again after recovery completes.")
+                .serverDataMutationRecoveryPending,
+                String(localized: "The server data change is still being recovered. Try again after recovery completes.")
             ),
             (.timeout, String(localized: "Connection timed out"))
         ]

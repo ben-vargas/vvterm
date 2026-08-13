@@ -55,8 +55,8 @@ final class ServerStateStore: ObservableObject {
     var transientBootstrapWorkspaceID: UUID? { pendingBootstrapWorkspaceID }
     var shouldForceRemoteFullFetchForBootstrap: Bool { pendingBootstrapWorkspaceID != nil }
 
-    var hasPendingServerMutation: Bool {
-        (try? dependencies.localRepository.loadServerMutationTransactionJournal()) != nil
+    var hasPendingServerDataMutation: Bool {
+        (try? dependencies.localRepository.loadServerDataMutationJournal()) != nil
     }
 
     var localCacheContainsUserData: Bool {
@@ -222,22 +222,26 @@ final class ServerStateStore: ObservableObject {
         replaceCollections(servers: result.servers, workspaces: result.workspaces)
     }
 
-    func makeServerMutationTransaction(
-        mutationQueue: any ServerMutationTransactionEnqueuing,
+    func makeServerDataMutationTransaction(
+        mutationQueue: any ServerDataMutationEnqueuing,
         credentials: any ServerMutationCredentialTransacting
-    ) -> ServerMutationTransaction {
-        ServerMutationTransaction(
+    ) -> ServerDataMutationTransaction {
+        ServerDataMutationTransaction(
             store: dependencies.localRepository,
             mutationQueue: mutationQueue,
             credentials: credentials
         )
     }
 
-    func applyCommittedServerMutation(_ plan: ServerMutationTransactionPlan) {
+    func applyCommittedServerDataMutation(_ plan: ServerDataMutationPlan) {
         replaceCollections(
             servers: plan.resultingServers,
             workspaces: plan.resultingWorkspaces
         )
+        if case .workspaceDelete(let workspaceID) = plan.kind,
+           pendingBootstrapWorkspaceID == workspaceID {
+            pendingBootstrapWorkspaceID = nil
+        }
     }
 
     func replaceCollections(servers: [Server], workspaces: [Workspace]) {
@@ -245,43 +249,6 @@ final class ServerStateStore: ObservableObject {
             snapshot.servers = servers
             snapshot.workspaces = workspaces
         }
-    }
-
-    func applyCommittedWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) {
-        replaceCollections(
-            servers: plan.remainingServers,
-            workspaces: plan.remainingWorkspaces
-        )
-        if pendingBootstrapWorkspaceID == plan.workspace.id {
-            pendingBootstrapWorkspaceID = nil
-        }
-    }
-
-    func makeWorkspaceDeletionTransaction(
-        mutationQueue: any WorkspaceDeletionMutationEnqueuing,
-        credentialCleaner: any WorkspaceDeletionCredentialCleaning
-    ) -> WorkspaceDeletionTransaction {
-        WorkspaceDeletionTransaction(
-            store: dependencies.localRepository,
-            mutationQueue: mutationQueue,
-            credentialCleaner: credentialCleaner
-        )
-    }
-
-    func makeEnvironmentDeletionTransaction(
-        mutationQueue: any EnvironmentDeletionMutationEnqueuing
-    ) -> EnvironmentDeletionTransaction {
-        EnvironmentDeletionTransaction(
-            store: dependencies.localRepository,
-            mutationQueue: mutationQueue
-        )
-    }
-
-    func applyCommittedEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) {
-        replaceCollections(
-            servers: plan.resultingServers,
-            workspaces: plan.resultingWorkspaces
-        )
     }
 
     func applyPendingSyncOverlay(_ mutations: [ServerPendingMutation]) {
@@ -388,18 +355,18 @@ final class ServerStateStore: ObservableObject {
     }
 
     func updateLastConnected(for serverID: UUID, at date: Date) throws {
-        try requireNoPendingServerMutation()
+        try requireNoPendingServerDataMutation()
         guard let index = servers.firstIndex(where: { $0.id == serverID }) else { return }
         updateSnapshot { $0.servers[index].lastConnected = date }
         persistCurrentCollections()
     }
 
-    func reorderWorkspaces(
+    func planWorkspaceReorder(
         from source: IndexSet,
         to destination: Int,
         at date: Date
     ) throws -> [Workspace] {
-        try requireNoPendingServerMutation()
+        try requireNoPendingServerDataMutation()
         var reordered = workspaces
         reordered.moveElements(fromOffsets: source, toOffset: destination)
         for index in reordered.indices {
@@ -408,9 +375,6 @@ final class ServerStateStore: ObservableObject {
             workspace.updatedAt = date
             reordered[index] = workspace
         }
-        pendingBootstrapWorkspaceID = nil
-        replaceCollections(servers: servers, workspaces: reordered)
-        persistCurrentCollections()
         return reordered
     }
 
@@ -473,7 +437,7 @@ final class ServerStateStore: ObservableObject {
     }
 
     func handleAppLanguageChange() {
-        guard !hasPendingServerMutation else { return }
+        guard !hasPendingServerDataMutation else { return }
         guard refreshPendingBootstrapWorkspaceLocalizationIfNeeded() else { return }
         persistCurrentCollections()
     }
@@ -729,7 +693,7 @@ final class ServerStateStore: ObservableObject {
         if (try? dependencies.localRepository.loadAmbiguousCloudRecoveryBackup()) != nil {
             updateSnapshot { $0.ambiguousCloudRecovery = .decisionRequired }
         }
-        guard !hasPendingServerMutation else { return }
+        guard !hasPendingServerDataMutation else { return }
         var shouldPersist = reconcilePendingBootstrapWorkspaceState()
         if Self.shouldCreateBootstrapWorkspace(
             didBootstrapDefaultWorkspace: didBootstrapDefaultWorkspace,
@@ -745,9 +709,9 @@ final class ServerStateStore: ObservableObject {
         }
     }
 
-    func requireNoPendingServerMutation() throws {
-        guard !hasPendingServerMutation else {
-            throw ServerMutationTransactionError.recoveryPending
+    func requireNoPendingServerDataMutation() throws {
+        guard !hasPendingServerDataMutation else {
+            throw ServerDataMutationTransactionError.recoveryPending
         }
     }
 

@@ -18,14 +18,12 @@ nonisolated enum VVTermError: Error, Equatable, Sendable {
     case authenticationFailed
     case authorizationRequired
     case serverNotFound
-    case serverMutationRecoveryPending
+    case serverDataMutationRecoveryPending
     case workspaceNotFound
     case environmentNotFound
     case environmentDeletionNotAllowed
     case environmentFallbackUnavailable
-    case environmentDeletionRecoveryPending
     case workspaceDeletionChanged
-    case workspaceDeletionRecoveryPending
     case timeout
 
     var isLockedError: Bool {

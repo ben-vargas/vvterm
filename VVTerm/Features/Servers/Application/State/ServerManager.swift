@@ -42,19 +42,6 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
 
     // MARK: - Pending Remote Sync
 
-    private func persistLocalMutations(logMessage: String? = nil) async {
-        stateStore.persistCurrentCollections()
-        await remoteSyncCoordinator.drainPendingMutations()
-        if let logMessage {
-            logger.info("\(logMessage)")
-        }
-    }
-
-    private func applyMutationResult(_ result: ServerMutationCommandResult) throws {
-        stateStore.applyMutationResult(result)
-        try remoteSyncCoordinator.enqueue(result.effect)
-    }
-
     /// Clear all local data and re-download from CloudKit
     func clearLocalDataAndResync() async throws {
         try await remoteSyncCoordinator.clearLocalDataAndResync()
@@ -121,7 +108,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             previousServer = previousServers.first { $0.id == savedServer.id }
         }
         let transactionID = dependencies.makeID()
-        let plan = ServerMutationTransactionPlan(
+        let plan = ServerDataMutationPlan(
             id: transactionID,
             previousServers: previousServers,
             previousWorkspaces: previousWorkspaces,
@@ -138,15 +125,15 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
                 server: savedServer
             )
         )
-        let journal = try serverMutationTransaction.commitSave(
+        let journal = try serverDataMutationTransaction.commitSave(
             plan,
             credentials: credentials
         )
         if journal.presentsResultingState {
-            stateStore.applyCommittedServerMutation(plan)
+            stateStore.applyCommittedServerDataMutation(plan)
         }
         guard journal.phase == .complete else {
-            throw VVTermError.serverMutationRecoveryPending
+            throw VVTermError.serverDataMutationRecoveryPending
         }
         await remoteSyncCoordinator.drainPendingMutations()
 
@@ -184,7 +171,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             .deleteServer(server.id),
             now: dependencies.now()
         )
-        let plan = ServerMutationTransactionPlan(
+        let plan = ServerDataMutationPlan(
             id: dependencies.makeID(),
             previousServers: servers,
             previousWorkspaces: workspaces,
@@ -195,22 +182,22 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
                 payload: .serverDelete(server),
                 createdAt: dependencies.now()
             ),
-            credentialAction: .delete(server)
+            credentialAction: .delete([server])
         )
-        let journal = try serverMutationTransaction.commitDeletion(plan)
+        let journal = try serverDataMutationTransaction.commit(plan)
         if journal.presentsResultingState {
-            stateStore.applyCommittedServerMutation(plan)
+            stateStore.applyCommittedServerDataMutation(plan)
             remoteSyncCoordinator.removeKnownHostIfUnused(for: server)
         }
         guard journal.phase == .complete else {
-            throw VVTermError.serverMutationRecoveryPending
+            throw VVTermError.serverDataMutationRecoveryPending
         }
         await remoteSyncCoordinator.drainPendingMutations()
         logger.info("Deleted server: \(server.name)")
     }
 
-    private var serverMutationTransaction: ServerMutationTransaction {
-        stateStore.makeServerMutationTransaction(
+    private var serverDataMutationTransaction: ServerDataMutationTransaction {
+        stateStore.makeServerDataMutationTransaction(
             mutationQueue: dependencies.syncRepository,
             credentials: dependencies.credentialRepository
         )
@@ -227,22 +214,62 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             throw VVTermError.proRequired(.unlimitedWorkspaces)
         }
 
-        let result = try stateStore.commitMutation(
+        let previousServers = servers
+        let previousWorkspaces = workspaces
+        let result = try stateStore.planMutation(
             .insertWorkspace(workspace),
             now: dependencies.now()
         )
-        try remoteSyncCoordinator.enqueue(result.effect)
+        guard case .workspaceUpsert(let savedWorkspace) = result.effect else {
+            preconditionFailure("A workspace insert must produce a workspace upsert")
+        }
+        let plan = ServerDataMutationPlan(
+            id: dependencies.makeID(),
+            kind: .workspaceUpsert(savedWorkspace.id),
+            previousServers: previousServers,
+            previousWorkspaces: previousWorkspaces,
+            resultingServers: result.servers,
+            resultingWorkspaces: result.workspaces,
+            pendingMutations: [
+                ServerPendingMutation(
+                    id: dependencies.makeID(),
+                    payload: .workspaceUpsert(savedWorkspace),
+                    createdAt: dependencies.now()
+                )
+            ]
+        )
+        try commitServerDataMutation(plan)
         stateStore.clearPendingBootstrapWorkspace(reason: "adding a workspace")
         await remoteSyncCoordinator.drainPendingMutations()
         logger.info("Added workspace: \(workspace.name)")
     }
 
     func updateWorkspace(_ workspace: Workspace) async throws {
-        let result = try stateStore.commitMutation(
+        let previousServers = servers
+        let previousWorkspaces = workspaces
+        let result = try stateStore.planMutation(
             .updateWorkspace(workspace),
             now: dependencies.now()
         )
-        try remoteSyncCoordinator.enqueue(result.effect)
+        guard case .workspaceUpsert(let savedWorkspace) = result.effect else {
+            preconditionFailure("A workspace update must produce a workspace upsert")
+        }
+        let plan = ServerDataMutationPlan(
+            id: dependencies.makeID(),
+            kind: .workspaceUpsert(savedWorkspace.id),
+            previousServers: previousServers,
+            previousWorkspaces: previousWorkspaces,
+            resultingServers: result.servers,
+            resultingWorkspaces: result.workspaces,
+            pendingMutations: [
+                ServerPendingMutation(
+                    id: dependencies.makeID(),
+                    payload: .workspaceUpsert(savedWorkspace),
+                    createdAt: dependencies.now()
+                )
+            ]
+        )
+        try commitServerDataMutation(plan)
         stateStore.promotePendingBootstrapWorkspaceIfNeeded(
             for: workspace.id,
             reason: "updating workspace metadata"
@@ -287,25 +314,42 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             throw VVTermError.workspaceDeletionChanged
         }
 
-        let journal = try remoteSyncCoordinator.commitWorkspaceDeletion(currentPlan)
+        let dataPlan = ServerDataMutationPlan(workspaceDeletion: currentPlan)
+        let journal = try serverDataMutationTransaction.commit(dataPlan)
+        applyCommittedServerDataMutation(journal)
         await remoteSyncCoordinator.drainPendingMutations()
 
         guard journal.phase == .complete else {
             logger.error("Workspace deletion committed with pending recovery work")
-            throw VVTermError.workspaceDeletionRecoveryPending
+            throw VVTermError.serverDataMutationRecoveryPending
         }
         logger.info("Deleted workspace: \(plan.workspace.name)")
     }
 
     func reorderWorkspaces(from source: IndexSet, to destination: Int) async throws {
-        let reordered = try stateStore.reorderWorkspaces(
+        let reordered = try stateStore.planWorkspaceReorder(
             from: source,
             to: destination,
             at: dependencies.now()
         )
-        for workspace in reordered {
-            try remoteSyncCoordinator.enqueueWorkspaceUpsert(workspace)
-        }
+        let mutationDate = dependencies.now()
+        let plan = ServerDataMutationPlan(
+            id: dependencies.makeID(),
+            kind: .workspaceBatchUpsert(reordered.map(\.id)),
+            previousServers: servers,
+            previousWorkspaces: workspaces,
+            resultingServers: servers,
+            resultingWorkspaces: reordered,
+            pendingMutations: reordered.enumerated().map { index, workspace in
+                ServerPendingMutation(
+                    id: dependencies.makeID(),
+                    payload: .workspaceUpsert(workspace),
+                    createdAt: mutationDate.addingTimeInterval(TimeInterval(index))
+                )
+            }
+        )
+        try commitServerDataMutation(plan)
+        stateStore.clearPendingBootstrapWorkspace(reason: "reordering workspaces")
         await remoteSyncCoordinator.drainPendingMutations()
         logger.info("Reordered workspaces")
     }
@@ -471,10 +515,16 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             mutationIDs: (0...affectedServerCount).map { _ in dependencies.makeID() },
             mutationDate: dependencies.now()
         )
-        let journal = try remoteSyncCoordinator.commitEnvironmentDeletion(plan)
+        let dataPlan = ServerDataMutationPlan(
+            environmentDeletion: plan,
+            previousServers: servers,
+            previousWorkspaces: workspaces
+        )
+        let journal = try serverDataMutationTransaction.commit(dataPlan)
+        applyCommittedServerDataMutation(journal)
         await remoteSyncCoordinator.drainPendingMutations()
         guard journal.phase == .complete else {
-            throw VVTermError.environmentDeletionRecoveryPending
+            throw VVTermError.serverDataMutationRecoveryPending
         }
         logger.info("Deleted environment: \(environment.name)")
         return EnvironmentDeletionResult(
@@ -485,5 +535,25 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
 
     func handleAppLanguageChange() {
         stateStore.handleAppLanguageChange()
+    }
+
+    private func commitServerDataMutation(_ plan: ServerDataMutationPlan) throws {
+        let journal = try serverDataMutationTransaction.commit(plan)
+        applyCommittedServerDataMutation(journal)
+        guard journal.phase == .complete else {
+            throw VVTermError.serverDataMutationRecoveryPending
+        }
+    }
+
+    private func applyCommittedServerDataMutation(_ journal: ServerDataMutationJournal) {
+        guard journal.presentsResultingState else { return }
+        stateStore.applyCommittedServerDataMutation(journal.plan)
+        let deletedServerIDs = Set(journal.plan.deletedServers.map(\.id))
+        for server in journal.plan.deletedServers {
+            remoteSyncCoordinator.removeKnownHostIfUnused(
+                for: server,
+                excluding: deletedServerIDs
+            )
+        }
     }
 }

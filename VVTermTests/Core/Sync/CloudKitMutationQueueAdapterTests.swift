@@ -97,7 +97,7 @@ struct CloudKitMutationQueueAdapterTests {
             createdAt: createdAt
         )
 
-        try repository.enqueueWorkspaceDeletionMutations([
+        try repository.enqueueServerDataMutations([
             serverMutation,
             workspaceMutation
         ])

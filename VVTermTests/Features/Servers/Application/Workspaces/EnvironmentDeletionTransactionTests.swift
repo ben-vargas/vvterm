@@ -36,18 +36,27 @@ struct EnvironmentDeletionTransactionTests {
     func queueFailureKeepsDurablePlanAndRestartCompletesIt() throws {
         let fixture = EnvironmentDeletionFixture()
         let plan = try fixture.makePlan()
+        let dataPlan = fixture.makeDataPlan(plan)
         let store = EnvironmentDeletionStore()
         let failingQueue = EnvironmentDeletionQueue(shouldFail: true)
-        let first = EnvironmentDeletionTransaction(store: store, mutationQueue: failingQueue)
+        let first = ServerDataMutationTransaction(
+            store: store,
+            mutationQueue: failingQueue,
+            credentials: EnvironmentDeletionCredentials()
+        )
 
-        let failed = try first.commit(plan)
+        let failed = try first.commit(dataPlan)
 
         #expect(failed.phase == .enqueueing)
-        #expect(store.materializedPlan == plan)
+        #expect(store.materializedPlan == dataPlan)
         #expect(store.journal == failed)
 
         let recoveredQueue = EnvironmentDeletionQueue()
-        let restarted = EnvironmentDeletionTransaction(store: store, mutationQueue: recoveredQueue)
+        let restarted = ServerDataMutationTransaction(
+            store: store,
+            mutationQueue: recoveredQueue,
+            credentials: EnvironmentDeletionCredentials()
+        )
         let recovered = try #require(try restarted.resumePending())
 
         #expect(recovered.phase == .complete)
@@ -59,11 +68,14 @@ struct EnvironmentDeletionTransactionTests {
     func localStoreLoadsJournalPlanAcrossRestart() throws {
         let fixture = EnvironmentDeletionFixture()
         let plan = try fixture.makePlan()
+        let dataPlan = fixture.makeDataPlan(plan)
         let suiteName = "EnvironmentDeletionTransactionTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = ServerLocalStore(defaults: defaults)
-        try store.storeEnvironmentDeletionJournal(EnvironmentDeletionJournal(plan: plan))
+        var journal = ServerDataMutationJournal(plan: dataPlan)
+        journal.didMaterializeLocalState = true
+        try store.storeServerDataMutationJournal(journal)
 
         let restarted = ServerLocalStore(defaults: defaults)
         guard case .loaded(let servers) = restarted.loadServers(),
@@ -121,21 +133,29 @@ private struct EnvironmentDeletionFixture {
             mutationDate: Date(timeIntervalSinceReferenceDate: 100)
         )
     }
+
+    func makeDataPlan(_ plan: EnvironmentDeletionPlan) -> ServerDataMutationPlan {
+        ServerDataMutationPlan(
+            environmentDeletion: plan,
+            previousServers: [affectedServer, unaffectedServer],
+            previousWorkspaces: [workspace]
+        )
+    }
 }
 
 @MainActor
-private final class EnvironmentDeletionStore: EnvironmentDeletionJournalStoring {
-    var journal: EnvironmentDeletionJournal?
-    var materializedPlan: EnvironmentDeletionPlan?
+private final class EnvironmentDeletionStore: ServerDataMutationJournalStoring {
+    var journal: ServerDataMutationJournal?
+    var materializedPlan: ServerDataMutationPlan?
 
-    func loadEnvironmentDeletionJournal() throws -> EnvironmentDeletionJournal? { journal }
-    func storeEnvironmentDeletionJournal(_ journal: EnvironmentDeletionJournal) throws { self.journal = journal }
-    func materializeEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) throws { materializedPlan = plan }
-    func clearEnvironmentDeletionJournal() throws { journal = nil }
+    func loadServerDataMutationJournal() throws -> ServerDataMutationJournal? { journal }
+    func storeServerDataMutationJournal(_ journal: ServerDataMutationJournal) throws { self.journal = journal }
+    func materializeServerDataMutation(_ plan: ServerDataMutationPlan) throws { materializedPlan = plan }
+    func clearServerDataMutationJournal() throws { journal = nil }
 }
 
 @MainActor
-private final class EnvironmentDeletionQueue: EnvironmentDeletionMutationEnqueuing {
+private final class EnvironmentDeletionQueue: ServerDataMutationEnqueuing {
     let shouldFail: Bool
     var mutations: [ServerPendingMutation] = []
 
@@ -143,10 +163,29 @@ private final class EnvironmentDeletionQueue: EnvironmentDeletionMutationEnqueui
         self.shouldFail = shouldFail
     }
 
-    func enqueueEnvironmentDeletionMutations(_ mutations: [ServerPendingMutation]) throws {
+    func enqueueServerDataMutations(_ mutations: [ServerPendingMutation]) throws {
         if shouldFail { throw EnvironmentDeletionTestError.queue }
         self.mutations = mutations
     }
+}
+
+@MainActor
+private final class EnvironmentDeletionCredentials: ServerMutationCredentialTransacting {
+    func prepareServerCredentialTransaction(
+        id: UUID,
+        previousServer: Server?,
+        server: Server,
+        credentials: ServerCredentials
+    ) throws {}
+
+    func commitServerCredentialTransaction(
+        id: UUID,
+        previousServer: Server?,
+        server: Server
+    ) throws {}
+
+    func discardServerCredentialTransaction(id: UUID) throws {}
+    func cleanupCredentials(for server: Server) throws {}
 }
 
 private enum EnvironmentDeletionTestError: Error {

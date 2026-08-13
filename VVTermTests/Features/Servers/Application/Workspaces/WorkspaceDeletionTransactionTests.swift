@@ -52,25 +52,22 @@ struct WorkspaceDeletionTransactionTests {
         let store = TestWorkspaceDeletionStore()
         let queue = TestWorkspaceDeletionQueue()
         let cleaner = TestWorkspaceCredentialCleaner(failingServerID: fixture.secondServer.id)
-        let transaction = WorkspaceDeletionTransaction(
+        let transaction = ServerDataMutationTransaction(
             store: store,
             mutationQueue: queue,
-            credentialCleaner: cleaner
+            credentials: cleaner
         )
 
-        let journal = try transaction.commit(fixture.plan)
+        let journal = try transaction.commit(ServerDataMutationPlan(workspaceDeletion: fixture.plan))
 
-        #expect(store.materializedPlan?.remainingServers == [fixture.otherServer])
-        #expect(store.materializedPlan?.remainingWorkspaces == [fixture.otherWorkspace])
-        #expect(queue.enqueuedMutations == fixture.plan.pendingMutations)
+        #expect(store.materializedPlan?.resultingServers == [fixture.otherServer])
+        #expect(store.materializedPlan?.resultingWorkspaces == [fixture.otherWorkspace])
+        #expect(queue.enqueuedMutations.isEmpty)
         #expect(cleaner.cleanedServerIDs == [fixture.firstServer.id, fixture.secondServer.id])
         #expect(
-            journal.phase == .credentialCleanup(
-                pendingServerIDs: [fixture.secondServer.id],
-                lastFailure: journal.lastFailure
-            )
+            journal.phase == .finalizingCredentials
         )
-        #expect(journal.lastFailure?.stage == .credentialCleanup)
+        #expect(journal.lastFailure?.stage == .credentialFinalization)
         #expect(store.journal == journal)
     }
 
@@ -81,14 +78,14 @@ struct WorkspaceDeletionTransactionTests {
         store.failNextJournalWrite = true
         let queue = TestWorkspaceDeletionQueue()
         let cleaner = TestWorkspaceCredentialCleaner()
-        let transaction = WorkspaceDeletionTransaction(
+        let transaction = ServerDataMutationTransaction(
             store: store,
             mutationQueue: queue,
-            credentialCleaner: cleaner
+            credentials: cleaner
         )
 
         #expect(throws: TestWorkspaceDeletionError.self) {
-            try transaction.commit(fixture.plan)
+            try transaction.commit(ServerDataMutationPlan(workspaceDeletion: fixture.plan))
         }
         #expect(store.journal == nil)
         #expect(store.materializedPlan == nil)
@@ -102,34 +99,36 @@ struct WorkspaceDeletionTransactionTests {
         let store = TestWorkspaceDeletionStore()
         let failingQueue = TestWorkspaceDeletionQueue(shouldFail: true)
         let firstCleaner = TestWorkspaceCredentialCleaner()
-        let firstTransaction = WorkspaceDeletionTransaction(
+        let firstTransaction = ServerDataMutationTransaction(
             store: store,
             mutationQueue: failingQueue,
-            credentialCleaner: firstCleaner
+            credentials: firstCleaner
         )
 
-        let failedJournal = try firstTransaction.commit(fixture.plan)
+        let failedJournal = try firstTransaction.commit(
+            ServerDataMutationPlan(workspaceDeletion: fixture.plan)
+        )
 
         #expect(failedJournal.lastFailure?.stage == .pendingSyncQueue)
         #expect(store.journal == failedJournal)
-        #expect(store.materializedPlan == fixture.plan)
-        #expect(firstCleaner.cleanedServerIDs.isEmpty)
+        #expect(store.materializedPlan == failedJournal.plan)
+        #expect(firstCleaner.cleanedServerIDs == [
+            fixture.firstServer.id,
+            fixture.secondServer.id
+        ])
 
         let recoveredQueue = TestWorkspaceDeletionQueue()
         let recoveredCleaner = TestWorkspaceCredentialCleaner()
-        let restartedTransaction = WorkspaceDeletionTransaction(
+        let restartedTransaction = ServerDataMutationTransaction(
             store: store,
             mutationQueue: recoveredQueue,
-            credentialCleaner: recoveredCleaner
+            credentials: recoveredCleaner
         )
         let recoveredJournal = try #require(try restartedTransaction.resumePending())
 
         #expect(recoveredJournal.phase == .complete)
         #expect(recoveredQueue.enqueuedMutations == fixture.plan.pendingMutations)
-        #expect(recoveredCleaner.cleanedServerIDs == [
-            fixture.firstServer.id,
-            fixture.secondServer.id
-        ])
+        #expect(recoveredCleaner.cleanedServerIDs.isEmpty)
         #expect(store.journal == nil)
     }
 
@@ -143,7 +142,13 @@ struct WorkspaceDeletionTransactionTests {
 
         try store.storeServers(fixture.allServers)
         try store.storeWorkspaces(fixture.allWorkspaces)
-        try store.storeWorkspaceDeletionJournal(WorkspaceDeletionJournal(plan: fixture.plan))
+        var journal = ServerDataMutationJournal(
+            plan: ServerDataMutationPlan(workspaceDeletion: fixture.plan)
+        )
+        journal.didMaterializeLocalState = true
+        journal.pendingCredentialServerIDs = []
+        journal.didFinalizeCredentials = true
+        try store.storeServerDataMutationJournal(journal)
 
         let restartedStore = ServerLocalStore(defaults: defaults)
         guard case .loaded(let servers) = restartedStore.loadServers(),
@@ -161,17 +166,17 @@ struct WorkspaceDeletionTransactionTests {
         let fixture = WorkspaceDeletionFixture()
         let store = TestWorkspaceDeletionStore()
         store.failJournalClear = true
-        let transaction = WorkspaceDeletionTransaction(
+        let transaction = ServerDataMutationTransaction(
             store: store,
             mutationQueue: TestWorkspaceDeletionQueue(),
-            credentialCleaner: TestWorkspaceCredentialCleaner()
+            credentials: TestWorkspaceCredentialCleaner()
         )
 
-        let failedJournal = try transaction.commit(fixture.plan)
-
-        #expect(
-            failedJournal.phase == .finalizing(lastFailure: failedJournal.lastFailure)
+        let failedJournal = try transaction.commit(
+            ServerDataMutationPlan(workspaceDeletion: fixture.plan)
         )
+
+        #expect(failedJournal.phase == .finalizing)
         #expect(failedJournal.lastFailure?.stage == .localPersistence)
         #expect(store.journal == failedJournal)
 
@@ -216,17 +221,17 @@ struct WorkspaceDeletionTransactionTests {
 }
 
 @MainActor
-private final class TestWorkspaceDeletionStore: WorkspaceDeletionJournalStoring {
-    var journal: WorkspaceDeletionJournal?
-    var materializedPlan: WorkspaceDeletionPlan?
+private final class TestWorkspaceDeletionStore: ServerDataMutationJournalStoring {
+    var journal: ServerDataMutationJournal?
+    var materializedPlan: ServerDataMutationPlan?
     var failNextJournalWrite = false
     var failJournalClear = false
 
-    func loadWorkspaceDeletionJournal() throws -> WorkspaceDeletionJournal? {
+    func loadServerDataMutationJournal() throws -> ServerDataMutationJournal? {
         journal
     }
 
-    func storeWorkspaceDeletionJournal(_ journal: WorkspaceDeletionJournal) throws {
+    func storeServerDataMutationJournal(_ journal: ServerDataMutationJournal) throws {
         if failNextJournalWrite {
             failNextJournalWrite = false
             throw TestWorkspaceDeletionError.writeFailed
@@ -234,11 +239,11 @@ private final class TestWorkspaceDeletionStore: WorkspaceDeletionJournalStoring 
         self.journal = journal
     }
 
-    func materializeWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) throws {
+    func materializeServerDataMutation(_ plan: ServerDataMutationPlan) throws {
         materializedPlan = plan
     }
 
-    func clearWorkspaceDeletionJournal() throws {
+    func clearServerDataMutationJournal() throws {
         guard !failJournalClear else {
             throw TestWorkspaceDeletionError.writeFailed
         }
@@ -247,7 +252,7 @@ private final class TestWorkspaceDeletionStore: WorkspaceDeletionJournalStoring 
 }
 
 @MainActor
-private final class TestWorkspaceDeletionQueue: WorkspaceDeletionMutationEnqueuing {
+private final class TestWorkspaceDeletionQueue: ServerDataMutationEnqueuing {
     private let shouldFail: Bool
     private(set) var enqueuedMutations: [ServerPendingMutation] = []
 
@@ -255,14 +260,14 @@ private final class TestWorkspaceDeletionQueue: WorkspaceDeletionMutationEnqueui
         self.shouldFail = shouldFail
     }
 
-    func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws {
+    func enqueueServerDataMutations(_ mutations: [ServerPendingMutation]) throws {
         guard !shouldFail else { throw TestWorkspaceDeletionError.queueFailed }
         enqueuedMutations.append(contentsOf: mutations)
     }
 }
 
 @MainActor
-private final class TestWorkspaceCredentialCleaner: WorkspaceDeletionCredentialCleaning {
+private final class TestWorkspaceCredentialCleaner: ServerMutationCredentialTransacting {
     private let failingServerID: UUID?
     private(set) var cleanedServerIDs: [UUID] = []
 
@@ -276,6 +281,21 @@ private final class TestWorkspaceCredentialCleaner: WorkspaceDeletionCredentialC
             throw TestWorkspaceDeletionError.credentialCleanupFailed
         }
     }
+
+    func prepareServerCredentialTransaction(
+        id: UUID,
+        previousServer: Server?,
+        server: Server,
+        credentials: ServerCredentials
+    ) throws {}
+
+    func commitServerCredentialTransaction(
+        id: UUID,
+        previousServer: Server?,
+        server: Server
+    ) throws {}
+
+    func discardServerCredentialTransaction(id: UUID) throws {}
 }
 
 private enum TestWorkspaceDeletionError: Error {

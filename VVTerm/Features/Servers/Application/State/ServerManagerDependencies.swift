@@ -19,9 +19,7 @@ protocol ServerRemoteMutationClient: AnyObject {
 
 @MainActor
 protocol ServerSyncRepository:
-    ServerMutationTransactionEnqueuing,
-    WorkspaceDeletionMutationEnqueuing,
-    EnvironmentDeletionMutationEnqueuing,
+    ServerDataMutationEnqueuing,
     AnyObject {
     func pendingServerMutations() throws -> [ServerPendingMutation]
     func clearPendingServerAndWorkspaceMutations() throws
@@ -37,7 +35,6 @@ protocol ServerSyncRepository:
 protocol ServerManagerCredentialRepository:
     ServerCredentialTransactionRepository,
     ServerMutationCredentialTransacting,
-    WorkspaceDeletionCredentialCleaning,
     AnyObject {
     func deleteCredentials(for serverId: UUID) throws
 }

@@ -53,8 +53,8 @@ extension VVTermError: LocalizedError {
             return String(localized: "Authorization is required")
         case .serverNotFound:
             return String(localized: "Server no longer exists.")
-        case .serverMutationRecoveryPending:
-            return String(localized: "The server change is still being recovered. Try again after recovery completes.")
+        case .serverDataMutationRecoveryPending:
+            return String(localized: "The server data change is still being recovered. Try again after recovery completes.")
         case .workspaceNotFound:
             return String(localized: "Workspace no longer exists.")
         case .environmentNotFound:
@@ -63,12 +63,8 @@ extension VVTermError: LocalizedError {
             return String(localized: "Built-in environments cannot be deleted.")
         case .environmentFallbackUnavailable:
             return String(localized: "The fallback environment is not available.")
-        case .environmentDeletionRecoveryPending:
-            return String(localized: "The environment was deleted, but sync recovery is still pending.")
         case .workspaceDeletionChanged:
             return String(localized: "The workspace changed while deletion was authorized. Review it and try again.")
-        case .workspaceDeletionRecoveryPending:
-            return String(localized: "The workspace was deleted, but cleanup is still pending and will retry.")
         case .timeout:
             return String(localized: "Connection timed out")
         }

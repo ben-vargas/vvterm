@@ -233,9 +233,7 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
     var workspaces: [Workspace]
     var persistError: Error?
     var persistAttempts = 0
-    var serverMutationJournal: ServerMutationTransactionJournal?
-    var journal: WorkspaceDeletionJournal?
-    var environmentDeletionJournal: EnvironmentDeletionJournal?
+    var serverMutationJournal: ServerDataMutationJournal?
     var ambiguousCloudRecoveryBackup: AmbiguousCloudRecoveryBackup?
 
     private let serverLoadResult: ServerLocalLoadResult<[Server]>?
@@ -267,14 +265,14 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
 
     func persist(servers: [Server], workspaces: [Workspace]) throws {
         persistAttempts += 1
-        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
+        if serverMutationJournal != nil { throw ServerLocalStoreError.serverDataMutationPending }
         if let persistError { throw persistError }
         self.servers = servers
         self.workspaces = workspaces
     }
 
     func clearServerData() throws {
-        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
+        if serverMutationJournal != nil { throw ServerLocalStoreError.serverDataMutationPending }
         servers = []
         workspaces = []
     }
@@ -291,42 +289,23 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
         ambiguousCloudRecoveryBackup = nil
     }
 
-    func loadServerMutationTransactionJournal() throws -> ServerMutationTransactionJournal? {
+    func loadServerDataMutationJournal() throws -> ServerDataMutationJournal? {
         serverMutationJournal
     }
-    func storeServerMutationTransactionJournal(
-        _ journal: ServerMutationTransactionJournal
+    func storeServerDataMutationJournal(
+        _ journal: ServerDataMutationJournal
     ) throws {
         serverMutationJournal = journal
     }
-    func materializeServerMutation(_ plan: ServerMutationTransactionPlan) throws {
+    func materializeServerDataMutation(_ plan: ServerDataMutationPlan) throws {
         if let persistError { throw persistError }
         servers = plan.resultingServers
         workspaces = plan.resultingWorkspaces
     }
-    func clearServerMutationTransactionJournal() throws {
+    func clearServerDataMutationJournal() throws {
         serverMutationJournal = nil
     }
 
-    func loadWorkspaceDeletionJournal() throws -> WorkspaceDeletionJournal? { journal }
-    func storeWorkspaceDeletionJournal(_ journal: WorkspaceDeletionJournal) throws {
-        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
-        self.journal = journal
-    }
-    func materializeWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) throws {
-        servers = plan.remainingServers
-        workspaces = plan.remainingWorkspaces
-    }
-    func clearWorkspaceDeletionJournal() throws { journal = nil }
-    func loadEnvironmentDeletionJournal() throws -> EnvironmentDeletionJournal? { environmentDeletionJournal }
-    func storeEnvironmentDeletionJournal(_ journal: EnvironmentDeletionJournal) throws {
-        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
-        environmentDeletionJournal = journal
-    }
-    func materializeEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) throws {
-        try persist(servers: plan.resultingServers, workspaces: plan.resultingWorkspaces)
-    }
-    func clearEnvironmentDeletionJournal() throws { environmentDeletionJournal = nil }
 }
 
 @MainActor

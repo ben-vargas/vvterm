@@ -4,6 +4,8 @@ nonisolated struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable, Send
     let id: UUID
     let workspace: Workspace
     let deletedServers: [Server]
+    let previousServers: [Server]
+    let previousWorkspaces: [Workspace]
     let remainingServers: [Server]
     let remainingWorkspaces: [Workspace]
     let pendingMutations: [ServerPendingMutation]
@@ -28,6 +30,8 @@ nonisolated struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable, Send
         self.id = id
         self.workspace = workspace
         self.deletedServers = deletedServers
+        self.previousServers = servers
+        self.previousWorkspaces = workspaces
         self.remainingServers = servers.filter { $0.workspaceId != workspaceID }
         self.remainingWorkspaces = workspaces.filter { $0.id != workspaceID }
         self.pendingMutations = deletedServers.enumerated().map { index, server in
@@ -50,165 +54,5 @@ nonisolated struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable, Send
         deletedServers == other.deletedServers &&
         remainingServers == other.remainingServers &&
         remainingWorkspaces == other.remainingWorkspaces
-    }
-}
-
-nonisolated struct WorkspaceDeletionJournal: Codable, Equatable, Sendable {
-    enum FailureStage: String, Codable, Equatable {
-        case localPersistence
-        case pendingSyncQueue
-        case credentialCleanup
-    }
-
-    struct Failure: Codable, Equatable {
-        let stage: FailureStage
-        let message: String
-    }
-
-    enum Phase: Equatable {
-        case materializing(lastFailure: Failure?)
-        case credentialCleanup(pendingServerIDs: [UUID], lastFailure: Failure?)
-        case finalizing(lastFailure: Failure?)
-        case complete
-    }
-
-    let plan: WorkspaceDeletionPlan
-    var didMaterializeLocalState: Bool
-    var didEnqueuePendingMutations: Bool
-    var pendingCredentialServerIDs: [UUID]
-    var lastFailure: Failure?
-    var didFinalize: Bool
-
-    init(plan: WorkspaceDeletionPlan) {
-        self.plan = plan
-        self.didMaterializeLocalState = false
-        self.didEnqueuePendingMutations = false
-        self.pendingCredentialServerIDs = plan.deletedServers.map(\.id)
-        self.lastFailure = nil
-        self.didFinalize = false
-    }
-
-    var phase: Phase {
-        if !didMaterializeLocalState || !didEnqueuePendingMutations {
-            return .materializing(lastFailure: lastFailure)
-        }
-        if !pendingCredentialServerIDs.isEmpty {
-            return .credentialCleanup(
-                pendingServerIDs: pendingCredentialServerIDs,
-                lastFailure: lastFailure
-            )
-        }
-        return didFinalize ? .complete : .finalizing(lastFailure: lastFailure)
-    }
-}
-
-@MainActor
-protocol WorkspaceDeletionJournalStoring {
-    func loadWorkspaceDeletionJournal() throws -> WorkspaceDeletionJournal?
-    func storeWorkspaceDeletionJournal(_ journal: WorkspaceDeletionJournal) throws
-    func materializeWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) throws
-    func clearWorkspaceDeletionJournal() throws
-}
-
-@MainActor
-protocol WorkspaceDeletionMutationEnqueuing {
-    func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws
-}
-
-@MainActor
-protocol WorkspaceDeletionCredentialCleaning {
-    func cleanupCredentials(for server: Server) throws
-}
-
-@MainActor
-struct WorkspaceDeletionTransaction {
-    private let store: any WorkspaceDeletionJournalStoring
-    private let mutationQueue: any WorkspaceDeletionMutationEnqueuing
-    private let credentialCleaner: any WorkspaceDeletionCredentialCleaning
-
-    init(
-        store: any WorkspaceDeletionJournalStoring,
-        mutationQueue: any WorkspaceDeletionMutationEnqueuing,
-        credentialCleaner: any WorkspaceDeletionCredentialCleaning
-    ) {
-        self.store = store
-        self.mutationQueue = mutationQueue
-        self.credentialCleaner = credentialCleaner
-    }
-
-    func commit(_ plan: WorkspaceDeletionPlan) throws -> WorkspaceDeletionJournal {
-        let journal = WorkspaceDeletionJournal(plan: plan)
-        try store.storeWorkspaceDeletionJournal(journal)
-        return resume(journal)
-    }
-
-    func resumePending() throws -> WorkspaceDeletionJournal? {
-        guard let journal = try store.loadWorkspaceDeletionJournal() else {
-            return nil
-        }
-        return resume(journal)
-    }
-
-    private func resume(_ storedJournal: WorkspaceDeletionJournal) -> WorkspaceDeletionJournal {
-        var journal = storedJournal
-
-        if !journal.didMaterializeLocalState {
-            do {
-                try store.materializeWorkspaceDeletion(journal.plan)
-                journal.didMaterializeLocalState = true
-                journal.lastFailure = nil
-                try store.storeWorkspaceDeletionJournal(journal)
-            } catch {
-                return recording(error, at: .localPersistence, in: journal)
-            }
-        }
-
-        if !journal.didEnqueuePendingMutations {
-            do {
-                try mutationQueue.enqueueWorkspaceDeletionMutations(journal.plan.pendingMutations)
-                journal.didEnqueuePendingMutations = true
-                journal.lastFailure = nil
-                try store.storeWorkspaceDeletionJournal(journal)
-            } catch {
-                return recording(error, at: .pendingSyncQueue, in: journal)
-            }
-        }
-
-        while let serverID = journal.pendingCredentialServerIDs.first,
-              let server = journal.plan.deletedServers.first(where: { $0.id == serverID }) {
-            do {
-                try credentialCleaner.cleanupCredentials(for: server)
-                journal.pendingCredentialServerIDs.removeFirst()
-                journal.lastFailure = nil
-                try store.storeWorkspaceDeletionJournal(journal)
-            } catch {
-                return recording(error, at: .credentialCleanup, in: journal)
-            }
-        }
-
-        if case .finalizing = journal.phase {
-            do {
-                try store.clearWorkspaceDeletionJournal()
-                journal.didFinalize = true
-                journal.lastFailure = nil
-            } catch {
-                return recording(error, at: .localPersistence, in: journal)
-            }
-        }
-        return journal
-    }
-
-    private func recording(
-        _ error: Error,
-        at stage: WorkspaceDeletionJournal.FailureStage,
-        in journal: WorkspaceDeletionJournal
-    ) -> WorkspaceDeletionJournal {
-        var failedJournal = journal
-        failedJournal.lastFailure = WorkspaceDeletionJournal.Failure(
-            stage: stage,
-            message: error.localizedDescription
-        )
-        try? store.storeWorkspaceDeletionJournal(failedJournal)
-        return failedJournal
     }
 }

@@ -4,10 +4,8 @@ import Foundation
 struct ServerLocalStore {
     static let serversStorageKey = "com.vivy.vvterm.servers"
     static let workspacesStorageKey = "com.vivy.vvterm.workspaces"
-    private static let serverMutationTransactionJournalKey =
-        "com.vivy.vvterm.serverMutationTransactionJournal.v1"
-    private static let workspaceDeletionJournalKey = "com.vivy.vvterm.workspaceDeletionJournal.v1"
-    private static let environmentDeletionJournalKey = "com.vivy.vvterm.environmentDeletionJournal.v1"
+    private static let serverDataMutationJournalKey =
+        "com.vivy.vvterm.serverDataMutationJournal.v2"
     private static let ambiguousCloudRecoveryBackupKey =
         "com.vivy.vvterm.ambiguousCloudRecoveryBackup.v1"
 
@@ -26,46 +24,34 @@ struct ServerLocalStore {
     }
 
     func loadServers() -> ServerLocalLoadResult<[Server]> {
-        if let journal = try? loadServerMutationTransactionJournal() {
+        if let journal = try? loadServerDataMutationJournal() {
             return .loaded(
                 journal.presentsResultingState
                     ? journal.plan.resultingServers
                     : journal.plan.previousServers
             )
         }
-        if let plan = try? loadWorkspaceDeletionJournal()?.plan {
-            return .loaded(plan.remainingServers)
-        }
-        if let plan = try? loadEnvironmentDeletionJournal()?.plan {
-            return .loaded(plan.resultingServers)
-        }
         return load([Server].self, forKey: serversKey, collection: .servers)
     }
 
     func loadWorkspaces() -> ServerLocalLoadResult<[Workspace]> {
-        if let journal = try? loadServerMutationTransactionJournal() {
+        if let journal = try? loadServerDataMutationJournal() {
             return .loaded(
                 journal.presentsResultingState
                     ? journal.plan.resultingWorkspaces
                     : journal.plan.previousWorkspaces
             )
         }
-        if let plan = try? loadWorkspaceDeletionJournal()?.plan {
-            return .loaded(plan.remainingWorkspaces)
-        }
-        if let plan = try? loadEnvironmentDeletionJournal()?.plan {
-            return .loaded(plan.resultingWorkspaces)
-        }
         return load([Workspace].self, forKey: workspacesKey, collection: .workspaces)
     }
 
     func storeServers(_ servers: [Server]) throws {
-        try requireNoPendingServerMutation()
+        try requireNoPendingServerDataMutation()
         try store(servers, forKey: serversKey)
     }
 
     func storeWorkspaces(_ workspaces: [Workspace]) throws {
-        try requireNoPendingServerMutation()
+        try requireNoPendingServerDataMutation()
         try store(workspaces, forKey: workspacesKey)
     }
 
@@ -103,34 +89,35 @@ struct ServerLocalStore {
     }
 }
 
-extension ServerLocalStore: ServerMutationTransactionJournalStoring {
-    func loadServerMutationTransactionJournal() throws -> ServerMutationTransactionJournal? {
-        guard let data = defaults.data(forKey: Self.serverMutationTransactionJournalKey) else {
+extension ServerLocalStore: ServerDataMutationJournalStoring {
+    func loadServerDataMutationJournal() throws -> ServerDataMutationJournal? {
+        guard let data = defaults.data(forKey: Self.serverDataMutationJournalKey) else {
             return nil
         }
-        return try JSONDecoder().decode(ServerMutationTransactionJournal.self, from: data)
+        return try JSONDecoder().decode(ServerDataMutationJournal.self, from: data)
     }
 
-    func storeServerMutationTransactionJournal(
-        _ journal: ServerMutationTransactionJournal
+    func storeServerDataMutationJournal(
+        _ journal: ServerDataMutationJournal
     ) throws {
         let data = try JSONEncoder().encode(journal)
-        defaults.set(data, forKey: Self.serverMutationTransactionJournalKey)
-        guard defaults.data(forKey: Self.serverMutationTransactionJournalKey) == data else {
+        defaults.set(data, forKey: Self.serverDataMutationJournalKey)
+        guard defaults.data(forKey: Self.serverDataMutationJournalKey) == data,
+              try loadServerDataMutationJournal() == journal else {
             throw ServerLocalStoreError.persistenceFailed
         }
     }
 
-    func materializeServerMutation(_ plan: ServerMutationTransactionPlan) throws {
+    func materializeServerDataMutation(_ plan: ServerDataMutationPlan) throws {
         try persistCollections(
             servers: plan.resultingServers,
             workspaces: plan.resultingWorkspaces
         )
     }
 
-    func clearServerMutationTransactionJournal() throws {
-        defaults.removeObject(forKey: Self.serverMutationTransactionJournalKey)
-        guard defaults.object(forKey: Self.serverMutationTransactionJournalKey) == nil else {
+    func clearServerDataMutationJournal() throws {
+        defaults.removeObject(forKey: Self.serverDataMutationJournalKey)
+        guard defaults.object(forKey: Self.serverDataMutationJournalKey) == nil else {
             throw ServerLocalStoreError.persistenceFailed
         }
     }
@@ -145,12 +132,12 @@ extension ServerLocalStore: ServerLocalRepository {
     }
 
     func persist(servers: [Server], workspaces: [Workspace]) throws {
-        try requireNoPendingServerMutation()
+        try requireNoPendingServerDataMutation()
         try persistCollections(servers: servers, workspaces: workspaces)
     }
 
     func clearServerData() throws {
-        try requireNoPendingServerMutation()
+        try requireNoPendingServerDataMutation()
         defaults.removeObject(forKey: serversKey)
         defaults.removeObject(forKey: workspacesKey)
     }
@@ -181,9 +168,9 @@ extension ServerLocalStore: ServerLocalRepository {
         }
     }
 
-    private func requireNoPendingServerMutation() throws {
-        guard try loadServerMutationTransactionJournal() == nil else {
-            throw ServerLocalStoreError.serverMutationPending
+    private func requireNoPendingServerDataMutation() throws {
+        guard try loadServerDataMutationJournal() == nil else {
+            throw ServerLocalStoreError.serverDataMutationPending
         }
     }
 
@@ -215,53 +202,5 @@ extension ServerLocalStore: ServerLocalRepository {
 
 nonisolated enum ServerLocalStoreError: Error, Equatable, Sendable {
     case persistenceFailed
-    case serverMutationPending
-}
-
-extension ServerLocalStore: WorkspaceDeletionJournalStoring {
-    func loadWorkspaceDeletionJournal() throws -> WorkspaceDeletionJournal? {
-        guard let data = defaults.data(forKey: Self.workspaceDeletionJournalKey) else {
-            return nil
-        }
-        return try JSONDecoder().decode(WorkspaceDeletionJournal.self, from: data)
-    }
-
-    func storeWorkspaceDeletionJournal(_ journal: WorkspaceDeletionJournal) throws {
-        try requireNoPendingServerMutation()
-        defaults.set(
-            try JSONEncoder().encode(journal),
-            forKey: Self.workspaceDeletionJournalKey
-        )
-    }
-
-    func materializeWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) throws {
-        try persistCollections(
-            servers: plan.remainingServers,
-            workspaces: plan.remainingWorkspaces
-        )
-    }
-
-    func clearWorkspaceDeletionJournal() throws {
-        defaults.removeObject(forKey: Self.workspaceDeletionJournalKey)
-    }
-}
-
-extension ServerLocalStore: EnvironmentDeletionJournalStoring {
-    func loadEnvironmentDeletionJournal() throws -> EnvironmentDeletionJournal? {
-        guard let data = defaults.data(forKey: Self.environmentDeletionJournalKey) else { return nil }
-        return try JSONDecoder().decode(EnvironmentDeletionJournal.self, from: data)
-    }
-
-    func storeEnvironmentDeletionJournal(_ journal: EnvironmentDeletionJournal) throws {
-        try requireNoPendingServerMutation()
-        defaults.set(try JSONEncoder().encode(journal), forKey: Self.environmentDeletionJournalKey)
-    }
-
-    func materializeEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) throws {
-        try persistCollections(servers: plan.resultingServers, workspaces: plan.resultingWorkspaces)
-    }
-
-    func clearEnvironmentDeletionJournal() throws {
-        defaults.removeObject(forKey: Self.environmentDeletionJournalKey)
-    }
+    case serverDataMutationPending
 }

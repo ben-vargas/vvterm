@@ -54,16 +54,11 @@ final class ServerRemoteSyncCoordinator {
         let stateStore = dependencies.stateStore
         let syncRepository = dependencies.syncRepository
         startupTask = Task { [weak self, stateStore, syncRepository] in
-            let serverMutationRecovery = self?.recoverPendingServerMutation()
-            if case .pending? = serverMutationRecovery {
+            let mutationRecovery = self?.recoverPendingServerDataMutation()
+            if case .pending? = mutationRecovery {
                 return
             }
-            let recoveredWorkspaceDeletion = self?.recoverPendingWorkspaceDeletion() ?? false
-            let recoveredEnvironmentDeletion = self?.recoverPendingEnvironmentDeletion() ?? false
-            let recoveredPendingMutation = serverMutationRecovery == .complete
-                || recoveredWorkspaceDeletion
-                || recoveredEnvironmentDeletion
-            if recoveredPendingMutation, stateStore.isSyncEnabled {
+            if mutationRecovery == .complete, stateStore.isSyncEnabled {
                 await syncRepository.drainPendingMutations()
             }
             guard !Task.isCancelled else { return }
@@ -90,7 +85,7 @@ final class ServerRemoteSyncCoordinator {
     func clearLocalDataAndResync() async throws {
         logger.info("Replacing local server data from an authoritative CloudKit fetch...")
 
-        try stateStore.requireNoPendingServerMutation()
+        try stateStore.requireNoPendingServerDataMutation()
 
         if let activeLoad {
             await activeLoad.task.value
@@ -144,7 +139,7 @@ final class ServerRemoteSyncCoordinator {
             await activeLoad.task.value
         }
         guard stateStore.ambiguousCloudRecovery != nil else { return }
-        try stateStore.requireNoPendingServerMutation()
+        try stateStore.requireNoPendingServerDataMutation()
         guard stateStore.isSyncEnabled,
               dependencies.remoteRepository.isAvailable,
               let changes = pendingAmbiguousFullFetch else {
@@ -217,24 +212,8 @@ final class ServerRemoteSyncCoordinator {
     }
 
     func drainPendingMutations() async {
-        guard stateStore.isSyncEnabled, !stateStore.hasPendingServerMutation else { return }
+        guard stateStore.isSyncEnabled, !stateStore.hasPendingServerDataMutation else { return }
         await dependencies.syncRepository.drainPendingMutations()
-    }
-
-    func commitWorkspaceDeletion(
-        _ plan: WorkspaceDeletionPlan
-    ) throws -> WorkspaceDeletionJournal {
-        let journal = try workspaceDeletionTransaction.commit(plan)
-        applyCommittedWorkspaceDeletion(plan)
-        return journal
-    }
-
-    func commitEnvironmentDeletion(
-        _ plan: EnvironmentDeletionPlan
-    ) throws -> EnvironmentDeletionJournal {
-        let journal = try environmentDeletionTransaction.commit(plan)
-        stateStore.applyCommittedEnvironmentDeletion(plan)
-        return journal
     }
 
     func removeKnownHostIfUnused(
@@ -626,92 +605,45 @@ final class ServerRemoteSyncCoordinator {
         }
     }
 
-    private var workspaceDeletionTransaction: WorkspaceDeletionTransaction {
-        stateStore.makeWorkspaceDeletionTransaction(
-            mutationQueue: dependencies.syncRepository,
-            credentialCleaner: dependencies.credentialRepository
-        )
-    }
-
-    private var serverMutationTransaction: ServerMutationTransaction {
-        stateStore.makeServerMutationTransaction(
+    private var serverDataMutationTransaction: ServerDataMutationTransaction {
+        stateStore.makeServerDataMutationTransaction(
             mutationQueue: dependencies.syncRepository,
             credentials: dependencies.credentialRepository
         )
     }
 
-    private enum ServerMutationRecoveryResult: Equatable {
+    private enum ServerDataMutationRecoveryResult: Equatable {
         case none
         case complete
         case pending
     }
 
-    private func recoverPendingServerMutation() -> ServerMutationRecoveryResult {
+    private func recoverPendingServerDataMutation() -> ServerDataMutationRecoveryResult {
         do {
-            guard let journal = try serverMutationTransaction.resumePending() else {
+            guard let journal = try serverDataMutationTransaction.resumePending() else {
                 stateStore.restorePersistedCollections()
                 return .none
             }
             if journal.presentsResultingState {
-                stateStore.applyCommittedServerMutation(journal.plan)
+                applyCommittedServerDataMutation(journal.plan)
             }
             guard journal.phase == .complete else {
-                logger.error("Server mutation recovery remains pending")
+                logger.error("Server data mutation recovery remains pending")
                 return .pending
             }
             return .complete
         } catch {
-            logger.error("Could not resume server mutation: \(error.localizedDescription)")
+            logger.error("Could not resume server data mutation: \(error.localizedDescription)")
             return .pending
         }
     }
 
-    private var environmentDeletionTransaction: EnvironmentDeletionTransaction {
-        stateStore.makeEnvironmentDeletionTransaction(
-            mutationQueue: dependencies.syncRepository
-        )
-    }
-
-    private func recoverPendingWorkspaceDeletion() -> Bool {
-        do {
-            guard let journal = try workspaceDeletionTransaction.resumePending() else {
-                return false
-            }
-            applyCommittedWorkspaceDeletion(journal.plan)
-            if journal.phase != .complete {
-                logger.error("Workspace deletion recovery remains pending")
-            }
-            return true
-        } catch {
-            logger.error(
-                "Could not resume workspace deletion: \(error.localizedDescription)"
-            )
-            return false
-        }
-    }
-
-    private func recoverPendingEnvironmentDeletion() -> Bool {
-        do {
-            guard let journal = try environmentDeletionTransaction.resumePending() else {
-                return false
-            }
-            stateStore.applyCommittedEnvironmentDeletion(journal.plan)
-            if journal.phase != .complete {
-                logger.error("Environment deletion recovery remains pending")
-            }
-            return true
-        } catch {
-            logger.error("Could not resume environment deletion: \(error.localizedDescription)")
-            return false
-        }
-    }
-
-    private func applyCommittedWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) {
+    private func applyCommittedServerDataMutation(_ plan: ServerDataMutationPlan) {
         let deletedServerIDs = Set(plan.deletedServers.map(\.id))
         for server in plan.deletedServers {
             removeKnownHostIfUnused(for: server, excluding: deletedServerIDs)
         }
-        stateStore.applyCommittedWorkspaceDeletion(plan)
+        stateStore.applyCommittedServerDataMutation(plan)
     }
 
     private func removeKnownHostsDeletedByIncrementalChanges(

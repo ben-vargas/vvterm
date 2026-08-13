@@ -120,7 +120,7 @@ struct ServerLocalStoreTests {
     }
 
     @Test
-    func normalPersistenceIsRejectedWhileServerTransactionJournalExists() throws {
+    func normalPersistenceIsRejectedWhileServerDataJournalExists() throws {
         let fixture = try makeDefaults()
         let defaults = fixture.defaults
         defer { defaults.removePersistentDomain(forName: fixture.suiteName) }
@@ -132,7 +132,7 @@ struct ServerLocalStoreTests {
             host: "server.example.test",
             username: "root"
         )
-        let plan = ServerMutationTransactionPlan(
+        let plan = ServerDataMutationPlan(
             id: UUID(),
             previousServers: [server],
             previousWorkspaces: [workspace],
@@ -143,20 +143,20 @@ struct ServerLocalStoreTests {
                 payload: .serverUpsert(server),
                 createdAt: .distantPast
             ),
-            credentialAction: .delete(server)
+            credentialAction: .delete([server])
         )
-        try store.storeServerMutationTransactionJournal(
-            ServerMutationTransactionJournal(plan: plan)
+        try store.storeServerDataMutationJournal(
+            ServerDataMutationJournal(plan: plan)
         )
 
-        #expect(throws: ServerLocalStoreError.serverMutationPending) {
+        #expect(throws: ServerLocalStoreError.serverDataMutationPending) {
             try store.persist(servers: [], workspaces: [])
         }
-        #expect(throws: ServerLocalStoreError.serverMutationPending) {
+        #expect(throws: ServerLocalStoreError.serverDataMutationPending) {
             try store.clearServerData()
         }
 
-        try store.materializeServerMutation(plan)
+        try store.materializeServerDataMutation(plan)
         guard case .loaded(let servers) = store.loadServers() else {
             Issue.record("Expected transaction state")
             return

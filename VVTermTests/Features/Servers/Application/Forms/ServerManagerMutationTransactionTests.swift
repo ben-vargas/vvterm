@@ -34,7 +34,7 @@ struct ServerManagerMutationTransactionTests {
 
         sync.enqueueError = nil
         let resumed = try #require(
-            try manager.stateStore.makeServerMutationTransaction(
+            try manager.stateStore.makeServerDataMutationTransaction(
                 mutationQueue: sync,
                 credentials: credentials
             ).resumePending()
@@ -77,7 +77,7 @@ struct ServerManagerMutationTransactionTests {
 
         sync.enqueueError = nil
         let resumed = try #require(
-            try manager.stateStore.makeServerMutationTransaction(
+            try manager.stateStore.makeServerDataMutationTransaction(
                 mutationQueue: sync,
                 credentials: credentials
             ).resumePending()
@@ -109,7 +109,7 @@ struct ServerManagerMutationTransactionTests {
 
         sync.enqueueError = nil
         let resumed = try #require(
-            try manager.stateStore.makeServerMutationTransaction(
+            try manager.stateStore.makeServerDataMutationTransaction(
                 mutationQueue: sync,
                 credentials: credentials
             ).resumePending()
@@ -162,7 +162,7 @@ struct ServerManagerMutationTransactionTests {
         }
         var editedWorkspace = workspace
         editedWorkspace.name = "Changed"
-        await #expect(throws: ServerLocalStoreError.self) {
+        await #expect(throws: ServerDataMutationTransactionError.self) {
             try await manager.updateWorkspace(editedWorkspace)
         }
 
@@ -170,7 +170,7 @@ struct ServerManagerMutationTransactionTests {
         #expect(sync.enqueuedServerMutations.isEmpty)
         credentials.commitError = nil
         let resumed = try #require(
-            try manager.stateStore.makeServerMutationTransaction(
+            try manager.stateStore.makeServerDataMutationTransaction(
                 mutationQueue: sync,
                 credentials: credentials
             ).resumePending()
@@ -196,15 +196,136 @@ struct ServerManagerMutationTransactionTests {
                 credentials: ServerCredentials(serverId: server.id)
             )
         }
-        await #expect(throws: ServerMutationTransactionError.self) {
+        await #expect(throws: ServerDataMutationTransactionError.self) {
             try await manager.updateLastConnected(for: server)
         }
-        await #expect(throws: ServerMutationTransactionError.self) {
+        await #expect(throws: ServerDataMutationTransactionError.self) {
             try await manager.clearLocalDataAndResync()
         }
 
         #expect(manager.servers.first?.lastConnected == nil)
         #expect(local.servers.first?.lastConnected == nil)
+        #expect(sync.clearCount == 0)
+    }
+
+    @Test
+    func workspaceUpsertQueueFailureKeepsDurableLocalStateAndSyncIntent() async throws {
+        let workspace = makeWorkspace()
+        let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])
+        let credentials = ServerManagerCredentialRepositoryFake()
+        let sync = ServerSyncRepositoryFake()
+        sync.enqueueError = ServerSyncRepositoryTestError.rejected
+        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+        var editedWorkspace = workspace
+        editedWorkspace.name = "Changed"
+
+        await #expect(throws: VVTermError.self) {
+            try await manager.updateWorkspace(editedWorkspace)
+        }
+
+        #expect(manager.workspaces.map(\.name) == ["Changed"])
+        #expect(local.workspaces.map(\.name) == ["Changed"])
+        #expect(local.serverMutationJournal?.phase == .enqueueing)
+        #expect(sync.enqueuedServerMutations.isEmpty)
+
+        sync.enqueueError = nil
+        let recovered = try #require(
+            try manager.stateStore.makeServerDataMutationTransaction(
+                mutationQueue: sync,
+                credentials: credentials
+            ).resumePending()
+        )
+
+        #expect(recovered.phase == .complete)
+        #expect(sync.enqueuedServerMutations.count == 1)
+        guard case .workspaceUpsert(let queuedWorkspace) = sync.enqueuedServerMutations[0].payload else {
+            Issue.record("Expected a workspace upsert")
+            return
+        }
+        #expect(queuedWorkspace.name == "Changed")
+    }
+
+    @Test
+    func workspaceReorderQueueFailureNeverCommitsOnlyPartOfTheBatch() async throws {
+        let first = makeWorkspace()
+        let second = Workspace(
+            id: UUID(uuidString: "10000000-0000-0000-0000-000000000002")!,
+            name: "Second",
+            order: 1,
+            createdAt: .distantPast,
+            updatedAt: .distantPast
+        )
+        let local = ServerLocalRepositoryFake(servers: [], workspaces: [first, second])
+        let credentials = ServerManagerCredentialRepositoryFake()
+        let sync = ServerSyncRepositoryFake()
+        sync.enqueueError = ServerSyncRepositoryTestError.rejected
+        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+
+        await #expect(throws: VVTermError.self) {
+            try await manager.reorderWorkspaces(from: IndexSet(integer: 0), to: 2)
+        }
+
+        #expect(manager.workspaces.map(\.id) == [second.id, first.id])
+        #expect(local.workspaces.map(\.id) == [second.id, first.id])
+        #expect(local.serverMutationJournal?.plan.pendingMutations.count == 2)
+        #expect(sync.enqueuedServerMutations.isEmpty)
+
+        sync.enqueueError = nil
+        let recovered = try #require(
+            try manager.stateStore.makeServerDataMutationTransaction(
+                mutationQueue: sync,
+                credentials: credentials
+            ).resumePending()
+        )
+
+        #expect(recovered.phase == .complete)
+        #expect(sync.enqueuedServerMutations.count == 2)
+    }
+
+    @Test
+    func pendingWorkspaceMutationBlocksOtherMutationsAndAuthoritativeResync() async throws {
+        let first = makeWorkspace()
+        let second = Workspace(
+            id: UUID(uuidString: "10000000-0000-0000-0000-000000000002")!,
+            name: "Second",
+            order: 1,
+            createdAt: .distantPast,
+            updatedAt: .distantPast
+        )
+        let custom = ServerEnvironment(
+            id: UUID(uuidString: "30000000-0000-0000-0000-000000000001")!,
+            name: "Review",
+            shortName: "Rev",
+            colorHex: "#123456"
+        )
+        var workspaceWithEnvironment = second
+        workspaceWithEnvironment.environments.append(custom)
+        let local = ServerLocalRepositoryFake(
+            servers: [],
+            workspaces: [first, workspaceWithEnvironment]
+        )
+        let credentials = ServerManagerCredentialRepositoryFake()
+        let sync = ServerSyncRepositoryFake()
+        sync.enqueueError = ServerSyncRepositoryTestError.rejected
+        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+        var editedFirst = first
+        editedFirst.name = "Pending"
+
+        await #expect(throws: VVTermError.self) {
+            try await manager.updateWorkspace(editedFirst)
+        }
+        await #expect(throws: ServerDataMutationTransactionError.self) {
+            try await manager.deleteWorkspace(workspaceWithEnvironment)
+        }
+        await #expect(throws: ServerDataMutationTransactionError.self) {
+            _ = try await manager.deleteEnvironment(custom, in: workspaceWithEnvironment)
+        }
+        await #expect(throws: ServerDataMutationTransactionError.self) {
+            try await manager.clearLocalDataAndResync()
+        }
+
+        #expect(local.serverMutationJournal?.plan.kind == .workspaceUpsert(first.id))
+        #expect(local.workspaces.map(\.id) == [first.id, second.id])
         #expect(sync.clearCount == 0)
     }
 

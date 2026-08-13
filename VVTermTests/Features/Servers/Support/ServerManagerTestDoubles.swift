@@ -52,9 +52,7 @@ final class ServerLocalRepositoryFake: ServerLocalRepository {
     var persistError: Error?
     var serverMutationJournalStoreError: Error?
     var serverMutationJournalClearError: Error?
-    var serverMutationJournal: ServerMutationTransactionJournal?
-    var journal: WorkspaceDeletionJournal?
-    var environmentDeletionJournal: EnvironmentDeletionJournal?
+    var serverMutationJournal: ServerDataMutationJournal?
     var ambiguousCloudRecoveryBackup: AmbiguousCloudRecoveryBackup?
 
     init(servers: [Server], workspaces: [Workspace]) {
@@ -84,14 +82,14 @@ final class ServerLocalRepositoryFake: ServerLocalRepository {
     }
 
     func persist(servers: [Server], workspaces: [Workspace]) throws {
-        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
+        if serverMutationJournal != nil { throw ServerLocalStoreError.serverDataMutationPending }
         if let persistError { throw persistError }
         self.servers = servers
         self.workspaces = workspaces
     }
 
     func clearServerData() throws {
-        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
+        if serverMutationJournal != nil { throw ServerLocalStoreError.serverDataMutationPending }
         servers = []
         workspaces = []
     }
@@ -108,46 +106,25 @@ final class ServerLocalRepositoryFake: ServerLocalRepository {
         ambiguousCloudRecoveryBackup = nil
     }
 
-    func loadServerMutationTransactionJournal() throws -> ServerMutationTransactionJournal? {
+    func loadServerDataMutationJournal() throws -> ServerDataMutationJournal? {
         serverMutationJournal
     }
-    func storeServerMutationTransactionJournal(
-        _ journal: ServerMutationTransactionJournal
+    func storeServerDataMutationJournal(
+        _ journal: ServerDataMutationJournal
     ) throws {
         if let serverMutationJournalStoreError { throw serverMutationJournalStoreError }
         serverMutationJournal = journal
     }
-    func materializeServerMutation(_ plan: ServerMutationTransactionPlan) throws {
+    func materializeServerDataMutation(_ plan: ServerDataMutationPlan) throws {
         if let persistError { throw persistError }
         servers = plan.resultingServers
         workspaces = plan.resultingWorkspaces
     }
-    func clearServerMutationTransactionJournal() throws {
+    func clearServerDataMutationJournal() throws {
         if let serverMutationJournalClearError { throw serverMutationJournalClearError }
         serverMutationJournal = nil
     }
 
-    func loadWorkspaceDeletionJournal() throws -> WorkspaceDeletionJournal? { journal }
-    func storeWorkspaceDeletionJournal(_ journal: WorkspaceDeletionJournal) throws {
-        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
-        self.journal = journal
-    }
-    func materializeWorkspaceDeletion(_ plan: WorkspaceDeletionPlan) throws {
-        servers = plan.remainingServers
-        workspaces = plan.remainingWorkspaces
-    }
-    func clearWorkspaceDeletionJournal() throws { journal = nil }
-    func loadEnvironmentDeletionJournal() throws -> EnvironmentDeletionJournal? { environmentDeletionJournal }
-    func storeEnvironmentDeletionJournal(_ journal: EnvironmentDeletionJournal) throws {
-        if serverMutationJournal != nil { throw ServerLocalStoreError.serverMutationPending }
-        environmentDeletionJournal = journal
-    }
-    func materializeEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) throws {
-        if let persistError { throw persistError }
-        servers = plan.resultingServers
-        workspaces = plan.resultingWorkspaces
-    }
-    func clearEnvironmentDeletionJournal() throws { environmentDeletionJournal = nil }
 }
 
 @MainActor
@@ -227,12 +204,16 @@ final class ServerSyncRepositoryFake: ServerSyncRepository {
     func enqueueServerDelete(_ server: Server) throws {
         if let enqueueError { throw enqueueError }
     }
-    func enqueueServerMutation(_ mutation: ServerPendingMutation) throws {
+    func enqueueServerDataMutations(_ mutations: [ServerPendingMutation]) throws {
         if let enqueueError { throw enqueueError }
-        enqueuedServerMutations.removeAll {
-            $0.payload.coalescingIdentity == mutation.payload.coalescingIdentity
+        var updated = enqueuedServerMutations
+        for mutation in mutations {
+            updated.removeAll {
+                $0.payload.coalescingIdentity == mutation.payload.coalescingIdentity
+            }
+            updated.append(mutation)
         }
-        enqueuedServerMutations.append(mutation)
+        enqueuedServerMutations = updated
     }
     func enqueueWorkspaceUpsert(_ workspace: Workspace) throws {
         if let enqueueError { throw enqueueError }
@@ -244,11 +225,6 @@ final class ServerSyncRepositoryFake: ServerSyncRepository {
         drainCount += 1
         await drainHandler?()
         completedDrainCount += 1
-    }
-    func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws {}
-    func enqueueEnvironmentDeletionMutations(_ mutations: [ServerPendingMutation]) throws {
-        if let enqueueError { throw enqueueError }
-        environmentDeletionMutations = mutations
     }
 }
 

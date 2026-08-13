@@ -45,7 +45,7 @@ nonisolated struct EnvironmentDeletionPlan: Codable, Equatable, Identifiable, Se
             $0.workspaceId == workspaceID && $0.environment.id == environmentID
         }
         guard mutationIDs.count == affectedServers.count + 1 else {
-            throw VVTermError.environmentDeletionRecoveryPending
+            throw VVTermError.serverDataMutationRecoveryPending
         }
 
         var updatedWorkspace = workspace
@@ -93,108 +93,5 @@ nonisolated struct EnvironmentDeletionPlan: Codable, Equatable, Identifiable, Se
                 createdAt: mutationDate.addingTimeInterval(TimeInterval(index + 1))
             )
         }
-    }
-}
-
-nonisolated struct EnvironmentDeletionJournal: Codable, Equatable, Sendable {
-    enum Phase: Equatable {
-        case materializing
-        case enqueueing
-        case finalizing
-        case complete
-    }
-
-    let plan: EnvironmentDeletionPlan
-    var didMaterializeLocalState = false
-    var didEnqueuePendingMutations = false
-    var didFinalize = false
-    var lastFailureMessage: String?
-
-    var phase: Phase {
-        if !didMaterializeLocalState { return .materializing }
-        if !didEnqueuePendingMutations { return .enqueueing }
-        return didFinalize ? .complete : .finalizing
-    }
-}
-
-@MainActor
-protocol EnvironmentDeletionJournalStoring {
-    func loadEnvironmentDeletionJournal() throws -> EnvironmentDeletionJournal?
-    func storeEnvironmentDeletionJournal(_ journal: EnvironmentDeletionJournal) throws
-    func materializeEnvironmentDeletion(_ plan: EnvironmentDeletionPlan) throws
-    func clearEnvironmentDeletionJournal() throws
-}
-
-@MainActor
-protocol EnvironmentDeletionMutationEnqueuing {
-    func enqueueEnvironmentDeletionMutations(_ mutations: [ServerPendingMutation]) throws
-}
-
-@MainActor
-struct EnvironmentDeletionTransaction {
-    private let store: any EnvironmentDeletionJournalStoring
-    private let mutationQueue: any EnvironmentDeletionMutationEnqueuing
-
-    init(
-        store: any EnvironmentDeletionJournalStoring,
-        mutationQueue: any EnvironmentDeletionMutationEnqueuing
-    ) {
-        self.store = store
-        self.mutationQueue = mutationQueue
-    }
-
-    func commit(_ plan: EnvironmentDeletionPlan) throws -> EnvironmentDeletionJournal {
-        let journal = EnvironmentDeletionJournal(plan: plan)
-        try store.storeEnvironmentDeletionJournal(journal)
-        return resume(journal)
-    }
-
-    func resumePending() throws -> EnvironmentDeletionJournal? {
-        guard let journal = try store.loadEnvironmentDeletionJournal() else { return nil }
-        return resume(journal)
-    }
-
-    private func resume(_ storedJournal: EnvironmentDeletionJournal) -> EnvironmentDeletionJournal {
-        var journal = storedJournal
-
-        if !journal.didMaterializeLocalState {
-            do {
-                try store.materializeEnvironmentDeletion(journal.plan)
-                journal.didMaterializeLocalState = true
-                journal.lastFailureMessage = nil
-                try store.storeEnvironmentDeletionJournal(journal)
-            } catch {
-                return recording(error, in: journal)
-            }
-        }
-
-        if !journal.didEnqueuePendingMutations {
-            do {
-                try mutationQueue.enqueueEnvironmentDeletionMutations(journal.plan.pendingMutations)
-                journal.didEnqueuePendingMutations = true
-                journal.lastFailureMessage = nil
-                try store.storeEnvironmentDeletionJournal(journal)
-            } catch {
-                return recording(error, in: journal)
-            }
-        }
-
-        if !journal.didFinalize {
-            do {
-                try store.clearEnvironmentDeletionJournal()
-                journal.didFinalize = true
-                journal.lastFailureMessage = nil
-            } catch {
-                return recording(error, in: journal)
-            }
-        }
-        return journal
-    }
-
-    private func recording(_ error: Error, in journal: EnvironmentDeletionJournal) -> EnvironmentDeletionJournal {
-        var failed = journal
-        failed.lastFailureMessage = error.localizedDescription
-        try? store.storeEnvironmentDeletionJournal(failed)
-        return failed
     }
 }

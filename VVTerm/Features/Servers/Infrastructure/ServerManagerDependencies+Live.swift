@@ -13,8 +13,8 @@ extension CloudKitSyncCoordinator: ServerSyncRepository {
         try enqueue(.serverDelete(server))
     }
 
-    func enqueueServerMutation(_ mutation: ServerPendingMutation) throws {
-        try enqueueAtomically([try PendingCloudKitMutation(mutation)])
+    func enqueueServerDataMutations(_ mutations: [ServerPendingMutation]) throws {
+        try enqueueAtomically(try mutations.map(PendingCloudKitMutation.init))
     }
 
     func enqueueWorkspaceUpsert(_ workspace: Workspace) throws {
@@ -33,34 +33,13 @@ extension CloudKitSyncCoordinator: ServerSyncRepository {
         try remove(mutationID)
     }
 
-    func enqueueWorkspaceDeletionMutations(_ mutations: [ServerPendingMutation]) throws {
-        guard mutations.allSatisfy(\.payload.isDeletion) else {
-            throw WorkspaceDeletionTransactionError.invalidPendingMutation
-        }
-        try enqueueAtomically(try mutations.map(PendingCloudKitMutation.init))
-    }
-
-    func enqueueEnvironmentDeletionMutations(_ mutations: [ServerPendingMutation]) throws {
-        let isEnvironmentUpdate = mutations.allSatisfy { mutation in
-            switch mutation.payload {
-            case .serverUpsert, .workspaceUpsert:
-                true
-            case .serverDelete, .workspaceDelete:
-                false
-            }
-        }
-        guard isEnvironmentUpdate else {
-            throw EnvironmentDeletionTransactionError.invalidPendingMutation
-        }
-        try enqueueAtomically(try mutations.map(PendingCloudKitMutation.init))
-    }
 }
 
 extension KeychainManager: ServerManagerCredentialRepository {
     func cleanupCredentials(for server: Server) throws {
         try deleteCredentials(for: server.id)
         guard try !hasCredentials(for: server) else {
-            throw WorkspaceDeletionTransactionError.credentialCleanupIncomplete
+            throw ServerCredentialCleanupError.incomplete
         }
     }
 }
@@ -124,17 +103,6 @@ private extension ServerPendingMutation {
     }
 }
 
-private extension ServerPendingMutation.Payload {
-    var isDeletion: Bool {
-        switch self {
-        case .serverDelete, .workspaceDelete:
-            return true
-        case .serverUpsert, .workspaceUpsert:
-            return false
-        }
-    }
-}
-
 private extension PendingCloudKitMutation {
     init(_ mutation: ServerPendingMutation) throws {
         self.init(
@@ -145,24 +113,10 @@ private extension PendingCloudKitMutation {
     }
 }
 
-private enum WorkspaceDeletionTransactionError: LocalizedError {
-    case invalidPendingMutation
-    case credentialCleanupIncomplete
+private enum ServerCredentialCleanupError: LocalizedError {
+    case incomplete
 
     var errorDescription: String? {
-        switch self {
-        case .invalidPendingMutation:
-            return "The workspace deletion contains an invalid pending mutation."
-        case .credentialCleanupIncomplete:
-            return "The server credentials are still present after cleanup."
-        }
-    }
-}
-
-private enum EnvironmentDeletionTransactionError: LocalizedError {
-    case invalidPendingMutation
-
-    var errorDescription: String? {
-        String(localized: "The environment deletion sync transaction is invalid.")
+        "The server credentials are still present after cleanup."
     }
 }
