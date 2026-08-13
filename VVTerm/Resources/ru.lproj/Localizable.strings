@@ -1,4 +1,17 @@
 /* General */
+"Account" = "Учётная запись";
+"App" = "Приложение";
+"Data & Security" = "Данные и безопасность";
+"Voice" = "Голос";
+"Appearance & Language" = "Оформление и язык";
+"Navigation & Stats" = "Навигация и статистика";
+"Privacy & App Lock" = "Конфиденциальность и блокировка приложения";
+"Keyboard & Input" = "Клавиатура и ввод";
+"Sessions & Connections" = "Сеансы и подключения";
+"Clipboard & Paste" = "Буфер обмена и вставка";
+"Trusted Hosts" = "Доверенные хосты";
+"About & Support" = "О приложении и поддержка";
+"Search Settings" = "Поиск настроек";
 "OK" = "ОК";
 "Cancel" = "Отмена";
 "Save" = "Сохранить";

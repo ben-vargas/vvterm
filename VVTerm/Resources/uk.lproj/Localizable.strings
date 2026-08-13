@@ -1,4 +1,17 @@
 /* General */
+"Account" = "Обліковий запис";
+"App" = "Програма";
+"Data & Security" = "Дані й безпека";
+"Voice" = "Голос";
+"Appearance & Language" = "Вигляд і мова";
+"Navigation & Stats" = "Навігація і статистика";
+"Privacy & App Lock" = "Приватність і блокування програми";
+"Keyboard & Input" = "Клавіатура і введення";
+"Sessions & Connections" = "Сеанси і з’єднання";
+"Clipboard & Paste" = "Буфер обміну і вставлення";
+"Trusted Hosts" = "Довірені хости";
+"About & Support" = "Про програму і підтримка";
+"Search Settings" = "Пошук у параметрах";
 "OK" = "ОК";
 "Cancel" = "Скасувати";
 "Save" = "Зберегти";

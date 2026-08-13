@@ -1,4 +1,17 @@
 /* General */
+"Account" = "账户";
+"App" = "App";
+"Data & Security" = "数据与安全";
+"Voice" = "语音";
+"Appearance & Language" = "外观与语言";
+"Navigation & Stats" = "导航与统计";
+"Privacy & App Lock" = "隐私与 App 锁定";
+"Keyboard & Input" = "键盘与输入";
+"Sessions & Connections" = "会话与连接";
+"Clipboard & Paste" = "剪贴板与粘贴";
+"Trusted Hosts" = "受信任的主机";
+"About & Support" = "关于与支持";
+"Search Settings" = "搜索设置";
 "OK" = "确定";
 "Cancel" = "取消";
 "Save" = "保存";

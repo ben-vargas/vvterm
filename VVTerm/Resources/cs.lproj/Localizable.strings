@@ -1,4 +1,17 @@
 /* General */
+"Account" = "Účet";
+"App" = "Aplikace";
+"Data & Security" = "Data a zabezpečení";
+"Voice" = "Hlas";
+"Appearance & Language" = "Vzhled a jazyk";
+"Navigation & Stats" = "Navigace a statistiky";
+"Privacy & App Lock" = "Soukromí a zámek aplikace";
+"Keyboard & Input" = "Klávesnice a vstup";
+"Sessions & Connections" = "Relace a připojení";
+"Clipboard & Paste" = "Schránka a vkládání";
+"Trusted Hosts" = "Důvěryhodní hostitelé";
+"About & Support" = "O aplikaci a podpora";
+"Search Settings" = "Hledat v nastavení";
 "OK" = "OK";
 "Cancel" = "Zrušit";
 "Save" = "Uložit";

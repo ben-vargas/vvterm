@@ -1,4 +1,17 @@
 /* General */
+"Account" = "Konto";
+"App" = "Aplikacja";
+"Data & Security" = "Dane i bezpieczeństwo";
+"Voice" = "Głos";
+"Appearance & Language" = "Wygląd i język";
+"Navigation & Stats" = "Nawigacja i statystyki";
+"Privacy & App Lock" = "Prywatność i blokada aplikacji";
+"Keyboard & Input" = "Klawiatura i wprowadzanie";
+"Sessions & Connections" = "Sesje i połączenia";
+"Clipboard & Paste" = "Schowek i wklejanie";
+"Trusted Hosts" = "Zaufane hosty";
+"About & Support" = "Informacje i pomoc";
+"Search Settings" = "Szukaj w ustawieniach";
 "OK" = "OK";
 "Cancel" = "Anuluj";
 "Save" = "Zapisz";
