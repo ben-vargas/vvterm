@@ -60,6 +60,15 @@ nonisolated struct SyncSettingsRuntimeInfo: Equatable, Sendable {
     let platform: String
 }
 
+nonisolated struct SyncSettingsContentSummary: Equatable, Sendable {
+    let workspaceCount: Int
+    let serverCount: Int
+    let customThemeCount: Int
+    let serverCredentialCount: Int
+    let reusableSSHKeyCount: Int
+    let openTerminalCount: Int
+}
+
 nonisolated enum SyncSettingsAccountCategory: String, Equatable, Sendable {
     case available
     case checking
@@ -157,6 +166,11 @@ protocol SyncSettingsDataRefreshing: AnyObject {
 }
 
 @MainActor
+protocol SyncSettingsContentSummarizing: AnyObject {
+    var currentSummary: SyncSettingsContentSummary { get }
+}
+
+@MainActor
 protocol SyncSettingsHistoryStoring: AnyObject {
     var lastSuccessfulSyncDate: Date? { get }
     func recordSuccessfulSync(at date: Date) throws
@@ -176,10 +190,12 @@ final class SyncSettingsCoordinator: ObservableObject {
     @Published private(set) var manualSyncState: SyncSettingsManualSyncState = .idle
     @Published private(set) var lastSuccessfulSyncDate: Date?
     @Published private(set) var lastError: SyncSettingsErrorRecord?
+    @Published private(set) var contentSummary: SyncSettingsContentSummary
 
     private let cloud: any SyncSettingsCloudSyncing
     private let credentials: any SyncSettingsCredentialSyncing
     private let data: any SyncSettingsDataRefreshing
+    private let content: any SyncSettingsContentSummarizing
     private let history: any SyncSettingsHistoryStoring
     private let runtime: SyncSettingsRuntimeInfo
     private let now: () -> Date
@@ -189,6 +205,7 @@ final class SyncSettingsCoordinator: ObservableObject {
         cloud: any SyncSettingsCloudSyncing,
         credentials: any SyncSettingsCredentialSyncing,
         data: any SyncSettingsDataRefreshing,
+        content: any SyncSettingsContentSummarizing,
         history: any SyncSettingsHistoryStoring,
         runtime: SyncSettingsRuntimeInfo,
         now: @escaping () -> Date = Date.init
@@ -196,11 +213,13 @@ final class SyncSettingsCoordinator: ObservableObject {
         self.cloud = cloud
         self.credentials = credentials
         self.data = data
+        self.content = content
         self.history = history
         self.runtime = runtime
         self.now = now
         cloudState = cloud.currentState
         credentialState = credentials.currentState
+        contentSummary = content.currentSummary
         lastSuccessfulSyncDate = [
             history.lastSuccessfulSyncDate,
             cloud.currentState.lastSuccessfulSyncDate,
@@ -399,6 +418,7 @@ final class SyncSettingsCoordinator: ObservableObject {
 
     func refreshSnapshots() {
         cloudState = cloud.currentState
+        contentSummary = content.currentSummary
         acceptCloudSuccessDate(cloudState.lastSuccessfulSyncDate)
         if credentialFailure == nil {
             credentialState = credentials.currentState

@@ -157,6 +157,41 @@ private enum SyncSettingsDataRefreshError: Error {
 }
 
 @MainActor
+private final class AppSyncSettingsContentSummaryAdapter: SyncSettingsContentSummarizing {
+    private let serverManager: ServerManager
+    private let keychain: KeychainManager
+    private let terminalTheme: TerminalThemeManager
+    private let tabManager: TerminalTabManager
+
+    init(
+        serverManager: ServerManager,
+        keychain: KeychainManager,
+        terminalTheme: TerminalThemeManager,
+        tabManager: TerminalTabManager
+    ) {
+        self.serverManager = serverManager
+        self.keychain = keychain
+        self.terminalTheme = terminalTheme
+        self.tabManager = tabManager
+    }
+
+    var currentSummary: SyncSettingsContentSummary {
+        SyncSettingsContentSummary(
+            workspaceCount: serverManager.workspaces.count,
+            serverCount: serverManager.servers.count,
+            customThemeCount: terminalTheme.customThemes.filter { !$0.isDeleted }.count,
+            serverCredentialCount: serverManager.servers.filter(hasCredentials).count,
+            reusableSSHKeyCount: keychain.getStoredSSHKeys().count,
+            openTerminalCount: tabManager.sessionState.allPaneStates.count
+        )
+    }
+
+    private func hasCredentials(_ server: Server) -> Bool {
+        (try? keychain.hasCredentials(for: server)) == true
+    }
+}
+
+@MainActor
 final class UserDefaultsSyncSettingsHistoryStore: SyncSettingsHistoryStoring {
     nonisolated static let lastSuccessfulSyncKey = "settings.sync.lastSuccessfulDate"
 
@@ -192,6 +227,7 @@ enum SyncSettingsLiveComposition {
         cloudKit: CloudKitManager,
         keychain: KeychainManager,
         serverManager: ServerManager,
+        tabManager: TerminalTabManager,
         terminalTheme: TerminalThemeManager,
         terminalAccessory: TerminalAccessoryPreferencesManager,
         statsPreferences: PreferencesStore,
@@ -210,6 +246,12 @@ enum SyncSettingsLiveComposition {
                 terminalAccessory: terminalAccessory,
                 statsPreferences: statsPreferences,
                 pendingSync: pendingSync
+            ),
+            content: AppSyncSettingsContentSummaryAdapter(
+                serverManager: serverManager,
+                keychain: keychain,
+                terminalTheme: terminalTheme,
+                tabManager: tabManager
             ),
             history: UserDefaultsSyncSettingsHistoryStore(defaults: defaults),
             runtime: runtimeInfo

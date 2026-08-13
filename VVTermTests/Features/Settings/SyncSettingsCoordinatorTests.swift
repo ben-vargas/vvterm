@@ -99,6 +99,18 @@ private final class SyncSettingsDataSpy: SyncSettingsDataRefreshing {
 }
 
 @MainActor
+private final class SyncSettingsContentSpy: SyncSettingsContentSummarizing {
+    var currentSummary = SyncSettingsContentSummary(
+        workspaceCount: 2,
+        serverCount: 7,
+        customThemeCount: 3,
+        serverCredentialCount: 6,
+        reusableSSHKeyCount: 4,
+        openTerminalCount: 2
+    )
+}
+
+@MainActor
 private final class SyncSettingsHistorySpy: SyncSettingsHistoryStoring {
     var lastSuccessfulSyncDate: Date?
     var recordedDates: [Date] = []
@@ -137,6 +149,25 @@ struct SyncSettingsCoordinatorTests {
         #expect(coordinator.cloudState == updatedState)
         #expect(cloud.accountCheckCount == 1)
         #expect(data.syncCount == 0)
+    }
+
+    @Test
+    func refreshSnapshotsPublishesDerivedContentCounts() {
+        let content = SyncSettingsContentSpy()
+        let coordinator = makeCoordinator(content: content)
+        let updated = SyncSettingsContentSummary(
+            workspaceCount: 3,
+            serverCount: 8,
+            customThemeCount: 4,
+            serverCredentialCount: 7,
+            reusableSSHKeyCount: 5,
+            openTerminalCount: 1
+        )
+
+        content.currentSummary = updated
+        coordinator.refreshSnapshots()
+
+        #expect(coordinator.contentSummary == updated)
     }
 
     @Test
@@ -364,6 +395,7 @@ struct SyncSettingsCoordinatorTests {
         cloud: SyncSettingsCloudSpy? = nil,
         credentials: SyncSettingsCredentialSpy? = nil,
         data: SyncSettingsDataSpy? = nil,
+        content: SyncSettingsContentSpy? = nil,
         history: SyncSettingsHistorySpy? = nil,
         runtime: SyncSettingsRuntimeInfo = .testValue,
         now: @escaping () -> Date = Date.init
@@ -372,6 +404,7 @@ struct SyncSettingsCoordinatorTests {
             cloud: cloud ?? SyncSettingsCloudSpy(),
             credentials: credentials ?? SyncSettingsCredentialSpy(),
             data: data ?? SyncSettingsDataSpy(),
+            content: content ?? SyncSettingsContentSpy(),
             history: history ?? SyncSettingsHistorySpy(),
             runtime: runtime,
             now: now

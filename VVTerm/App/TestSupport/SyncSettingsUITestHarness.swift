@@ -64,8 +64,20 @@ private final class SyncSettingsUITestData: SyncSettingsDataRefreshing {
 }
 
 @MainActor
+private final class SyncSettingsUITestContent: SyncSettingsContentSummarizing {
+    let currentSummary = SyncSettingsContentSummary(
+        workspaceCount: 2,
+        serverCount: 7,
+        customThemeCount: 3,
+        serverCredentialCount: 6,
+        reusableSSHKeyCount: 4,
+        openTerminalCount: 2
+    )
+}
+
+@MainActor
 private final class SyncSettingsUITestHistory: SyncSettingsHistoryStoring {
-    private(set) var lastSuccessfulSyncDate: Date?
+    private(set) var lastSuccessfulSyncDate: Date? = Date()
 
     func recordSuccessfulSync(at date: Date) throws {
         lastSuccessfulSyncDate = date
@@ -85,6 +97,7 @@ struct SyncSettingsUITestHarness: View {
                 cloud: SyncSettingsUITestCloud(isEnabled: isEnabled),
                 credentials: SyncSettingsUITestCredentials(isEnabled: isEnabled),
                 data: SyncSettingsUITestData(),
+                content: SyncSettingsUITestContent(),
                 history: SyncSettingsUITestHistory(),
                 runtime: SyncSettingsRuntimeInfo(
                     appVersion: "UI Test",

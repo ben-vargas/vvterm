@@ -3,9 +3,34 @@ import SwiftUI
 struct SyncSettingsStatusHero: View {
     let state: SyncSettingsUserState
     let lastSuccessfulSyncDate: Date?
+    let primaryAction: SyncSettingsPrimaryAction?
+    let onPrimaryAction: () -> Void
 
     var body: some View {
         platformBody
+    }
+}
+
+struct SyncSettingsPrimaryActionButton: View {
+    let action: SyncSettingsPrimaryAction
+    let perform: () -> Void
+
+    var body: some View {
+        Button(action: perform) {
+            if action.isRunning {
+                HStack(spacing: 7) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(action.title)
+                }
+            } else {
+                Label(action.title, systemImage: action.systemImage)
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.regular)
+        .disabled(action.isRunning)
+        .accessibilityIdentifier("vvterm.settings.sync.action.primary")
     }
 }
 
