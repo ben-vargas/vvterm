@@ -13,11 +13,11 @@ final class StatsAppearancePresentationUITests: XCTestCase {
 
         app.typeKey(",", modifierFlags: .command)
 
-        let navigationAndStats = app.staticTexts["Navigation & Stats"]
+        let navigationAndStats = app.staticTexts["Server Views"]
         XCTAssertTrue(navigationAndStats.waitForExistence(timeout: 5))
         navigationAndStats.click()
 
-        let statsAppearance = app.staticTexts["Stats Appearance"]
+        let statsAppearance = app.buttons["vvterm.settings.navigationAndStats.statsAppearance"]
         XCTAssertTrue(statsAppearance.waitForExistence(timeout: 5))
         statsAppearance.click()
 

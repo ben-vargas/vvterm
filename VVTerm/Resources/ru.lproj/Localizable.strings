@@ -1791,3 +1791,11 @@
 "Unlimited" = "Без ограничений";
 "Included" = "Включено";
 "Renews %@" = "Продление %@";
+"Views" = "Просмотры";
+"Choose which views appear. Drag rows to change their order." = "Выберите, какие просмотры показывать. Перетаскивайте строки, чтобы изменить их порядок.";
+"Startup" = "Запуск";
+"Open Servers In" = "Открывать серверы в";
+"VVTerm uses the first enabled view if this view is unavailable." = "VVTerm использует первый включённый просмотр, если этот просмотр недоступен.";
+"View Options" = "Параметры просмотра";
+"Appearance and layout" = "Внешний вид и компоновка";
+"Reset to Defaults" = "Восстановить настройки по умолчанию";

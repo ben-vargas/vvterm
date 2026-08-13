@@ -1836,3 +1836,11 @@
 "Unlimited" = "Không giới hạn";
 "Included" = "Đã bao gồm";
 "Renews %@" = "Gia hạn vào %@";
+"Views" = "Chế độ xem";
+"Choose which views appear. Drag rows to change their order." = "Chọn các chế độ xem sẽ xuất hiện. Kéo các hàng để thay đổi thứ tự.";
+"Startup" = "Khởi động";
+"Open Servers In" = "Mở máy chủ trong";
+"VVTerm uses the first enabled view if this view is unavailable." = "VVTerm sử dụng chế độ xem đầu tiên đã bật nếu chế độ xem này không khả dụng.";
+"View Options" = "Tùy chọn chế độ xem";
+"Appearance and layout" = "Giao diện và bố cục";
+"Reset to Defaults" = "Đặt lại về mặc định";

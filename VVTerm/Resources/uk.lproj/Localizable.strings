@@ -1798,3 +1798,11 @@
 "Unlimited" = "Без обмежень";
 "Included" = "Включено";
 "Renews %@" = "Подовження %@";
+"Views" = "Перегляди";
+"Choose which views appear. Drag rows to change their order." = "Виберіть, які перегляди показувати. Перетягуйте рядки, щоб змінити їх порядок.";
+"Startup" = "Запуск";
+"Open Servers In" = "Відкривати сервери у";
+"VVTerm uses the first enabled view if this view is unavailable." = "VVTerm використовує перший увімкнений перегляд, якщо цей перегляд недоступний.";
+"View Options" = "Параметри перегляду";
+"Appearance and layout" = "Вигляд і компонування";
+"Reset to Defaults" = "Відновити типові параметри";

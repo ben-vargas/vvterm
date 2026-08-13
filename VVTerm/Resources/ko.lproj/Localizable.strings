@@ -1790,3 +1790,11 @@
 "Unlimited" = "무제한";
 "Included" = "포함됨";
 "Renews %@" = "%@에 갱신";
+"Views" = "보기";
+"Choose which views appear. Drag rows to change their order." = "표시할 보기를 선택하세요. 행을 드래그하여 순서를 변경할 수 있습니다.";
+"Startup" = "시작";
+"Open Servers In" = "서버 열기 위치";
+"VVTerm uses the first enabled view if this view is unavailable." = "이 보기를 사용할 수 없으면 VVTerm이 활성화된 첫 번째 보기를 사용합니다.";
+"View Options" = "보기 옵션";
+"Appearance and layout" = "모양 및 레이아웃";
+"Reset to Defaults" = "기본값으로 재설정";

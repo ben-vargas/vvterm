@@ -1791,3 +1791,11 @@
 "Unlimited" = "ไม่จำกัด";
 "Included" = "รวมอยู่แล้ว";
 "Renews %@" = "ต่ออายุวันที่ %@";
+"Views" = "มุมมอง";
+"Choose which views appear. Drag rows to change their order." = "เลือกมุมมองที่จะแสดง ลากแถวเพื่อเปลี่ยนลำดับ";
+"Startup" = "การเริ่มต้น";
+"Open Servers In" = "เปิดเซิร์ฟเวอร์ใน";
+"VVTerm uses the first enabled view if this view is unavailable." = "VVTerm จะใช้มุมมองแรกที่เปิดใช้งาน หากมุมมองนี้ไม่พร้อมใช้งาน";
+"View Options" = "ตัวเลือกมุมมอง";
+"Appearance and layout" = "ลักษณะและเค้าโครง";
+"Reset to Defaults" = "รีเซ็ตเป็นค่าเริ่มต้น";

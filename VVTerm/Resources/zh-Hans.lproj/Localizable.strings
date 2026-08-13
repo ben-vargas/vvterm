@@ -1788,3 +1788,11 @@
 "Unlimited" = "无限制";
 "Included" = "已包含";
 "Renews %@" = "%@续订";
+"Views" = "视图";
+"Choose which views appear. Drag rows to change their order." = "选择要显示的视图。拖动各行可更改顺序。";
+"Startup" = "启动";
+"Open Servers In" = "打开服务器时显示";
+"VVTerm uses the first enabled view if this view is unavailable." = "如果此视图不可用，VVTerm 会使用第一个已启用的视图。";
+"View Options" = "视图选项";
+"Appearance and layout" = "外观和布局";
+"Reset to Defaults" = "恢复默认设置";

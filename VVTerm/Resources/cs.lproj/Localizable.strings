@@ -1792,3 +1792,11 @@
 "Unlimited" = "Bez omezení";
 "Included" = "Zahrnuto";
 "Renews %@" = "Obnoví se %@";
+"Views" = "Zobrazení";
+"Choose which views appear. Drag rows to change their order." = "Vyberte, která zobrazení se mají zobrazit. Přetažením řádků změňte jejich pořadí.";
+"Startup" = "Spuštění";
+"Open Servers In" = "Otevírat servery v";
+"VVTerm uses the first enabled view if this view is unavailable." = "Pokud toto zobrazení není dostupné, VVTerm použije první povolené zobrazení.";
+"View Options" = "Možnosti zobrazení";
+"Appearance and layout" = "Vzhled a rozložení";
+"Reset to Defaults" = "Obnovit výchozí nastavení";

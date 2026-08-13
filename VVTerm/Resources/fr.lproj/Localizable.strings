@@ -1793,3 +1793,11 @@
 "Unlimited" = "Illimité";
 "Included" = "Inclus";
 "Renews %@" = "Renouvellement le %@";
+"Views" = "Vues";
+"Choose which views appear. Drag rows to change their order." = "Choisissez les vues à afficher. Faites glisser les lignes pour modifier leur ordre.";
+"Startup" = "Démarrage";
+"Open Servers In" = "Ouvrir les serveurs dans";
+"VVTerm uses the first enabled view if this view is unavailable." = "VVTerm utilise la première vue activée si cette vue n’est pas disponible.";
+"View Options" = "Options d’affichage";
+"Appearance and layout" = "Apparence et disposition";
+"Reset to Defaults" = "Rétablir les réglages par défaut";

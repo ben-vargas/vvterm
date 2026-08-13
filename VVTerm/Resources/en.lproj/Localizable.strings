@@ -1843,3 +1843,11 @@
 "Unlimited" = "Unlimited";
 "Included" = "Included";
 "Renews %@" = "Renews %@";
+"Views" = "Views";
+"Choose which views appear. Drag rows to change their order." = "Choose which views appear. Drag rows to change their order.";
+"Startup" = "Startup";
+"Open Servers In" = "Open Servers In";
+"VVTerm uses the first enabled view if this view is unavailable." = "VVTerm uses the first enabled view if this view is unavailable.";
+"View Options" = "View Options";
+"Appearance and layout" = "Appearance and layout";
+"Reset to Defaults" = "Reset to Defaults";

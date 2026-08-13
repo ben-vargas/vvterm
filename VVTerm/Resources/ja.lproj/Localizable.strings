@@ -1791,3 +1791,11 @@
 "Unlimited" = "無制限";
 "Included" = "含まれます";
 "Renews %@" = "%@に更新";
+"Views" = "表示";
+"Choose which views appear. Drag rows to change their order." = "表示するビューを選択します。行をドラッグして順序を変更します。";
+"Startup" = "起動";
+"Open Servers In" = "サーバーを開くビュー";
+"VVTerm uses the first enabled view if this view is unavailable." = "このビューを使用できない場合、VVTermは最初に有効なビューを使用します。";
+"View Options" = "表示オプション";
+"Appearance and layout" = "外観とレイアウト";
+"Reset to Defaults" = "デフォルトに戻す";

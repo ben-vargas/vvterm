@@ -127,7 +127,10 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .appearanceAndLanguage:
             ["language", "system", "light", "dark", "theme", "color scheme"]
         case .navigationAndStats:
-            ["server views", "view order", "default view", "reset views", "stats", "metrics", "dashboard"]
+            [
+                "server views", "view order", "open servers in", "reset views",
+                "stats", "appearance and layout", "metrics", "dashboard",
+            ]
         case .privacyAndAppLock:
             ["privacy", "analytics", "biometric", "face id", "touch id", "lock", "background", "grace period"]
         case .terminalAppearance:
@@ -171,7 +174,10 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .appearanceAndLanguage:
             ["Appearance & Language", "Language", "System", "Light", "Dark"]
         case .navigationAndStats:
-            ["Server Views", "Stats Appearance"]
+            [
+                "Server Views", "Views", "Open Servers In", "View Options",
+                "Stats", "Appearance and layout",
+            ]
         case .privacyAndAppLock:
             ["Privacy & App Lock", "Privacy Mode", "Help Improve VVTerm", "App Lock"]
         case .terminalAppearance:
