@@ -17,11 +17,11 @@ struct ServerLocalStorageNotice: View {
                 if stateStore.ambiguousCloudRecovery != nil {
                     NoticeBannerView(
                         item: NoticeItem(
-                            id: "server-empty-cloud-recovery",
+                            id: "server-cloud-recovery",
                             lane: .topBanner,
                             level: .warning,
                             leading: .icon("icloud.slash"),
-                            title: String(localized: "Cloud server data is empty"),
+                            title: String(localized: "Cloud data needs review"),
                             message: String(localized: "Your local data is safe. Choose how to continue."),
                             action: NoticeAction(
                                 id: "review-cloud-recovery",
@@ -48,7 +48,7 @@ struct ServerLocalStorageNotice: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .confirmationDialog(
-                String(localized: "Cloud server data is empty"),
+                String(localized: "Cloud data needs review"),
                 isPresented: $isShowingCloudRecovery,
                 titleVisibility: .visible
             ) {
@@ -58,14 +58,14 @@ struct ServerLocalStorageNotice: View {
                 Button(String(localized: "Upload Local Data")) {
                     resolve(.uploadLocal)
                 }
-                Button(String(localized: "Replace with Empty Cloud Data"), role: .destructive) {
+                Button(String(localized: "Replace with Cloud Data"), role: .destructive) {
                     resolve(.replaceWithCloud)
                 }
                 Button(String(localized: "Cancel"), role: .cancel) {}
             } message: {
                 Text(
                     String(
-                        localized: "VVTerm could not confirm that the empty cloud state is intentional."
+                        localized: "VVTerm could not confirm that missing local items were intentionally removed."
                     )
                 )
             }

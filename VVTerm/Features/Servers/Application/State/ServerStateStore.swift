@@ -119,24 +119,39 @@ final class ServerStateStore: ObservableObject {
         updateSnapshot { $0.localStorageIssues.removeAll() }
     }
 
-    func automaticEmptyFullFetchNeedsRecovery(_ changes: ServerRemoteChanges) -> Bool {
-        guard changes.isFullFetch,
-              changes.servers.isEmpty,
-              changes.workspaces.isEmpty,
-              localCacheContainsUserData else {
+    func automaticFullFetchNeedsRecovery(
+        _ changes: ServerRemoteChanges,
+        pendingMutations: [ServerPendingMutation]
+    ) -> Bool {
+        guard changes.isFullFetch, localCacheContainsUserData else {
             return false
         }
 
+        let cloudServerIDs = Set(changes.servers.map(\.id))
+        let cloudWorkspaceIDs = Set(changes.workspaces.map(\.id))
         let deletedServerIDs = Set(changes.deletedServerIDs)
         let deletedWorkspaceIDs = Set(changes.deletedWorkspaceIDs)
-        let localServerIDs = Set(servers.map(\.id))
-        let localWorkspaceIDs = Set(
-            workspaces.lazy
-                .filter { $0.id != self.transientBootstrapWorkspaceID }
-                .map(\.id)
-        )
-        return !localServerIDs.isSubset(of: deletedServerIDs)
-            || !localWorkspaceIDs.isSubset(of: deletedWorkspaceIDs)
+        var explainedServerIDs = cloudServerIDs.union(deletedServerIDs)
+        var explainedWorkspaceIDs = cloudWorkspaceIDs.union(deletedWorkspaceIDs)
+
+        for mutation in pendingMutations {
+            switch mutation.payload {
+            case .serverUpsert(let server), .serverDelete(let server):
+                explainedServerIDs.insert(server.id)
+            case .workspaceUpsert(let workspace), .workspaceDelete(let workspace):
+                explainedWorkspaceIDs.insert(workspace.id)
+            }
+        }
+
+        let hasUnexplainedServer = servers.contains { server in
+            !explainedServerIDs.contains(server.id)
+                && !deletedWorkspaceIDs.contains(server.workspaceId)
+        }
+        let hasUnexplainedWorkspace = workspaces.contains { workspace in
+            workspace.id != transientBootstrapWorkspaceID
+                && !explainedWorkspaceIDs.contains(workspace.id)
+        }
+        return hasUnexplainedServer || hasUnexplainedWorkspace
     }
 
     func preserveAmbiguousCloudRecoveryBackup() throws {

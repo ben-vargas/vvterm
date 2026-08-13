@@ -24,10 +24,6 @@ protocol ServerSyncRepository:
     func pendingServerMutations() throws -> [ServerPendingMutation]
     func clearPendingServerAndWorkspaceMutations() throws
     func removePendingServerMutation(_ mutationID: UUID) throws
-    func enqueueServerUpsert(_ server: Server) throws
-    func enqueueServerDelete(_ server: Server) throws
-    func enqueueWorkspaceUpsert(_ workspace: Workspace) throws
-    func enqueueWorkspaceDelete(_ workspace: Workspace) throws
     func drainPendingMutations() async
 }
 

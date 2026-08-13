@@ -42,10 +42,28 @@ struct CloudKitMutationQueueAdapterTests {
         )
         try coordinator.enqueue(unrelatedMutation)
 
-        try repository.enqueueServerUpsert(server)
-        try repository.enqueueServerDelete(deletedServer)
-        try repository.enqueueWorkspaceUpsert(workspace)
-        try repository.enqueueWorkspaceDelete(deletedWorkspace)
+        try repository.enqueueServerDataMutations([
+            ServerPendingMutation(
+                id: UUID(),
+                payload: .serverUpsert(server),
+                createdAt: Date(timeIntervalSinceReferenceDate: 2)
+            ),
+            ServerPendingMutation(
+                id: UUID(),
+                payload: .serverDelete(deletedServer),
+                createdAt: Date(timeIntervalSinceReferenceDate: 3)
+            ),
+            ServerPendingMutation(
+                id: UUID(),
+                payload: .workspaceUpsert(workspace),
+                createdAt: Date(timeIntervalSinceReferenceDate: 4)
+            ),
+            ServerPendingMutation(
+                id: UUID(),
+                payload: .workspaceDelete(deletedWorkspace),
+                createdAt: Date(timeIntervalSinceReferenceDate: 5)
+            )
+        ])
 
         let expectedPayloads = [
             statsPayload,

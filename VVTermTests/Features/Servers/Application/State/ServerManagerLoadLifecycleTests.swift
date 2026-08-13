@@ -313,6 +313,127 @@ struct ServerManagerLoadLifecycleTests {
     }
 
     @Test
+    func durableRecoveryDecisionBlocksAutomaticFetchAfterRestart() async throws {
+        let workspace = makeWorkspace(name: "Local")
+        let server = makeServer(workspaceID: workspace.id)
+        let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [],
+                workspaces: [],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: true,
+                checkpoint: ServerRemoteChangeCheckpoint(id: UUID())
+            )
+        }
+        let sync = ServerSyncRepositoryFake()
+        let firstManager = makeManager(
+            local: local,
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { true }
+        )
+
+        await firstManager.loadData()
+        #expect(remote.fetchCount == 1)
+
+        let unrelatedWorkspace = Workspace(
+            id: UUID(uuidString: "10000000-0000-0000-0000-000000000099")!,
+            name: "Other Account",
+            order: 0,
+            createdAt: .distantPast,
+            updatedAt: .distantPast
+        )
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [],
+                workspaces: [unrelatedWorkspace],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: true,
+                checkpoint: ServerRemoteChangeCheckpoint(id: UUID())
+            )
+        }
+        let restartedManager = makeManager(
+            local: local,
+            remote: remote,
+            sync: sync,
+            isSyncEnabled: { true }
+        )
+
+        await restartedManager.loadData()
+
+        #expect(remote.fetchCount == 1)
+        #expect(restartedManager.servers == [server])
+        #expect(restartedManager.workspaces == [workspace])
+        #expect(local.ambiguousCloudRecoveryBackup != nil)
+        #expect(remote.acceptedCheckpoints.isEmpty)
+
+        try await restartedManager.resolveAmbiguousCloudRecovery(.replaceWithCloud)
+
+        #expect(remote.fetchCount == 2)
+        #expect(remote.fetchForceFullModes == [false, true])
+        #expect(restartedManager.servers.isEmpty)
+        #expect(restartedManager.workspaces == [unrelatedWorkspace])
+        #expect(local.ambiguousCloudRecoveryBackup == nil)
+    }
+
+    @Test
+    func nonEmptyFullFetchWithUnexplainedMissingLocalIDsRequiresDecision() async {
+        let localWorkspace = makeWorkspace(name: "Local")
+        let localServer = makeServer(workspaceID: localWorkspace.id)
+        let cloudWorkspace = Workspace(
+            id: UUID(uuidString: "10000000-0000-0000-0000-000000000099")!,
+            name: "Cloud",
+            order: 0,
+            createdAt: .distantPast,
+            updatedAt: .distantPast
+        )
+        let cloudServer = Server(
+            id: UUID(uuidString: "20000000-0000-0000-0000-000000000099")!,
+            workspaceId: cloudWorkspace.id,
+            name: "Cloud Server",
+            host: "cloud.example.test",
+            username: "root",
+            createdAt: .distantPast,
+            updatedAt: .distantPast
+        )
+        let local = ServerLocalRepositoryFake(
+            servers: [localServer],
+            workspaces: [localWorkspace]
+        )
+        let checkpoint = ServerRemoteChangeCheckpoint(id: UUID())
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [cloudServer],
+                workspaces: [cloudWorkspace],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: true,
+                checkpoint: checkpoint
+            )
+        }
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: ServerSyncRepositoryFake(),
+            isSyncEnabled: { true }
+        )
+
+        await manager.loadData()
+
+        #expect(manager.servers == [localServer])
+        #expect(manager.workspaces == [localWorkspace])
+        #expect(local.ambiguousCloudRecoveryBackup?.servers == [localServer])
+        #expect(local.ambiguousCloudRecoveryBackup?.workspaces == [localWorkspace])
+        #expect(manager.stateStore.ambiguousCloudRecovery != nil)
+        #expect(remote.acceptedCheckpoints.isEmpty)
+    }
+
+    @Test
     func emptyFullFetchWithCompleteDeletionEvidenceCanReplaceLocalData() async {
         let workspace = makeWorkspace(name: "Deleted remotely")
         let server = makeServer(workspaceID: workspace.id)
@@ -357,6 +478,7 @@ struct ServerManagerLoadLifecycleTests {
         #expect(fixture.remote.savedServers.isEmpty)
         #expect(fixture.remote.savedWorkspaces.isEmpty)
         #expect(fixture.remote.acceptedCheckpoints == [fixture.checkpoint])
+        #expect(fixture.remote.fetchForceFullModes == [false, true])
         #expect(fixture.local.ambiguousCloudRecoveryBackup == nil)
         #expect(fixture.manager.stateStore.ambiguousCloudRecovery == nil)
     }
@@ -407,6 +529,7 @@ struct ServerManagerLoadLifecycleTests {
         #expect(fixture.local.workspaces.isEmpty)
         #expect(fixture.sync.clearCount == 1)
         #expect(fixture.remote.acceptedCheckpoints == [fixture.checkpoint])
+        #expect(fixture.remote.fetchForceFullModes == [false, true])
         #expect(fixture.local.ambiguousCloudRecoveryBackup == nil)
         #expect(fixture.manager.stateStore.ambiguousCloudRecovery == nil)
     }
@@ -477,6 +600,7 @@ struct ServerManagerLoadLifecycleTests {
         #expect(remote.fetchForceFullModes == [true])
         #expect(manager.stateStore.transientBootstrapWorkspaceID == workspace.id)
         #expect(manager.workspaces == [workspace])
+        #expect(manager.stateStore.ambiguousCloudRecovery == nil)
         #expect(remote.acceptedCheckpoints.isEmpty)
         #expect(sync.drainCount == 0)
 

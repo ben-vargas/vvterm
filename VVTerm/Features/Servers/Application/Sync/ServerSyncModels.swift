@@ -45,15 +45,15 @@ nonisolated enum AmbiguousCloudRecoveryState: Equatable, Sendable {
 }
 
 nonisolated enum AmbiguousCloudRecoveryError: LocalizedError, Equatable, Sendable {
-    case emptyFullFetchNeedsDecision
+    case fullFetchNeedsDecision
     case remoteUnavailable
     case incompleteSnapshot
 
     var errorDescription: String? {
         switch self {
-        case .emptyFullFetchNeedsDecision:
+        case .fullFetchNeedsDecision:
             return String(
-                localized: "Cloud data is unexpectedly empty. Choose how VVTerm should recover."
+                localized: "Cloud data is missing local items. Choose how VVTerm should recover."
             )
         case .remoteUnavailable:
             return String(localized: "iCloud is not available. Try again when sync is available.")

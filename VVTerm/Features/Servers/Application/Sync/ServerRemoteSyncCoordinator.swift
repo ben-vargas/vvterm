@@ -36,7 +36,6 @@ final class ServerRemoteSyncCoordinator {
     )
     private var activeLoad: ActiveLoad?
     private var startupTask: Task<Void, Never>?
-    private var pendingAmbiguousFullFetch: ServerRemoteChanges?
 
     init(dependencies: ServerRemoteSyncCoordinatorDependencies) {
         self.dependencies = dependencies
@@ -74,7 +73,6 @@ final class ServerRemoteSyncCoordinator {
     func handleSyncDisabled() {
         startupTask?.cancel()
         startupTask = nil
-        pendingAmbiguousFullFetch = nil
         invalidateActiveLoad()
         stateStore.refreshFreePlanGeneration(
             persistCurrentIfNeeded: true,
@@ -141,10 +139,12 @@ final class ServerRemoteSyncCoordinator {
         guard stateStore.ambiguousCloudRecovery != nil else { return }
         try stateStore.requireNoPendingServerDataMutation()
         guard stateStore.isSyncEnabled,
-              dependencies.remoteRepository.isAvailable,
-              let changes = pendingAmbiguousFullFetch else {
+              dependencies.remoteRepository.isAvailable else {
             throw AmbiguousCloudRecoveryError.remoteUnavailable
         }
+        let changes = try await dependencies.remoteRepository.fetchServerChanges(
+            forceFullFetch: true
+        )
         guard changes.isFullFetch else {
             throw AmbiguousCloudRecoveryError.incompleteSnapshot
         }
@@ -196,21 +196,6 @@ final class ServerRemoteSyncCoordinator {
         }
     }
 
-    func enqueue(_ effect: ServerMutationEffect) throws {
-        switch effect {
-        case .serverUpsert(let server):
-            try dependencies.syncRepository.enqueueServerUpsert(server)
-        case .serverDelete(let server):
-            try dependencies.syncRepository.enqueueServerDelete(server)
-        case .workspaceUpsert(let workspace):
-            try dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
-        }
-    }
-
-    func enqueueWorkspaceUpsert(_ workspace: Workspace) throws {
-        try dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
-    }
-
     func drainPendingMutations() async {
         guard stateStore.isSyncEnabled, !stateStore.hasPendingServerDataMutation else { return }
         await dependencies.syncRepository.drainPendingMutations()
@@ -234,6 +219,11 @@ final class ServerRemoteSyncCoordinator {
     private func beginLoadingIfNeeded() -> Task<Void, Never>? {
         if let activeLoad {
             return activeLoad.task
+        }
+
+        guard stateStore.ambiguousCloudRecovery == nil else {
+            logger.info("Automatic CloudKit load is paused for a recovery decision")
+            return nil
         }
 
         guard stateStore.isSyncEnabled else {
@@ -320,10 +310,13 @@ final class ServerRemoteSyncCoordinator {
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
         let changes = backfillResult.changes
 
-        if stateStore.automaticEmptyFullFetchNeedsRecovery(changes) {
+        let pendingMutations = try dependencies.syncRepository.pendingServerMutations()
+        if stateStore.automaticFullFetchNeedsRecovery(
+            changes,
+            pendingMutations: pendingMutations
+        ) {
             try stateStore.preserveAmbiguousCloudRecoveryBackup()
-            pendingAmbiguousFullFetch = changes
-            throw AmbiguousCloudRecoveryError.emptyFullFetchNeedsDecision
+            throw AmbiguousCloudRecoveryError.fullFetchNeedsDecision
         }
 
         logger.info(
@@ -359,7 +352,6 @@ final class ServerRemoteSyncCoordinator {
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
         do {
             try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
-            try clearAmbiguousCloudRecoveryIfNeeded()
         } catch {
             await failLoad(error, operationID: operationID, generation: generation)
             return
@@ -384,7 +376,6 @@ final class ServerRemoteSyncCoordinator {
         if stateStore.ambiguousCloudRecovery != nil {
             try stateStore.clearAmbiguousCloudRecovery()
         }
-        pendingAmbiguousFullFetch = nil
     }
 
     private func failLoad(
@@ -562,7 +553,13 @@ final class ServerRemoteSyncCoordinator {
         guard let workspace = stateStore.takePendingBootstrapWorkspaceForAuthoritativeEmptyFetch(changes) else {
             return
         }
-        try dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
+        try dependencies.syncRepository.enqueueServerDataMutations([
+            ServerPendingMutation(
+                id: dependencies.makeID(),
+                payload: .workspaceUpsert(workspace),
+                createdAt: dependencies.now()
+            )
+        ])
         logger.info(
             "Promoted pending bootstrap workspace after authoritative CloudKit fetch returned no workspaces"
         )
@@ -667,14 +664,29 @@ final class ServerRemoteSyncCoordinator {
         let repair = stateStore.repairOrphanedServers(at: dependencies.now())
         guard repair.workspace != nil || !repair.servers.isEmpty else { return }
 
-        if let workspace = repair.workspace, stateStore.isSyncEnabled {
-            try dependencies.syncRepository.enqueueWorkspaceUpsert(workspace)
-            logger.warning(
-                "Created repair workspace '\(workspace.name)' to recover orphaned servers"
-            )
-        }
-        for server in repair.servers where stateStore.isSyncEnabled {
-            try dependencies.syncRepository.enqueueServerUpsert(server)
+        if stateStore.isSyncEnabled {
+            let createdAt = dependencies.now()
+            var mutations: [ServerPendingMutation] = []
+            if let workspace = repair.workspace {
+                mutations.append(
+                    ServerPendingMutation(
+                        id: dependencies.makeID(),
+                        payload: .workspaceUpsert(workspace),
+                        createdAt: createdAt
+                    )
+                )
+                logger.warning(
+                    "Created repair workspace '\(workspace.name)' to recover orphaned servers"
+                )
+            }
+            mutations += repair.servers.enumerated().map { index, server in
+                ServerPendingMutation(
+                    id: dependencies.makeID(),
+                    payload: .serverUpsert(server),
+                    createdAt: createdAt.addingTimeInterval(TimeInterval(index + 1))
+                )
+            }
+            try dependencies.syncRepository.enqueueServerDataMutations(mutations)
         }
         logger.warning("Repaired \(repair.servers.count) orphaned servers")
     }
