@@ -1811,3 +1811,16 @@
 "Separate Light and Dark Themes" = "Окремі теми для світлого й темного режимів";
 "Dark Theme" = "Темна тема";
 "Light Theme" = "Світла тема";
+"Access" = "Доступ";
+"Show in Terminal" = "Показувати в терміналі";
+"You can also use Command–Shift–M with a hardware keyboard." = "Також можна використовувати Command–Shift–M на апаратній клавіатурі.";
+"Whisper runs on this device and works offline after download." = "Whisper працює на цьому пристрої та доступний офлайн після завантаження.";
+"Parakeet runs on this device and works offline after download." = "Parakeet працює на цьому пристрої та доступний офлайн після завантаження.";
+"Offline Model" = "Офлайн-модель";
+"Download Size" = "Розмір завантаження";
+"Remove Download" = "Видалити завантаження";
+"Downloaded Models" = "Завантажені моделі";
+"All Models" = "Усі моделі";
+"Remove All Downloaded Models" = "Видалити всі завантажені моделі";
+"Remove All Downloaded Models?" = "Видалити всі завантажені моделі?";
+"Voice input models must be downloaded again before they can work offline." = "Щоб моделі голосового введення працювали офлайн, їх потрібно буде завантажити повторно.";

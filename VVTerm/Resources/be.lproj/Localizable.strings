@@ -1805,3 +1805,16 @@
 "Separate Light and Dark Themes" = "Асобныя тэмы для светлага і цёмнага рэжымаў";
 "Dark Theme" = "Цёмная тэма";
 "Light Theme" = "Светлая тэма";
+"Access" = "Доступ";
+"Show in Terminal" = "Паказваць у тэрмінале";
+"You can also use Command–Shift–M with a hardware keyboard." = "Таксама можна выкарыстоўваць Command–Shift–M з апаратнай клавіятурай.";
+"Whisper runs on this device and works offline after download." = "Whisper працуе на гэтай прыладзе і даступны без інтэрнэту пасля спампоўвання.";
+"Parakeet runs on this device and works offline after download." = "Parakeet працуе на гэтай прыладзе і даступны без інтэрнэту пасля спампоўвання.";
+"Offline Model" = "Афлайн-мадэль";
+"Download Size" = "Памер спампоўвання";
+"Remove Download" = "Выдаліць спампаванае";
+"Downloaded Models" = "Спампаваныя мадэлі";
+"All Models" = "Усе мадэлі";
+"Remove All Downloaded Models" = "Выдаліць усе спампаваныя мадэлі";
+"Remove All Downloaded Models?" = "Выдаліць усе спампаваныя мадэлі?";
+"Voice input models must be downloaded again before they can work offline." = "Каб мадэлі галасавога ўводу працавалі без інтэрнэту, іх трэба будзе спампаваць зноў.";

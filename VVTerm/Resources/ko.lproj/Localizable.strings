@@ -1803,3 +1803,16 @@
 "Separate Light and Dark Themes" = "라이트 및 다크 테마 분리";
 "Dark Theme" = "다크 테마";
 "Light Theme" = "라이트 테마";
+"Access" = "접근";
+"Show in Terminal" = "터미널에 표시";
+"You can also use Command–Shift–M with a hardware keyboard." = "하드웨어 키보드에서는 Command–Shift–M도 사용할 수 있습니다.";
+"Whisper runs on this device and works offline after download." = "Whisper는 이 기기에서 실행되며 다운로드 후 오프라인으로 사용할 수 있습니다.";
+"Parakeet runs on this device and works offline after download." = "Parakeet은 이 기기에서 실행되며 다운로드 후 오프라인으로 사용할 수 있습니다.";
+"Offline Model" = "오프라인 모델";
+"Download Size" = "다운로드 크기";
+"Remove Download" = "다운로드 제거";
+"Downloaded Models" = "다운로드한 모델";
+"All Models" = "모든 모델";
+"Remove All Downloaded Models" = "다운로드한 모델 모두 제거";
+"Remove All Downloaded Models?" = "다운로드한 모델을 모두 제거할까요?";
+"Voice input models must be downloaded again before they can work offline." = "오프라인에서 사용하려면 음성 입력 모델을 다시 다운로드해야 합니다.";

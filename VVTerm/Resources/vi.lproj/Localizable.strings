@@ -1849,3 +1849,16 @@
 "Separate Light and Dark Themes" = "Tách chủ đề sáng và tối";
 "Dark Theme" = "Chủ đề tối";
 "Light Theme" = "Chủ đề sáng";
+"Access" = "Truy cập";
+"Show in Terminal" = "Hiển thị trong Terminal";
+"You can also use Command–Shift–M with a hardware keyboard." = "Bạn cũng có thể dùng Command–Shift–M với bàn phím vật lý.";
+"Whisper runs on this device and works offline after download." = "Whisper chạy trên thiết bị này và hoạt động ngoại tuyến sau khi tải xuống.";
+"Parakeet runs on this device and works offline after download." = "Parakeet chạy trên thiết bị này và hoạt động ngoại tuyến sau khi tải xuống.";
+"Offline Model" = "Mô hình ngoại tuyến";
+"Download Size" = "Kích thước tải xuống";
+"Remove Download" = "Xóa bản tải xuống";
+"Downloaded Models" = "Mô hình đã tải xuống";
+"All Models" = "Tất cả mô hình";
+"Remove All Downloaded Models" = "Xóa tất cả mô hình đã tải xuống";
+"Remove All Downloaded Models?" = "Xóa tất cả mô hình đã tải xuống?";
+"Voice input models must be downloaded again before they can work offline." = "Bạn phải tải lại các mô hình nhập liệu bằng giọng nói trước khi dùng ngoại tuyến.";

@@ -1805,3 +1805,16 @@
 "Separate Light and Dark Themes" = "Samostatné motivy pro světlý a tmavý režim";
 "Dark Theme" = "Tmavý motiv";
 "Light Theme" = "Světlý motiv";
+"Access" = "Přístup";
+"Show in Terminal" = "Zobrazit v terminálu";
+"You can also use Command–Shift–M with a hardware keyboard." = "S hardwarovou klávesnicí můžete také použít Command–Shift–M.";
+"Whisper runs on this device and works offline after download." = "Whisper běží na tomto zařízení a po stažení funguje offline.";
+"Parakeet runs on this device and works offline after download." = "Parakeet běží na tomto zařízení a po stažení funguje offline.";
+"Offline Model" = "Offline model";
+"Download Size" = "Velikost stahování";
+"Remove Download" = "Odstranit stažený model";
+"Downloaded Models" = "Stažené modely";
+"All Models" = "Všechny modely";
+"Remove All Downloaded Models" = "Odstranit všechny stažené modely";
+"Remove All Downloaded Models?" = "Odstranit všechny stažené modely?";
+"Voice input models must be downloaded again before they can work offline." = "Aby modely hlasového vstupu fungovaly offline, bude nutné je znovu stáhnout.";

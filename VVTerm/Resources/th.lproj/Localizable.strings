@@ -1804,3 +1804,16 @@
 "Separate Light and Dark Themes" = "แยกธีมสว่างและมืด";
 "Dark Theme" = "ธีมมืด";
 "Light Theme" = "ธีมสว่าง";
+"Access" = "การเข้าถึง";
+"Show in Terminal" = "แสดงในเทอร์มินัล";
+"You can also use Command–Shift–M with a hardware keyboard." = "คุณสามารถใช้ Command–Shift–M กับแป้นพิมพ์ฮาร์ดแวร์ได้ด้วย";
+"Whisper runs on this device and works offline after download." = "Whisper ทำงานบนอุปกรณ์นี้และใช้งานแบบออฟไลน์ได้หลังดาวน์โหลด";
+"Parakeet runs on this device and works offline after download." = "Parakeet ทำงานบนอุปกรณ์นี้และใช้งานแบบออฟไลน์ได้หลังดาวน์โหลด";
+"Offline Model" = "โมเดลออฟไลน์";
+"Download Size" = "ขนาดดาวน์โหลด";
+"Remove Download" = "ลบไฟล์ดาวน์โหลด";
+"Downloaded Models" = "โมเดลที่ดาวน์โหลดแล้ว";
+"All Models" = "โมเดลทั้งหมด";
+"Remove All Downloaded Models" = "ลบโมเดลที่ดาวน์โหลดทั้งหมด";
+"Remove All Downloaded Models?" = "ลบโมเดลที่ดาวน์โหลดทั้งหมดหรือไม่";
+"Voice input models must be downloaded again before they can work offline." = "ต้องดาวน์โหลดโมเดลป้อนข้อมูลด้วยเสียงอีกครั้งก่อนใช้งานแบบออฟไลน์";

@@ -1801,3 +1801,16 @@
 "Separate Light and Dark Themes" = "单独设置浅色和深色主题";
 "Dark Theme" = "深色主题";
 "Light Theme" = "浅色主题";
+"Access" = "访问";
+"Show in Terminal" = "在终端中显示";
+"You can also use Command–Shift–M with a hardware keyboard." = "使用实体键盘时，也可以按 Command–Shift–M。";
+"Whisper runs on this device and works offline after download." = "Whisper 在此设备上运行，下载后可离线使用。";
+"Parakeet runs on this device and works offline after download." = "Parakeet 在此设备上运行，下载后可离线使用。";
+"Offline Model" = "离线模型";
+"Download Size" = "下载大小";
+"Remove Download" = "移除下载";
+"Downloaded Models" = "已下载模型";
+"All Models" = "所有模型";
+"Remove All Downloaded Models" = "移除所有已下载模型";
+"Remove All Downloaded Models?" = "移除所有已下载模型？";
+"Voice input models must be downloaded again before they can work offline." = "语音输入模型需要重新下载后才能离线使用。";

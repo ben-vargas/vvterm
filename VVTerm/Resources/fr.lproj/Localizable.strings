@@ -1806,3 +1806,16 @@
 "Separate Light and Dark Themes" = "Thèmes distincts pour les modes clair et sombre";
 "Dark Theme" = "Thème sombre";
 "Light Theme" = "Thème clair";
+"Access" = "Accès";
+"Show in Terminal" = "Afficher dans le terminal";
+"You can also use Command–Shift–M with a hardware keyboard." = "Vous pouvez aussi utiliser Command–Shift–M avec un clavier physique.";
+"Whisper runs on this device and works offline after download." = "Whisper s’exécute sur cet appareil et fonctionne hors ligne après le téléchargement.";
+"Parakeet runs on this device and works offline after download." = "Parakeet s’exécute sur cet appareil et fonctionne hors ligne après le téléchargement.";
+"Offline Model" = "Modèle hors ligne";
+"Download Size" = "Taille du téléchargement";
+"Remove Download" = "Supprimer le téléchargement";
+"Downloaded Models" = "Modèles téléchargés";
+"All Models" = "Tous les modèles";
+"Remove All Downloaded Models" = "Supprimer tous les modèles téléchargés";
+"Remove All Downloaded Models?" = "Supprimer tous les modèles téléchargés ?";
+"Voice input models must be downloaded again before they can work offline." = "Les modèles de saisie vocale devront être téléchargés à nouveau pour fonctionner hors ligne.";

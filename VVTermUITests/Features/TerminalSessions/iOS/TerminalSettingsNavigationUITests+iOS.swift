@@ -88,6 +88,49 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
     }
 
     @MainActor
+    func testVoiceInputSettingsUseGroupedLayoutBelowNavigationBar() throws {
+        let app = XCUIApplication()
+        app.terminate()
+        app.launchArguments = [
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US",
+            "-hasSeenWelcome", "YES",
+            "-iCloudSyncEnabled", "NO",
+            "-security.privacyModeEnabled", "NO",
+            "-security.fullAppLockEnabled", "NO",
+            "-security.lockOnBackground", "NO",
+            "-transcriptionProvider", "mlxWhisper",
+        ]
+        app.launch()
+        defer { app.terminate() }
+
+        let settings = app.buttons["vvterm.serverList.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+
+        let voiceInputRoute = app.buttons["vvterm.settings.route.transcription"]
+        XCTAssertTrue(voiceInputRoute.waitForExistence(timeout: 8))
+        voiceInputRoute.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["vvterm.settings.page.transcription"]
+                .waitForExistence(timeout: 8)
+        )
+
+        let navigationBar = app.navigationBars["Voice Input"]
+        let accessHeader = app.staticTexts["Access"]
+        XCTAssertTrue(navigationBar.exists)
+        XCTAssertTrue(accessHeader.exists)
+        XCTAssertGreaterThanOrEqual(
+            accessHeader.frame.minY,
+            navigationBar.frame.maxY,
+            "The first section heading must not be clipped by the navigation bar."
+        )
+        XCTAssertTrue(app.switches["Show in Terminal"].exists)
+        XCTAssertTrue(app.staticTexts["Transcription"].exists)
+    }
+
+    @MainActor
     func testAppearanceAndCursorChoicesAreSelectedButtons() throws {
         let app = XCUIApplication()
         app.terminate()

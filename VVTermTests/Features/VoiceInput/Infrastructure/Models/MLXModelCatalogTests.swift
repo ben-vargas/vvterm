@@ -36,13 +36,22 @@ final class MLXModelCatalogTests: XCTestCase {
                 XCTAssertEqual(option.expectedDownloadBytes, manifest.expectedBytes)
                 XCTAssertEqual(
                     option.downloadSizeLabel,
-                    ByteCountFormatter.string(
-                        fromByteCount: try XCTUnwrap(manifest.expectedBytes),
-                        countStyle: .file
+                    MLXModelStorageSizeFormatter.string(
+                        fromByteCount: try XCTUnwrap(manifest.expectedBytes)
                     )
                 )
             }
         }
+    }
+
+    func testStorageSizeUsesWholeUnits() {
+        XCTAssertEqual(
+            MLXModelStorageSizeFormatter.string(
+                fromByteCount: 145_400_000,
+                locale: Locale(identifier: "en_US")
+            ),
+            "145 MB"
+        )
     }
 
 }
