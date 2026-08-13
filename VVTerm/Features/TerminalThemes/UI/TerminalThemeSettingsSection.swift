@@ -51,13 +51,6 @@ struct TerminalThemeSettingsSection: View {
         )
     }
 
-    private var customThemeCountLabel: String {
-        let count = Int64(customThemes.count)
-        return count == 1
-            ? String(format: String(localized: "%lld custom theme"), count)
-            : String(format: String(localized: "%lld custom themes"), count)
-    }
-
     private var customThemeErrorAlertBinding: Binding<Bool> {
         Binding(
             get: { customThemeErrorMessage != nil },
@@ -91,17 +84,17 @@ struct TerminalThemeSettingsSection: View {
     var body: some View {
         Section("Theme") {
             Toggle(
-                "Use different themes for Light/Dark mode",
+                "Separate Light and Dark Themes",
                 isOn: usePerAppearanceThemeBinding
             )
 
             if themeSelection.usePerAppearanceTheme {
-                Picker("Dark Mode Theme", selection: darkThemeNameBinding) {
+                Picker("Dark Theme", selection: darkThemeNameBinding) {
                     themePickerRows
                 }
                 .disabled(allThemeNames.isEmpty)
 
-                Picker("Light Mode Theme", selection: lightThemeNameBinding) {
+                Picker("Light Theme", selection: lightThemeNameBinding) {
                     themePickerRows
                 }
                 .disabled(allThemeNames.isEmpty)
@@ -112,22 +105,26 @@ struct TerminalThemeSettingsSection: View {
                 .disabled(allThemeNames.isEmpty)
             }
 
-            HStack(spacing: 10) {
-                Button("Manage custom themes") {
-                    showingCustomThemeManager = true
+            Button {
+                showingCustomThemeManager = true
+            } label: {
+                HStack(spacing: 10) {
+                    Text("Custom Themes")
+
+                    Spacer(minLength: 8)
+
+                    Text(customThemes.count, format: .number)
+                        .foregroundStyle(.secondary)
+
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
-                .buttonStyle(.bordered)
-
-                Spacer(minLength: 0)
-
-                Text(customThemeCountLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
             }
-
-            Text("Clipboard content or imported files must be Ghostty-compatible theme text.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("vvterm.settings.appearance.customThemes")
         }
         .sheet(isPresented: $showingCustomThemeManager) {
             ManageCustomThemesSheet(

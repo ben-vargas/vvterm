@@ -144,8 +144,18 @@ struct ManageCustomThemesSheet: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 320)
+
+            customThemeCompatibilityNote
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 320)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    var customThemeCompatibilityNote: some View {
+        Text("Clipboard content or imported files must be Ghostty-compatible theme text.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
     }
 
     func assignmentLabel(for theme: String) -> String? {

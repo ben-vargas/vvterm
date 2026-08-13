@@ -1844,3 +1844,8 @@
 "View Options" = "Tùy chọn chế độ xem";
 "Appearance and layout" = "Giao diện và bố cục";
 "Reset to Defaults" = "Đặt lại về mặc định";
+"Family" = "Họ phông chữ";
+"%lld pt" = "%lld pt";
+"Separate Light and Dark Themes" = "Tách chủ đề sáng và tối";
+"Dark Theme" = "Chủ đề tối";
+"Light Theme" = "Chủ đề sáng";

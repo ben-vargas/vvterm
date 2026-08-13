@@ -1799,3 +1799,8 @@
 "View Options" = "ตัวเลือกมุมมอง";
 "Appearance and layout" = "ลักษณะและเค้าโครง";
 "Reset to Defaults" = "รีเซ็ตเป็นค่าเริ่มต้น";
+"Family" = "ตระกูลแบบอักษร";
+"%lld pt" = "%lld pt";
+"Separate Light and Dark Themes" = "แยกธีมสว่างและมืด";
+"Dark Theme" = "ธีมมืด";
+"Light Theme" = "ธีมสว่าง";

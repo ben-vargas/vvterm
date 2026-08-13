@@ -1800,3 +1800,8 @@
 "View Options" = "Параметры прагляду";
 "Appearance and layout" = "Выгляд і макет";
 "Reset to Defaults" = "Скінуць да стандартных";
+"Family" = "Гарнітура";
+"%lld pt" = "%lld пт";
+"Separate Light and Dark Themes" = "Асобныя тэмы для светлага і цёмнага рэжымаў";
+"Dark Theme" = "Цёмная тэма";
+"Light Theme" = "Светлая тэма";

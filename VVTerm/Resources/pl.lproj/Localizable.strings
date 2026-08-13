@@ -1801,3 +1801,8 @@
 "View Options" = "Opcje widoku";
 "Appearance and layout" = "Wygląd i układ";
 "Reset to Defaults" = "Przywróć ustawienia domyślne";
+"Family" = "Rodzina";
+"%lld pt" = "%lld pkt";
+"Separate Light and Dark Themes" = "Oddzielne motywy jasny i ciemny";
+"Dark Theme" = "Ciemny motyw";
+"Light Theme" = "Jasny motyw";

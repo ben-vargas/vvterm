@@ -1798,3 +1798,8 @@
 "View Options" = "보기 옵션";
 "Appearance and layout" = "모양 및 레이아웃";
 "Reset to Defaults" = "기본값으로 재설정";
+"Family" = "글꼴";
+"%lld pt" = "%lld pt";
+"Separate Light and Dark Themes" = "라이트 및 다크 테마 분리";
+"Dark Theme" = "다크 테마";
+"Light Theme" = "라이트 테마";

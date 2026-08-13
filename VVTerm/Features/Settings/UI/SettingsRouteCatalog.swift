@@ -181,7 +181,10 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .privacyAndAppLock:
             ["Privacy & App Lock", "Privacy Mode", "Help Improve VVTerm", "App Lock"]
         case .terminalAppearance:
-            ["Appearance", "Font Family", "Cursor", "Blink"]
+            [
+                "Appearance", "Font", "Family", "Size", "Cursor", "Blink", "Theme",
+                "Separate Light and Dark Themes", "Dark Theme", "Light Theme", "Custom Themes",
+            ]
         case .keyboardAndInput:
             [
                 "Keyboard & Input",

@@ -1796,3 +1796,8 @@
 "View Options" = "视图选项";
 "Appearance and layout" = "外观和布局";
 "Reset to Defaults" = "恢复默认设置";
+"Family" = "字体";
+"%lld pt" = "%lld 磅";
+"Separate Light and Dark Themes" = "单独设置浅色和深色主题";
+"Dark Theme" = "深色主题";
+"Light Theme" = "浅色主题";

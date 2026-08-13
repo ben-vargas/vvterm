@@ -1800,3 +1800,8 @@
 "View Options" = "Možnosti zobrazení";
 "Appearance and layout" = "Vzhled a rozložení";
 "Reset to Defaults" = "Obnovit výchozí nastavení";
+"Family" = "Rodina písma";
+"%lld pt" = "%lld pt";
+"Separate Light and Dark Themes" = "Samostatné motivy pro světlý a tmavý režim";
+"Dark Theme" = "Tmavý motiv";
+"Light Theme" = "Světlý motiv";

@@ -9,8 +9,12 @@ extension ManageCustomThemesSheet {
                     customThemesEmptyState
                 } else {
                     List {
-                        ForEach(sortedThemes) { theme in
-                            themeRow(theme)
+                        Section {
+                            ForEach(sortedThemes) { theme in
+                                themeRow(theme)
+                            }
+                        } footer: {
+                            customThemeCompatibilityNote
                         }
                     }
                 }

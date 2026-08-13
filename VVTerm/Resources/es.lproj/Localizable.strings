@@ -1799,3 +1799,8 @@
 "View Options" = "Opciones de vista";
 "Appearance and layout" = "Apariencia y diseño";
 "Reset to Defaults" = "Restablecer valores predeterminados";
+"Family" = "Familia";
+"%lld pt" = "%lld pt";
+"Separate Light and Dark Themes" = "Temas distintos para los modos claro y oscuro";
+"Dark Theme" = "Tema oscuro";
+"Light Theme" = "Tema claro";

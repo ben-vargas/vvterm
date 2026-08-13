@@ -1799,3 +1799,8 @@
 "View Options" = "表示オプション";
 "Appearance and layout" = "外観とレイアウト";
 "Reset to Defaults" = "デフォルトに戻す";
+"Family" = "フォントファミリー";
+"%lld pt" = "%lld pt";
+"Separate Light and Dark Themes" = "ライトとダークでテーマを分ける";
+"Dark Theme" = "ダークテーマ";
+"Light Theme" = "ライトテーマ";

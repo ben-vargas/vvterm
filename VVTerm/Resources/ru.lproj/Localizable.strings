@@ -1799,3 +1799,8 @@
 "View Options" = "Параметры просмотра";
 "Appearance and layout" = "Внешний вид и компоновка";
 "Reset to Defaults" = "Восстановить настройки по умолчанию";
+"Family" = "Гарнитура";
+"%lld pt" = "%lld пт";
+"Separate Light and Dark Themes" = "Отдельные темы для светлого и тёмного режимов";
+"Dark Theme" = "Тёмная тема";
+"Light Theme" = "Светлая тема";

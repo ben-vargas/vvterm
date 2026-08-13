@@ -1806,3 +1806,8 @@
 "View Options" = "Параметри перегляду";
 "Appearance and layout" = "Вигляд і компонування";
 "Reset to Defaults" = "Відновити типові параметри";
+"Family" = "Гарнітура";
+"%lld pt" = "%lld пт";
+"Separate Light and Dark Themes" = "Окремі теми для світлого й темного режимів";
+"Dark Theme" = "Темна тема";
+"Light Theme" = "Світла тема";

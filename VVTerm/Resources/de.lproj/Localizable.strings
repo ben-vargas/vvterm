@@ -1799,3 +1799,8 @@
 "View Options" = "Ansichtsoptionen";
 "Appearance and layout" = "Darstellung und Layout";
 "Reset to Defaults" = "Auf Standardwerte zurücksetzen";
+"Family" = "Schriftfamilie";
+"%lld pt" = "%lld pt";
+"Separate Light and Dark Themes" = "Separate Themes für Hell und Dunkel";
+"Dark Theme" = "Dunkles Theme";
+"Light Theme" = "Helles Theme";
