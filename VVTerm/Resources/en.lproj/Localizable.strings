@@ -1784,6 +1784,9 @@
 "Servers & Settings" = "Servers & Settings";
 "Passwords & SSH Keys" = "Passwords & SSH Keys";
 "Synced with iCloud" = "Synced with iCloud";
+"Included in iCloud Sync" = "Included in iCloud Sync";
+"iCloud Sync Includes" = "iCloud Sync Includes";
+"Not Syncing" = "Not Syncing";
 "Data on This Device" = "Data on This Device";
 "On This Device" = "On This Device";
 "Active Sessions" = "Active Sessions";
@@ -1798,8 +1801,9 @@
 "Credentials" = "Credentials";
 "Credentials could not be copied. Nothing was removed." = "Credentials could not be copied. Nothing was removed.";
 "Credentials and SSH keys need attention." = "Credentials and SSH keys need attention.";
-"Credentials could not be removed. Nothing was changed." = "Credentials could not be removed. Nothing was changed.";
-"Ready to sync" = "Ready to sync";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm could not remove every item. Your local copies remain safe. Try again.";
+"Ready to Sync" = "Ready to Sync";
+"No successful sync yet." = "No successful sync yet.";
 "Sync in progress" = "Sync in progress";
 "Changes will sync later." = "Changes will sync later.";
 "Sign in to continue." = "Sign in to continue.";
@@ -1831,7 +1835,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain.";
 "Sync Details" = "Sync Details";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Credentials remain on this device. Existing app data in iCloud is not deleted.";
-"Stored on This Device" = "Stored on This Device";
 "Hardware Keyboard" = "Hardware Keyboard";
 "Software Keyboard" = "Software Keyboard";
 "Accessory Bar" = "Accessory Bar";

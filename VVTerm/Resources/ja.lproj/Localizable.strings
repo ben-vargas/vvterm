@@ -1732,6 +1732,9 @@
 "Servers & Settings" = "サーバーと設定";
 "Passwords & SSH Keys" = "パスワードとSSHキー";
 "Synced with iCloud" = "iCloudと同期済み";
+"Included in iCloud Sync" = "iCloud同期の対象";
+"iCloud Sync Includes" = "iCloud同期の対象";
+"Not Syncing" = "同期していません";
 "Data on This Device" = "このデバイス上のデータ";
 "On This Device" = "このデバイス上";
 "Active Sessions" = "アクティブなセッション";
@@ -1746,8 +1749,9 @@
 "Credentials" = "認証情報";
 "Credentials could not be copied. Nothing was removed." = "認証情報をコピーできませんでした。何も削除されていません。";
 "Credentials and SSH keys need attention." = "認証情報とSSHキーの確認が必要です。";
-"Credentials could not be removed. Nothing was changed." = "認証情報を削除できませんでした。何も変更されていません。";
-"Ready to sync" = "同期の準備完了";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTermですべての項目を削除できませんでした。ローカルコピーは安全です。もう一度お試しください。";
+"Ready to Sync" = "同期の準備完了";
+"No successful sync yet." = "まだ同期は完了していません。";
 "Sync in progress" = "同期中";
 "Changes will sync later." = "変更内容は後で同期されます。";
 "Sign in to continue." = "サインインして続けてください。";
@@ -1779,7 +1783,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "パスワード、秘密鍵、パスフレーズ、CloudflareトークンはiCloudキーチェーンを使用します。";
 "Sync Details" = "同期の詳細";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "認証情報はこのデバイスに残ります。iCloudにある既存のAppデータは削除されません。";
-"Stored on This Device" = "このデバイスに保存済み";
 "Hardware Keyboard" = "ハードウェアキーボード";
 "Software Keyboard" = "ソフトウェアキーボード";
 "Accessory Bar" = "アクセサリーバー";

@@ -15,7 +15,37 @@ nonisolated struct SyncSettingsCloudState: Equatable, Sendable {
     let accountState: CloudKitAccountState
     let pendingOperationCount: Int
     let hasPendingFailure: Bool
+    let quarantinedOperationCount: Int
+    let pendingQueueHealth: PendingCloudKitQueueHealth
     let lastSuccessfulSyncDate: Date?
+
+    init(
+        status: Status,
+        isAvailable: Bool,
+        accountState: CloudKitAccountState,
+        pendingOperationCount: Int,
+        hasPendingFailure: Bool,
+        quarantinedOperationCount: Int = 0,
+        pendingQueueHealth: PendingCloudKitQueueHealth = .ready,
+        lastSuccessfulSyncDate: Date?
+    ) {
+        self.status = status
+        self.isAvailable = isAvailable
+        self.accountState = accountState
+        self.pendingOperationCount = pendingOperationCount
+        self.hasPendingFailure = hasPendingFailure
+        self.quarantinedOperationCount = quarantinedOperationCount
+        self.pendingQueueHealth = pendingQueueHealth
+        self.lastSuccessfulSyncDate = lastSuccessfulSyncDate
+    }
+
+    var outstandingOperationCount: Int {
+        pendingOperationCount + quarantinedOperationCount
+    }
+
+    var hasBlockedPendingWork: Bool {
+        quarantinedOperationCount > 0 || pendingQueueHealth == .migrationBlocked
+    }
 }
 
 nonisolated enum SyncSettingsCredentialState: Equatable, Sendable {
@@ -25,6 +55,7 @@ nonisolated enum SyncSettingsCredentialState: Equatable, Sendable {
 }
 
 nonisolated enum SyncSettingsUserState: Equatable, Sendable {
+    case readyToSync
     case upToDate
     case syncing
     case waitingForNetwork
@@ -101,6 +132,8 @@ nonisolated struct SyncSettingsDiagnostics: Equatable, Sendable {
     let account: SyncSettingsAccountCategory
     let lastSuccessfulSyncDate: Date?
     let pendingOperationCount: Int
+    let quarantinedOperationCount: Int
+    let pendingQueueHealth: PendingCloudKitQueueHealth
     let lastError: SyncSettingsErrorRecord?
     let runtime: SyncSettingsRuntimeInfo
 
@@ -111,6 +144,8 @@ nonisolated struct SyncSettingsDiagnostics: Equatable, Sendable {
             "iCloud Account: \(account.rawValue)",
             "Last Successful Sync: \(lastSuccessfulSyncDate.map(Self.format) ?? "none")",
             "Pending Changes: \(pendingOperationCount)",
+            "Quarantined Changes: \(quarantinedOperationCount)",
+            "Pending Queue: \(pendingQueueHealth.diagnosticValue)",
             "App Version: \(runtime.appVersion) (\(runtime.buildVersion))",
             "Platform: \(runtime.platform)",
         ]
@@ -128,9 +163,19 @@ nonisolated struct SyncSettingsDiagnostics: Equatable, Sendable {
     }
 }
 
+private extension PendingCloudKitQueueHealth {
+    nonisolated var diagnosticValue: String {
+        switch self {
+        case .ready: "ready"
+        case .migrationBlocked: "migrationBlocked"
+        }
+    }
+}
+
 private extension SyncSettingsUserState {
     nonisolated var diagnosticValue: String {
         switch self {
+        case .readyToSync: "readyToSync"
         case .upToDate: "upToDate"
         case .syncing: "syncing"
         case .waitingForNetwork: "waitingForNetwork"
@@ -199,6 +244,7 @@ final class SyncSettingsCoordinator: ObservableObject {
     private let runtime: SyncSettingsRuntimeInfo
     private let now: () -> Date
     private var cloudStateObservation: AnyCancellable?
+    private var manualSyncOperationID = UUID()
 
     init(
         cloud: any SyncSettingsCloudSyncing,
@@ -281,10 +327,14 @@ final class SyncSettingsCoordinator: ObservableObject {
             break
         }
 
+        if cloudState.hasBlockedPendingWork {
+            return .needsAttention
+        }
+
         if cloudState.pendingOperationCount > 0 {
             return cloudState.hasPendingFailure ? .needsAttention : .waitingForNetwork
         }
-        return .upToDate
+        return lastSuccessfulSyncDate == nil ? .readyToSync : .upToDate
     }
 
     var canSyncNow: Bool {
@@ -297,6 +347,8 @@ final class SyncSettingsCoordinator: ObservableObject {
             account: SyncSettingsAccountCategory(cloudState.accountState),
             lastSuccessfulSyncDate: lastSuccessfulSyncDate,
             pendingOperationCount: cloudState.pendingOperationCount,
+            quarantinedOperationCount: cloudState.quarantinedOperationCount,
+            pendingQueueHealth: cloudState.pendingQueueHealth,
             lastError: lastError,
             runtime: runtime
         )
@@ -304,6 +356,7 @@ final class SyncSettingsCoordinator: ObservableObject {
 
     @discardableResult
     func setSyncEnabled(_ enabled: Bool) -> Bool {
+        invalidateManualSync()
         do {
             try credentials.prepareCredentialStorage(isSyncEnabled: enabled)
         } catch {
@@ -315,7 +368,6 @@ final class SyncSettingsCoordinator: ObservableObject {
 
         credentialFailure = nil
         credentialState = enabled ? .storedInICloudKeychain : .storedOnThisDevice
-        manualSyncState = .idle
         if !enabled {
             data.handleSyncDisabled()
         }
@@ -326,10 +378,13 @@ final class SyncSettingsCoordinator: ObservableObject {
 
     func syncNow() async {
         guard manualSyncState != .running else { return }
+        manualSyncOperationID = UUID()
+        let operationID = manualSyncOperationID
         manualSyncState = .running
         credentialFailure = nil
 
         await cloud.checkAccountStatus()
+        guard isCurrentManualSync(operationID) else { return }
         refreshSnapshots()
 
         guard cloudState.isAvailable else {
@@ -351,16 +406,19 @@ final class SyncSettingsCoordinator: ObservableObject {
         do {
             try await data.syncNow()
         } catch is CancellationError {
+            guard isCurrentManualSync(operationID) else { return }
             manualSyncState = .idle
             refreshSnapshots()
             return
         } catch {
+            guard isCurrentManualSync(operationID) else { return }
             manualSyncState = .failure
             recordError(.cloudData)
             refreshSnapshots()
             return
         }
 
+        guard isCurrentManualSync(operationID) else { return }
         refreshSnapshots()
         if credentialSyncFailed {
             manualSyncState = .failure
@@ -371,7 +429,7 @@ final class SyncSettingsCoordinator: ObservableObject {
             recordError(.network)
             return
         }
-        if cloudState.status == .error || cloudState.hasPendingFailure {
+        if cloudState.status == .error || cloudState.hasPendingFailure || cloudState.hasBlockedPendingWork {
             manualSyncState = .failure
             recordError(.cloudData)
             return
@@ -383,6 +441,7 @@ final class SyncSettingsCoordinator: ObservableObject {
         }
 
         let successDate = now()
+        guard isCurrentManualSync(operationID) else { return }
         do {
             try history.recordSuccessfulSync(at: successDate)
             lastSuccessfulSyncDate = successDate
@@ -436,6 +495,15 @@ final class SyncSettingsCoordinator: ObservableObject {
             manualSyncState = .failure
             recordError(.account)
         }
+    }
+
+    private func invalidateManualSync() {
+        manualSyncOperationID = UUID()
+        manualSyncState = .idle
+    }
+
+    private func isCurrentManualSync(_ operationID: UUID) -> Bool {
+        manualSyncOperationID == operationID
     }
 
     private func recordError(_ category: SyncSettingsErrorCategory) {

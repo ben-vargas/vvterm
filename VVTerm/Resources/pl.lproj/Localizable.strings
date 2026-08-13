@@ -1734,6 +1734,9 @@
 "Servers & Settings" = "Serwery i ustawienia";
 "Passwords & SSH Keys" = "Hasła i klucze SSH";
 "Synced with iCloud" = "Zsynchronizowano z iCloud";
+"Included in iCloud Sync" = "Uwzględniono w synchronizacji z iCloud";
+"iCloud Sync Includes" = "Synchronizacja z iCloud obejmuje";
+"Not Syncing" = "Brak synchronizacji";
 "Data on This Device" = "Dane na tym urządzeniu";
 "On This Device" = "Na tym urządzeniu";
 "Active Sessions" = "Aktywne sesje";
@@ -1748,8 +1751,9 @@
 "Credentials" = "Dane logowania";
 "Credentials could not be copied. Nothing was removed." = "Nie udało się skopiować danych logowania. Nic nie usunięto.";
 "Credentials and SSH keys need attention." = "Dane logowania i klucze SSH wymagają uwagi.";
-"Credentials could not be removed. Nothing was changed." = "Nie udało się usunąć danych logowania. Nic nie zmieniono.";
-"Ready to sync" = "Gotowe do synchronizacji";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm nie mógł usunąć wszystkich elementów. Lokalne kopie są bezpieczne. Spróbuj ponownie.";
+"Ready to Sync" = "Gotowe do synchronizacji";
+"No successful sync yet." = "Nie było jeszcze udanej synchronizacji.";
 "Sync in progress" = "Trwa synchronizacja";
 "Changes will sync later." = "Zmiany zostaną zsynchronizowane później.";
 "Sign in to continue." = "Zaloguj się, aby kontynuować.";
@@ -1781,7 +1785,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Hasła, klucze prywatne, frazy dostępu i tokeny Cloudflare używają Pęku kluczy iCloud.";
 "Sync Details" = "Szczegóły synchronizacji";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Dane logowania pozostają na tym urządzeniu. Istniejące dane aplikacji w iCloud nie są usuwane.";
-"Stored on This Device" = "Zapisano na tym urządzeniu";
 "Hardware Keyboard" = "Klawiatura sprzętowa";
 "Software Keyboard" = "Klawiatura ekranowa";
 "Accessory Bar" = "Pasek akcesoriów";

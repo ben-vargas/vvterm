@@ -1731,6 +1731,9 @@
 "Servers & Settings" = "서버 및 설정";
 "Passwords & SSH Keys" = "암호 및 SSH 키";
 "Synced with iCloud" = "iCloud와 동기화됨";
+"Included in iCloud Sync" = "iCloud 동기화에 포함됨";
+"iCloud Sync Includes" = "iCloud 동기화 항목";
+"Not Syncing" = "동기화 안 함";
 "Data on This Device" = "이 기기의 데이터";
 "On This Device" = "이 기기";
 "Active Sessions" = "활성 세션";
@@ -1745,8 +1748,9 @@
 "Credentials" = "자격 증명";
 "Credentials could not be copied. Nothing was removed." = "자격 증명을 복사할 수 없습니다. 아무것도 제거되지 않았습니다.";
 "Credentials and SSH keys need attention." = "자격 증명과 SSH 키를 확인해야 합니다.";
-"Credentials could not be removed. Nothing was changed." = "자격 증명을 제거할 수 없습니다. 아무것도 변경되지 않았습니다.";
-"Ready to sync" = "동기화 준비 완료";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm에서 모든 항목을 제거하지 못했습니다. 로컬 복사본은 안전합니다. 다시 시도하십시오.";
+"Ready to Sync" = "동기화 준비 완료";
+"No successful sync yet." = "아직 동기화가 완료되지 않았습니다.";
 "Sync in progress" = "동기화 중";
 "Changes will sync later." = "변경 사항은 나중에 동기화됩니다.";
 "Sign in to continue." = "계속하려면 로그인하십시오.";
@@ -1778,7 +1782,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "암호, 개인 키, 암호 구문 및 Cloudflare 토큰은 iCloud 키체인을 사용합니다.";
 "Sync Details" = "동기화 세부사항";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "자격 증명은 이 기기에 남습니다. iCloud의 기존 앱 데이터는 삭제되지 않습니다.";
-"Stored on This Device" = "이 기기에 저장됨";
 "Hardware Keyboard" = "하드웨어 키보드";
 "Software Keyboard" = "소프트웨어 키보드";
 "Accessory Bar" = "액세서리 바";

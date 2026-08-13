@@ -15,10 +15,10 @@ struct SyncSettingsView: View {
             }
             SyncSettingsDetailsSections(
                 summary: coordinator.contentSummary,
-                storageTitle: syncedDataHeaderTitle,
+                contentSyncState: contentSyncState,
                 syncEnabled: syncEnabled,
                 lastSuccessfulSyncDate: coordinator.lastSuccessfulSyncDate,
-                pendingChangeCount: coordinator.cloudState.pendingOperationCount,
+                pendingChangeCount: coordinator.cloudState.outstandingOperationCount,
                 lastError: coordinator.lastError,
                 diagnostics: coordinator.diagnostics.text,
                 requestCredentialRemoval: {
@@ -80,8 +80,12 @@ struct SyncSettingsView: View {
         }
     }
 
-    private var syncedDataHeaderTitle: LocalizedStringResource {
-        syncEnabled ? "Synced with iCloud" : "Stored on This Device"
+    private var contentSyncState: SyncSettingsContentSyncState {
+        SyncSettingsContentSyncState(
+            syncEnabled: syncEnabled,
+            userState: coordinator.userState,
+            lastSuccessfulSyncDate: coordinator.lastSuccessfulSyncDate
+        )
     }
 
     private var primaryAction: SyncSettingsPrimaryAction? {
@@ -106,7 +110,9 @@ struct SyncSettingsView: View {
         case .sync:
             String(localized: "Credentials and SSH keys need attention.")
         case .removal:
-            String(localized: "Credentials could not be removed. Nothing was changed.")
+            String(
+                localized: "VVTerm could not remove every item. Your local copies remain safe. Try again."
+            )
         case nil:
             nil
         }

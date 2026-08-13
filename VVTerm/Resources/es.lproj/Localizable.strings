@@ -1732,6 +1732,9 @@
 "Servers & Settings" = "Servidores y ajustes";
 "Passwords & SSH Keys" = "Contraseñas y claves SSH";
 "Synced with iCloud" = "Sincronizado con iCloud";
+"Included in iCloud Sync" = "Incluido en la sincronización con iCloud";
+"iCloud Sync Includes" = "La sincronización con iCloud incluye";
+"Not Syncing" = "Sin sincronizar";
 "Data on This Device" = "Datos en este dispositivo";
 "On This Device" = "En este dispositivo";
 "Active Sessions" = "Sesiones activas";
@@ -1746,8 +1749,9 @@
 "Credentials" = "Credenciales";
 "Credentials could not be copied. Nothing was removed." = "No se pudieron copiar las credenciales. No se eliminó nada.";
 "Credentials and SSH keys need attention." = "Las credenciales y las claves SSH requieren atención.";
-"Credentials could not be removed. Nothing was changed." = "No se pudieron eliminar las credenciales. No se cambió nada.";
-"Ready to sync" = "Listo para sincronizar";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm no pudo eliminar todos los elementos. Tus copias locales siguen seguras. Inténtalo de nuevo.";
+"Ready to Sync" = "Listo para sincronizar";
+"No successful sync yet." = "Aún no se ha completado ninguna sincronización.";
 "Sync in progress" = "Sincronización en curso";
 "Changes will sync later." = "Los cambios se sincronizarán más tarde.";
 "Sign in to continue." = "Inicia sesión para continuar.";
@@ -1779,7 +1783,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Las contraseñas, claves privadas, frases de contraseña y tokens de Cloudflare usan el llavero de iCloud.";
 "Sync Details" = "Detalles de sincronización";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Las credenciales permanecen en este dispositivo. Los datos existentes de la app en iCloud no se eliminan.";
-"Stored on This Device" = "Guardado en este dispositivo";
 "Hardware Keyboard" = "Teclado físico";
 "Software Keyboard" = "Teclado en pantalla";
 "Accessory Bar" = "Barra de accesorios";

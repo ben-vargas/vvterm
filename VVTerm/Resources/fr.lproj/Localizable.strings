@@ -1734,6 +1734,9 @@
 "Servers & Settings" = "Serveurs et réglages";
 "Passwords & SSH Keys" = "Mots de passe et clés SSH";
 "Synced with iCloud" = "Synchronisé avec iCloud";
+"Included in iCloud Sync" = "Inclus dans la synchronisation iCloud";
+"iCloud Sync Includes" = "La synchronisation iCloud inclut";
+"Not Syncing" = "Non synchronisé";
 "Data on This Device" = "Données sur cet appareil";
 "On This Device" = "Sur cet appareil";
 "Active Sessions" = "Sessions actives";
@@ -1748,8 +1751,9 @@
 "Credentials" = "Identifiants";
 "Credentials could not be copied. Nothing was removed." = "Les identifiants n’ont pas pu être copiés. Rien n’a été supprimé.";
 "Credentials and SSH keys need attention." = "Les identifiants et les clés SSH nécessitent votre attention.";
-"Credentials could not be removed. Nothing was changed." = "Les identifiants n’ont pas pu être supprimés. Rien n’a été modifié.";
-"Ready to sync" = "Prêt à synchroniser";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm n’a pas pu supprimer tous les éléments. Vos copies locales restent en sécurité. Réessayez.";
+"Ready to Sync" = "Prêt à synchroniser";
+"No successful sync yet." = "Aucune synchronisation réussie pour le moment.";
 "Sync in progress" = "Synchronisation en cours";
 "Changes will sync later." = "Les modifications seront synchronisées plus tard.";
 "Sign in to continue." = "Connectez-vous pour continuer.";
@@ -1781,7 +1785,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Les mots de passe, clés privées, phrases secrètes et jetons Cloudflare utilisent le trousseau iCloud.";
 "Sync Details" = "Détails de la synchronisation";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Les identifiants restent sur cet appareil. Les données existantes de l’app dans iCloud ne sont pas supprimées.";
-"Stored on This Device" = "Stocké sur cet appareil";
 "Hardware Keyboard" = "Clavier physique";
 "Software Keyboard" = "Clavier à l’écran";
 "Accessory Bar" = "Barre d’accessoires";

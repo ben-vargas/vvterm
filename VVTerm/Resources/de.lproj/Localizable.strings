@@ -1732,6 +1732,9 @@
 "Servers & Settings" = "Server & Einstellungen";
 "Passwords & SSH Keys" = "Passwörter & SSH-Schlüssel";
 "Synced with iCloud" = "Mit iCloud synchronisiert";
+"Included in iCloud Sync" = "In iCloud-Sync enthalten";
+"iCloud Sync Includes" = "iCloud-Sync umfasst";
+"Not Syncing" = "Wird nicht synchronisiert";
 "Data on This Device" = "Daten auf diesem Gerät";
 "On This Device" = "Auf diesem Gerät";
 "Active Sessions" = "Aktive Sitzungen";
@@ -1746,8 +1749,9 @@
 "Credentials" = "Anmeldedaten";
 "Credentials could not be copied. Nothing was removed." = "Anmeldedaten konnten nicht kopiert werden. Nichts wurde entfernt.";
 "Credentials and SSH keys need attention." = "Anmeldedaten und SSH-Schlüssel benötigen Aufmerksamkeit.";
-"Credentials could not be removed. Nothing was changed." = "Anmeldedaten konnten nicht entfernt werden. Nichts wurde geändert.";
-"Ready to sync" = "Bereit zum Synchronisieren";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm konnte nicht alle Elemente entfernen. Deine lokalen Kopien bleiben sicher. Versuche es erneut.";
+"Ready to Sync" = "Bereit zum Synchronisieren";
+"No successful sync yet." = "Noch keine erfolgreiche Synchronisierung.";
 "Sync in progress" = "Synchronisierung läuft";
 "Changes will sync later." = "Änderungen werden später synchronisiert.";
 "Sign in to continue." = "Melde dich an, um fortzufahren.";
@@ -1779,7 +1783,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Passwörter, private Schlüssel, Passphrasen und Cloudflare-Token verwenden den iCloud-Schlüsselbund.";
 "Sync Details" = "Synchronisierungsdetails";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Die Anmeldedaten bleiben auf diesem Gerät. Vorhandene App-Daten in iCloud werden nicht gelöscht.";
-"Stored on This Device" = "Auf diesem Gerät gespeichert";
 "Hardware Keyboard" = "Hardwaretastatur";
 "Software Keyboard" = "Bildschirmtastatur";
 "Accessory Bar" = "Zubehörleiste";

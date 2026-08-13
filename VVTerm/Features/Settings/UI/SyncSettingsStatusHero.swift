@@ -37,7 +37,7 @@ struct SyncSettingsPrimaryActionButton: View {
 extension SyncSettingsUserState {
     var statusHeroSystemImage: String {
         switch self {
-        case .upToDate:
+        case .readyToSync, .upToDate:
             "icloud.fill"
         case .syncing:
             "icloud.and.arrow.up.fill"
@@ -52,7 +52,7 @@ extension SyncSettingsUserState {
 
     var statusHeroTint: Color {
         switch self {
-        case .upToDate, .syncing:
+        case .readyToSync, .upToDate, .syncing:
             .blue
         case .waitingForNetwork, .signInToICloud:
             .orange
@@ -71,13 +71,13 @@ struct SyncSettingsStatusDetail: View {
     var body: some View {
         Group {
             switch state {
+            case .readyToSync:
+                Text("No successful sync yet.")
             case .upToDate:
                 if let lastSuccessfulSyncDate {
                     Text(
                         "Last synced \(lastSuccessfulSyncDate, format: .relative(presentation: .named))"
                     )
-                } else {
-                    Text("Ready to sync")
                 }
             case .syncing:
                 Text("Sync in progress")

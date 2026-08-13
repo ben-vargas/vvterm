@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SyncSettingsDetailsSections: View {
     let summary: SyncSettingsContentSummary
-    let storageTitle: LocalizedStringResource
+    let contentSyncState: SyncSettingsContentSyncState
     let syncEnabled: Bool
     let lastSuccessfulSyncDate: Date?
     let pendingChangeCount: Int
@@ -73,7 +73,7 @@ struct SyncSettingsDetailsSections: View {
                 status: storageStatus
             )
         } header: {
-            Text(storageTitle)
+            Text(contentSyncState.sectionTitle)
         } footer: {
             if syncEnabled {
                 Text("Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain.")
@@ -149,7 +149,7 @@ struct SyncSettingsDetailsSections: View {
     }
 
     private var storageStatus: LocalizedStringResource {
-        syncEnabled ? "Synced" : "On This Device"
+        contentSyncState.rowTitle
     }
 }
 

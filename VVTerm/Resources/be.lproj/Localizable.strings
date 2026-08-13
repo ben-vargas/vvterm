@@ -1733,6 +1733,9 @@
 "Servers & Settings" = "Серверы і налады";
 "Passwords & SSH Keys" = "Паролі і ключы SSH";
 "Synced with iCloud" = "Сінхранізавана з iCloud";
+"Included in iCloud Sync" = "Уключана ў сінхранізацыю iCloud";
+"iCloud Sync Includes" = "Сінхранізацыя iCloud уключае";
+"Not Syncing" = "Не сінхранізуецца";
 "Data on This Device" = "Даныя на гэтай прыладзе";
 "On This Device" = "На гэтай прыладзе";
 "Active Sessions" = "Актыўныя сеансы";
@@ -1747,8 +1750,9 @@
 "Credentials" = "Уліковыя даныя";
 "Credentials could not be copied. Nothing was removed." = "Не ўдалося скапіяваць уліковыя даныя. Нічога не выдалена.";
 "Credentials and SSH keys need attention." = "Уліковыя даныя і ключы SSH патрабуюць увагі.";
-"Credentials could not be removed. Nothing was changed." = "Не ўдалося выдаліць уліковыя даныя. Нічога не зменена.";
-"Ready to sync" = "Гатова да сінхранізацыі";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm не ўдалося выдаліць усе элементы. Лакальныя копіі ў бяспецы. Паўтарыце спробу.";
+"Ready to Sync" = "Гатова да сінхранізацыі";
+"No successful sync yet." = "Паспяховай сінхранізацыі яшчэ не было.";
 "Sync in progress" = "Ідзе сінхранізацыя";
 "Changes will sync later." = "Змены сінхранізуюцца пазней.";
 "Sign in to continue." = "Увайдзіце, каб працягнуць.";
@@ -1780,7 +1784,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Паролі, прыватныя ключы, парольныя фразы і токены Cloudflare выкарыстоўваюць Звязку ключоў iCloud.";
 "Sync Details" = "Падрабязнасці сінхранізацыі";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Уліковыя даныя застануцца на гэтай прыладзе. Існуючыя даныя праграмы ў iCloud не выдаляюцца.";
-"Stored on This Device" = "Захавана на гэтай прыладзе";
 "Hardware Keyboard" = "Апаратная клавіятура";
 "Software Keyboard" = "Экранная клавіятура";
 "Accessory Bar" = "Панэль аксесуараў";

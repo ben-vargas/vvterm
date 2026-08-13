@@ -1733,6 +1733,9 @@
 "Servers & Settings" = "Servery a nastavení";
 "Passwords & SSH Keys" = "Hesla a SSH klíče";
 "Synced with iCloud" = "Synchronizováno s iCloudem";
+"Included in iCloud Sync" = "Zahrnuto do synchronizace s iCloudem";
+"iCloud Sync Includes" = "Synchronizace s iCloudem zahrnuje";
+"Not Syncing" = "Nesynchronizuje se";
 "Data on This Device" = "Data v tomto zařízení";
 "On This Device" = "V tomto zařízení";
 "Active Sessions" = "Aktivní relace";
@@ -1747,8 +1750,9 @@
 "Credentials" = "Přihlašovací údaje";
 "Credentials could not be copied. Nothing was removed." = "Přihlašovací údaje se nepodařilo zkopírovat. Nic nebylo odstraněno.";
 "Credentials and SSH keys need attention." = "Přihlašovací údaje a SSH klíče vyžadují pozornost.";
-"Credentials could not be removed. Nothing was changed." = "Přihlašovací údaje se nepodařilo odstranit. Nic se nezměnilo.";
-"Ready to sync" = "Připraveno k synchronizaci";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm nemohl odstranit všechny položky. Místní kopie jsou v bezpečí. Zkuste to znovu.";
+"Ready to Sync" = "Připraveno k synchronizaci";
+"No successful sync yet." = "Zatím neproběhla žádná úspěšná synchronizace.";
 "Sync in progress" = "Probíhá synchronizace";
 "Changes will sync later." = "Změny se synchronizují později.";
 "Sign in to continue." = "Pokračujte přihlášením.";
@@ -1780,7 +1784,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Hesla, soukromé klíče, přístupové fráze a tokeny Cloudflare používají Klíčenku na iCloudu.";
 "Sync Details" = "Podrobnosti synchronizace";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Přihlašovací údaje zůstanou v tomto zařízení. Existující data aplikace na iCloudu se nesmažou.";
-"Stored on This Device" = "Uloženo v tomto zařízení";
 "Hardware Keyboard" = "Hardwarová klávesnice";
 "Software Keyboard" = "Klávesnice na obrazovce";
 "Accessory Bar" = "Lišta příslušenství";

@@ -1732,6 +1732,9 @@
 "Servers & Settings" = "เซิร์ฟเวอร์และการตั้งค่า";
 "Passwords & SSH Keys" = "รหัสผ่านและคีย์ SSH";
 "Synced with iCloud" = "ซิงค์กับ iCloud แล้ว";
+"Included in iCloud Sync" = "รวมอยู่ในการซิงค์ iCloud";
+"iCloud Sync Includes" = "การซิงค์ iCloud รวม";
+"Not Syncing" = "ไม่ได้ซิงค์";
 "Data on This Device" = "ข้อมูลบนอุปกรณ์นี้";
 "On This Device" = "บนอุปกรณ์นี้";
 "Active Sessions" = "เซสชันที่ใช้งานอยู่";
@@ -1746,8 +1749,9 @@
 "Credentials" = "ข้อมูลประจำตัว";
 "Credentials could not be copied. Nothing was removed." = "ไม่สามารถคัดลอกข้อมูลประจำตัวได้ ไม่มีข้อมูลใดถูกลบ";
 "Credentials and SSH keys need attention." = "ข้อมูลประจำตัวและคีย์ SSH ต้องได้รับการตรวจสอบ";
-"Credentials could not be removed. Nothing was changed." = "ไม่สามารถลบข้อมูลประจำตัวได้ ไม่มีข้อมูลใดเปลี่ยนแปลง";
-"Ready to sync" = "พร้อมซิงค์";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm ไม่สามารถลบได้ทุกรายการ สำเนาในเครื่องของคุณยังปลอดภัย โปรดลองอีกครั้ง";
+"Ready to Sync" = "พร้อมซิงค์";
+"No successful sync yet." = "ยังไม่มีการซิงค์ที่สำเร็จ";
 "Sync in progress" = "กำลังซิงค์";
 "Changes will sync later." = "ระบบจะซิงค์การเปลี่ยนแปลงภายหลัง";
 "Sign in to continue." = "ลงชื่อเข้าใช้เพื่อดำเนินการต่อ";
@@ -1779,7 +1783,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "รหัสผ่าน คีย์ส่วนตัว วลีรหัสผ่าน และโทเค็น Cloudflare ใช้พวงกุญแจ iCloud";
 "Sync Details" = "รายละเอียดการซิงค์";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "ข้อมูลประจำตัวยังคงอยู่บนอุปกรณ์นี้ ข้อมูลแอปที่มีอยู่ใน iCloud จะไม่ถูกลบ";
-"Stored on This Device" = "จัดเก็บบนอุปกรณ์นี้";
 "Hardware Keyboard" = "แป้นพิมพ์จริง";
 "Software Keyboard" = "แป้นพิมพ์บนหน้าจอ";
 "Accessory Bar" = "แถบอุปกรณ์เสริม";

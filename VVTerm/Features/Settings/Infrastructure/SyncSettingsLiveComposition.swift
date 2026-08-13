@@ -21,22 +21,25 @@ private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
             syncState: statusStore.syncState,
             accountState: statusStore.accountState,
             lastSyncDate: statusStore.lastSyncDate,
-            pendingMutations: pendingSync.snapshot()
+            queueSummary: pendingSync.queueSummary
         )
     }
 
     var stateUpdates: AnyPublisher<SyncSettingsCloudState, Never> {
-        Publishers.CombineLatest3(
-            statusStore.$syncState,
-            statusStore.$accountState,
-            statusStore.$lastSyncDate
+        Publishers.CombineLatest(
+            Publishers.CombineLatest3(
+                statusStore.$syncState,
+                statusStore.$accountState,
+                statusStore.$lastSyncDate
+            ),
+            pendingSync.queueSummaryUpdates
         )
-        .map { [pendingSync] syncState, accountState, lastSyncDate in
+        .map { status, queueSummary in
             Self.state(
-                syncState: syncState,
-                accountState: accountState,
-                lastSyncDate: lastSyncDate,
-                pendingMutations: pendingSync.snapshot()
+                syncState: status.0,
+                accountState: status.1,
+                lastSyncDate: status.2,
+                queueSummary: queueSummary
             )
         }
         .eraseToAnyPublisher()
@@ -54,16 +57,16 @@ private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
         syncState: CloudKitSyncState,
         accountState: CloudKitAccountState,
         lastSyncDate: Date? = nil,
-        pendingMutations: [PendingCloudKitMutation]
+        queueSummary: PendingCloudKitQueueSummary
     ) -> SyncSettingsCloudState {
         SyncSettingsCloudState(
             status: status(syncState.status),
             isAvailable: syncState.isAvailable,
             accountState: accountState,
-            pendingOperationCount: pendingMutations.count,
-            hasPendingFailure: pendingMutations.contains {
-                $0.lastErrorCode != nil || $0.lastErrorDescription != nil
-            },
+            pendingOperationCount: queueSummary.pendingOperationCount,
+            hasPendingFailure: queueSummary.hasPendingFailure,
+            quarantinedOperationCount: queueSummary.quarantinedOperationCount,
+            pendingQueueHealth: queueSummary.health,
             lastSuccessfulSyncDate: lastSyncDate
         )
     }

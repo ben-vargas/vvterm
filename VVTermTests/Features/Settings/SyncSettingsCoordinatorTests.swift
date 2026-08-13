@@ -87,6 +87,7 @@ private final class SyncSettingsDataSpy: SyncSettingsDataRefreshing {
         syncCount += 1
         actionLog.events.append("data-synced")
         if suspendsSync {
+            suspendsSync = false
             await withCheckedContinuation { continuation = $0 }
         }
         if let syncError { throw syncError }
@@ -287,6 +288,34 @@ struct SyncSettingsCoordinatorTests {
     }
 
     @Test
+    func syncToggleInvalidatesAnOlderManualSync() async {
+        let data = SyncSettingsDataSpy()
+        data.suspendsSync = true
+        let history = SyncSettingsHistorySpy()
+        let coordinator = makeCoordinator(data: data, history: history)
+
+        let staleSync = Task { await coordinator.syncNow() }
+        while data.syncCount == 0 {
+            await Task.yield()
+        }
+
+        #expect(coordinator.setSyncEnabled(false))
+        #expect(coordinator.setSyncEnabled(true))
+        await coordinator.syncNow()
+
+        #expect(data.syncCount == 2)
+        #expect(history.recordedDates.count == 1)
+        #expect(coordinator.manualSyncState == .success)
+
+        data.resumeSync()
+        await staleSync.value
+
+        #expect(history.recordedDates.count == 1)
+        #expect(coordinator.manualSyncState == .success)
+        #expect(coordinator.userState == .upToDate)
+    }
+
+    @Test
     func offlineSyncKeepsPendingChangesAndReportsWaiting() async {
         let cloud = SyncSettingsCloudSpy(
             state: SyncSettingsCloudState(
@@ -348,6 +377,69 @@ struct SyncSettingsCoordinatorTests {
         #expect(coordinator.credentialFailure == .sync)
         #expect(coordinator.manualSyncState == .failure)
         #expect(history.recordedDates.isEmpty)
+    }
+
+    @Test
+    func quarantinedMutationPreventsUpToDateAndManualSuccess() async {
+        let cloud = SyncSettingsCloudSpy(
+            state: SyncSettingsCloudState(
+                status: .idle,
+                isAvailable: true,
+                accountState: .available,
+                pendingOperationCount: 0,
+                hasPendingFailure: false,
+                quarantinedOperationCount: 1,
+                lastSuccessfulSyncDate: nil
+            )
+        )
+        let history = SyncSettingsHistorySpy()
+        let coordinator = makeCoordinator(cloud: cloud, history: history)
+
+        await coordinator.syncNow()
+
+        #expect(coordinator.manualSyncState == .failure)
+        #expect(coordinator.userState == .needsAttention)
+        #expect(history.recordedDates.isEmpty)
+        #expect(coordinator.diagnostics.pendingOperationCount == 0)
+        #expect(coordinator.diagnostics.quarantinedOperationCount == 1)
+    }
+
+    @Test
+    func blockedQueueMigrationPreventsUpToDateAndManualSuccess() async {
+        let cloud = SyncSettingsCloudSpy(
+            state: SyncSettingsCloudState(
+                status: .idle,
+                isAvailable: true,
+                accountState: .available,
+                pendingOperationCount: 0,
+                hasPendingFailure: false,
+                pendingQueueHealth: .migrationBlocked,
+                lastSuccessfulSyncDate: nil
+            )
+        )
+        let history = SyncSettingsHistorySpy()
+        let coordinator = makeCoordinator(cloud: cloud, history: history)
+
+        await coordinator.syncNow()
+
+        #expect(coordinator.manualSyncState == .failure)
+        #expect(coordinator.userState == .needsAttention)
+        #expect(history.recordedDates.isEmpty)
+        #expect(coordinator.diagnostics.pendingQueueHealth == .migrationBlocked)
+    }
+
+    @Test
+    func availableCloudWithoutSuccessfulSyncReportsReadyToSync() {
+        let coordinator = makeCoordinator()
+
+        #expect(coordinator.userState == .readyToSync)
+        #expect(
+            SyncSettingsContentSyncState(
+                syncEnabled: true,
+                userState: coordinator.userState,
+                lastSuccessfulSyncDate: coordinator.lastSuccessfulSyncDate
+            ) == .included
+        )
     }
 
     @Test

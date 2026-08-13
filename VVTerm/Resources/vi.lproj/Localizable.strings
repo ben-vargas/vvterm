@@ -1777,6 +1777,9 @@
 "Servers & Settings" = "Máy chủ & Cài đặt";
 "Passwords & SSH Keys" = "Mật khẩu & Khóa SSH";
 "Synced with iCloud" = "Đã đồng bộ với iCloud";
+"Included in iCloud Sync" = "Được bao gồm trong Đồng bộ iCloud";
+"iCloud Sync Includes" = "Đồng bộ iCloud bao gồm";
+"Not Syncing" = "Không đồng bộ";
 "Data on This Device" = "Dữ liệu trên thiết bị này";
 "On This Device" = "Trên thiết bị này";
 "Active Sessions" = "Phiên đang hoạt động";
@@ -1791,8 +1794,9 @@
 "Credentials" = "Thông tin xác thực";
 "Credentials could not be copied. Nothing was removed." = "Không thể sao chép thông tin xác thực. Không có dữ liệu nào bị xóa.";
 "Credentials and SSH keys need attention." = "Thông tin xác thực và khóa SSH cần được kiểm tra.";
-"Credentials could not be removed. Nothing was changed." = "Không thể xóa thông tin xác thực. Không có dữ liệu nào thay đổi.";
-"Ready to sync" = "Sẵn sàng đồng bộ";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm không thể xóa mọi mục. Các bản sao cục bộ vẫn an toàn. Hãy thử lại.";
+"Ready to Sync" = "Sẵn sàng đồng bộ";
+"No successful sync yet." = "Chưa có lần đồng bộ nào thành công.";
 "Sync in progress" = "Đang đồng bộ";
 "Changes will sync later." = "Các thay đổi sẽ được đồng bộ sau.";
 "Sign in to continue." = "Đăng nhập để tiếp tục.";
@@ -1824,7 +1828,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Mật khẩu, khóa riêng tư, cụm mật khẩu và token Cloudflare dùng Chuỗi khóa iCloud.";
 "Sync Details" = "Chi tiết đồng bộ";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Thông tin xác thực vẫn còn trên thiết bị này. Dữ liệu ứng dụng hiện có trong iCloud không bị xóa.";
-"Stored on This Device" = "Đã lưu trên thiết bị này";
 "Hardware Keyboard" = "Bàn phím vật lý";
 "Software Keyboard" = "Bàn phím ảo";
 "Accessory Bar" = "Thanh phụ kiện";

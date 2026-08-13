@@ -20,26 +20,52 @@ enum SyncSettingsPrimaryAction: Equatable {
     }
 }
 
+enum SyncSettingsContentSyncState: Equatable {
+    case synced
+    case included
+    case notSyncing
+
+    init(
+        syncEnabled: Bool,
+        userState: SyncSettingsUserState,
+        lastSuccessfulSyncDate: Date?
+    ) {
+        if !syncEnabled {
+            self = .notSyncing
+        } else if userState == .upToDate, lastSuccessfulSyncDate != nil {
+            self = .synced
+        } else {
+            self = .included
+        }
+    }
+
+    var sectionTitle: LocalizedStringResource {
+        switch self {
+        case .synced: "Synced with iCloud"
+        case .included: "Included in iCloud Sync"
+        case .notSyncing: "iCloud Sync Includes"
+        }
+    }
+
+    var rowTitle: LocalizedStringResource {
+        switch self {
+        case .synced: "Synced"
+        case .included: "Included"
+        case .notSyncing: "Not Syncing"
+        }
+    }
+}
+
 extension SyncSettingsUserState {
     var title: String {
         switch self {
+        case .readyToSync: String(localized: "Ready to Sync")
         case .upToDate: String(localized: "Up to Date")
         case .syncing: String(localized: "Syncing")
         case .waitingForNetwork: String(localized: "Waiting for Network")
         case .signInToICloud: String(localized: "Sign In to iCloud")
         case .needsAttention: String(localized: "Sync Needs Attention")
         case .disabled: String(localized: "Sync is Off")
-        }
-    }
-
-    var appDataStatusTitle: LocalizedStringResource {
-        switch self {
-        case .upToDate: "Up to Date"
-        case .syncing: "Syncing"
-        case .waitingForNetwork: "Waiting for Network"
-        case .signInToICloud: "Sign In to iCloud"
-        case .needsAttention: "Needs Attention"
-        case .disabled: "On This Device"
         }
     }
 
@@ -51,7 +77,7 @@ extension SyncSettingsUserState {
             String(localized: "Sign in to iCloud and turn on iCloud Drive.")
         case .needsAttention:
             String(localized: "Try syncing again. Your changes are safe.")
-        case .upToDate, .syncing, .disabled:
+        case .readyToSync, .upToDate, .syncing, .disabled:
             nil
         }
     }

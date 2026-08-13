@@ -1729,6 +1729,9 @@
 "Servers & Settings" = "服务器与设置";
 "Passwords & SSH Keys" = "密码与 SSH 密钥";
 "Synced with iCloud" = "已与 iCloud 同步";
+"Included in iCloud Sync" = "已包含在 iCloud 同步中";
+"iCloud Sync Includes" = "iCloud 同步内容";
+"Not Syncing" = "未同步";
 "Data on This Device" = "此设备上的数据";
 "On This Device" = "在此设备上";
 "Active Sessions" = "活跃会话";
@@ -1743,8 +1746,9 @@
 "Credentials" = "凭据";
 "Credentials could not be copied. Nothing was removed." = "凭据复制失败。没有移除任何内容。";
 "Credentials and SSH keys need attention." = "凭据和 SSH 密钥需要检查。";
-"Credentials could not be removed. Nothing was changed." = "凭据移除失败。没有更改任何内容。";
-"Ready to sync" = "可以同步";
+"VVTerm could not remove every item. Your local copies remain safe. Try again." = "VVTerm 无法移除所有项目。本地副本仍然安全。请重试。";
+"Ready to Sync" = "可以同步";
+"No successful sync yet." = "尚未成功同步。";
 "Sync in progress" = "正在同步";
 "Changes will sync later." = "更改将在稍后同步。";
 "Sign in to continue." = "请登录以继续。";
@@ -1776,7 +1780,6 @@
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "密码、私钥、密码短语和 Cloudflare 令牌使用 iCloud 钥匙串。";
 "Sync Details" = "同步详情";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "凭据会保留在此设备上。iCloud 中现有的 App 数据不会被删除。";
-"Stored on This Device" = "已存储在此设备上";
 "Hardware Keyboard" = "硬件键盘";
 "Software Keyboard" = "屏幕键盘";
 "Accessory Bar" = "配件栏";
