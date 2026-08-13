@@ -27,6 +27,13 @@ final class TerminalTransportRegistry<Runtime: AnyObject> {
         shells = SSHShellRegistry(staleThreshold: staleShellStartThreshold)
     }
 
+    #if compiler(<6.4)
+    // Xcode 26.5 crashes while optimizing the isolated destructor of a generic
+    // MainActor class. Xcode 27 fixes the compiler bug.
+    @_optimize(none)
+    deinit {}
+    #endif
+
     var ownedPaneIds: Set<UUID> {
         Set(shells.registrations.keys)
             .union(shells.startsInFlight.keys)
