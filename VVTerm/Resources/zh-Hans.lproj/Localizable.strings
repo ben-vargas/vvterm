@@ -1784,3 +1784,7 @@
 "Show dismiss button" = "显示隐藏按钮";
 "Choose which Option key sends Alt. The other key still types layout characters." = "选择发送 Alt 的 Option 键。另一个键仍用于输入键盘布局字符。";
 "Prevents tmux and other terminal apps from resizing when the keyboard opens." = "防止 tmux 和其他终端应用在键盘打开时调整大小。";
+"Purchases" = "购买项目";
+"Unlimited" = "无限制";
+"Included" = "已包含";
+"Renews %@" = "%@续订";

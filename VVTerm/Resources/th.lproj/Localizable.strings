@@ -1787,3 +1787,7 @@
 "Show dismiss button" = "แสดงปุ่มซ่อน";
 "Choose which Option key sends Alt. The other key still types layout characters." = "เลือกปุ่ม Option ที่จะส่ง Alt ปุ่มอีกข้างยังคงใช้พิมพ์อักขระตามผังแป้นพิมพ์";
 "Prevents tmux and other terminal apps from resizing when the keyboard opens." = "ป้องกันไม่ให้ tmux และแอปเทอร์มินัลอื่นปรับขนาดเมื่อเปิดแป้นพิมพ์";
+"Purchases" = "รายการซื้อ";
+"Unlimited" = "ไม่จำกัด";
+"Included" = "รวมอยู่แล้ว";
+"Renews %@" = "ต่ออายุวันที่ %@";

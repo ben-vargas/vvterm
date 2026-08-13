@@ -1788,3 +1788,7 @@
 "Show dismiss button" = "Паказваць кнопку схавання";
 "Choose which Option key sends Alt. The other key still types layout characters." = "Выберыце клавішу Option, якая адпраўляе Alt. Іншая клавіша па-ранейшаму ўводзіць сімвалы раскладкі.";
 "Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Не дазваляе tmux і іншым тэрмінальным праграмам змяняць памер пры адкрыцці клавіятуры.";
+"Purchases" = "Пакупкі";
+"Unlimited" = "Без абмежаванняў";
+"Included" = "Уключана";
+"Renews %@" = "Падаўжаецца %@";

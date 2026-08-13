@@ -1787,3 +1787,7 @@
 "Show dismiss button" = "Taste zum Ausblenden anzeigen";
 "Choose which Option key sends Alt. The other key still types layout characters." = "Lege fest, welche Wahltaste Alt sendet. Die andere Taste gibt weiter Layoutzeichen ein.";
 "Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Verhindert, dass tmux und andere Terminal-Apps ihre Größe ändern, wenn die Tastatur geöffnet wird.";
+"Purchases" = "Käufe";
+"Unlimited" = "Unbegrenzt";
+"Included" = "Enthalten";
+"Renews %@" = "Verlängert sich am %@";

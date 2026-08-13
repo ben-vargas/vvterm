@@ -1839,3 +1839,7 @@
 "Show dismiss button" = "Show dismiss button";
 "Choose which Option key sends Alt. The other key still types layout characters." = "Choose which Option key sends Alt. The other key still types layout characters.";
 "Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Prevents tmux and other terminal apps from resizing when the keyboard opens.";
+"Purchases" = "Purchases";
+"Unlimited" = "Unlimited";
+"Included" = "Included";
+"Renews %@" = "Renews %@";

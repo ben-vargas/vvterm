@@ -1787,3 +1787,7 @@
 "Show dismiss button" = "Mostrar botón para ocultar";
 "Choose which Option key sends Alt. The other key still types layout characters." = "Elige qué tecla Opción envía Alt. La otra sigue escribiendo caracteres de la distribución.";
 "Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Evita que tmux y otras apps de terminal cambien de tamaño al abrir el teclado.";
+"Purchases" = "Compras";
+"Unlimited" = "Sin límites";
+"Included" = "Incluido";
+"Renews %@" = "Se renueva el %@";

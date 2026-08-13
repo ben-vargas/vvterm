@@ -157,7 +157,17 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
     var searchLocalizationKeys: [String] {
         switch self {
         case .pro:
-            ["VVTerm Pro", "Subscription", "Plan", "Restore Purchases"]
+            [
+                "VVTerm Pro",
+                "Free Tier",
+                "Pro Monthly",
+                "Pro Yearly",
+                "Pro Lifetime",
+                "Manage Subscription",
+                "Restore Purchases",
+                "Unlimited",
+                "Included",
+            ]
         case .appearanceAndLanguage:
             ["Appearance & Language", "Language", "System", "Light", "Dark"]
         case .navigationAndStats:

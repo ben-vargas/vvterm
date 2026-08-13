@@ -1787,3 +1787,7 @@
 "Show dismiss button" = "閉じるボタンを表示";
 "Choose which Option key sends Alt. The other key still types layout characters." = "Altを送信するOptionキーを選択します。もう一方のキーは引き続き配列文字を入力します。";
 "Prevents tmux and other terminal apps from resizing when the keyboard opens." = "キーボードを開いたときにtmuxなどのターミナルアプリがサイズ変更されるのを防ぎます。";
+"Purchases" = "購入";
+"Unlimited" = "無制限";
+"Included" = "含まれます";
+"Renews %@" = "%@に更新";

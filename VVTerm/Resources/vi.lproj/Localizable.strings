@@ -1832,3 +1832,7 @@
 "Show dismiss button" = "Hiển thị nút ẩn";
 "Choose which Option key sends Alt. The other key still types layout characters." = "Chọn phím Option gửi Alt. Phím còn lại vẫn nhập ký tự theo bố cục.";
 "Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Ngăn tmux và các ứng dụng terminal khác đổi kích thước khi bàn phím mở.";
+"Purchases" = "Giao dịch mua";
+"Unlimited" = "Không giới hạn";
+"Included" = "Đã bao gồm";
+"Renews %@" = "Gia hạn vào %@";

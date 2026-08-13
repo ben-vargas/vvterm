@@ -1789,3 +1789,7 @@
 "Show dismiss button" = "Pokaż przycisk ukrywania";
 "Choose which Option key sends Alt. The other key still types layout characters." = "Wybierz klawisz Option wysyłający Alt. Drugi nadal wpisuje znaki układu klawiatury.";
 "Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Zapobiega zmianie rozmiaru tmux i innych aplikacji terminalowych po otwarciu klawiatury.";
+"Purchases" = "Zakupy";
+"Unlimited" = "Bez limitu";
+"Included" = "W zestawie";
+"Renews %@" = "Odnowienie: %@";

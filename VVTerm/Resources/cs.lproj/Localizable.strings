@@ -1788,3 +1788,7 @@
 "Show dismiss button" = "Zobrazit tlačítko pro skrytí";
 "Choose which Option key sends Alt. The other key still types layout characters." = "Vyberte klávesu Option, která odesílá Alt. Druhá klávesa dál píše znaky rozložení.";
 "Prevents tmux and other terminal apps from resizing when the keyboard opens." = "Zabrání změně velikosti tmuxu a dalších terminálových aplikací při otevření klávesnice.";
+"Purchases" = "Nákupy";
+"Unlimited" = "Bez omezení";
+"Included" = "Zahrnuto";
+"Renews %@" = "Obnoví se %@";

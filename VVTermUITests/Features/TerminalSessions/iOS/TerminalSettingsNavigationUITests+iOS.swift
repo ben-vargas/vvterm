@@ -207,6 +207,43 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
     }
 
     @MainActor
+    func testProSettingsUsesOneStatusHero() throws {
+        let app = XCUIApplication()
+        app.terminate()
+        app.launchArguments = [
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US",
+            "-hasSeenWelcome", "YES",
+            "-iCloudSyncEnabled", "NO",
+            "-security.privacyModeEnabled", "NO",
+            "-security.fullAppLockEnabled", "NO",
+            "-security.lockOnBackground", "NO",
+        ]
+        app.launch()
+        defer { app.terminate() }
+
+        let settings = app.buttons["vvterm.serverList.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+
+        let proRoute = app.buttons["vvterm.settings.route.pro"]
+        XCTAssertTrue(proRoute.waitForExistence(timeout: 5))
+        proRoute.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["vvterm.settings.page.pro"]
+                .waitForExistence(timeout: 5)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["vvterm.settings.pro.statusHero"]
+                .waitForExistence(timeout: 5)
+        )
+        XCTAssertTrue(app.buttons["Restore Purchases"].exists)
+        XCTAssertFalse(app.staticTexts["Subscription"].exists)
+        XCTAssertFalse(app.staticTexts["Purchased"].exists)
+    }
+
+    @MainActor
     func testConnectedTerminalCanOpenSettingsFromItsToolbar() throws {
         let app = XCUIApplication()
         app.terminate()
