@@ -101,7 +101,7 @@ struct ProSettingsView: View {
     }
 
     private var featuresSection: some View {
-        Section("Features") {
+        Section {
             ProSettingsFeatureRow(
                 title: "Servers",
                 systemImage: "server.rack",
@@ -118,15 +118,34 @@ struct ProSettingsView: View {
                 value: "Unlimited"
             )
             ProSettingsFeatureRow(
-                title: "Custom Environments",
-                systemImage: "paintbrush",
+                title: "File tabs",
+                systemImage: "doc.on.doc",
+                value: "Unlimited"
+            )
+            ProSettingsFeatureRow(
+                title: "Custom actions",
+                systemImage: "command",
+                value: "Unlimited"
+            )
+            ProSettingsFeatureRow(
+                title: "Split panes",
+                systemImage: "rectangle.split.2x1",
                 value: "Included"
             )
             ProSettingsFeatureRow(
-                title: "iCloud Sync",
-                systemImage: "icloud",
+                title: "Docker monitoring",
+                systemImage: "shippingbox",
                 value: "Included"
             )
+            ProSettingsFeatureRow(
+                title: "Environments",
+                systemImage: "paintbrush",
+                value: "Custom"
+            )
+        } header: {
+            Text("Features")
+        } footer: {
+            Text("One Pro purchase works on iPhone, iPad, and Mac with the same Apple ID.")
         }
     }
 
