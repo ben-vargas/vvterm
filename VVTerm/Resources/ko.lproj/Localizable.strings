@@ -1764,7 +1764,6 @@
 "iCloud Sync completed." = "iCloud 동기화가 완료되었습니다.";
 "iCloud Sync is waiting for the network." = "iCloud 동기화가 네트워크를 기다리고 있습니다.";
 "iCloud Sync needs attention." = "iCloud 동기화를 확인해야 합니다.";
-"iCloud Sync Details" = "iCloud 동기화 세부사항";
 "Terminal Appearance" = "터미널 모양";
 "Keyboard Toolbar" = "키보드 도구 막대";
 "Stats Layout" = "통계 레이아웃";
@@ -1779,9 +1778,4 @@
 "Cache and Logs" = "캐시 및 로그";
 "Sync Details" = "동기화 세부사항";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "자격 증명은 이 기기에 남습니다. iCloud의 기존 앱 데이터는 삭제되지 않습니다.";
-"Show iCloud Sync Details" = "iCloud 동기화 세부사항 보기";
 "Stored on This Device" = "이 기기에 저장됨";
-"%lld server credential" = "서버 자격 증명 %lld개";
-"%lld server credentials" = "서버 자격 증명 %lld개";
-"%lld SSH key" = "SSH 키 %lld개";
-"%lld SSH keys" = "SSH 키 %lld개";

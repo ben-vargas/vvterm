@@ -1767,7 +1767,6 @@
 "iCloud Sync completed." = "Synchronizacja iCloud zakończona.";
 "iCloud Sync is waiting for the network." = "Synchronizacja iCloud czeka na sieć.";
 "iCloud Sync needs attention." = "Synchronizacja iCloud wymaga uwagi.";
-"iCloud Sync Details" = "Szczegóły synchronizacji iCloud";
 "Terminal Appearance" = "Wygląd terminala";
 "Keyboard Toolbar" = "Pasek klawiatury";
 "Stats Layout" = "Układ statystyk";
@@ -1782,9 +1781,4 @@
 "Cache and Logs" = "Pamięć podręczna i dzienniki";
 "Sync Details" = "Szczegóły synchronizacji";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Dane logowania pozostają na tym urządzeniu. Istniejące dane aplikacji w iCloud nie są usuwane.";
-"Show iCloud Sync Details" = "Pokaż szczegóły synchronizacji iCloud";
 "Stored on This Device" = "Zapisano na tym urządzeniu";
-"%lld server credential" = "%lld dane logowania serwera";
-"%lld server credentials" = "%lld danych logowania serwerów";
-"%lld SSH key" = "%lld klucz SSH";
-"%lld SSH keys" = "%lld kluczy SSH";

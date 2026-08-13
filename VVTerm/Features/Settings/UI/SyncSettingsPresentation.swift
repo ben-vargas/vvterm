@@ -15,87 +15,8 @@ enum SyncSettingsPrimaryAction: Equatable {
         }
     }
 
-    var systemImage: String {
-        switch self {
-        case .syncNow, .tryAgain, .syncing:
-            "arrow.triangle.2.circlepath"
-        case .checkAgain:
-            "arrow.clockwise"
-        }
-    }
-
     var isRunning: Bool {
         self == .syncing
-    }
-}
-
-extension SyncSettingsContentSummary {
-    var appDataSummaryText: String {
-        [
-            localizedWorkspaceCount,
-            localizedServerCount,
-            localizedCustomThemeCount,
-        ]
-        .joined(separator: " · ")
-    }
-
-    var credentialSummaryText: String {
-        [
-            localizedServerCredentialCount,
-            localizedReusableSSHKeyCount,
-        ]
-        .joined(separator: " · ")
-    }
-
-    private var localizedWorkspaceCount: String {
-        localizedCount(
-            workspaceCount,
-            singular: "%lld workspace",
-            plural: "%lld workspaces"
-        )
-    }
-
-    private var localizedServerCount: String {
-        localizedCount(
-            serverCount,
-            singular: "%lld server",
-            plural: "%lld servers"
-        )
-    }
-
-    private var localizedCustomThemeCount: String {
-        localizedCount(
-            customThemeCount,
-            singular: "%lld custom theme",
-            plural: "%lld custom themes"
-        )
-    }
-
-    private var localizedServerCredentialCount: String {
-        localizedCount(
-            serverCredentialCount,
-            singular: "%lld server credential",
-            plural: "%lld server credentials"
-        )
-    }
-
-    private var localizedReusableSSHKeyCount: String {
-        localizedCount(
-            reusableSSHKeyCount,
-            singular: "%lld SSH key",
-            plural: "%lld SSH keys"
-        )
-    }
-
-    private func localizedCount(
-        _ count: Int,
-        singular: String.LocalizationValue,
-        plural: String.LocalizationValue
-    ) -> String {
-        let format = count == 1
-            ? String(localized: singular)
-            : String(localized: plural)
-        return String(format: format, Int64(count))
     }
 }
 

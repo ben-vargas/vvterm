@@ -1765,7 +1765,6 @@
 "iCloud Sync completed." = "ซิงค์ iCloud เสร็จแล้ว";
 "iCloud Sync is waiting for the network." = "การซิงค์ iCloud กำลังรอเครือข่าย";
 "iCloud Sync needs attention." = "ต้องตรวจสอบการซิงค์ iCloud";
-"iCloud Sync Details" = "รายละเอียดการซิงค์ iCloud";
 "Terminal Appearance" = "ลักษณะเทอร์มินัล";
 "Keyboard Toolbar" = "แถบเครื่องมือแป้นพิมพ์";
 "Stats Layout" = "เค้าโครงสถิติ";
@@ -1780,9 +1779,4 @@
 "Cache and Logs" = "แคชและบันทึก";
 "Sync Details" = "รายละเอียดการซิงค์";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "ข้อมูลประจำตัวยังคงอยู่บนอุปกรณ์นี้ ข้อมูลแอปที่มีอยู่ใน iCloud จะไม่ถูกลบ";
-"Show iCloud Sync Details" = "แสดงรายละเอียดการซิงค์ iCloud";
 "Stored on This Device" = "จัดเก็บบนอุปกรณ์นี้";
-"%lld server credential" = "ข้อมูลประจำตัวเซิร์ฟเวอร์ %lld รายการ";
-"%lld server credentials" = "ข้อมูลประจำตัวเซิร์ฟเวอร์ %lld รายการ";
-"%lld SSH key" = "คีย์ SSH %lld รายการ";
-"%lld SSH keys" = "คีย์ SSH %lld รายการ";

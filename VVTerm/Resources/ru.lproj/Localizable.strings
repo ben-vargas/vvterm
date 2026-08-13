@@ -1765,7 +1765,6 @@
 "iCloud Sync completed." = "Синхронизация iCloud завершена.";
 "iCloud Sync is waiting for the network." = "Синхронизация iCloud ожидает подключения к сети.";
 "iCloud Sync needs attention." = "Синхронизация iCloud требует внимания.";
-"iCloud Sync Details" = "Сведения о синхронизации iCloud";
 "Terminal Appearance" = "Внешний вид терминала";
 "Keyboard Toolbar" = "Панель клавиатуры";
 "Stats Layout" = "Расположение статистики";
@@ -1780,9 +1779,4 @@
 "Cache and Logs" = "Кэш и журналы";
 "Sync Details" = "Сведения о синхронизации";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Учётные данные останутся на этом устройстве. Существующие данные приложения в iCloud не удаляются.";
-"Show iCloud Sync Details" = "Показать сведения о синхронизации iCloud";
 "Stored on This Device" = "Сохранено на этом устройстве";
-"%lld server credential" = "%lld набор учётных данных сервера";
-"%lld server credentials" = "%lld наборов учётных данных серверов";
-"%lld SSH key" = "%lld SSH-ключ";
-"%lld SSH keys" = "%lld SSH-ключей";

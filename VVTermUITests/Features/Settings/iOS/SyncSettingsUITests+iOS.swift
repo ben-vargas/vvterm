@@ -7,7 +7,7 @@ final class SyncSettingsUITests: XCTestCase {
     }
 
     @MainActor
-    func testSyncPageShowsHeroActionSummariesAndDetails() {
+    func testSyncPageShowsHeroActionAndInlineDetails() {
         let app = launchHarness(syncEnabled: true)
         defer { app.terminate() }
 
@@ -16,7 +16,11 @@ final class SyncSettingsUITests: XCTestCase {
         XCTAssertTrue(hero.waitForExistence(timeout: 5))
         XCTAssertTrue(hero.label.contains("Sync Status"))
         XCTAssertTrue(hero.value.debugDescription.contains("Up to Date"))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Last synced")).firstMatch.exists)
+        XCTAssertTrue(
+            app.staticTexts
+                .matching(NSPredicate(format: "label BEGINSWITH %@", "Last synced"))
+                .firstMatch.exists
+        )
         XCTAssertGreaterThan(hero.frame.height, 80)
         XCTAssertLessThan(hero.frame.height, 180)
 
@@ -26,30 +30,21 @@ final class SyncSettingsUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Keep your setup on all devices."].exists)
         XCTAssertFalse(app.staticTexts["Use data stored on this device."].exists)
 
-        let appData = app.descendants(matching: .any)["vvterm.settings.sync.data.app"]
-        XCTAssertTrue(appData.exists)
-        XCTAssertTrue(appData.label.contains("2 workspaces · 7 servers · 3 custom themes"))
-        let credentials = app.descendants(matching: .any)[
-            "vvterm.settings.sync.data.credentials"
-        ]
-        XCTAssertTrue(credentials.exists)
-        XCTAssertTrue(credentials.label.contains("6 server credentials · 4 SSH keys"))
-        XCTAssertFalse(app.staticTexts["On This Device"].exists)
+        XCTAssertFalse(app.buttons["vvterm.settings.sync.detailsButton"].exists)
+        XCTAssertFalse(app.staticTexts["iCloud Sync Details"].exists)
         XCTAssertFalse(app.buttons["Advanced"].exists)
 
         let syncNow = app.buttons["vvterm.settings.sync.action.primary"]
         XCTAssertTrue(syncNow.waitForExistence(timeout: 5))
         XCTAssertLessThan(syncNow.frame.minY - hero.frame.maxY, 70)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "Sync Now")).count, 1)
+        XCTAssertEqual(syncNow.descendants(matching: .image).count, 0)
         syncNow.tap()
 
-        let detailsButton = app.buttons["vvterm.settings.sync.detailsButton"]
-        XCTAssertTrue(detailsButton.waitForExistence(timeout: 5))
-        detailsButton.tap()
-        XCTAssertTrue(app.staticTexts["iCloud Sync Details"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any)[
+        let workspaces = app.descendants(matching: .any)[
             "vvterm.settings.sync.details.workspaces"
-        ].exists)
+        ]
+        XCTAssertTrue(scrollToElement(workspaces, in: app))
         let serverCredentials = app.descendants(matching: .any)[
             "vvterm.settings.sync.details.serverCredentials"
         ]
@@ -77,10 +72,8 @@ final class SyncSettingsUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Existing iCloud data is not deleted."].exists)
         XCTAssertFalse(app.buttons["vvterm.settings.sync.action.primary"].exists)
 
-        let detailsButton = app.buttons["vvterm.settings.sync.detailsButton"]
-        XCTAssertTrue(detailsButton.waitForExistence(timeout: 5))
-        detailsButton.tap()
-        XCTAssertTrue(app.staticTexts["iCloud Sync Details"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["vvterm.settings.sync.detailsButton"].exists)
+        XCTAssertFalse(app.staticTexts["iCloud Sync Details"].exists)
 
         let remove = app.buttons["vvterm.settings.sync.removeCredentials"]
         XCTAssertTrue(scrollToElement(remove, in: app, requireHittable: true))

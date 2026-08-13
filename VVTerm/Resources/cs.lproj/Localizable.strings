@@ -1766,7 +1766,6 @@
 "iCloud Sync completed." = "Synchronizace iCloud dokončena.";
 "iCloud Sync is waiting for the network." = "Synchronizace iCloud čeká na síť.";
 "iCloud Sync needs attention." = "Synchronizace iCloud vyžaduje pozornost.";
-"iCloud Sync Details" = "Podrobnosti synchronizace iCloud";
 "Terminal Appearance" = "Vzhled terminálu";
 "Keyboard Toolbar" = "Panel klávesnice";
 "Stats Layout" = "Rozložení statistik";
@@ -1781,9 +1780,4 @@
 "Cache and Logs" = "Mezipaměť a protokoly";
 "Sync Details" = "Podrobnosti synchronizace";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Přihlašovací údaje zůstanou v tomto zařízení. Existující data aplikace na iCloudu se nesmažou.";
-"Show iCloud Sync Details" = "Zobrazit podrobnosti synchronizace iCloud";
 "Stored on This Device" = "Uloženo v tomto zařízení";
-"%lld server credential" = "%lld přihlašovací údaj serveru";
-"%lld server credentials" = "%lld přihlašovacích údajů serverů";
-"%lld SSH key" = "%lld klíč SSH";
-"%lld SSH keys" = "%lld klíčů SSH";

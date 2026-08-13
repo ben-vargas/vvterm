@@ -24,11 +24,11 @@ struct SyncSettingsPrimaryActionButton: View {
                     Text(action.title)
                 }
             } else {
-                Label(action.title, systemImage: action.systemImage)
+                Text(action.title)
             }
         }
-        .buttonStyle(.bordered)
-        .controlSize(.regular)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
         .disabled(action.isRunning)
         .accessibilityIdentifier("vvterm.settings.sync.action.primary")
     }

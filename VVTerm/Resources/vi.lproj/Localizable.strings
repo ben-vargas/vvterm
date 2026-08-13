@@ -1810,7 +1810,6 @@
 "iCloud Sync completed." = "Đã hoàn tất đồng bộ iCloud.";
 "iCloud Sync is waiting for the network." = "Đồng bộ iCloud đang chờ mạng.";
 "iCloud Sync needs attention." = "Cần kiểm tra đồng bộ iCloud.";
-"iCloud Sync Details" = "Chi tiết đồng bộ iCloud";
 "Terminal Appearance" = "Giao diện terminal";
 "Keyboard Toolbar" = "Thanh công cụ bàn phím";
 "Stats Layout" = "Bố cục thống kê";
@@ -1825,9 +1824,4 @@
 "Cache and Logs" = "Bộ nhớ đệm và nhật ký";
 "Sync Details" = "Chi tiết đồng bộ";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Thông tin xác thực vẫn còn trên thiết bị này. Dữ liệu ứng dụng hiện có trong iCloud không bị xóa.";
-"Show iCloud Sync Details" = "Hiển thị chi tiết đồng bộ iCloud";
 "Stored on This Device" = "Đã lưu trên thiết bị này";
-"%lld server credential" = "%lld thông tin xác thực máy chủ";
-"%lld server credentials" = "%lld thông tin xác thực máy chủ";
-"%lld SSH key" = "%lld khóa SSH";
-"%lld SSH keys" = "%lld khóa SSH";

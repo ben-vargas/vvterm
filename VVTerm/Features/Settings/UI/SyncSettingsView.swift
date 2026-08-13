@@ -4,7 +4,7 @@ struct SyncSettingsView: View {
     @EnvironmentObject private var coordinator: SyncSettingsCoordinator
     @State private var syncEnabled = SyncSettings.isEnabled
     @State private var ignoresNextSyncToggleChange = false
-    @State private var isShowingSyncDetails = false
+    @State private var isConfirmingCredentialRemoval = false
 
     var body: some View {
         Form {
@@ -13,7 +13,18 @@ struct SyncSettingsView: View {
             if let attentionMessage {
                 troubleshootingSection(message: attentionMessage)
             }
-            syncedDataSection
+            SyncSettingsDetailsSections(
+                summary: coordinator.contentSummary,
+                storageTitle: syncedDataHeaderTitle,
+                syncEnabled: syncEnabled,
+                lastSuccessfulSyncDate: coordinator.lastSuccessfulSyncDate,
+                pendingChangeCount: coordinator.cloudState.pendingOperationCount,
+                lastError: coordinator.lastError,
+                diagnostics: coordinator.diagnostics.text,
+                requestCredentialRemoval: {
+                    isConfirmingCredentialRemoval = true
+                }
+            )
         }
         .formStyle(.grouped)
         .adaptiveSoftScrollEdges()
@@ -26,18 +37,17 @@ struct SyncSettingsView: View {
             guard let message = state.announcement else { return }
             SyncSettingsAccessibilityAnnouncement.post(message)
         }
-        .sheet(isPresented: $isShowingSyncDetails) {
-            SyncSettingsDetailsSheet(
-                summary: coordinator.contentSummary,
-                syncEnabled: syncEnabled,
-                lastSuccessfulSyncDate: coordinator.lastSuccessfulSyncDate,
-                pendingChangeCount: coordinator.cloudState.pendingOperationCount,
-                lastError: coordinator.lastError,
-                diagnostics: coordinator.diagnostics.text,
-                removeCredentialsFromICloud: {
-                    _ = coordinator.removeCredentialsFromICloud()
-                }
-            )
+        .confirmationDialog(
+            "Remove Credentials from iCloud Keychain?",
+            isPresented: $isConfirmingCredentialRemoval,
+            titleVisibility: .visible
+        ) {
+            Button("Remove from iCloud Keychain", role: .destructive) {
+                _ = coordinator.removeCredentialsFromICloud()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again.")
         }
     }
 
@@ -59,37 +69,6 @@ struct SyncSettingsView: View {
         Section {
             Toggle("Sync with iCloud", isOn: $syncEnabled)
                 .accessibilityIdentifier("vvterm.settings.sync.toggle")
-        }
-    }
-
-    private var syncedDataSection: some View {
-        Section {
-            SyncSettingsSummaryRow(
-                title: "App Data",
-                systemImage: "externaldrive.fill",
-                summary: coordinator.contentSummary.appDataSummaryText
-            )
-            .accessibilityIdentifier("vvterm.settings.sync.data.app")
-
-            SyncSettingsSummaryRow(
-                title: "Credentials",
-                systemImage: "key.horizontal.fill",
-                summary: coordinator.contentSummary.credentialSummaryText
-            )
-            .accessibilityIdentifier("vvterm.settings.sync.data.credentials")
-        } header: {
-            HStack {
-                Text(syncedDataHeaderTitle)
-                Spacer()
-                Button {
-                    isShowingSyncDetails = true
-                } label: {
-                    Image(systemName: "info.circle")
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Show iCloud Sync Details")
-                .accessibilityIdentifier("vvterm.settings.sync.detailsButton")
-            }
         }
     }
 

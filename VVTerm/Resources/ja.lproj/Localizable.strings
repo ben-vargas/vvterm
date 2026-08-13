@@ -1765,7 +1765,6 @@
 "iCloud Sync completed." = "iCloud同期が完了しました。";
 "iCloud Sync is waiting for the network." = "iCloud同期はネットワークを待機しています。";
 "iCloud Sync needs attention." = "iCloud同期の確認が必要です。";
-"iCloud Sync Details" = "iCloud同期の詳細";
 "Terminal Appearance" = "ターミナルの外観";
 "Keyboard Toolbar" = "キーボードツールバー";
 "Stats Layout" = "統計のレイアウト";
@@ -1780,9 +1779,4 @@
 "Cache and Logs" = "キャッシュとログ";
 "Sync Details" = "同期の詳細";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "認証情報はこのデバイスに残ります。iCloudにある既存のAppデータは削除されません。";
-"Show iCloud Sync Details" = "iCloud同期の詳細を表示";
 "Stored on This Device" = "このデバイスに保存済み";
-"%lld server credential" = "%lld件のサーバー認証情報";
-"%lld server credentials" = "%lld件のサーバー認証情報";
-"%lld SSH key" = "%lld個のSSHキー";
-"%lld SSH keys" = "%lld個のSSHキー";

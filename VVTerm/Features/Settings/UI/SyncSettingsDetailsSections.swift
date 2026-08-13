@@ -1,55 +1,8 @@
 import SwiftUI
 
-struct SyncSettingsDetailsSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var isConfirmingCredentialRemoval = false
-
+struct SyncSettingsDetailsSections: View {
     let summary: SyncSettingsContentSummary
-    let syncEnabled: Bool
-    let lastSuccessfulSyncDate: Date?
-    let pendingChangeCount: Int
-    let lastError: SyncSettingsErrorRecord?
-    let diagnostics: String
-    let removeCredentialsFromICloud: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            SyncSettingsDetailsContent(
-                summary: summary,
-                syncEnabled: syncEnabled,
-                lastSuccessfulSyncDate: lastSuccessfulSyncDate,
-                pendingChangeCount: pendingChangeCount,
-                lastError: lastError,
-                diagnostics: diagnostics,
-                requestCredentialRemoval: {
-                    isConfirmingCredentialRemoval = true
-                }
-            )
-            .navigationTitle("iCloud Sync Details")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-        .syncSettingsDetailsPresentation()
-        .confirmationDialog(
-            "Remove Credentials from iCloud Keychain?",
-            isPresented: $isConfirmingCredentialRemoval,
-            titleVisibility: .visible
-        ) {
-            Button("Remove from iCloud Keychain", role: .destructive) {
-                removeCredentialsFromICloud()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again.")
-        }
-    }
-}
-
-private struct SyncSettingsDetailsContent: View {
-    let summary: SyncSettingsContentSummary
+    let storageTitle: LocalizedStringResource
     let syncEnabled: Bool
     let lastSuccessfulSyncDate: Date?
     let pendingChangeCount: Int
@@ -58,23 +11,16 @@ private struct SyncSettingsDetailsContent: View {
     let requestCredentialRemoval: () -> Void
 
     var body: some View {
-        Form {
-            appDataSection
-            settingsSection
-            credentialsSection
-            deviceOnlySection
-            syncDetailsSection
-            if !syncEnabled {
-                credentialRemovalSection
-            }
+        syncedDataSection
+        deviceOnlySection
+        syncDetailsSection
+        if !syncEnabled {
+            credentialRemovalSection
         }
-        .formStyle(.grouped)
-        .adaptiveSoftScrollEdges()
-        .accessibilityIdentifier("vvterm.settings.sync.details")
     }
 
-    private var appDataSection: some View {
-        Section("App Data") {
+    private var syncedDataSection: some View {
+        Section {
             SyncSettingsDetailsCountRow(
                 title: "Workspaces",
                 systemImage: "folder",
@@ -93,11 +39,6 @@ private struct SyncSettingsDetailsContent: View {
                 count: summary.customThemeCount,
                 accessibilityIdentifier: "vvterm.settings.sync.details.customThemes"
             )
-        }
-    }
-
-    private var settingsSection: some View {
-        Section("Settings") {
             SyncSettingsDetailsStatusRow(
                 title: "Terminal Appearance",
                 systemImage: "circle.lefthalf.filled",
@@ -113,11 +54,6 @@ private struct SyncSettingsDetailsContent: View {
                 systemImage: "chart.xyaxis.line",
                 status: storageStatus
             )
-        }
-    }
-
-    private var credentialsSection: some View {
-        Section {
             SyncSettingsDetailsCountRow(
                 title: "Server Credentials",
                 systemImage: "key.fill",
@@ -136,9 +72,11 @@ private struct SyncSettingsDetailsContent: View {
                 status: storageStatus
             )
         } header: {
-            Text("Credentials")
+            Text(storageTitle)
         } footer: {
-            Text("Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain.")
+            if syncEnabled {
+                Text("Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain.")
+            }
         }
     }
 

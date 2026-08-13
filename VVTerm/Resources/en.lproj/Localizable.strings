@@ -1817,7 +1817,6 @@
 "iCloud Sync completed." = "iCloud Sync completed.";
 "iCloud Sync is waiting for the network." = "iCloud Sync is waiting for the network.";
 "iCloud Sync needs attention." = "iCloud Sync needs attention.";
-"iCloud Sync Details" = "iCloud Sync Details";
 "Terminal Appearance" = "Terminal Appearance";
 "Keyboard Toolbar" = "Keyboard Toolbar";
 "Stats Layout" = "Stats Layout";
@@ -1832,9 +1831,4 @@
 "Cache and Logs" = "Cache and Logs";
 "Sync Details" = "Sync Details";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Credentials remain on this device. Existing app data in iCloud is not deleted.";
-"Show iCloud Sync Details" = "Show iCloud Sync Details";
 "Stored on This Device" = "Stored on This Device";
-"%lld server credential" = "%lld server credential";
-"%lld server credentials" = "%lld server credentials";
-"%lld SSH key" = "%lld SSH key";
-"%lld SSH keys" = "%lld SSH keys";

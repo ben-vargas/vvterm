@@ -1762,7 +1762,6 @@
 "iCloud Sync completed." = "iCloud 同步已完成。";
 "iCloud Sync is waiting for the network." = "iCloud 同步正在等待网络。";
 "iCloud Sync needs attention." = "iCloud 同步需要检查。";
-"iCloud Sync Details" = "iCloud 同步详情";
 "Terminal Appearance" = "终端外观";
 "Keyboard Toolbar" = "键盘工具栏";
 "Stats Layout" = "统计布局";
@@ -1777,9 +1776,4 @@
 "Cache and Logs" = "缓存和日志";
 "Sync Details" = "同步详情";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "凭据会保留在此设备上。iCloud 中现有的 App 数据不会被删除。";
-"Show iCloud Sync Details" = "显示 iCloud 同步详情";
 "Stored on This Device" = "已存储在此设备上";
-"%lld server credential" = "%lld 个服务器凭据";
-"%lld server credentials" = "%lld 个服务器凭据";
-"%lld SSH key" = "%lld 个 SSH 密钥";
-"%lld SSH keys" = "%lld 个 SSH 密钥";
