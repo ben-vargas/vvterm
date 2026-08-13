@@ -10,14 +10,12 @@ struct SettingsRouteCatalogTests {
         #expect(SettingsRoute.defaultRoute != .pro)
         #expect(SettingsRouteCatalog.groups == [
             .account,
-            .voice,
             .app,
             .terminal,
             .dataAndSecurity,
             .support,
         ])
         #expect(SettingsRouteCatalog.routes(in: .account) == [.pro])
-        #expect(SettingsRouteCatalog.routes(in: .voice) == [.transcription])
         #expect(SettingsRouteCatalog.routes(in: .app) == [
             .appearanceAndLanguage,
             .navigationAndStats,
@@ -25,6 +23,7 @@ struct SettingsRouteCatalogTests {
         #expect(SettingsRouteCatalog.routes(in: .terminal) == [
             .terminalAppearance,
             .keyboardAndInput,
+            .transcription,
             .sessionsAndConnections,
             .clipboardAndPaste,
         ])

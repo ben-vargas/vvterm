@@ -2,7 +2,6 @@ import Foundation
 
 nonisolated enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Sendable {
     case account
-    case voice
     case app
     case terminal
     case dataAndSecurity
@@ -20,8 +19,6 @@ nonisolated enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Se
             String(localized: "Terminal")
         case .dataAndSecurity:
             String(localized: "Data & Security")
-        case .voice:
-            String(localized: "Voice")
         case .support:
             String(localized: "Support")
         }
@@ -30,11 +27,11 @@ nonisolated enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Se
 
 nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Sendable {
     case pro
-    case transcription
     case appearanceAndLanguage
     case navigationAndStats
     case terminalAppearance
     case keyboardAndInput
+    case transcription
     case sessionsAndConnections
     case clipboardAndPaste
     case privacyAndAppLock
@@ -51,11 +48,10 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         switch self {
         case .pro:
             .account
-        case .transcription:
-            .voice
         case .appearanceAndLanguage, .navigationAndStats:
             .app
-        case .terminalAppearance, .keyboardAndInput, .sessionsAndConnections, .clipboardAndPaste:
+        case .terminalAppearance, .keyboardAndInput, .transcription,
+             .sessionsAndConnections, .clipboardAndPaste:
             .terminal
         case .privacyAndAppLock, .iCloudSync, .sshKeys, .trustedHosts:
             .dataAndSecurity
