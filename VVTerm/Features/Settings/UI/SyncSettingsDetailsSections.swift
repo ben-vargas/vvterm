@@ -22,16 +22,28 @@ struct SyncSettingsDetailsSections: View {
     private var syncedDataSection: some View {
         Section {
             SyncSettingsDetailsCountRow(
+                title: "Servers",
+                systemImage: "server.rack",
+                count: summary.serverCount,
+                accessibilityIdentifier: "vvterm.settings.sync.details.servers"
+            )
+            SyncSettingsDetailsCountRow(
                 title: "Workspaces",
                 systemImage: "folder",
                 count: summary.workspaceCount,
                 accessibilityIdentifier: "vvterm.settings.sync.details.workspaces"
             )
             SyncSettingsDetailsCountRow(
-                title: "Servers",
-                systemImage: "server.rack",
-                count: summary.serverCount,
-                accessibilityIdentifier: "vvterm.settings.sync.details.servers"
+                title: "Server Credentials",
+                systemImage: "key.fill",
+                count: summary.serverCredentialCount,
+                accessibilityIdentifier: "vvterm.settings.sync.details.serverCredentials"
+            )
+            SyncSettingsDetailsCountRow(
+                title: "Reusable SSH Keys",
+                systemImage: "key.horizontal.fill",
+                count: summary.reusableSSHKeyCount,
+                accessibilityIdentifier: "vvterm.settings.sync.details.reusableSSHKeys"
             )
             SyncSettingsDetailsCountRow(
                 title: "Custom Themes",
@@ -53,18 +65,6 @@ struct SyncSettingsDetailsSections: View {
                 title: "Stats Layout",
                 systemImage: "chart.xyaxis.line",
                 status: storageStatus
-            )
-            SyncSettingsDetailsCountRow(
-                title: "Server Credentials",
-                systemImage: "key.fill",
-                count: summary.serverCredentialCount,
-                accessibilityIdentifier: "vvterm.settings.sync.details.serverCredentials"
-            )
-            SyncSettingsDetailsCountRow(
-                title: "Reusable SSH Keys",
-                systemImage: "key.horizontal.fill",
-                count: summary.reusableSSHKeyCount,
-                accessibilityIdentifier: "vvterm.settings.sync.details.reusableSSHKeys"
             )
             SyncSettingsDetailsStatusRow(
                 title: "Cloudflare Tokens",
