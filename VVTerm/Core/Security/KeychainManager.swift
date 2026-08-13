@@ -14,6 +14,7 @@ final class KeychainManager {
     private let store: KeychainStore
     private let cloudflareTokenStore: KeychainStore
     private let isSyncEnabled: @Sendable () -> Bool
+    private let persistSyncEnabled: @Sendable (Bool) throws -> Void
     private let offlineChanges: CredentialOfflineChangeStore
     private let credentialOfflineWrites: CredentialOfflineWriteTransaction
     private let oauthOfflineWrites: CredentialOfflineWriteTransaction
@@ -58,12 +59,16 @@ final class KeychainManager {
             service: cloudflareTokenService
         ),
         isSyncEnabled: @escaping @Sendable () -> Bool = { SyncSettings.isEnabled },
+        persistSyncEnabled: @escaping @Sendable (Bool) throws -> Void = {
+            try SyncSettings.persistEnabled($0)
+        },
         offlineChanges: CredentialOfflineChangeStore = .shared,
         performsInitialMigration: Bool = false
     ) {
         self.store = store
         self.cloudflareTokenStore = cloudflareTokenStore
         self.isSyncEnabled = isSyncEnabled
+        self.persistSyncEnabled = persistSyncEnabled
         self.offlineChanges = offlineChanges
         credentialOfflineWrites = CredentialOfflineWriteTransaction(
             store: store,
@@ -74,14 +79,10 @@ final class KeychainManager {
             offlineChanges: offlineChanges
         )
         if performsInitialMigration,
-           isSyncEnabled(),
-           (offlineChanges.isTrackingOfflineChanges
-               || credentialOfflineWrites.hasPendingWrite
-               || oauthOfflineWrites.hasPendingWrite
-               || !UserDefaults.standard.bool(forKey: Self.iCloudMigrationKey)) {
+           shouldResumeCredentialStorageOnLaunch {
             do {
-                try synchronizeCredentialStorage(isEnabled: true)
-                if !offlineChanges.isTrackingOfflineChanges {
+                try resumeCredentialStorageOnLaunch()
+                if isSyncEnabled(), !offlineChanges.isTrackingOfflineChanges {
                     UserDefaults.standard.set(true, forKey: Self.iCloudMigrationKey)
                 }
             } catch {
@@ -644,9 +645,36 @@ final class KeychainManager {
         try credentialOfflineWrites.resumePendingWrite()
         try oauthOfflineWrites.resumePendingWrite()
         if isEnabled {
-            try reconcileOfflineCredentialChanges()
+            if offlineChanges.reconciliationPhase == .preparingOfflineSnapshot {
+                try prepareOfflineCredentialSnapshot()
+            }
+            if offlineChanges.requiresSyncDisableCommit {
+                try persistSyncEnabled(false)
+                try offlineChanges.finishSyncDisableCommit()
+            }
+            try applyOfflineCredentialChangesToCloud()
+            try persistSyncEnabled(true)
+            if offlineChanges.reconciliationPhase == .localCleanup {
+                do {
+                    try finishLocalCredentialCleanup()
+                } catch {
+                    logger.error(
+                        "Credential sync is active, but local credential cleanup remains pending: \(error.localizedDescription)"
+                    )
+                }
+            }
         } else {
             try prepareOfflineCredentialSnapshot()
+            try persistSyncEnabled(false)
+            if offlineChanges.requiresSyncDisableCommit {
+                do {
+                    try offlineChanges.finishSyncDisableCommit()
+                } catch {
+                    logger.error(
+                        "Credential snapshot is active, but its transition marker remains pending: \(error.localizedDescription)"
+                    )
+                }
+            }
         }
         logger.info(
             "Prepared credential storage for iCloud sync enabled=\(isEnabled)"
@@ -665,39 +693,101 @@ final class KeychainManager {
         case .remoteChanges:
             return
         case .localCleanup:
-            try finishLocalCredentialCleanup()
-        case nil:
+            try offlineChanges.beginOfflineSnapshotPreparation()
+        case .preparingOfflineSnapshot:
             break
+        case nil:
+            try offlineChanges.beginOfflineSnapshotPreparation()
         }
-        try store.deleteAll(in: .deviceOnly, where: Self.isSynchronizableCredentialKey)
-        try cloudflareTokenStore.deleteAll(
-            in: .deviceOnly,
-            where: { $0.hasPrefix("oauth.") }
-        )
-        try store.copyAll(
-            from: .iCloud,
-            to: .deviceOnly,
+
+        let credentialKeys = try replaceDeviceSnapshot(
+            in: store,
             where: Self.isSynchronizableCredentialKey
         )
-        try cloudflareTokenStore.copyAll(
-            from: .iCloud,
-            to: .deviceOnly,
+        let oauthKeys = try replaceDeviceSnapshot(
+            in: cloudflareTokenStore,
             where: { $0.hasPrefix("oauth.") }
         )
         var units = Set(
-            try store.keys(in: .deviceOnly).compactMap(credentialSyncUnit(forCredentialKey:))
+            credentialKeys.compactMap(credentialSyncUnit(forCredentialKey:))
         )
         units.formUnion(
-            try cloudflareTokenStore.keys(in: .deviceOnly)
-                .filter { $0.hasPrefix("oauth.") }
-                .map(CredentialSyncUnit.oauth)
+            oauthKeys.map(CredentialSyncUnit.oauth)
         )
-        try offlineChanges.beginOfflineTracking(
+        try offlineChanges.completeOfflineSnapshot(
             changes: Dictionary(uniqueKeysWithValues: units.map { ($0, .unchanged) })
         )
     }
 
-    private func reconcileOfflineCredentialChanges() throws {
+    private func replaceDeviceSnapshot(
+        in selectedStore: KeychainStore,
+        where shouldCopy: (String) -> Bool
+    ) throws -> [String] {
+        let sourceKeys = try selectedStore.keys(in: .iCloud).filter(shouldCopy)
+        let snapshot = try Dictionary(uniqueKeysWithValues: sourceKeys.map { key in
+            guard let value = try selectedStore.get(key, scope: .iCloud) else {
+                throw KeychainError.itemNotFound
+            }
+            return (key, value)
+        })
+
+        for key in sourceKeys {
+            guard let value = snapshot[key] else { throw KeychainError.itemNotFound }
+            try selectedStore.set(value, forKey: key, scope: .deviceOnly)
+            guard try selectedStore.get(key, scope: .deviceOnly) == value else {
+                throw KeychainError.copyVerificationFailed
+            }
+        }
+
+        let expectedKeys = Set(sourceKeys)
+        for key in try selectedStore.keys(in: .deviceOnly)
+            where shouldCopy(key) && !expectedKeys.contains(key) {
+            try selectedStore.delete(key, scope: .deviceOnly)
+        }
+
+        let finalKeys = try selectedStore.keys(in: .deviceOnly).filter(shouldCopy)
+        guard Set(finalKeys) == expectedKeys else {
+            throw KeychainError.copyVerificationFailed
+        }
+        for key in sourceKeys where try selectedStore.get(key, scope: .deviceOnly) != snapshot[key] {
+            throw KeychainError.copyVerificationFailed
+        }
+        return sourceKeys
+    }
+
+    private var shouldResumeCredentialStorageOnLaunch: Bool {
+        credentialOfflineWrites.hasPendingWrite
+            || oauthOfflineWrites.hasPendingWrite
+            || offlineChanges.reconciliationPhase == .preparingOfflineSnapshot
+            || offlineChanges.requiresSyncDisableCommit
+            || offlineChanges.reconciliationPhase == .localCleanup
+            || (isSyncEnabled()
+                && (offlineChanges.isTrackingOfflineChanges
+                    || !UserDefaults.standard.bool(forKey: Self.iCloudMigrationKey)))
+    }
+
+    private func resumeCredentialStorageOnLaunch() throws {
+        try credentialOfflineWrites.resumePendingWrite()
+        try oauthOfflineWrites.resumePendingWrite()
+
+        if offlineChanges.reconciliationPhase == .preparingOfflineSnapshot {
+            try prepareOfflineCredentialSnapshot()
+        }
+        if offlineChanges.requiresSyncDisableCommit {
+            try persistSyncEnabled(false)
+            try offlineChanges.finishSyncDisableCommit()
+            return
+        }
+        if offlineChanges.reconciliationPhase == .localCleanup, !isSyncEnabled() {
+            try synchronizeCredentialStorage(isEnabled: false)
+            return
+        }
+        if isSyncEnabled() {
+            try synchronizeCredentialStorage(isEnabled: true)
+        }
+    }
+
+    private func applyOfflineCredentialChangesToCloud() throws {
         if offlineChanges.reconciliationPhase == nil {
             let existingChanges = offlineChanges.snapshot()
             var units = Set(existingChanges.keys)
@@ -750,14 +840,6 @@ final class KeychainManager {
             try offlineChanges.markRemoteChangesApplied()
         }
 
-        do {
-            try finishLocalCredentialCleanup()
-        } catch {
-            logger.error(
-                "Credential sync is active, but local credential cleanup remains pending: \(error.localizedDescription)"
-            )
-            throw error
-        }
     }
 
     private func finishLocalCredentialCleanup() throws {
@@ -946,21 +1028,6 @@ final class KeychainManager {
             return nil
         }
         return .server(id)
-    }
-
-    func removeCredentialsFromICloud() throws {
-        guard !offlineChanges.isTrackingOfflineChanges else {
-            throw CredentialSyncError.offlineReconciliationPending
-        }
-        try store.deleteAll(
-            in: .iCloud,
-            where: Self.isSynchronizableCredentialKey
-        )
-        try cloudflareTokenStore.deleteAll(
-            in: .iCloud,
-            where: { $0.hasPrefix("oauth.") }
-        )
-        logger.info("Removed VVTerm credentials from iCloud Keychain")
     }
 
     nonisolated static func isSynchronizableCredentialKey(_ key: String) -> Bool {

@@ -28,7 +28,6 @@ protocol SyncSettingsCloudSyncing: AnyObject {
 @MainActor
 protocol SyncSettingsCredentialSyncing: AnyObject {
     func prepareCredentialStorage(isSyncEnabled: Bool) throws
-    func removeCloudCredentials() throws
 }
 
 @MainActor
@@ -41,7 +40,6 @@ protocol SyncSettingsDataRefreshing: AnyObject {
 final class SyncSettingsCoordinator: ObservableObject {
     enum CredentialFailure: Equatable {
         case toggle
-        case removal
     }
 
     @Published private(set) var cloudState: SyncSettingsCloudState
@@ -91,14 +89,5 @@ final class SyncSettingsCoordinator: ObservableObject {
 
     func refreshAccountStatus() async {
         await cloud.refreshAccountStatus()
-    }
-
-    func removeCloudCredentials() {
-        do {
-            try credentials.removeCloudCredentials()
-            credentialFailure = nil
-        } catch {
-            credentialFailure = .removal
-        }
     }
 }

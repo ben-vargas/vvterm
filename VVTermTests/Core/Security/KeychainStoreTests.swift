@@ -256,6 +256,16 @@ nonisolated final class InMemoryKeychainStoreBacking: KeychainStoreBacking, @unc
         lock.unlock()
     }
 
+    func allowWrites(
+        to scope: KeychainStorageScope,
+        service: String,
+        key: String
+    ) {
+        lock.lock()
+        failedWriteItems.remove(Item(service: service, key: key, scope: scope))
+        lock.unlock()
+    }
+
     func corruptReads(
         from scope: KeychainStorageScope,
         service: String,

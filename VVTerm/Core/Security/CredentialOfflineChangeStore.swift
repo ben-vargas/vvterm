@@ -7,6 +7,7 @@ nonisolated enum CredentialOfflineChange: String, Codable, Equatable, Sendable {
 }
 
 nonisolated enum CredentialReconciliationPhase: String, Codable, Equatable, Sendable {
+    case preparingOfflineSnapshot
     case remoteChanges
     case localCleanup
 }
@@ -60,6 +61,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         var phase: CredentialReconciliationPhase
         var changes: [String: String]
         var changeDates: [String: Double]
+        var requiresSyncDisableCommit: Bool?
     }
 
     private static let reconciliationStateKey = "vvterm.keychain.offlineReconciliation.v3"
@@ -85,6 +87,60 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
+    var requiresSyncDisableCommit: Bool {
+        withLock {
+            storedState()?.requiresSyncDisableCommit == true
+        }
+    }
+
+    func beginOfflineSnapshotPreparation() throws {
+        try withLock {
+            try persist(
+                PersistedState(
+                    phase: .preparingOfflineSnapshot,
+                    changes: [:],
+                    changeDates: [:],
+                    requiresSyncDisableCommit: nil
+                )
+            )
+        }
+    }
+
+    func completeOfflineSnapshot(
+        changes: [CredentialSyncUnit: CredentialOfflineChange]
+    ) throws {
+        try withLock {
+            guard storedState()?.phase == .preparingOfflineSnapshot else {
+                throw CredentialOfflineChangeStoreError.persistenceFailed
+            }
+            let values = Dictionary(
+                uniqueKeysWithValues: changes.map { unit, change in
+                    (unit.storageKey, change.rawValue)
+                }
+            )
+            try persist(
+                PersistedState(
+                    phase: .remoteChanges,
+                    changes: values,
+                    changeDates: [:],
+                    requiresSyncDisableCommit: true
+                )
+            )
+        }
+    }
+
+    func finishSyncDisableCommit() throws {
+        try withLock {
+            guard var state = storedState(),
+                  state.phase == .remoteChanges,
+                  state.requiresSyncDisableCommit == true else {
+                throw CredentialOfflineChangeStoreError.persistenceFailed
+            }
+            state.requiresSyncDisableCommit = nil
+            try persist(state)
+        }
+    }
+
     func beginOfflineTracking(
         changes: [CredentialSyncUnit: CredentialOfflineChange]
     ) throws {
@@ -104,7 +160,8 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
                 PersistedState(
                     phase: .remoteChanges,
                     changes: values,
-                    changeDates: dates
+                    changeDates: dates,
+                    requiresSyncDisableCommit: nil
                 )
             )
         }
@@ -115,9 +172,11 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
             var state = storedState() ?? PersistedState(
                 phase: .remoteChanges,
                 changes: [:],
-                changeDates: [:]
+                changeDates: [:],
+                requiresSyncDisableCommit: nil
             )
-            guard state.phase != .localCleanup else {
+            guard state.phase == .remoteChanges,
+                  state.requiresSyncDisableCommit != true else {
                 throw CredentialSyncError.offlineReconciliationPending
             }
             state.phase = .remoteChanges
@@ -161,6 +220,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
                 throw CredentialOfflineChangeStoreError.persistenceFailed
             }
             state.phase = .localCleanup
+            state.requiresSyncDisableCommit = nil
             try persist(state)
         }
     }
@@ -206,13 +266,15 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
             return legacyChanges.isEmpty ? nil : PersistedState(
                 phase: .remoteChanges,
                 changes: legacyChanges,
-                changeDates: storedLegacyChangeDates()
+                changeDates: storedLegacyChangeDates(),
+                requiresSyncDisableCommit: nil
             )
         }
         return PersistedState(
             phase: legacyPhase,
             changes: legacyChanges,
-            changeDates: storedLegacyChangeDates()
+            changeDates: storedLegacyChangeDates(),
+            requiresSyncDisableCommit: nil
         )
     }
 
@@ -323,7 +385,8 @@ nonisolated final class CredentialOfflineWriteTransaction: @unchecked Sendable {
         operations: [CredentialOfflineWriteOperation]
     ) throws {
         try resumePendingWrite()
-        guard offlineChanges.reconciliationPhase != .localCleanup else {
+        guard offlineChanges.reconciliationPhase != .preparingOfflineSnapshot,
+              offlineChanges.reconciliationPhase != .localCleanup else {
             throw CredentialSyncError.offlineReconciliationPending
         }
 
@@ -411,6 +474,6 @@ nonisolated enum CredentialSyncError: LocalizedError, Equatable, Sendable {
     case offlineReconciliationPending
 
     var errorDescription: String? {
-        "Credential reconciliation must finish before iCloud credentials can be removed."
+        "Credential reconciliation must finish before credentials can change."
     }
 }

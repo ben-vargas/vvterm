@@ -1418,9 +1418,6 @@
 "Symlink" = "シンボリックリンク";
 "Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "サーバー、認証情報、SSHキーは、iCloudとiCloudキーチェーンを使用してAppleデバイス間で同期されます。";
 "Credentials could not be copied. Existing credentials were kept." = "認証情報をコピーできませんでした。既存の認証情報は保持されました。";
-"Remove credentials from iCloud Keychain" = "iCloudキーチェーンから認証情報を削除";
-"This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "すべてのAppleデバイスのiCloudキーチェーンからVVTermの認証情報を削除します。デバイス専用の認証情報はこのデバイスに残ります。";
-"Some iCloud Keychain credentials could not be removed. Device-only credentials were kept." = "一部のiCloudキーチェーン認証情報を削除できませんでした。デバイス専用の認証情報は保持されました。";
 "Tab \\(number)" = "タブ \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "規約";

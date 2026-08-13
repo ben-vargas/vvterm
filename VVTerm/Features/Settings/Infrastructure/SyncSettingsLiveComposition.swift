@@ -85,10 +85,6 @@ private final class KeychainSyncSettingsAdapter: SyncSettingsCredentialSyncing {
     func prepareCredentialStorage(isSyncEnabled: Bool) throws {
         try keychain.handleSyncToggle(isEnabled: isSyncEnabled)
     }
-
-    func removeCloudCredentials() throws {
-        try keychain.removeCredentialsFromICloud()
-    }
 }
 
 @MainActor

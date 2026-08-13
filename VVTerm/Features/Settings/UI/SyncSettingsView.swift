@@ -40,8 +40,7 @@ struct SyncSettingsView: View {
     @EnvironmentObject private var serverManager: ServerManager
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @EnvironmentObject private var terminalAccessory: TerminalAccessoryPreferencesManager
-    @AppStorage(SyncSettings.enabledKey) private var syncEnabled = true
-    @State private var confirmsCloudCredentialRemoval = false
+    @State private var syncEnabled = SyncSettings.isEnabled
     @State private var ignoresNextSyncToggleChange = false
 
     var body: some View {
@@ -132,14 +131,6 @@ struct SyncSettingsView: View {
                     }
                 }
 
-            } else {
-                Section {
-                    Button("Remove credentials from iCloud Keychain", role: .destructive) {
-                        confirmsCloudCredentialRemoval = true
-                    }
-                } footer: {
-                    Text("This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device.")
-                }
             }
 
             // Debug section when CloudKit is unavailable
@@ -179,18 +170,6 @@ struct SyncSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .confirmationDialog(
-            "Remove credentials from iCloud Keychain",
-            isPresented: $confirmsCloudCredentialRemoval,
-            titleVisibility: .visible
-        ) {
-            Button("Remove credentials from iCloud Keychain", role: .destructive) {
-                coordinator.removeCloudCredentials()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device.")
-        }
         .onChange(of: syncEnabled) { enabled in
             if ignoresNextSyncToggleChange {
                 ignoresNextSyncToggleChange = false
@@ -217,10 +196,6 @@ struct SyncSettingsView: View {
         switch coordinator.credentialFailure {
         case .toggle:
             return String(localized: "Credentials could not be copied. Existing credentials were kept.")
-        case .removal:
-            return String(
-                localized: "Some iCloud Keychain credentials could not be removed. Device-only credentials were kept."
-            )
         case nil:
             return nil
         }

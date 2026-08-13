@@ -96,6 +96,126 @@ struct KeychainManagerSyncTests {
             try fixture.oauthStore.get("oauth.example.com", scope: .iCloud)
                 == Data("oauth-token".utf8)
         )
+        #expect(!fixture.syncState.value)
+        #expect(!fixture.offlineChanges.requiresSyncDisableCommit)
+    }
+
+    @Test
+    func failedOfflineSnapshotKeepsPreferenceEnabledAndExistingDeviceValues() throws {
+        let fixture = Fixture(syncEnabled: true)
+        let serverID = UUID()
+        let cloudKey = "server.\(serverID.uuidString).password"
+        let staleKey = "server.\(UUID().uuidString).password"
+        try fixture.credentialStore.set(
+            Data("cloud".utf8),
+            forKey: cloudKey,
+            scope: .iCloud
+        )
+        try fixture.credentialStore.set(
+            Data("stale".utf8),
+            forKey: staleKey,
+            scope: .deviceOnly
+        )
+        fixture.backing.failWrites(
+            to: .deviceOnly,
+            service: KeychainManager.credentialService,
+            key: cloudKey
+        )
+
+        #expect(throws: InMemoryKeychainStoreBacking.Failure.writeRejected) {
+            try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        }
+
+        #expect(fixture.syncState.value)
+        #expect(fixture.offlineChanges.reconciliationPhase == .preparingOfflineSnapshot)
+        #expect(try fixture.credentialStore.get(staleKey, scope: .deviceOnly) == Data("stale".utf8))
+        #expect(try fixture.credentialStore.get(cloudKey, scope: .iCloud) == Data("cloud".utf8))
+    }
+
+    @Test
+    func interruptedServerBundleCopyResumesBeforeSyncBecomesDisabled() throws {
+        let fixture = Fixture(syncEnabled: true)
+        let server = makeServer(
+            connectionMode: .standard,
+            authMethod: .sshKeyWithPassphrase
+        )
+        let prefix = "server.\(server.id.uuidString)"
+        let values: [String: Data] = [
+            "\(prefix).credential-binding.v1": try JSONEncoder().encode(
+                ServerCredentialBinding(server: server)
+            ),
+            "\(prefix).passphrase": Data("passphrase".utf8),
+            "\(prefix).publickey": Data("public".utf8),
+            "\(prefix).sshkey": Data("private".utf8)
+        ]
+        for (key, value) in values {
+            try fixture.credentialStore.set(value, forKey: key, scope: .iCloud)
+        }
+        let rejectedKey = "\(prefix).publickey"
+        fixture.backing.failWrites(
+            to: .deviceOnly,
+            service: KeychainManager.credentialService,
+            key: rejectedKey
+        )
+
+        #expect(throws: InMemoryKeychainStoreBacking.Failure.writeRejected) {
+            try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        }
+        #expect(fixture.syncState.value)
+        #expect(fixture.offlineChanges.reconciliationPhase == .preparingOfflineSnapshot)
+        #expect(try fixture.credentialStore.get("\(prefix).passphrase", scope: .deviceOnly) != nil)
+        #expect(try fixture.credentialStore.get(rejectedKey, scope: .deviceOnly) == nil)
+
+        fixture.backing.allowWrites(
+            to: .deviceOnly,
+            service: KeychainManager.credentialService,
+            key: rejectedKey
+        )
+        _ = fixture.makeRelaunchedManager(performsInitialMigration: true)
+
+        #expect(!fixture.syncState.value)
+        #expect(fixture.offlineChanges.reconciliationPhase == .remoteChanges)
+        #expect(!fixture.offlineChanges.requiresSyncDisableCommit)
+        for (key, value) in values {
+            #expect(try fixture.credentialStore.get(key, scope: .deviceOnly) == value)
+            #expect(try fixture.credentialStore.get(key, scope: .iCloud) == value)
+        }
+
+        let relaunchedManager = fixture.makeRelaunchedManager()
+        try relaunchedManager.synchronizeCredentialStorage(isEnabled: true)
+        #expect(fixture.syncState.value)
+        for (key, value) in values {
+            #expect(try fixture.credentialStore.get(key, scope: .iCloud) == value)
+        }
+    }
+
+    @Test
+    func preparingSnapshotResumesEvenWhenPersistedPreferenceIsAlreadyDisabled() throws {
+        let fixture = Fixture(syncEnabled: true)
+        let key = "server.\(UUID().uuidString).password"
+        let value = Data("cloud".utf8)
+        try fixture.credentialStore.set(value, forKey: key, scope: .iCloud)
+        fixture.backing.failWrites(
+            to: .deviceOnly,
+            service: KeychainManager.credentialService,
+            key: key
+        )
+        #expect(throws: InMemoryKeychainStoreBacking.Failure.writeRejected) {
+            try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        }
+        fixture.syncState.value = false
+        fixture.backing.allowWrites(
+            to: .deviceOnly,
+            service: KeychainManager.credentialService,
+            key: key
+        )
+
+        _ = fixture.makeRelaunchedManager(performsInitialMigration: true)
+
+        #expect(!fixture.syncState.value)
+        #expect(fixture.offlineChanges.reconciliationPhase == .remoteChanges)
+        #expect(try fixture.credentialStore.get(key, scope: .deviceOnly) == value)
+        #expect(try fixture.credentialStore.get(key, scope: .iCloud) == value)
     }
 
     @Test
@@ -211,10 +331,9 @@ struct KeychainManagerSyncTests {
             key: passwordKey
         )
 
-        #expect(throws: InMemoryKeychainStoreBacking.Failure.deleteRejected) {
-            try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
-        }
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
 
+        #expect(fixture.syncState.value)
         #expect(fixture.offlineChanges.reconciliationPhase == .localCleanup)
         #expect(try fixture.credentialStore.get(passwordKey, scope: .iCloud) == Data("P2".utf8))
         #expect(try fixture.credentialStore.get(passwordKey, scope: .deviceOnly) == Data("P2".utf8))
@@ -224,12 +343,7 @@ struct KeychainManagerSyncTests {
             service: KeychainManager.credentialService,
             key: passwordKey
         )
-        let relaunchedManager = KeychainManager(
-            store: fixture.credentialStore,
-            cloudflareTokenStore: fixture.oauthStore,
-            isSyncEnabled: { true },
-            offlineChanges: fixture.offlineChanges
-        )
+        let relaunchedManager = fixture.makeRelaunchedManager()
         try relaunchedManager.synchronizeCredentialStorage(isEnabled: true)
 
         #expect(fixture.offlineChanges.reconciliationPhase == nil)
@@ -238,7 +352,7 @@ struct KeychainManagerSyncTests {
     }
 
     @Test
-    func pendingLocalCleanupRejectsOfflineEditsUntilDisableCanCreateANewSnapshot() async throws {
+    func pendingLocalCleanupBuildsNewSnapshotBeforeOfflineEdits() async throws {
         let fixture = Fixture(syncEnabled: false)
         let tokenKey = "oauth.example"
         try fixture.oauthStore.setString("P1", forKey: tokenKey, scope: .iCloud)
@@ -255,21 +369,9 @@ struct KeychainManagerSyncTests {
             key: tokenKey
         )
 
-        #expect(throws: InMemoryKeychainStoreBacking.Failure.deleteRejected) {
-            try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
-        }
-        #expect(throws: InMemoryKeychainStoreBacking.Failure.deleteRejected) {
-            try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
-        }
-        do {
-            try await adapter.writeToken("P3", for: "example")
-            Issue.record("Expected the offline edit to be rejected during local cleanup")
-        } catch CredentialSyncError.offlineReconciliationPending {
-            // Expected.
-        } catch {
-            Issue.record("Unexpected error: \(error)")
-        }
-        #expect(try fixture.oauthStore.getString(tokenKey, scope: .deviceOnly) == "P2")
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+        #expect(fixture.syncState.value)
+        #expect(fixture.offlineChanges.reconciliationPhase == .localCleanup)
 
         fixture.backing.allowDeletes(
             from: .deviceOnly,
@@ -277,6 +379,8 @@ struct KeychainManagerSyncTests {
             key: tokenKey
         )
         try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        #expect(!fixture.syncState.value)
+        #expect(fixture.offlineChanges.reconciliationPhase == .remoteChanges)
         try await adapter.writeToken("P3", for: "example")
         try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
 
@@ -356,6 +460,46 @@ struct KeychainManagerSyncTests {
     }
 
     @Test
+    func launchResumesPendingSSHKeyWriteWhileSyncRemainsDisabled() throws {
+        let suiteName = "KeychainManagerSyncTests.ssh-write.\(UUID().uuidString)"
+        let defaults = CredentialStateWriteRejectingUserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let fixture = Fixture(syncEnabled: true, defaults: defaults)
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+
+        defaults.rejectCredentialStateWrites = true
+        do {
+            _ = try fixture.manager.storeSSHKeyEntry(
+                name: "Interrupted",
+                privateKey: Data("private".utf8),
+                passphrase: "secret"
+            )
+            Issue.record("Expected the durable change marker write to fail")
+        } catch CredentialOfflineChangeStoreError.persistenceFailed {
+            // Expected.
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+        #expect(fixture.offlineChanges.reconciliationPhase == .remoteChanges)
+
+        defaults.rejectCredentialStateWrites = false
+        _ = fixture.makeRelaunchedManager(performsInitialMigration: true)
+
+        #expect(!fixture.syncState.value)
+        let entries = try loadSSHLibrary(scope: .deviceOnly, from: fixture.credentialStore)
+        let entry = try #require(entries.first)
+        #expect(entry.name == "Interrupted")
+        #expect(
+            try fixture.credentialStore.get(
+                "sshkey.\(entry.id.uuidString).data",
+                scope: .deviceOnly
+            ) == Data("private".utf8)
+        )
+        #expect(fixture.offlineChanges.change(for: .sshKey(entry.id)) == .updated)
+        #expect(try fixture.credentialStore.keys(in: .iCloud).isEmpty)
+    }
+
+    @Test
     func launchResumesTrackedReconciliationAfterMigrationCompleted() throws {
         let fixture = Fixture(syncEnabled: false)
         let server = makeServer(connectionMode: .standard, authMethod: .password)
@@ -395,43 +539,6 @@ struct KeychainManagerSyncTests {
         #expect(fixture.offlineChanges.reconciliationPhase == nil)
         #expect(try fixture.credentialStore.get(passwordKey, scope: .iCloud) == Data("P2".utf8))
         #expect(try fixture.credentialStore.get(passwordKey, scope: .deviceOnly) == nil)
-    }
-
-    @Test
-    func cloudRemovalIsRejectedDuringOfflineReconciliation() throws {
-        let fixture = Fixture(syncEnabled: false)
-        let key = "server.\(UUID().uuidString).password"
-        try fixture.credentialStore.set(Data("P1".utf8), forKey: key, scope: .iCloud)
-        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
-
-        #expect(throws: CredentialSyncError.offlineReconciliationPending) {
-            try fixture.manager.removeCredentialsFromICloud()
-        }
-        #expect(try fixture.credentialStore.get(key, scope: .iCloud) == Data("P1".utf8))
-    }
-
-    @Test
-    func explicitCloudRemovalKeepsDeviceOnlyCredentials() throws {
-        let fixture = Fixture(syncEnabled: false)
-        let key = "server.\(UUID().uuidString).password"
-        let local = Data("local-password".utf8)
-        try fixture.credentialStore.set(local, forKey: key, scope: .deviceOnly)
-        try fixture.credentialStore.set(
-            Data("cloud-password".utf8),
-            forKey: key,
-            scope: .iCloud
-        )
-        try fixture.oauthStore.set(
-            Data("oauth-token".utf8),
-            forKey: "oauth.example.com",
-            scope: .iCloud
-        )
-
-        try fixture.manager.removeCredentialsFromICloud()
-
-        #expect(try fixture.credentialStore.get(key, scope: .deviceOnly) == local)
-        #expect(try fixture.credentialStore.get(key, scope: .iCloud) == nil)
-        #expect(try fixture.oauthStore.get("oauth.example.com", scope: .iCloud) == nil)
     }
 
     @Test
@@ -903,6 +1010,7 @@ struct KeychainManagerSyncTests {
         let offlineChanges: CredentialOfflineChangeStore
         let manager: KeychainManager
         let defaults: UserDefaults
+        let syncState: KeychainSyncEnabledState
 
         init(syncEnabled: Bool, defaults providedDefaults: UserDefaults? = nil) {
             if let providedDefaults {
@@ -913,6 +1021,7 @@ struct KeychainManagerSyncTests {
                 defaults.removePersistentDomain(forName: suiteName)
             }
             offlineChanges = CredentialOfflineChangeStore(defaults: defaults)
+            syncState = KeychainSyncEnabledState(syncEnabled)
             credentialStore = KeychainStore(
                 service: KeychainManager.credentialService,
                 backing: backing
@@ -924,8 +1033,22 @@ struct KeychainManagerSyncTests {
             manager = KeychainManager(
                 store: credentialStore,
                 cloudflareTokenStore: oauthStore,
-                isSyncEnabled: { syncEnabled },
+                isSyncEnabled: { [syncState] in syncState.value },
+                persistSyncEnabled: { [syncState] in syncState.value = $0 },
                 offlineChanges: offlineChanges
+            )
+        }
+
+        func makeRelaunchedManager(
+            performsInitialMigration: Bool = false
+        ) -> KeychainManager {
+            KeychainManager(
+                store: credentialStore,
+                cloudflareTokenStore: oauthStore,
+                isSyncEnabled: { [syncState] in syncState.value },
+                persistSyncEnabled: { [syncState] in syncState.value = $0 },
+                offlineChanges: CredentialOfflineChangeStore(defaults: defaults),
+                performsInitialMigration: performsInitialMigration
             )
         }
     }
@@ -979,6 +1102,28 @@ struct KeychainManagerSyncTests {
         let storedData = try store.get("vvterm.sshkeys.index", scope: scope)
         let data = try #require(storedData)
         return try JSONDecoder().decode([SSHKeyEntry].self, from: data)
+    }
+}
+
+private final class KeychainSyncEnabledState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue: Bool
+
+    init(_ value: Bool) {
+        storedValue = value
+    }
+
+    var value: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return storedValue
+        }
+        set {
+            lock.lock()
+            storedValue = newValue
+            lock.unlock()
+        }
     }
 }
 

@@ -42,9 +42,7 @@ private final class SyncSettingsCloudSpy: SyncSettingsCloudSyncing {
 private final class SyncSettingsCredentialSpy: SyncSettingsCredentialSyncing {
     let actionLog: SyncSettingsActionLog
     var preparedValues: [Bool] = []
-    var removalCount = 0
     var prepareError: Error?
-    var removalError: Error?
 
     init(actionLog: SyncSettingsActionLog? = nil) {
         self.actionLog = actionLog ?? SyncSettingsActionLog()
@@ -56,11 +54,6 @@ private final class SyncSettingsCredentialSpy: SyncSettingsCredentialSyncing {
         if let prepareError { throw prepareError }
     }
 
-    func removeCloudCredentials() throws {
-        removalCount += 1
-        actionLog.events.append("remove-credentials")
-        if let removalError { throw removalError }
-    }
 }
 
 @MainActor
@@ -159,21 +152,6 @@ struct SyncSettingsCoordinatorTests {
         #expect(data.disabledCount == 1)
         #expect(cloud.toggles == [false])
         #expect(actionLog.events == ["credentials:false", "data-disabled", "cloud:false"])
-    }
-
-    @Test
-    func credentialRemovalPublishesClosedFailureAndClearsItAfterSuccess() {
-        let credentials = SyncSettingsCredentialSpy()
-        credentials.removalError = TestError.failed
-        let coordinator = makeCoordinator(credentials: credentials)
-
-        coordinator.removeCloudCredentials()
-        #expect(coordinator.credentialFailure == .removal)
-
-        credentials.removalError = nil
-        coordinator.removeCloudCredentials()
-        #expect(coordinator.credentialFailure == nil)
-        #expect(credentials.removalCount == 2)
     }
 
     @Test

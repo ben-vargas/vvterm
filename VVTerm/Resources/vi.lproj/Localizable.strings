@@ -1463,9 +1463,6 @@
 "Symlink" = "Liên kết tượng trưng";
 "Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Máy chủ, thông tin xác thực và khóa SSH đồng bộ hóa trên các thiết bị Apple của bạn bằng iCloud và Chuỗi khóa iCloud.";
 "Credentials could not be copied. Existing credentials were kept." = "Không thể sao chép thông tin xác thực. Thông tin xác thực hiện có vẫn được giữ lại.";
-"Remove credentials from iCloud Keychain" = "Xóa thông tin xác thực khỏi Chuỗi khóa iCloud";
-"This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "Thao tác này xóa thông tin xác thực VVTerm khỏi Chuỗi khóa iCloud trên tất cả thiết bị Apple của bạn. Thông tin xác thực chỉ dành cho thiết bị vẫn ở trên thiết bị này.";
-"Some iCloud Keychain credentials could not be removed. Device-only credentials were kept." = "Không thể xóa một số thông tin xác thực khỏi Chuỗi khóa iCloud. Thông tin xác thực chỉ dành cho thiết bị vẫn được giữ lại.";
 "Tab \\(number)" = "Tab \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Điều khoản";

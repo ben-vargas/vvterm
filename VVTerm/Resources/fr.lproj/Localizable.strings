@@ -1420,9 +1420,6 @@
 "Symlink" = "Lien symbolique";
 "Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Les serveurs, les identifiants et les clés SSH se synchronisent sur vos appareils Apple avec iCloud et le trousseau iCloud.";
 "Credentials could not be copied. Existing credentials were kept." = "Impossible de copier les identifiants. Les identifiants existants ont été conservés.";
-"Remove credentials from iCloud Keychain" = "Supprimer les identifiants du trousseau iCloud";
-"This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "Cette action supprime les identifiants VVTerm du trousseau iCloud sur tous vos appareils Apple. Les identifiants propres à cet appareil y restent.";
-"Some iCloud Keychain credentials could not be removed. Device-only credentials were kept." = "Certains identifiants du trousseau iCloud n’ont pas pu être supprimés. Les identifiants propres à l’appareil ont été conservés.";
 "Tab \\(number)" = "Onglet \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Conditions";

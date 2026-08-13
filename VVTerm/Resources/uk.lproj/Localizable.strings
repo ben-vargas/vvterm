@@ -1425,9 +1425,6 @@
 "Symlink" = "Символьне посилання";
 "Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain." = "Сервери, облікові дані та ключі SSH синхронізуються між вашими пристроями Apple через iCloud і В’язку ключів iCloud.";
 "Credentials could not be copied. Existing credentials were kept." = "Не вдалося скопіювати облікові дані. Наявні облікові дані збережено.";
-"Remove credentials from iCloud Keychain" = "Видалити облікові дані з В’язки ключів iCloud";
-"This removes VVTerm credentials from iCloud Keychain on all your Apple devices. Device-only credentials stay on this device." = "Це видалить облікові дані VVTerm із В’язки ключів iCloud на всіх ваших пристроях Apple. Облікові дані лише для пристрою залишаться на ньому.";
-"Some iCloud Keychain credentials could not be removed. Device-only credentials were kept." = "Деякі облікові дані не вдалося видалити з В’язки ключів iCloud. Облікові дані лише для пристрою збережено.";
 "Tab \\(number)" = "Вкладка \\(number)";
 "Tailscale" = "Tailscale";
 "Terms" = "Умови";
