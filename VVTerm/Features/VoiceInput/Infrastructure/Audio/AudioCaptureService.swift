@@ -43,6 +43,17 @@ struct AudioPCMBufferSnapshot {
     }
 }
 
+/// Bridges Xcode 26.5's `@Sendable` converter callback without weakening the
+/// complete-concurrency checks for the rest of AVFoundation.
+///
+/// The buffer has unique ownership here, is only read by the converter, and
+/// the callback cannot escape the synchronous `convert` call. Remove this
+/// bridge after Xcode Cloud uses the SDK 27 AVFAudio overlay, which marks the
+/// callback as non-Sendable.
+private nonisolated struct SynchronousAudioConverterInput: @unchecked Sendable {
+    let buffer: AVAudioPCMBuffer
+}
+
 @MainActor
 protocol AudioCaptureHardware: AnyObject {
     var inputFormat: AVAudioFormat { get }
@@ -325,10 +336,11 @@ final class AudioCaptureService: ObservableObject {
             return
         }
 
+        let converterInput = SynchronousAudioConverterInput(buffer: buffer)
         var error: NSError?
         let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
             outStatus.pointee = .haveData
-            return buffer
+            return converterInput.buffer
         }
 
         converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputBlock)
