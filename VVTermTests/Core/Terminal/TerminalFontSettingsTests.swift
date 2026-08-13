@@ -41,7 +41,7 @@ struct TerminalFontSettingsTests {
     @Test
     func fontListPrependsCurrentFontWhenMissing() {
         let systemFonts = ["Andale Mono", "Courier", "Monaco"]
-        let result = TerminalSettingsView.fontListEnsuringCurrentFont(
+        let result = TerminalAppearanceSettingsView.fontListEnsuringCurrentFont(
             systemFonts: systemFonts,
             currentFontName: "Menlo"
         )
@@ -56,7 +56,7 @@ struct TerminalFontSettingsTests {
     func fontListUnchangedWhenCurrentFontAlreadyPresent() {
         let systemFonts = ["Menlo", "Monaco", "Courier"]
 
-        let result = TerminalSettingsView.fontListEnsuringCurrentFont(
+        let result = TerminalAppearanceSettingsView.fontListEnsuringCurrentFont(
             systemFonts: systemFonts,
             currentFontName: "Menlo"
         )
@@ -68,13 +68,13 @@ struct TerminalFontSettingsTests {
     func fontListUnchangedForBlankCurrentFont() {
         let systemFonts = ["Menlo", "Monaco"]
 
-        let resultBlank = TerminalSettingsView.fontListEnsuringCurrentFont(
+        let resultBlank = TerminalAppearanceSettingsView.fontListEnsuringCurrentFont(
             systemFonts: systemFonts,
             currentFontName: ""
         )
         #expect(resultBlank == systemFonts)
 
-        let resultWhitespace = TerminalSettingsView.fontListEnsuringCurrentFont(
+        let resultWhitespace = TerminalAppearanceSettingsView.fontListEnsuringCurrentFont(
             systemFonts: systemFonts,
             currentFontName: "  \n  "
         )
@@ -84,7 +84,7 @@ struct TerminalFontSettingsTests {
     @Test
     func fontListPrependsCustomFontNotInSystemList() {
         let systemFonts = ["Menlo", "Monaco"]
-        let result = TerminalSettingsView.fontListEnsuringCurrentFont(
+        let result = TerminalAppearanceSettingsView.fontListEnsuringCurrentFont(
             systemFonts: systemFonts,
             currentFontName: "MyUninstalledFont"
         )
@@ -95,7 +95,7 @@ struct TerminalFontSettingsTests {
     @Test
     func fontListDoesNotDuplicateCaseSensitiveMatch() {
         let systemFonts = ["Menlo", "monaco"]
-        let result = TerminalSettingsView.fontListEnsuringCurrentFont(
+        let result = TerminalAppearanceSettingsView.fontListEnsuringCurrentFont(
             systemFonts: systemFonts,
             currentFontName: "Menlo"
         )
