@@ -212,10 +212,7 @@ struct VVTermApp: App {
     private var macOSRootContent: some View {
         #if DEBUG
         if usesSyncSettingsUITestHarness {
-            SyncSettingsUITestHarness(
-                serverManager: serverManager,
-                terminalAccessory: terminalAccessoryPreferencesManager
-            )
+            SyncSettingsUITestHarness()
         } else if Foundation.ProcessInfo.processInfo.arguments.contains(
             "--vvterm-ui-test-mac-terminal-recovery-harness"
         ) {
@@ -272,10 +269,7 @@ struct VVTermApp: App {
     private var iOSRootContent: some View {
         #if DEBUG
         if usesSyncSettingsUITestHarness {
-            SyncSettingsUITestHarness(
-                serverManager: serverManager,
-                terminalAccessory: terminalAccessoryPreferencesManager
-            )
+            SyncSettingsUITestHarness()
         } else if usesNoticePresentationUITestHarness {
             NoticePresentationUITestHarness()
                 .modifier(AppearanceModifier())

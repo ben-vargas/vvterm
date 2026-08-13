@@ -75,15 +75,7 @@ private final class SyncSettingsUITestHistory: SyncSettingsHistoryStoring {
 struct SyncSettingsUITestHarness: View {
     @StateObject private var coordinator: SyncSettingsCoordinator
 
-    let serverManager: ServerManager
-    let terminalAccessory: TerminalAccessoryPreferencesManager
-
-    init(
-        serverManager: ServerManager,
-        terminalAccessory: TerminalAccessoryPreferencesManager
-    ) {
-        self.serverManager = serverManager
-        self.terminalAccessory = terminalAccessory
+    init() {
         let isEnabled = !Foundation.ProcessInfo.processInfo.arguments.contains(
             "--vvterm-ui-test-sync-settings-disabled"
         )
@@ -109,8 +101,6 @@ struct SyncSettingsUITestHarness: View {
                 .navigationTitle("iCloud Sync")
         }
         .environmentObject(coordinator)
-        .environmentObject(serverManager)
-        .environmentObject(terminalAccessory)
         .accessibilityIdentifier("vvterm.syncSettingsTest.root")
     }
 }

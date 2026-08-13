@@ -2,21 +2,16 @@ import SwiftUI
 
 struct SyncSettingsView: View {
     @EnvironmentObject private var coordinator: SyncSettingsCoordinator
-    @EnvironmentObject private var serverManager: ServerManager
-    @EnvironmentObject private var terminalAccessory: TerminalAccessoryPreferencesManager
     @State private var syncEnabled = SyncSettings.isEnabled
     @State private var ignoresNextSyncToggleChange = false
-    @State private var isShowingTroubleshooting = false
     @State private var isConfirmingCredentialRemoval = false
 
     var body: some View {
         Form {
-            iCloudSyncSection
-            syncServicesSection
-            includedInSyncSection
-            notSyncedSection
-            if showsTroubleshooting {
-                troubleshootingSection
+            syncSection
+            dataSection
+            if let attentionMessage {
+                troubleshootingSection(message: attentionMessage)
             }
             advancedSection
         }
@@ -45,133 +40,73 @@ struct SyncSettingsView: View {
         }
     }
 
-    private var iCloudSyncSection: some View {
+    private var syncSection: some View {
         Section {
             Toggle("Enable iCloud Sync", isOn: $syncEnabled)
 
-            LabeledContent("Status") {
+            VStack(alignment: .leading, spacing: 5) {
                 syncStatusLabel
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Sync Status")
-            .accessibilityValue(coordinator.userState.title)
-            .accessibilityIdentifier("vvterm.settings.sync.status")
 
-            LabeledContent("Last Successful Sync") {
                 if let date = coordinator.lastSuccessfulSyncDate {
-                    Text(date, style: .relative)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("vvterm.settings.sync.lastSuccessful.value")
+                    HStack(spacing: 4) {
+                        Text("Last Successful Sync")
+                        Text(date, style: .relative)
+                    }
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("vvterm.settings.sync.lastSuccessful.value")
                 } else {
                     Text("Not Yet")
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("vvterm.settings.sync.lastSuccessful.empty")
                 }
-            }
 
-            if coordinator.cloudState.pendingOperationCount > 0 {
-                Text(pendingChangesText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("vvterm.settings.sync.pendingChanges")
+                if coordinator.cloudState.pendingOperationCount > 0 {
+                    Text(pendingChangesText)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("vvterm.settings.sync.pendingChanges")
+                }
             }
+            .font(.caption)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if syncEnabled && coordinator.canSyncNow {
                 syncNowButton
                     .accessibilityIdentifier("vvterm.settings.sync.syncNow.primary")
             }
 
-            if let credentialFailureText {
-                Label(credentialFailureText, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-        } header: {
-            Text("iCloud Sync")
         } footer: {
             Text("Turning off sync keeps your data on this device. Existing data in iCloud is not deleted.")
         }
     }
 
-    private var syncServicesSection: some View {
-        Section("Sync Services") {
-            LabeledContent {
-                Text(coordinator.userState.appDataServiceTitle)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-            } label: {
-                Label("App Data — iCloud", systemImage: "icloud")
-            }
-            .accessibilityIdentifier("vvterm.settings.sync.service.appData")
-
-            LabeledContent {
-                Text(coordinator.credentialState.title)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-            } label: {
-                Label("Credentials and SSH Keys — iCloud Keychain", systemImage: "key.icloud")
-            }
-            .accessibilityIdentifier("vvterm.settings.sync.service.credentials")
+    private var dataSection: some View {
+        Section("Data") {
+            Label(
+                "Workspaces, servers, settings, credentials, and SSH keys sync with iCloud.",
+                systemImage: "icloud"
+            )
+            .accessibilityIdentifier("vvterm.settings.sync.data.synced")
+            Label(
+                "Active sessions and device data stay on this device.",
+                systemImage: "iphone"
+            )
+            .accessibilityIdentifier("vvterm.settings.sync.data.local")
         }
     }
 
-    private var includedInSyncSection: some View {
-        Section("Included in Sync") {
-            dynamicSyncContractRow(
-                title: workspaceCountText,
-                icon: "folder",
-                identifier: "vvterm.settings.sync.localCount.workspaces"
-            )
-            dynamicSyncContractRow(
-                title: serverCountText,
-                icon: "server.rack",
-                identifier: "vvterm.settings.sync.localCount.servers"
-            )
-            syncContractRow("Server credentials", icon: "lock")
-            syncContractRow("Reusable SSH keys", icon: "key")
-            syncContractRow(
-                "Custom terminal themes and theme selection",
-                icon: "paintpalette"
-            )
-            dynamicSyncContractRow(
-                title: accessoryContextText,
-                icon: "keyboard",
-                identifier: "vvterm.settings.sync.localCount.accessories"
-            )
-            syncContractRow("Stats appearance preferences", icon: "chart.bar")
-        }
-    }
-
-    private var notSyncedSection: some View {
-        Section("Not Synced") {
-            syncContractRow("Open terminal tabs and active sessions", icon: "terminal")
-            syncContractRow("Trusted SSH host fingerprints", icon: "checkmark.shield")
-            syncContractRow("Downloaded transcription models", icon: "waveform")
-            syncContractRow(
-                "Device identity, session resume data, temporary data, and caches",
-                icon: "iphone"
-            )
-        }
-    }
-
-    private var troubleshootingSection: some View {
+    private func troubleshootingSection(message: String) -> some View {
         Section {
-            Text(coordinator.userState.recoveryGuidance)
+            Label(message, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.secondary)
 
-            if syncEnabled && coordinator.canSyncNow {
-                syncNowButton
-                    .accessibilityIdentifier("vvterm.settings.sync.syncNow.troubleshooting")
+            if syncEnabled && !coordinator.canSyncNow {
+                Button {
+                    Task { await coordinator.checkICloudStatus() }
+                } label: {
+                    Label("Check Again", systemImage: "arrow.clockwise")
+                }
+                .disabled(coordinator.manualSyncState == .running)
             }
-
-            Button {
-                Task { await coordinator.checkICloudStatus() }
-            } label: {
-                Label("Check Again", systemImage: "arrow.clockwise")
-            }
-            .disabled(coordinator.manualSyncState == .running)
-
-            copyDiagnosticsButton
         } header: {
             Text("Troubleshooting")
         }
@@ -179,42 +114,19 @@ struct SyncSettingsView: View {
 
     private var advancedSection: some View {
         Section {
-            syncNowButton
-                .disabled(!syncEnabled || !coordinator.canSyncNow)
-                .accessibilityIdentifier("vvterm.settings.sync.syncNow.advanced")
+            DisclosureGroup("Advanced") {
+                copyDiagnosticsButton
 
-            Button {
-                Task { await coordinator.checkICloudStatus() }
-            } label: {
-                Label("Check iCloud Status", systemImage: "checkmark.icloud")
-            }
-            .disabled(!syncEnabled || coordinator.manualSyncState == .running)
-
-            copyDiagnosticsButton
-
-            Button {
-                isShowingTroubleshooting.toggle()
-            } label: {
-                if isShowingTroubleshooting {
-                    Label("Hide Sync Help", systemImage: "questionmark.circle")
-                } else {
-                    Label("Show Sync Help", systemImage: "questionmark.circle")
+                if !syncEnabled {
+                    Button(role: .destructive) {
+                        isConfirmingCredentialRemoval = true
+                    } label: {
+                        Label("Remove Credentials from iCloud Keychain", systemImage: "key.slash")
+                    }
+                    .accessibilityIdentifier("vvterm.settings.sync.removeCredentials")
                 }
             }
-
-            Button(role: .destructive) {
-                isConfirmingCredentialRemoval = true
-            } label: {
-                Label("Remove Credentials from iCloud Keychain", systemImage: "key.slash")
-            }
-            .disabled(syncEnabled)
-            .accessibilityIdentifier("vvterm.settings.sync.removeCredentials")
-        } header: {
-            Text("Advanced")
-        } footer: {
-            if syncEnabled {
-                Text("Turn off iCloud Sync before removing credentials from iCloud Keychain.")
-            }
+            .accessibilityIdentifier("vvterm.settings.sync.advanced")
         }
     }
 
@@ -246,33 +158,40 @@ struct SyncSettingsView: View {
 
     @ViewBuilder
     private var syncStatusLabel: some View {
-        switch coordinator.userState {
-        case .upToDate:
-            Label("Up to Date", systemImage: "checkmark.circle")
-                .foregroundStyle(.green)
-        case .syncing:
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Syncing")
+        Group {
+            switch coordinator.userState {
+            case .upToDate:
+                Label("Up to Date", systemImage: "checkmark.circle")
+                    .foregroundStyle(.green)
+            case .syncing:
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Syncing")
+                }
+            case .waitingForNetwork:
+                Label("Waiting for Network", systemImage: "wifi.slash")
+                    .foregroundStyle(.secondary)
+            case .signInToICloud:
+                Label("Sign In to iCloud", systemImage: "person.crop.circle.badge.exclamationmark")
+                    .foregroundStyle(.orange)
+            case .needsAttention:
+                Label("Sync Needs Attention", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+            case .disabled:
+                Label("Sync Disabled", systemImage: "pause.circle")
+                    .foregroundStyle(.secondary)
             }
-        case .waitingForNetwork:
-            Label("Waiting for Network", systemImage: "wifi.slash")
-                .foregroundStyle(.secondary)
-        case .signInToICloud:
-            Label("Sign In to iCloud", systemImage: "person.crop.circle.badge.exclamationmark")
-                .foregroundStyle(.orange)
-        case .needsAttention:
-            Label("Sync Needs Attention", systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.red)
-        case .disabled:
-            Label("Sync Disabled", systemImage: "pause.circle")
-                .foregroundStyle(.secondary)
         }
+        .font(.body.weight(.medium))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Sync Status")
+        .accessibilityValue(coordinator.userState.title)
+        .accessibilityIdentifier("vvterm.settings.sync.status")
     }
 
-    private var showsTroubleshooting: Bool {
-        isShowingTroubleshooting || coordinator.userState.needsTroubleshooting
+    private var attentionMessage: String? {
+        credentialFailureText ?? coordinator.userState.recoveryGuidance
     }
 
     private var pendingChangesText: String {
@@ -280,32 +199,6 @@ struct SyncSettingsView: View {
         let format = count == 1
             ? String(localized: "%lld change will sync later.")
             : String(localized: "%lld changes will sync later.")
-        return String(format: format, Int64(count))
-    }
-
-    private var accessoryContextText: String {
-        let itemCount = terminalAccessory.profile.layout.activeItems.count
-        let actionCount = terminalAccessory.customActions.count
-        return String(
-            format: String(localized: "Keyboard accessory layout and custom actions (%lld items and %lld actions on this device)"),
-            Int64(itemCount),
-            Int64(actionCount)
-        )
-    }
-
-    private var workspaceCountText: String {
-        let count = serverManager.workspaces.count
-        let format = count == 1
-            ? String(localized: "%lld workspace on this device. Included in iCloud Sync.")
-            : String(localized: "%lld workspaces on this device. Included in iCloud Sync.")
-        return String(format: format, Int64(count))
-    }
-
-    private var serverCountText: String {
-        let count = serverManager.servers.count
-        let format = count == 1
-            ? String(localized: "%lld server on this device. Included in iCloud Sync.")
-            : String(localized: "%lld servers on this device. Included in iCloud Sync.")
         return String(format: format, Int64(count))
     }
 
@@ -337,20 +230,4 @@ struct SyncSettingsView: View {
         }
     }
 
-    private func syncContractRow(_ title: LocalizedStringKey, icon: String) -> some View {
-        Label(title, systemImage: icon)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-    }
-
-    private func dynamicSyncContractRow(
-        title: String,
-        icon: String,
-        identifier: String
-    ) -> some View {
-        Label(title, systemImage: icon)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier(identifier)
-    }
 }
