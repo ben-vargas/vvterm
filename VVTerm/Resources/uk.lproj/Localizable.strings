@@ -13,6 +13,7 @@
 "No Trusted Hosts" = "Немає довірених хостів";
 "Hosts appear here after you approve their fingerprints." = "Хости з’являться тут після схвалення їхніх відбитків.";
 "Reset Trusted Host" = "Скинути довірений хост";
+"Last used" = "Останнє використання";
 "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm забуде збережений відбиток SSH для %@. Перевірте його знову під час повторного підключення.";
 "About & Support" = "Про програму і підтримка";
 "Search Settings" = "Пошук у параметрах";

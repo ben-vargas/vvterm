@@ -4,7 +4,6 @@ import Foundation
 nonisolated struct KnownHostSettingsItem: Identifiable, Equatable, Sendable {
     let host: String
     let port: Int
-    let fingerprint: String
     let lastSeenAt: Date
 
     var endpoint: String { "\(host):\(port)" }

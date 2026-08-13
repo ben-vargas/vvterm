@@ -13,6 +13,7 @@
 "No Trusted Hosts" = "信頼済みホストはありません";
 "Hosts appear here after you approve their fingerprints." = "フィンガープリントを承認したホストがここに表示されます。";
 "Reset Trusted Host" = "信頼済みホストをリセット";
+"Last used" = "最終使用";
 "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm は %@ の保存済み SSH フィンガープリントを削除します。再接続時にもう一度確認してください。";
 "About & Support" = "情報とサポート";
 "Search Settings" = "設定を検索";

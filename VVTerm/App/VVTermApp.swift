@@ -169,6 +169,12 @@ struct VVTermApp: App {
             "--vvterm-ui-test-sync-settings-harness"
         )
     }
+
+    private var usesTrustedHostsSettingsUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-trusted-hosts-settings-harness"
+        )
+    }
     #endif
 
     #if os(iOS) && DEBUG
@@ -213,6 +219,8 @@ struct VVTermApp: App {
         #if DEBUG
         if usesSyncSettingsUITestHarness {
             SyncSettingsUITestHarness()
+        } else if usesTrustedHostsSettingsUITestHarness {
+            TrustedHostsSettingsUITestHarness()
         } else if Foundation.ProcessInfo.processInfo.arguments.contains(
             "--vvterm-ui-test-mac-terminal-recovery-harness"
         ) {
@@ -270,6 +278,8 @@ struct VVTermApp: App {
         #if DEBUG
         if usesSyncSettingsUITestHarness {
             SyncSettingsUITestHarness()
+        } else if usesTrustedHostsSettingsUITestHarness {
+            TrustedHostsSettingsUITestHarness()
         } else if usesNoticePresentationUITestHarness {
             NoticePresentationUITestHarness()
                 .modifier(AppearanceModifier())

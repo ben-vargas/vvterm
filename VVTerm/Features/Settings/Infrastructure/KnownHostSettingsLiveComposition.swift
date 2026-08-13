@@ -11,7 +11,6 @@ private final class AppKnownHostSettingsRepository: KnownHostSettingsRepository 
             KnownHostSettingsItem(
                 host: entry.host,
                 port: entry.port,
-                fingerprint: entry.fingerprint,
                 lastSeenAt: entry.lastSeenAt
             )
         }

@@ -13,6 +13,7 @@
 "No Trusted Hosts" = "ไม่มีโฮสต์ที่เชื่อถือได้";
 "Hosts appear here after you approve their fingerprints." = "โฮสต์จะปรากฏที่นี่หลังจากคุณอนุมัติลายนิ้วมือแล้ว";
 "Reset Trusted Host" = "รีเซ็ตโฮสต์ที่เชื่อถือได้";
+"Last used" = "ใช้ล่าสุด";
 "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm จะลืมลายนิ้วมือ SSH ที่บันทึกไว้สำหรับ %@ โปรดยืนยันอีกครั้งเมื่อเชื่อมต่อใหม่";
 "About & Support" = "เกี่ยวกับและบริการช่วยเหลือ";
 "Search Settings" = "ค้นหาการตั้งค่า";

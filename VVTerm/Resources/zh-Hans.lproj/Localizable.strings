@@ -13,6 +13,7 @@
 "No Trusted Hosts" = "没有受信任的主机";
 "Hosts appear here after you approve their fingerprints." = "批准主机指纹后，主机将显示在这里。";
 "Reset Trusted Host" = "重置受信任的主机";
+"Last used" = "上次使用";
 "VVTerm will forget the saved SSH fingerprint for %@. Verify it again when you reconnect." = "VVTerm 将忘记为 %@ 保存的 SSH 指纹。重新连接时请再次验证。";
 "About & Support" = "关于与支持";
 "Search Settings" = "搜索设置";
