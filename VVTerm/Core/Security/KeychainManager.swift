@@ -688,6 +688,28 @@ final class KeychainManager {
         }
     }
 
+    var hasPendingCredentialSyncWork: Bool {
+        shouldResumeCredentialStorageOnLaunch
+    }
+
+    func removeCredentialsFromICloud() throws {
+        guard !isSyncEnabled() else {
+            throw CredentialSyncError.syncMustBeDisabled
+        }
+
+        try synchronizeCredentialStorage(isEnabled: false)
+        let credentialKeys = try store.keys(in: .deviceOnly).filter(Self.isSynchronizableCredentialKey)
+        let oauthKeys = try cloudflareTokenStore.keys(in: .deviceOnly).filter { $0.hasPrefix("oauth.") }
+        var units = Set(credentialKeys.compactMap(credentialSyncUnit(forCredentialKey:)))
+        units.formUnion(oauthKeys.map(CredentialSyncUnit.oauth))
+
+        // A later re-enable must restore every local credential. Persist that
+        // intent before removing any iCloud Keychain item.
+        try offlineChanges.recordUpdated(units)
+        try store.deleteAll(in: .iCloud, where: Self.isSynchronizableCredentialKey)
+        try cloudflareTokenStore.deleteAll(in: .iCloud, where: { $0.hasPrefix("oauth.") })
+    }
+
     private func prepareOfflineCredentialSnapshot() throws {
         switch offlineChanges.reconciliationPhase {
         case .remoteChanges:

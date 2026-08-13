@@ -186,6 +186,23 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
+    func recordUpdated(_ units: Set<CredentialSyncUnit>) throws {
+        guard !units.isEmpty else { return }
+        try withLock {
+            guard var state = storedState(),
+                  state.phase == .remoteChanges,
+                  state.requiresSyncDisableCommit != true else {
+                throw CredentialSyncError.offlineReconciliationPending
+            }
+            let changeDate = Date().timeIntervalSinceReferenceDate
+            for unit in units {
+                state.changes[unit.storageKey] = CredentialOfflineChange.updated.rawValue
+                state.changeDates[unit.storageKey] = changeDate
+            }
+            try persist(state)
+        }
+    }
+
     func change(for unit: CredentialSyncUnit) -> CredentialOfflineChange? {
         withLock {
             storedState()?.changes[unit.storageKey]
@@ -472,8 +489,14 @@ nonisolated enum CredentialOfflineChangeStoreError: Error, Equatable, Sendable {
 
 nonisolated enum CredentialSyncError: LocalizedError, Equatable, Sendable {
     case offlineReconciliationPending
+    case syncMustBeDisabled
 
     var errorDescription: String? {
-        "Credential reconciliation must finish before credentials can change."
+        switch self {
+        case .offlineReconciliationPending:
+            "Credential reconciliation must finish before credentials can change."
+        case .syncMustBeDisabled:
+            "Turn off iCloud Sync before removing credentials from iCloud Keychain."
+        }
     }
 }
