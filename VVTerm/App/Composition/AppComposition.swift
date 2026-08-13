@@ -291,7 +291,11 @@ struct AppComposition {
             cloudKit: cloudKitManager,
             keychain: keychainManager,
             serverManager: serverManager,
-            terminalAccessory: terminalAccessoryPreferencesManager
+            terminalTheme: terminalThemeManager,
+            terminalAccessory: terminalAccessoryPreferencesManager,
+            statsPreferences: statsPreferencesStore,
+            pendingSync: cloudKitSyncCoordinator,
+            defaults: defaults
         )
         let sshKeySettingsCoordinator = SSHKeySettingsLiveComposition.makeCoordinator(
             keychain: keychainManager

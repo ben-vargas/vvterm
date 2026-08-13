@@ -163,6 +163,14 @@ struct VVTermApp: App {
         )
     }
 
+    #if DEBUG
+    private var usesSyncSettingsUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-sync-settings-harness"
+        )
+    }
+    #endif
+
     #if os(iOS) && DEBUG
     private var usesTerminalKeyboardUITestHarness: Bool {
         Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-keyboard-harness")
@@ -203,7 +211,12 @@ struct VVTermApp: App {
     @ViewBuilder
     private var macOSRootContent: some View {
         #if DEBUG
-        if Foundation.ProcessInfo.processInfo.arguments.contains(
+        if usesSyncSettingsUITestHarness {
+            SyncSettingsUITestHarness(
+                serverManager: serverManager,
+                terminalAccessory: terminalAccessoryPreferencesManager
+            )
+        } else if Foundation.ProcessInfo.processInfo.arguments.contains(
             "--vvterm-ui-test-mac-terminal-recovery-harness"
         ) {
             MacTerminalRecoveryUITestHarness(
@@ -258,7 +271,12 @@ struct VVTermApp: App {
     @ViewBuilder
     private var iOSRootContent: some View {
         #if DEBUG
-        if usesNoticePresentationUITestHarness {
+        if usesSyncSettingsUITestHarness {
+            SyncSettingsUITestHarness(
+                serverManager: serverManager,
+                terminalAccessory: terminalAccessoryPreferencesManager
+            )
+        } else if usesNoticePresentationUITestHarness {
             NoticePresentationUITestHarness()
                 .modifier(AppearanceModifier())
         } else if usesStatsCardsLayoutUITestHarness {

@@ -145,7 +145,10 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .trustedHosts:
             ["trusted host", "fingerprint", "known hosts", "host key", "reset"]
         case .iCloudSync:
-            ["icloud", "sync", "cloudkit", "keychain", "resync"]
+            [
+                "icloud", "sync", "sync now", "cloudkit", "keychain", "credentials",
+                "diagnostics", "network", "resync"
+            ]
         case .transcription:
             ["voice", "speech", "transcription", "whisper", "parakeet", "model", "microphone"]
         case .aboutAndSupport:

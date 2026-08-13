@@ -95,6 +95,14 @@ final class PreferencesStore: ObservableObject {
         observerCleanupRequest.perform()
     }
 
+    func refreshFromCloud() async throws {
+        startupSyncTask?.cancel()
+        startupSyncTask = nil
+        lifecycleSyncTask?.cancel()
+        lifecycleSyncTask = nil
+        try await synchronizeWithCloud()
+    }
+
     func setStyle(_ style: StatsPreferences.Style) {
         applyMutation { preferences, now in
             preferences.style = style
@@ -218,27 +226,28 @@ final class PreferencesStore: ObservableObject {
     }
 
     private func makeCloudSyncTask() -> Task<Void, Never> {
-        let localSnapshot = preferences
-        let cloud = dependencies.cloud
-        let isSyncEnabled = dependencies.isSyncEnabled
-        let mutationQueue = dependencies.mutationQueue
-        let logger = logger
-
-        return Task { [weak self, cloud, isSyncEnabled, mutationQueue, logger, localSnapshot] in
-            guard !Task.isCancelled, isSyncEnabled() else { return }
+        Task { [weak self] in
+            guard let self else { return }
             do {
-                let cloudResolved = try await cloud.syncStatsPreferences(localSnapshot)
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                self?.applyCloudResolution(cloudResolved)
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                await mutationQueue.drainPendingMutations()
+                try await self.synchronizeWithCloud()
             } catch is CancellationError {
                 return
             } catch {
-                guard !Task.isCancelled, isSyncEnabled() else { return }
-                logger.warning("Stats preferences CloudKit sync failed: \(error.localizedDescription)")
+                guard !Task.isCancelled, self.dependencies.isSyncEnabled() else { return }
+                self.logger.warning("Stats preferences CloudKit sync failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func synchronizeWithCloud() async throws {
+        try Task.checkCancellation()
+        guard dependencies.isSyncEnabled() else { return }
+        let localSnapshot = preferences
+        let cloudResolved = try await dependencies.cloud.syncStatsPreferences(localSnapshot)
+        try Task.checkCancellation()
+        guard dependencies.isSyncEnabled() else { throw CancellationError() }
+        applyCloudResolution(cloudResolved)
+        await dependencies.mutationQueue.drainPendingMutations()
     }
 
     private func applyCloudResolution(_ cloudResolved: StatsPreferences) {

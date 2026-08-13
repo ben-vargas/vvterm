@@ -1,246 +1,356 @@
-//
-//  SyncSettingsView.swift
-//  VVTerm
-//
-
 import SwiftUI
-
-enum SyncSettingsAccountStatusText {
-    static func text(for state: CloudKitAccountState) -> String {
-        switch state {
-        case .checking:
-            String(localized: "Checking...")
-        case .available:
-            String(localized: "available")
-        case .noAccount:
-            String(localized: "noAccount - User not signed into iCloud")
-        case .restricted:
-            String(localized: "restricted - iCloud access restricted (parental controls, MDM, etc.)")
-        case .couldNotDetermine:
-            String(localized: "couldNotDetermine - Unable to determine iCloud status")
-        case .temporarilyUnavailable:
-            String(localized: "temporarilyUnavailable - iCloud temporarily unavailable")
-        case .unknown(let rawValue):
-            String(
-                format: String(localized: "unknown status: %@"),
-                String(rawValue)
-            )
-        case .failed(let detail):
-            String(format: String(localized: "Error: %@"), detail)
-        case .disabled:
-            String(localized: "Disabled")
-        }
-    }
-}
-
-// MARK: - Sync Settings View
 
 struct SyncSettingsView: View {
     @EnvironmentObject private var coordinator: SyncSettingsCoordinator
     @EnvironmentObject private var serverManager: ServerManager
-    @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @EnvironmentObject private var terminalAccessory: TerminalAccessoryPreferencesManager
     @State private var syncEnabled = SyncSettings.isEnabled
     @State private var ignoresNextSyncToggleChange = false
+    @State private var isShowingTroubleshooting = false
+    @State private var isConfirmingCredentialRemoval = false
 
     var body: some View {
         Form {
-            Section {
-                Toggle("Enable iCloud Sync", isOn: $syncEnabled)
-
-                HStack {
-                    Label("iCloud Account", systemImage: "icloud")
-                    Spacer()
-                    statusBadge
-                }
-
-                if let credentialSyncError {
-                    Text(credentialSyncError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-            } header: {
-                Text("iCloud")
-            } footer: {
-                Text("Servers, credentials, and SSH keys sync across your Apple devices using iCloud and iCloud Keychain.")
+            iCloudSyncSection
+            syncServicesSection
+            includedInSyncSection
+            notSyncedSection
+            if showsTroubleshooting {
+                troubleshootingSection
             }
-
-            if syncEnabled {
-                Section("Sync Status") {
-                    HStack {
-                        Text("Status")
-                        Spacer()
-                        syncStatusView
-                    }
-
-                    if let lastSync = coordinator.cloudState.lastSyncDate {
-                        HStack {
-                            Text("Last Synced")
-                            Spacer()
-                            Text(lastSync, style: .relative)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    if case .error(let message) = coordinator.cloudState.status {
-                        HStack {
-                            Text("Error")
-                            Spacer()
-                            Text(message)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .multilineTextAlignment(.trailing)
-                        }
-                    }
-                }
-
-                Section("Data") {
-                    HStack {
-                        Label("Workspaces", systemImage: "folder")
-                        Spacer()
-                        Text(serverManager.workspaces.count, format: .number)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Label("Servers", systemImage: "server.rack")
-                        Spacer()
-                        Text(serverManager.servers.count, format: .number)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Label("Custom Themes", systemImage: "paintpalette")
-                        Spacer()
-                        Text(customThemeCount, format: .number)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Label("Accessory Items", systemImage: "keyboard")
-                        Spacer()
-                        Text(terminalAccessory.profile.layout.activeItems.count, format: .number)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Label("Custom Actions", systemImage: "command.square")
-                        Spacer()
-                        Text(terminalAccessory.customActions.count, format: .number)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-            }
-
-            // Debug section when CloudKit is unavailable
-            if syncEnabled && !coordinator.cloudState.isAvailable {
-                Section {
-                    HStack {
-                        Text("Account Status")
-                        Spacer()
-                        Text(SyncSettingsAccountStatusText.text(
-                            for: coordinator.cloudState.accountState
-                        ))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.trailing)
-                    }
-
-                    HStack {
-                        Text("Container")
-                        Spacer()
-                        Text(String(localized: "iCloud.app.vivy.VivyTerm"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button {
-                        Task {
-                            await coordinator.refreshAccountStatus()
-                        }
-                    } label: {
-                        Label("Re-check iCloud Status", systemImage: "arrow.clockwise")
-                    }
-                } header: {
-                    Text("Troubleshooting")
-                } footer: {
-                    Text("Make sure you are signed into iCloud in Settings and iCloud Drive is enabled. Check Console.app for 'CloudKit' logs for more details.")
-                }
-            }
+            advancedSection
         }
         .formStyle(.grouped)
-        .onChange(of: syncEnabled) { enabled in
-            if ignoresNextSyncToggleChange {
-                ignoresNextSyncToggleChange = false
-                return
+        .adaptiveSoftScrollEdges()
+        .accessibilityIdentifier("vvterm.settings.page.iCloudSync")
+        .onAppear {
+            coordinator.refreshSnapshots()
+        }
+        .onChange(of: syncEnabled, perform: handleSyncToggle)
+        .onChange(of: coordinator.manualSyncState) { state in
+            guard let message = state.announcement else { return }
+            SyncSettingsAccessibilityAnnouncement.post(message)
+        }
+        .confirmationDialog(
+            "Remove Credentials from iCloud Keychain?",
+            isPresented: $isConfirmingCredentialRemoval,
+            titleVisibility: .visible
+        ) {
+            Button("Remove from iCloud Keychain", role: .destructive) {
+                _ = coordinator.removeCredentialsFromICloud()
             }
-            guard coordinator.setSyncEnabled(enabled) else {
-                ignoresNextSyncToggleChange = true
-                syncEnabled = !enabled
-                return
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Credentials remain on this device. If you enable sync again, VVTerm will store them in iCloud Keychain again.")
+        }
+    }
+
+    private var iCloudSyncSection: some View {
+        Section {
+            Toggle("Enable iCloud Sync", isOn: $syncEnabled)
+
+            LabeledContent("Status") {
+                syncStatusLabel
             }
-            if enabled {
-                Task {
-                    await coordinator.refreshAfterSyncEnabled()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Sync Status")
+            .accessibilityValue(coordinator.userState.title)
+            .accessibilityIdentifier("vvterm.settings.sync.status")
+
+            LabeledContent("Last Successful Sync") {
+                if let date = coordinator.lastSuccessfulSyncDate {
+                    Text(date, style: .relative)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("vvterm.settings.sync.lastSuccessful.value")
+                } else {
+                    Text("Not Yet")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("vvterm.settings.sync.lastSuccessful.empty")
                 }
             }
+
+            if coordinator.cloudState.pendingOperationCount > 0 {
+                Text(pendingChangesText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("vvterm.settings.sync.pendingChanges")
+            }
+
+            if syncEnabled && coordinator.canSyncNow {
+                syncNowButton
+                    .accessibilityIdentifier("vvterm.settings.sync.syncNow.primary")
+            }
+
+            if let credentialFailureText {
+                Label(credentialFailureText, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            Text("iCloud Sync")
+        } footer: {
+            Text("Turning off sync keeps your data on this device. Existing data in iCloud is not deleted.")
         }
     }
 
-    private var customThemeCount: Int {
-        terminalThemeManager.customThemes.filter { !$0.isDeleted }.count
-    }
+    private var syncServicesSection: some View {
+        Section("Sync Services") {
+            LabeledContent {
+                Text(coordinator.userState.appDataServiceTitle)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+            } label: {
+                Label("App Data — iCloud", systemImage: "icloud")
+            }
+            .accessibilityIdentifier("vvterm.settings.sync.service.appData")
 
-    private var credentialSyncError: String? {
-        switch coordinator.credentialFailure {
-        case .toggle:
-            return String(localized: "Credentials could not be copied. Existing credentials were kept.")
-        case nil:
-            return nil
+            LabeledContent {
+                Text(coordinator.credentialState.title)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+            } label: {
+                Label("Credentials and SSH Keys — iCloud Keychain", systemImage: "key.icloud")
+            }
+            .accessibilityIdentifier("vvterm.settings.sync.service.credentials")
         }
     }
 
-    @ViewBuilder
-    private var statusBadge: some View {
-        if !syncEnabled {
-            Label("Disabled", systemImage: "pause.circle")
-                .font(.caption)
+    private var includedInSyncSection: some View {
+        Section("Included in Sync") {
+            dynamicSyncContractRow(
+                title: workspaceCountText,
+                icon: "folder",
+                identifier: "vvterm.settings.sync.localCount.workspaces"
+            )
+            dynamicSyncContractRow(
+                title: serverCountText,
+                icon: "server.rack",
+                identifier: "vvterm.settings.sync.localCount.servers"
+            )
+            syncContractRow("Server credentials", icon: "lock")
+            syncContractRow("Reusable SSH keys", icon: "key")
+            syncContractRow(
+                "Custom terminal themes and theme selection",
+                icon: "paintpalette"
+            )
+            dynamicSyncContractRow(
+                title: accessoryContextText,
+                icon: "keyboard",
+                identifier: "vvterm.settings.sync.localCount.accessories"
+            )
+            syncContractRow("Stats appearance preferences", icon: "chart.bar")
+        }
+    }
+
+    private var notSyncedSection: some View {
+        Section("Not Synced") {
+            syncContractRow("Open terminal tabs and active sessions", icon: "terminal")
+            syncContractRow("Trusted SSH host fingerprints", icon: "checkmark.shield")
+            syncContractRow("Downloaded transcription models", icon: "waveform")
+            syncContractRow(
+                "Device identity, session resume data, temporary data, and caches",
+                icon: "iphone"
+            )
+        }
+    }
+
+    private var troubleshootingSection: some View {
+        Section {
+            Text(coordinator.userState.recoveryGuidance)
                 .foregroundStyle(.secondary)
-        } else if coordinator.cloudState.isAvailable {
-            Label("Connected", systemImage: "checkmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(.green)
-        } else {
-            Label("Not Available", systemImage: "xmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(.red)
+
+            if syncEnabled && coordinator.canSyncNow {
+                syncNowButton
+                    .accessibilityIdentifier("vvterm.settings.sync.syncNow.troubleshooting")
+            }
+
+            Button {
+                Task { await coordinator.checkICloudStatus() }
+            } label: {
+                Label("Check Again", systemImage: "arrow.clockwise")
+            }
+            .disabled(coordinator.manualSyncState == .running)
+
+            copyDiagnosticsButton
+        } header: {
+            Text("Troubleshooting")
         }
     }
 
+    private var advancedSection: some View {
+        Section {
+            syncNowButton
+                .disabled(!syncEnabled || !coordinator.canSyncNow)
+                .accessibilityIdentifier("vvterm.settings.sync.syncNow.advanced")
+
+            Button {
+                Task { await coordinator.checkICloudStatus() }
+            } label: {
+                Label("Check iCloud Status", systemImage: "checkmark.icloud")
+            }
+            .disabled(!syncEnabled || coordinator.manualSyncState == .running)
+
+            copyDiagnosticsButton
+
+            Button {
+                isShowingTroubleshooting.toggle()
+            } label: {
+                if isShowingTroubleshooting {
+                    Label("Hide Sync Help", systemImage: "questionmark.circle")
+                } else {
+                    Label("Show Sync Help", systemImage: "questionmark.circle")
+                }
+            }
+
+            Button(role: .destructive) {
+                isConfirmingCredentialRemoval = true
+            } label: {
+                Label("Remove Credentials from iCloud Keychain", systemImage: "key.slash")
+            }
+            .disabled(syncEnabled)
+            .accessibilityIdentifier("vvterm.settings.sync.removeCredentials")
+        } header: {
+            Text("Advanced")
+        } footer: {
+            if syncEnabled {
+                Text("Turn off iCloud Sync before removing credentials from iCloud Keychain.")
+            }
+        }
+    }
+
+    private var syncNowButton: some View {
+        Button {
+            Task { await coordinator.syncNow() }
+        } label: {
+            if coordinator.manualSyncState == .running {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Syncing")
+                }
+            } else {
+                Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
+            }
+        }
+        .disabled(coordinator.manualSyncState == .running)
+    }
+
+    private var copyDiagnosticsButton: some View {
+        Button {
+            Clipboard.copy(coordinator.diagnostics.text)
+        } label: {
+            Label("Copy Sync Diagnostics", systemImage: "doc.on.doc")
+        }
+        .accessibilityIdentifier("vvterm.settings.sync.copyDiagnostics")
+    }
+
     @ViewBuilder
-    private var syncStatusView: some View {
-        switch coordinator.cloudState.status {
-        case .idle:
-            Label("Synced", systemImage: "checkmark.circle")
+    private var syncStatusLabel: some View {
+        switch coordinator.userState {
+        case .upToDate:
+            Label("Up to Date", systemImage: "checkmark.circle")
                 .foregroundStyle(.green)
         case .syncing:
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 ProgressView()
                     .controlSize(.small)
-                Text("Syncing...")
+                Text("Syncing")
             }
-            .foregroundStyle(.orange)
-        case .error:
-            Label("Error", systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.red)
-        case .offline:
-            Label("Offline", systemImage: "wifi.slash")
+        case .waitingForNetwork:
+            Label("Waiting for Network", systemImage: "wifi.slash")
                 .foregroundStyle(.secondary)
+        case .signInToICloud:
+            Label("Sign In to iCloud", systemImage: "person.crop.circle.badge.exclamationmark")
+                .foregroundStyle(.orange)
+        case .needsAttention:
+            Label("Sync Needs Attention", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.red)
         case .disabled:
-            Label("Disabled", systemImage: "pause.circle")
+            Label("Sync Disabled", systemImage: "pause.circle")
                 .foregroundStyle(.secondary)
         }
     }
 
+    private var showsTroubleshooting: Bool {
+        isShowingTroubleshooting || coordinator.userState.needsTroubleshooting
+    }
+
+    private var pendingChangesText: String {
+        let count = coordinator.cloudState.pendingOperationCount
+        let format = count == 1
+            ? String(localized: "%lld change will sync later.")
+            : String(localized: "%lld changes will sync later.")
+        return String(format: format, Int64(count))
+    }
+
+    private var accessoryContextText: String {
+        let itemCount = terminalAccessory.profile.layout.activeItems.count
+        let actionCount = terminalAccessory.customActions.count
+        return String(
+            format: String(localized: "Keyboard accessory layout and custom actions (%lld items and %lld actions on this device)"),
+            Int64(itemCount),
+            Int64(actionCount)
+        )
+    }
+
+    private var workspaceCountText: String {
+        let count = serverManager.workspaces.count
+        let format = count == 1
+            ? String(localized: "%lld workspace on this device. Included in iCloud Sync.")
+            : String(localized: "%lld workspaces on this device. Included in iCloud Sync.")
+        return String(format: format, Int64(count))
+    }
+
+    private var serverCountText: String {
+        let count = serverManager.servers.count
+        let format = count == 1
+            ? String(localized: "%lld server on this device. Included in iCloud Sync.")
+            : String(localized: "%lld servers on this device. Included in iCloud Sync.")
+        return String(format: format, Int64(count))
+    }
+
+    private var credentialFailureText: String? {
+        switch coordinator.credentialFailure {
+        case .toggle:
+            String(localized: "Credentials could not be copied. Existing credentials were kept.")
+        case .sync:
+            String(localized: "Credentials and SSH keys need attention. App data may still be up to date.")
+        case .removal:
+            String(localized: "Credentials could not be removed from iCloud Keychain. Existing credentials were kept.")
+        case nil:
+            nil
+        }
+    }
+
+    private func handleSyncToggle(_ enabled: Bool) {
+        if ignoresNextSyncToggleChange {
+            ignoresNextSyncToggleChange = false
+            return
+        }
+        guard coordinator.setSyncEnabled(enabled) else {
+            ignoresNextSyncToggleChange = true
+            syncEnabled = !enabled
+            return
+        }
+        if enabled {
+            Task { await coordinator.syncNow() }
+        }
+    }
+
+    private func syncContractRow(_ title: LocalizedStringKey, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+    }
+
+    private func dynamicSyncContractRow(
+        title: String,
+        icon: String,
+        identifier: String
+    ) -> some View {
+        Label(title, systemImage: icon)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier(identifier)
+    }
 }
