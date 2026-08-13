@@ -1774,7 +1774,6 @@
 "Data on This Device" = "Dữ liệu trên thiết bị này";
 "On This Device" = "Trên thiết bị này";
 "Active Sessions" = "Phiên đang hoạt động";
-"Device Only" = "Chỉ trên thiết bị";
 "Try Again" = "Thử lại";
 "Last Sync Error" = "Lỗi đồng bộ gần nhất";
 "Sync is Off" = "Đồng bộ đang tắt";
@@ -1817,11 +1816,6 @@
 "Reusable SSH Keys" = "Khóa SSH dùng lại";
 "Cloudflare Tokens" = "Token Cloudflare";
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Mật khẩu, khóa riêng tư, cụm mật khẩu và token Cloudflare dùng Chuỗi khóa iCloud.";
-"Stays on This Device" = "Lưu trên thiết bị này";
-"Open Terminals" = "Terminal đang mở";
-"Session Resume Data" = "Dữ liệu tiếp tục phiên";
-"Device Identity" = "Danh tính thiết bị";
-"Cache and Logs" = "Bộ nhớ đệm và nhật ký";
 "Sync Details" = "Chi tiết đồng bộ";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Thông tin xác thực vẫn còn trên thiết bị này. Dữ liệu ứng dụng hiện có trong iCloud không bị xóa.";
 "Stored on This Device" = "Đã lưu trên thiết bị này";

@@ -291,7 +291,6 @@ struct AppComposition {
             cloudKit: cloudKitManager,
             keychain: keychainManager,
             serverManager: serverManager,
-            tabManager: tabManager,
             terminalTheme: terminalThemeManager,
             terminalAccessory: terminalAccessoryPreferencesManager,
             statsPreferences: statsPreferencesStore,

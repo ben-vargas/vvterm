@@ -105,8 +105,7 @@ private final class SyncSettingsContentSpy: SyncSettingsContentSummarizing {
         serverCount: 7,
         customThemeCount: 3,
         serverCredentialCount: 6,
-        reusableSSHKeyCount: 4,
-        openTerminalCount: 2
+        reusableSSHKeyCount: 4
     )
 }
 
@@ -160,8 +159,7 @@ struct SyncSettingsCoordinatorTests {
             serverCount: 8,
             customThemeCount: 4,
             serverCredentialCount: 7,
-            reusableSSHKeyCount: 5,
-            openTerminalCount: 1
+            reusableSSHKeyCount: 5
         )
 
         content.currentSummary = updated

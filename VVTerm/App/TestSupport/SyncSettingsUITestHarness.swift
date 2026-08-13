@@ -70,8 +70,7 @@ private final class SyncSettingsUITestContent: SyncSettingsContentSummarizing {
         serverCount: 7,
         customThemeCount: 3,
         serverCredentialCount: 6,
-        reusableSSHKeyCount: 4,
-        openTerminalCount: 2
+        reusableSSHKeyCount: 4
     )
 }
 

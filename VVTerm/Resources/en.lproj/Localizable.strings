@@ -1781,7 +1781,6 @@
 "Data on This Device" = "Data on This Device";
 "On This Device" = "On This Device";
 "Active Sessions" = "Active Sessions";
-"Device Only" = "Device Only";
 "Try Again" = "Try Again";
 "Last Sync Error" = "Last Sync Error";
 "Sync is Off" = "Sync is Off";
@@ -1824,11 +1823,6 @@
 "Reusable SSH Keys" = "Reusable SSH Keys";
 "Cloudflare Tokens" = "Cloudflare Tokens";
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain.";
-"Stays on This Device" = "Stays on This Device";
-"Open Terminals" = "Open Terminals";
-"Session Resume Data" = "Session Resume Data";
-"Device Identity" = "Device Identity";
-"Cache and Logs" = "Cache and Logs";
 "Sync Details" = "Sync Details";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Credentials remain on this device. Existing app data in iCloud is not deleted.";
 "Stored on This Device" = "Stored on This Device";

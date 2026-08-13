@@ -24,6 +24,7 @@ final class SyncSettingsUITests: XCTestCase {
         XCTAssertFalse(app.buttons["vvterm.settings.sync.detailsButton"].exists)
         XCTAssertFalse(app.staticTexts["iCloud Sync Details"].exists)
         XCTAssertFalse(app.buttons["Advanced"].exists)
+        XCTAssertFalse(app.staticTexts["Stays on This Device"].exists)
 
         let syncNow = app.buttons["vvterm.settings.sync.action.primary"]
         XCTAssertTrue(syncNow.waitForExistence(timeout: 5))
@@ -39,10 +40,6 @@ final class SyncSettingsUITests: XCTestCase {
             "vvterm.settings.sync.details.serverCredentials"
         ]
         XCTAssertTrue(scrollToElement(serverCredentials, in: app))
-        let openTerminals = app.descendants(matching: .any)[
-            "vvterm.settings.sync.details.openTerminals"
-        ]
-        XCTAssertTrue(scrollToElement(openTerminals, in: app))
         let lastSuccessful = app.descendants(matching: .any)[
             "vvterm.settings.sync.details.lastSuccessful"
         ]

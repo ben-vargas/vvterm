@@ -66,7 +66,6 @@ nonisolated struct SyncSettingsContentSummary: Equatable, Sendable {
     let customThemeCount: Int
     let serverCredentialCount: Int
     let reusableSSHKeyCount: Int
-    let openTerminalCount: Int
 }
 
 nonisolated enum SyncSettingsAccountCategory: String, Equatable, Sendable {

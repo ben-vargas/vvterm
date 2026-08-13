@@ -1730,7 +1730,6 @@
 "Data on This Device" = "Data v tomto zařízení";
 "On This Device" = "V tomto zařízení";
 "Active Sessions" = "Aktivní relace";
-"Device Only" = "Jen v zařízení";
 "Try Again" = "Zkusit znovu";
 "Last Sync Error" = "Poslední chyba synchronizace";
 "Sync is Off" = "Synchronizace je vypnutá";
@@ -1773,11 +1772,6 @@
 "Reusable SSH Keys" = "Opakovaně použitelné klíče SSH";
 "Cloudflare Tokens" = "Tokeny Cloudflare";
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Hesla, soukromé klíče, přístupové fráze a tokeny Cloudflare používají Klíčenku na iCloudu.";
-"Stays on This Device" = "Zůstává v tomto zařízení";
-"Open Terminals" = "Otevřené terminály";
-"Session Resume Data" = "Data pro obnovení relace";
-"Device Identity" = "Identita zařízení";
-"Cache and Logs" = "Mezipaměť a protokoly";
 "Sync Details" = "Podrobnosti synchronizace";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Přihlašovací údaje zůstanou v tomto zařízení. Existující data aplikace na iCloudu se nesmažou.";
 "Stored on This Device" = "Uloženo v tomto zařízení";

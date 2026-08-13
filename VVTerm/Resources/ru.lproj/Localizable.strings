@@ -1729,7 +1729,6 @@
 "Data on This Device" = "Данные на этом устройстве";
 "On This Device" = "На этом устройстве";
 "Active Sessions" = "Активные сеансы";
-"Device Only" = "Только на устройстве";
 "Try Again" = "Повторить";
 "Last Sync Error" = "Последняя ошибка синхронизации";
 "Sync is Off" = "Синхронизация выключена";
@@ -1772,11 +1771,6 @@
 "Reusable SSH Keys" = "Многоразовые SSH-ключи";
 "Cloudflare Tokens" = "Токены Cloudflare";
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "Пароли, закрытые ключи, парольные фразы и токены Cloudflare используют Связку ключей iCloud.";
-"Stays on This Device" = "Остаётся на этом устройстве";
-"Open Terminals" = "Открытые терминалы";
-"Session Resume Data" = "Данные восстановления сеанса";
-"Device Identity" = "Идентификатор устройства";
-"Cache and Logs" = "Кэш и журналы";
 "Sync Details" = "Сведения о синхронизации";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "Учётные данные останутся на этом устройстве. Существующие данные приложения в iCloud не удаляются.";
 "Stored on This Device" = "Сохранено на этом устройстве";

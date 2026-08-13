@@ -1726,7 +1726,6 @@
 "Data on This Device" = "此设备上的数据";
 "On This Device" = "在此设备上";
 "Active Sessions" = "活跃会话";
-"Device Only" = "仅限此设备";
 "Try Again" = "再试一次";
 "Last Sync Error" = "上次同步错误";
 "Sync is Off" = "同步已关闭";
@@ -1769,11 +1768,6 @@
 "Reusable SSH Keys" = "可重复使用的 SSH 密钥";
 "Cloudflare Tokens" = "Cloudflare 令牌";
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "密码、私钥、密码短语和 Cloudflare 令牌使用 iCloud 钥匙串。";
-"Stays on This Device" = "保留在此设备上";
-"Open Terminals" = "打开的终端";
-"Session Resume Data" = "会话恢复数据";
-"Device Identity" = "设备身份";
-"Cache and Logs" = "缓存和日志";
 "Sync Details" = "同步详情";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "凭据会保留在此设备上。iCloud 中现有的 App 数据不会被删除。";
 "Stored on This Device" = "已存储在此设备上";

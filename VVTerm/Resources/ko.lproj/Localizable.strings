@@ -1728,7 +1728,6 @@
 "Data on This Device" = "이 기기의 데이터";
 "On This Device" = "이 기기";
 "Active Sessions" = "활성 세션";
-"Device Only" = "기기에만";
 "Try Again" = "다시 시도";
 "Last Sync Error" = "마지막 동기화 오류";
 "Sync is Off" = "동기화 꺼짐";
@@ -1771,11 +1770,6 @@
 "Reusable SSH Keys" = "재사용 가능한 SSH 키";
 "Cloudflare Tokens" = "Cloudflare 토큰";
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "암호, 개인 키, 암호 구문 및 Cloudflare 토큰은 iCloud 키체인을 사용합니다.";
-"Stays on This Device" = "이 기기에만 저장";
-"Open Terminals" = "열린 터미널";
-"Session Resume Data" = "세션 재개 데이터";
-"Device Identity" = "기기 ID";
-"Cache and Logs" = "캐시 및 로그";
 "Sync Details" = "동기화 세부사항";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "자격 증명은 이 기기에 남습니다. iCloud의 기존 앱 데이터는 삭제되지 않습니다.";
 "Stored on This Device" = "이 기기에 저장됨";

@@ -1729,7 +1729,6 @@
 "Data on This Device" = "このデバイス上のデータ";
 "On This Device" = "このデバイス上";
 "Active Sessions" = "アクティブなセッション";
-"Device Only" = "デバイスのみ";
 "Try Again" = "もう一度試す";
 "Last Sync Error" = "前回の同期エラー";
 "Sync is Off" = "同期はオフです";
@@ -1772,11 +1771,6 @@
 "Reusable SSH Keys" = "再利用可能なSSHキー";
 "Cloudflare Tokens" = "Cloudflareトークン";
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "パスワード、秘密鍵、パスフレーズ、CloudflareトークンはiCloudキーチェーンを使用します。";
-"Stays on This Device" = "このデバイスにのみ保存";
-"Open Terminals" = "開いているターミナル";
-"Session Resume Data" = "セッション再開データ";
-"Device Identity" = "デバイスID";
-"Cache and Logs" = "キャッシュとログ";
 "Sync Details" = "同期の詳細";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "認証情報はこのデバイスに残ります。iCloudにある既存のAppデータは削除されません。";
 "Stored on This Device" = "このデバイスに保存済み";

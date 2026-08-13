@@ -161,18 +161,15 @@ private final class AppSyncSettingsContentSummaryAdapter: SyncSettingsContentSum
     private let serverManager: ServerManager
     private let keychain: KeychainManager
     private let terminalTheme: TerminalThemeManager
-    private let tabManager: TerminalTabManager
 
     init(
         serverManager: ServerManager,
         keychain: KeychainManager,
-        terminalTheme: TerminalThemeManager,
-        tabManager: TerminalTabManager
+        terminalTheme: TerminalThemeManager
     ) {
         self.serverManager = serverManager
         self.keychain = keychain
         self.terminalTheme = terminalTheme
-        self.tabManager = tabManager
     }
 
     var currentSummary: SyncSettingsContentSummary {
@@ -181,8 +178,7 @@ private final class AppSyncSettingsContentSummaryAdapter: SyncSettingsContentSum
             serverCount: serverManager.servers.count,
             customThemeCount: terminalTheme.customThemes.filter { !$0.isDeleted }.count,
             serverCredentialCount: serverManager.servers.filter(hasCredentials).count,
-            reusableSSHKeyCount: keychain.getStoredSSHKeys().count,
-            openTerminalCount: tabManager.sessionState.allPaneStates.count
+            reusableSSHKeyCount: keychain.getStoredSSHKeys().count
         )
     }
 
@@ -227,7 +223,6 @@ enum SyncSettingsLiveComposition {
         cloudKit: CloudKitManager,
         keychain: KeychainManager,
         serverManager: ServerManager,
-        tabManager: TerminalTabManager,
         terminalTheme: TerminalThemeManager,
         terminalAccessory: TerminalAccessoryPreferencesManager,
         statsPreferences: PreferencesStore,
@@ -250,8 +245,7 @@ enum SyncSettingsLiveComposition {
             content: AppSyncSettingsContentSummaryAdapter(
                 serverManager: serverManager,
                 keychain: keychain,
-                terminalTheme: terminalTheme,
-                tabManager: tabManager
+                terminalTheme: terminalTheme
             ),
             history: UserDefaultsSyncSettingsHistoryStore(defaults: defaults),
             runtime: runtimeInfo

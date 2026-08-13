@@ -1729,7 +1729,6 @@
 "Data on This Device" = "ข้อมูลบนอุปกรณ์นี้";
 "On This Device" = "บนอุปกรณ์นี้";
 "Active Sessions" = "เซสชันที่ใช้งานอยู่";
-"Device Only" = "เฉพาะอุปกรณ์นี้";
 "Try Again" = "ลองอีกครั้ง";
 "Last Sync Error" = "ข้อผิดพลาดการซิงค์ล่าสุด";
 "Sync is Off" = "ปิดการซิงค์";
@@ -1772,11 +1771,6 @@
 "Reusable SSH Keys" = "คีย์ SSH ที่ใช้ซ้ำได้";
 "Cloudflare Tokens" = "โทเค็น Cloudflare";
 "Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain." = "รหัสผ่าน คีย์ส่วนตัว วลีรหัสผ่าน และโทเค็น Cloudflare ใช้พวงกุญแจ iCloud";
-"Stays on This Device" = "อยู่บนอุปกรณ์นี้";
-"Open Terminals" = "เทอร์มินัลที่เปิดอยู่";
-"Session Resume Data" = "ข้อมูลสำหรับทำงานต่อ";
-"Device Identity" = "ข้อมูลระบุอุปกรณ์";
-"Cache and Logs" = "แคชและบันทึก";
 "Sync Details" = "รายละเอียดการซิงค์";
 "Credentials remain on this device. Existing app data in iCloud is not deleted." = "ข้อมูลประจำตัวยังคงอยู่บนอุปกรณ์นี้ ข้อมูลแอปที่มีอยู่ใน iCloud จะไม่ถูกลบ";
 "Stored on This Device" = "จัดเก็บบนอุปกรณ์นี้";

@@ -14,7 +14,6 @@ struct SyncSettingsDetailsSections: View {
 
     var body: some View {
         syncedDataSection
-        deviceOnlySection
         syncDetailsSection
         if !syncEnabled {
             credentialRemovalSection
@@ -79,32 +78,6 @@ struct SyncSettingsDetailsSections: View {
             if syncEnabled {
                 Text("Passwords, private keys, passphrases, and Cloudflare tokens use iCloud Keychain.")
             }
-        }
-    }
-
-    private var deviceOnlySection: some View {
-        Section("Stays on This Device") {
-            SyncSettingsDetailsCountRow(
-                title: "Open Terminals",
-                systemImage: "terminal",
-                count: summary.openTerminalCount,
-                accessibilityIdentifier: "vvterm.settings.sync.details.openTerminals"
-            )
-            SyncSettingsDetailsStatusRow(
-                title: "Session Resume Data",
-                systemImage: "arrow.clockwise.circle",
-                status: "Device Only"
-            )
-            SyncSettingsDetailsStatusRow(
-                title: "Device Identity",
-                systemImage: "iphone",
-                status: "Device Only"
-            )
-            SyncSettingsDetailsStatusRow(
-                title: "Cache and Logs",
-                systemImage: "doc.text",
-                status: "Device Only"
-            )
         }
     }
 
