@@ -7,45 +7,66 @@ final class SyncSettingsUITests: XCTestCase {
     }
 
     @MainActor
-    func testSyncPageStaysCompactAndRecordsManualSuccess() {
+    func testSyncPageShowsStatusHeroShortDataRowsAndOneManualAction() {
         let app = launchHarness(syncEnabled: true)
         defer { app.terminate() }
 
         XCTAssertTrue(app.staticTexts["iCloud Sync"].waitForExistence(timeout: 10))
-        let status = app.descendants(matching: .any)["vvterm.settings.sync.status"]
-        XCTAssertTrue(status.waitForExistence(timeout: 5))
-        XCTAssertTrue(status.label.contains("Sync Status"))
-        XCTAssertTrue(status.value.debugDescription.contains("Up to Date"))
+        let hero = app.descendants(matching: .any)["vvterm.settings.sync.statusHero"]
+        XCTAssertTrue(hero.waitForExistence(timeout: 5))
+        XCTAssertTrue(hero.label.contains("Sync Status"))
+        XCTAssertTrue(hero.value.debugDescription.contains("Up to Date"))
+        XCTAssertGreaterThan(hero.frame.height, 80)
+        XCTAssertLessThan(hero.frame.height, 180)
+
+        let toggle = app.switches["vvterm.settings.sync.toggle"]
+        XCTAssertTrue(toggle.exists)
+        XCTAssertLessThan(toggle.frame.minY - hero.frame.maxY, 100)
+
         XCTAssertTrue(
-            app.descendants(matching: .any)["vvterm.settings.sync.data.synced"].exists
+            app.descendants(matching: .any)["vvterm.settings.sync.data.app"].exists
         )
         XCTAssertTrue(
-            app.descendants(matching: .any)["vvterm.settings.sync.data.local"].exists
+            app.descendants(matching: .any)["vvterm.settings.sync.data.credentials"].exists
         )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["vvterm.settings.sync.data.sessions"].exists
+        )
+        XCTAssertTrue(app.staticTexts["Servers & Settings"].exists)
+        XCTAssertTrue(app.staticTexts["Passwords & SSH Keys"].exists)
+        XCTAssertTrue(app.staticTexts["Active Sessions"].exists)
         XCTAssertFalse(app.staticTexts["App Data — iCloud"].exists)
+        XCTAssertFalse(
+            app.staticTexts[
+                "Workspaces, servers, settings, credentials, and SSH keys sync with iCloud."
+            ].exists
+        )
 
-        let notYet = app.staticTexts["vvterm.settings.sync.lastSuccessful.empty"]
-        XCTAssertTrue(notYet.exists)
-
-        let syncNow = app.buttons["vvterm.settings.sync.syncNow.primary"]
+        let syncNow = app.buttons["vvterm.settings.sync.action.primary"]
         XCTAssertTrue(syncNow.waitForExistence(timeout: 5))
-        XCTAssertLessThan(syncNow.frame.minY - status.frame.maxY, 120)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "Sync Now")).count, 1)
         syncNow.tap()
 
-        let predicate = NSPredicate(format: "exists == false")
-        expectation(for: predicate, evaluatedWith: notYet)
-        waitForExpectations(timeout: 5)
+        let advanced = app.buttons["vvterm.settings.sync.advanced"]
+        XCTAssertTrue(advanced.waitForExistence(timeout: 5))
+        advanced.tap()
         XCTAssertTrue(
-            app.staticTexts["vvterm.settings.sync.lastSuccessful.value"]
+            app.descendants(matching: .any)["vvterm.settings.sync.advanced.lastSuccessful"]
                 .waitForExistence(timeout: 5)
         )
+        XCTAssertTrue(app.buttons["vvterm.settings.sync.copyDiagnostics"].exists)
     }
 
     @MainActor
     func testCredentialRemovalUsesNativeConfirmation() {
         let app = launchHarness(syncEnabled: false)
         defer { app.terminate() }
+
+        let hero = app.descendants(matching: .any)["vvterm.settings.sync.statusHero"]
+        XCTAssertTrue(hero.waitForExistence(timeout: 5))
+        XCTAssertTrue(hero.value.debugDescription.contains("Sync is Off"))
+        XCTAssertTrue(app.staticTexts["Existing iCloud data is not deleted."].exists)
+        XCTAssertFalse(app.buttons["vvterm.settings.sync.action.primary"].exists)
 
         let advanced = app.buttons["vvterm.settings.sync.advanced"]
         XCTAssertTrue(advanced.waitForExistence(timeout: 5))

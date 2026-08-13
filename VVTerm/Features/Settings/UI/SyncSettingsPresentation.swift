@@ -8,20 +8,52 @@ extension SyncSettingsUserState {
         case .waitingForNetwork: String(localized: "Waiting for Network")
         case .signInToICloud: String(localized: "Sign In to iCloud")
         case .needsAttention: String(localized: "Sync Needs Attention")
-        case .disabled: String(localized: "Sync Disabled")
+        case .disabled: String(localized: "Sync is Off")
+        }
+    }
+
+    var appDataStatusTitle: LocalizedStringResource {
+        switch self {
+        case .upToDate: "Up to Date"
+        case .syncing: "Syncing"
+        case .waitingForNetwork: "Waiting for Network"
+        case .signInToICloud: "Sign In to iCloud"
+        case .needsAttention: "Needs Attention"
+        case .disabled: "On This Device"
         }
     }
 
     var recoveryGuidance: String? {
         switch self {
         case .waitingForNetwork:
-            String(localized: "Check your network connection. Pending changes remain on this device and will sync later.")
+            String(localized: "Check your network connection.")
         case .signInToICloud:
-            String(localized: "Sign in to iCloud and enable iCloud Drive in System Settings, then check again.")
+            String(localized: "Sign in to iCloud and turn on iCloud Drive.")
         case .needsAttention:
-            String(localized: "Check iCloud status and try Sync Now again. Your pending changes remain on this device.")
+            String(localized: "Try syncing again. Your changes are safe.")
         case .upToDate, .syncing, .disabled:
             nil
+        }
+    }
+}
+
+extension SyncSettingsCredentialState {
+    var statusTitle: LocalizedStringResource {
+        switch self {
+        case .storedInICloudKeychain: "iCloud Keychain"
+        case .storedOnThisDevice: "On This Device"
+        case .needsAttention: "Needs Attention"
+        }
+    }
+}
+
+extension SyncSettingsErrorCategory {
+    var title: LocalizedStringResource {
+        switch self {
+        case .account: "Account"
+        case .cloudData: "App Data"
+        case .credentials: "Credentials"
+        case .network: "Network"
         }
     }
 }
