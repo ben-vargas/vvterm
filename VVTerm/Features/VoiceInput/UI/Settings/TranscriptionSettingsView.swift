@@ -303,6 +303,7 @@ struct TranscriptionSettingsView: View {
                 }
             }
         }
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
     }
 
     private func formatETA(_ seconds: Int) -> String {
