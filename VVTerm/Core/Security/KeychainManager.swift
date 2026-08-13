@@ -15,6 +15,8 @@ final class KeychainManager {
     private let cloudflareTokenStore: KeychainStore
     private let isSyncEnabled: @Sendable () -> Bool
     private let offlineChanges: CredentialOfflineChangeStore
+    private let credentialOfflineWrites: CredentialOfflineWriteTransaction
+    private let oauthOfflineWrites: CredentialOfflineWriteTransaction
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "Keychain")
 
     private struct CredentialBundle: Codable, Equatable {
@@ -63,9 +65,19 @@ final class KeychainManager {
         self.cloudflareTokenStore = cloudflareTokenStore
         self.isSyncEnabled = isSyncEnabled
         self.offlineChanges = offlineChanges
+        credentialOfflineWrites = CredentialOfflineWriteTransaction(
+            store: store,
+            offlineChanges: offlineChanges
+        )
+        oauthOfflineWrites = CredentialOfflineWriteTransaction(
+            store: cloudflareTokenStore,
+            offlineChanges: offlineChanges
+        )
         if performsInitialMigration,
            isSyncEnabled(),
            (offlineChanges.isTrackingOfflineChanges
+               || credentialOfflineWrites.hasPendingWrite
+               || oauthOfflineWrites.hasPendingWrite
                || !UserDefaults.standard.bool(forKey: Self.iCloudMigrationKey)) {
             do {
                 try synchronizeCredentialStorage(isEnabled: true)
@@ -629,6 +641,8 @@ final class KeychainManager {
     }
 
     func synchronizeCredentialStorage(isEnabled: Bool) throws {
+        try credentialOfflineWrites.resumePendingWrite()
+        try oauthOfflineWrites.resumePendingWrite()
         if isEnabled {
             try reconcileOfflineCredentialChanges()
         } else {
@@ -647,7 +661,14 @@ final class KeychainManager {
     }
 
     private func prepareOfflineCredentialSnapshot() throws {
-        guard !offlineChanges.isTrackingOfflineChanges else { return }
+        switch offlineChanges.reconciliationPhase {
+        case .remoteChanges:
+            return
+        case .localCleanup:
+            try finishLocalCredentialCleanup()
+        case nil:
+            break
+        }
         try store.deleteAll(in: .deviceOnly, where: Self.isSynchronizableCredentialKey)
         try cloudflareTokenStore.deleteAll(
             in: .deviceOnly,
@@ -671,7 +692,9 @@ final class KeychainManager {
                 .filter { $0.hasPrefix("oauth.") }
                 .map(CredentialSyncUnit.oauth)
         )
-        try offlineChanges.beginOfflineTracking(units: units)
+        try offlineChanges.beginOfflineTracking(
+            changes: Dictionary(uniqueKeysWithValues: units.map { ($0, .unchanged) })
+        )
     }
 
     private func reconcileOfflineCredentialChanges() throws {
@@ -687,10 +710,13 @@ final class KeychainManager {
                 units.insert(.oauth(key))
             }
             guard !units.isEmpty else { return }
-            try offlineChanges.beginOfflineTracking(units: units)
-            for unit in units {
-                try offlineChanges.record(existingChanges[unit] ?? .updated, for: unit)
-            }
+            try offlineChanges.beginOfflineTracking(
+                changes: Dictionary(
+                    uniqueKeysWithValues: units.map { unit in
+                        (unit, existingChanges[unit] ?? .updated)
+                    }
+                )
+            )
         }
 
         if offlineChanges.reconciliationPhase == .remoteChanges {
@@ -725,17 +751,22 @@ final class KeychainManager {
         }
 
         do {
-            try store.deleteAll(in: .deviceOnly, where: Self.isSynchronizableCredentialKey)
-            try cloudflareTokenStore.deleteAll(
-                in: .deviceOnly,
-                where: { $0.hasPrefix("oauth.") }
-            )
-            try offlineChanges.finishOnlineReconciliation()
+            try finishLocalCredentialCleanup()
         } catch {
             logger.error(
                 "Credential sync is active, but local credential cleanup remains pending: \(error.localizedDescription)"
             )
+            throw error
         }
+    }
+
+    private func finishLocalCredentialCleanup() throws {
+        try store.deleteAll(in: .deviceOnly, where: Self.isSynchronizableCredentialKey)
+        try cloudflareTokenStore.deleteAll(
+            in: .deviceOnly,
+            where: { $0.hasPrefix("oauth.") }
+        )
+        try offlineChanges.finishOnlineReconciliation()
     }
 
     private func reconcileSSHKeyChanges(
@@ -988,29 +1019,38 @@ final class KeychainManager {
             publicKey: publicKey
         )
 
-        // Store the actual key data
-        try store.set(
-            privateKey,
-            forKey: storedKeyDataKey(for: entry.id),
-            scope: preferredStorageScope
-        )
-
-        // Store passphrase if provided
-        if let passphrase = passphrase, !passphrase.isEmpty,
-           let passphraseData = passphrase.data(using: .utf8) {
-            try store.set(
-                passphraseData,
-                forKey: storedKeyPassphraseKey(for: entry.id),
-                scope: preferredStorageScope
-            )
-        }
-
-        // Update index
         var keys = getStoredSSHKeys()
         keys.append(entry)
-        try saveSSHKeysIndex(keys)
-        if !isSyncEnabled() {
-            try offlineChanges.record(.updated, for: .sshKey(entry.id))
+        let indexData = try JSONEncoder().encode(keys)
+        if isSyncEnabled() {
+            try store.set(
+                privateKey,
+                forKey: storedKeyDataKey(for: entry.id),
+                scope: .iCloud
+            )
+            if let passphrase, !passphrase.isEmpty,
+               let passphraseData = passphrase.data(using: .utf8) {
+                try store.set(
+                    passphraseData,
+                    forKey: storedKeyPassphraseKey(for: entry.id),
+                    scope: .iCloud
+                )
+            }
+            try store.set(indexData, forKey: sshKeysIndexKey, scope: .iCloud)
+        } else {
+            let passphraseData = passphrase
+                .flatMap { $0.isEmpty ? nil : $0.data(using: .utf8) }
+            try credentialOfflineWrites.commitUpdate(
+                for: .sshKey(entry.id),
+                operations: [
+                    .init(targetKey: storedKeyDataKey(for: entry.id), value: privateKey),
+                    .init(
+                        targetKey: storedKeyPassphraseKey(for: entry.id),
+                        value: passphraseData
+                    ),
+                    .init(targetKey: sshKeysIndexKey, value: indexData)
+                ]
+            )
         }
 
         logger.info("Stored SSH key '\(name)' in keychain library")
@@ -1071,9 +1111,14 @@ final class KeychainManager {
         }
         keys[index].name = name
         keys[index].updatedAt = Date()
-        try saveSSHKeysIndex(keys)
-        if !isSyncEnabled() {
-            try offlineChanges.record(.updated, for: .sshKey(keyId))
+        let indexData = try JSONEncoder().encode(keys)
+        if isSyncEnabled() {
+            try store.set(indexData, forKey: sshKeysIndexKey, scope: .iCloud)
+        } else {
+            try credentialOfflineWrites.commitUpdate(
+                for: .sshKey(keyId),
+                operations: [.init(targetKey: sshKeysIndexKey, value: indexData)]
+            )
         }
         logger.info("Updated SSH key name to '\(name)'")
     }

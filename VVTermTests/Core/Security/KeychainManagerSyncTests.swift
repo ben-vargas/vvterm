@@ -151,10 +151,11 @@ struct KeychainManagerSyncTests {
         )
         try fixture.oauthStore.set(oauth, forKey: oauthKey, scope: .deviceOnly)
         try fixture.offlineChanges.beginOfflineTracking(
-            units: [.server(serverID), .oauth(oauthKey)]
+            changes: [
+                .server(serverID): .updated,
+                .oauth(oauthKey): .updated
+            ]
         )
-        try fixture.offlineChanges.record(.updated, for: .server(serverID))
-        try fixture.offlineChanges.record(.updated, for: .oauth(oauthKey))
         fixture.backing.failWrites(
             to: .iCloud,
             service: KeychainManager.credentialService,
@@ -210,7 +211,9 @@ struct KeychainManagerSyncTests {
             key: passwordKey
         )
 
-        try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+        #expect(throws: InMemoryKeychainStoreBacking.Failure.deleteRejected) {
+            try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+        }
 
         #expect(fixture.offlineChanges.reconciliationPhase == .localCleanup)
         #expect(try fixture.credentialStore.get(passwordKey, scope: .iCloud) == Data("P2".utf8))
@@ -232,6 +235,124 @@ struct KeychainManagerSyncTests {
         #expect(fixture.offlineChanges.reconciliationPhase == nil)
         #expect(try fixture.credentialStore.get(passwordKey, scope: .deviceOnly) == nil)
         #expect(try fixture.credentialStore.get(passwordKey, scope: .iCloud) == Data("P2".utf8))
+    }
+
+    @Test
+    func pendingLocalCleanupRejectsOfflineEditsUntilDisableCanCreateANewSnapshot() async throws {
+        let fixture = Fixture(syncEnabled: false)
+        let tokenKey = "oauth.example"
+        try fixture.oauthStore.setString("P1", forKey: tokenKey, scope: .iCloud)
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        let adapter = CloudflareTokenStoreAdapter(
+            store: fixture.oauthStore,
+            isSyncEnabled: { false },
+            offlineChanges: fixture.offlineChanges
+        )
+        try await adapter.writeToken("P2", for: "example")
+        fixture.backing.failDeletes(
+            from: .deviceOnly,
+            service: KeychainManager.cloudflareTokenService,
+            key: tokenKey
+        )
+
+        #expect(throws: InMemoryKeychainStoreBacking.Failure.deleteRejected) {
+            try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+        }
+        #expect(throws: InMemoryKeychainStoreBacking.Failure.deleteRejected) {
+            try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        }
+        do {
+            try await adapter.writeToken("P3", for: "example")
+            Issue.record("Expected the offline edit to be rejected during local cleanup")
+        } catch CredentialSyncError.offlineReconciliationPending {
+            // Expected.
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+        #expect(try fixture.oauthStore.getString(tokenKey, scope: .deviceOnly) == "P2")
+
+        fixture.backing.allowDeletes(
+            from: .deviceOnly,
+            service: KeychainManager.cloudflareTokenService,
+            key: tokenKey
+        )
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        try await adapter.writeToken("P3", for: "example")
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+
+        #expect(try fixture.oauthStore.getString(tokenKey, scope: .iCloud) == "P3")
+        #expect(try fixture.oauthStore.getString(tokenKey, scope: .deviceOnly) == nil)
+        #expect(fixture.offlineChanges.reconciliationPhase == nil)
+    }
+
+    @Test
+    func initialMigrationPersistsEveryDeviceUnitAsUpdatedBeforeRemoteCopy() throws {
+        let fixture = Fixture(syncEnabled: false)
+        let serverID = UUID()
+        let passwordKey = "server.\(serverID.uuidString).password"
+        let oauthKey = "oauth.example"
+        try fixture.credentialStore.set(
+            Data("password".utf8),
+            forKey: passwordKey,
+            scope: .deviceOnly
+        )
+        try fixture.oauthStore.set(
+            Data("token".utf8),
+            forKey: oauthKey,
+            scope: .deviceOnly
+        )
+        fixture.backing.failWrites(to: .iCloud)
+
+        #expect(throws: InMemoryKeychainStoreBacking.Failure.writeRejected) {
+            try fixture.manager.synchronizeCredentialStorage(isEnabled: true)
+        }
+
+        let relaunchedStore = CredentialOfflineChangeStore(defaults: fixture.defaults)
+        #expect(relaunchedStore.change(for: .server(serverID)) == .updated)
+        #expect(relaunchedStore.change(for: .oauth(oauthKey)) == .updated)
+        #expect(relaunchedStore.reconciliationPhase == .remoteChanges)
+    }
+
+    @Test
+    func failedOfflineOAuthMarkerWriteKeepsLiveValueAndResumesFromStaging() async throws {
+        let suiteName = "KeychainManagerSyncTests.rejecting.\(UUID().uuidString)"
+        let defaults = CredentialStateWriteRejectingUserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let fixture = Fixture(syncEnabled: false, defaults: defaults)
+        let tokenKey = "oauth.example"
+        try fixture.oauthStore.setString("old", forKey: tokenKey, scope: .iCloud)
+        try fixture.manager.synchronizeCredentialStorage(isEnabled: false)
+        let adapter = CloudflareTokenStoreAdapter(
+            store: fixture.oauthStore,
+            isSyncEnabled: { false },
+            offlineChanges: fixture.offlineChanges
+        )
+
+        defaults.rejectCredentialStateWrites = true
+        do {
+            try await adapter.writeToken("new", for: "example")
+            Issue.record("Expected the durable change marker write to fail")
+        } catch CredentialOfflineChangeStoreError.persistenceFailed {
+            // Expected.
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+
+        #expect(try fixture.oauthStore.getString(tokenKey, scope: .deviceOnly) == "old")
+        #expect(try fixture.oauthStore.getString(tokenKey, scope: .iCloud) == "old")
+        #expect(fixture.offlineChanges.change(for: .oauth(tokenKey)) == .unchanged)
+
+        defaults.rejectCredentialStateWrites = false
+        let relaunchedManager = KeychainManager(
+            store: fixture.credentialStore,
+            cloudflareTokenStore: fixture.oauthStore,
+            isSyncEnabled: { true },
+            offlineChanges: CredentialOfflineChangeStore(defaults: defaults)
+        )
+        try relaunchedManager.synchronizeCredentialStorage(isEnabled: true)
+
+        #expect(try fixture.oauthStore.getString(tokenKey, scope: .iCloud) == "new")
+        #expect(try fixture.oauthStore.getString(tokenKey, scope: .deviceOnly) == nil)
     }
 
     @Test
@@ -781,12 +902,16 @@ struct KeychainManagerSyncTests {
         let oauthStore: KeychainStore
         let offlineChanges: CredentialOfflineChangeStore
         let manager: KeychainManager
-        private let defaults: UserDefaults
+        let defaults: UserDefaults
 
-        init(syncEnabled: Bool) {
-            let suiteName = "KeychainManagerSyncTests.\(UUID().uuidString)"
-            defaults = UserDefaults(suiteName: suiteName)!
-            defaults.removePersistentDomain(forName: suiteName)
+        init(syncEnabled: Bool, defaults providedDefaults: UserDefaults? = nil) {
+            if let providedDefaults {
+                defaults = providedDefaults
+            } else {
+                let suiteName = "KeychainManagerSyncTests.\(UUID().uuidString)"
+                defaults = UserDefaults(suiteName: suiteName)!
+                defaults.removePersistentDomain(forName: suiteName)
+            }
             offlineChanges = CredentialOfflineChangeStore(defaults: defaults)
             credentialStore = KeychainStore(
                 service: KeychainManager.credentialService,
@@ -854,5 +979,17 @@ struct KeychainManagerSyncTests {
         let storedData = try store.get("vvterm.sshkeys.index", scope: scope)
         let data = try #require(storedData)
         return try JSONDecoder().decode([SSHKeyEntry].self, from: data)
+    }
+}
+
+private final class CredentialStateWriteRejectingUserDefaults: UserDefaults {
+    var rejectCredentialStateWrites = false
+
+    override func set(_ value: Any?, forKey defaultName: String) {
+        guard !rejectCredentialStateWrites
+                || defaultName != "vvterm.keychain.offlineReconciliation.v3" else {
+            return
+        }
+        super.set(value, forKey: defaultName)
     }
 }
