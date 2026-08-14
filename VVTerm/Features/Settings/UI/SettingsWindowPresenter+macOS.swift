@@ -96,6 +96,7 @@ final class SettingsWindowPresenter {
 /// Observes language changes and injects the app-owned settings dependencies.
 private struct LocalizedSettingsView: View {
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.system.rawValue
+    @State private var applicationPhase: ScenePhase = NSApplication.shared.isActive ? .active : .inactive
     @ObservedObject var appLockManager: AppLockManager
     @ObservedObject var serverManager: ServerManager
     @ObservedObject var terminalThemeManager: TerminalThemeManager
@@ -129,7 +130,14 @@ private struct LocalizedSettingsView: View {
                 .environmentObject(sshKeySettingsCoordinator)
                 .environmentObject(knownHostSettingsCoordinator)
         }
+        .environment(\.scenePhase, applicationPhase)
         .environmentObject(appLockManager)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            applicationPhase = .active
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            applicationPhase = .inactive
+        }
     }
 }
 #endif
