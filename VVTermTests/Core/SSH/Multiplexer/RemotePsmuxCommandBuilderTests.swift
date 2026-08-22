@@ -41,6 +41,45 @@ struct RemotePsmuxCommandBuilderTests {
     }
 
     @Test
+    func managedWindowsConfigUsesActivePowerShellExecutableAsDefaultShellOnce() {
+        let backend = RemoteTmuxBackend.windowsPsmux(
+            commandName: "psmux",
+            shellFamily: .powershell,
+            powerShellExecutable: "pwsh"
+        )
+
+        let command = RemoteTmuxCommandBuilder.windowsConfigWriteCommand(
+            terminalType: .xtermGhostty,
+            themeStyle: deterministicRemoteTmuxThemeStyle,
+            backend: backend
+        )
+
+        #expect(command.contains("[System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName"))
+        #expect(command.contains("set -o default-shell"))
+        #expect(!command.contains("set -g default-shell"))
+    }
+
+    @Test
+    func managedWindowsConfigUsesComSpecAsCmdDefaultShellOnce() throws {
+        let backend = RemoteTmuxBackend.windowsPsmux(
+            commandName: "psmux",
+            shellFamily: .cmd,
+            powerShellExecutable: "powershell"
+        )
+
+        let command = RemoteTmuxCommandBuilder.windowsConfigWriteCommand(
+            terminalType: .xtermGhostty,
+            themeStyle: deterministicRemoteTmuxThemeStyle,
+            backend: backend
+        )
+        let script = try #require(decodedPowerShellScript(from: command))
+
+        #expect(script.contains("$vvtermDefaultShell = $env:ComSpec"))
+        #expect(script.contains("set -o default-shell"))
+        #expect(!script.contains("set -g default-shell"))
+    }
+
+    @Test
     func windowsPsmuxAttachCommandUsesPowerShellAndPsmux() {
         let backend = RemoteTmuxBackend.windowsPsmux(
             commandName: "psmux",
@@ -235,5 +274,15 @@ struct RemotePsmuxCommandBuilderTests {
         #expect(!script.contains("scroll-on-clear"))
         #expect(!script.contains("sh -lc"))
     }
-}
 
+    private func decodedPowerShellScript(from command: String) -> String? {
+        guard let encodedCommand = command
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: " ")
+            .last,
+              let data = Data(base64Encoded: String(encodedCommand)) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf16LittleEndian)
+    }
+}

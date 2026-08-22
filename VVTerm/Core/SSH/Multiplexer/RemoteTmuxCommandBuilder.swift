@@ -839,7 +839,8 @@ nonisolated enum RemoteTmuxCommandBuilder {
         windowsShellCommand(
             powerShellScript: windowsConfigWritePowerShell(
                 terminalType: terminalType,
-                themeStyle: themeStyle
+                themeStyle: themeStyle,
+                backend: backend
             ),
             backend: backend
         )
@@ -847,19 +848,41 @@ nonisolated enum RemoteTmuxCommandBuilder {
 
     private static func windowsConfigWritePowerShell(
         terminalType: RemoteTerminalType,
-        themeStyle: RemoteTmuxThemeStyle
+        themeStyle: RemoteTmuxThemeStyle,
+        backend: RemoteTmuxBackend
     ) -> String {
         let lines = windowsConfigLines(
             terminalType: terminalType,
             themeStyle: themeStyle
         )
         let content = lines.joined(separator: "\n") + "\n"
+        let defaultShellExpression: String?
+        switch backend {
+        case .windowsPsmux(_, .powershell, _):
+            defaultShellExpression = "[System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName"
+        case .windowsPsmux(_, .cmd, _):
+            defaultShellExpression = "$env:ComSpec"
+        case .windowsPsmux(_, .unknown, _), .windowsPsmux(_, .posix, _), .unixTmux:
+            defaultShellExpression = nil
+        }
+        // This config is sourced again on reconnect. `-o` keeps this a one-time
+        // choice for the VVTerm-managed psmux server.
+        let defaultShellConfiguration = defaultShellExpression.map { expression in
+            """
+            $vvtermDefaultShell = \(expression)
+            $vvtermDefaultShell = $vvtermDefaultShell.Replace('\\', '/')
+            $vvtermConfigContent += "`n# Match the shell used by the VVTerm SSH connection`n"
+            $vvtermConfigContent += "set -o default-shell `"$vvtermDefaultShell`"`n"
+            """
+        } ?? ""
         return """
         $vvtermConfigDirectory = \(windowsConfigDirectoryPowerShellExpression())
         $vvtermConfigPath = \(windowsConfigPathPowerShellExpression())
         New-Item -ItemType Directory -Force -Path $vvtermConfigDirectory | Out-Null
-        @'
-        \(content)'@ | Set-Content -Encoding UTF8 -NoNewline -Path $vvtermConfigPath
+        $vvtermConfigContent = @'
+        \(content)'@
+        \(defaultShellConfiguration)
+        $vvtermConfigContent | Set-Content -Encoding UTF8 -NoNewline -Path $vvtermConfigPath
         """
     }
 
@@ -881,7 +904,8 @@ nonisolated enum RemoteTmuxCommandBuilder {
     ) -> String {
         let configWrite = windowsConfigWritePowerShell(
             terminalType: terminalType,
-            themeStyle: themeStyle
+            themeStyle: themeStyle,
+            backend: backend
         )
         let attach = windowsAttachOrCreatePowerShell(
             sessionName: sessionName,
