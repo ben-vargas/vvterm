@@ -17,8 +17,8 @@ nonisolated enum TerminalConnectionFailurePresentation {
         switch failure {
         case .reconnectTimedOut:
             return String(localized: "Connection timed out. Please retry.")
-        case .tmuxStartupFailed:
-            return String(localized: "Unable to start tmux session.")
+        case .remoteSessionStartupFailed:
+            return String(localized: "Unable to start the remote session.")
         case .eternalTerminal(let failure, let host, let port):
             return eternalTerminalMessage(for: failure, host: host, port: port)
         case .external(let message, _, _):
@@ -93,12 +93,12 @@ nonisolated enum TerminalConnectionFailurePresentation {
 extension TerminalDisconnectReason {
     var statusMessage: String? {
         switch self {
-        case .transportEnded:
+        case .transportInterrupted:
             return nil
-        case .tmuxDetached:
-            return String(localized: "tmux session is still running on the server.")
-        case .externalTmuxEnded:
-            return String(localized: "The tmux session has ended.")
+        case .remoteSessionDetached:
+            return String(localized: "The remote session is still running on the server.")
+        case .externalRemoteSessionTerminated:
+            return String(localized: "The remote session has ended.")
         }
     }
 }
@@ -116,7 +116,7 @@ enum TerminalConnectionStatusPresentation: Hashable {
         hasEstablishedConnection: Bool,
         automaticReconnectAllowed: Bool,
         isReconnectPreparationInFlight: Bool,
-        isAwaitingTmuxSelection: Bool,
+        isAwaitingRemoteSessionSelection: Bool,
         terminalExists: Bool,
         isReady: Bool,
         disconnectedMessage: String?
@@ -128,7 +128,7 @@ enum TerminalConnectionStatusPresentation: Hashable {
             )
         }
 
-        if isAwaitingTmuxSelection {
+        if isAwaitingRemoteSessionSelection {
             return .hidden
         }
 
@@ -260,8 +260,17 @@ enum TerminalSceneActivityPolicy {
     }
 }
 
-enum TmuxInstallPromptPolicy {
-    static func shouldPresent(for status: TmuxStatus?) -> Bool {
-        status == .missing
+enum RemoteSessionInstallPromptPolicy {
+    static func shouldPresent(
+        for status: RemoteSessionStatus?,
+        installation: RemoteSessionBackendMetadata.Installation?
+    ) -> Bool {
+        guard status == .missing else { return false }
+        switch installation {
+        case .automatic, .documentation:
+            return true
+        case nil:
+            return false
+        }
     }
 }

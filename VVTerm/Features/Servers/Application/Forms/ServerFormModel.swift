@@ -77,14 +77,16 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var environment: ServerEnvironment
     var notes: String
     var requiresBiometricUnlock: Bool
-    var tmuxEnabled: Bool
-    var tmuxStartupBehavior: TmuxStartupBehavior
+    var remoteSessionEnabled: Bool
+    var remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier
+    var remoteSessionStartupBehavior: RemoteSessionStartupBehavior
 
     init(
         server: Server? = nil,
         workspaceID: UUID? = nil,
-        defaultTmuxEnabled: Bool,
-        defaultTmuxStartupBehavior: TmuxStartupBehavior
+        defaultRemoteSessionEnabled: Bool,
+        defaultRemoteSessionBackendIdentifier: RemoteSessionBackendIdentifier,
+        defaultRemoteSessionStartupBehavior: RemoteSessionStartupBehavior
     ) {
         name = server?.name ?? ""
         host = server?.host ?? ""
@@ -105,8 +107,12 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         environment = server?.environment ?? .production
         notes = server?.notes ?? ""
         requiresBiometricUnlock = server?.requiresBiometricUnlock ?? false
-        tmuxEnabled = server?.tmuxEnabledOverride ?? defaultTmuxEnabled
-        tmuxStartupBehavior = server?.tmuxStartupBehaviorOverride ?? defaultTmuxStartupBehavior
+        remoteSessionEnabled = server?.remoteSessionEnabledOverride
+            ?? defaultRemoteSessionEnabled
+        remoteSessionBackendIdentifier = server?.remoteSessionBackendIdentifier
+            ?? defaultRemoteSessionBackendIdentifier
+        remoteSessionStartupBehavior = server?.remoteSessionStartupBehaviorOverride
+            ?? defaultRemoteSessionStartupBehavior
     }
 
     var isValid: Bool {
@@ -176,7 +182,11 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         cloudflareClientSecret = credentials.cloudflareClientSecret ?? ""
     }
 
-    func makeServer(id: UUID, workspaceID: UUID, createdAt: Date) -> Server {
+    func makeServer(
+        id: UUID,
+        workspaceID: UUID,
+        createdAt: Date
+    ) -> Server {
         Server(
             id: id,
             workspaceId: workspaceID,
@@ -195,8 +205,9 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             cloudflareAppDomainOverride: nil,
             notes: notes.isEmpty ? nil : notes,
             requiresBiometricUnlock: requiresBiometricUnlock,
-            tmuxEnabledOverride: tmuxEnabled,
-            tmuxStartupBehaviorOverride: tmuxStartupBehavior,
+            remoteSessionEnabledOverride: remoteSessionEnabled,
+            remoteSessionBackendIdentifier: remoteSessionBackendIdentifier,
+            remoteSessionStartupBehaviorOverride: remoteSessionStartupBehavior,
             createdAt: createdAt
         )
     }

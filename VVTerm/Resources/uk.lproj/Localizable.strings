@@ -1827,3 +1827,13 @@
 "Remove All Downloaded Models" = "Видалити всі завантажені моделі";
 "Remove All Downloaded Models?" = "Видалити всі завантажені моделі?";
 "Voice input models must be downloaded again before they can work offline." = "Щоб моделі голосового введення працювали офлайн, їх потрібно буде завантажити повторно.";
+"Keep remote sessions running by default" = "Типово залишати віддалені сеанси запущеними";
+"These defaults apply to new servers. You can override them in server settings." = "Ці типові параметри застосовуються до нових серверів. Їх можна змінити в параметрах сервера.";
+"Keep remote sessions running" = "Залишати віддалені сеанси запущеними";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "Вибраний варіант залишає віддалені сеанси запущеними після перезапуску програми або відключення.";
+"Without session persistence, app backgrounding can interrupt running commands." = "Без збереження сеансу перехід програми у фоновий режим може перервати команди, що виконуються.";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "Вибраний варіант залишає термінал активним після перезапуску програми або відключення.";
+"Use a persistent session" = "Використовувати постійний сеанс";
+"Use persistent sessions by default" = "Типово використовувати постійні сеанси";
+"Create or reconnect to a VVTerm-managed session." = "Створити сеанс під керуванням VVTerm або підключитися до нього знову.";
+"Ask which session to use for each new tab or split." = "Запитувати, який сеанс використовувати для кожної нової вкладки або області.";

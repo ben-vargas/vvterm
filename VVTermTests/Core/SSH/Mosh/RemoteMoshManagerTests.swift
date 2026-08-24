@@ -173,10 +173,10 @@ struct RemoteMoshManagerTests {
     @Test
     func managedTmuxBootstrapKeepsNestedQuotingOutOfLoginShell() throws {
         let startCommand = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_dev223",
             workingDirectory: "~",
-            lifecycleMarkerToken: "dev223-marker"
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
         )
         let command = RemoteMoshManager.shared.bootstrapCommand(
             terminalType: .xtermGhostty,

@@ -2,8 +2,6 @@ import Foundation
 import os.log
 
 actor RemoteTmuxManager {
-    static let shared = RemoteTmuxManager()
-
     private let availabilityTimeout: Duration = .seconds(8)
     private let listTimeout: Duration = .seconds(12)
     private let configTimeout: Duration = .seconds(20)
@@ -15,7 +13,7 @@ actor RemoteTmuxManager {
         category: "Tmux"
     )
 
-    private init() {}
+    init() {}
 
     func tmuxAvailability(using client: SSHClient) async -> RemoteTmuxAvailability {
         let probeId = UUID().uuidString
@@ -51,11 +49,24 @@ actor RemoteTmuxManager {
         do {
             let output = try await execute(command, availabilityTimeout)
             try Task.checkCancellation()
-            return RemoteTmuxParser.classifyAvailabilityOutput(
+            let classification = RemoteTmuxParser.classifyAvailabilityOutput(
                 output,
                 availableMarker: okMarker,
                 missingMarker: "__VVTERM_TMUX_NO__",
                 backend: .unixTmux
+            )
+            guard case .available = classification else { return classification }
+            guard let backend = RemoteTmuxParser.resolvedBackend(
+                from: output,
+                variant: .unixTmux
+            ) else {
+                return .indeterminate(.invalidResponse)
+            }
+            return RemoteTmuxParser.classifyAvailabilityOutput(
+                output,
+                availableMarker: okMarker,
+                missingMarker: "__VVTERM_TMUX_NO__",
+                backend: backend
             )
         } catch {
             return .indeterminate(.resolve(error))
@@ -131,11 +142,11 @@ actor RemoteTmuxManager {
     func prepareConfig(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
-        themeStyle: RemoteTmuxThemeStyle,
+        themeStyle: RemoteSessionThemeStyle,
         backend explicitBackend: RemoteTmuxBackend? = nil
     ) async {
         let backend = await resolveBackend(explicitBackend, using: client)
-        guard let backend, case .windowsPsmux = backend else { return }
+        guard let backend, backend.isWindows else { return }
         let command = RemoteTmuxCommandBuilder.windowsConfigWriteCommand(
             terminalType: terminalType,
             themeStyle: themeStyle,
@@ -169,17 +180,10 @@ actor RemoteTmuxManager {
         backend explicitBackend: RemoteTmuxBackend? = nil
     ) async {
         let backend = await resolveBackend(explicitBackend, using: client)
-        guard let backend else { return }
-        guard case .unixTmux = backend else { return }
-        let body = """
-        \(RemoteTerminalBootstrap.shellPathExport());
-        if command -v tmux >/dev/null 2>&1; then
-          tmux list-sessions -F '#{session_name} #{session_attached}' 2>/dev/null | awk '$1 ~ /^vvterm_[0-9a-fA-F-]+$/ && $2 == 0 { print $1 }' | while IFS= read -r name; do
-            tmux kill-session -t "$name" 2>/dev/null || true;
-          done;
-        fi
-        """
-        let command = "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
+        guard let backend,
+              let command = RemoteTmuxCommandBuilder.legacyCleanupCommand(
+                  backend: backend
+              ) else { return }
         _ = try? await client.execute(command, timeout: cleanupTimeout)
     }
 
@@ -263,11 +267,41 @@ actor RemoteTmuxManager {
                     availabilityTimeout
                 )
                 try Task.checkCancellation()
-                let resolution = RemoteTmuxParser.classifyAvailabilityOutput(
+                let classification = RemoteTmuxParser.classifyAvailabilityOutput(
                     output,
                     availableMarker: "__VVTERM_TMUX_OK__:\(commandName)",
                     missingMarker: "__VVTERM_TMUX_NO__:\(commandName)",
                     backend: backend
+                )
+                guard case .available = classification else {
+                    switch classification {
+                    case .indeterminate(let failure):
+                        firstIndeterminateFailure = firstIndeterminateFailure ?? failure
+                    case .confirmedMissing:
+                        break
+                    case .unsupported:
+                        assertionFailure("A supported Windows tmux probe resolved as unsupported")
+                    case .available:
+                        break
+                    }
+                    continue
+                }
+                let variant = RemoteTmuxBackend.Variant.windowsPsmux(
+                    shellFamily: shellFamily,
+                    powerShellExecutable: powerShellExecutable
+                )
+                guard let resolvedBackend = RemoteTmuxParser.resolvedBackend(
+                    from: output,
+                    variant: variant
+                ) else {
+                    firstIndeterminateFailure = firstIndeterminateFailure ?? .invalidResponse
+                    continue
+                }
+                let resolution = RemoteTmuxParser.classifyAvailabilityOutput(
+                    output,
+                    availableMarker: "__VVTERM_TMUX_OK__:\(commandName)",
+                    missingMarker: "__VVTERM_TMUX_NO__:\(commandName)",
+                    backend: resolvedBackend
                 )
                 switch resolution {
                 case .available:

@@ -1865,3 +1865,13 @@
 "Remove All Downloaded Models" = "Xóa tất cả mô hình đã tải xuống";
 "Remove All Downloaded Models?" = "Xóa tất cả mô hình đã tải xuống?";
 "Voice input models must be downloaded again before they can work offline." = "Bạn phải tải lại các mô hình nhập liệu bằng giọng nói trước khi dùng ngoại tuyến.";
+"Keep remote sessions running by default" = "Duy trì phiên từ xa chạy theo mặc định";
+"These defaults apply to new servers. You can override them in server settings." = "Các giá trị mặc định này áp dụng cho máy chủ mới. Bạn có thể thay đổi trong cài đặt máy chủ.";
+"Keep remote sessions running" = "Duy trì phiên từ xa hoạt động";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "Tùy chọn đã chọn duy trì phiên từ xa hoạt động sau khi ứng dụng khởi động lại hoặc mất kết nối.";
+"Without session persistence, app backgrounding can interrupt running commands." = "Nếu không duy trì phiên, việc đưa ứng dụng vào nền có thể làm gián đoạn các lệnh đang chạy.";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "Tùy chọn đã chọn duy trì thiết bị đầu cuối hoạt động sau khi ứng dụng khởi động lại hoặc mất kết nối.";
+"Use a persistent session" = "Dùng phiên liên tục";
+"Use persistent sessions by default" = "Dùng phiên liên tục theo mặc định";
+"Create or reconnect to a VVTerm-managed session." = "Tạo hoặc kết nối lại với phiên do VVTerm quản lý.";
+"Ask which session to use for each new tab or split." = "Hỏi phiên cần dùng cho mỗi tab hoặc vùng chia mới.";

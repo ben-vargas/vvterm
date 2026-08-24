@@ -7,6 +7,10 @@ import Testing
 private final class StateStoreSnapshotMemory: TerminalTabSnapshotStoring {
     private(set) var data: Data?
 
+    init(data: Data? = nil) {
+        self.data = data
+    }
+
     func loadSnapshotData() -> Data? {
         data
     }
@@ -67,7 +71,7 @@ struct TerminalSessionStateStoreTests {
             serverId: tab.serverId
         )
         pane.presentationOverrides = TerminalPresentationOverrides(fontSize: 18)
-        pane.disconnectReason = .transportEnded
+        pane.disconnectReason = .transportInterrupted
 
         source.install(tab, paneState: pane, select: true)
         source.selectTab(staleSelectedTabId, for: tab.serverId)
@@ -82,7 +86,7 @@ struct TerminalSessionStateStoreTests {
         #expect(restored.selectedTab(for: tab.serverId) == tab)
         #expect(restoredSelections.selection(for: tab.serverId) == .stats)
         #expect(restored.paneState(for: tab.rootPaneId)?.presentationOverrides.fontSize == 18)
-        #expect(restored.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
+        #expect(restored.paneState(for: tab.rootPaneId)?.disconnectReason == .transportInterrupted)
         #expect(restored.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
     }
 
@@ -136,7 +140,7 @@ struct TerminalSessionStateStoreTests {
             in: tab,
             paneId: tab.rootPaneId,
             placement: .right,
-            tmuxStatus: .off
+            remoteSessionStatus: .off
         ), let splitTab = store.tab(id: tab.id, for: tab.serverId) else {
             Issue.record("Expected split pane")
             return
@@ -176,7 +180,7 @@ struct TerminalSessionStateStoreTests {
             in: tab,
             paneId: tab.rootPaneId,
             placement: .right,
-            tmuxStatus: .off
+            remoteSessionStatus: .off
         ))
         let splitTab = try #require(store.tab(id: tab.id, for: tab.serverId))
         let layout = try #require(splitTab.layout)
@@ -283,19 +287,102 @@ struct TerminalSessionStateStoreTests {
         #expect(updateCount == 0)
     }
 
+    @Test
+    func legacyTmuxAttachmentMigratesOnceAndNextWriteUsesCurrentSchema() throws {
+        let sourceSnapshot = StateStoreSnapshotMemory()
+        let sourceResolver = makeResolver()
+        let source = TerminalSessionStateStore(
+            snapshotStore: sourceSnapshot,
+            connectionViewSelections: ConnectionViewSelectionStore(),
+            remoteSessionResolver: sourceResolver
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Migrated")
+        source.install(
+            tab,
+            paneState: TerminalPaneState(
+                paneId: tab.rootPaneId,
+                tabId: tab.id,
+                serverId: tab.serverId
+            ),
+            select: true
+        )
+        sourceResolver.setAttachment(
+            TerminalRemoteSessionAttachmentState(
+                attachment: RemoteSessionAttachment(
+                    identifier: try RemoteSessionIdentifier(
+                        backendIdentifier: .tmux,
+                        validating: "legacy-session"
+                    ),
+                    ownership: .managed
+                ),
+                managedSessionConfirmed: true
+            ),
+            for: tab.rootPaneId
+        )
+        let currentData = try source.snapshotDataForTesting()
+        var root = try #require(
+            JSONSerialization.jsonObject(with: currentData) as? [String: Any]
+        )
+        var servers = try #require(root["servers"] as? [[String: Any]])
+        var tabs = try #require(servers[0]["tabs"] as? [[String: Any]])
+        let currentAttachments = try #require(
+            tabs[0].removeValue(forKey: "remoteSessionAttachments") as? [Any]
+        )
+        var legacyAttachments = currentAttachments
+        for index in stride(from: 1, to: legacyAttachments.count, by: 2) {
+            let state = try #require(legacyAttachments[index] as? [String: Any])
+            let attachment = try #require(state["attachment"] as? [String: Any])
+            let identifier = try #require(attachment["identifier"] as? [String: Any])
+            legacyAttachments[index] = [
+                "sessionName": try #require(identifier["rawValue"] as? String),
+                "ownership": try #require(attachment["ownership"] as? String),
+                "managedSessionConfirmed": state["managedSessionConfirmed"] as? Bool ?? false
+            ]
+        }
+        tabs[0]["tmuxAttachments"] = legacyAttachments
+        servers[0]["tabs"] = tabs
+        root["servers"] = servers
+        root.removeValue(forKey: "version")
+
+        let migratedSnapshot = StateStoreSnapshotMemory(
+            data: try JSONSerialization.data(withJSONObject: root)
+        )
+        let migratedResolver = makeResolver()
+        let migrated = TerminalSessionStateStore(
+            snapshotStore: migratedSnapshot,
+            connectionViewSelections: ConnectionViewSelectionStore(),
+            remoteSessionResolver: migratedResolver
+        )
+
+        let state = try #require(migratedResolver.attachment(for: tab.rootPaneId))
+        #expect(state.attachment.identifier.backendIdentifier == .tmux)
+        #expect(state.attachment.identifier.rawValue == "legacy-session")
+        #expect(state.attachment.ownership == .managed)
+        #expect(state.managedSessionConfirmed)
+
+        migrated.persistNow()
+        let rewritten = try #require(migratedSnapshot.data)
+        let rewrittenText = String(decoding: rewritten, as: UTF8.self)
+        #expect(rewrittenText.contains("\"version\":2"))
+        #expect(rewrittenText.contains("remoteSessionAttachments"))
+        #expect(!rewrittenText.contains("tmuxAttachments"))
+    }
+
     private func makeStore(
         snapshot: StateStoreSnapshotMemory,
         selections: ConnectionViewSelectionStore
     ) -> TerminalSessionStateStore {
-        let configuration = TerminalTmuxConfiguration.testing
-        let remoteTmux = UnavailableTerminalRemoteTmuxService()
         return TerminalSessionStateStore(
             snapshotStore: snapshot,
             connectionViewSelections: selections,
-            tmuxResolver: TmuxAttachResolver(
-                configuration: configuration,
-                remoteTmux: remoteTmux
-            )
+            remoteSessionResolver: makeResolver()
+        )
+    }
+
+    private func makeResolver() -> RemoteSessionAttachResolver {
+        RemoteSessionAttachResolver(
+            configuration: .testing,
+            remoteSessions: UnavailableTerminalRemoteSessionService()
         )
     }
 }

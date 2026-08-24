@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum RemoteShellFamily: String, Hashable, Sendable {
+nonisolated enum RemoteShellFamily: String, Codable, Hashable, Sendable {
     case posix
     case powershell
     case cmd

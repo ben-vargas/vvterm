@@ -130,8 +130,9 @@ nonisolated struct ServerMutationCommandRepository: Sendable {
             tags: server.tags,
             notes: server.notes,
             requiresBiometricUnlock: server.requiresBiometricUnlock,
-            tmuxEnabledOverride: server.tmuxEnabledOverride,
-            tmuxStartupBehaviorOverride: server.tmuxStartupBehaviorOverride,
+            remoteSessionEnabledOverride: server.remoteSessionEnabledOverride,
+            remoteSessionBackendIdentifier: server.remoteSessionBackendIdentifier,
+            remoteSessionStartupBehaviorOverride: server.remoteSessionStartupBehaviorOverride,
             createdAt: now,
             updatedAt: now
         )
@@ -157,8 +158,9 @@ nonisolated struct ServerMutationCommandRepository: Sendable {
             lastConnected: server.lastConnected,
             isFavorite: server.isFavorite,
             requiresBiometricUnlock: server.requiresBiometricUnlock,
-            tmuxEnabledOverride: server.tmuxEnabledOverride,
-            tmuxStartupBehaviorOverride: server.tmuxStartupBehaviorOverride,
+            remoteSessionEnabledOverride: server.remoteSessionEnabledOverride,
+            remoteSessionBackendIdentifier: server.remoteSessionBackendIdentifier,
+            remoteSessionStartupBehaviorOverride: server.remoteSessionStartupBehaviorOverride,
             createdAt: server.createdAt,
             updatedAt: now
         )

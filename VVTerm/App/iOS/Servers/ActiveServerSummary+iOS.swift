@@ -65,7 +65,8 @@ struct ActiveServerSummary: Identifiable {
     let terminalTab: TerminalTab?
     let title: String
     let status: ActiveConnectionPresentationStatus
-    let tmuxStatus: TmuxStatus
+    let remoteSessionStatus: RemoteSessionStatus
+    let remoteSessionBackendName: String
     let tabCount: Int
     let targetView: ConnectionViewTabID
 
@@ -111,7 +112,12 @@ struct ActiveServerSummary: Identifiable {
                         hasResumeCheckpoint: hasResumeCheckpoint
                     )
                 } ?? .disconnected,
-                tmuxStatus: state?.tmuxStatus ?? .off,
+                remoteSessionStatus: state?.remoteSessionStatus ?? .off,
+                remoteSessionBackendName: configuredServer.map { server in
+                    tabManager.remoteSessionCoordinator.backendMetadata.first {
+                        $0.identifier == server.remoteSessionBackendIdentifier
+                    }?.displayName ?? server.remoteSessionBackendIdentifier.rawValue
+                } ?? String(localized: "session"),
                 tabCount: terminalTabs.count + remoteFileTabs.count,
                 targetView: targetView(
                     serverId: serverId,

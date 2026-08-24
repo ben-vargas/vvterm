@@ -1,6 +1,34 @@
 import Foundation
 
 nonisolated enum RemoteTmuxParser {
+    static func resolvedBackend(
+        from output: String,
+        variant: RemoteTmuxBackend.Variant
+    ) -> RemoteTmuxBackend? {
+        let pathPrefix = "__VVTERM_TMUX_PATH__"
+        let versionPrefix = "__VVTERM_TMUX_VERSION__"
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
+        guard let pathLine = lines.first(where: { $0.hasPrefix(pathPrefix) }),
+              let versionLine = lines.first(where: { $0.hasPrefix(versionPrefix) }) else {
+            return nil
+        }
+        let path = String(pathLine.dropFirst(pathPrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let version = String(versionLine.dropFirst(versionPrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (try? RemoteSessionExecutable(validating: path)) != nil,
+              !version.isEmpty,
+              version.utf8.count <= 256,
+              version.rangeOfCharacter(from: .controlCharacters) == nil else {
+            return nil
+        }
+        return RemoteTmuxBackend(
+            variant: variant,
+            executablePath: path,
+            rawVersion: version
+        )
+    }
+
     static func classifyAvailabilityOutput(
         _ output: String,
         availableMarker: String,

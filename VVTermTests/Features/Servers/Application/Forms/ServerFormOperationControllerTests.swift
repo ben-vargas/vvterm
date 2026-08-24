@@ -727,8 +727,9 @@ struct ServerFormOperationControllerTests {
         let serverID = UUID()
         var form = ServerFormModel(
             workspaceID: workspaceID,
-            defaultTmuxEnabled: true,
-            defaultTmuxStartupBehavior: .vvtermManaged
+            defaultRemoteSessionEnabled: true,
+            defaultRemoteSessionBackendIdentifier: .tmux,
+            defaultRemoteSessionStartupBehavior: .createManaged
         )
         form.name = host
         form.host = host

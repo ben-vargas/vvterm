@@ -12,15 +12,15 @@ private final class EternalTerminalEventRecorder {
     }
 }
 
-private actor EternalTerminalTmuxKillRecorder: EternalTerminalTmuxSessionKilling {
-    private var sessionNames: [String] = []
+private actor EternalTerminalRemoteSessionKillRecorder: EternalTerminalRemoteSessionKilling {
+    private var identifiers: [RemoteSessionIdentifier] = []
 
-    func killSession(named sessionName: String, using client: SSHClient) async {
-        sessionNames.append(sessionName)
+    func killSession(_ identifier: RemoteSessionIdentifier, using client: SSHClient) async {
+        identifiers.append(identifier)
     }
 
-    func recordedSessionNames() -> [String] {
-        sessionNames
+    func recordedIdentifiers() -> [RemoteSessionIdentifier] {
+        identifiers
     }
 }
 
@@ -158,7 +158,7 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
         let events = EternalTerminalEventRecorder()
         let dependencies = EternalTerminalRuntimeDependencies(
             recordEvent: { [events] event in events.record(event) },
-            tmuxSessionKiller: EternalTerminalTmuxKillRecorder(),
+            remoteSessionKiller: EternalTerminalRemoteSessionKillRecorder(),
             sessionPreparer: SequencedEternalTerminalSessionPreparer(
                 sessions: [firstSession, replacementSession]
             )
@@ -186,13 +186,13 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
     }
 
     @Test
-    func runtimesAndPortsKeepEffectsAndTmuxKillsWithTheirOwners() async {
+    func runtimesAndPortsKeepEffectsAndRemoteSessionKillsWithTheirOwners() async {
         let firstEvents = EternalTerminalEventRecorder()
         let secondEvents = EternalTerminalEventRecorder()
-        let firstTmux = EternalTerminalTmuxKillRecorder()
-        let secondTmux = EternalTerminalTmuxKillRecorder()
-        let firstDependencies = dependencies(events: firstEvents, tmux: firstTmux)
-        let secondDependencies = dependencies(events: secondEvents, tmux: secondTmux)
+        let firstSessions = EternalTerminalRemoteSessionKillRecorder()
+        let secondSessions = EternalTerminalRemoteSessionKillRecorder()
+        let firstDependencies = dependencies(events: firstEvents, sessions: firstSessions)
+        let secondDependencies = dependencies(events: secondEvents, sessions: secondSessions)
         let firstRuntime = makeRuntime(
             dependencies: firstDependencies
         )
@@ -204,8 +204,12 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
         firstRuntime.abortConnection()
         firstDependencies.record(.connectionReconnecting)
         firstDependencies.record(.connectionFailed(reason: "network"))
-        await firstDependencies.killTmuxSession(
-            named: "first-session",
+        let identifier = try! RemoteSessionIdentifier(
+            backendIdentifier: .tmux,
+            validating: "first-session"
+        )
+        await firstDependencies.killRemoteSession(
+            identifier,
             using: SSHClient.testing()
         )
 
@@ -215,8 +219,8 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
             .connectionFailed(reason: "network")
         ])
         #expect(secondEvents.events.isEmpty)
-        #expect(await firstTmux.recordedSessionNames() == ["first-session"])
-        #expect(await secondTmux.recordedSessionNames().isEmpty)
+        #expect(await firstSessions.recordedIdentifiers() == [identifier])
+        #expect(await secondSessions.recordedIdentifiers().isEmpty)
 
         await firstRuntime.close()
         await secondRuntime.close()
@@ -224,13 +228,13 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
 
     private func dependencies(
         events: EternalTerminalEventRecorder,
-        tmux: EternalTerminalTmuxKillRecorder
+        sessions: EternalTerminalRemoteSessionKillRecorder
     ) -> EternalTerminalRuntimeDependencies {
         EternalTerminalRuntimeDependencies(
             recordEvent: { [events] event in
                 events.record(event)
             },
-            tmuxSessionKiller: tmux,
+            remoteSessionKiller: sessions,
             sessionPreparer: FailingEternalTerminalSessionPreparer()
         )
     }

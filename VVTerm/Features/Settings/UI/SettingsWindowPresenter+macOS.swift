@@ -34,7 +34,8 @@ final class SettingsWindowPresenter {
         sshKeySettingsCoordinator: SSHKeySettingsCoordinator,
         knownHostSettingsCoordinator: KnownHostSettingsCoordinator,
         voiceModelManagers: VoiceSettingsModelManagerOwner,
-        analyticsOptOutAction: AnalyticsOptOutAction
+        analyticsOptOutAction: AnalyticsOptOutAction,
+        remoteSessionBackends: [RemoteSessionBackendMetadata]
     ) {
         makeWindow = {
             let settingsView = LocalizedSettingsView(
@@ -49,7 +50,8 @@ final class SettingsWindowPresenter {
                 knownHostSettingsCoordinator: knownHostSettingsCoordinator,
                 statsPreferencesStore: statsPreferencesStore,
                 voiceModelManagers: voiceModelManagers,
-                analyticsOptOutAction: analyticsOptOutAction
+                analyticsOptOutAction: analyticsOptOutAction,
+                remoteSessionBackends: remoteSessionBackends
             )
             return Self.makeSettingsWindow(rootView: settingsView)
         }
@@ -109,6 +111,7 @@ private struct LocalizedSettingsView: View {
     let statsPreferencesStore: PreferencesStore
     let voiceModelManagers: VoiceSettingsModelManagerOwner
     let analyticsOptOutAction: AnalyticsOptOutAction
+    let remoteSessionBackends: [RemoteSessionBackendMetadata]
 
     var body: some View {
         let locale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
@@ -116,7 +119,8 @@ private struct LocalizedSettingsView: View {
             SettingsView(
                 statsPreferencesStore: statsPreferencesStore,
                 voiceModelManagers: voiceModelManagers,
-                analyticsOptOutAction: analyticsOptOutAction
+                analyticsOptOutAction: analyticsOptOutAction,
+                remoteSessionBackends: remoteSessionBackends
             )
                 .modifier(AppearanceModifier())
                 .adaptiveSoftScrollEdges()

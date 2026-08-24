@@ -1,19 +1,22 @@
 import SwiftUI
 
-struct TmuxAttachPromptSheet: View {
-    let prompt: TmuxAttachPrompt
-    let onConfirm: (TmuxAttachSelection) -> Void
+struct RemoteSessionAttachPromptSheet: View {
+    let prompt: RemoteSessionAttachPrompt
+    let onConfirm: (RemoteSessionAttachSelection) -> Void
 
     private var hasSessions: Bool {
         !prompt.existingSessions.isEmpty
     }
 
+    private var title: String {
+        String(format: String(localized: "Choose %@ session"), prompt.backendName)
+    }
 
     var body: some View {
         #if os(iOS)
         NavigationStack {
             contentBody
-            .navigationTitle("Choose tmux session")
+            .navigationTitle(title)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 actionRow
             }
@@ -43,8 +46,8 @@ struct TmuxAttachPromptSheet: View {
 
     #if os(macOS)
     private var macHeader: some View {
-        DialogSheetHeader(title: "Choose tmux session") {
-            confirm(.skipTmux)
+        DialogSheetHeader(title: LocalizedStringKey(title)) {
+            confirm(.plainShell)
         }
     }
     #endif
@@ -57,13 +60,13 @@ struct TmuxAttachPromptSheet: View {
                 Section {
                     ForEach(prompt.existingSessions) { session in
                         Button {
-                            confirm(.attachExisting(sessionName: session.name))
+                            confirm(.attachExisting(session.id))
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "terminal")
                                     .foregroundStyle(.secondary)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(session.name)
+                                    Text(session.displayName)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                     Text(sessionDetailsText(for: session))
@@ -92,13 +95,13 @@ struct TmuxAttachPromptSheet: View {
                 Section {
                     ForEach(prompt.existingSessions) { session in
                         Button {
-                            confirm(.attachExisting(sessionName: session.name))
+                            confirm(.attachExisting(session.id))
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "terminal")
                                     .foregroundStyle(.secondary)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(session.name)
+                                    Text(session.displayName)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                     Text(sessionDetailsText(for: session))
@@ -134,41 +137,45 @@ struct TmuxAttachPromptSheet: View {
         }
     }
 
-    private func sessionDetailsText(for session: TmuxAttachSessionInfo) -> String {
-        let attachment = session.attachedClients > 0
-            ? String(localized: "Attached")
-            : String(localized: "Detached")
-
-        let clients: String
-        if session.attachedClients == 1 {
-            clients = String(localized: "1 client")
-        } else {
-            clients = String(
-                format: String(localized: "%lld clients"),
-                Int64(session.attachedClients)
+    private func sessionDetailsText(for session: RemoteSessionSelectionInfo) -> String {
+        var details: [String] = []
+        if let attachedClientCount = session.attachedClientCount {
+            details.append(
+                attachedClientCount > 0
+                    ? String(localized: "Attached")
+                    : String(localized: "Detached")
             )
+            if attachedClientCount == 1 {
+                details.append(String(localized: "1 client"))
+            } else {
+                details.append(String(
+                    format: String(localized: "%lld clients"),
+                    Int64(attachedClientCount)
+                ))
+            }
         }
 
-        let windows: String
-        if session.windowCount == 1 {
-            windows = String(localized: "1 window")
-        } else {
-            windows = String(
-                format: String(localized: "%lld windows"),
-                Int64(session.windowCount)
-            )
+        if let containerCount = session.containerCount {
+            if containerCount == 1 {
+                details.append(String(localized: "1 window"))
+            } else {
+                details.append(String(
+                    format: String(localized: "%lld windows"),
+                    Int64(containerCount)
+                ))
+            }
         }
 
-        return [attachment, clients, windows].joined(separator: " • ")
+        return details.isEmpty ? String(localized: "Available") : details.joined(separator: " • ")
     }
 
     private var actionRow: some View {
         #if os(macOS)
         HStack(spacing: 12) {
             Button {
-                confirm(.skipTmux)
+                confirm(.plainShell)
             } label: {
-                Label("Skip tmux", systemImage: "arrow.right.circle")
+                Label("Continue without a remote session", systemImage: "arrow.right.circle")
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 38)
                     .font(.callout.weight(.semibold))
@@ -221,9 +228,9 @@ struct TmuxAttachPromptSheet: View {
             .accessibilityIdentifier("tmuxNewSessionButton")
 
             Button {
-                confirm(.skipTmux)
+                confirm(.plainShell)
             } label: {
-                Label("Skip tmux", systemImage: "arrow.right.circle")
+                Label("Continue without a remote session", systemImage: "arrow.right.circle")
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
                     .font(.headline)
@@ -241,7 +248,7 @@ struct TmuxAttachPromptSheet: View {
 
     private var closeButton: some View {
         Button {
-            confirm(.skipTmux)
+            confirm(.plainShell)
         } label: {
             #if os(macOS)
             Image(systemName: "xmark")
@@ -268,15 +275,18 @@ struct TmuxAttachPromptSheet: View {
     private var noSessionsView: some View {
         if #available(iOS 17.0, macOS 14.0, *) {
             ContentUnavailableView(
-                "No tmux sessions found",
+                String(format: String(localized: "No %@ sessions found"), prompt.backendName),
                 systemImage: "terminal",
-                description: Text("Create a new session, or continue without tmux.")
+                description: Text("Create a new session, or continue without a remote session.")
             )
         } else {
             VStack(spacing: 8) {
-                Label("No tmux sessions found", systemImage: "terminal")
+                Label(
+                    String(format: String(localized: "No %@ sessions found"), prompt.backendName),
+                    systemImage: "terminal"
+                )
                     .font(.headline)
-                Text("Create a new session, or continue without tmux.")
+                Text("Create a new session, or continue without a remote session.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -285,7 +295,7 @@ struct TmuxAttachPromptSheet: View {
         }
     }
 
-    private func confirm(_ selection: TmuxAttachSelection) {
+    private func confirm(_ selection: RemoteSessionAttachSelection) {
         onConfirm(selection)
     }
 }

@@ -19,9 +19,34 @@ struct ServerCloudKitRecordCodecTests {
         #expect(record.recordType == "Server")
         #expect(record.recordID.recordName == server.id.uuidString)
         #expect(record.recordID.zoneID == zoneID)
+        #expect(record["remoteSessionBackendIdentifier"] as? String == "zmx")
+        #expect(record["tmuxEnabledOverride"] == nil)
+        #expect(record["tmuxStartupBehaviorOverride"] == nil)
         var expected = server
         expected.updatedAt = now
         #expect(ServerCloudKitRecordCodec.server(from: record, now: now) == expected)
+    }
+
+    @Test
+    func legacyTmuxRecordMigratesToCurrentRemoteSessionFields() throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        let now = Date(timeIntervalSinceReferenceDate: 3_000)
+        let record = ServerCloudKitRecordCodec.record(
+            for: makeServer(),
+            in: zoneID,
+            now: now
+        )
+        record["remoteSessionEnabledOverride"] = nil
+        record["remoteSessionBackendIdentifier"] = nil
+        record["remoteSessionStartupBehaviorOverride"] = nil
+        record["tmuxEnabledOverride"] = true
+        record["tmuxStartupBehaviorOverride"] = "vvtermManaged"
+
+        let migrated = try #require(ServerCloudKitRecordCodec.server(from: record, now: now))
+
+        #expect(migrated.remoteSessionEnabledOverride == true)
+        #expect(migrated.remoteSessionBackendIdentifier == .tmux)
+        #expect(migrated.remoteSessionStartupBehaviorOverride == .createManaged)
     }
 
     @Test
@@ -113,8 +138,9 @@ struct ServerCloudKitRecordCodecTests {
             lastConnected: Date(timeIntervalSinceReferenceDate: 1_500),
             isFavorite: true,
             requiresBiometricUnlock: true,
-            tmuxEnabledOverride: false,
-            tmuxStartupBehaviorOverride: .skipTmux,
+            remoteSessionEnabledOverride: false,
+            remoteSessionBackendIdentifier: .zmx,
+            remoteSessionStartupBehaviorOverride: .plainShell,
             createdAt: Date(timeIntervalSinceReferenceDate: 1_000),
             updatedAt: Date(timeIntervalSinceReferenceDate: 2_000)
         )

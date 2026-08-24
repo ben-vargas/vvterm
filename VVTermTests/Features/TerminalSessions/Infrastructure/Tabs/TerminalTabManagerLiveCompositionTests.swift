@@ -4,34 +4,54 @@ import MoshCore
 import Testing
 @testable import VVTerm
 
-private actor LiveCompositionRemoteTmuxSpy: TerminalRemoteTmuxServicing {
-    private var killedSessionNames: [String] = []
+private actor LiveCompositionRemoteSessionSpy: TerminalRemoteSessionServicing {
+    nonisolated let backendMetadata = [RemoteSessionBackendMetadata(
+        identifier: .tmux,
+        displayName: "tmux",
+        installation: .automatic
+    )]
+    private var killedIdentifiers: [RemoteSessionIdentifier] = []
 
-    func killedSessions() -> [String] {
-        killedSessionNames
+    func killedSessions() -> [RemoteSessionIdentifier] {
+        killedIdentifiers
     }
 
-    func tmuxAvailability(using client: SSHClient) async -> RemoteTmuxAvailability {
-        .unsupported
-    }
-
-    func tmuxInstallBackend(using client: SSHClient) async -> RemoteTmuxBackend? {
-        nil
+    func availability(
+        for backendIdentifier: RemoteSessionBackendIdentifier,
+        using client: SSHClient
+    ) async -> RemoteSessionAvailability {
+        .unsupportedEnvironment
     }
 
     func listSessions(
         using client: SSHClient,
-        backend: RemoteTmuxBackend
-    ) async throws -> [RemoteTmuxSession] {
+        runtime: RemoteSessionRuntime
+    ) async throws -> [RemoteSessionDescriptor] {
         []
     }
 
-    func prepareConfig(
+    func prepareManagedSession(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
-        themeStyle: RemoteTmuxThemeStyle,
-        backend: RemoteTmuxBackend?
+        themeStyle: RemoteSessionThemeStyle,
+        runtime: RemoteSessionRuntime
     ) async {}
+
+    func launchPlan(
+        for request: RemoteSessionLaunchRequest,
+        runtime: RemoteSessionRuntime
+    ) async throws -> RemoteSessionBackendLaunchPlan {
+        throw SSHError.notConnected
+    }
+
+    func installScript(
+        attachment: RemoteSessionAttachment,
+        workingDirectory: String,
+        terminalType: RemoteTerminalType,
+        themeStyle: RemoteSessionThemeStyle,
+        using client: SSHClient,
+        attachAfterInstall: Bool
+    ) async -> String? { nil }
 
     func sendScript(
         _ script: String,
@@ -40,29 +60,24 @@ private actor LiveCompositionRemoteTmuxSpy: TerminalRemoteTmuxServicing {
     ) async throws {}
 
     func killSession(
-        named sessionName: String,
+        _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
-        backend: RemoteTmuxBackend?
+        runtime: RemoteSessionRuntime?
     ) async {
-        killedSessionNames.append(sessionName)
+        killedIdentifiers.append(identifier)
     }
 
-    func cleanupLegacySessions(
+    func cleanupSessions(
+        deviceID: String,
+        keeping identifiers: Set<RemoteSessionIdentifier>,
         using client: SSHClient,
-        backend: RemoteTmuxBackend?
+        runtime: RemoteSessionRuntime
     ) async {}
 
-    func cleanupDetachedSessions(
-        deviceId: String,
-        keeping sessionNames: Set<String>,
+    func currentWorkingDirectory(
+        for identifier: RemoteSessionIdentifier,
         using client: SSHClient,
-        backend: RemoteTmuxBackend?
-    ) async {}
-
-    func currentPath(
-        sessionName: String,
-        using client: SSHClient,
-        backend: RemoteTmuxBackend?
+        runtime: RemoteSessionRuntime?
     ) async -> String? {
         nil
     }
@@ -146,15 +161,15 @@ struct TerminalTabManagerLiveCompositionTests {
 
         let firstCheckpointPaneID = UUID()
         let secondCheckpointPaneID = UUID()
-        let firstRemoteTmux = LiveCompositionRemoteTmuxSpy()
-        let secondRemoteTmux = LiveCompositionRemoteTmuxSpy()
+        let firstRemoteSessions = LiveCompositionRemoteSessionSpy()
+        let secondRemoteSessions = LiveCompositionRemoteSessionSpy()
         let firstSurfaceStore = GhosttyTerminalSurfaceStore()
         let secondSurfaceStore = GhosttyTerminalSurfaceStore()
         let firstLiveActivityController = LiveCompositionLiveActivityController()
         let secondLiveActivityController = LiveCompositionLiveActivityController()
         let first = makeManager(
             defaults: firstDefaults,
-            remoteTmux: firstRemoteTmux,
+            remoteSessions: firstRemoteSessions,
             eternalTerminalResumeStore: LiveCompositionEternalTerminalResumeStore(
                 checkpointPaneIDs: [firstCheckpointPaneID]
             ),
@@ -167,7 +182,7 @@ struct TerminalTabManagerLiveCompositionTests {
         )
         let second = makeManager(
             defaults: secondDefaults,
-            remoteTmux: secondRemoteTmux,
+            remoteSessions: secondRemoteSessions,
             eternalTerminalResumeStore: LiveCompositionEternalTerminalResumeStore(
                 checkpointPaneIDs: [secondCheckpointPaneID]
             ),
@@ -185,8 +200,12 @@ struct TerminalTabManagerLiveCompositionTests {
             (second.terminalSurfaceStore as AnyObject) === secondSurfaceStore
         #expect(firstOwnsSurfaceStore)
         #expect(secondOwnsSurfaceStore)
-        #expect(first.tmuxCoordinator.isEnabled(for: UUID()))
-        #expect(!second.tmuxCoordinator.isEnabled(for: UUID()))
+        #expect(first.remoteSessionCoordinator.isEnabled(for: UUID()))
+        #expect(!second.remoteSessionCoordinator.isEnabled(for: UUID()))
+        #expect(first.remoteSessionCoordinator.backendIdentifier(for: UUID()) == .tmux)
+        #expect(second.remoteSessionCoordinator.backendIdentifier(for: UUID()) == .tmux)
+        #expect(firstDefaults.bool(forKey: TerminalRemoteSessionDefaults.enabledKey))
+        #expect(!secondDefaults.bool(forKey: TerminalRemoteSessionDefaults.enabledKey))
         #expect(!first.reconnectCoordinator.applicationIsActive)
         #expect(second.reconnectCoordinator.applicationIsActive)
         #expect(
@@ -208,12 +227,16 @@ struct TerminalTabManagerLiveCompositionTests {
         )
         #expect(second.transportCoordinator.hasMoshCheckpoint(for: secondCheckpointPaneID))
 
-        await first.tmuxCoordinator.killSession(
-            named: "first-session",
+        let identifier = try RemoteSessionIdentifier(
+            backendIdentifier: .tmux,
+            validating: "first-session"
+        )
+        await first.remoteSessionCoordinator.killSession(
+            identifier,
             using: SSHClient.testing()
         )
-        #expect(await firstRemoteTmux.killedSessions() == ["first-session"])
-        #expect(await secondRemoteTmux.killedSessions().isEmpty)
+        #expect(await firstRemoteSessions.killedSessions() == [identifier])
+        #expect(await secondRemoteSessions.killedSessions().isEmpty)
 
         let tab = TerminalTab(serverId: UUID(), title: "First")
         first.sessionState.install(
@@ -239,7 +262,7 @@ struct TerminalTabManagerLiveCompositionTests {
 
     private func makeManager(
         defaults: UserDefaults,
-        remoteTmux: LiveCompositionRemoteTmuxSpy,
+        remoteSessions: LiveCompositionRemoteSessionSpy,
         eternalTerminalResumeStore: LiveCompositionEternalTerminalResumeStore,
         moshResumeStore: LiveCompositionMoshResumeStore,
         surfaceStore: GhosttyTerminalSurfaceStore,
@@ -296,13 +319,13 @@ struct TerminalTabManagerLiveCompositionTests {
                 controller: liveActivityController
             ),
             remoteMosh: LiveCompositionRemoteMoshSpy(),
-            remoteTmux: remoteTmux,
+            remoteSessions: remoteSessions,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshResumeStore: moshResumeStore,
             terminalSurfaceStore: surfaceStore,
             deviceID: UUID().uuidString.lowercased(),
             themeStyle: {
-                TerminalTmuxSessionLiveComposition.themeStyle(for: "Aizen Dark")
+                TerminalRemoteSessionLiveComposition.themeStyle(for: "Aizen Dark")
             },
             applicationIsActive: applicationIsActiveQuery
         )

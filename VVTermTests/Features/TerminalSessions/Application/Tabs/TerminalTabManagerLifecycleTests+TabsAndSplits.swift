@@ -301,7 +301,7 @@ extension TerminalTabManagerLifecycleTests {
     
                 #expect(manager.sessionState.tabs(for: tab.serverId).map(\.id) == [tab.id])
                 #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
-                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
+                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .transportInterrupted)
             }
         }
         #endif

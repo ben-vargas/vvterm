@@ -1821,3 +1821,13 @@
 "Remove All Downloaded Models" = "Выдаліць усе спампаваныя мадэлі";
 "Remove All Downloaded Models?" = "Выдаліць усе спампаваныя мадэлі?";
 "Voice input models must be downloaded again before they can work offline." = "Каб мадэлі галасавога ўводу працавалі без інтэрнэту, іх трэба будзе спампаваць зноў.";
+"Keep remote sessions running by default" = "Трымаць аддаленыя сесіі запушчанымі па змаўчанні";
+"These defaults apply to new servers. You can override them in server settings." = "Гэтыя налады па змаўчанні прымяняюцца да новых сервераў. Іх можна змяніць у наладах сервера.";
+"Keep remote sessions running" = "Трымаць аддаленыя сесіі запушчанымі";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "Выбраны варыянт захоўвае аддаленыя сесіі запушчанымі пасля перазапуску праграмы і разрыву злучэння.";
+"Without session persistence, app backgrounding can interrupt running commands." = "Без захавання сесій пераход праграмы ў фонавы рэжым можа перапыніць запушчаныя каманды.";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "Выбраны варыянт захоўвае тэрмінал актыўным пасля перазапуску праграмы і разрыву злучэння.";
+"Use a persistent session" = "Выкарыстоўваць пастаянную сесію";
+"Use persistent sessions by default" = "Тыпова выкарыстоўваць пастаянныя сесіі";
+"Create or reconnect to a VVTerm-managed session." = "Стварыць або аднавіць злучэнне з сесіяй пад кіраваннем VVTerm.";
+"Ask which session to use for each new tab or split." = "Пытацца, якую сесію выкарыстоўваць для кожнай новай укладкі або падзелу.";

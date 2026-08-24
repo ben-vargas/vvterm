@@ -1,84 +1,72 @@
 import Foundation
 
-nonisolated struct TmuxShellLifecycleContext: Hashable, Sendable {
-    let ownership: TmuxSessionOwnership
-    let markerToken: String
-    let presenceProbe: TmuxSessionPresenceProbe
-}
-
-nonisolated struct EternalTerminalTmuxResumeContext: Codable, Hashable, Sendable {
-    let ownership: TmuxSessionOwnership
-    let markerToken: String
-}
-
-nonisolated struct TmuxSessionPresenceProbe: Hashable, Sendable {
-    let command: String
-    let existsMarker: String
-    let missingMarker: String
-
-    nonisolated func sessionExists(in output: String) -> Bool? {
-        if output.contains(existsMarker) {
-            return true
-        }
-        if output.contains(missingMarker) {
-            return false
-        }
-        return nil
-    }
+nonisolated struct RemoteSessionLifecycleContext: Codable, Hashable, Sendable {
+    let attachment: RemoteSessionAttachment
+    let envelope: RemoteSessionLifecycleEnvelope
+    let presenceProbe: RemoteSessionPresenceProbe
 }
 
 nonisolated struct TerminalShellStartupPlan: Sendable {
     let command: String?
-    let tmuxLifecycle: TmuxShellLifecycleContext?
+    let remoteSessionLifecycle: RemoteSessionLifecycleContext?
 
     nonisolated static let plainShell = TerminalShellStartupPlan(
         command: nil,
-        tmuxLifecycle: nil
+        remoteSessionLifecycle: nil
     )
 }
 
 nonisolated enum TerminalShellEndReason: Hashable, Sendable {
-    case transportEnded
-    case tmuxDetached(TmuxSessionOwnership)
-    case tmuxEnded(TmuxSessionOwnership)
-    case tmuxCreationFailed
+    case transportInterrupted
+    case remoteSessionDetached(RemoteSessionOwnership)
+    case remoteSessionTerminated(RemoteSessionOwnership)
+    case remoteSessionCreationFailed
+    case remoteSessionAttachFailed
+    case observationAmbiguous
 
     nonisolated static func resolve(
-        tmuxLifecycle: TmuxShellLifecycleContext?,
-        markerEvent: TmuxLifecycleEvent?,
+        lifecycle: RemoteSessionLifecycleContext?,
+        event: RemoteSessionEvent?,
         sessionExists: Bool?
     ) -> Self {
-        guard let tmuxLifecycle else {
-            return .transportEnded
+        guard let lifecycle else {
+            return .transportInterrupted
         }
 
-        switch markerEvent {
+        switch event {
         case .detached:
-            return .tmuxDetached(tmuxLifecycle.ownership)
-        case .ended:
-            return .tmuxEnded(tmuxLifecycle.ownership)
+            return .remoteSessionDetached(lifecycle.attachment.ownership)
+        case .terminated:
+            return .remoteSessionTerminated(lifecycle.attachment.ownership)
         case .creationFailed:
-            return .tmuxCreationFailed
-        case nil:
+            return .remoteSessionCreationFailed
+        case .attachFailed:
+            return .remoteSessionAttachFailed
+        case .transportInterrupted:
+            return .transportInterrupted
+        case .observationAmbiguous:
+            return .observationAmbiguous
+        case .attached, nil:
             switch sessionExists {
             case true:
-                return .tmuxDetached(tmuxLifecycle.ownership)
+                return .remoteSessionDetached(lifecycle.attachment.ownership)
             case false:
-                return .tmuxEnded(tmuxLifecycle.ownership)
+                return .remoteSessionTerminated(lifecycle.attachment.ownership)
             case nil:
-                return .transportEnded
+                return .observationAmbiguous
             }
         }
     }
 }
 
 nonisolated enum TerminalDisconnectReason: String, Codable, Hashable, Sendable {
-    case transportEnded
-    case tmuxDetached
-    case externalTmuxEnded
+    // Keep raw values stable for local snapshot migration.
+    case transportInterrupted = "transportEnded"
+    case remoteSessionDetached = "tmuxDetached"
+    case externalRemoteSessionTerminated = "externalTmuxEnded"
 
     var allowsAutomaticReconnect: Bool {
-        self == .transportEnded
+        self == .transportInterrupted
     }
 }
 
@@ -92,7 +80,7 @@ nonisolated enum TerminalTeardownIntent: CaseIterable, Sendable {
         self != .applicationTermination
     }
 
-    var terminatesManagedTmux: Bool {
+    var terminatesManagedRemoteSession: Bool {
         switch self {
         case .explicitClose, .explicitServerDisconnect:
             true

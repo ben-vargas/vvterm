@@ -1820,3 +1820,13 @@
 "Remove All Downloaded Models" = "ダウンロード済みモデルをすべて削除";
 "Remove All Downloaded Models?" = "ダウンロード済みモデルをすべて削除しますか？";
 "Voice input models must be downloaded again before they can work offline." = "オフラインで使用するには、音声入力モデルを再度ダウンロードする必要があります。";
+"Keep remote sessions running by default" = "デフォルトでリモートセッションを実行したままにする";
+"These defaults apply to new servers. You can override them in server settings." = "これらのデフォルト設定は新しいサーバーに適用されます。サーバー設定で変更できます。";
+"Keep remote sessions running" = "リモートセッションを実行したままにする";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "選択した方法は、アプリの再起動や切断後もリモートセッションを実行したままにします。";
+"Without session persistence, app backgrounding can interrupt running commands." = "セッションを保持しない場合、アプリがバックグラウンドに移ると実行中のコマンドが中断されることがあります。";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "選択した方法は、アプリの再起動や切断後もターミナルを維持します。";
+"Use a persistent session" = "永続セッションを使用";
+"Use persistent sessions by default" = "デフォルトで永続セッションを使用";
+"Create or reconnect to a VVTerm-managed session." = "VVTerm 管理のセッションを作成または再接続します。";
+"Ask which session to use for each new tab or split." = "新しいタブや分割ごとに使用するセッションを確認します。";

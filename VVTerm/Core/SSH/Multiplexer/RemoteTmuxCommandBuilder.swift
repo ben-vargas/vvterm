@@ -2,11 +2,11 @@ import Foundation
 
 nonisolated enum RemoteTmuxCommandBuilder {
     static func attachCommand(
-        themeStyle: RemoteTmuxThemeStyle,
+        themeStyle: RemoteSessionThemeStyle,
         sessionName: String,
         workingDirectory: String,
         backend: RemoteTmuxBackend = .unixTmux,
-        lifecycleMarkerToken: String? = nil,
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope? = nil,
         transport: ShellTransport = .ssh
     ) -> String {
         let body = attachOrCreateBody(
@@ -14,27 +14,27 @@ nonisolated enum RemoteTmuxCommandBuilder {
             workingDirectory: workingDirectory,
             themeStyle: themeStyle,
             backend: backend,
-            lifecycleMarkerToken: lifecycleMarkerToken,
+            lifecycleEnvelope: lifecycleEnvelope,
             transport: transport
         )
         return body
     }
 
     static func attachExistingCommand(
-        themeStyle: RemoteTmuxThemeStyle,
+        themeStyle: RemoteSessionThemeStyle,
         sessionName: String,
-        ownership: TmuxSessionOwnership,
+        ownership: RemoteSessionOwnership,
         backend: RemoteTmuxBackend = .unixTmux,
-        lifecycleMarkerToken: String? = nil,
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope? = nil,
         transport: ShellTransport = .ssh
     ) -> String {
         let body = attachExistingBody(
             sessionName: sessionName,
-            missingCommand: lifecycleMarkerToken == nil
+            missingCommand: lifecycleEnvelope == nil
                 ? missingSessionCommand(backend: backend)
                 : lifecycleMissingSessionCommand(backend: backend),
             backend: backend,
-            lifecycleMarkerToken: lifecycleMarkerToken,
+            lifecycleEnvelope: lifecycleEnvelope,
             themeStyle: themeStyle,
             ownership: ownership,
             transport: transport
@@ -48,7 +48,8 @@ nonisolated enum RemoteTmuxCommandBuilder {
         existsMarker: String,
         missingMarker: String
     ) -> String {
-        if case .windowsPsmux(let commandName, _, _) = backend {
+        if backend.isWindows {
+            let commandName = backend.commandName
             let script = """
             $vvtermPsmux = \(powerShellQuoted(commandName))
             $vvtermSession = \(powerShellQuoted(sessionName))
@@ -66,7 +67,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         let plainSession = RemoteTerminalBootstrap.shellQuoted(sessionName)
         let exists = RemoteTerminalBootstrap.shellQuoted(existsMarker)
         let missing = RemoteTerminalBootstrap.shellQuoted(missingMarker)
-        let tmuxProbe = tmuxCommand(includeUTF8: false)
+        let tmuxProbe = tmuxCommand(includeUTF8: false, backend: backend)
         let body = """
         \(RemoteTerminalBootstrap.shellPathExport()); \
         if \(tmuxProbe) has-session -t \(exactSession) 2>/dev/null || \(tmuxProbe) has-session -t \(plainSession) 2>/dev/null; then \
@@ -76,7 +77,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
     }
 
     static func installAndAttachScript(
-        themeStyle: RemoteTmuxThemeStyle,
+        themeStyle: RemoteSessionThemeStyle,
         sessionName: String,
         workingDirectory: String,
         terminalType: RemoteTerminalType,
@@ -167,18 +168,18 @@ nonisolated enum RemoteTmuxCommandBuilder {
     private static func attachOrCreateBody(
         sessionName: String,
         workingDirectory: String,
-        themeStyle: RemoteTmuxThemeStyle,
+        themeStyle: RemoteSessionThemeStyle,
         backend: RemoteTmuxBackend = .unixTmux,
-        lifecycleMarkerToken: String? = nil,
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope? = nil,
         transport: ShellTransport = .ssh
     ) -> String {
-        if case .windowsPsmux = backend {
+        if backend.isWindows {
             return windowsAttachOrCreateCommand(
                 sessionName: sessionName,
                 workingDirectory: workingDirectory,
                 backend: backend,
                 themeStyle: themeStyle,
-                lifecycleMarkerToken: lifecycleMarkerToken
+                lifecycleEnvelope: lifecycleEnvelope
             )
         }
 
@@ -187,14 +188,14 @@ nonisolated enum RemoteTmuxCommandBuilder {
             workingDirectory: workingDirectory,
             backend: backend,
             themeStyle: themeStyle,
-            lifecycleMarkerToken: lifecycleMarkerToken,
+            lifecycleEnvelope: lifecycleEnvelope,
             transport: transport
         )
         return attachExistingBody(
             sessionName: sessionName,
             missingCommand: createCommand,
             backend: backend,
-            lifecycleMarkerToken: lifecycleMarkerToken,
+            lifecycleEnvelope: lifecycleEnvelope,
             themeStyle: themeStyle,
             reportsCreationFailure: true,
             ownership: .managed,
@@ -206,18 +207,18 @@ nonisolated enum RemoteTmuxCommandBuilder {
         sessionName: String,
         missingCommand: String,
         backend: RemoteTmuxBackend = .unixTmux,
-        lifecycleMarkerToken: String? = nil,
-        themeStyle: RemoteTmuxThemeStyle,
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope? = nil,
+        themeStyle: RemoteSessionThemeStyle,
         reportsCreationFailure: Bool = false,
-        ownership: TmuxSessionOwnership,
+        ownership: RemoteSessionOwnership,
         transport: ShellTransport = .ssh
     ) -> String {
-        if case .windowsPsmux = backend {
+        if backend.isWindows {
             return windowsAttachExistingCommand(
                 sessionName: sessionName,
                 missingCommand: missingCommand,
                 backend: backend,
-                lifecycleMarkerToken: lifecycleMarkerToken,
+                lifecycleEnvelope: lifecycleEnvelope,
                 themeStyle: themeStyle,
                 reportsCreationFailure: reportsCreationFailure,
                 ownership: ownership
@@ -226,37 +227,39 @@ nonisolated enum RemoteTmuxCommandBuilder {
 
         let exactSession = RemoteTerminalBootstrap.shellQuoted("=\(sessionName)")
         let plainSession = RemoteTerminalBootstrap.shellQuoted(sessionName)
-        let tmuxProbe = tmuxCommand(includeUTF8: false)
+        let tmuxProbe = tmuxCommand(includeUTF8: false, backend: backend)
         let usesManagedConfiguration = ownership == .managed
-        let replacesProcess = lifecycleMarkerToken == nil
+        let replacesProcess = lifecycleEnvelope == nil
         let managedConfiguration = usesManagedConfiguration
-            ? "\(managedSessionConfigurationCommand(sessionName: sessionName, transport: transport)); \(managedWindowsConfigurationCommand(sessionName: sessionName, themeStyle: themeStyle)); "
+            ? "\(managedSessionConfigurationCommand(sessionName: sessionName, backend: backend, transport: transport)); \(managedWindowsConfigurationCommand(sessionName: sessionName, backend: backend, themeStyle: themeStyle)); "
             : ""
         let exactAttach = tmuxAttachCommand(
             target: exactSession,
+            backend: backend,
             replacesProcess: replacesProcess,
             advertisesManagedFeatures: usesManagedConfiguration
         )
         let plainAttach = tmuxAttachCommand(
             target: plainSession,
+            backend: backend,
             replacesProcess: replacesProcess,
             advertisesManagedFeatures: usesManagedConfiguration
         )
-        let creationStatusCapture = reportsCreationFailure && lifecycleMarkerToken != nil
+        let creationStatusCapture = reportsCreationFailure && lifecycleEnvelope != nil
             ? "; vvtermTmuxCreateStatus=$?"
             : ""
 
         let lifecycleReport: String
-        if let lifecycleMarkerToken {
+        if let lifecycleEnvelope {
             let detached = RemoteTerminalBootstrap.shellQuoted(
-                TmuxLifecycleMarker.sequence(token: lifecycleMarkerToken, event: .detached)
+                RemoteSessionLifecycleMarker.sequence(envelope: lifecycleEnvelope, event: .detached)
             )
             let ended = RemoteTerminalBootstrap.shellQuoted(
-                TmuxLifecycleMarker.sequence(token: lifecycleMarkerToken, event: .ended)
+                RemoteSessionLifecycleMarker.sequence(envelope: lifecycleEnvelope, event: .terminated)
             )
             if reportsCreationFailure {
                 let creationFailed = RemoteTerminalBootstrap.shellQuoted(
-                    TmuxLifecycleMarker.sequence(token: lifecycleMarkerToken, event: .creationFailed)
+                    RemoteSessionLifecycleMarker.sequence(envelope: lifecycleEnvelope, event: .creationFailed)
                 )
                 lifecycleReport = """
                 ; if [ "${vvtermTmuxCreateStatus:-0}" -ne 0 ]; then printf '%s' \(creationFailed); \
@@ -287,11 +290,11 @@ nonisolated enum RemoteTmuxCommandBuilder {
         sessionName: String,
         workingDirectory: String,
         backend: RemoteTmuxBackend = .unixTmux,
-        themeStyle: RemoteTmuxThemeStyle,
-        lifecycleMarkerToken: String? = nil,
+        themeStyle: RemoteSessionThemeStyle,
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope? = nil,
         transport: ShellTransport = .ssh
     ) -> String {
-        if case .windowsPsmux = backend {
+        if backend.isWindows {
             return windowsCreateSessionCommand(
                 sessionName: sessionName,
                 workingDirectory: workingDirectory,
@@ -308,13 +311,15 @@ nonisolated enum RemoteTmuxCommandBuilder {
         let bootstrapWindowTarget = RemoteTerminalBootstrap.shellQuoted(
             "=\(sessionName):\(bootstrapWindowName)"
         )
-        let tmux = tmuxCommand(includeUTF8: false)
+        let tmux = tmuxCommand(includeUTF8: false, backend: backend)
         let sessionConfiguration = managedSessionConfigurationCommand(
             sessionName: sessionName,
+            backend: backend,
             transport: transport
         )
         let windowsConfiguration = managedWindowsConfigurationCommand(
             sessionName: sessionName,
+            backend: backend,
             themeStyle: themeStyle
         )
         let createBootstrap = "\(tmux) new-session -d -s \(escapedSession) -n \(escapedBootstrapWindow) -c \(escapedDir) \(RemoteTerminalBootstrap.shellQuoted("sleep 86400"))"
@@ -327,7 +332,8 @@ nonisolated enum RemoteTmuxCommandBuilder {
         let removeFailedSession = "\(tmux) kill-session -t \(exactSession) 2>/dev/null"
         let attach = tmuxAttachCommand(
             target: escapedSession,
-            replacesProcess: lifecycleMarkerToken == nil,
+            backend: backend,
+            replacesProcess: lifecycleEnvelope == nil,
             advertisesManagedFeatures: true
         )
         return """
@@ -346,16 +352,24 @@ nonisolated enum RemoteTmuxCommandBuilder {
 
     private static func managedSessionConfigurationCommand(
         sessionName: String,
+        backend: RemoteTmuxBackend,
         transport: ShellTransport
     ) -> String {
-        let tmux = tmuxCommand(includeUTF8: false)
+        let tmux = tmuxCommand(includeUTF8: false, backend: backend)
         let sessionOptionTarget = RemoteTerminalBootstrap.shellQuoted("=\(sessionName):")
         let sessionEnvironmentTarget = RemoteTerminalBootstrap.shellQuoted("=\(sessionName)")
         let paneTitle = RemoteTerminalBootstrap.shellQuoted("#{pane_title}")
+        let windowLinked = RemoteTerminalBootstrap.shellQuoted("#{window_linked}")
+        // tmux can apply history-limit through the selected linked window.
+        // Skip it when that could change an external session.
+        let historyLimit = """
+        if \(tmux) list-windows -t \(sessionOptionTarget) -F \(windowLinked) 2>/dev/null | grep -Fqx '1'; then :; \
+        else \(tmux) set-option -q -t \(sessionOptionTarget) history-limit 10000; fi
+        """
 
         var commands = [
             "\(tmux) set-option -q -t \(sessionOptionTarget) status off",
-            "\(tmux) set-option -q -t \(sessionOptionTarget) history-limit 10000",
+            historyLimit,
             "\(tmux) set-option -q -t \(sessionOptionTarget) mouse on",
             "\(tmux) set-option -q -t \(sessionOptionTarget) set-titles on",
             "\(tmux) set-option -q -t \(sessionOptionTarget) set-titles-string \(paneTitle)"
@@ -382,9 +396,10 @@ nonisolated enum RemoteTmuxCommandBuilder {
 
     private static func managedWindowsConfigurationCommand(
         sessionName: String,
-        themeStyle: RemoteTmuxThemeStyle
+        backend: RemoteTmuxBackend,
+        themeStyle: RemoteSessionThemeStyle
     ) -> String {
-        let tmux = tmuxCommand(includeUTF8: false)
+        let tmux = tmuxCommand(includeUTF8: false, backend: backend)
         let sessionTarget = RemoteTerminalBootstrap.shellQuoted("=\(sessionName):")
         let settings = [
             (name: "allow-passthrough", value: "on"),
@@ -430,16 +445,17 @@ nonisolated enum RemoteTmuxCommandBuilder {
 
     private static func tmuxAttachCommand(
         target: String,
+        backend: RemoteTmuxBackend,
         replacesProcess: Bool,
         advertisesManagedFeatures: Bool
     ) -> String {
         let processReplacement = replacesProcess ? "exec " : ""
-        let tmux = tmuxCommand(includeUTF8: true)
+        let tmux = tmuxCommand(includeUTF8: true, backend: backend)
         let attach = "\(processReplacement)\(tmux) attach-session -t \(target)"
         guard advertisesManagedFeatures else { return attach }
 
         let features = "-T RGB,hyperlinks"
-        return "if tmux \(features) -V >/dev/null 2>&1; then \(processReplacement)\(tmux) \(features) attach-session -t \(target); else \(attach); fi"
+        return "if \(tmux) \(features) -V >/dev/null 2>&1; then \(processReplacement)\(tmux) \(features) attach-session -t \(target); else \(attach); fi"
     }
 
     private static func lifecycleMissingSessionCommand(backend: RemoteTmuxBackend) -> String {
@@ -447,9 +463,10 @@ nonisolated enum RemoteTmuxCommandBuilder {
     }
 
     private static func tmuxCommand(
-        includeUTF8: Bool
+        includeUTF8: Bool,
+        backend: RemoteTmuxBackend
     ) -> String {
-        var parts = ["tmux"]
+        var parts = [RemoteTerminalBootstrap.shellQuoted(backend.executablePath)]
         if includeUTF8 {
             parts.append("-u")
         }
@@ -472,7 +489,8 @@ nonisolated enum RemoteTmuxCommandBuilder {
           done;
         fi;
         if [ -n "$VVTERM_TMUX_BIN" ] && "$VVTERM_TMUX_BIN" -V >/dev/null 2>&1; then
-          printf '\(okMarker)';
+          VVTERM_TMUX_VERSION="$("$VVTERM_TMUX_BIN" -V 2>/dev/null | head -n 1)";
+          printf '%s\n__VVTERM_TMUX_PATH__%s\n__VVTERM_TMUX_VERSION__%s\n' '\(okMarker)' "$VVTERM_TMUX_BIN" "$VVTERM_TMUX_VERSION";
         else
           printf '__VVTERM_TMUX_NO__';
         fi
@@ -514,7 +532,10 @@ nonisolated enum RemoteTmuxCommandBuilder {
           }
         }
         if ($vvtermAvailable) {
+          $vvtermVersion = (& $cmd.Source -V 2>$null | Select-Object -First 1)
           Write-Output \(powerShellQuoted(availableMarker))
+          Write-Output (\(powerShellQuoted("__VVTERM_TMUX_PATH__")) + $cmd.Source)
+          Write-Output (\(powerShellQuoted("__VVTERM_TMUX_VERSION__")) + $vvtermVersion)
         } else {
           Write-Output \(powerShellQuoted(missingMarker))
         }
@@ -523,9 +544,9 @@ nonisolated enum RemoteTmuxCommandBuilder {
     }
 
     static func listSessionCommands(backend: RemoteTmuxBackend) -> [String] {
-        switch backend {
+        switch backend.variant {
         case .unixTmux:
-            let tmux = tmuxCommand(includeUTF8: false)
+            let tmux = tmuxCommand(includeUTF8: false, backend: backend)
             let bodies = [
                 "\(RemoteTerminalBootstrap.shellPathExport()); \(tmux) list-sessions -F '#{session_name} #{session_attached} #{session_windows}' 2>/dev/null",
                 "\(RemoteTerminalBootstrap.shellPathExport()); \(tmux) list-sessions -F '#{session_name} #{session_attached}' 2>/dev/null",
@@ -533,7 +554,8 @@ nonisolated enum RemoteTmuxCommandBuilder {
             ]
             return bodies.map { "sh -lc \(RemoteTerminalBootstrap.shellQuoted($0))" }
 
-        case .windowsPsmux(let commandName, _, _):
+        case .windowsPsmux:
+            let commandName = backend.commandName
             return [
                 windowsPsmuxListSessionsCommand(commandName: commandName, format: "#{session_name} #{session_attached} #{session_windows}", backend: backend),
                 windowsPsmuxListSessionsCommand(commandName: commandName, format: "#{session_name} #{session_attached}", backend: backend),
@@ -557,28 +579,41 @@ nonisolated enum RemoteTmuxCommandBuilder {
     }
 
     static func killSessionCommand(named sessionName: String, backend: RemoteTmuxBackend) -> String {
-        switch backend {
+        switch backend.variant {
         case .unixTmux:
             let quoted = RemoteTerminalBootstrap.shellQuoted(sessionName)
-            let tmux = tmuxCommand(includeUTF8: false)
+            let tmux = tmuxCommand(includeUTF8: false, backend: backend)
             let body = "\(RemoteTerminalBootstrap.shellPathExport()); \(tmux) kill-session -t \(quoted) 2>/dev/null || true"
             return "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
 
-        case .windowsPsmux(let commandName, _, _):
+        case .windowsPsmux:
+            let commandName = backend.commandName
             let script = "& \(powerShellQuoted(commandName)) kill-session -t \(powerShellQuoted(sessionName)) 2>$null"
             return windowsShellCommand(powerShellScript: script, backend: backend)
         }
     }
 
+    static func legacyCleanupCommand(backend: RemoteTmuxBackend) -> String? {
+        guard case .unixTmux = backend.variant else { return nil }
+        let tmux = tmuxCommand(includeUTF8: false, backend: backend)
+        let body = """
+        \(tmux) list-sessions -F '#{session_name} #{session_attached}' 2>/dev/null | awk '$1 ~ /^vvterm_[0-9a-fA-F-]+$/ && $2 == 0 { print $1 }' | while IFS= read -r name; do
+          \(tmux) kill-session -t "$name" 2>/dev/null || true;
+        done
+        """
+        return "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
+    }
+
     static func currentPathCommand(sessionName: String, backend: RemoteTmuxBackend) -> String {
-        switch backend {
+        switch backend.variant {
         case .unixTmux:
             let quotedSession = RemoteTerminalBootstrap.shellQuoted(sessionName)
-            let tmux = tmuxCommand(includeUTF8: false)
+            let tmux = tmuxCommand(includeUTF8: false, backend: backend)
             let body = "\(RemoteTerminalBootstrap.shellPathExport()); \(tmux) list-panes -t \(quotedSession) -F '#{pane_current_path}' 2>/dev/null | head -n 1"
             return "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
 
-        case .windowsPsmux(let commandName, _, _):
+        case .windowsPsmux:
+            let commandName = backend.commandName
             let script = "& \(powerShellQuoted(commandName)) list-panes -t \(powerShellQuoted(sessionName)) -F '#{pane_current_path}' 2>$null | Select-Object -First 1"
             return windowsShellCommand(powerShellScript: script, backend: backend)
         }
@@ -588,8 +623,8 @@ nonisolated enum RemoteTmuxCommandBuilder {
         sessionName: String,
         workingDirectory: String,
         backend: RemoteTmuxBackend,
-        themeStyle: RemoteTmuxThemeStyle,
-        lifecycleMarkerToken: String?
+        themeStyle: RemoteSessionThemeStyle,
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope?
     ) -> String {
         windowsShellCommand(
             powerShellScript: windowsAttachOrCreatePowerShell(
@@ -597,7 +632,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
                 workingDirectory: workingDirectory,
                 backend: backend,
                 themeStyle: themeStyle,
-                lifecycleMarkerToken: lifecycleMarkerToken
+                lifecycleEnvelope: lifecycleEnvelope
             ),
             backend: backend
         )
@@ -607,10 +642,10 @@ nonisolated enum RemoteTmuxCommandBuilder {
         sessionName: String,
         missingCommand: String,
         backend: RemoteTmuxBackend,
-        lifecycleMarkerToken: String?,
-        themeStyle: RemoteTmuxThemeStyle,
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope?,
+        themeStyle: RemoteSessionThemeStyle,
         reportsCreationFailure: Bool = false,
-        ownership: TmuxSessionOwnership
+        ownership: RemoteSessionOwnership
     ) -> String {
         windowsShellCommand(
             powerShellScript: windowsAttachExistingPowerShell(
@@ -618,7 +653,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
                 missingCommand: missingCommand,
                 backend: backend,
                 themeStyle: themeStyle,
-                lifecycleMarkerToken: lifecycleMarkerToken,
+                lifecycleEnvelope: lifecycleEnvelope,
                 reportsCreationFailure: reportsCreationFailure,
                 ownership: ownership
             ),
@@ -630,9 +665,9 @@ nonisolated enum RemoteTmuxCommandBuilder {
         sessionName: String,
         workingDirectory: String,
         backend: RemoteTmuxBackend,
-        themeStyle: RemoteTmuxThemeStyle,
+        themeStyle: RemoteSessionThemeStyle,
         commandExpression: String? = nil,
-        lifecycleMarkerToken: String? = nil
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope? = nil
     ) -> String {
         let createCommand = windowsCreateSessionPowerShell(
             sessionName: sessionName,
@@ -646,7 +681,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
             backend: backend,
             themeStyle: themeStyle,
             commandExpression: commandExpression,
-            lifecycleMarkerToken: lifecycleMarkerToken,
+            lifecycleEnvelope: lifecycleEnvelope,
             reportsCreationFailure: true,
             ownership: .managed
         )
@@ -656,13 +691,14 @@ nonisolated enum RemoteTmuxCommandBuilder {
         sessionName: String,
         missingCommand: String,
         backend: RemoteTmuxBackend,
-        themeStyle: RemoteTmuxThemeStyle,
+        themeStyle: RemoteSessionThemeStyle,
         commandExpression: String? = nil,
-        lifecycleMarkerToken: String? = nil,
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope? = nil,
         reportsCreationFailure: Bool = false,
-        ownership: TmuxSessionOwnership
+        ownership: RemoteSessionOwnership
     ) -> String {
-        guard case .windowsPsmux(let commandName, _, _) = backend else { return missingCommand }
+        guard backend.isWindows else { return missingCommand }
+        let commandName = backend.commandName
         let psmuxExpression = commandExpression ?? powerShellQuoted(commandName)
         let usesManagedConfiguration = ownership == .managed
         let configDeclaration = usesManagedConfiguration
@@ -675,12 +711,12 @@ nonisolated enum RemoteTmuxCommandBuilder {
               """
             : "& $vvtermPsmux -u attach-session -d -t $vvtermSession"
         let lifecycleReport: String
-        if let lifecycleMarkerToken {
+        if let lifecycleEnvelope {
             let detached = powerShellQuoted(
-                TmuxLifecycleMarker.sequence(token: lifecycleMarkerToken, event: .detached)
+                RemoteSessionLifecycleMarker.sequence(envelope: lifecycleEnvelope, event: .detached)
             )
             let ended = powerShellQuoted(
-                TmuxLifecycleMarker.sequence(token: lifecycleMarkerToken, event: .ended)
+                RemoteSessionLifecycleMarker.sequence(envelope: lifecycleEnvelope, event: .terminated)
             )
             let sessionPresenceReport = """
             & $vvtermPsmux has-session -t $vvtermSession 2>$null
@@ -692,7 +728,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
             """
             if reportsCreationFailure {
                 let creationFailed = powerShellQuoted(
-                    TmuxLifecycleMarker.sequence(token: lifecycleMarkerToken, event: .creationFailed)
+                    RemoteSessionLifecycleMarker.sequence(envelope: lifecycleEnvelope, event: .creationFailed)
                 )
                 lifecycleReport = """
                 if ($null -ne $vvtermTmuxCreateStatus -and $vvtermTmuxCreateStatus -ne 0) {
@@ -717,7 +753,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         \(indentPowerShell(attachCommand, spaces: 2))
         } else {
         \(indentPowerShell(missingCommand, spaces: 2))
-        \(reportsCreationFailure && lifecycleMarkerToken != nil ? "  $vvtermTmuxCreateStatus = $LASTEXITCODE" : "")
+        \(reportsCreationFailure && lifecycleEnvelope != nil ? "  $vvtermTmuxCreateStatus = $LASTEXITCODE" : "")
         }
         \(lifecycleReport)
         """
@@ -744,7 +780,8 @@ nonisolated enum RemoteTmuxCommandBuilder {
         backend: RemoteTmuxBackend,
         commandExpression: String? = nil
     ) -> String {
-        guard case .windowsPsmux(let commandName, _, _) = backend else { return "" }
+        guard backend.isWindows else { return "" }
+        let commandName = backend.commandName
         let psmuxExpression = commandExpression ?? powerShellQuoted(commandName)
         return """
         $vvtermPsmux = \(psmuxExpression)
@@ -756,7 +793,8 @@ nonisolated enum RemoteTmuxCommandBuilder {
     }
 
     private static func windowsDefaultShellCommand(backend: RemoteTmuxBackend) -> String {
-        guard case .windowsPsmux(_, let shellFamily, let powerShellExecutable) = backend else { return "" }
+        guard let shellFamily = backend.shellFamily else { return "" }
+        let powerShellExecutable = backend.powerShellExecutable
         switch shellFamily {
         case .powershell:
             let executable = powerShellExecutable ?? "powershell"
@@ -773,7 +811,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
 
     private static func windowsConfigLines(
         terminalType: RemoteTerminalType,
-        themeStyle: RemoteTmuxThemeStyle
+        themeStyle: RemoteSessionThemeStyle
     ) -> [String] {
         // psmux runs one server per session. VVTerm loads this global-looking
         // config only into the explicitly targeted managed-session server.
@@ -833,7 +871,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
 
     static func windowsConfigWriteCommand(
         terminalType: RemoteTerminalType,
-        themeStyle: RemoteTmuxThemeStyle,
+        themeStyle: RemoteSessionThemeStyle,
         backend: RemoteTmuxBackend
     ) -> String {
         windowsShellCommand(
@@ -848,7 +886,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
 
     private static func windowsConfigWritePowerShell(
         terminalType: RemoteTerminalType,
-        themeStyle: RemoteTmuxThemeStyle,
+        themeStyle: RemoteSessionThemeStyle,
         backend: RemoteTmuxBackend
     ) -> String {
         let lines = windowsConfigLines(
@@ -857,12 +895,12 @@ nonisolated enum RemoteTmuxCommandBuilder {
         )
         let content = lines.joined(separator: "\n") + "\n"
         let defaultShellExpression: String?
-        switch backend {
-        case .windowsPsmux(_, .powershell, _):
+        switch backend.shellFamily {
+        case .powershell:
             defaultShellExpression = "[System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName"
-        case .windowsPsmux(_, .cmd, _):
+        case .cmd:
             defaultShellExpression = "$env:ComSpec"
-        case .windowsPsmux(_, .unknown, _), .windowsPsmux(_, .posix, _), .unixTmux:
+        case .unknown, .posix, nil:
             defaultShellExpression = nil
         }
         // This config is sourced again on reconnect. `-o` keeps this a one-time
@@ -898,7 +936,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         sessionName: String,
         workingDirectory: String,
         terminalType: RemoteTerminalType,
-        themeStyle: RemoteTmuxThemeStyle,
+        themeStyle: RemoteSessionThemeStyle,
         backend: RemoteTmuxBackend,
         attachAfterInstall: Bool
     ) -> String {
@@ -960,9 +998,10 @@ nonisolated enum RemoteTmuxCommandBuilder {
         powerShellScript: String,
         backend: RemoteTmuxBackend
     ) -> String {
-        guard case .windowsPsmux(_, let shellFamily, let powerShellExecutable) = backend else {
+        guard let shellFamily = backend.shellFamily else {
             return powerShellScript
         }
+        let powerShellExecutable = backend.powerShellExecutable
 
         switch shellFamily {
         case .powershell:
@@ -1031,4 +1070,5 @@ nonisolated enum RemoteTmuxCommandBuilder {
             }
             .joined(separator: "\n")
     }
+
 }

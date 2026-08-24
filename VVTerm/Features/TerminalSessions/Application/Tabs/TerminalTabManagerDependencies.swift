@@ -7,44 +7,99 @@ nonisolated enum TerminalNetworkReadiness: String, Hashable, Sendable {
     case unavailable
 }
 
-nonisolated protocol TerminalRemoteTmuxServicing: Sendable {
-    func tmuxAvailability(using client: SSHClient) async -> RemoteTmuxAvailability
-    func tmuxInstallBackend(using client: SSHClient) async -> RemoteTmuxBackend?
+nonisolated enum TerminalRemoteSessionDefaults {
+    static let enabledKey = "terminalRemoteSessionEnabledDefault"
+    static let backendIdentifierKey = "terminalRemoteSessionBackendIdentifierDefault"
+    static let startupBehaviorKey = "terminalRemoteSessionStartupBehaviorDefault"
+    static let legacyEnabledKey = "terminalTmuxEnabledDefault"
+    static let legacyStartupBehaviorKey = "terminalTmuxStartupBehaviorDefault"
+}
+
+nonisolated protocol TerminalRemoteSessionServicing: Sendable {
+    var backendMetadata: [RemoteSessionBackendMetadata] { get }
+    func managedIdentifier(
+        deviceID: String,
+        entityID: UUID,
+        serverName: String,
+        backendIdentifier: RemoteSessionBackendIdentifier
+    ) throws -> RemoteSessionIdentifier
+    func isManagedIdentifier(
+        _ identifier: RemoteSessionIdentifier,
+        deviceID: String
+    ) -> Bool
+    func availability(
+        for backendIdentifier: RemoteSessionBackendIdentifier,
+        using client: SSHClient
+    ) async -> RemoteSessionAvailability
     func listSessions(
         using client: SSHClient,
-        backend: RemoteTmuxBackend
-    ) async throws -> [RemoteTmuxSession]
-    func prepareConfig(
+        runtime: RemoteSessionRuntime
+    ) async throws -> [RemoteSessionDescriptor]
+    func prepareManagedSession(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
-        themeStyle: RemoteTmuxThemeStyle,
-        backend: RemoteTmuxBackend?
+        themeStyle: RemoteSessionThemeStyle,
+        runtime: RemoteSessionRuntime
     ) async
+    func launchPlan(
+        for request: RemoteSessionLaunchRequest,
+        runtime: RemoteSessionRuntime
+    ) async throws -> RemoteSessionBackendLaunchPlan
+    func installScript(
+        attachment: RemoteSessionAttachment,
+        workingDirectory: String,
+        terminalType: RemoteTerminalType,
+        themeStyle: RemoteSessionThemeStyle,
+        using client: SSHClient,
+        attachAfterInstall: Bool
+    ) async -> String?
     func sendScript(
         _ script: String,
         using client: SSHClient,
         shellId: UUID
     ) async throws
     func killSession(
-        named sessionName: String,
+        _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
-        backend: RemoteTmuxBackend?
+        runtime: RemoteSessionRuntime?
     ) async
-    func cleanupLegacySessions(
+    func cleanupSessions(
+        deviceID: String,
+        keeping identifiers: Set<RemoteSessionIdentifier>,
         using client: SSHClient,
-        backend: RemoteTmuxBackend?
+        runtime: RemoteSessionRuntime
     ) async
-    func cleanupDetachedSessions(
-        deviceId: String,
-        keeping sessionNames: Set<String>,
+    func currentWorkingDirectory(
+        for identifier: RemoteSessionIdentifier,
         using client: SSHClient,
-        backend: RemoteTmuxBackend?
-    ) async
-    func currentPath(
-        sessionName: String,
-        using client: SSHClient,
-        backend: RemoteTmuxBackend?
+        runtime: RemoteSessionRuntime?
     ) async -> String?
+}
+
+extension TerminalRemoteSessionServicing {
+    nonisolated func managedIdentifier(
+        deviceID: String,
+        entityID: UUID,
+        serverName: String,
+        backendIdentifier: RemoteSessionBackendIdentifier
+    ) throws -> RemoteSessionIdentifier {
+        try RemoteSessionManagedIdentifierPolicy.identifier(
+            backendIdentifier: backendIdentifier,
+            serverName: serverName,
+            deviceID: deviceID,
+            entityID: entityID
+        )
+    }
+
+    nonisolated func isManagedIdentifier(
+        _ identifier: RemoteSessionIdentifier,
+        deviceID: String
+    ) -> Bool {
+        RemoteSessionManagedIdentifierPolicy.isManagedIdentifier(
+            identifier,
+            deviceID: deviceID
+        )
+    }
 }
 
 nonisolated protocol TerminalRemoteMoshServicing: Sendable {
@@ -73,17 +128,20 @@ struct TerminalSessionApplicationEffects {
 }
 
 @MainActor
-struct TerminalTmuxConfiguration {
+struct TerminalRemoteSessionConfiguration {
     struct ServerSettings {
+        let name: String
         let enabledOverride: Bool?
-        let startupBehaviorOverride: TmuxStartupBehavior?
+        let backendIdentifier: RemoteSessionBackendIdentifier
+        let startupBehaviorOverride: RemoteSessionStartupBehavior?
     }
 
     let deviceID: String
     let enabledByDefault: () -> Bool
-    let startupBehaviorByDefault: () -> TmuxStartupBehavior
+    let backendIdentifierByDefault: () -> RemoteSessionBackendIdentifier
+    let startupBehaviorByDefault: () -> RemoteSessionStartupBehavior
     let serverSettings: (UUID) -> ServerSettings?
-    let themeStyle: @MainActor () -> RemoteTmuxThemeStyle
+    let themeStyle: @MainActor () -> RemoteSessionThemeStyle
 }
 
 @MainActor

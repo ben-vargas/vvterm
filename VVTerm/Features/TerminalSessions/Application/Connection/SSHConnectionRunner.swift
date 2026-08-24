@@ -7,6 +7,11 @@ nonisolated struct SSHConnectionInitialTerminalState: Equatable, Sendable {
     let pixelSize: TerminalPixelSize?
 }
 
+nonisolated struct SSHConnectionRestoredShell: Sendable {
+    let shell: ShellHandle
+    let remoteSessionLifecycle: RemoteSessionLifecycleContext?
+}
+
 nonisolated struct SSHConnectionRunnerTransport: Sendable {
     let connect: @Sendable (_ server: Server, _ credentials: ServerCredentials) async throws -> Void
     let startShell: @Sendable (
@@ -55,7 +60,10 @@ nonisolated enum SSHConnectionRunner {
         shouldContinueConnection: @MainActor @escaping @Sendable () -> Bool,
         onAttempt: @MainActor @escaping @Sendable (_ attempt: Int) -> Void,
         startupPlan: @MainActor @escaping @Sendable () async throws -> TerminalShellStartupPlan,
-        restoreMoshShell: @MainActor @escaping @Sendable (_ cols: Int, _ rows: Int) async -> ShellHandle?,
+        restoreMoshShell: @MainActor @escaping @Sendable (
+            _ cols: Int,
+            _ rows: Int
+        ) async -> SSHConnectionRestoredShell?,
         registerShell: @MainActor @escaping @Sendable (_ shell: ShellHandle) async -> Bool,
         onTitleChange: @MainActor @escaping @Sendable (_ title: String) -> Void,
         writeOutput: @MainActor @escaping @Sendable (_ data: Data) -> Bool,
@@ -91,8 +99,11 @@ nonisolated enum SSHConnectionRunner {
                 let shell: ShellHandle
                 let startup: TerminalShellStartupPlan?
                 if let restored = await restoreMoshShell(cols, rows) {
-                    shell = restored
-                    startup = nil
+                    shell = restored.shell
+                    startup = TerminalShellStartupPlan(
+                        command: nil,
+                        remoteSessionLifecycle: restored.remoteSessionLifecycle
+                    )
                     logger.info("Restored existing Mosh protocol session")
                 } else {
                     try await transport.connect(server, credentials)
@@ -122,10 +133,10 @@ nonisolated enum SSHConnectionRunner {
                 guard await registerShell(shell) else { return }
 
                 guard !Task.isCancelled else { return }
-                var lifecycleParser = startup?.tmuxLifecycle.map {
-                    TmuxLifecycleStreamParser(markerToken: $0.markerToken)
+                var lifecycleParser = startup?.remoteSessionLifecycle.map {
+                    RemoteSessionLifecycleStreamParser(envelope: $0.envelope)
                 }
-                var lastLifecycleEvent: TmuxLifecycleEvent?
+                var lastLifecycleEvent: RemoteSessionEvent?
                 for await data in shell.stream {
                     guard !Task.isCancelled else { break }
                     guard await shouldContinueConnection() else { break }
@@ -157,7 +168,8 @@ nonisolated enum SSHConnectionRunner {
                 }
 
                 var sessionExists: Bool?
-                if lastLifecycleEvent == nil, let lifecycle = startup?.tmuxLifecycle {
+                if lastLifecycleEvent == nil || lastLifecycleEvent == .attached,
+                   let lifecycle = startup?.remoteSessionLifecycle {
                     do {
                         let output = try await transport.execute(
                             lifecycle.presenceProbe.command,
@@ -166,13 +178,13 @@ nonisolated enum SSHConnectionRunner {
                         sessionExists = lifecycle.presenceProbe.sessionExists(in: output)
                     } catch {
                         logger.warning(
-                            "Unable to verify tmux session after shell exit: \(error.localizedDescription, privacy: .public)"
+                            "Unable to verify remote session after shell exit: \(error.localizedDescription, privacy: .public)"
                         )
                     }
                 }
                 let endReason = TerminalShellEndReason.resolve(
-                    tmuxLifecycle: startup?.tmuxLifecycle,
-                    markerEvent: lastLifecycleEvent,
+                    lifecycle: startup?.remoteSessionLifecycle,
+                    event: lastLifecycleEvent,
                     sessionExists: sessionExists
                 )
                 logger.info("SSH shell ended: \(String(describing: endReason), privacy: .public)")

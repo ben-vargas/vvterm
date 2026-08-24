@@ -144,7 +144,8 @@ struct ServerListScreen: View {
             SettingsView(
                 statsPreferencesStore: statsDependencies.preferencesStore,
                 voiceModelManagers: voiceModelManagers,
-                analyticsOptOutAction: analyticsOptOutAction
+                analyticsOptOutAction: analyticsOptOutAction,
+                remoteSessionBackends: tabManager.remoteSessionCoordinator.backendMetadata
             )
                 .modifier(AppearanceModifier())
                 .adaptiveSoftScrollEdges()
@@ -418,7 +419,8 @@ struct ServerListScreen: View {
                     ActiveConnectionListRow(
                         title: connection.title,
                         status: connection.status,
-                        tmuxStatus: connection.tmuxStatus,
+                        remoteSessionStatus: connection.remoteSessionStatus,
+                        remoteSessionBackendName: connection.remoteSessionBackendName,
                         tabCount: connection.tabCount,
                         onOpen: { openActiveConnection(connection) },
                         onDisconnect: { disconnectActiveConnection(connection) }

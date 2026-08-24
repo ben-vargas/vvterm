@@ -5,7 +5,7 @@ import Testing
 struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func invalidSyncedThemeNameFallsBackAtFeatureBoundary() {
-        let theme = TerminalTmuxSessionLiveComposition.themeStyle(
+        let theme = TerminalRemoteSessionLiveComposition.themeStyle(
             for: "safe\n'@\nrun-shell attacker"
         )
 
@@ -15,11 +15,11 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func attachExistingCommandFallsBackToLoginShell() {
         let command = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "team session",
             ownership: .external
         )
-        #expect(command.contains("tmux has-session"))
+        #expect(command.contains("'tmux' has-session"))
         #expect(command.contains("attach-session"))
         #expect(command.contains("exec \"${SHELL:-/bin/sh}\" -l"))
     }
@@ -27,17 +27,26 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func managedLifecycleCommandReportsDetachOrSessionEnd() {
         let command = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_managed",
             workingDirectory: "/work",
-            lifecycleMarkerToken: "marker-token"
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
         )
 
         #expect(command.contains("new-session -d -s"))
         #expect(command.contains("has-session -t '=vvterm_managed'"))
-        #expect(command.contains(TmuxLifecycleMarker.sequence(token: "marker-token", event: .detached)))
-        #expect(command.contains(TmuxLifecycleMarker.sequence(token: "marker-token", event: .ended)))
-        #expect(command.contains(TmuxLifecycleMarker.sequence(token: "marker-token", event: .creationFailed)))
+        #expect(command.contains(RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .detached
+        )))
+        #expect(command.contains(RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .terminated
+        )))
+        #expect(command.contains(RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .creationFailed
+        )))
         #expect(command.contains("vvtermTmuxCreateStatus=$?"))
         #expect(!command.contains("exec tmux"))
     }
@@ -53,7 +62,7 @@ struct RemoteTmuxUnixCommandBuilderTests {
     ])
     func unixWorkingDirectoryIsOneOpaqueShellArgument(_ workingDirectory: String) {
         let command = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_secure",
             workingDirectory: workingDirectory
         )
@@ -66,7 +75,7 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func unixHomeWorkingDirectoryUsesQuotedExpansion() {
         let command = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_secure",
             workingDirectory: "~"
         )
@@ -93,16 +102,22 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func managedReattachDoesNotRecreateMissingSession() {
         let command = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_managed",
             ownership: .managed,
-            lifecycleMarkerToken: "marker-token"
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
         )
 
         #expect(command.contains("attach-session"))
         #expect(command.contains("set-option -wq -t \"$vvtermWindow\" scroll-on-clear 'off'"))
-        #expect(command.contains(TmuxLifecycleMarker.sequence(token: "marker-token", event: .ended)))
-        #expect(!command.contains(TmuxLifecycleMarker.sequence(token: "marker-token", event: .creationFailed)))
+        #expect(command.contains(RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .terminated
+        )))
+        #expect(!command.contains(RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .creationFailed
+        )))
         #expect(!command.contains("new-session"))
         #expect(!command.contains("exec \"${SHELL:-/bin/sh}\" -l"))
     }
@@ -110,7 +125,7 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func installAndAttachScriptIncludesScopedManagedConfiguration() {
         let script = RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_demo",
             workingDirectory: "/tmp/work dir",
             terminalType: .xtermGhostty
@@ -121,7 +136,6 @@ struct RemoteTmuxUnixCommandBuilderTests {
         #expect(script.contains("set-option -q -t"))
         #expect(script.contains("status off"))
         #expect(script.contains("RGB,hyperlinks"))
-        #expect(script.contains("tmux -u"))
         #expect(!script.contains("~/.vvterm/tmux.conf"))
         #expect(!script.contains("set -g"))
     }
@@ -129,7 +143,7 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func installOnlyScriptDoesNotEnterUntrackedTmuxSession() {
         let script = RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_demo",
             workingDirectory: "/tmp/work",
             terminalType: .xtermGhostty,
@@ -146,17 +160,17 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func managedSessionClearBehaviorIsWindowScoped() {
         let create = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_managed",
             workingDirectory: "/tmp"
         )
         let reattach = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_managed",
             ownership: .managed
         )
         let external = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "shared",
             ownership: .external
         )
@@ -172,23 +186,26 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func managedUnixSessionConfigurationIsScopedToItsSession() {
         let create = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_managed",
             workingDirectory: "/tmp"
         )
         let reattach = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_managed",
             ownership: .managed
         )
         let external = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "shared",
             ownership: .external
         )
 
         for command in [create, reattach] {
             #expect(command.contains("set-option -q -t '=vvterm_managed:' status off"))
+            #expect(command.contains(
+                "list-windows -t '=vvterm_managed:' -F '#{window_linked}'"
+            ))
             #expect(command.contains("set-option -q -t '=vvterm_managed:' history-limit 10000"))
             #expect(command.contains("set-option -q -t '=vvterm_managed:' mouse on"))
             #expect(command.contains("set-environment -t '=vvterm_managed' TERM_PROGRAM 'ghostty'"))
@@ -211,24 +228,24 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func managedETSessionPropagatesSnacksHintWithoutFabricatingSSHEnvironment() throws {
         let create = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_et",
             workingDirectory: "/tmp",
-            lifecycleMarkerToken: "create",
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
             transport: .eternalTerminal
         )
         let reattach = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_et",
             ownership: .managed,
-            lifecycleMarkerToken: "reattach",
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
             transport: .eternalTerminal
         )
         let external = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "shared",
             ownership: .external,
-            lifecycleMarkerToken: "external",
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
             transport: .eternalTerminal
         )
 
@@ -251,7 +268,7 @@ struct RemoteTmuxUnixCommandBuilderTests {
     func managedSSHAndMoshSessionsClearStaleETCompatibilityHint() {
         for transport in [ShellTransport.ssh, .sshFallback, .mosh] {
             let command = RemoteTmuxCommandBuilder.attachCommand(
-                themeStyle: deterministicRemoteTmuxThemeStyle,
+                themeStyle: deterministicRemoteSessionThemeStyle,
                 sessionName: "vvterm_transport",
                 workingDirectory: "/tmp",
                 transport: transport
@@ -270,14 +287,14 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func managedUnixCreationBootstrapsLegacyTmuxBeforeStartingTerminalShell() {
         let command = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_managed",
             workingDirectory: "/tmp"
         )
 
-        #expect(command.contains("tmux -T RGB,hyperlinks -V"))
-        #expect(command.contains("tmux -u -T RGB,hyperlinks attach-session"))
-        #expect(command.contains("else exec tmux -u attach-session"))
+        #expect(command.contains("'tmux' -u -T RGB,hyperlinks -V"))
+        #expect(command.contains("'tmux' -u -T RGB,hyperlinks attach-session"))
+        #expect(command.contains("else exec 'tmux' -u attach-session"))
         #expect(command.components(separatedBy: "new-session -d -s").count == 2)
         #expect(!command.contains("-e 'COLORTERM=truecolor'"))
         #expect(command.contains("__vvterm_bootstrap__"))
@@ -297,7 +314,7 @@ struct RemoteTmuxUnixCommandBuilderTests {
     @Test
     func externalUnixSessionAttachDoesNotLoadVVTermConfiguration() {
         let command = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "external's; $session",
             ownership: .external
         )
@@ -309,5 +326,18 @@ struct RemoteTmuxUnixCommandBuilderTests {
         #expect(!command.contains("~/.vvterm/tmux.conf"))
     }
 
-}
+    @Test
+    func legacyCleanupUsesTheResolvedExecutable() throws {
+        let backend = RemoteTmuxBackend.unixTmux(
+            executablePath: "/opt/tools/tmux",
+            rawVersion: "tmux 3.7b"
+        )
+        let command = try #require(
+            RemoteTmuxCommandBuilder.legacyCleanupCommand(backend: backend)
+        )
 
+        #expect(command.contains("/opt/tools/tmux"))
+        #expect(!command.contains("command -v tmux"))
+    }
+
+}

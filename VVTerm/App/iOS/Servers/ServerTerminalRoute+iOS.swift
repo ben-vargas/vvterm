@@ -196,7 +196,8 @@ struct ServerTerminalRoute: View {
                     SettingsView(
                         statsPreferencesStore: statsDependencies.preferencesStore,
                         voiceModelManagers: voiceModelManagers,
-                        analyticsOptOutAction: analyticsOptOutAction
+                        analyticsOptOutAction: analyticsOptOutAction,
+                        remoteSessionBackends: tabManager.remoteSessionCoordinator.backendMetadata
                     )
                         .modifier(AppearanceModifier())
                         .adaptiveSoftScrollEdges()

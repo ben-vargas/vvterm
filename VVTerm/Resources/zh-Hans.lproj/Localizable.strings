@@ -1817,3 +1817,13 @@
 "Remove All Downloaded Models" = "移除所有已下载模型";
 "Remove All Downloaded Models?" = "移除所有已下载模型？";
 "Voice input models must be downloaded again before they can work offline." = "语音输入模型需要重新下载后才能离线使用。";
+"Keep remote sessions running by default" = "默认保持远程会话运行";
+"These defaults apply to new servers. You can override them in server settings." = "这些默认设置适用于新服务器。你可以在服务器设置中更改。";
+"Keep remote sessions running" = "保持远程会话运行";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "所选选项可让远程会话在应用重启或断开连接后继续运行。";
+"Without session persistence, app backgrounding can interrupt running commands." = "如果没有会话持久化，应用进入后台时可能会中断正在运行的命令。";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "所选选项可让终端在应用重启或断开连接后继续运行。";
+"Use a persistent session" = "使用持久会话";
+"Use persistent sessions by default" = "默认使用持久会话";
+"Create or reconnect to a VVTerm-managed session." = "创建或重新连接到 VVTerm 管理的会话。";
+"Ask which session to use for each new tab or split." = "为每个新标签页或分屏询问要使用的会话。";

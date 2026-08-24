@@ -1822,3 +1822,13 @@
 "Remove All Downloaded Models" = "Supprimer tous les modèles téléchargés";
 "Remove All Downloaded Models?" = "Supprimer tous les modèles téléchargés ?";
 "Voice input models must be downloaded again before they can work offline." = "Les modèles de saisie vocale devront être téléchargés à nouveau pour fonctionner hors ligne.";
+"Keep remote sessions running by default" = "Garder les sessions distantes actives par défaut";
+"These defaults apply to new servers. You can override them in server settings." = "Ces réglages par défaut s’appliquent aux nouveaux serveurs. Vous pouvez les modifier dans les réglages du serveur.";
+"Keep remote sessions running" = "Garder les sessions distantes actives";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "L’option sélectionnée garde les sessions distantes actives après le redémarrage de l’app ou une déconnexion.";
+"Without session persistence, app backgrounding can interrupt running commands." = "Sans persistance de session, le passage de l’app en arrière-plan peut interrompre les commandes en cours.";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "L’option sélectionnée garde le terminal actif après le redémarrage de l’app ou une déconnexion.";
+"Use a persistent session" = "Utiliser une session persistante";
+"Use persistent sessions by default" = "Utiliser des sessions persistantes par défaut";
+"Create or reconnect to a VVTerm-managed session." = "Créer une session gérée par VVTerm ou s’y reconnecter.";
+"Ask which session to use for each new tab or split." = "Demander quelle session utiliser pour chaque nouvel onglet ou volet.";

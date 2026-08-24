@@ -6,22 +6,22 @@ nonisolated enum EternalTerminalRuntimeEvent: Equatable, Sendable {
     case connectionFailed(reason: String)
 }
 
-nonisolated protocol EternalTerminalTmuxSessionKilling: Sendable {
-    func killSession(named sessionName: String, using client: SSHClient) async
+nonisolated protocol EternalTerminalRemoteSessionKilling: Sendable {
+    func killSession(_ identifier: RemoteSessionIdentifier, using client: SSHClient) async
 }
 
 nonisolated struct EternalTerminalRuntimeDependencies: Sendable {
     private let recordEvent: @MainActor @Sendable (EternalTerminalRuntimeEvent) -> Void
-    private let tmuxSessionKiller: any EternalTerminalTmuxSessionKilling
+    private let remoteSessionKiller: any EternalTerminalRemoteSessionKilling
     let sessionPreparer: any EternalTerminalSessionPreparing
 
     init(
         recordEvent: @MainActor @Sendable @escaping (EternalTerminalRuntimeEvent) -> Void,
-        tmuxSessionKiller: any EternalTerminalTmuxSessionKilling,
+        remoteSessionKiller: any EternalTerminalRemoteSessionKilling,
         sessionPreparer: any EternalTerminalSessionPreparing
     ) {
         self.recordEvent = recordEvent
-        self.tmuxSessionKiller = tmuxSessionKiller
+        self.remoteSessionKiller = remoteSessionKiller
         self.sessionPreparer = sessionPreparer
     }
 
@@ -30,8 +30,11 @@ nonisolated struct EternalTerminalRuntimeDependencies: Sendable {
         recordEvent(event)
     }
 
-    func killTmuxSession(named sessionName: String, using client: SSHClient) async {
-        await tmuxSessionKiller.killSession(named: sessionName, using: client)
+    func killRemoteSession(
+        _ identifier: RemoteSessionIdentifier,
+        using client: SSHClient
+    ) async {
+        await remoteSessionKiller.killSession(identifier, using: client)
     }
 }
 
@@ -40,14 +43,14 @@ extension EternalTerminalRuntimeDependencies {
     static var testing: Self {
         Self(
             recordEvent: { _ in },
-            tmuxSessionKiller: NoOpEternalTerminalTmuxSessionKiller(),
+            remoteSessionKiller: NoOpEternalTerminalRemoteSessionKiller(),
             sessionPreparer: UnavailableEternalTerminalSessionPreparer()
         )
     }
 }
 
-private actor NoOpEternalTerminalTmuxSessionKiller: EternalTerminalTmuxSessionKilling {
-    func killSession(named sessionName: String, using client: SSHClient) async {}
+private actor NoOpEternalTerminalRemoteSessionKiller: EternalTerminalRemoteSessionKilling {
+    func killSession(_ identifier: RemoteSessionIdentifier, using client: SSHClient) async {}
 }
 
 @MainActor

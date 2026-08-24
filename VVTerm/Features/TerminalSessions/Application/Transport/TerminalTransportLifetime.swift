@@ -75,11 +75,11 @@ final class TerminalTransportLifetime {
 
     func unregisterShell(
         for paneId: UUID,
-        ifOwnedBy registration: TerminalTmuxShellRegistration
+        ifOwnedBy registration: TerminalRemoteSessionShellRegistration
     ) async {
         guard registry.ownsShell(
             client: registration.client,
-            shellId: registration.shellId,
+            shellId: registration.shellID,
             for: paneId
         ) else { return }
 

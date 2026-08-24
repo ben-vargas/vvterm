@@ -173,10 +173,10 @@ struct SSHStartupIntegrationTests {
         do {
             _ = try await client.connect(to: server, credentials: credentials)
             let createCommand = RemoteTmuxCommandBuilder.attachCommand(
-                themeStyle: deterministicRemoteTmuxThemeStyle,
+                themeStyle: deterministicRemoteSessionThemeStyle,
                 sessionName: sessionName,
                 workingDirectory: "~",
-                lifecycleMarkerToken: UUID().uuidString
+                lifecycleEnvelope: .make()
             )
             let created = try await client.startShell(
                 cols: 80,
@@ -203,10 +203,10 @@ struct SSHStartupIntegrationTests {
             await client.closeShell(created.id)
 
             let reattachCommand = RemoteTmuxCommandBuilder.attachExistingCommand(
-                themeStyle: deterministicRemoteTmuxThemeStyle,
+                themeStyle: deterministicRemoteSessionThemeStyle,
                 sessionName: sessionName,
                 ownership: .managed,
-                lifecycleMarkerToken: UUID().uuidString
+                lifecycleEnvelope: .make()
             )
             let reattached = try await client.startShell(
                 cols: 80,
@@ -247,10 +247,10 @@ struct SSHStartupIntegrationTests {
         do {
             _ = try await client.connect(to: server, credentials: credentials)
             let createCommand = RemoteTmuxCommandBuilder.attachCommand(
-                themeStyle: deterministicRemoteTmuxThemeStyle,
+                themeStyle: deterministicRemoteSessionThemeStyle,
                 sessionName: sessionName,
                 workingDirectory: "~",
-                lifecycleMarkerToken: UUID().uuidString
+                lifecycleEnvelope: .make()
             )
             let shell = try await client.startShell(
                 cols: 80,
@@ -279,10 +279,10 @@ struct SSHStartupIntegrationTests {
             await client.closeShell(shell.id)
 
             let reattachCommand = RemoteTmuxCommandBuilder.attachExistingCommand(
-                themeStyle: deterministicRemoteTmuxThemeStyle,
+                themeStyle: deterministicRemoteSessionThemeStyle,
                 sessionName: sessionName,
                 ownership: .managed,
-                lifecycleMarkerToken: UUID().uuidString
+                lifecycleEnvelope: .make()
             )
             let reattached = try await client.startShell(
                 cols: 80,
@@ -515,26 +515,37 @@ struct SSHStartupIntegrationTests {
 
         let staleClient = makeIntegrationSSHClient()
         let replacementClient = makeIntegrationSSHClient()
+        let tmux = RemoteTmuxManager()
         let (server, credentials) = makeStandardConnection(configuration: configuration)
 
         do {
             _ = try await staleClient.connect(to: server, credentials: credentials)
-            let initialAvailability = await RemoteTmuxManager.shared.tmuxAvailability(
+            let initialAvailability = await tmux.tmuxAvailability(
                 using: staleClient
             )
-            #expect(initialAvailability == .available(.unixTmux))
+            guard case .available(let initialBackend) = initialAvailability else {
+                Issue.record("Expected tmux to be available")
+                return
+            }
+            #expect(initialBackend.variant == .unixTmux)
+            #expect(initialBackend.executablePath.hasPrefix("/"))
 
             await staleClient.disconnect()
-            let staleAvailability = await RemoteTmuxManager.shared.tmuxAvailability(
+            let staleAvailability = await tmux.tmuxAvailability(
                 using: staleClient
             )
             #expect(staleAvailability == .indeterminate(.disconnected))
 
             _ = try await replacementClient.connect(to: server, credentials: credentials)
-            let recoveredAvailability = await RemoteTmuxManager.shared.tmuxAvailability(
+            let recoveredAvailability = await tmux.tmuxAvailability(
                 using: replacementClient
             )
-            #expect(recoveredAvailability == .available(.unixTmux))
+            guard case .available(let recoveredBackend) = recoveredAvailability else {
+                Issue.record("Expected tmux to recover")
+                return
+            }
+            #expect(recoveredBackend.variant == .unixTmux)
+            #expect(recoveredBackend.executablePath.hasPrefix("/"))
             await replacementClient.disconnect()
         } catch {
             await staleClient.disconnect()

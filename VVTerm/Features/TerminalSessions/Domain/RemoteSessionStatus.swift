@@ -1,4 +1,6 @@
-nonisolated enum TmuxStatus: String, Codable, Hashable, Sendable {
+import Foundation
+
+nonisolated enum RemoteSessionStatus: String, Codable, Hashable, Sendable {
     case foreground
     case background
     case off
@@ -6,12 +8,12 @@ nonisolated enum TmuxStatus: String, Codable, Hashable, Sendable {
     case installing
     case unknown
 
-    var indicatesTmux: Bool {
+    var indicatesPersistentSession: Bool {
         switch self {
         case .foreground, .background, .unknown:
-            return true
+            true
         case .off, .missing, .installing:
-            return false
+            false
         }
     }
 }

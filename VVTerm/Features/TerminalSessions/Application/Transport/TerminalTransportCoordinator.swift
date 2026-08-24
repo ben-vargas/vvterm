@@ -20,7 +20,7 @@ struct TerminalTransportSessionAccess {
 
 nonisolated enum TerminalTransportSessionEvent: Sendable {
     case activeTransport(UUID, ShellTransportState)
-    case eternalTerminalResumeContext(UUID, EternalTerminalTmuxResumeContext?)
+    case eternalTerminalResumeContext(UUID, RemoteSessionLifecycleContext?)
     case connectionState(UUID, ConnectionState)
     case title(UUID, String)
     case shellEnd(UUID, TerminalShellEndReason, TerminalTransportEndOwnership?)
@@ -49,7 +49,7 @@ final class TerminalTransportCoordinator {
     private let remoteMosh: any TerminalRemoteMoshServicing
     private let eternalTerminalRuntimeDependencies: EternalTerminalRuntimeDependencies
     private let sessionAccess: TerminalTransportSessionAccess
-    private let tmuxCoordinator: TerminalTmuxSessionCoordinator
+    private let remoteSessionCoordinator: TerminalRemoteSessionCoordinator
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "VVTerm",
         category: "TerminalTransportCoordinator"
@@ -63,7 +63,7 @@ final class TerminalTransportCoordinator {
         remoteMosh: any TerminalRemoteMoshServicing,
         eternalTerminalRuntimeDependencies: EternalTerminalRuntimeDependencies,
         sessionAccess: TerminalTransportSessionAccess,
-        tmuxCoordinator: TerminalTmuxSessionCoordinator
+        remoteSessionCoordinator: TerminalRemoteSessionCoordinator
     ) {
         self.lifetime = lifetime
         self.sshClientFactory = sshClientFactory
@@ -75,7 +75,7 @@ final class TerminalTransportCoordinator {
         self.remoteMosh = remoteMosh
         self.eternalTerminalRuntimeDependencies = eternalTerminalRuntimeDependencies
         self.sessionAccess = sessionAccess
-        self.tmuxCoordinator = tmuxCoordinator
+        self.remoteSessionCoordinator = remoteSessionCoordinator
     }
 
     var ownedPaneIds: Set<UUID> {
@@ -221,12 +221,12 @@ final class TerminalTransportCoordinator {
 
     func unregisterEternalTerminalRuntime(
         for paneId: UUID,
-        killingManagedTmuxSessionNamed tmuxSessionName: String? = nil
+        killingManagedRemoteSession identifier: RemoteSessionIdentifier? = nil
     ) async {
         guard let runtime = registry.runtime(for: paneId),
               detachEternalTerminalRuntime(for: paneId, ifOwnedBy: runtime) else { return }
-        if let tmuxSessionName {
-            await tmuxCoordinator.killSession(named: tmuxSessionName, using: runtime)
+        if let identifier {
+            await remoteSessionCoordinator.killSession(identifier, using: runtime)
         }
         await runtime.close()
     }
@@ -436,7 +436,7 @@ final class TerminalTransportCoordinator {
     func unregisterSSHClient(for paneId: UUID) async {
         await unregisterSSHClient(
             for: paneId,
-            killingManagedTmuxSessionNamed: nil,
+            killingManagedRemoteSession: nil,
             beforeCleanup: nil
         )
     }
@@ -471,9 +471,9 @@ final class TerminalTransportCoordinator {
 
         let registry = registry
         let sessionAccess = sessionAccess
-        let tmuxCoordinator = tmuxCoordinator
+        let remoteSessionCoordinator = remoteSessionCoordinator
         let moshRecovery = moshRecovery
-        let taskId = registry.startConnectionTask(for: paneId) { [weak registry, weak tmuxCoordinator] taskId in
+        let taskId = registry.startConnectionTask(for: paneId) { [weak registry, weak remoteSessionCoordinator] taskId in
             guard let context = await Self.makeSSHConnectionContext(
                 taskId: taskId,
                 startToken: startToken,
@@ -482,7 +482,7 @@ final class TerminalTransportCoordinator {
                 client: client,
                 registry: registry,
                 sessionAccess: sessionAccess,
-                tmuxCoordinator: tmuxCoordinator,
+                remoteSessionCoordinator: remoteSessionCoordinator,
                 moshRecovery: moshRecovery
             ) else { return }
             await operation(context)
@@ -537,7 +537,7 @@ final class TerminalTransportCoordinator {
     func removePane(
         _ paneId: UUID,
         deletingResumableState: Bool,
-        killingManagedTmuxSessionNamed tmuxSessionName: String?
+        killingManagedRemoteSession identifier: RemoteSessionIdentifier?
     ) {
         let shellOwnership = detachSSHOwnership(for: paneId)
         let runtime = registry.runtime(for: paneId)
@@ -549,18 +549,18 @@ final class TerminalTransportCoordinator {
         }
 
         let registry = registry
-        let tmuxCoordinator = tmuxCoordinator
+        let remoteSessionCoordinator = remoteSessionCoordinator
         Task { @MainActor in
             await Self.cleanupSSHOwnership(
                 shellOwnership,
                 registry: registry,
-                tmuxCoordinator: tmuxCoordinator,
-                killingManagedTmuxSessionNamed: tmuxSessionName,
+                remoteSessionCoordinator: remoteSessionCoordinator,
+                killingManagedRemoteSession: identifier,
                 beforeCleanup: nil
             )
             if let runtime {
-                if let tmuxSessionName {
-                    await tmuxCoordinator.killSession(named: tmuxSessionName, using: runtime)
+                if let identifier {
+                    await remoteSessionCoordinator.killSession(identifier, using: runtime)
                 }
                 await runtime.close()
             }
@@ -612,22 +612,22 @@ final class TerminalTransportCoordinator {
     private func makeEternalTerminalOwnerAccess() -> EternalTerminalRuntimeOwnerAccess {
         let registry = registry
         let sessionAccess = sessionAccess
-        let tmuxCoordinator = tmuxCoordinator
+        let remoteSessionCoordinator = remoteSessionCoordinator
         return EternalTerminalRuntimeOwnerAccess(
             isCurrent: { [weak registry] paneId, token in
                 registry?.runtime(for: paneId)?.identityToken == token
             },
-            startupPlan: { [weak tmuxCoordinator] paneId, serverId, client, token in
-                guard let tmuxCoordinator else { throw CancellationError() }
-                return try await tmuxCoordinator.eternalTerminalStartupPlan(
+            startupPlan: { [weak remoteSessionCoordinator] paneId, serverId, client, token in
+                guard let remoteSessionCoordinator else { throw CancellationError() }
+                return try await remoteSessionCoordinator.eternalTerminalStartupPlan(
                     for: paneId,
-                    serverId: serverId,
+                    serverID: serverId,
                     client: client,
                     runtimeToken: token
                 )
             },
             resumeContext: { paneId in
-                sessionAccess.paneState(paneId)?.eternalTerminalTmuxResumeContext
+                sessionAccess.paneState(paneId)?.remoteSessionResumeContext
             },
             setResumeContext: { paneId, context in
                 sessionAccess.send(.eternalTerminalResumeContext(paneId, context))
@@ -694,7 +694,7 @@ final class TerminalTransportCoordinator {
     ) {
         guard let staleContext else { return }
         logger.warning("\(logMessage) \(paneId.uuidString, privacy: .public)")
-        tmuxCoordinator.cancelPrompt(requestId: staleContext.token.id)
+        remoteSessionCoordinator.cancelPrompt(requestID: staleContext.token.id)
         if !registry.hasClientReferences(staleContext.client) {
             let registry = registry
             Task { @MainActor [weak registry] in
@@ -709,7 +709,7 @@ final class TerminalTransportCoordinator {
 
     private func unregisterSSHClient(
         for paneId: UUID,
-        killingManagedTmuxSessionNamed tmuxSessionName: String?,
+        killingManagedRemoteSession identifier: RemoteSessionIdentifier?,
         beforeCleanup: (@MainActor @Sendable () async -> Void)?
     ) async {
         let ownership = detachSSHOwnership(for: paneId)
@@ -719,8 +719,8 @@ final class TerminalTransportCoordinator {
         await Self.cleanupSSHOwnership(
             ownership,
             registry: registry,
-            tmuxCoordinator: tmuxCoordinator,
-            killingManagedTmuxSessionNamed: tmuxSessionName,
+            remoteSessionCoordinator: remoteSessionCoordinator,
+            killingManagedRemoteSession: identifier,
             beforeCleanup: beforeCleanup
         )
     }
@@ -737,7 +737,7 @@ final class TerminalTransportCoordinator {
         lifetime.cancelQueuedIO(for: paneId)
         let ownership = registry.unregisterShell(for: paneId)
         if let pendingStart = ownership.pendingStart {
-            tmuxCoordinator.cancelPrompt(requestId: pendingStart.token.id)
+            remoteSessionCoordinator.cancelPrompt(requestID: pendingStart.token.id)
         }
         return ownership
     }
@@ -745,8 +745,8 @@ final class TerminalTransportCoordinator {
     private static func cleanupSSHOwnership(
         _ ownership: SSHOwnership,
         registry: TerminalTransportRegistry<EternalTerminalRuntime>,
-        tmuxCoordinator: TerminalTmuxSessionCoordinator,
-        killingManagedTmuxSessionNamed tmuxSessionName: String?,
+        remoteSessionCoordinator: TerminalRemoteSessionCoordinator,
+        killingManagedRemoteSession identifier: RemoteSessionIdentifier?,
         beforeCleanup: (@MainActor @Sendable () async -> Void)?
     ) async {
         guard let registration = ownership.registration else {
@@ -763,11 +763,8 @@ final class TerminalTransportCoordinator {
 
         await registry.performTrackedCleanup(for: registration.client) {
             if let beforeCleanup { await beforeCleanup() }
-            if let tmuxSessionName {
-                await tmuxCoordinator.killSession(
-                    named: tmuxSessionName,
-                    using: registration.client
-                )
+            if let identifier {
+                await remoteSessionCoordinator.killSession(identifier, using: registration.client)
             }
             if !registry.hasClientReferences(registration.client) {
                 await registration.client.disconnect()
@@ -848,7 +845,7 @@ final class TerminalTransportCoordinator {
         client: SSHClient,
         registry: TerminalTransportRegistry<EternalTerminalRuntime>?,
         sessionAccess: TerminalTransportSessionAccess,
-        tmuxCoordinator: TerminalTmuxSessionCoordinator?,
+        remoteSessionCoordinator: TerminalRemoteSessionCoordinator?,
         moshRecovery: any TerminalMoshRecoveryServicing
     ) -> TerminalSSHConnectionContext? {
         guard let registry else { return nil }
@@ -868,23 +865,28 @@ final class TerminalTransportCoordinator {
                 guard ownsConnection() else { return }
                 sessionAccess.send(.connectionState(paneId, state))
             },
-            startupPlan: { [weak tmuxCoordinator] in
+            startupPlan: { [weak remoteSessionCoordinator] in
                 guard ownsConnection() else { throw CancellationError() }
-                guard let tmuxCoordinator else { throw CancellationError() }
-                return try await tmuxCoordinator.startupPlan(
+                guard let remoteSessionCoordinator else { throw CancellationError() }
+                return try await remoteSessionCoordinator.startupPlan(
                     for: paneId,
-                    serverId: server.id,
+                    serverID: server.id,
                     client: client,
                     startToken: startToken
                 )
             },
             restoreMoshShell: { cols, rows in
                 guard ownsConnection(), server.connectionMode == .mosh else { return nil }
-                return await moshRecovery.restoreShell(
+                guard let shell = await moshRecovery.restoreShell(
                     for: paneId,
                     using: client,
                     cols: cols,
                     rows: rows
+                ) else { return nil }
+                return SSHConnectionRestoredShell(
+                    shell: shell,
+                    remoteSessionLifecycle: sessionAccess.paneState(paneId)?
+                        .remoteSessionResumeContext
                 )
             },
             registerShell: { [weak registry] shell in

@@ -72,15 +72,15 @@ struct TerminalPaneState: Equatable {
     var disconnectReason: TerminalDisconnectReason?
     private(set) var hasEstablishedConnection: Bool
     var lastActivity: Date
-    var tmuxStatus: TmuxStatus
+    var remoteSessionStatus: RemoteSessionStatus
     var workingDirectory: String?
     var presentationOverrides: TerminalPresentationOverrides
     var seedPaneId: UUID?
     /// Runtime transport and any valid Mosh fallback data for this pane (never persisted).
     var transportState: ShellTransportState
-    /// Minimal non-secret context needed to recognize tmux lifecycle markers
-    /// when an existing ET session is resumed after process relaunch.
-    var eternalTerminalTmuxResumeContext: EternalTerminalTmuxResumeContext?
+    /// Minimal non-secret context needed to recognize remote-session lifecycle markers
+    /// when an existing Mosh or ET session resumes after process relaunch.
+    var remoteSessionResumeContext: RemoteSessionLifecycleContext?
 
     init(paneId: UUID, tabId: UUID, serverId: UUID) {
         self.paneId = paneId
@@ -90,12 +90,12 @@ struct TerminalPaneState: Equatable {
         self.disconnectReason = nil
         self.hasEstablishedConnection = false
         self.lastActivity = Date()
-        self.tmuxStatus = .unknown
+        self.remoteSessionStatus = .unknown
         self.workingDirectory = nil
         self.presentationOverrides = .empty
         self.seedPaneId = nil
         self.transportState = .ssh
-        self.eternalTerminalTmuxResumeContext = nil
+        self.remoteSessionResumeContext = nil
     }
 
     mutating func markConnectionEstablished() {

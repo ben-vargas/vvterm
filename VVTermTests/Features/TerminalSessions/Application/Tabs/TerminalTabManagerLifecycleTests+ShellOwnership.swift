@@ -182,15 +182,15 @@ extension TerminalTabManagerLifecycleTests {
                 }
     
                 let selection = Task { @MainActor in
-                    await manager.tmuxCoordinator.requestSelection(
-                        requestId: startToken.id,
-                        paneId: tab.rootPaneId,
-                        serverId: tab.serverId,
+                    await manager.remoteSessionCoordinator.requestSelection(
+                        requestID: startToken.id,
+                        paneID: tab.rootPaneId,
+                        backendIdentifier: .tmux,
                         availableSessions: []
                     )
                 }
                 guard await waitUntil({
-                    manager.tmuxCoordinator.hasPendingPrompt(requestId: startToken.id)
+                    manager.remoteSessionCoordinator.hasPendingPrompt(requestID: startToken.id)
                 }) else {
                     Issue.record("Pending tmux prompt was not enqueued")
                     selection.cancel()
@@ -200,14 +200,14 @@ extension TerminalTabManagerLifecycleTests {
                 await manager.transportCoordinator.unregisterSSHClient(for: tab.rootPaneId)
     
                 let promptWasCancelled = await waitUntil({
-                    !manager.tmuxCoordinator.hasPendingPrompt(requestId: startToken.id)
-                        && manager.tmuxCoordinator.attachPrompt == nil
+                    !manager.remoteSessionCoordinator.hasPendingPrompt(requestID: startToken.id)
+                        && manager.remoteSessionCoordinator.attachPrompt == nil
                 })
                 #expect(promptWasCancelled)
                 if !promptWasCancelled {
                     selection.cancel()
                 }
-                #expect(await selection.value == .skipTmux)
+                #expect(await selection.value == .plainShell)
             }
         }
     

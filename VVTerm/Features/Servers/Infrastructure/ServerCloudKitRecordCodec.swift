@@ -9,7 +9,10 @@ nonisolated enum ServerCloudKitRecordCodec {
         "connectionMode", "authMethod", "cloudflareAccessMode",
         "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
         "lastConnected", "isFavorite", "requiresBiometricUnlock", "tmuxEnabledOverride",
-        "tmuxStartupBehaviorOverride", "createdAt", "updatedAt", "environment"
+        "tmuxStartupBehaviorOverride",
+        "remoteSessionEnabledOverride", "remoteSessionBackendIdentifier",
+        "remoteSessionStartupBehaviorOverride",
+        "createdAt", "updatedAt", "environment"
     ]
 
     private static let logger = Logger(
@@ -55,6 +58,9 @@ nonisolated enum ServerCloudKitRecordCodec {
             .flatMap(SSHConnectionMode.init(rawValue:)) ?? .standard
         let cloudflareAccessMode = (record["cloudflareAccessMode"] as? String)
             .flatMap(CloudflareAccessMode.init(rawValue:))
+        let legacyStartupBehavior = (record["tmuxStartupBehaviorOverride"] as? String)
+            .flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
+        let updatedAt = record["updatedAt"] as? Date ?? now
 
         return Server(
             id: id,
@@ -75,11 +81,18 @@ nonisolated enum ServerCloudKitRecordCodec {
             lastConnected: record["lastConnected"] as? Date,
             isFavorite: record["isFavorite"] as? Bool ?? false,
             requiresBiometricUnlock: record["requiresBiometricUnlock"] as? Bool ?? false,
-            tmuxEnabledOverride: record["tmuxEnabledOverride"] as? Bool,
-            tmuxStartupBehaviorOverride: (record["tmuxStartupBehaviorOverride"] as? String)
-                .flatMap(TmuxStartupBehavior.init(rawValue:)),
+            remoteSessionEnabledOverride: record["remoteSessionEnabledOverride"] as? Bool
+                ?? record["tmuxEnabledOverride"] as? Bool,
+            remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier(
+                rawValue: record["remoteSessionBackendIdentifier"] as? String
+                    ?? RemoteSessionBackendIdentifier.tmux.rawValue
+            ),
+            remoteSessionStartupBehaviorOverride: (
+                record["remoteSessionStartupBehaviorOverride"] as? String
+            ).flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
+                ?? legacyStartupBehavior,
             createdAt: record["createdAt"] as? Date ?? now,
-            updatedAt: record["updatedAt"] as? Date ?? now
+            updatedAt: updatedAt
         )
     }
 
@@ -113,8 +126,10 @@ nonisolated enum ServerCloudKitRecordCodec {
         record["lastConnected"] = server.lastConnected
         record["isFavorite"] = server.isFavorite
         record["requiresBiometricUnlock"] = server.requiresBiometricUnlock
-        record["tmuxEnabledOverride"] = server.tmuxEnabledOverride
-        record["tmuxStartupBehaviorOverride"] = server.tmuxStartupBehaviorOverride?.rawValue
+        record["remoteSessionEnabledOverride"] = server.remoteSessionEnabledOverride
+        record["remoteSessionBackendIdentifier"] = server.remoteSessionBackendIdentifier.rawValue
+        record["remoteSessionStartupBehaviorOverride"] =
+            server.remoteSessionStartupBehaviorOverride?.rawValue
         record["createdAt"] = server.createdAt
         record["updatedAt"] = now
         if let environment = try? JSONEncoder().encode(server.environment) {

@@ -1,26 +1,31 @@
+import Foundation
 import Testing
 @testable import VVTerm
 
-nonisolated let deterministicRemoteTmuxThemeStyle = RemoteTmuxThemeStyle(
+nonisolated let deterministicRemoteSessionThemeStyle = RemoteSessionThemeStyle(
     name: "Aizen Dark",
     modeStyle: "fg=#d0d6f0,bg=#333333"
+)
+nonisolated let deterministicRemoteSessionLifecycleEnvelope = try! RemoteSessionLifecycleEnvelope(
+    token: "marker-token",
+    operationID: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
 )
 
 struct RemoteTmuxCommandBuilderTests {
     @Test
     func identicalUnixAttachInputsProduceIdenticalCommands() {
         let first = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm-device-session",
             workingDirectory: "/srv/app",
-            lifecycleMarkerToken: "marker",
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
             transport: .ssh
         )
         let second = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm-device-session",
             workingDirectory: "/srv/app",
-            lifecycleMarkerToken: "marker",
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
             transport: .ssh
         )
 
@@ -36,14 +41,14 @@ struct RemoteTmuxCommandBuilderTests {
             powerShellExecutable: "pwsh"
         )
         let first = RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "prod",
             workingDirectory: #"C:\work\app"#,
             terminalType: .xtermGhostty,
             backend: backend
         )
         let second = RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "prod",
             workingDirectory: #"C:\work\app"#,
             terminalType: .xtermGhostty,

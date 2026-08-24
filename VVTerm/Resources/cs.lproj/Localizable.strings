@@ -1821,3 +1821,13 @@
 "Remove All Downloaded Models" = "Odstranit všechny stažené modely";
 "Remove All Downloaded Models?" = "Odstranit všechny stažené modely?";
 "Voice input models must be downloaded again before they can work offline." = "Aby modely hlasového vstupu fungovaly offline, bude nutné je znovu stáhnout.";
+"Keep remote sessions running by default" = "Ve výchozím nastavení ponechat vzdálené relace spuštěné";
+"These defaults apply to new servers. You can override them in server settings." = "Tato výchozí nastavení platí pro nové servery. Můžete je změnit v nastavení serveru.";
+"Keep remote sessions running" = "Ponechat vzdálené relace spuštěné";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "Vybraná možnost ponechá vzdálené relace spuštěné i po restartu aplikace nebo odpojení.";
+"Without session persistence, app backgrounding can interrupt running commands." = "Bez zachování relace může přechod aplikace na pozadí přerušit spuštěné příkazy.";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "Vybraná možnost ponechá terminál aktivní i po restartu aplikace nebo odpojení.";
+"Use a persistent session" = "Použít trvalou relaci";
+"Use persistent sessions by default" = "Ve výchozím nastavení používat trvalé relace";
+"Create or reconnect to a VVTerm-managed session." = "Vytvořit relaci spravovanou VVTerm nebo se k ní znovu připojit.";
+"Ask which session to use for each new tab or split." = "U každé nové karty nebo rozdělení se zeptat, kterou relaci použít.";

@@ -13,7 +13,7 @@ nonisolated enum TerminalConnectionRequiredAction: Hashable, Sendable {
 
 nonisolated enum TerminalConnectionFailure: Hashable, Sendable {
     case reconnectTimedOut
-    case tmuxStartupFailed
+    case remoteSessionStartupFailed
     case eternalTerminal(
         failure: EternalTerminalSessionFailure,
         host: String,
@@ -29,7 +29,7 @@ nonisolated enum TerminalConnectionFailure: Hashable, Sendable {
         switch self {
         case .external(_, let retryDisposition, _):
             return retryDisposition == .automatic
-        case .reconnectTimedOut, .tmuxStartupFailed, .eternalTerminal:
+        case .reconnectTimedOut, .remoteSessionStartupFailed, .eternalTerminal:
             return false
         }
     }
@@ -38,7 +38,7 @@ nonisolated enum TerminalConnectionFailure: Hashable, Sendable {
         switch self {
         case .external(_, _, let requiredAction):
             return requiredAction
-        case .reconnectTimedOut, .tmuxStartupFailed, .eternalTerminal:
+        case .reconnectTimedOut, .remoteSessionStartupFailed, .eternalTerminal:
             return nil
         }
     }

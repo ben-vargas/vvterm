@@ -15,15 +15,15 @@ enum TerminalTabManagerLiveComposition {
         analyticsTracker: AnalyticsTracker,
         liveActivityManager: LiveActivityManager,
         remoteMosh: any TerminalRemoteMoshServicing,
-        remoteTmux: any TerminalRemoteTmuxServicing,
+        remoteSessions: any TerminalRemoteSessionServicing,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshResumeStore: any MoshResumeStoring,
         terminalSurfaceStore: any TerminalSurfaceStoring,
         deviceID: String,
-        themeStyle: @escaping @MainActor () -> RemoteTmuxThemeStyle,
+        themeStyle: @escaping @MainActor () -> RemoteSessionThemeStyle,
         applicationIsActive: @escaping @MainActor @Sendable () -> Bool
     ) -> TerminalTabManager {
-        let tmuxConfiguration = TerminalTmuxSessionLiveComposition.makeConfiguration(
+        let remoteSessionConfiguration = TerminalRemoteSessionLiveComposition.makeConfiguration(
             defaults: defaults,
             serverManager: serverManager,
             deviceID: deviceID,
@@ -72,7 +72,7 @@ enum TerminalTabManagerLiveComposition {
             eternalTerminalRuntime: .live(
                 resumeStore: eternalTerminalResumeStore,
                 analyticsTracker: analyticsTracker,
-                remoteTmux: remoteTmux,
+                remoteSessions: remoteSessions,
                 sshClientFactory: sshClientFactory
             )
         )
@@ -82,8 +82,8 @@ enum TerminalTabManagerLiveComposition {
                 key: persistenceKey
             ),
             dependencies: dependencies,
-            tmuxConfiguration: tmuxConfiguration,
-            remoteTmux: remoteTmux,
+            remoteSessionConfiguration: remoteSessionConfiguration,
+            remoteSessions: remoteSessions,
             terminalSurfaceStore: terminalSurfaceStore,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: TerminalMoshRecoveryService(

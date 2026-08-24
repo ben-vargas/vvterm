@@ -22,8 +22,8 @@ struct TerminalConnectionFailurePresentationTests {
                 == String(localized: "Connection timed out. Please retry.")
         )
         #expect(
-            TerminalConnectionFailurePresentation.message(for: .tmuxStartupFailed)
-                == String(localized: "Unable to start tmux session.")
+            TerminalConnectionFailurePresentation.message(for: .remoteSessionStartupFailed)
+                == String(localized: "Unable to start the remote session.")
         )
         #expect(
             TerminalTabOpeningError.alreadyOpening.localizedDescription

@@ -25,7 +25,7 @@ final class TerminalSessionStateStore: ObservableObject {
 
     private let snapshotStore: any TerminalTabSnapshotStoring
     private let connectionViewSelections: ConnectionViewSelectionStore
-    private let tmuxResolver: TmuxAttachResolver
+    private let remoteSessionResolver: RemoteSessionAttachResolver
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "VVTerm",
         category: "TerminalSessionStateStore"
@@ -36,11 +36,11 @@ final class TerminalSessionStateStore: ObservableObject {
     init(
         snapshotStore: any TerminalTabSnapshotStoring,
         connectionViewSelections: ConnectionViewSelectionStore,
-        tmuxResolver: TmuxAttachResolver
+        remoteSessionResolver: RemoteSessionAttachResolver
     ) {
         self.snapshotStore = snapshotStore
         self.connectionViewSelections = connectionViewSelections
-        self.tmuxResolver = tmuxResolver
+        self.remoteSessionResolver = remoteSessionResolver
         restoreSnapshot()
     }
 
@@ -206,7 +206,7 @@ final class TerminalSessionStateStore: ObservableObject {
         title: String,
         sourcePaneId: UUID?,
         sourceWorkingDirectory: String?,
-        tmuxStatus: TmuxStatus
+        remoteSessionStatus: RemoteSessionStatus
     ) -> TerminalTab {
         let tab = TerminalTab(serverId: serverId, title: title)
         var paneState = TerminalPaneState(
@@ -216,7 +216,7 @@ final class TerminalSessionStateStore: ObservableObject {
         )
         paneState.workingDirectory = sourceWorkingDirectory
         paneState.seedPaneId = sourcePaneId
-        paneState.tmuxStatus = tmuxStatus
+        paneState.remoteSessionStatus = remoteSessionStatus
         install(tab, paneState: paneState, select: true)
         return tab
     }
@@ -296,7 +296,7 @@ final class TerminalSessionStateStore: ObservableObject {
         in tab: TerminalTab,
         paneId: UUID,
         placement: TerminalSplitPlacement,
-        tmuxStatus: TmuxStatus
+        remoteSessionStatus: RemoteSessionStatus
     ) -> UUID? {
         guard let currentTab = self.tab(id: tab.id, for: tab.serverId) else { return nil }
 
@@ -312,7 +312,7 @@ final class TerminalSessionStateStore: ObservableObject {
         )
         newState.workingDirectory = paneState(for: paneId)?.workingDirectory
         newState.seedPaneId = paneId
-        newState.tmuxStatus = tmuxStatus
+        newState.remoteSessionStatus = remoteSessionStatus
         paneStates[newPaneId] = newState
 
         let sourceNode = TerminalSplitNode.leaf(paneId: paneId)
@@ -476,7 +476,7 @@ final class TerminalSessionStateStore: ObservableObject {
         let ids = paneIds
         for paneId in ids {
             updatePane(paneId) { state in
-                state.disconnectReason = .transportEnded
+                state.disconnectReason = .transportInterrupted
                 state.connectionState = .disconnected
             }
         }
@@ -492,7 +492,7 @@ final class TerminalSessionStateStore: ObservableObject {
                     TerminalTabsSnapshot.TabSnapshot(
                         from: $0,
                         paneStates: paneStates,
-                        tmuxResolver: tmuxResolver
+                        remoteSessionResolver: remoteSessionResolver
                     )
                 },
                 selectedTabId: selectedTabByServer[serverId],
@@ -520,15 +520,15 @@ final class TerminalSessionStateStore: ObservableObject {
                     )
                     paneState.connectionState = .disconnected
                     paneState.markConnectionEstablished()
-                    if !tmuxResolver.isTmuxEnabled(for: tab.serverId) {
-                        paneState.tmuxStatus = .off
+                    if !remoteSessionResolver.isEnabled(for: tab.serverId) {
+                        paneState.remoteSessionStatus = .off
                     }
                     paneState.presentationOverrides = snapshotsByTabId[tab.id]?
                         .panePresentationOverrides?[paneId] ?? .empty
                     paneState.disconnectReason = snapshotsByTabId[tab.id]?
                         .paneDisconnectReasons?[paneId]
-                    paneState.eternalTerminalTmuxResumeContext = snapshotsByTabId[tab.id]?
-                        .eternalTerminalTmuxResumeContexts?[paneId]
+                    paneState.remoteSessionResumeContext = snapshotsByTabId[tab.id]?
+                        .remoteSessionResumeContexts?[paneId]
                     restoredPaneStates[paneId] = paneState
                 }
             }
@@ -561,13 +561,13 @@ final class TerminalSessionStateStore: ObservableObject {
         tabsByServer = restoredTabsByServer
         selectedTabByServer = restoredSelectedTabs
         connectionViewSelections.restore(restoredSelectedViews)
-        var restoredAttachments: [UUID: TerminalTmuxAttachmentState] = [:]
+        var restoredAttachments: [UUID: TerminalRemoteSessionAttachmentState] = [:]
         for tabSnapshot in snapshotsByTabId.values {
-            for (paneId, attachment) in tabSnapshot.tmuxAttachments ?? [:] {
+            for (paneId, attachment) in tabSnapshot.remoteSessionAttachments ?? [:] {
                 restoredAttachments[paneId] = attachment
             }
         }
-        tmuxResolver.restoreAttachments(restoredAttachments)
+        remoteSessionResolver.restoreAttachments(restoredAttachments)
         paneStates = makeRestoredPaneStates(
             from: restoredTabsByServer,
             snapshotsByTabId: snapshotsByTabId
@@ -610,7 +610,7 @@ final class TerminalSessionStateStore: ObservableObject {
         persistTask?.cancel()
         persistTask = nil
         persistSnapshot()
-        tmuxResolver.clearAllAttachmentState()
+        remoteSessionResolver.clearAllAttachmentState()
         restoreSnapshot()
     }
 
@@ -651,14 +651,14 @@ struct TerminalPanePresentationState: Equatable {
     let connectionState: ConnectionState
     let disconnectReason: TerminalDisconnectReason?
     let hasEstablishedConnection: Bool
-    let tmuxStatus: TmuxStatus
+    let remoteSessionStatus: RemoteSessionStatus
     let transportState: ShellTransportState
 
     init(_ state: TerminalPaneState) {
         connectionState = state.connectionState
         disconnectReason = state.disconnectReason
         hasEstablishedConnection = state.hasEstablishedConnection
-        tmuxStatus = state.tmuxStatus
+        remoteSessionStatus = state.remoteSessionStatus
         transportState = state.transportState
     }
 
@@ -668,6 +668,8 @@ struct TerminalPanePresentationState: Equatable {
 }
 
 private struct TerminalTabsSnapshot: Codable {
+    private static let currentVersion = 2
+
     struct ServerSnapshot: Codable {
         let serverId: UUID
         let tabs: [TabSnapshot]
@@ -685,13 +687,35 @@ private struct TerminalTabsSnapshot: Codable {
         let rootPaneId: UUID
         let panePresentationOverrides: [UUID: TerminalPresentationOverrides]?
         let paneDisconnectReasons: [UUID: TerminalDisconnectReason]?
-        let eternalTerminalTmuxResumeContexts: [UUID: EternalTerminalTmuxResumeContext]?
-        let tmuxAttachments: [UUID: TerminalTmuxAttachmentState]?
+        let remoteSessionResumeContexts: [UUID: RemoteSessionLifecycleContext]?
+        let remoteSessionAttachments: [UUID: TerminalRemoteSessionAttachmentState]?
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case serverId
+            case title
+            case createdAt
+            case layout
+            case focusedPaneId
+            case rootPaneId
+            case panePresentationOverrides
+            case paneDisconnectReasons
+            case remoteSessionResumeContexts
+            case remoteSessionAttachments
+            case eternalTerminalTmuxResumeContexts
+            case tmuxAttachments
+        }
+
+        private struct LegacyTmuxAttachment: Decodable {
+            let sessionName: String
+            let ownership: RemoteSessionOwnership
+            let managedSessionConfirmed: Bool?
+        }
 
         init(
             from tab: TerminalTab,
             paneStates: [UUID: TerminalPaneState],
-            tmuxResolver: TmuxAttachResolver
+            remoteSessionResolver: RemoteSessionAttachResolver
         ) {
             id = tab.id
             serverId = tab.serverId
@@ -715,21 +739,99 @@ private struct TerminalTabsSnapshot: Codable {
                 }
             )
             paneDisconnectReasons = disconnectReasons.isEmpty ? nil : disconnectReasons
-            let resumeContexts: [UUID: EternalTerminalTmuxResumeContext] = Dictionary(
+            let resumeContexts: [UUID: RemoteSessionLifecycleContext] = Dictionary(
                 uniqueKeysWithValues: tab.allPaneIds.compactMap { paneId in
-                    guard let context = paneStates[paneId]?.eternalTerminalTmuxResumeContext else {
+                    guard let context = paneStates[paneId]?.remoteSessionResumeContext else {
                         return nil
                     }
                     return (paneId, context)
                 }
             )
-            eternalTerminalTmuxResumeContexts = resumeContexts.isEmpty ? nil : resumeContexts
-            let attachments: [UUID: TerminalTmuxAttachmentState] = Dictionary(
+            remoteSessionResumeContexts = resumeContexts.isEmpty ? nil : resumeContexts
+            let attachments: [UUID: TerminalRemoteSessionAttachmentState] = Dictionary(
                 uniqueKeysWithValues: tab.allPaneIds.compactMap { paneId in
-                    tmuxResolver.attachment(for: paneId).map { (paneId, $0) }
+                    remoteSessionResolver.attachment(for: paneId).map { (paneId, $0) }
                 }
             )
-            tmuxAttachments = attachments.isEmpty ? nil : attachments
+            remoteSessionAttachments = attachments.isEmpty ? nil : attachments
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(UUID.self, forKey: .id)
+            serverId = try container.decode(UUID.self, forKey: .serverId)
+            title = try container.decode(String.self, forKey: .title)
+            createdAt = try container.decode(Date.self, forKey: .createdAt)
+            layout = try container.decodeIfPresent(TerminalSplitNode.self, forKey: .layout)
+            focusedPaneId = try container.decode(UUID.self, forKey: .focusedPaneId)
+            rootPaneId = try container.decode(UUID.self, forKey: .rootPaneId)
+            panePresentationOverrides = try container.decodeIfPresent(
+                [UUID: TerminalPresentationOverrides].self,
+                forKey: .panePresentationOverrides
+            )
+            paneDisconnectReasons = try container.decodeIfPresent(
+                [UUID: TerminalDisconnectReason].self,
+                forKey: .paneDisconnectReasons
+            )
+            remoteSessionResumeContexts = try container.decodeIfPresent(
+                [UUID: RemoteSessionLifecycleContext].self,
+                forKey: .remoteSessionResumeContexts
+            )
+            if let current = try container.decodeIfPresent(
+                [UUID: TerminalRemoteSessionAttachmentState].self,
+                forKey: .remoteSessionAttachments
+            ) {
+                remoteSessionAttachments = current
+            } else {
+                let legacy = try container.decodeIfPresent(
+                    [UUID: LegacyTmuxAttachment].self,
+                    forKey: .tmuxAttachments
+                ) ?? [:]
+                let migrated: [UUID: TerminalRemoteSessionAttachmentState] =
+                    legacy.compactMapValues { attachment in
+                    guard let identifier = try? RemoteSessionIdentifier(
+                        backendIdentifier: .tmux,
+                        validating: attachment.sessionName
+                    ) else {
+                        return nil
+                    }
+                    return TerminalRemoteSessionAttachmentState(
+                        attachment: RemoteSessionAttachment(
+                            identifier: identifier,
+                            ownership: attachment.ownership
+                        ),
+                        managedSessionConfirmed: attachment.managedSessionConfirmed == true
+                    )
+                }
+                remoteSessionAttachments = migrated.isEmpty ? nil : migrated
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(id, forKey: .id)
+            try container.encode(serverId, forKey: .serverId)
+            try container.encode(title, forKey: .title)
+            try container.encode(createdAt, forKey: .createdAt)
+            try container.encodeIfPresent(layout, forKey: .layout)
+            try container.encode(focusedPaneId, forKey: .focusedPaneId)
+            try container.encode(rootPaneId, forKey: .rootPaneId)
+            try container.encodeIfPresent(
+                panePresentationOverrides,
+                forKey: .panePresentationOverrides
+            )
+            try container.encodeIfPresent(
+                paneDisconnectReasons,
+                forKey: .paneDisconnectReasons
+            )
+            try container.encodeIfPresent(
+                remoteSessionResumeContexts,
+                forKey: .remoteSessionResumeContexts
+            )
+            try container.encodeIfPresent(
+                remoteSessionAttachments,
+                forKey: .remoteSessionAttachments
+            )
         }
 
         func toTerminalTab() -> TerminalTab {
@@ -745,5 +847,29 @@ private struct TerminalTabsSnapshot: Codable {
         }
     }
 
+    let version: Int
     let servers: [ServerSnapshot]
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case servers
+    }
+
+    init(servers: [ServerSnapshot]) {
+        version = Self.currentVersion
+        self.servers = servers
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        guard (1...Self.currentVersion).contains(version) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .version,
+                in: container,
+                debugDescription: "Unsupported terminal snapshot version"
+            )
+        }
+        servers = try container.decode([ServerSnapshot].self, forKey: .servers)
+    }
 }

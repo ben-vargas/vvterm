@@ -138,7 +138,10 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .keyboardAndInput:
             ["keyboard", "input", "option", "alt", "terminal size", "dismiss", "accessory bar", "custom actions"]
         case .sessionsAndConnections:
-            ["tmux", "session", "connect", "auto reconnect", "ssh", "keep alive", "keep-alive", "interval"]
+            [
+                "remote session", "session persistence", "tmux", "zmx", "backend", "connect",
+                "auto reconnect", "ssh", "keep alive", "keep-alive", "interval"
+            ]
         case .clipboardAndPaste:
             ["clipboard", "copy", "paste", "image", "whitespace", "ansi", "shell prompts", "remote clipboard"]
         case .sshKeys:
@@ -198,7 +201,11 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
                 "Custom Actions",
             ]
         case .sessionsAndConnections:
-            ["Sessions & SSH", "Enable tmux by default", "On connect", "Keep screen awake", "Auto-reconnect on disconnect", "Send keep-alive packets"]
+            [
+                "Sessions & SSH", "Session Persistence", "Use persistent sessions by default",
+                "Use", "On connect", "Auto-reconnect on disconnect",
+                "Send keep-alive packets"
+            ]
         case .clipboardAndPaste:
             ["Clipboard & Paste", "Copy", "Paste", "Image"]
         case .sshKeys:

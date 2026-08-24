@@ -1872,3 +1872,13 @@
 "Remove All Downloaded Models" = "Remove All Downloaded Models";
 "Remove All Downloaded Models?" = "Remove All Downloaded Models?";
 "Voice input models must be downloaded again before they can work offline." = "Voice input models must be downloaded again before they can work offline.";
+"Keep remote sessions running by default" = "Keep remote sessions running by default";
+"These defaults apply to new servers. You can override them in server settings." = "These defaults apply to new servers. You can override them in server settings.";
+"Keep remote sessions running" = "Keep remote sessions running";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "The selected option keeps remote sessions running across app restarts and disconnects.";
+"Without session persistence, app backgrounding can interrupt running commands." = "Without session persistence, app backgrounding can interrupt running commands.";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "The selected option keeps the terminal alive across app restarts and disconnects.";
+"Use a persistent session" = "Use a persistent session";
+"Use persistent sessions by default" = "Use persistent sessions by default";
+"Create or reconnect to a VVTerm-managed session." = "Create or reconnect to a VVTerm-managed session.";
+"Ask which session to use for each new tab or split." = "Ask which session to use for each new tab or split.";

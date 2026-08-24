@@ -1820,3 +1820,13 @@
 "Remove All Downloaded Models" = "ลบโมเดลที่ดาวน์โหลดทั้งหมด";
 "Remove All Downloaded Models?" = "ลบโมเดลที่ดาวน์โหลดทั้งหมดหรือไม่";
 "Voice input models must be downloaded again before they can work offline." = "ต้องดาวน์โหลดโมเดลป้อนข้อมูลด้วยเสียงอีกครั้งก่อนใช้งานแบบออฟไลน์";
+"Keep remote sessions running by default" = "ให้เซสชันระยะไกลทำงานต่อโดยค่าเริ่มต้น";
+"These defaults apply to new servers. You can override them in server settings." = "ค่าเริ่มต้นเหล่านี้ใช้กับเซิร์ฟเวอร์ใหม่ คุณเปลี่ยนได้ในการตั้งค่าเซิร์ฟเวอร์";
+"Keep remote sessions running" = "ให้เซสชันระยะไกลทำงานต่อ";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "ตัวเลือกที่เลือกจะทำให้เซสชันระยะไกลทำงานต่อหลังจากแอปเริ่มใหม่หรือขาดการเชื่อมต่อ";
+"Without session persistence, app backgrounding can interrupt running commands." = "หากไม่มีการคงอยู่ของเซสชัน การทำงานเบื้องหลังของแอปอาจขัดจังหวะคำสั่งที่กำลังทำงาน";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "ตัวเลือกที่เลือกจะทำให้เทอร์มินัลทำงานต่อหลังจากแอปเริ่มใหม่หรือขาดการเชื่อมต่อ";
+"Use a persistent session" = "ใช้เซสชันถาวร";
+"Use persistent sessions by default" = "ใช้เซสชันถาวรโดยค่าเริ่มต้น";
+"Create or reconnect to a VVTerm-managed session." = "สร้างหรือเชื่อมต่อกับเซสชันที่ VVTerm จัดการอีกครั้ง";
+"Ask which session to use for each new tab or split." = "ถามว่าจะใช้เซสชันใดสำหรับแต่ละแท็บหรือการแบ่งใหม่";

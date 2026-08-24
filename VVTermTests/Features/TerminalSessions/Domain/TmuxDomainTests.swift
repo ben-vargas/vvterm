@@ -2,20 +2,19 @@ import XCTest
 @testable import VVTerm
 
 final class TmuxDomainTests: XCTestCase {
-    func testStartupBehaviorConfigurationCasesPreserveRawValueOrder() {
-        XCTAssertEqual(TmuxStartupBehavior.configCases, TmuxStartupBehavior.allCases)
+    func testStartupBehaviorCasesPreserveRawValueOrder() {
         XCTAssertEqual(
-            TmuxStartupBehavior.configCases.map(\.rawValue),
-            ["vvtermManaged", "askEveryTime", "skipTmux"]
+            RemoteSessionStartupBehavior.allCases.map(\.rawValue),
+            ["createManaged", "ask", "plainShell"]
         )
     }
 
     func testStatusTmuxIndicationRules() {
-        XCTAssertTrue(TmuxStatus.foreground.indicatesTmux)
-        XCTAssertTrue(TmuxStatus.background.indicatesTmux)
-        XCTAssertTrue(TmuxStatus.unknown.indicatesTmux)
-        XCTAssertFalse(TmuxStatus.off.indicatesTmux)
-        XCTAssertFalse(TmuxStatus.missing.indicatesTmux)
-        XCTAssertFalse(TmuxStatus.installing.indicatesTmux)
+        XCTAssertTrue(RemoteSessionStatus.foreground.indicatesPersistentSession)
+        XCTAssertTrue(RemoteSessionStatus.background.indicatesPersistentSession)
+        XCTAssertTrue(RemoteSessionStatus.unknown.indicatesPersistentSession)
+        XCTAssertFalse(RemoteSessionStatus.off.indicatesPersistentSession)
+        XCTAssertFalse(RemoteSessionStatus.missing.indicatesPersistentSession)
+        XCTAssertFalse(RemoteSessionStatus.installing.indicatesPersistentSession)
     }
 }

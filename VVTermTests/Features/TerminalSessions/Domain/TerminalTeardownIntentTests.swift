@@ -14,11 +14,10 @@ struct TerminalTeardownIntentTests {
     }
 
     @Test
-    func onlyExplicitUserActionsTerminateManagedTmux() {
-        #expect(TerminalTeardownIntent.explicitClose.terminatesManagedTmux)
-        #expect(TerminalTeardownIntent.explicitServerDisconnect.terminatesManagedTmux)
-        #expect(!TerminalTeardownIntent.remoteSessionEnded.terminatesManagedTmux)
-        #expect(!TerminalTeardownIntent.applicationTermination.terminatesManagedTmux)
+    func onlyExplicitUserActionsTerminateManagedRemoteSessions() {
+        #expect(TerminalTeardownIntent.explicitClose.terminatesManagedRemoteSession)
+        #expect(TerminalTeardownIntent.explicitServerDisconnect.terminatesManagedRemoteSession)
+        #expect(!TerminalTeardownIntent.remoteSessionEnded.terminatesManagedRemoteSession)
+        #expect(!TerminalTeardownIntent.applicationTermination.terminatesManagedRemoteSession)
     }
 }
-

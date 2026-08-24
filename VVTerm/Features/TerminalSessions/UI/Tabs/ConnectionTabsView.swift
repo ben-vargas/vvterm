@@ -34,7 +34,7 @@ struct ConnectionTerminalContainer: View {
     let tabManager: TerminalTabManager
     let terminalToolbarProjection: TerminalServerToolbarProjection
     @ObservedObject var terminalContent: TerminalServerContentProjection
-    @ObservedObject private var tmuxCoordinator: TerminalTmuxSessionCoordinator
+    @ObservedObject private var remoteSessionCoordinator: TerminalRemoteSessionCoordinator
     @ObservedObject var fileTabManager: RemoteFileTabManager
     let serverManager: ServerManager
     let fileBrowser: RemoteFileBrowserStore
@@ -92,7 +92,7 @@ struct ConnectionTerminalContainer: View {
         self.tabManager = tabManager
         self.terminalToolbarProjection = terminalToolbarProjection
         _terminalContent = ObservedObject(wrappedValue: terminalToolbarProjection.content)
-        _tmuxCoordinator = ObservedObject(wrappedValue: tabManager.tmuxCoordinator)
+        _remoteSessionCoordinator = ObservedObject(wrappedValue: tabManager.remoteSessionCoordinator)
         self.fileTabManager = fileTabManager
         self.serverManager = serverManager
         self.fileBrowser = fileBrowser
@@ -215,18 +215,18 @@ struct ConnectionTerminalContainer: View {
         fileTabManager.selectedTab(for: server.id)
     }
 
-    private var tmuxAttachPromptBinding: Binding<TmuxAttachPrompt?> {
+    private var remoteSessionAttachPromptBinding: Binding<RemoteSessionAttachPrompt?> {
         Binding(
             get: {
-                guard let prompt = tmuxCoordinator.attachPrompt else { return nil }
+                guard let prompt = remoteSessionCoordinator.attachPrompt else { return nil }
                 guard tabManager.sessionState.paneState(for: prompt.paneId)?.serverId == server.id else { return nil }
                 return prompt
             },
             set: { newValue in
                 guard newValue == nil,
-                      let prompt = tmuxCoordinator.attachPrompt else { return }
+                      let prompt = remoteSessionCoordinator.attachPrompt else { return }
                 guard tabManager.sessionState.paneState(for: prompt.paneId)?.serverId == server.id else { return }
-                tmuxCoordinator.cancelPrompt(requestId: prompt.id)
+                remoteSessionCoordinator.cancelPrompt(requestID: prompt.id)
             }
         )
     }
@@ -300,12 +300,12 @@ struct ConnectionTerminalContainer: View {
 
     var body: some View {
         platformBody
-            .sheet(item: tmuxAttachPromptBinding) { prompt in
-                TmuxAttachPromptSheet(
+            .sheet(item: remoteSessionAttachPromptBinding) { prompt in
+                RemoteSessionAttachPromptSheet(
                     prompt: prompt,
                     onConfirm: { selection in
-                        tabManager.tmuxCoordinator.resolvePrompt(
-                            requestId: prompt.id,
+                        tabManager.remoteSessionCoordinator.resolvePrompt(
+                            requestID: prompt.id,
                             selection: selection
                         )
                     }

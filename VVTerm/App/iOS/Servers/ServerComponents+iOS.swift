@@ -152,7 +152,8 @@ struct ServerListRow: View {
 struct ActiveConnectionListRow: View {
     let title: String
     let status: ActiveConnectionPresentationStatus
-    let tmuxStatus: TmuxStatus
+    let remoteSessionStatus: RemoteSessionStatus
+    let remoteSessionBackendName: String
     let tabCount: Int
     let onOpen: () -> Void
     let onDisconnect: () -> Void
@@ -180,8 +181,11 @@ struct ActiveConnectionListRow: View {
 
                 Spacer()
 
-                if !tmuxStatus.shortLabel.isEmpty {
-                    Text(tmuxStatus.shortLabel)
+                let remoteSessionLabel = remoteSessionStatus.shortLabel(
+                    backendName: remoteSessionBackendName
+                )
+                if !remoteSessionLabel.isEmpty {
+                    Text(remoteSessionLabel)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
