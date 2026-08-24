@@ -450,11 +450,13 @@ struct ServerManagerLoadLifecycleTests {
                 checkpoint: checkpoint
             )
         }
+        var deletedLocalDataIDs: [UUID] = []
         let manager = makeManager(
             local: local,
             remote: remote,
             sync: ServerSyncRepositoryFake(),
-            isSyncEnabled: { true }
+            isSyncEnabled: { true },
+            didDeleteServerLocalData: { deletedLocalDataIDs.append($0) }
         )
 
         await manager.loadData()
@@ -464,6 +466,7 @@ struct ServerManagerLoadLifecycleTests {
         #expect(local.ambiguousCloudRecoveryBackup == nil)
         #expect(manager.stateStore.ambiguousCloudRecovery == nil)
         #expect(remote.acceptedCheckpoints == [checkpoint])
+        #expect(deletedLocalDataIDs == [server.id])
     }
 
     @Test
@@ -894,7 +897,8 @@ struct ServerManagerLoadLifecycleTests {
         preferences: ServerManagerPreferencesFake? = nil,
         isSyncEnabled: @escaping () -> Bool,
         isRemoteSchemaError: @escaping (Error) -> Bool = { _ in false },
-        startsAutomatically: Bool = false
+        startsAutomatically: Bool = false,
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
     ) -> ServerManager {
         ServerManager(
             dependencies: makeDependencies(
@@ -903,7 +907,8 @@ struct ServerManagerLoadLifecycleTests {
                 sync: sync,
                 preferences: preferences,
                 isSyncEnabled: isSyncEnabled,
-                isRemoteSchemaError: isRemoteSchemaError
+                isRemoteSchemaError: isRemoteSchemaError,
+                didDeleteServerLocalData: didDeleteServerLocalData
             ),
             startsAutomatically: startsAutomatically
         )
@@ -965,7 +970,8 @@ struct ServerManagerLoadLifecycleTests {
         sync: ServerSyncRepositoryFake,
         preferences: ServerManagerPreferencesFake? = nil,
         isSyncEnabled: @escaping () -> Bool,
-        isRemoteSchemaError: @escaping (Error) -> Bool
+        isRemoteSchemaError: @escaping (Error) -> Bool,
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
     ) -> ServerManagerDependencies {
         let now = { Date(timeIntervalSinceReferenceDate: 20_000) }
         let makeID = { UUID(uuidString: "90000000-0000-0000-0000-000000000002")! }
@@ -988,6 +994,7 @@ struct ServerManagerLoadLifecycleTests {
             credentialRepository: ServerManagerCredentialRepositoryFake(),
             actionAuthorizer: ProtectedServerActionAuthorizerFake(),
             knownHosts: ServerKnownHostRepositoryFake(),
+            didDeleteServerLocalData: didDeleteServerLocalData,
             isRemoteSchemaError: isRemoteSchemaError,
             now: now,
             makeID: makeID

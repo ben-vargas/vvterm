@@ -109,9 +109,10 @@ extension TerminalRemoteSessionCoordinator {
         validateOwner: () throws -> Void
     ) async throws -> TerminalShellStartupPlan {
         try validateOwner()
+        let startupAction = startupActions.action(for: serverID)
         guard isEnabled(for: serverID) else {
             disableAttachment(for: paneID, status: .off)
-            return .plainShell
+            return plainShellStartupPlan(startupAction)
         }
 
         let availability = await availabilityResolver()
@@ -206,6 +207,9 @@ extension TerminalRemoteSessionCoordinator {
             for: RemoteSessionLaunchRequest(
                 intent: intent,
                 workingDirectory: workingDirectory,
+                initialCommand: mode == .attachOrCreate
+                    ? startupAction?.command
+                    : nil,
                 lifecycleEnvelope: envelope,
                 transport: transport,
                 themeStyle: configuration.themeStyle()
@@ -223,6 +227,15 @@ extension TerminalRemoteSessionCoordinator {
         return TerminalShellStartupPlan(
             command: backendPlan.command,
             remoteSessionLifecycle: lifecycle
+        )
+    }
+
+    private func plainShellStartupPlan(
+        _ action: RemoteShellStartupAction?
+    ) -> TerminalShellStartupPlan {
+        return TerminalShellStartupPlan(
+            command: action?.command,
+            remoteSessionLifecycle: nil
         )
     }
 

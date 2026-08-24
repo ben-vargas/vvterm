@@ -1835,3 +1835,8 @@
 "Use persistent sessions by default" = "기본적으로 지속 세션 사용";
 "Create or reconnect to a VVTerm-managed session." = "VVTerm 관리 세션을 만들거나 다시 연결합니다.";
 "Ask which session to use for each new tab or split." = "새 탭이나 분할마다 사용할 세션을 묻습니다.";
+"Startup Command" = "시작 명령";
+"Stored on this device. Runs only when VVTerm creates a persistent session. Do not include secrets." = "이 기기에 저장됩니다. VVTerm이 지속 세션을 만들 때만 실행됩니다. 비밀 정보를 포함하지 마십시오.";
+"Stored on this device. Runs for each new terminal connection. Do not include secrets." = "이 기기에 저장됩니다. 새 터미널 연결마다 실행됩니다. 비밀 정보를 포함하지 마십시오.";
+"The command contains unsupported control characters." = "명령에 지원되지 않는 제어 문자가 있습니다.";
+"The command is too long." = "명령이 너무 깁니다.";

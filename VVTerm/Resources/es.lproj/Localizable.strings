@@ -1836,3 +1836,8 @@
 "Use persistent sessions by default" = "Usar sesiones persistentes de forma predeterminada";
 "Create or reconnect to a VVTerm-managed session." = "Crear una sesión gestionada por VVTerm o volver a conectarse a ella.";
 "Ask which session to use for each new tab or split." = "Preguntar qué sesión usar para cada pestaña o división nueva.";
+"Startup Command" = "Comando de inicio";
+"Stored on this device. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Se guarda en este dispositivo. Solo se ejecuta cuando VVTerm crea una sesión persistente. No incluyas secretos.";
+"Stored on this device. Runs for each new terminal connection. Do not include secrets." = "Se guarda en este dispositivo. Se ejecuta para cada conexión de terminal nueva. No incluyas secretos.";
+"The command contains unsupported control characters." = "El comando contiene caracteres de control no compatibles.";
+"The command is too long." = "El comando es demasiado largo.";

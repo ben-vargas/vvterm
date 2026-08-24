@@ -1837,3 +1837,8 @@
 "Use persistent sessions by default" = "Ve výchozím nastavení používat trvalé relace";
 "Create or reconnect to a VVTerm-managed session." = "Vytvořit relaci spravovanou VVTerm nebo se k ní znovu připojit.";
 "Ask which session to use for each new tab or split." = "U každé nové karty nebo rozdělení se zeptat, kterou relaci použít.";
+"Startup Command" = "Příkaz při spuštění";
+"Stored on this device. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Uloženo v tomto zařízení. Spustí se jen při vytvoření trvalé relace aplikací VVTerm. Nezadávejte tajné údaje.";
+"Stored on this device. Runs for each new terminal connection. Do not include secrets." = "Uloženo v tomto zařízení. Spustí se pro každé nové připojení terminálu. Nezadávejte tajné údaje.";
+"The command contains unsupported control characters." = "Příkaz obsahuje nepodporované řídicí znaky.";
+"The command is too long." = "Příkaz je příliš dlouhý.";

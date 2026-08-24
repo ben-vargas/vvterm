@@ -96,6 +96,7 @@ extension ServerFormDependencies {
         hostKeys: any ServerHostKeyRepository,
         connectionOperations: any ServerConnectionOperationRunning,
         remoteMosh: any ServerMoshConnectionTesting,
+        remoteShellStartupActions: any RemoteShellStartupActionRepository,
         remoteSessionBackends: [RemoteSessionBackendMetadata],
         defaultRemoteSessionEnabled: @escaping @MainActor () -> Bool,
         defaultRemoteSessionBackendIdentifier: @escaping @MainActor () -> RemoteSessionBackendIdentifier,
@@ -112,6 +113,7 @@ extension ServerFormDependencies {
                 now: now
             ),
             hostKeys: hostKeys,
+            remoteShellStartupActions: remoteShellStartupActions,
             remoteSessionBackends: remoteSessionBackends,
             defaultRemoteSessionEnabled: defaultRemoteSessionEnabled,
             defaultRemoteSessionBackendIdentifier: defaultRemoteSessionBackendIdentifier,

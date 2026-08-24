@@ -97,7 +97,13 @@ struct ServerManagerMutationTransactionTests {
         credentials.values[server.id] = ServerCredentials(serverId: server.id)
         let sync = ServerSyncRepositoryFake()
         sync.enqueueError = ServerSyncRepositoryTestError.rejected
-        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+        var deletedServerIDs: [UUID] = []
+        let manager = makeManager(
+            local: local,
+            credentials: credentials,
+            sync: sync,
+            didDeleteServerLocalData: { deletedServerIDs.append($0) }
+        )
 
         await #expect(throws: VVTermError.self) {
             try await manager.deleteServer(server)
@@ -106,6 +112,7 @@ struct ServerManagerMutationTransactionTests {
         #expect(manager.servers.isEmpty)
         #expect(credentials.values[server.id] == nil)
         #expect(local.serverMutationJournal?.phase == .enqueueing)
+        #expect(deletedServerIDs == [server.id])
 
         sync.enqueueError = nil
         let resumed = try #require(
@@ -139,6 +146,61 @@ struct ServerManagerMutationTransactionTests {
         #expect(credentials.values[server.id] != nil)
         #expect(local.serverMutationJournal?.phase == .finalizingCredentials)
         #expect(sync.enqueuedServerMutations.isEmpty)
+    }
+
+    @Test
+    func localServerDataIsRemovedAfterDurableDeleteButNotUpdate() async throws {
+        let workspace = makeWorkspace()
+        let server = makeServer(workspaceID: workspace.id)
+        let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
+        let credentials = ServerManagerCredentialRepositoryFake()
+        credentials.values[server.id] = ServerCredentials(serverId: server.id)
+        var deletedServerIDs: [UUID] = []
+        let manager = makeManager(
+            local: local,
+            credentials: credentials,
+            sync: ServerSyncRepositoryFake(),
+            didDeleteServerLocalData: { deletedServerIDs.append($0) }
+        )
+
+        _ = try await manager.apply(
+            .update(server),
+            credentials: ServerCredentials(serverId: server.id)
+        )
+        #expect(deletedServerIDs.isEmpty)
+
+        try await manager.deleteServer(server)
+        #expect(deletedServerIDs == [server.id])
+    }
+
+    @Test
+    func workspaceDeletionRemovesLocalDataForEachDeletedServer() async throws {
+        let workspace = makeWorkspace()
+        let first = makeServer(workspaceID: workspace.id)
+        let second = makeServer(
+            workspaceID: workspace.id,
+            id: UUID(uuidString: "20000000-0000-0000-0000-000000000002")!,
+            name: "Second"
+        )
+        let local = ServerLocalRepositoryFake(
+            servers: [first, second],
+            workspaces: [workspace]
+        )
+        let credentials = ServerManagerCredentialRepositoryFake()
+        credentials.values[first.id] = ServerCredentials(serverId: first.id)
+        credentials.values[second.id] = ServerCredentials(serverId: second.id)
+        var deletedServerIDs: [UUID] = []
+        let manager = makeManager(
+            local: local,
+            credentials: credentials,
+            sync: ServerSyncRepositoryFake(),
+            didDeleteServerLocalData: { deletedServerIDs.append($0) }
+        )
+
+        try await manager.deleteWorkspace(workspace)
+
+        #expect(deletedServerIDs.count == 2)
+        #expect(Set(deletedServerIDs) == Set([first.id, second.id]))
     }
 
     @Test
@@ -332,7 +394,8 @@ struct ServerManagerMutationTransactionTests {
     private func makeManager(
         local: ServerLocalRepositoryFake,
         credentials: ServerManagerCredentialRepositoryFake,
-        sync: ServerSyncRepositoryFake
+        sync: ServerSyncRepositoryFake,
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
     ) -> ServerManager {
         let now = { Date(timeIntervalSinceReferenceDate: 10_000) }
         var ids = (1...20).map {
@@ -359,6 +422,7 @@ struct ServerManagerMutationTransactionTests {
                 credentialRepository: credentials,
                 actionAuthorizer: ProtectedServerActionAuthorizerFake(),
                 knownHosts: ServerKnownHostRepositoryFake(),
+                didDeleteServerLocalData: didDeleteServerLocalData,
                 isRemoteSchemaError: { _ in false },
                 now: now,
                 makeID: makeID
@@ -377,11 +441,16 @@ struct ServerManagerMutationTransactionTests {
         )
     }
 
-    private func makeServer(workspaceID: UUID, host: String = "server.example.test") -> Server {
+    private func makeServer(
+        workspaceID: UUID,
+        id: UUID = UUID(uuidString: "20000000-0000-0000-0000-000000000001")!,
+        name: String = "Server",
+        host: String = "server.example.test"
+    ) -> Server {
         Server(
-            id: UUID(uuidString: "20000000-0000-0000-0000-000000000001")!,
+            id: id,
             workspaceId: workspaceID,
-            name: "Server",
+            name: name,
             host: host,
             username: "root",
             createdAt: .distantPast,

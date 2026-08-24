@@ -70,7 +70,8 @@ final class TerminalTabManager {
             remoteSessions: remoteSessions,
             resolver: remoteSessionResolver,
             sessionState: sessionState,
-            transportLifetime: transportLifetime
+            transportLifetime: transportLifetime,
+            startupActions: dependencies.remoteShellStartupActions
         )
         self.remoteSessionCoordinator = remoteSessionCoordinator
         self.terminalSurfaceStore = terminalSurfaceStore

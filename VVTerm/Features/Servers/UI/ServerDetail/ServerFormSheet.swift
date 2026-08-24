@@ -49,6 +49,7 @@ struct ServerFormSheet: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var form: ServerFormModel
+    @State private var startupActionForm: RemoteShellStartupActionFormModel
     @StateObject private var operations: ServerFormOperationController
     @State private var showCloudflareOverrides: Bool = false
 
@@ -61,6 +62,7 @@ struct ServerFormSheet: View {
 
     private let now: @Sendable () -> Date
     private let makeID: @Sendable () -> UUID
+    private let remoteShellStartupActions: any RemoteShellStartupActionRepository
     private let remoteSessionBackends: [RemoteSessionBackendMetadata]
 
     var isEditing: Bool { server != nil }
@@ -86,6 +88,7 @@ struct ServerFormSheet: View {
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.now = dependencies.now
         self.makeID = dependencies.makeID
+        remoteShellStartupActions = dependencies.remoteShellStartupActions
         remoteSessionBackends = dependencies.remoteSessionBackends
         let saveUseCase = ServerSaveUseCase(mutations: serverManager)
         self.onSave = onSave
@@ -119,6 +122,13 @@ struct ServerFormSheet: View {
             )
         }
         _form = State(initialValue: initialForm)
+        _startupActionForm = State(
+            initialValue: RemoteShellStartupActionFormModel(
+                action: server.flatMap {
+                    dependencies.remoteShellStartupActions.action(for: $0.id)
+                }
+            )
+        )
         _hasAuthorizedInitialEdit = State(initialValue: server?.requiresBiometricUnlock != true)
         _showCloudflareOverrides = State(
             initialValue: !(server?.cloudflareTeamDomainOverride ?? "").isEmpty
@@ -195,7 +205,8 @@ struct ServerFormSheet: View {
     private var isTestingConnection: Bool { operations.isTestingConnection }
 
     var saveButtonDisabled: Bool {
-        !form.isValid || isSaving || isAtLimit || isLoadingCredentials || isTestingConnection
+        !form.isValid || !startupActionForm.isValid || isSaving || isAtLimit
+            || isLoadingCredentials || isTestingConnection
     }
 
     private var serverLimitAlertBinding: Binding<Bool> {
@@ -236,6 +247,10 @@ struct ServerFormSheet: View {
         authSection
         connectionSection
         sessionSection
+        RemoteShellStartupActionSection(
+            model: $startupActionForm,
+            remoteSessionEnabled: form.remoteSessionEnabled
+        )
     }
 
     @ViewBuilder
@@ -857,6 +872,12 @@ struct ServerFormSheet: View {
     }
 
     func saveServer() {
+        let startupAction: RemoteShellStartupAction?
+        do {
+            startupAction = try startupActionForm.makeAction()
+        } catch {
+            return
+        }
         let serverID = server?.id ?? makeID()
         let newServer = buildServer(id: serverID, createdAt: server?.createdAt ?? now())
         operations.save(
@@ -868,6 +889,7 @@ struct ServerFormSheet: View {
                 return await appLockManager.authorizeProtectedServerAction(server, action: .save)
             },
             onSaved: { savedServer in
+                remoteShellStartupActions.save(startupAction, for: savedServer.id)
                 onSave(savedServer)
                 dismiss()
             }

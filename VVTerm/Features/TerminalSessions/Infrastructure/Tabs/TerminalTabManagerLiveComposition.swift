@@ -16,6 +16,7 @@ enum TerminalTabManagerLiveComposition {
         liveActivityManager: LiveActivityManager,
         remoteMosh: any TerminalRemoteMoshServicing,
         remoteSessions: any TerminalRemoteSessionServicing,
+        remoteShellStartupActions: any RemoteShellStartupActionRepository,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshResumeStore: any MoshResumeStoring,
         terminalSurfaceStore: any TerminalSurfaceStoring,
@@ -69,6 +70,7 @@ enum TerminalTabManagerLiveComposition {
                 }
             ),
             remoteMosh: remoteMosh,
+            remoteShellStartupActions: remoteShellStartupActions,
             eternalTerminalRuntime: .live(
                 resumeStore: eternalTerminalResumeStore,
                 analyticsTracker: analyticsTracker,

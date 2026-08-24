@@ -1836,3 +1836,8 @@
 "Use persistent sessions by default" = "По умолчанию использовать постоянные сессии";
 "Create or reconnect to a VVTerm-managed session." = "Создать сессию под управлением VVTerm или подключиться к ней снова.";
 "Ask which session to use for each new tab or split." = "Спрашивать, какую сессию использовать для каждой новой вкладки или области.";
+"Startup Command" = "Команда запуска";
+"Stored on this device. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Хранится на этом устройстве. Запускается только когда VVTerm создаёт постоянную сессию. Не добавляйте секретные данные.";
+"Stored on this device. Runs for each new terminal connection. Do not include secrets." = "Хранится на этом устройстве. Запускается для каждого нового подключения терминала. Не добавляйте секретные данные.";
+"The command contains unsupported control characters." = "Команда содержит неподдерживаемые управляющие символы.";
+"The command is too long." = "Команда слишком длинная.";
