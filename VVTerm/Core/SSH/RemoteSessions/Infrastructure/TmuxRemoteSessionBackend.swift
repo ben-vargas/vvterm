@@ -13,6 +13,19 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         self.tmux = tmux
     }
 
+    nonisolated func isManagedIdentifier(
+        _ identifier: RemoteSessionIdentifier,
+        deviceID: String
+    ) -> Bool {
+        RemoteSessionManagedIdentifierPolicy.isManagedIdentifier(
+            identifier,
+            deviceID: deviceID
+        ) || RemoteSessionManagedIdentifierPolicy.isLegacyTmuxIdentifier(
+            identifier,
+            deviceID: deviceID
+        )
+    }
+
     func availability(using client: SSHClient) async -> RemoteSessionAvailability {
         switch await tmux.tmuxAvailability(using: client) {
         case .unsupported:

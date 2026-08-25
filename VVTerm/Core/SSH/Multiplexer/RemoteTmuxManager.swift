@@ -187,32 +187,6 @@ actor RemoteTmuxManager {
         _ = try? await client.execute(command, timeout: cleanupTimeout)
     }
 
-    func cleanupDetachedSessions(
-        deviceId: String,
-        keeping sessionNames: Set<String>,
-        using client: SSHClient,
-        backend explicitBackend: RemoteTmuxBackend? = nil
-    ) async {
-        let backend = await resolveBackend(explicitBackend, using: client)
-        guard let backend else { return }
-        let prefix = "vvterm_\(deviceId)_"
-        let keep = sessionNames
-        let sessions: [RemoteTmuxSession]
-        do {
-            sessions = try await listSessions(using: client, backend: backend)
-        } catch {
-            logger.warning("Unable to list detached tmux sessions during cleanup [error: \(LogPrivacy.errorClass(error), privacy: .public)]")
-            return
-        }
-
-        for session in sessions {
-            guard session.name.hasPrefix(prefix) else { continue }
-            guard session.attachedClients == 0 else { continue }
-            guard !keep.contains(session.name) else { continue }
-            await killSession(named: session.name, using: client, backend: backend)
-        }
-    }
-
     func currentPath(
         sessionName: String,
         using client: SSHClient,

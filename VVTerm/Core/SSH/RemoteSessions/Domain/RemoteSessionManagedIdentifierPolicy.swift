@@ -68,6 +68,21 @@ nonisolated enum RemoteSessionManagedIdentifierPolicy {
             && session.utf8.allSatisfy(tokenAlphabet.contains)
     }
 
+    static func isLegacyTmuxIdentifier(
+        _ identifier: RemoteSessionIdentifier,
+        deviceID: String
+    ) -> Bool {
+        guard identifier.backendIdentifier == .tmux,
+              !deviceID.isEmpty else {
+            return false
+        }
+
+        let prefix = "vvterm_\(deviceID)_"
+        guard identifier.rawValue.hasPrefix(prefix) else { return false }
+        let sessionID = identifier.rawValue.dropFirst(prefix.count)
+        return sessionID.count == 36 && UUID(uuidString: String(sessionID)) != nil
+    }
+
     private static func serverSlug(_ name: String) -> String {
         let latin = name.applyingTransform(.toLatin, reverse: false) ?? name
         let folded = latin
