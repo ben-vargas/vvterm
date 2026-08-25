@@ -470,6 +470,15 @@ final class TerminalSessionStateStore: ObservableObject {
         persistNow()
     }
 
+    func markStandaloneStartupActionCompleted(for paneId: UUID) {
+        let didChange = updatePane(paneId) {
+            $0.disconnectReason = .startupActionCompleted
+            $0.standaloneStartupActionPendingCompletion = false
+        }
+        guard didChange else { return }
+        persistNow()
+    }
+
     func requestPersistence() {
         schedulePersist()
     }

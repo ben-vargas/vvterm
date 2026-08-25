@@ -500,7 +500,6 @@ final class EternalTerminalRuntime {
         }
         if state == .closed, standaloneStartupActionPendingCompletion {
             standaloneStartupActionPendingCompletion = false
-            ownerAccess.setStandaloneStartupActionPendingCompletion(paneId, false)
             ownerAccess.handleShellEnd(
                 paneId,
                 identityToken,

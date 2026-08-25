@@ -1081,10 +1081,7 @@ final class TerminalTabManager {
             updatePaneState(paneId, connectionState: .disconnected)
 
         case .standaloneStartupActionCompleted:
-            sessionState.updatePane(paneId, persist: true) {
-                $0.disconnectReason = .startupActionCompleted
-                $0.standaloneStartupActionPendingCompletion = false
-            }
+            sessionState.markStandaloneStartupActionCompleted(for: paneId)
             updatePaneState(paneId, connectionState: .disconnected)
 
         case .transportInterrupted, .observationAmbiguous:
