@@ -52,8 +52,12 @@ nonisolated enum EternalTerminalStartupCommand {
         "/tmp/vvterm-et-start-\(token.uuidString.lowercased()).sh"
     }
 
-    static func script(command: String, remotePath: String) -> String {
-        """
+    static func script(
+        for plan: TerminalShellStartupPlan,
+        remotePath: String
+    ) -> String? {
+        guard let command = plan.command else { return nil }
+        return """
         rm -f -- \(RemoteTerminalBootstrap.shellQuoted(remotePath))
         \(command)
         """

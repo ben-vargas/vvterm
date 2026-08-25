@@ -64,17 +64,16 @@ extension TerminalRemoteSessionCoordinator {
             }
         )
 
-        if let command = plan.command, plan.remoteSessionLifecycle != nil {
+        let remotePath = EternalTerminalStartupCommand.remoteScriptPath(token: runtimeToken)
+        if let script = EternalTerminalStartupCommand.script(
+            for: plan,
+            remotePath: remotePath
+        ) {
             try Task.checkCancellation()
             guard transportLifetime.registry.runtime(for: paneID)?.identityToken
                     == runtimeToken else {
                 throw CancellationError()
             }
-            let remotePath = EternalTerminalStartupCommand.remoteScriptPath(token: runtimeToken)
-            let script = EternalTerminalStartupCommand.script(
-                command: command,
-                remotePath: remotePath
-            )
             try await client.upload(Data(script.utf8), to: remotePath, permissions: 0o700)
             return TerminalShellStartupPlan(
                 command: EternalTerminalStartupCommand.invocation(remotePath: remotePath),
