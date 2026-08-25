@@ -64,6 +64,62 @@ private actor SSHConnectionRunnerTestRecorder {
 @MainActor
 struct SSHConnectionRunnerTests {
     @Test
+    func possibleStartupCommandExecutionStopsConnectionAttempts() async {
+        let fixture = makeFixture()
+        let recorder = SSHConnectionRunnerTestRecorder()
+        let startupCommand = "notify-deployment"
+        var attempts: [Int] = []
+        var reportedFailure: SSHError?
+        let transport = SSHConnectionRunnerTransport(
+            connect: { _, _ in },
+            startShell: { columns, rows, _, command in
+                #expect(command == startupCommand)
+                await recorder.recordStart(columns: columns, rows: rows)
+                throw SSHError.moshStartupCommandMayHaveRun("UDP startup failed")
+            },
+            disconnect: {},
+            closeShell: { _ in },
+            execute: { _, _ in "" }
+        )
+
+        await SSHConnectionRunner.run(
+            server: fixture.server,
+            credentials: fixture.credentials,
+            transport: transport,
+            initialTerminalState: SSHConnectionInitialTerminalState(
+                columns: 132,
+                rows: 43,
+                pixelSize: nil
+            ),
+            logger: Logger(subsystem: "SSHConnectionRunnerTests", category: "Runner"),
+            shouldContinueConnection: { true },
+            onAttempt: { attempts.append($0) },
+            startupPlan: {
+                TerminalShellStartupPlan(
+                    command: startupCommand,
+                    remoteSessionLifecycle: nil
+                )
+            },
+            restoreMoshShell: { _, _ in nil },
+            registerShell: { _ in true },
+            onTitleChange: { _ in },
+            writeOutput: { _ in true },
+            shouldResetClient: { _ in false },
+            onProcessExit: { _, _ in },
+            onFailure: { error in
+                reportedFailure = error as? SSHError
+            }
+        )
+
+        #expect(attempts == [1])
+        #expect(await recorder.recordedStartSizes() == [[132, 43]])
+        guard case .moshStartupCommandMayHaveRun = reportedFailure else {
+            Issue.record("Expected the possible command execution failure")
+            return
+        }
+    }
+
+    @Test
     func cancellationAfterShellOpenClosesUnregisteredShellExactlyOnce() async {
         let fixture = makeFixture()
         let gate = SSHConnectionRunnerTestGate()

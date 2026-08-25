@@ -197,6 +197,11 @@ nonisolated enum SSHConnectionRunner {
                 lastError = error
                 logger.error("SSH connection failed (attempt \(attempt)): \(error.localizedDescription)")
 
+                if let sshError = error as? SSHError,
+                   !sshError.allowsAutomaticReconnectRetry {
+                    break
+                }
+
                 if attempt < maxAttempts, let sshError = error as? SSHError {
                     let shouldReset = await shouldResetClient(sshError)
                     guard !Task.isCancelled else { return }
