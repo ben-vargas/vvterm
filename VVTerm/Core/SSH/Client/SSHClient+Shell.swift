@@ -89,6 +89,15 @@ extension SSHClient {
             }
             let moshError = error
             let fallbackReason = fallbackReason(for: moshError)
+            if MoshSSHFallbackPolicy.decision(
+                after: fallbackReason,
+                startupCommand: startupCommand
+            ) == .rejectToPreventStartupCommandReplay {
+                logger.error(
+                    "Mosh startup failed after the startup command may have run. SSH fallback is disabled to prevent replay."
+                )
+                throw SSHError.moshStartupCommandMayHaveRun(moshError.localizedDescription)
+            }
             logger.warning("Mosh startup failed, using SSH fallback: \(moshError.localizedDescription)")
 
             do {

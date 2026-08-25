@@ -398,6 +398,8 @@ extension SSHClient {
             return .clientSessionFailed
         case .moshSessionFailed:
             return .sessionFailed
+        case .moshStartupCommandMayHaveRun:
+            return .sessionFailed
         default:
             return .sessionFailed
         }

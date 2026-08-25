@@ -15,6 +15,7 @@ enum SSHError: LocalizedError {
     case moshInvalidEndpoint
     case moshUDPTimeout
     case moshClientSessionFailed(String)
+    case moshStartupCommandMayHaveRun(String)
     case timeout
     case channelOpenFailed
     case shellRequestFailed
@@ -45,6 +46,7 @@ enum SSHError: LocalizedError {
              .moshServerRuntimeBroken,
              .moshBootstrapFailed,
              .moshInvalidEndpoint,
+             .moshStartupCommandMayHaveRun,
              .hostKeyApprovalRequired,
              .hostKeyVerificationFailed,
              .outputLimitExceeded,
@@ -80,6 +82,8 @@ enum SSHError: LocalizedError {
             return "Mosh UDP session timed out"
         case .moshClientSessionFailed(let msg):
             return "Mosh client session failed: \(msg)"
+        case .moshStartupCommandMayHaveRun(let msg):
+            return "Mosh failed after the startup command may have run. VVTerm did not run it again through SSH. \(msg)"
         case .timeout: return String(localized: "Connection timed out")
         case .channelOpenFailed: return "Failed to open channel"
         case .shellRequestFailed: return "Failed to request shell"

@@ -7,7 +7,7 @@ nonisolated enum ShellTransport: String, Codable, Hashable, Sendable {
     case sshFallback
 }
 
-nonisolated enum MoshFallbackReason: String, Codable, Hashable, Sendable {
+nonisolated enum MoshFallbackReason: String, Codable, CaseIterable, Hashable, Sendable {
     case serverMissing
     case serverRuntimeBroken
     case bootstrapFailed
