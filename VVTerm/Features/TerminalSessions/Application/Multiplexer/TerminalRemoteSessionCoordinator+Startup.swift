@@ -250,11 +250,13 @@ extension TerminalRemoteSessionCoordinator {
     }
 
     private func managedIdentifiers(
-        for serverID: UUID,
         backendIdentifier: RemoteSessionBackendIdentifier
     ) -> Set<RemoteSessionIdentifier> {
-        Set(sessionState.tabs(for: serverID).flatMap(\.allPaneIds).compactMap { paneID in
-            guard let state = resolver.attachment(for: paneID),
+        // Several server profiles can share one remote host. Cleanup cannot
+        // safely assign a listed remote name to one profile, so retain every
+        // locally referenced identifier for this backend.
+        Set(sessionState.allPaneStates.compactMap { paneState in
+            guard let state = resolver.attachment(for: paneState.paneId),
                   state.attachment.ownership == .managed,
                   state.attachment.identifier.backendIdentifier == backendIdentifier else {
                 return nil
@@ -275,7 +277,6 @@ extension TerminalRemoteSessionCoordinator {
         )
         guard completedCleanup.insert(key).inserted else { return }
         var identifiers = managedIdentifiers(
-            for: serverID,
             backendIdentifier: runtime.backendIdentifier
         )
         if let identifier = resolver.attachment(for: paneID)?.attachment.identifier {
