@@ -17,7 +17,7 @@ struct RemoteTmuxOwnershipTests {
             backendIdentifier: .tmux
         )
 
-        #expect(identifier.rawValue.hasPrefix("vvterm-prod-api-d"))
+        #expect(identifier.rawValue.hasPrefix("vvterm-prod-d"))
     }
 
     @Test @MainActor

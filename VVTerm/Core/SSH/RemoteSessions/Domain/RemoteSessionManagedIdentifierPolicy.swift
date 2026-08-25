@@ -10,9 +10,9 @@ nonisolated enum RemoteSessionManagedIdentifierPolicy {
     static let maximumIdentifierLength = 32
 
     private static let prefix = "vvterm-"
-    private static let maximumServerSlugLength = 11
-    private static let deviceTokenLength = 4
-    private static let sessionTokenLength = 6
+    private static let maximumServerSlugLength = 4
+    private static let deviceTokenLength = 10
+    private static let sessionTokenLength = 7
     private static let tokenAlphabet = Array("0123456789abcdefghjkmnpqrstvwxyz".utf8)
 
     static func identifier(
@@ -109,7 +109,7 @@ nonisolated enum RemoteSessionManagedIdentifierPolicy {
             guard slug.count < maximumServerSlugLength else { break }
             slug.append(byte)
         }
-        return slug.isEmpty ? "server" : String(decoding: slug, as: UTF8.self)
+        return slug.isEmpty ? "serv" : String(decoding: slug, as: UTF8.self)
     }
 
     private static func isValidServerSlug(_ value: Substring) -> Bool {

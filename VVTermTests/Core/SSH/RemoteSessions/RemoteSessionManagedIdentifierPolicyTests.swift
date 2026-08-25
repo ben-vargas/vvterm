@@ -8,7 +8,7 @@ struct RemoteSessionManagedIdentifierPolicyTests {
     )!
 
     @Test
-    func identifierStartsWithTheReadableServerNameAndFitsZmx() throws {
+    func identifierKeepsAReadableServerNameAndFiftyDeviceIdentityBits() throws {
         let identifier = try RemoteSessionManagedIdentifierPolicy.identifier(
             backendIdentifier: .zmx,
             serverName: "Prod API",
@@ -17,13 +17,15 @@ struct RemoteSessionManagedIdentifierPolicyTests {
         )
         let components = identifier.rawValue.split(separator: "-")
 
-        #expect(identifier.rawValue.hasPrefix("vvterm-prod-api-d"))
+        #expect(identifier.rawValue.hasPrefix("vvterm-prod-d"))
         #expect(identifier.rawValue.utf8.count <= 32)
-        try #require(components.count == 5)
-        #expect(components[3].first == "d")
-        #expect(components[3].count == 5)
-        #expect(components[4].first == "s")
-        #expect(components[4].count == 7)
+        try #require(components.count >= 4)
+        let deviceComponent = components[components.count - 2]
+        let sessionComponent = components[components.count - 1]
+        #expect(deviceComponent.first == "d")
+        #expect(deviceComponent.count == 11)
+        #expect(sessionComponent.first == "s")
+        #expect(sessionComponent.count == 8)
     }
 
     @Test
@@ -78,10 +80,10 @@ struct RemoteSessionManagedIdentifierPolicyTests {
         let accented = try identifier(serverName: "Résumé Web")
         let punctuation = try identifier(serverName: "---")
 
-        #expect(long.rawValue.hasPrefix("vvterm-this-is-a-v-d"))
+        #expect(long.rawValue.hasPrefix("vvterm-this-d"))
         #expect(long.rawValue.utf8.count == 32)
-        #expect(accented.rawValue.hasPrefix("vvterm-resume-web-d"))
-        #expect(punctuation.rawValue.hasPrefix("vvterm-server-d"))
+        #expect(accented.rawValue.hasPrefix("vvterm-resu-d"))
+        #expect(punctuation.rawValue.hasPrefix("vvterm-serv-d"))
     }
 
     @Test

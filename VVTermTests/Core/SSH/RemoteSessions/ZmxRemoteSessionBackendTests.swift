@@ -76,7 +76,7 @@ struct ZmxRemoteSessionBackendTests {
             serverName: "Prod API"
         )
 
-        #expect(first.rawValue.hasPrefix("vvterm-prod-api-d"))
+        #expect(first.rawValue.hasPrefix("vvterm-prod-d"))
         #expect(first.rawValue.utf8.count <= RemoteSessionManagedIdentifierPolicy.maximumIdentifierLength)
         #expect(first != second)
         #expect(backend.isManagedIdentifier(
