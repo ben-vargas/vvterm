@@ -85,9 +85,6 @@ extension SSHClient {
             if error is CancellationError || Task.isCancelled {
                 throw CancellationError()
             }
-            if let sshError = error as? SSHError, case .notConnected = sshError {
-                throw sshError
-            }
             let moshError = error
             let fallbackReason = fallbackReason(for: moshError)
             if MoshSSHFallbackPolicy.decision(
@@ -99,6 +96,9 @@ extension SSHClient {
                     "Mosh startup failed after the startup command may have run. SSH fallback is disabled to prevent replay."
                 )
                 throw SSHError.startupCommandMayHaveRun(moshError.localizedDescription)
+            }
+            if let sshError = error as? SSHError, case .notConnected = sshError {
+                throw sshError
             }
             logger.warning("Mosh startup failed, using SSH fallback: \(moshError.localizedDescription)")
 

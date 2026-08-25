@@ -23,7 +23,8 @@ struct MoshSSHFallbackPolicyTests {
             .moshBootstrapFailed("ambiguous bootstrap failure"),
             .moshSessionFailed("session failure"),
             .moshUDPTimeout,
-            .moshClientSessionFailed("client failure")
+            .moshClientSessionFailed("client failure"),
+            .notConnected
         ]
 
         for error in errors {
@@ -57,7 +58,8 @@ struct MoshSSHFallbackPolicyTests {
             .moshServerMissing,
             .moshServerRuntimeBroken,
             .moshInvalidEndpoint,
-            .moshBootstrapFailedBeforeStartupCommand("rejected")
+            .moshBootstrapFailedBeforeStartupCommand("rejected"),
+            .channelOpenFailed
         ]
 
         for error in errors {

@@ -19,7 +19,8 @@ nonisolated enum MoshSSHFallbackPolicy {
         }
 
         switch sshError {
-        case .moshServerMissing,
+        case .channelOpenFailed,
+             .moshServerMissing,
              .moshServerRuntimeBroken,
              .moshBootstrapFailedBeforeStartupCommand,
              .moshInvalidEndpoint:
