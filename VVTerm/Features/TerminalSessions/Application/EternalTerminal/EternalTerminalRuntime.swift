@@ -64,7 +64,7 @@ nonisolated enum EternalTerminalStartupCommand {
     }
 
     static func invocation(remotePath: String) -> String {
-        "/bin/sh \(RemoteTerminalBootstrap.shellQuoted(remotePath))"
+        "exec /bin/sh \(RemoteTerminalBootstrap.shellQuoted(remotePath))"
     }
 }
 

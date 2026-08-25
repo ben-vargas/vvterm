@@ -221,7 +221,7 @@ struct EternalTerminalStatePolicyTests {
         #expect(remotePath == "/tmp/vvterm-et-start-45b943d4-58c7-4bc9-b089-a9f0ed25c2d3.sh")
         #expect(script.hasPrefix("rm -f -- '\(remotePath)'\n"))
         #expect(script.hasSuffix(command))
-        #expect(invocation == "/bin/sh '\(remotePath)'")
+        #expect(invocation == "exec /bin/sh '\(remotePath)'")
         #expect(!invocation.contains(command))
         #expect(invocation.count < 100)
     }
