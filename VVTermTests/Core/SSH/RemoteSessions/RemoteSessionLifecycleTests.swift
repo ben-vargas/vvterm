@@ -149,6 +149,23 @@ struct RemoteSessionLifecycleTests {
         #expect(parser.finish().isEmpty)
     }
 
+    @Test
+    func legacyTmuxMarkersRemainHiddenAfterSnapshotMigration() throws {
+        let token = "legacy-token"
+        let observation = try RemoteSessionLifecycleObservation(
+            legacyTmuxMarkerToken: token
+        )
+        var parser = RemoteSessionLifecycleStreamParser(observation: observation)
+        let detached = "\u{001B}]777;vvterm-tmux;\(token);detached\u{0007}"
+        let ended = "\u{001B}]777;vvterm-tmux;\(token);ended\u{0007}"
+
+        let result = parser.consume(Data("before\(detached)middle\(ended)after".utf8))
+
+        #expect(String(decoding: result.output, as: UTF8.self) == "beforemiddleafter")
+        #expect(result.events == [.detached, .terminated])
+        #expect(parser.finish().isEmpty)
+    }
+
     private func lifecycle(ownership: RemoteSessionOwnership) -> RemoteSessionLifecycleContext {
         RemoteSessionLifecycleContext(
             attachment: RemoteSessionAttachment(

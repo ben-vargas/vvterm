@@ -26,14 +26,18 @@ nonisolated struct RemoteSessionLifecycleEnvelope: Codable, Hashable, Sendable {
     let operationID: UUID
 
     init(token: String, operationID: UUID) throws {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        guard !token.isEmpty,
-              token.utf8.count <= Self.maximumTokenLength,
-              token.unicodeScalars.allSatisfy(allowed.contains) else {
+        guard Self.isValidToken(token) else {
             throw ValidationError.invalidToken
         }
         self.token = token
         self.operationID = operationID
+    }
+
+    static func isValidToken(_ token: String) -> Bool {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        return !token.isEmpty
+            && token.utf8.count <= Self.maximumTokenLength
+            && token.unicodeScalars.allSatisfy(allowed.contains)
     }
 
     static func make() -> Self {
@@ -62,8 +66,33 @@ nonisolated struct RemoteSessionLifecycleEnvelope: Codable, Hashable, Sendable {
     }
 }
 
+nonisolated enum RemoteSessionLifecycleObservation: Hashable, Sendable {
+    case current(
+        envelope: RemoteSessionLifecycleEnvelope,
+        presenceProbe: RemoteSessionPresenceProbe
+    )
+    case legacyTmux(markerToken: String)
+
+    init(legacyTmuxMarkerToken: String) throws {
+        guard RemoteSessionLifecycleEnvelope.isValidToken(legacyTmuxMarkerToken) else {
+            throw RemoteSessionLifecycleEnvelope.ValidationError.invalidToken
+        }
+        self = .legacyTmux(markerToken: legacyTmuxMarkerToken)
+    }
+
+    var presenceProbe: RemoteSessionPresenceProbe? {
+        switch self {
+        case .current(_, let presenceProbe):
+            presenceProbe
+        case .legacyTmux:
+            nil
+        }
+    }
+}
+
 nonisolated enum RemoteSessionLifecycleMarker {
     private static let prefix = "\u{001B}]777;vvterm-session-v1;"
+    private static let legacyTmuxPrefix = "\u{001B}]777;vvterm-tmux;"
     private static let bellTerminator = "\u{0007}"
     private static let stringTerminator = "\u{001B}\\"
 
@@ -82,6 +111,20 @@ nonisolated enum RemoteSessionLifecycleMarker {
         case .string: stringTerminator
         }
         return "\(prefix)\(envelope.token);\(envelope.operationID.uuidString.lowercased());\(event.rawValue)\(suffix)"
+    }
+
+    static func legacyTmuxSequence(token: String, event: RemoteSessionEvent) -> String? {
+        let legacyEvent: String? = switch event {
+        case .detached:
+            "detached"
+        case .terminated:
+            "ended"
+        case .creationFailed:
+            "creationFailed"
+        case .attached, .attachFailed, .transportInterrupted, .observationAmbiguous:
+            nil
+        }
+        return legacyEvent.map { "\(legacyTmuxPrefix)\(token);\($0)\(bellTerminator)" }
     }
 }
 
@@ -124,6 +167,24 @@ nonisolated struct RemoteSessionLifecycleStreamParser: Sendable {
                     )
                 ]
             }
+    }
+
+    init(observation: RemoteSessionLifecycleObservation) {
+        switch observation {
+        case .current(let envelope, _):
+            self.init(envelope: envelope)
+        case .legacyTmux(let markerToken):
+            self.init(markers: [.detached, .terminated, .creationFailed].compactMap { event in
+                RemoteSessionLifecycleMarker.legacyTmuxSequence(
+                    token: markerToken,
+                    event: event
+                ).map { (event, Data($0.utf8)) }
+            })
+        }
+    }
+
+    private init(markers: [(event: RemoteSessionEvent, data: Data)]) {
+        self.markers = markers
     }
 
     mutating func consume(_ data: Data) -> Result {

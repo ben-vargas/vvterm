@@ -712,6 +712,11 @@ private struct TerminalTabsSnapshot: Codable {
             let managedSessionConfirmed: Bool?
         }
 
+        private struct LegacyTmuxResumeContext: Decodable {
+            let ownership: RemoteSessionOwnership
+            let markerToken: String
+        }
+
         init(
             from tab: TerminalTab,
             paneStates: [UUID: TerminalPaneState],
@@ -773,15 +778,12 @@ private struct TerminalTabsSnapshot: Codable {
                 [UUID: TerminalDisconnectReason].self,
                 forKey: .paneDisconnectReasons
             )
-            remoteSessionResumeContexts = try container.decodeIfPresent(
-                [UUID: RemoteSessionLifecycleContext].self,
-                forKey: .remoteSessionResumeContexts
-            )
+            let attachments: [UUID: TerminalRemoteSessionAttachmentState]?
             if let current = try container.decodeIfPresent(
                 [UUID: TerminalRemoteSessionAttachmentState].self,
                 forKey: .remoteSessionAttachments
             ) {
-                remoteSessionAttachments = current
+                attachments = current
             } else {
                 let legacy = try container.decodeIfPresent(
                     [UUID: LegacyTmuxAttachment].self,
@@ -803,7 +805,34 @@ private struct TerminalTabsSnapshot: Codable {
                         managedSessionConfirmed: attachment.managedSessionConfirmed == true
                     )
                 }
-                remoteSessionAttachments = migrated.isEmpty ? nil : migrated
+                attachments = migrated.isEmpty ? nil : migrated
+            }
+            remoteSessionAttachments = attachments
+
+            if let current = try container.decodeIfPresent(
+                [UUID: RemoteSessionLifecycleContext].self,
+                forKey: .remoteSessionResumeContexts
+            ) {
+                remoteSessionResumeContexts = current
+            } else {
+                let legacy = try container.decodeIfPresent(
+                    [UUID: LegacyTmuxResumeContext].self,
+                    forKey: .eternalTerminalTmuxResumeContexts
+                ) ?? [:]
+                let migrated = legacy.reduce(
+                    into: [UUID: RemoteSessionLifecycleContext]()
+                ) { result, element in
+                    guard let attachment = attachments?[element.key]?.attachment,
+                          attachment.ownership == element.value.ownership,
+                          let context = try? RemoteSessionLifecycleContext(
+                              attachment: attachment,
+                              legacyTmuxMarkerToken: element.value.markerToken
+                          ) else {
+                        return
+                    }
+                    result[element.key] = context
+                }
+                remoteSessionResumeContexts = migrated.isEmpty ? nil : migrated
             }
         }
 

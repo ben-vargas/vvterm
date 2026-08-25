@@ -2,8 +2,69 @@ import Foundation
 
 nonisolated struct RemoteSessionLifecycleContext: Codable, Hashable, Sendable {
     let attachment: RemoteSessionAttachment
-    let envelope: RemoteSessionLifecycleEnvelope
-    let presenceProbe: RemoteSessionPresenceProbe
+    let observation: RemoteSessionLifecycleObservation
+
+    private enum CodingKeys: String, CodingKey {
+        case attachment
+        case envelope
+        case presenceProbe
+        case legacyTmuxMarkerToken
+    }
+
+    init(
+        attachment: RemoteSessionAttachment,
+        envelope: RemoteSessionLifecycleEnvelope,
+        presenceProbe: RemoteSessionPresenceProbe
+    ) {
+        self.attachment = attachment
+        observation = .current(envelope: envelope, presenceProbe: presenceProbe)
+    }
+
+    init(
+        attachment: RemoteSessionAttachment,
+        legacyTmuxMarkerToken: String
+    ) throws {
+        self.attachment = attachment
+        observation = try RemoteSessionLifecycleObservation(
+            legacyTmuxMarkerToken: legacyTmuxMarkerToken
+        )
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        attachment = try container.decode(RemoteSessionAttachment.self, forKey: .attachment)
+        if let envelope = try container.decodeIfPresent(
+            RemoteSessionLifecycleEnvelope.self,
+            forKey: .envelope
+        ) {
+            observation = .current(
+                envelope: envelope,
+                presenceProbe: try container.decode(
+                    RemoteSessionPresenceProbe.self,
+                    forKey: .presenceProbe
+                )
+            )
+        } else {
+            observation = try RemoteSessionLifecycleObservation(
+                legacyTmuxMarkerToken: container.decode(
+                    String.self,
+                    forKey: .legacyTmuxMarkerToken
+                )
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(attachment, forKey: .attachment)
+        switch observation {
+        case .current(let envelope, let presenceProbe):
+            try container.encode(envelope, forKey: .envelope)
+            try container.encode(presenceProbe, forKey: .presenceProbe)
+        case .legacyTmux(let markerToken):
+            try container.encode(markerToken, forKey: .legacyTmuxMarkerToken)
+        }
+    }
 }
 
 nonisolated struct TerminalShellStartupPlan: Sendable {

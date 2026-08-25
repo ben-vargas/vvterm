@@ -477,7 +477,7 @@ final class EternalTerminalRuntime {
         let context = ownerAccess.resumeContext(paneId)
         remoteSessionLifecycle = context
         remoteSessionLifecycleParser = context.map {
-            RemoteSessionLifecycleStreamParser(envelope: $0.envelope)
+            RemoteSessionLifecycleStreamParser(observation: $0.observation)
         }
     }
 
@@ -557,7 +557,7 @@ final class EternalTerminalRuntime {
         let resumeContext = plan.remoteSessionLifecycle
         remoteSessionLifecycle = resumeContext
         remoteSessionLifecycleParser = resumeContext.map {
-            RemoteSessionLifecycleStreamParser(envelope: $0.envelope)
+            RemoteSessionLifecycleStreamParser(observation: $0.observation)
         }
         ownerAccess.setResumeContext(paneId, resumeContext)
         guard let command = plan.command,

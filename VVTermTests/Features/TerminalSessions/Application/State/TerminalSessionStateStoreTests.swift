@@ -288,7 +288,7 @@ struct TerminalSessionStateStoreTests {
     }
 
     @Test
-    func legacyTmuxAttachmentMigratesOnceAndNextWriteUsesCurrentSchema() throws {
+    func legacyTmuxStateMigratesOnceAndNextWriteUsesCurrentSchema() throws {
         let sourceSnapshot = StateStoreSnapshotMemory()
         let sourceResolver = makeResolver()
         let source = TerminalSessionStateStore(
@@ -306,19 +306,37 @@ struct TerminalSessionStateStoreTests {
             ),
             select: true
         )
+        let attachment = RemoteSessionAttachment(
+            identifier: try RemoteSessionIdentifier(
+                backendIdentifier: .tmux,
+                validating: "legacy-session"
+            ),
+            ownership: .managed
+        )
         sourceResolver.setAttachment(
             TerminalRemoteSessionAttachmentState(
-                attachment: RemoteSessionAttachment(
-                    identifier: try RemoteSessionIdentifier(
-                        backendIdentifier: .tmux,
-                        validating: "legacy-session"
-                    ),
-                    ownership: .managed
-                ),
+                attachment: attachment,
                 managedSessionConfirmed: true
             ),
             for: tab.rootPaneId
         )
+        let envelope = try RemoteSessionLifecycleEnvelope(
+            token: "legacy-marker",
+            operationID: #require(UUID(
+                uuidString: "11111111-2222-3333-4444-555555555555"
+            ))
+        )
+        source.updatePane(tab.rootPaneId, persist: true) {
+            $0.remoteSessionResumeContext = RemoteSessionLifecycleContext(
+                attachment: attachment,
+                envelope: envelope,
+                presenceProbe: RemoteSessionPresenceProbe(
+                    command: "probe",
+                    existsMarker: "exists",
+                    missingMarker: "missing"
+                )
+            )
+        }
         let currentData = try source.snapshotDataForTesting()
         var root = try #require(
             JSONSerialization.jsonObject(with: currentData) as? [String: Any]
@@ -340,6 +358,20 @@ struct TerminalSessionStateStoreTests {
             ]
         }
         tabs[0]["tmuxAttachments"] = legacyAttachments
+        let currentContexts = try #require(
+            tabs[0].removeValue(forKey: "remoteSessionResumeContexts") as? [Any]
+        )
+        var legacyContexts = currentContexts
+        for index in stride(from: 1, to: legacyContexts.count, by: 2) {
+            let context = try #require(legacyContexts[index] as? [String: Any])
+            let contextAttachment = try #require(context["attachment"] as? [String: Any])
+            let contextEnvelope = try #require(context["envelope"] as? [String: Any])
+            legacyContexts[index] = [
+                "ownership": try #require(contextAttachment["ownership"] as? String),
+                "markerToken": try #require(contextEnvelope["token"] as? String)
+            ]
+        }
+        tabs[0]["eternalTerminalTmuxResumeContexts"] = legacyContexts
         servers[0]["tabs"] = tabs
         root["servers"] = servers
         root.removeValue(forKey: "version")
@@ -359,12 +391,19 @@ struct TerminalSessionStateStoreTests {
         #expect(state.attachment.identifier.rawValue == "legacy-session")
         #expect(state.attachment.ownership == .managed)
         #expect(state.managedSessionConfirmed)
+        let lifecycle = try #require(
+            migrated.paneState(for: tab.rootPaneId)?.remoteSessionResumeContext
+        )
+        #expect(lifecycle.attachment == attachment)
+        #expect(lifecycle.observation == .legacyTmux(markerToken: "legacy-marker"))
 
         migrated.persistNow()
         let rewritten = try #require(migratedSnapshot.data)
         let rewrittenText = String(decoding: rewritten, as: UTF8.self)
         #expect(rewrittenText.contains("\"version\":2"))
         #expect(rewrittenText.contains("remoteSessionAttachments"))
+        #expect(rewrittenText.contains("legacyTmuxMarkerToken"))
+        #expect(!rewrittenText.contains("eternalTerminalTmuxResumeContexts"))
         #expect(!rewrittenText.contains("tmuxAttachments"))
     }
 

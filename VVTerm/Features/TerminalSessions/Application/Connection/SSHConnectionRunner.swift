@@ -134,7 +134,7 @@ nonisolated enum SSHConnectionRunner {
 
                 guard !Task.isCancelled else { return }
                 var lifecycleParser = startup?.remoteSessionLifecycle.map {
-                    RemoteSessionLifecycleStreamParser(envelope: $0.envelope)
+                    RemoteSessionLifecycleStreamParser(observation: $0.observation)
                 }
                 var lastLifecycleEvent: RemoteSessionEvent?
                 for await data in shell.stream {
@@ -169,13 +169,14 @@ nonisolated enum SSHConnectionRunner {
 
                 var sessionExists: Bool?
                 if lastLifecycleEvent == nil || lastLifecycleEvent == .attached,
-                   let lifecycle = startup?.remoteSessionLifecycle {
+                   let presenceProbe = startup?.remoteSessionLifecycle?
+                    .observation.presenceProbe {
                     do {
                         let output = try await transport.execute(
-                            lifecycle.presenceProbe.command,
+                            presenceProbe.command,
                             .seconds(8)
                         )
-                        sessionExists = lifecycle.presenceProbe.sessionExists(in: output)
+                        sessionExists = presenceProbe.sessionExists(in: output)
                     } catch {
                         logger.warning(
                             "Unable to verify remote session after shell exit: \(error.localizedDescription, privacy: .public)"
