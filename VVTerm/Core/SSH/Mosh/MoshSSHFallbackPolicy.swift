@@ -8,10 +8,12 @@ nonisolated enum MoshSSHFallbackDecision: Equatable, Sendable {
 nonisolated enum MoshSSHFallbackPolicy {
     static func decision(
         after error: Error,
-        startupCommand: String?
+        startupCommand: String?,
+        mayExecuteUserStartupAction: Bool
     ) -> MoshSSHFallbackDecision {
         let command = startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !command.isEmpty else { return .allow }
+        guard mayExecuteUserStartupAction else { return .allow }
         guard let sshError = error as? SSHError else {
             return .rejectToPreventStartupCommandReplay
         }

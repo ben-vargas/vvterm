@@ -9,7 +9,8 @@ extension SSHClient {
         cols: Int = 80,
         rows: Int = 24,
         pixelSize: TerminalPixelSize? = nil,
-        startupCommand: String? = nil
+        startupCommand: String? = nil,
+        mayExecuteUserStartupAction: Bool = true
     ) async throws -> ShellHandle {
         try Task.checkCancellation()
         guard !isAborted, let sshSession = session else {
@@ -91,7 +92,8 @@ extension SSHClient {
             let fallbackReason = fallbackReason(for: moshError)
             if MoshSSHFallbackPolicy.decision(
                 after: moshError,
-                startupCommand: startupCommand
+                startupCommand: startupCommand,
+                mayExecuteUserStartupAction: mayExecuteUserStartupAction
             ) == .rejectToPreventStartupCommandReplay {
                 logger.error(
                     "Mosh startup failed after the startup command may have run. SSH fallback is disabled to prevent replay."

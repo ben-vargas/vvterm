@@ -18,7 +18,8 @@ nonisolated struct SSHConnectionRunnerTransport: Sendable {
         _ columns: Int,
         _ rows: Int,
         _ pixelSize: TerminalPixelSize?,
-        _ startupCommand: String?
+        _ startupCommand: String?,
+        _ mayExecuteUserStartupAction: Bool
     ) async throws -> ShellHandle
     let disconnect: @Sendable () async -> Void
     let closeShell: @Sendable (_ shellId: UUID) async -> Void
@@ -29,12 +30,13 @@ nonisolated struct SSHConnectionRunnerTransport: Sendable {
             connect: { server, credentials in
                 _ = try await client.connect(to: server, credentials: credentials)
             },
-            startShell: { columns, rows, pixelSize, startupCommand in
+            startShell: { columns, rows, pixelSize, startupCommand, mayExecuteUserStartupAction in
                 try await client.startShell(
                     cols: columns,
                     rows: rows,
                     pixelSize: pixelSize,
-                    startupCommand: startupCommand
+                    startupCommand: startupCommand,
+                    mayExecuteUserStartupAction: mayExecuteUserStartupAction
                 )
             },
             disconnect: {
@@ -102,7 +104,8 @@ nonisolated enum SSHConnectionRunner {
                     shell = restored.shell
                     startup = TerminalShellStartupPlan(
                         command: nil,
-                        remoteSessionLifecycle: restored.remoteSessionLifecycle
+                        remoteSessionLifecycle: restored.remoteSessionLifecycle,
+                        mayExecuteUserStartupAction: false
                     )
                     logger.info("Restored existing Mosh protocol session")
                 } else {
@@ -118,13 +121,14 @@ nonisolated enum SSHConnectionRunner {
                             cols,
                             rows,
                             pixelSize,
-                            freshStartup.command
+                            freshStartup.command,
+                            freshStartup.mayExecuteUserStartupAction
                         )
                     } catch {
                         if error is CancellationError || Task.isCancelled {
                             throw CancellationError()
                         }
-                        guard freshStartup.hasStandaloneStartupCommand else {
+                        guard freshStartup.mayExecuteStandaloneUserStartupAction else {
                             throw error
                         }
                         throw SSHError.startupCommandMayHaveRun(error.localizedDescription)

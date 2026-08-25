@@ -72,8 +72,9 @@ struct SSHConnectionRunnerTests {
         var reportedFailure: SSHError?
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { columns, rows, _, command in
+            startShell: { columns, rows, _, command, mayExecuteUserStartupAction in
                 #expect(command == startupCommand)
+                #expect(mayExecuteUserStartupAction)
                 await recorder.recordStart(columns: columns, rows: rows)
                 throw SSHError.notConnected
             },
@@ -97,7 +98,8 @@ struct SSHConnectionRunnerTests {
             startupPlan: {
                 TerminalShellStartupPlan(
                     command: startupCommand,
-                    remoteSessionLifecycle: nil
+                    remoteSessionLifecycle: nil,
+                    mayExecuteUserStartupAction: true
                 )
             },
             restoreMoshShell: { _, _ in nil },
@@ -210,7 +212,7 @@ struct SSHConnectionRunnerTests {
     ) -> SSHConnectionRunnerTransport {
         SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { columns, rows, _, _ in
+            startShell: { columns, rows, _, _, _ in
                 await startShell(columns, rows)
                 return shell
             },

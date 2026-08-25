@@ -8,7 +8,8 @@ struct MoshSSHFallbackPolicyTests {
 
         if MoshSSHFallbackPolicy.decision(
             after: SSHError.moshUDPTimeout,
-            startupCommand: "deploy --start"
+            startupCommand: "deploy --start",
+            mayExecuteUserStartupAction: true
         ) == .allow {
             executionCount += 1
         }
@@ -28,7 +29,8 @@ struct MoshSSHFallbackPolicyTests {
         for error in errors {
             #expect(MoshSSHFallbackPolicy.decision(
                 after: error,
-                startupCommand: "notify-send started"
+                startupCommand: "notify-send started",
+                mayExecuteUserStartupAction: true
             ) == .rejectToPreventStartupCommandReplay)
         }
     }
@@ -41,7 +43,8 @@ struct MoshSSHFallbackPolicyTests {
             after: SSHError.moshBootstrapFailedBeforeStartupCommand(
                 "mosh-server rejected startup"
             ),
-            startupCommand: "notify-send started"
+            startupCommand: "notify-send started",
+            mayExecuteUserStartupAction: true
         ) == .allow)
         executionCount += 1
 
@@ -60,9 +63,19 @@ struct MoshSSHFallbackPolicyTests {
         for error in errors {
             #expect(MoshSSHFallbackPolicy.decision(
                 after: error,
-                startupCommand: "echo once"
+                startupCommand: "echo once",
+                mayExecuteUserStartupAction: true
             ) == .allow)
         }
+    }
+
+    @Test
+    func managedSessionLauncherWithoutUserActionCanFallbackAfterBootstrap() {
+        #expect(MoshSSHFallbackPolicy.decision(
+            after: SSHError.moshUDPTimeout,
+            startupCommand: "tmux new-session -A -s vvterm-workstation",
+            mayExecuteUserStartupAction: false
+        ) == .allow)
     }
 
     @Test
@@ -81,7 +94,8 @@ struct MoshSSHFallbackPolicyTests {
         for error in errors {
             #expect(MoshSSHFallbackPolicy.decision(
                 after: error,
-                startupCommand: "  "
+                startupCommand: "  ",
+                mayExecuteUserStartupAction: false
             ) == .allow)
         }
     }

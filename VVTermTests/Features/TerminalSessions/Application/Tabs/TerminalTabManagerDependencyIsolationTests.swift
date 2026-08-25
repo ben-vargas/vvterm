@@ -384,6 +384,7 @@ struct TerminalTabManagerDependencyIsolationTests {
 
         #expect(plan.command == "cd ~/myproject && printf '%s' \"$(date)\"")
         #expect(plan.remoteSessionLifecycle == nil)
+        #expect(plan.mayExecuteUserStartupAction)
         #expect(await remoteSessions.availabilityProbeCount() == 0)
         manager.transportCoordinator.finishShellStart(
             for: tab.rootPaneId,
@@ -465,7 +466,7 @@ struct TerminalTabManagerDependencyIsolationTests {
                 client: firstClient
             )
         )
-        _ = try await manager.remoteSessionCoordinator.startupPlan(
+        let createPlan = try await manager.remoteSessionCoordinator.startupPlan(
             for: tab.rootPaneId,
             serverID: tab.serverId,
             client: firstClient,
@@ -485,7 +486,7 @@ struct TerminalTabManagerDependencyIsolationTests {
                 client: reconnectClient
             )
         )
-        _ = try await manager.remoteSessionCoordinator.startupPlan(
+        let reconnectPlan = try await manager.remoteSessionCoordinator.startupPlan(
             for: tab.rootPaneId,
             serverID: tab.serverId,
             client: reconnectClient,
@@ -498,6 +499,9 @@ struct TerminalTabManagerDependencyIsolationTests {
         #expect(requests.first?.initialCommand == command)
         #expect(requests.last?.mode == .attachExisting)
         #expect(requests.last?.initialCommand == nil)
+        #expect(createPlan.mayExecuteUserStartupAction)
+        #expect(reconnectPlan.command != nil)
+        #expect(!reconnectPlan.mayExecuteUserStartupAction)
         manager.transportCoordinator.finishShellStart(
             for: tab.rootPaneId,
             client: reconnectClient,

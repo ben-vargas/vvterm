@@ -70,15 +70,16 @@ nonisolated struct RemoteSessionLifecycleContext: Codable, Hashable, Sendable {
 nonisolated struct TerminalShellStartupPlan: Sendable {
     let command: String?
     let remoteSessionLifecycle: RemoteSessionLifecycleContext?
+    let mayExecuteUserStartupAction: Bool
 
-    var hasStandaloneStartupCommand: Bool {
-        guard remoteSessionLifecycle == nil else { return false }
-        return !(command?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    var mayExecuteStandaloneUserStartupAction: Bool {
+        remoteSessionLifecycle == nil && mayExecuteUserStartupAction
     }
 
     nonisolated static let plainShell = TerminalShellStartupPlan(
         command: nil,
-        remoteSessionLifecycle: nil
+        remoteSessionLifecycle: nil,
+        mayExecuteUserStartupAction: false
     )
 }
 

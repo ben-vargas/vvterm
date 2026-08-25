@@ -78,7 +78,8 @@ extension TerminalRemoteSessionCoordinator {
             try await client.upload(Data(script.utf8), to: remotePath, permissions: 0o700)
             return TerminalShellStartupPlan(
                 command: EternalTerminalStartupCommand.invocation(remotePath: remotePath),
-                remoteSessionLifecycle: plan.remoteSessionLifecycle
+                remoteSessionLifecycle: plan.remoteSessionLifecycle,
+                mayExecuteUserStartupAction: plan.mayExecuteUserStartupAction
             )
         }
 
@@ -95,7 +96,11 @@ extension TerminalRemoteSessionCoordinator {
         guard case .command(let command) = restorePlan else {
             return plan
         }
-        return TerminalShellStartupPlan(command: command, remoteSessionLifecycle: nil)
+        return TerminalShellStartupPlan(
+            command: command,
+            remoteSessionLifecycle: nil,
+            mayExecuteUserStartupAction: false
+        )
     }
 
     private func startupPlan(
@@ -226,7 +231,8 @@ extension TerminalRemoteSessionCoordinator {
         }
         return TerminalShellStartupPlan(
             command: backendPlan.command,
-            remoteSessionLifecycle: lifecycle
+            remoteSessionLifecycle: lifecycle,
+            mayExecuteUserStartupAction: mode == .attachOrCreate && startupAction != nil
         )
     }
 
@@ -235,7 +241,8 @@ extension TerminalRemoteSessionCoordinator {
     ) -> TerminalShellStartupPlan {
         return TerminalShellStartupPlan(
             command: action?.command,
-            remoteSessionLifecycle: nil
+            remoteSessionLifecycle: nil,
+            mayExecuteUserStartupAction: action != nil
         )
     }
 
