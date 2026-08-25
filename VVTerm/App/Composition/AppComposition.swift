@@ -133,6 +133,7 @@ struct AppComposition {
                 )
             )
         }
+        let serverDeletionTerminalCleanup = ServerDeletionTerminalCleanupRelay()
         let serverManager = ServerManager(
             dependencies: .live(
                 defaults: defaults,
@@ -142,7 +143,9 @@ struct AppComposition {
                 freePlanTracker: analyticsTracker,
                 actionAuthorizer: appLockManager,
                 syncRepository: cloudKitSyncCoordinator,
-                didDeleteServerLocalData: { _ in },
+                didDeleteServerLocalData: { serverID in
+                    serverDeletionTerminalCleanup.handleServerDeletion(serverID)
+                },
                 defaultWorkspaceName: defaultWorkspaceName,
                 canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames,
                 now: now,
@@ -220,6 +223,7 @@ struct AppComposition {
             },
             applicationIsActive: applicationIsActive
         )
+        serverDeletionTerminalCleanup.bind(to: tabManager)
         let storeManager = StoreManager(
             client: AppStoreKitClient(),
             effects: .live(
