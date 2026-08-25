@@ -101,4 +101,34 @@ struct MoshSSHFallbackPolicyTests {
             ) == .allow)
         }
     }
+
+    @Test
+    func fallbackPreservesFailuresBeforeStartupCommandDispatch() {
+        let moshError = SSHError.moshServerMissing
+        let channel = MoshSSHFallbackPolicy.fallbackFailure(
+            moshError: moshError,
+            fallbackError: SSHError.channelOpenFailed
+        )
+        let disconnected = MoshSSHFallbackPolicy.fallbackFailure(
+            moshError: moshError,
+            fallbackError: SSHError.disconnectedBeforeShellRequest
+        )
+        let shellRequest = MoshSSHFallbackPolicy.fallbackFailure(
+            moshError: moshError,
+            fallbackError: SSHError.shellRequestFailed
+        )
+
+        guard case .channelOpenFailed = channel else {
+            Issue.record("Expected the channel-open error")
+            return
+        }
+        guard case .disconnectedBeforeShellRequest = disconnected else {
+            Issue.record("Expected the pre-request disconnect")
+            return
+        }
+        guard case .shellRequestFailed = shellRequest else {
+            Issue.record("Expected the shell-request error")
+            return
+        }
+    }
 }

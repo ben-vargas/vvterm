@@ -131,11 +131,9 @@ extension SSHClient {
                 if error is CancellationError || Task.isCancelled {
                     throw CancellationError()
                 }
-                if let sshError = error as? SSHError, case .notConnected = sshError {
-                    throw sshError
-                }
-                throw SSHError.moshSessionFailed(
-                    "Mosh startup failed (\(moshError.localizedDescription)); SSH fallback failed (\(error.localizedDescription))"
+                throw MoshSSHFallbackPolicy.fallbackFailure(
+                    moshError: moshError,
+                    fallbackError: error
                 )
             }
         }

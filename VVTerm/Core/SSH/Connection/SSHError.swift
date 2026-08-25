@@ -28,6 +28,18 @@ enum SSHError: LocalizedError {
     case socketError(String)
     case unknown(String)
 
+    var provesStartupCommandWasNotDispatched: Bool {
+        switch self {
+        case .channelOpenFailed,
+             .disconnectedBeforeShellRequest,
+             .shellRequestFailed,
+             .unsupportedRemoteShellForStartupCommand:
+            return true
+        default:
+            return false
+        }
+    }
+
     var allowsAutomaticReconnectRetry: Bool {
         switch self {
         case .notConnected,

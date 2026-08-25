@@ -17,11 +17,12 @@ nonisolated enum MoshSSHFallbackPolicy {
         guard let sshError = error as? SSHError else {
             return .rejectToPreventStartupCommandReplay
         }
+        if sshError.provesStartupCommandWasNotDispatched {
+            return .allow
+        }
 
         switch sshError {
-        case .channelOpenFailed,
-             .disconnectedBeforeShellRequest,
-             .moshServerMissing,
+        case .moshServerMissing,
              .moshServerRuntimeBroken,
              .moshBootstrapFailedBeforeStartupCommand,
              .moshInvalidEndpoint:
@@ -29,5 +30,22 @@ nonisolated enum MoshSSHFallbackPolicy {
         default:
             return .rejectToPreventStartupCommandReplay
         }
+    }
+
+    static func fallbackFailure(
+        moshError: Error,
+        fallbackError: Error
+    ) -> SSHError {
+        if let sshError = fallbackError as? SSHError {
+            if sshError.provesStartupCommandWasNotDispatched {
+                return sshError
+            }
+            if case .notConnected = sshError {
+                return sshError
+            }
+        }
+        return .moshSessionFailed(
+            "Mosh startup failed (\(moshError.localizedDescription)); SSH fallback failed (\(fallbackError.localizedDescription))"
+        )
     }
 }
