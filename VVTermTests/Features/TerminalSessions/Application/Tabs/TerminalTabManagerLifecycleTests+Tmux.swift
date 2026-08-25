@@ -494,6 +494,33 @@ extension TerminalTabManagerLifecycleTests {
                 #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason?.allowsAutomaticReconnect == true)
             }
         }
+
+        @Test
+        func completedStandaloneActionPreservesPaneWithoutAutomaticReconnect() async {
+            await withCleanManager { manager in
+                let tab = TerminalTab(serverId: UUID(), title: "Completed action")
+                installTab(tab, in: manager, connectionState: .connected)
+
+                manager.handleShellEnd(
+                    for: tab.rootPaneId,
+                    reason: .standaloneStartupActionCompleted
+                )
+
+                #expect(manager.sessionState.tabs(for: tab.serverId) == [tab])
+                #expect(
+                    manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState
+                        == .disconnected
+                )
+                #expect(
+                    manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason
+                        == .startupActionCompleted
+                )
+                #expect(
+                    manager.sessionState.paneState(for: tab.rootPaneId)?
+                        .disconnectReason?.allowsAutomaticReconnect == false
+                )
+            }
+        }
     
         @Test
         func transientReconnectFailurePreservesAutomaticRetryEligibility() async {

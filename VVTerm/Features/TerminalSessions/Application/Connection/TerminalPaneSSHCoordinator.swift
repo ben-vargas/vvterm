@@ -135,10 +135,12 @@ final class TerminalPaneSSHCoordinator {
             },
             startupPlan: context.startupPlan,
             restoreMoshShell: context.restoreMoshShell,
-            registerShell: { shell in
+            registerShell: { shell, startupPlan in
                 guard await context.registerShell(shell) else { return false }
                 context.updateConnectionState(.connected)
-                if shell.origin == .fresh, let cwd = context.workingDirectory() {
+                if shell.origin == .fresh,
+                   startupPlan.allowsPostLaunchWorkingDirectoryRestore,
+                   let cwd = context.workingDirectory() {
                     await applyWorkingDirectory(
                         cwd,
                         shellId: shell.id,

@@ -76,6 +76,10 @@ nonisolated struct TerminalShellStartupPlan: Sendable {
         remoteSessionLifecycle == nil && mayExecuteUserStartupAction
     }
 
+    var allowsPostLaunchWorkingDirectoryRestore: Bool {
+        !mayExecuteStandaloneUserStartupAction
+    }
+
     nonisolated static let plainShell = TerminalShellStartupPlan(
         command: nil,
         remoteSessionLifecycle: nil,
@@ -85,6 +89,7 @@ nonisolated struct TerminalShellStartupPlan: Sendable {
 
 nonisolated enum TerminalShellEndReason: Hashable, Sendable {
     case transportInterrupted
+    case standaloneStartupActionCompleted
     case remoteSessionDetached(RemoteSessionOwnership)
     case remoteSessionTerminated(RemoteSessionOwnership)
     case remoteSessionCreationFailed
@@ -129,6 +134,7 @@ nonisolated enum TerminalShellEndReason: Hashable, Sendable {
 nonisolated enum TerminalDisconnectReason: String, Codable, Hashable, Sendable {
     // Keep raw values stable for local snapshot migration.
     case transportInterrupted = "transportEnded"
+    case startupActionCompleted
     case remoteSessionDetached = "tmuxDetached"
     case externalRemoteSessionTerminated = "externalTmuxEnded"
 

@@ -66,7 +66,10 @@ nonisolated enum SSHConnectionRunner {
             _ cols: Int,
             _ rows: Int
         ) async -> SSHConnectionRestoredShell?,
-        registerShell: @MainActor @escaping @Sendable (_ shell: ShellHandle) async -> Bool,
+        registerShell: @MainActor @escaping @Sendable (
+            _ shell: ShellHandle,
+            _ startupPlan: TerminalShellStartupPlan
+        ) async -> Bool,
         onTitleChange: @MainActor @escaping @Sendable (_ title: String) -> Void,
         writeOutput: @MainActor @escaping @Sendable (_ data: Data) -> Bool,
         shouldResetClient: @escaping @Sendable (_ error: SSHError) async -> Bool,
@@ -99,7 +102,7 @@ nonisolated enum SSHConnectionRunner {
                 let pixelSize = initialTerminalState.pixelSize
 
                 let shell: ShellHandle
-                let startup: TerminalShellStartupPlan?
+                let startup: TerminalShellStartupPlan
                 if let restored = await restoreMoshShell(cols, rows) {
                     shell = restored.shell
                     startup = TerminalShellStartupPlan(
@@ -144,10 +147,10 @@ nonisolated enum SSHConnectionRunner {
                     await transport.closeShell(shell.id)
                     return
                 }
-                guard await registerShell(shell) else { return }
+                guard await registerShell(shell, startup) else { return }
 
                 guard !Task.isCancelled else { return }
-                var lifecycleParser = startup?.remoteSessionLifecycle.map {
+                var lifecycleParser = startup.remoteSessionLifecycle.map {
                     RemoteSessionLifecycleStreamParser(observation: $0.observation)
                 }
                 var lastLifecycleEvent: RemoteSessionEvent?
@@ -183,7 +186,7 @@ nonisolated enum SSHConnectionRunner {
 
                 var sessionExists: Bool?
                 if lastLifecycleEvent == nil || lastLifecycleEvent == .attached,
-                   let presenceProbe = startup?.remoteSessionLifecycle?
+                   let presenceProbe = startup.remoteSessionLifecycle?
                     .observation.presenceProbe {
                     do {
                         let output = try await transport.execute(
@@ -197,11 +200,14 @@ nonisolated enum SSHConnectionRunner {
                         )
                     }
                 }
-                let endReason = TerminalShellEndReason.resolve(
-                    lifecycle: startup?.remoteSessionLifecycle,
-                    event: lastLifecycleEvent,
-                    sessionExists: sessionExists
-                )
+                let endReason: TerminalShellEndReason =
+                    startup.mayExecuteStandaloneUserStartupAction
+                    ? .standaloneStartupActionCompleted
+                    : TerminalShellEndReason.resolve(
+                        lifecycle: startup.remoteSessionLifecycle,
+                        event: lastLifecycleEvent,
+                        sessionExists: sessionExists
+                    )
                 logger.info("SSH shell ended: \(String(describing: endReason), privacy: .public)")
                 await onProcessExit(shell.id, endReason)
                 return

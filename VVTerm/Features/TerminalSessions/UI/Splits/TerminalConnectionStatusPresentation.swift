@@ -93,7 +93,7 @@ nonisolated enum TerminalConnectionFailurePresentation {
 extension TerminalDisconnectReason {
     var statusMessage: String? {
         switch self {
-        case .transportInterrupted:
+        case .transportInterrupted, .startupActionCompleted:
             return nil
         case .remoteSessionDetached:
             return String(localized: "The remote session is still running on the server.")

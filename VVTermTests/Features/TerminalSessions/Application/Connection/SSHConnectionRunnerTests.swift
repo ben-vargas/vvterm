@@ -103,7 +103,7 @@ struct SSHConnectionRunnerTests {
                 )
             },
             restoreMoshShell: { _, _ in nil },
-            registerShell: { _ in true },
+            registerShell: { _, _ in true },
             onTitleChange: { _ in },
             writeOutput: { _ in true },
             shouldResetClient: { _ in false },
@@ -119,6 +119,58 @@ struct SSHConnectionRunnerTests {
             Issue.record("Expected the possible command execution failure")
             return
         }
+    }
+
+    @Test
+    func completedStandaloneActionDoesNotRestoreDirectoryOrReconnect() async {
+        let fixture = makeFixture()
+        await fixture.channel.finish()
+        var registeredPlan: TerminalShellStartupPlan?
+        var endReason: TerminalShellEndReason?
+        let transport = SSHConnectionRunnerTransport(
+            connect: { _, _ in },
+            startShell: { _, _, _, _, _ in fixture.shell },
+            disconnect: {},
+            closeShell: { _ in },
+            execute: { _, _ in "" }
+        )
+
+        await SSHConnectionRunner.run(
+            server: fixture.server,
+            credentials: fixture.credentials,
+            transport: transport,
+            initialTerminalState: SSHConnectionInitialTerminalState(
+                columns: 80,
+                rows: 24,
+                pixelSize: nil
+            ),
+            logger: Logger(subsystem: "SSHConnectionRunnerTests", category: "Runner"),
+            shouldContinueConnection: { true },
+            onAttempt: { _ in },
+            startupPlan: {
+                TerminalShellStartupPlan(
+                    command: "exec vim",
+                    remoteSessionLifecycle: nil,
+                    mayExecuteUserStartupAction: true
+                )
+            },
+            restoreMoshShell: { _, _ in nil },
+            registerShell: { _, startupPlan in
+                registeredPlan = startupPlan
+                return true
+            },
+            onTitleChange: { _ in },
+            writeOutput: { _ in true },
+            shouldResetClient: { _ in false },
+            onProcessExit: { _, reason in endReason = reason },
+            onFailure: { error in
+                Issue.record("Unexpected runner failure: \(error.localizedDescription)")
+            }
+        )
+
+        #expect(registeredPlan?.mayExecuteStandaloneUserStartupAction == true)
+        #expect(registeredPlan?.allowsPostLaunchWorkingDirectoryRestore == false)
+        #expect(endReason == .standaloneStartupActionCompleted)
     }
 
     @Test
@@ -139,7 +191,7 @@ struct SSHConnectionRunnerTests {
             await run(
                 fixture: fixture,
                 transport: transport,
-                registerShell: { _ in
+                registerShell: { _, _ in
                     await recorder.recordRegistration()
                     return true
                 }
@@ -171,7 +223,7 @@ struct SSHConnectionRunnerTests {
         await run(
             fixture: fixture,
             transport: transport,
-            registerShell: { _ in
+            registerShell: { _, _ in
                 await recorder.recordRegistration()
                 return false
             }
@@ -185,6 +237,7 @@ struct SSHConnectionRunnerTests {
     private struct Fixture {
         let server: Server
         let credentials: ServerCredentials
+        let channel: TerminalOutputChannel
         let shell: ShellHandle
     }
 
@@ -202,7 +255,12 @@ struct SSHConnectionRunnerTests {
             id: UUID(),
             stream: TerminalOutputStream(channel: channel)
         )
-        return Fixture(server: server, credentials: credentials, shell: shell)
+        return Fixture(
+            server: server,
+            credentials: credentials,
+            channel: channel,
+            shell: shell
+        )
     }
 
     private func makeTransport(
@@ -227,7 +285,10 @@ struct SSHConnectionRunnerTests {
     private func run(
         fixture: Fixture,
         transport: SSHConnectionRunnerTransport,
-        registerShell: @MainActor @escaping @Sendable (ShellHandle) async -> Bool
+        registerShell: @MainActor @escaping @Sendable (
+            ShellHandle,
+            TerminalShellStartupPlan
+        ) async -> Bool
     ) async {
         await SSHConnectionRunner.run(
             server: fixture.server,
