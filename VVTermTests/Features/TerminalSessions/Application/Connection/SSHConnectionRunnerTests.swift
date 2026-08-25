@@ -60,6 +60,18 @@ private actor SSHConnectionRunnerTestRecorder {
     }
 }
 
+enum SSHConnectionRunnerPreDispatchFailure: CaseIterable, Sendable {
+    case channelOpen
+    case shellRequest
+
+    var error: SSHError {
+        switch self {
+        case .channelOpen: .channelOpenFailed
+        case .shellRequest: .shellRequestFailed
+        }
+    }
+}
+
 @Suite(.serialized)
 @MainActor
 struct SSHConnectionRunnerTests {
@@ -121,8 +133,10 @@ struct SSHConnectionRunnerTests {
         }
     }
 
-    @Test
-    func channelOpenFailureBeforeStandaloneActionRemainsRetryable() async {
+    @Test(arguments: SSHConnectionRunnerPreDispatchFailure.allCases)
+    func preDispatchFailureBeforeStandaloneActionRemainsRetryable(
+        _ failure: SSHConnectionRunnerPreDispatchFailure
+    ) async {
         let fixture = makeFixture()
         let recorder = SSHConnectionRunnerTestRecorder()
         var attempts: [Int] = []
@@ -132,7 +146,7 @@ struct SSHConnectionRunnerTests {
             startShell: { columns, rows, _, _, mayExecuteUserStartupAction in
                 #expect(mayExecuteUserStartupAction)
                 await recorder.recordStart(columns: columns, rows: rows)
-                throw SSHError.channelOpenFailed
+                throw failure.error
             },
             disconnect: {},
             closeShell: { _ in },
@@ -169,9 +183,17 @@ struct SSHConnectionRunnerTests {
 
         #expect(attempts == [1, 2, 3])
         #expect(await recorder.recordedStartSizes() == [[132, 43], [132, 43], [132, 43]])
-        guard case .channelOpenFailed = reportedFailure else {
-            Issue.record("Expected the pre-dispatch channel-open failure")
-            return
+        switch failure {
+        case .channelOpen:
+            guard case .channelOpenFailed = reportedFailure else {
+                Issue.record("Expected the pre-dispatch channel-open failure")
+                return
+            }
+        case .shellRequest:
+            guard case .shellRequestFailed = reportedFailure else {
+                Issue.record("Expected the pre-dispatch shell-request failure")
+                return
+            }
         }
     }
 
