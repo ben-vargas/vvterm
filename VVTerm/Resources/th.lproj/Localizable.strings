@@ -846,12 +846,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "ระบุการแทนที่ทั้งโดเมนทีมและโดเมนแอปสำหรับ Cloudflare OAuth";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "ตรวจพบเมตาดาต้า Cloudflare ไม่สำเร็จ เพิ่มการแทนที่โดเมนทีมและโดเมนแอปในการตั้งค่าเซิร์ฟเวอร์";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "เลือกเซสชัน tmux";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "เลือกเซสชัน %@";
 "Existing sessions" = "เซสชันที่มีอยู่";
 "Select a session to attach immediately." = "เลือกเซสชันเพื่อเชื่อมต่อทันที";
-"No tmux sessions found" = "ไม่พบเซสชัน tmux";
-"Create a new session, or continue without tmux." = "สร้างเซสชันใหม่ หรือดำเนินการต่อโดยไม่ใช้ tmux";
+"No %@ sessions found" = "ไม่พบเซสชัน %@";
+"Create a new session, or continue without a remote session." = "สร้างเซสชันใหม่ หรือดำเนินการต่อโดยไม่ใช้เซสชันระยะไกล";
 "Attached" = "เชื่อมต่ออยู่";
 "Detached" = "แยกออก";
 "1 client" = "1 ไคลเอนต์";
@@ -859,7 +859,8 @@
 "1 window" = "1 หน้าต่าง";
 "%lld windows" = "%lld หน้าต่าง";
 "New session" = "เซสชันใหม่";
-"Skip tmux" = "ข้าม tmux";
+"Continue without a remote session" = "ดำเนินการต่อโดยไม่ใช้เซสชันระยะไกล";
+"Open Installation Guide" = "เปิดคู่มือการติดตั้ง";
 "Create VVTerm session" = "สร้างเซสชัน VVTerm";
 "Ask every time" = "ถามทุกครั้ง";
 "Use remembered session" = "ใช้เซสชันที่จดจำไว้";

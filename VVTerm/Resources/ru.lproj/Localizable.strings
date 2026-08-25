@@ -846,12 +846,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "Укажите переопределения домена команды и домена приложения для Cloudflare OAuth.";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "Не удалось обнаружить метаданные Cloudflare. Добавьте переопределения домена команды и домена приложения в настройках сервера.";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "Выбрать сессию tmux";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "Выбрать сессию %@";
 "Existing sessions" = "Существующие сессии";
 "Select a session to attach immediately." = "Выберите сессию для немедленного подключения.";
-"No tmux sessions found" = "Сессии tmux не найдены";
-"Create a new session, or continue without tmux." = "Создайте новую сессию или продолжайте без tmux.";
+"No %@ sessions found" = "Сессии %@ не найдены";
+"Create a new session, or continue without a remote session." = "Создайте новую сессию или продолжайте без удалённой сессии.";
 "Attached" = "Подключена";
 "Detached" = "Отсоединена";
 "1 client" = "1 клиент";
@@ -859,7 +859,8 @@
 "1 window" = "1 окно";
 "%lld windows" = "%lld окон";
 "New session" = "Новая сессия";
-"Skip tmux" = "Пропустить tmux";
+"Continue without a remote session" = "Продолжить без удалённой сессии";
+"Open Installation Guide" = "Открыть руководство по установке";
 "Create VVTerm session" = "Создать сессию VVTerm";
 "Ask every time" = "Спрашивать каждый раз";
 "Use remembered session" = "Использовать запомненную сессию";

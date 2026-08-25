@@ -847,12 +847,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "Pro Cloudflare OAuth zadejte přepsání domény týmu i domény aplikace.";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "Zjištění metadat Cloudflare selhalo. V nastavení serveru přidejte přepsání domény týmu a domény aplikace.";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "Vybrat relaci tmux";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "Vybrat relaci %@";
 "Existing sessions" = "Existující relace";
 "Select a session to attach immediately." = "Vyberte relaci pro okamžité připojení.";
-"No tmux sessions found" = "Nebyly nalezeny žádné relace tmux";
-"Create a new session, or continue without tmux." = "Vytvořte novou relaci nebo pokračujte bez tmux.";
+"No %@ sessions found" = "Nebyly nalezeny žádné relace %@";
+"Create a new session, or continue without a remote session." = "Vytvořte novou relaci nebo pokračujte bez vzdálené relace.";
 "Attached" = "Připojeno";
 "Detached" = "Odpojeno";
 "1 client" = "1 klient";
@@ -860,7 +860,8 @@
 "1 window" = "1 okno";
 "%lld windows" = "%lld oken";
 "New session" = "Nová relace";
-"Skip tmux" = "Přeskočit tmux";
+"Continue without a remote session" = "Pokračovat bez vzdálené relace";
+"Open Installation Guide" = "Otevřít průvodce instalací";
 "Create VVTerm session" = "Vytvořit relaci VVTerm";
 "Ask every time" = "Ptát se pokaždé";
 "Use remembered session" = "Použít zapamatovanou relaci";

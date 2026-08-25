@@ -4,6 +4,36 @@ import XCTest
 
 @MainActor
 final class RemoteSessionPresentationTests: XCTestCase {
+    func testRemoteSessionPromptCopyExistsInEveryLocalization() throws {
+        let keys = [
+            "Choose %@ session",
+            "No %@ sessions found",
+            "Create a new session, or continue without a remote session.",
+            "Continue without a remote session",
+            "Open Installation Guide"
+        ]
+
+        for localization in Bundle.main.localizations.sorted() where localization != "Base" {
+            let url = try XCTUnwrap(
+                Bundle.main.url(
+                    forResource: "Localizable",
+                    withExtension: "strings",
+                    subdirectory: nil,
+                    localization: localization
+                ),
+                "Missing Localizable.strings for \(localization)"
+            )
+            let data = try Data(contentsOf: url)
+            let catalog = try XCTUnwrap(
+                PropertyListSerialization.propertyList(from: data, format: nil) as? [String: String]
+            )
+
+            for key in keys {
+                XCTAssertNotNil(catalog[key], "Missing \(key) in \(localization)")
+            }
+        }
+    }
+
     func testStartupBehaviorPresentationMatchesExistingLocalizedCopy() {
         XCTAssertEqual(
             RemoteSessionStartupBehavior.createManaged.displayName,

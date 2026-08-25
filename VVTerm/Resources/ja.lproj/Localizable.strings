@@ -846,12 +846,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "Cloudflare OAuth 用にチームドメインとアプリドメインの上書きを両方指定してください。";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "Cloudflare メタデータの検出に失敗しました。サーバー設定でチームドメインとアプリドメインの上書きを追加してください。";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "tmuxセッションを選択";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "%@セッションを選択";
 "Existing sessions" = "既存のセッション";
 "Select a session to attach immediately." = "すぐにアタッチするセッションを選択してください。";
-"No tmux sessions found" = "tmuxセッションが見つかりません";
-"Create a new session, or continue without tmux." = "新しいセッションを作成するか、tmuxなしで続行してください。";
+"No %@ sessions found" = "%@セッションが見つかりません";
+"Create a new session, or continue without a remote session." = "新しいセッションを作成するか、リモートセッションなしで続行してください。";
 "Attached" = "アタッチ済み";
 "Detached" = "デタッチ";
 "1 client" = "1 クライアント";
@@ -859,7 +859,8 @@
 "1 window" = "1 ウィンドウ";
 "%lld windows" = "%lld ウィンドウ";
 "New session" = "新しいセッション";
-"Skip tmux" = "tmuxをスキップ";
+"Continue without a remote session" = "リモートセッションなしで続行";
+"Open Installation Guide" = "インストールガイドを開く";
 "Create VVTerm session" = "VVTermセッションを作成";
 "Ask every time" = "毎回確認する";
 "Use remembered session" = "記憶したセッションを使用";

@@ -843,12 +843,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "请为 Cloudflare OAuth 同时提供团队域名和应用域名覆盖。";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "Cloudflare 元数据发现失败。请在服务器设置中添加团队域名和应用域名覆盖。";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "选择 tmux 会话";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "选择 %@ 会话";
 "Existing sessions" = "现有会话";
 "Select a session to attach immediately." = "选择一个会话以立即附加。";
-"No tmux sessions found" = "未找到 tmux 会话";
-"Create a new session, or continue without tmux." = "创建新会话，或不使用 tmux 继续。";
+"No %@ sessions found" = "未找到 %@ 会话";
+"Create a new session, or continue without a remote session." = "创建新会话，或不使用远程会话继续。";
 "Attached" = "已附加";
 "Detached" = "已分离";
 "1 client" = "1 个客户端";
@@ -856,7 +856,8 @@
 "1 window" = "1 个窗口";
 "%lld windows" = "%lld 个窗口";
 "New session" = "新建会话";
-"Skip tmux" = "跳过 tmux";
+"Continue without a remote session" = "不使用远程会话继续";
+"Open Installation Guide" = "打开安装指南";
 "Create VVTerm session" = "创建 VVTerm 会话";
 "Ask every time" = "每次都询问";
 "Use remembered session" = "使用记住的会话";

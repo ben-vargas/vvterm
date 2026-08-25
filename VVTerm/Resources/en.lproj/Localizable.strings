@@ -846,12 +846,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "Provide both Team Domain and App Domain overrides for Cloudflare OAuth.";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings.";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "Choose tmux session";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "Choose %@ session";
 "Existing sessions" = "Existing sessions";
 "Select a session to attach immediately." = "Select a session to attach immediately.";
-"No tmux sessions found" = "No tmux sessions found";
-"Create a new session, or continue without tmux." = "Create a new session, or continue without tmux.";
+"No %@ sessions found" = "No %@ sessions found";
+"Create a new session, or continue without a remote session." = "Create a new session, or continue without a remote session.";
 "Attached" = "Attached";
 "Detached" = "Detached";
 "1 client" = "1 client";
@@ -859,7 +859,8 @@
 "1 window" = "1 window";
 "%lld windows" = "%lld windows";
 "New session" = "New session";
-"Skip tmux" = "Skip tmux";
+"Continue without a remote session" = "Continue without a remote session";
+"Open Installation Guide" = "Open Installation Guide";
 "Create VVTerm session" = "Create VVTerm session";
 "Ask every time" = "Ask every time";
 "Use remembered session" = "Use remembered session";
