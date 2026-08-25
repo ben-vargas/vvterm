@@ -60,6 +60,20 @@ nonisolated enum ServerCloudKitRecordCodec {
             .flatMap(CloudflareAccessMode.init(rawValue:))
         let legacyStartupBehavior = (record["tmuxStartupBehaviorOverride"] as? String)
             .flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
+        let backendIdentifier = RemoteSessionBackendIdentifier(
+            rawValue: record["remoteSessionBackendIdentifier"] as? String
+                ?? RemoteSessionBackendIdentifier.tmux.rawValue
+        )
+        let currentEnabledOverride = record["remoteSessionEnabledOverride"] as? Bool
+        let currentStartupBehavior = (
+            record["remoteSessionStartupBehaviorOverride"] as? String
+        ).flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
+        let enabledOverride = backendIdentifier == .tmux
+            ? (record["tmuxEnabledOverride"] as? Bool) ?? currentEnabledOverride
+            : currentEnabledOverride
+        let startupBehavior = backendIdentifier == .tmux
+            ? (legacyStartupBehavior ?? currentStartupBehavior)
+            : currentStartupBehavior
         let updatedAt = record["updatedAt"] as? Date ?? now
 
         return Server(
@@ -81,16 +95,9 @@ nonisolated enum ServerCloudKitRecordCodec {
             lastConnected: record["lastConnected"] as? Date,
             isFavorite: record["isFavorite"] as? Bool ?? false,
             requiresBiometricUnlock: record["requiresBiometricUnlock"] as? Bool ?? false,
-            remoteSessionEnabledOverride: record["remoteSessionEnabledOverride"] as? Bool
-                ?? record["tmuxEnabledOverride"] as? Bool,
-            remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier(
-                rawValue: record["remoteSessionBackendIdentifier"] as? String
-                    ?? RemoteSessionBackendIdentifier.tmux.rawValue
-            ),
-            remoteSessionStartupBehaviorOverride: (
-                record["remoteSessionStartupBehaviorOverride"] as? String
-            ).flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
-                ?? legacyStartupBehavior,
+            remoteSessionEnabledOverride: enabledOverride,
+            remoteSessionBackendIdentifier: backendIdentifier,
+            remoteSessionStartupBehaviorOverride: startupBehavior,
             createdAt: record["createdAt"] as? Date ?? now,
             updatedAt: updatedAt
         )
