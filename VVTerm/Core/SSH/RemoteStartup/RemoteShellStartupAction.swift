@@ -9,10 +9,9 @@ nonisolated struct RemoteShellStartupAction: Hashable, Sendable {
         case tooLong
     }
 
-    // PowerShell expands ASCII text to UTF-16LE and then Base64. This limit
-    // leaves room for VVTerm's environment prefix and PowerShell arguments
-    // within Windows' 32,767-character process command-line limit.
-    static let maximumCommandByteCount = 11_000
+    // Leave room for the psmux launch script, environment prefix, UTF-16LE
+    // encoding, and PowerShell arguments within Windows' process limit.
+    static let maximumCommandByteCount = 9_000
 
     let command: String
 

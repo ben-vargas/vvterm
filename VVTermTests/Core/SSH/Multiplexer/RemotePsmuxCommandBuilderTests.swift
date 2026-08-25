@@ -4,6 +4,45 @@ import Testing
 
 struct RemotePsmuxCommandBuilderTests {
     @Test
+    func maximumStartupActionFitsTheCompletePowerShellInvocation() throws {
+        let action = try RemoteShellStartupAction(
+            command: String(
+                repeating: "x",
+                count: RemoteShellStartupAction.maximumCommandByteCount
+            )
+        )
+        let backend = RemoteTmuxBackend.windowsPsmux(
+            commandName: "psmux",
+            shellFamily: .powershell,
+            powerShellExecutable: "powershell.exe"
+        )
+        let backendCommand = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteSessionThemeStyle,
+            sessionName: "vvterm_managed_session",
+            workingDirectory: #"C:\Users\VVTerm\project"#,
+            initialCommand: action.command,
+            backend: backend,
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
+        )
+        let environment = RemoteEnvironment(
+            platform: .windows,
+            shellProfile: .powershell(executableName: "powershell.exe"),
+            activeShellName: "powershell.exe",
+            powerShellExecutable: "powershell.exe"
+        )
+        let plan = RemoteTerminalBootstrap.launchPlan(
+            startupCommand: backendCommand,
+            environment: environment
+        )
+        guard case .exec(let command) = plan else {
+            Issue.record("Expected a PowerShell startup command")
+            return
+        }
+
+        #expect(command.utf16.count <= 32_767)
+    }
+
+    @Test
     func externalWindowsSessionAttachDoesNotLoadVVTermConfiguration() {
         let backend = RemoteTmuxBackend.windowsPsmux(
             commandName: "psmux",
