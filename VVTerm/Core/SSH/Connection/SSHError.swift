@@ -11,6 +11,7 @@ enum SSHError: LocalizedError {
     case moshServerMissing
     case moshServerRuntimeBroken
     case moshBootstrapFailed(String)
+    case moshBootstrapFailedBeforeStartupCommand(String)
     case moshSessionFailed(String)
     case moshInvalidEndpoint
     case moshUDPTimeout
@@ -46,6 +47,7 @@ enum SSHError: LocalizedError {
              .moshServerMissing,
              .moshServerRuntimeBroken,
              .moshBootstrapFailed,
+             .moshBootstrapFailedBeforeStartupCommand,
              .moshInvalidEndpoint,
              .moshStartupCommandMayHaveRun,
              .hostKeyApprovalRequired,
@@ -76,6 +78,8 @@ enum SSHError: LocalizedError {
             return String(localized: "mosh-server is installed but cannot run. Repair its package installation on the remote host.")
         case .moshBootstrapFailed(let msg):
             return "Mosh bootstrap failed: \(msg)"
+        case .moshBootstrapFailedBeforeStartupCommand(let msg):
+            return "Mosh bootstrap failed before the startup command ran: \(msg)"
         case .moshSessionFailed(let msg):
             return "Mosh session failed: \(msg)"
         case .moshInvalidEndpoint:

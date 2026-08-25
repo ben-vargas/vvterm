@@ -90,7 +90,7 @@ extension SSHClient {
             let moshError = error
             let fallbackReason = fallbackReason(for: moshError)
             if MoshSSHFallbackPolicy.decision(
-                after: fallbackReason,
+                after: moshError,
                 startupCommand: startupCommand
             ) == .rejectToPreventStartupCommandReplay {
                 logger.error(

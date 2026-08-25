@@ -7,22 +7,22 @@ nonisolated enum MoshSSHFallbackDecision: Equatable, Sendable {
 
 nonisolated enum MoshSSHFallbackPolicy {
     static func decision(
-        after reason: MoshFallbackReason,
+        after error: Error,
         startupCommand: String?
     ) -> MoshSSHFallbackDecision {
         let command = startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !command.isEmpty else { return .allow }
+        guard let sshError = error as? SSHError else {
+            return .rejectToPreventStartupCommandReplay
+        }
 
-        switch reason {
-        case .serverMissing,
-             .serverRuntimeBroken,
-             .unsupportedRemoteCapabilities,
-             .invalidEndpoint:
+        switch sshError {
+        case .moshServerMissing,
+             .moshServerRuntimeBroken,
+             .moshBootstrapFailedBeforeStartupCommand,
+             .moshInvalidEndpoint:
             return .allow
-        case .bootstrapFailed,
-             .sessionFailed,
-             .udpTimeout,
-             .clientSessionFailed:
+        default:
             return .rejectToPreventStartupCommandReplay
         }
     }

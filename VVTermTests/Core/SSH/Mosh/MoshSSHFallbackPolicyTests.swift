@@ -7,7 +7,7 @@ struct MoshSSHFallbackPolicyTests {
         var executionCount = 1
 
         if MoshSSHFallbackPolicy.decision(
-            after: .udpTimeout,
+            after: SSHError.moshUDPTimeout,
             startupCommand: "deploy --start"
         ) == .allow {
             executionCount += 1
@@ -16,37 +16,71 @@ struct MoshSSHFallbackPolicyTests {
         #expect(executionCount == 1)
     }
 
-    @Test(arguments: [
-        MoshFallbackReason.bootstrapFailed,
-        .sessionFailed,
-        .udpTimeout,
-        .clientSessionFailed
-    ])
-    func commandBlocksFallbackWhenRemoteExecutionIsPossible(_ reason: MoshFallbackReason) {
-        #expect(MoshSSHFallbackPolicy.decision(
-            after: reason,
-            startupCommand: "notify-send started"
-        ) == .rejectToPreventStartupCommandReplay)
+    @Test
+    func commandBlocksFallbackWhenRemoteExecutionIsPossible() {
+        let errors: [SSHError] = [
+            .moshBootstrapFailed("ambiguous bootstrap failure"),
+            .moshSessionFailed("session failure"),
+            .moshUDPTimeout,
+            .moshClientSessionFailed("client failure")
+        ]
+
+        for error in errors {
+            #expect(MoshSSHFallbackPolicy.decision(
+                after: error,
+                startupCommand: "notify-send started"
+            ) == .rejectToPreventStartupCommandReplay)
+        }
     }
 
-    @Test(arguments: [
-        MoshFallbackReason.serverMissing,
-        .serverRuntimeBroken,
-        .unsupportedRemoteCapabilities,
-        .invalidEndpoint
-    ])
-    func commandAllowsFallbackBeforeRemoteExecution(_ reason: MoshFallbackReason) {
+    @Test
+    func preExecutionBootstrapFailureFallsBackAndRunsCommandOnce() {
+        var executionCount = 0
+
         #expect(MoshSSHFallbackPolicy.decision(
-            after: reason,
-            startupCommand: "echo once"
+            after: SSHError.moshBootstrapFailedBeforeStartupCommand(
+                "mosh-server rejected startup"
+            ),
+            startupCommand: "notify-send started"
         ) == .allow)
+        executionCount += 1
+
+        #expect(executionCount == 1)
+    }
+
+    @Test
+    func commandAllowsFallbackBeforeRemoteExecution() {
+        let errors: [SSHError] = [
+            .moshServerMissing,
+            .moshServerRuntimeBroken,
+            .moshInvalidEndpoint,
+            .moshBootstrapFailedBeforeStartupCommand("rejected")
+        ]
+
+        for error in errors {
+            #expect(MoshSSHFallbackPolicy.decision(
+                after: error,
+                startupCommand: "echo once"
+            ) == .allow)
+        }
     }
 
     @Test
     func normalShellCanFallbackForEveryFailureReason() {
-        for reason in MoshFallbackReason.allCases {
+        let errors: [SSHError] = [
+            .moshServerMissing,
+            .moshServerRuntimeBroken,
+            .moshBootstrapFailed("failed"),
+            .moshBootstrapFailedBeforeStartupCommand("rejected"),
+            .moshSessionFailed("failed"),
+            .moshInvalidEndpoint,
+            .moshUDPTimeout,
+            .moshClientSessionFailed("failed")
+        ]
+
+        for error in errors {
             #expect(MoshSSHFallbackPolicy.decision(
-                after: reason,
+                after: error,
                 startupCommand: "  "
             ) == .allow)
         }

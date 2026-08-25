@@ -390,6 +390,8 @@ extension SSHClient {
             return .serverRuntimeBroken
         case .moshBootstrapFailed:
             return .bootstrapFailed
+        case .moshBootstrapFailedBeforeStartupCommand:
+            return .bootstrapFailed
         case .moshInvalidEndpoint:
             return .invalidEndpoint
         case .moshUDPTimeout:

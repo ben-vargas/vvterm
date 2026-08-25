@@ -52,7 +52,7 @@ struct RemoteMoshManagerTests {
             )
             Issue.record("Expected malformed bootstrap failure")
         } catch let error as SSHError {
-            guard case .moshBootstrapFailed = error else {
+            guard case .moshBootstrapFailedBeforeStartupCommand = error else {
                 Issue.record("Unexpected SSHError: \(error.localizedDescription)")
                 return
             }
@@ -239,10 +239,25 @@ struct RemoteMoshManagerTests {
     func mapBootstrapPermissionDeniedProducesReadableSSHError() {
         let mapped = RemoteMoshManager.shared.mapBootstrapError(.permissionDenied)
         switch mapped {
-        case .moshBootstrapFailed(let message):
+        case .moshBootstrapFailedBeforeStartupCommand(let message):
             #expect(message.contains("Permission denied"))
         default:
-            Issue.record("Expected moshBootstrapFailed for permissionDenied")
+            Issue.record("Expected a pre-command bootstrap failure for permissionDenied")
+        }
+    }
+
+    @Test(arguments: [
+        MoshBootstrapError.permissionDenied,
+        .invalidPort,
+        .invalidKey,
+        .processExited
+    ])
+    func mapsPreCommandBootstrapFailuresExplicitly(_ error: MoshBootstrapError) {
+        let mapped = RemoteMoshManager.shared.mapBootstrapError(error)
+
+        guard case .moshBootstrapFailedBeforeStartupCommand = mapped else {
+            Issue.record("Expected a pre-command bootstrap failure")
+            return
         }
     }
 
