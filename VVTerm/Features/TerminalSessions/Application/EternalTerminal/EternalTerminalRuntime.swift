@@ -133,6 +133,7 @@ struct EternalTerminalRuntimeOwnerAccess {
     let setResumeContext: @MainActor @Sendable (UUID, RemoteSessionLifecycleContext?) -> Void
     let standaloneStartupActionPendingCompletion: @MainActor @Sendable (UUID) -> Bool
     let setStandaloneStartupActionPendingCompletion: @MainActor @Sendable (UUID, Bool) -> Void
+    let remoteSessionAttached: @MainActor @Sendable (UUID) -> Void
     let updateConnectionState: @MainActor @Sendable (UUID, ConnectionState) -> Void
     let markEternalTerminalTransport: @MainActor @Sendable (UUID) -> Void
     let handleShellEnd: @MainActor @Sendable (UUID, UUID, TerminalShellEndReason) -> Void
@@ -575,7 +576,7 @@ final class EternalTerminalRuntime {
         standaloneStartupActionPendingCompletion = plan.mayExecuteStandaloneUserStartupAction
         ownerAccess.setStandaloneStartupActionPendingCompletion(
             paneId,
-            standaloneStartupActionPendingCompletion
+            plan.mayExecuteUserStartupAction
         )
         let resumeContext = plan.remoteSessionLifecycle
         remoteSessionLifecycle = resumeContext
@@ -600,6 +601,9 @@ final class EternalTerminalRuntime {
         remoteSessionLifecycleParser = parser
         if !result.output.isEmpty {
             outputSink?.receiveTerminalOutput(result.output)
+        }
+        if result.events.contains(.attached) {
+            ownerAccess.remoteSessionAttached(paneId)
         }
         guard let event = result.events.last,
               event != .attached,

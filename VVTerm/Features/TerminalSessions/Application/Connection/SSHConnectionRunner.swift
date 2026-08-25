@@ -66,6 +66,7 @@ nonisolated enum SSHConnectionRunner {
         setStartupActionReplayGuard: @MainActor @escaping @Sendable (
             _ isPending: Bool
         ) -> Void = { _ in },
+        onRemoteSessionAttached: @MainActor @escaping @Sendable () -> Void = {},
         restoreMoshShell: @MainActor @escaping @Sendable (
             _ cols: Int,
             _ rows: Int
@@ -186,6 +187,9 @@ nonisolated enum SSHConnectionRunner {
                         visibleData = parsed.output
                         if let event = parsed.events.last {
                             lastLifecycleEvent = event
+                        }
+                        if parsed.events.contains(.attached) {
+                            await onRemoteSessionAttached()
                         }
                     } else {
                         visibleData = data

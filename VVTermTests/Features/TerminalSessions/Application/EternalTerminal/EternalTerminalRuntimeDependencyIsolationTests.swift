@@ -222,6 +222,46 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
     }
 
     @Test
+    func managedActionSetsReplayGuardBeforeSending() async throws {
+        let lifecycle = try RemoteSessionLifecycleContext(
+            attachment: RemoteSessionAttachment(
+                identifier: try RemoteSessionIdentifier(
+                    backendIdentifier: .tmux,
+                    validating: "vvterm-managed"
+                ),
+                ownership: .managed
+            ),
+            legacyTmuxMarkerToken: "marker-token"
+        )
+        let session = TestEternalTerminalSession(
+            startupPlan: TerminalShellStartupPlan(
+                command: "create-managed-session",
+                remoteSessionLifecycle: lifecycle,
+                mayExecuteUserStartupAction: true
+            )
+        )
+        var replayGuardStates: [Bool] = []
+        let runtime = makeRuntime(
+            dependencies: EternalTerminalRuntimeDependencies(
+                recordEvent: { _ in },
+                remoteSessionKiller: EternalTerminalRemoteSessionKillRecorder(),
+                sessionPreparer: SequencedEternalTerminalSessionPreparer(
+                    sessions: [session]
+                )
+            ),
+            setStartupActionReplayGuard: { _, isPending in
+                replayGuardStates.append(isPending)
+            }
+        )
+
+        runtime.resize(cols: 80, rows: 24, pixelSize: nil)
+        runtime.startIfNeeded()
+        #expect(await session.waitUntilCommandIsSent())
+        #expect(replayGuardStates == [true])
+        await runtime.close()
+    }
+
+    @Test
     func resumedStandaloneActionKeepsItsOneTimeCompletionState() async {
         let session = TestEternalTerminalSession()
         var endReasons: [TerminalShellEndReason] = []
@@ -349,6 +389,10 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
     private func makeRuntime(
         dependencies: EternalTerminalRuntimeDependencies,
         resumedStandaloneAction: Bool = false,
+        setStartupActionReplayGuard: @MainActor @Sendable @escaping (
+            UUID,
+            Bool
+        ) -> Void = { _, _ in },
         handleShellEnd: @MainActor @Sendable @escaping (
             UUID,
             UUID,
@@ -373,7 +417,8 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
                 standaloneStartupActionPendingCompletion: { _ in
                     resumedStandaloneAction
                 },
-                setStandaloneStartupActionPendingCompletion: { _, _ in },
+                setStandaloneStartupActionPendingCompletion: setStartupActionReplayGuard,
+                remoteSessionAttached: { _ in },
                 updateConnectionState: { _, _ in },
                 markEternalTerminalTransport: { _ in },
                 handleShellEnd: handleShellEnd,

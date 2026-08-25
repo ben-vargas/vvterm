@@ -136,12 +136,15 @@ final class TerminalPaneSSHCoordinator {
             startupPlan: context.startupPlan,
             setStartupActionReplayGuard: context
                 .setStandaloneStartupActionPendingCompletion,
+            onRemoteSessionAttached: context.remoteSessionAttached,
             restoreMoshShell: context.restoreMoshShell,
             registerShell: { shell, startupPlan in
                 guard await context.registerShell(shell) else { return false }
-                context.setStandaloneStartupActionPendingCompletion(
-                    startupPlan.mayExecuteStandaloneUserStartupAction
-                )
+                if startupPlan.remoteSessionLifecycle == nil {
+                    context.setStandaloneStartupActionPendingCompletion(
+                        startupPlan.mayExecuteStandaloneUserStartupAction
+                    )
+                }
                 context.updateConnectionState(.connected)
                 if shell.origin == .fresh,
                    startupPlan.allowsPostLaunchWorkingDirectoryRestore,

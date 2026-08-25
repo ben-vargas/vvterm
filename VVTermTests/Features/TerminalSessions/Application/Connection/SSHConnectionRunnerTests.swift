@@ -328,6 +328,56 @@ struct SSHConnectionRunnerTests {
     }
 
     @Test
+    func managedActionReplayGuardClearsAfterAttachment() async throws {
+        let fixture = makeFixture()
+        let recorder = SSHConnectionRunnerTestRecorder()
+        let pendingStateRecorder = SSHConnectionRunnerPendingStateRecorder()
+        let envelope = RemoteSessionLifecycleEnvelope.make()
+        let lifecycle = RemoteSessionLifecycleContext(
+            attachment: RemoteSessionAttachment(
+                identifier: try RemoteSessionIdentifier(
+                    backendIdentifier: .tmux,
+                    validating: "vvterm-managed"
+                ),
+                ownership: .managed
+            ),
+            envelope: envelope,
+            presenceProbe: RemoteSessionPresenceProbe(
+                command: "true",
+                existsMarker: "exists",
+                missingMarker: "missing"
+            )
+        )
+        #expect(await fixture.channel.send(Data(
+            RemoteSessionLifecycleMarker.sequence(envelope: envelope, event: .attached).utf8
+        )))
+        await fixture.channel.finish()
+
+        await run(
+            fixture: fixture,
+            transport: makeTransport(
+                shell: fixture.shell,
+                recorder: recorder,
+                startShell: { _, _ in }
+            ),
+            startupPlan: {
+                TerminalShellStartupPlan(
+                    command: "create-managed-session",
+                    remoteSessionLifecycle: lifecycle,
+                    mayExecuteUserStartupAction: true
+                )
+            },
+            setStartupActionReplayGuard: pendingStateRecorder.record,
+            onRemoteSessionAttached: {
+                pendingStateRecorder.record(false)
+            },
+            registerShell: { _, _ in true }
+        )
+
+        #expect(pendingStateRecorder.states == [true, false])
+    }
+
+    @Test
     func completedStandaloneActionDoesNotRestoreDirectoryOrReconnect() async {
         let fixture = makeFixture()
         await fixture.channel.finish()
@@ -555,6 +605,7 @@ struct SSHConnectionRunnerTests {
         setStartupActionReplayGuard: @MainActor @escaping @Sendable (
             Bool
         ) -> Void = { _ in },
+        onRemoteSessionAttached: @MainActor @escaping @Sendable () -> Void = {},
         registerShell: @MainActor @escaping @Sendable (
             ShellHandle,
             TerminalShellStartupPlan
@@ -574,6 +625,7 @@ struct SSHConnectionRunnerTests {
             onAttempt: { _ in },
             startupPlan: startupPlan,
             setStartupActionReplayGuard: setStartupActionReplayGuard,
+            onRemoteSessionAttached: onRemoteSessionAttached,
             restoreMoshShell: { _, _ in nil },
             registerShell: registerShell,
             onTitleChange: { _ in },

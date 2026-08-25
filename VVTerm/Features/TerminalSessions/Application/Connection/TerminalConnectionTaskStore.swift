@@ -64,6 +64,7 @@ struct TerminalSSHConnectionContext {
     ) async -> SSHConnectionRestoredShell?
     let registerShell: @MainActor @Sendable (ShellHandle) async -> Bool
     let setStandaloneStartupActionPendingCompletion: @MainActor @Sendable (Bool) -> Void
+    let remoteSessionAttached: @MainActor @Sendable () -> Void
     let persistMoshCheckpoint: @MainActor @Sendable (_ shellId: UUID) async -> Void
     let updateTitle: @MainActor @Sendable (String) -> Void
     let hasOtherRegistrations: @MainActor @Sendable () async -> Bool

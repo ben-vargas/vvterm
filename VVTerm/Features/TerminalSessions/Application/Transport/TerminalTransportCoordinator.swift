@@ -643,6 +643,13 @@ final class TerminalTransportCoordinator {
                     isPending
                 ))
             },
+            remoteSessionAttached: { [weak remoteSessionCoordinator] paneId in
+                remoteSessionCoordinator?.confirmManagedSession(for: paneId)
+                sessionAccess.send(.standaloneStartupActionPendingCompletion(
+                    paneId,
+                    false
+                ))
+            },
             updateConnectionState: { paneId, state in
                 sessionAccess.send(.connectionState(paneId, state))
             },
@@ -923,6 +930,14 @@ final class TerminalTransportCoordinator {
                 sessionAccess.send(.standaloneStartupActionPendingCompletion(
                     paneId,
                     isPending
+                ))
+            },
+            remoteSessionAttached: { [weak remoteSessionCoordinator] in
+                guard ownsConnection() else { return }
+                remoteSessionCoordinator?.confirmManagedSession(for: paneId)
+                sessionAccess.send(.standaloneStartupActionPendingCompletion(
+                    paneId,
+                    false
                 ))
             },
             persistMoshCheckpoint: { shellId in
