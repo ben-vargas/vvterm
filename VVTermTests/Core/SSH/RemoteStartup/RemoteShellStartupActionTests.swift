@@ -39,4 +39,30 @@ struct RemoteShellStartupActionTests {
             )
         }
     }
+
+    @Test
+    func maximumCommandFitsTheWindowsPowerShellCommandLine() throws {
+        let action = try RemoteShellStartupAction(
+            command: String(
+                repeating: "x",
+                count: RemoteShellStartupAction.maximumCommandByteCount
+            )
+        )
+        let environment = RemoteEnvironment(
+            platform: .windows,
+            shellProfile: .powershell(executableName: "powershell.exe"),
+            activeShellName: "powershell.exe",
+            powerShellExecutable: "powershell.exe"
+        )
+        let plan = RemoteTerminalBootstrap.launchPlan(
+            startupCommand: action.command,
+            environment: environment
+        )
+        guard case .exec(let command) = plan else {
+            Issue.record("Expected a PowerShell startup command")
+            return
+        }
+
+        #expect(command.utf16.count <= 32_767)
+    }
 }
