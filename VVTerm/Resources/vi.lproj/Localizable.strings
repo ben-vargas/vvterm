@@ -912,6 +912,9 @@
 "Always create or attach to a VVTerm-managed tmux session for this connection." = "Luôn tạo hoặc gắn vào phiên tmux do VVTerm quản lý cho kết nối này.";
 "Show a prompt on each new tab or split so you can choose a session." = "Hiển thị lời nhắc ở mỗi tab mới hoặc khi chia màn hình để bạn có thể chọn phiên.";
 "Start a normal shell without tmux session persistence." = "Bắt đầu shell bình thường mà không dùng cơ chế lưu phiên tmux.";
+"Use a normal shell" = "Dùng shell thông thường";
+"Start a normal shell without remote session persistence." = "Khởi động shell thông thường mà không duy trì phiên từ xa.";
+"Installing %@" = "Đang cài đặt %@";
 "Automatically attach to the last tmux session you selected." = "Tự động gắn vào phiên tmux gần nhất bạn đã chọn.";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "Phiên vẫn được giữ qua các lần khởi động lại ứng dụng và mất kết nối khi có tmux.";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "Chọn hành vi mặc định cho máy chủ mới. Bạn vẫn có thể ghi đè theo từng máy chủ trong cài đặt máy chủ.";

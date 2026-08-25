@@ -867,6 +867,9 @@
 "Always create or attach to a VVTerm-managed tmux session for this connection." = "この接続では、VVTerm が管理する tmux セッションを常に作成またはアタッチします。";
 "Show a prompt on each new tab or split so you can choose a session." = "新しいタブや分割を開くたびにプロンプトを表示し、セッションを選べるようにします。";
 "Start a normal shell without tmux session persistence." = "tmux のセッション保持を使わずに通常のシェルを開始します。";
+"Use a normal shell" = "通常のシェルを使用";
+"Start a normal shell without remote session persistence." = "リモートセッションを保持せずに通常のシェルを開始します。";
+"Installing %@" = "%@ をインストール中";
 "Automatically attach to the last tmux session you selected." = "最後に選択した tmux セッションに自動でアタッチします。";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "tmux が利用可能な場合、アプリ再起動や切断後もセッションは維持されます。";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "新しいサーバーの既定動作を選択します。サーバー設定でサーバーごとに上書きできます。";

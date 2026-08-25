@@ -867,6 +867,9 @@
 "Always create or attach to a VVTerm-managed tmux session for this connection." = "Crear o adjuntar siempre una sesión de tmux administrada por VVTerm para esta conexión.";
 "Show a prompt on each new tab or split so you can choose a session." = "Mostrar un aviso en cada pestaña nueva o división para que puedas elegir una sesión.";
 "Start a normal shell without tmux session persistence." = "Iniciar una shell normal sin persistencia de sesión de tmux.";
+"Use a normal shell" = "Usar una shell normal";
+"Start a normal shell without remote session persistence." = "Iniciar una shell normal sin persistencia de la sesión remota.";
+"Installing %@" = "Instalando %@";
 "Automatically attach to the last tmux session you selected." = "Adjuntarse automáticamente a la última sesión de tmux que seleccionaste.";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "Las sesiones se mantienen activas entre reinicios de la app y desconexiones cuando tmux está disponible.";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "Elige el comportamiento predeterminado para servidores nuevos. Puedes cambiarlo por servidor en la configuración del servidor.";

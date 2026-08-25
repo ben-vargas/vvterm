@@ -10,7 +10,10 @@ final class RemoteSessionPresentationTests: XCTestCase {
             "No %@ sessions found",
             "Create a new session, or continue without a remote session.",
             "Continue without a remote session",
-            "Open Installation Guide"
+            "Open Installation Guide",
+            "Use a normal shell",
+            "Start a normal shell without remote session persistence.",
+            "Installing %@"
         ]
 
         for localization in Bundle.main.localizations.sorted() where localization != "Base" {

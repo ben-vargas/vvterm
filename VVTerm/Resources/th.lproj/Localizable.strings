@@ -867,6 +867,9 @@
 "Always create or attach to a VVTerm-managed tmux session for this connection." = "สำหรับการเชื่อมต่อนี้ ให้สร้างหรือเชื่อมต่อกับเซสชัน tmux ที่ VVTerm จัดการเสมอ";
 "Show a prompt on each new tab or split so you can choose a session." = "แสดงพรอมต์ทุกครั้งที่เปิดแท็บใหม่หรือแบ่งหน้าจอ เพื่อให้คุณเลือกเซสชันได้";
 "Start a normal shell without tmux session persistence." = "เริ่มเชลล์ปกติโดยไม่ใช้การคงอยู่ของเซสชัน tmux";
+"Use a normal shell" = "ใช้เชลล์ปกติ";
+"Start a normal shell without remote session persistence." = "เริ่มเชลล์ปกติโดยไม่คงเซสชันระยะไกลไว้";
+"Installing %@" = "กำลังติดตั้ง %@";
 "Automatically attach to the last tmux session you selected." = "เชื่อมต่ออัตโนมัติกับเซสชัน tmux ล่าสุดที่คุณเลือก";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "เซสชันจะยังคงอยู่แม้แอปเริ่มใหม่หรือหลุดการเชื่อมต่อ เมื่อมี tmux ให้ใช้งาน";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "เลือกพฤติกรรมเริ่มต้นสำหรับเซิร์ฟเวอร์ใหม่ คุณยังสามารถกำหนดแยกต่อเซิร์ฟเวอร์ได้ในตั้งค่าเซิร์ฟเวอร์";
