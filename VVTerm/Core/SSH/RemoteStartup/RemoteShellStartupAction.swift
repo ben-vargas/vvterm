@@ -9,9 +9,9 @@ nonisolated struct RemoteShellStartupAction: Hashable, Sendable {
         case tooLong
     }
 
-    // Leave room for the psmux launch script, environment prefix, UTF-16LE
-    // encoding, and PowerShell arguments within Windows' process limit.
-    static let maximumCommandByteCount = 9_000
+    // psmux doubles each single quote before UTF-16LE and Base64 encoding.
+    // Keep room for that worst case, its launch script, and PowerShell arguments.
+    static let maximumCommandByteCount = 4_000
 
     let command: String
 

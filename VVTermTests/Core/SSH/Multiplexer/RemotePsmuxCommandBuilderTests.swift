@@ -3,11 +3,11 @@ import Testing
 @testable import VVTerm
 
 struct RemotePsmuxCommandBuilderTests {
-    @Test
-    func maximumStartupActionFitsTheCompletePowerShellInvocation() throws {
+    @Test(arguments: ["x", "'"])
+    func maximumStartupActionFitsTheCompletePowerShellInvocation(_ character: String) throws {
         let action = try RemoteShellStartupAction(
             command: String(
-                repeating: "x",
+                repeating: character,
                 count: RemoteShellStartupAction.maximumCommandByteCount
             )
         )
