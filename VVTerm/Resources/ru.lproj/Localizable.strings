@@ -870,6 +870,8 @@
 "Use a normal shell" = "Использовать обычную оболочку";
 "Start a normal shell without remote session persistence." = "Запустить обычную оболочку без сохранения удалённой сессии.";
 "Installing %@" = "Установка %@";
+"Install %@?" = "Установить %@?";
+"The remote session is still running on the server." = "Удалённая сессия всё ещё работает на сервере.";
 "Automatically attach to the last tmux session you selected." = "Автоматически подключаться к последней выбранной tmux-сессии.";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "Когда tmux доступен, сессии сохраняются между перезапусками приложения и отключениями.";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "Выберите поведение по умолчанию для новых серверов. Его можно переопределить для каждого сервера в настройках сервера.";

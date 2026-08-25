@@ -13,7 +13,9 @@ final class RemoteSessionPresentationTests: XCTestCase {
             "Open Installation Guide",
             "Use a normal shell",
             "Start a normal shell without remote session persistence.",
-            "Installing %@"
+            "Installing %@",
+            "Install %@?",
+            "The remote session is still running on the server."
         ]
 
         for localization in Bundle.main.localizations.sorted() where localization != "Base" {

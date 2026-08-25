@@ -870,6 +870,8 @@
 "Use a normal shell" = "일반 셸 사용";
 "Start a normal shell without remote session persistence." = "원격 세션 유지 없이 일반 셸을 시작합니다.";
 "Installing %@" = "%@ 설치 중";
+"Install %@?" = "%@ 설치를 진행하시겠습니까?";
+"The remote session is still running on the server." = "원격 세션이 여전히 서버에서 실행 중입니다.";
 "Automatically attach to the last tmux session you selected." = "마지막으로 선택한 tmux 세션에 자동으로 연결합니다.";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "tmux를 사용할 수 있는 경우, 앱 재시작 및 연결 해제 후에도 세션이 유지됩니다.";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "새 서버의 기본 동작을 선택합니다. 서버 설정에서 서버별로 재정의할 수 있습니다.";

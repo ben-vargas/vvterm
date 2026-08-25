@@ -872,6 +872,8 @@
 "Use a normal shell" = "Utiliser un shell normal";
 "Start a normal shell without remote session persistence." = "Démarrer un shell normal sans persistance de session distante.";
 "Installing %@" = "Installation de %@";
+"Install %@?" = "Installer %@ ?";
+"The remote session is still running on the server." = "La session distante est toujours en cours d'exécution sur le serveur.";
 "Automatically attach to the last tmux session you selected." = "Attacher automatiquement la dernière session tmux que vous avez sélectionnée.";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "Les sessions restent actives entre les redémarrages de l'application et les déconnexions lorsque tmux est disponible.";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "Choisissez le comportement par défaut pour les nouveaux serveurs. Vous pouvez toujours le remplacer serveur par serveur dans les réglages du serveur.";
