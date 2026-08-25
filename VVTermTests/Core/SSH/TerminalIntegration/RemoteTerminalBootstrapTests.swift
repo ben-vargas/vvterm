@@ -31,6 +31,13 @@ struct RemoteTerminalBootstrapTests {
         powerShellExecutable: "powershell"
     )
 
+    private let unknownEnvironment = RemoteEnvironment(
+        platform: .unknown,
+        shellProfile: .unknown(shellName: "mystery-shell"),
+        activeShellName: "mystery-shell",
+        powerShellExecutable: nil
+    )
+
     @Test
     func launchPlanWithoutStartupCommandUsesPOSIXLoginShellBootstrap() {
         let plan = RemoteTerminalBootstrap.launchPlan(startupCommand: nil, environment: posixEnvironment)
@@ -42,6 +49,8 @@ struct RemoteTerminalBootstrapTests {
             #expect(command.hasPrefix("/bin/sh -lc \""))
             #expect(command.contains("exec \\\"\\$SHELL\\\" -l"))
             #expect(command.contains("TERM_PROGRAM"))
+        case .unsupportedStartupCommand:
+            Issue.record("Expected POSIX login shell bootstrap")
         }
     }
 
@@ -54,6 +63,8 @@ struct RemoteTerminalBootstrapTests {
             #expect(Bool(true))
         case .exec:
             Issue.record("Expected plain shell launch for cmd.exe when no startup command is provided")
+        case .unsupportedStartupCommand:
+            Issue.record("Expected plain shell launch for cmd.exe")
         }
     }
 
@@ -68,7 +79,44 @@ struct RemoteTerminalBootstrapTests {
             #expect(command.hasPrefix("/bin/sh -lc \""))
             #expect(command.contains("echo hi"))
             #expect(command.contains("TERM_PROGRAM"))
+        case .unsupportedStartupCommand:
+            Issue.record("Expected POSIX exec plan")
         }
+    }
+
+    @Test
+    func posixStartupCommandUsesBinShEvenWhenDetectedShellIsZsh() {
+        let plan = RemoteTerminalBootstrap.launchPlan(
+            startupCommand: "setopt autocd",
+            environment: posixEnvironment
+        )
+
+        guard case .exec(let command) = plan else {
+            Issue.record("Expected a POSIX exec plan")
+            return
+        }
+        #expect(command.hasPrefix("/bin/sh -lc \""))
+        #expect(command.contains("setopt autocd"))
+    }
+
+    @Test
+    func unknownShellRejectsNonemptyStartupCommand() {
+        let plan = RemoteTerminalBootstrap.launchPlan(
+            startupCommand: "echo must-run",
+            environment: unknownEnvironment
+        )
+
+        #expect(plan == .unsupportedStartupCommand)
+    }
+
+    @Test
+    func unknownShellStillStartsNormallyWithoutACommand() {
+        let plan = RemoteTerminalBootstrap.launchPlan(
+            startupCommand: nil,
+            environment: unknownEnvironment
+        )
+
+        #expect(plan == .shell)
     }
 
     @Test
@@ -90,6 +138,8 @@ struct RemoteTerminalBootstrapTests {
             Issue.record("Expected exec launch when a PowerShell startup command is provided")
         case .exec(let command):
             #expect(command.hasPrefix("powershell -NoLogo -NoProfile -EncodedCommand "))
+        case .unsupportedStartupCommand:
+            Issue.record("Expected PowerShell exec plan")
         }
     }
 
@@ -102,6 +152,8 @@ struct RemoteTerminalBootstrapTests {
             Issue.record("Expected exec launch when a pwsh startup command is provided")
         case .exec(let command):
             #expect(command.hasPrefix("pwsh -NoLogo -NoProfile -EncodedCommand "))
+        case .unsupportedStartupCommand:
+            Issue.record("Expected pwsh exec plan")
         }
     }
 

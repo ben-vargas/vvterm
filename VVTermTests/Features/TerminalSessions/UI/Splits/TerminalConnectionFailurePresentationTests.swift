@@ -159,11 +159,19 @@ struct TerminalConnectionFailurePresentationTests {
         let approval = TerminalConnectionFailure.transport(
             SSHError.hostKeyApprovalRequired
         )
+        let unsupportedStartupShell = TerminalConnectionFailure.transport(
+            SSHError.unsupportedRemoteShellForStartupCommand
+        )
 
         #expect(timeout.allowsAutomaticReconnectRetry)
         #expect(timeout.requiredAction == nil)
         #expect(!approval.allowsAutomaticReconnectRetry)
         #expect(approval.requiredAction == .approveHostKey)
+        #expect(!unsupportedStartupShell.allowsAutomaticReconnectRetry)
+        #expect(
+            TerminalConnectionFailurePresentation.message(for: unsupportedStartupShell)
+                == SSHError.unsupportedRemoteShellForStartupCommand.localizedDescription
+        )
         #expect(
             TerminalConnectionFailurePresentation.message(for: approval)
                 == SSHError.hostKeyApprovalRequired.localizedDescription

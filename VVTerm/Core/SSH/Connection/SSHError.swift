@@ -19,6 +19,7 @@ enum SSHError: LocalizedError {
     case timeout
     case channelOpenFailed
     case shellRequestFailed
+    case unsupportedRemoteShellForStartupCommand
     case outputLimitExceeded
     case hostKeyApprovalRequired
     case hostKeyVerificationFailed
@@ -50,6 +51,7 @@ enum SSHError: LocalizedError {
              .hostKeyApprovalRequired,
              .hostKeyVerificationFailed,
              .outputLimitExceeded,
+             .unsupportedRemoteShellForStartupCommand,
              .unknown:
             return false
         }
@@ -87,6 +89,8 @@ enum SSHError: LocalizedError {
         case .timeout: return String(localized: "Connection timed out")
         case .channelOpenFailed: return "Failed to open channel"
         case .shellRequestFailed: return "Failed to request shell"
+        case .unsupportedRemoteShellForStartupCommand:
+            return String(localized: "VVTerm cannot run the startup command because it could not detect a supported remote shell.")
         case .outputLimitExceeded:
             return String(localized: "The remote command produced too much output.")
         case .hostKeyApprovalRequired:

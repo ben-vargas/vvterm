@@ -58,7 +58,7 @@ nonisolated struct RemoteShellProfile: Hashable, Sendable {
             guard !trimmed.isEmpty else {
                 return .shell
             }
-            return .shell
+            return .unsupportedStartupCommand
         }
     }
 

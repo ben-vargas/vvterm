@@ -1,6 +1,7 @@
 import Foundation
 
-/// A user-provided command that runs in the detected remote shell.
+/// A user-provided command. Unix hosts run it with `/bin/sh`; Windows hosts use
+/// the detected PowerShell or cmd.exe shell.
 nonisolated struct RemoteShellStartupAction: Hashable, Sendable {
     enum ValidationError: Error, Equatable, Sendable {
         case empty

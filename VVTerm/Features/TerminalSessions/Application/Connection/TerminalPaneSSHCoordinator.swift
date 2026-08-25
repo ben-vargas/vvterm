@@ -160,7 +160,7 @@ final class TerminalPaneSSHCoordinator {
                 case .channelOpenFailed, .shellRequestFailed:
                     let hasOtherRegistrations = await context.hasOtherRegistrations()
                     return !hasOtherRegistrations
-                case .authenticationFailed, .tailscaleAuthenticationNotAccepted, .cloudflareConfigurationRequired, .cloudflareAuthenticationFailed, .cloudflareTunnelFailed, .hostKeyApprovalRequired, .hostKeyVerificationFailed, .moshServerMissing, .moshServerRuntimeBroken, .moshBootstrapFailed, .moshSessionFailed, .moshInvalidEndpoint, .moshUDPTimeout, .moshClientSessionFailed, .moshStartupCommandMayHaveRun, .outputLimitExceeded, .unknown:
+                case .authenticationFailed, .tailscaleAuthenticationNotAccepted, .cloudflareConfigurationRequired, .cloudflareAuthenticationFailed, .cloudflareTunnelFailed, .hostKeyApprovalRequired, .hostKeyVerificationFailed, .moshServerMissing, .moshServerRuntimeBroken, .moshBootstrapFailed, .moshSessionFailed, .moshInvalidEndpoint, .moshUDPTimeout, .moshClientSessionFailed, .moshStartupCommandMayHaveRun, .unsupportedRemoteShellForStartupCommand, .outputLimitExceeded, .unknown:
                     return false
                 }
             },

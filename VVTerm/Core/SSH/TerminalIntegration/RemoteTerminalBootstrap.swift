@@ -49,6 +49,7 @@ nonisolated enum RemoteTerminalType: String, Hashable, Sendable {
 nonisolated enum RemoteShellLaunchPlan: Hashable, Sendable {
     case shell
     case exec(String)
+    case unsupportedStartupCommand
 }
 
 nonisolated enum RemoteWorkingDirectoryRestoreFailure: String, LocalizedError, Sendable {

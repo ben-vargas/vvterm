@@ -135,6 +135,8 @@ extension SSHSession {
                             )
                         }
                     }
+                case .unsupportedStartupCommand:
+                    throw SSHError.unsupportedRemoteShellForStartupCommand
                 }
             } catch {
                 if let shellToken {
