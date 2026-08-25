@@ -4,13 +4,12 @@ struct RemoteSessionBackendLabel: View {
     let backend: RemoteSessionBackendMetadata
 
     var body: some View {
-        HStack(spacing: 0) {
+        Label {
+            Text(backend.displayName)
+        } icon: {
             icon
                 .frame(width: 20, height: 20)
                 .clipped()
-                .frame(width: 32, height: 20, alignment: .leading)
-
-            Text(backend.displayName)
         }
     }
 
