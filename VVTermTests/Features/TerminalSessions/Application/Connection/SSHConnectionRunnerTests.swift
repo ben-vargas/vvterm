@@ -13,7 +13,7 @@ private actor SSHConnectionRunnerTestGate {
     }
 
     func waitUntilSuspended() async -> Bool {
-        for _ in 0..<2_000 {
+        for _ in 0..<100_000 {
             if continuation != nil { return true }
             await Task.yield()
         }
@@ -57,6 +57,15 @@ private actor SSHConnectionRunnerTestRecorder {
 
     func recordedStartSizes() -> [[Int]] {
         startSizes.map { [$0.columns, $0.rows] }
+    }
+}
+
+@MainActor
+private final class SSHConnectionRunnerPendingStateRecorder {
+    private(set) var states: [Bool] = []
+
+    func record(_ isPending: Bool) {
+        states.append(isPending)
     }
 }
 
@@ -252,6 +261,54 @@ struct SSHConnectionRunnerTests {
             Issue.record("Expected the unsupported-shell startup error")
             return
         }
+    }
+
+    @Test
+    func cancellationDuringStandaloneActionKeepsReplayGuard() async {
+        let fixture = makeFixture()
+        let gate = SSHConnectionRunnerTestGate()
+        let recorder = SSHConnectionRunnerTestRecorder()
+        let pendingStateRecorder = SSHConnectionRunnerPendingStateRecorder()
+        let startupCommand = "notify-deployment"
+        let transport = SSHConnectionRunnerTransport(
+            connect: { _, _ in },
+            startShell: { columns, rows, _, command, _ in
+                #expect(command == startupCommand)
+                await recorder.recordStart(columns: columns, rows: rows)
+                await gate.suspend()
+                try Task.checkCancellation()
+                return fixture.shell
+            },
+            disconnect: {},
+            closeShell: { _ in },
+            execute: { _, _ in "" }
+        )
+
+        let task = Task {
+            await run(
+                fixture: fixture,
+                transport: transport,
+                startupPlan: {
+                    TerminalShellStartupPlan(
+                        command: startupCommand,
+                        remoteSessionLifecycle: nil,
+                        mayExecuteUserStartupAction: true
+                    )
+                },
+                setStandaloneStartupActionPendingCompletion: { isPending in
+                    pendingStateRecorder.record(isPending)
+                },
+                registerShell: { _, _ in true }
+            )
+        }
+
+        #expect(await gate.waitUntilSuspended())
+        task.cancel()
+        await gate.resume()
+        await task.value
+
+        #expect(await recorder.recordedStartSizes() == [[132, 43]])
+        #expect(pendingStateRecorder.states == [true])
     }
 
     @Test
@@ -477,6 +534,11 @@ struct SSHConnectionRunnerTests {
     private func run(
         fixture: Fixture,
         transport: SSHConnectionRunnerTransport,
+        startupPlan: @MainActor @escaping @Sendable () async throws
+            -> TerminalShellStartupPlan = { .plainShell },
+        setStandaloneStartupActionPendingCompletion: @MainActor @escaping @Sendable (
+            Bool
+        ) -> Void = { _ in },
         registerShell: @MainActor @escaping @Sendable (
             ShellHandle,
             TerminalShellStartupPlan
@@ -494,7 +556,9 @@ struct SSHConnectionRunnerTests {
             logger: Logger(subsystem: "SSHConnectionRunnerTests", category: "Runner"),
             shouldContinueConnection: { true },
             onAttempt: { _ in },
-            startupPlan: { .plainShell },
+            startupPlan: startupPlan,
+            setStandaloneStartupActionPendingCompletion:
+                setStandaloneStartupActionPendingCompletion,
             restoreMoshShell: { _, _ in nil },
             registerShell: registerShell,
             onTitleChange: { _ in },

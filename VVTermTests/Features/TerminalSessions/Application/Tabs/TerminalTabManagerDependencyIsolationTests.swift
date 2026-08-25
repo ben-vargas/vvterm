@@ -395,6 +395,45 @@ struct TerminalTabManagerDependencyIsolationTests {
     }
 
     @Test
+    func pendingStandaloneStartupActionIsNotPlannedAgain() async throws {
+        let remoteSessions = RecordingTerminalRemoteTmuxService()
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: TerminalEffectRecorder(),
+            remoteSessions: remoteSessions,
+            remoteMosh: RecordingTerminalRemoteMoshService(),
+            startupAction: try RemoteShellStartupAction(command: "notify-deployment"),
+            deviceID: "pending-custom-startup-device"
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Pending custom startup")
+        install(tab, in: manager)
+        manager.sessionState.updatePane(tab.rootPaneId) {
+            $0.standaloneStartupActionPendingCompletion = true
+        }
+        let client = SSHClient.testing()
+        let startToken = try #require(
+            manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
+        )
+
+        let plan = try await manager.remoteSessionCoordinator.startupPlan(
+            for: tab.rootPaneId,
+            serverID: tab.serverId,
+            client: client,
+            startToken: startToken
+        )
+
+        #expect(plan.command == nil)
+        #expect(!plan.mayExecuteUserStartupAction)
+        #expect(await remoteSessions.availabilityProbeCount() == 0)
+        manager.transportCoordinator.finishShellStart(
+            for: tab.rootPaneId,
+            client: client,
+            startToken: startToken
+        )
+        await manager.resetForTesting()
+    }
+
+    @Test
     func persistentStartupCommandDoesNotRunWhenSessionCannotBeCreated() async throws {
         let remoteSessions = RecordingTerminalRemoteTmuxService()
         let manager = makeManager(

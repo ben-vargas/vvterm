@@ -134,6 +134,8 @@ final class TerminalPaneSSHCoordinator {
                 )
             },
             startupPlan: context.startupPlan,
+            setStandaloneStartupActionPendingCompletion: context
+                .setStandaloneStartupActionPendingCompletion,
             restoreMoshShell: context.restoreMoshShell,
             registerShell: { shell, startupPlan in
                 guard await context.registerShell(shell) else { return false }

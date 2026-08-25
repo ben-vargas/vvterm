@@ -63,6 +63,9 @@ nonisolated enum SSHConnectionRunner {
         shouldContinueConnection: @MainActor @escaping @Sendable () -> Bool,
         onAttempt: @MainActor @escaping @Sendable (_ attempt: Int) -> Void,
         startupPlan: @MainActor @escaping @Sendable () async throws -> TerminalShellStartupPlan,
+        setStandaloneStartupActionPendingCompletion: @MainActor @escaping @Sendable (
+            _ isPending: Bool
+        ) -> Void = { _ in },
         restoreMoshShell: @MainActor @escaping @Sendable (
             _ cols: Int,
             _ rows: Int
@@ -121,6 +124,9 @@ nonisolated enum SSHConnectionRunner {
                     let freshStartup = try await startupPlan()
                     guard !Task.isCancelled else { return }
                     guard await shouldContinueConnection() else { return }
+                    if freshStartup.mayExecuteStandaloneUserStartupAction {
+                        await setStandaloneStartupActionPendingCompletion(true)
+                    }
                     do {
                         shell = try await transport.startShell(
                             cols,
@@ -139,6 +145,9 @@ nonisolated enum SSHConnectionRunner {
                                  .disconnectedBeforeShellRequest,
                                  .shellRequestFailed,
                                  .unsupportedRemoteShellForStartupCommand:
+                                if freshStartup.mayExecuteStandaloneUserStartupAction {
+                                    await setStandaloneStartupActionPendingCompletion(false)
+                                }
                                 throw sshError
                             default:
                                 break
