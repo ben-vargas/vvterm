@@ -113,12 +113,22 @@ nonisolated enum SSHConnectionRunner {
                     let freshStartup = try await startupPlan()
                     guard !Task.isCancelled else { return }
                     guard await shouldContinueConnection() else { return }
-                    shell = try await transport.startShell(
-                        cols,
-                        rows,
-                        pixelSize,
-                        freshStartup.command
-                    )
+                    do {
+                        shell = try await transport.startShell(
+                            cols,
+                            rows,
+                            pixelSize,
+                            freshStartup.command
+                        )
+                    } catch {
+                        if error is CancellationError || Task.isCancelled {
+                            throw CancellationError()
+                        }
+                        guard freshStartup.hasStandaloneStartupCommand else {
+                            throw error
+                        }
+                        throw SSHError.startupCommandMayHaveRun(error.localizedDescription)
+                    }
                     startup = freshStartup
                 }
 

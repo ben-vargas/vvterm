@@ -62,6 +62,7 @@ struct TerminalConnectionStatusPresentationTests {
         #expect(!SSHError.hostKeyVerificationFailed.allowsAutomaticReconnectRetry)
         #expect(!SSHError.hostKeyApprovalRequired.allowsAutomaticReconnectRetry)
         #expect(!SSHError.moshServerMissing.allowsAutomaticReconnectRetry)
+        #expect(!SSHError.startupCommandMayHaveRun("connection lost").allowsAutomaticReconnectRetry)
     }
 
     @Test

@@ -64,7 +64,7 @@ private actor SSHConnectionRunnerTestRecorder {
 @MainActor
 struct SSHConnectionRunnerTests {
     @Test
-    func possibleStartupCommandExecutionStopsConnectionAttempts() async {
+    func plainStartupActionFailureStopsConnectionAttempts() async {
         let fixture = makeFixture()
         let recorder = SSHConnectionRunnerTestRecorder()
         let startupCommand = "notify-deployment"
@@ -75,7 +75,7 @@ struct SSHConnectionRunnerTests {
             startShell: { columns, rows, _, command in
                 #expect(command == startupCommand)
                 await recorder.recordStart(columns: columns, rows: rows)
-                throw SSHError.moshStartupCommandMayHaveRun("UDP startup failed")
+                throw SSHError.notConnected
             },
             disconnect: {},
             closeShell: { _ in },
@@ -113,7 +113,7 @@ struct SSHConnectionRunnerTests {
 
         #expect(attempts == [1])
         #expect(await recorder.recordedStartSizes() == [[132, 43]])
-        guard case .moshStartupCommandMayHaveRun = reportedFailure else {
+        guard case .startupCommandMayHaveRun = reportedFailure else {
             Issue.record("Expected the possible command execution failure")
             return
         }

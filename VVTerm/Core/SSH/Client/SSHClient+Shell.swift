@@ -96,7 +96,7 @@ extension SSHClient {
                 logger.error(
                     "Mosh startup failed after the startup command may have run. SSH fallback is disabled to prevent replay."
                 )
-                throw SSHError.moshStartupCommandMayHaveRun(moshError.localizedDescription)
+                throw SSHError.startupCommandMayHaveRun(moshError.localizedDescription)
             }
             logger.warning("Mosh startup failed, using SSH fallback: \(moshError.localizedDescription)")
 

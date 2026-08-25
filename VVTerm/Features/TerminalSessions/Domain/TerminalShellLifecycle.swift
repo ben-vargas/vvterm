@@ -71,6 +71,11 @@ nonisolated struct TerminalShellStartupPlan: Sendable {
     let command: String?
     let remoteSessionLifecycle: RemoteSessionLifecycleContext?
 
+    var hasStandaloneStartupCommand: Bool {
+        guard remoteSessionLifecycle == nil else { return false }
+        return !(command?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
     nonisolated static let plainShell = TerminalShellStartupPlan(
         command: nil,
         remoteSessionLifecycle: nil
