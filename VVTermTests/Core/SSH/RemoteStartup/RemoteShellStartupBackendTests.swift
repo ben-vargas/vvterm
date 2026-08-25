@@ -10,11 +10,11 @@ struct RemoteShellStartupBackendTests {
         let backend = TmuxRemoteSessionBackend(tmux: RemoteTmuxManager())
 
         let create = try backend.launchPlan(
-            for: request(mode: .attachOrCreate, initialCommand: command),
+            for: ensureManagedRequest(initialCommand: command),
             runtime: runtime
         ).command
         let reattach = try backend.launchPlan(
-            for: request(mode: .attachExisting, initialCommand: command),
+            for: managedAttachmentRequest(),
             runtime: runtime
         ).command
 
@@ -30,11 +30,11 @@ struct RemoteShellStartupBackendTests {
         let backend = TmuxRemoteSessionBackend(tmux: RemoteTmuxManager())
 
         let create = try backend.launchPlan(
-            for: request(mode: .attachOrCreate, initialCommand: command),
+            for: ensureManagedRequest(initialCommand: command),
             runtime: try tmuxRuntime(shellFamily: .powershell)
         ).command
         let reattach = try backend.launchPlan(
-            for: request(mode: .attachExisting, initialCommand: command),
+            for: managedAttachmentRequest(),
             runtime: try tmuxRuntime(shellFamily: .powershell)
         ).command
 
@@ -48,19 +48,14 @@ struct RemoteShellStartupBackendTests {
         let runtime = try zmxRuntime()
 
         let create = try ZmxRemoteSessionCommandBuilder.launchCommand(
-            request: request(
+            request: ensureManagedRequest(
                 backendIdentifier: .zmx,
-                mode: .attachOrCreate,
                 initialCommand: command
             ),
             runtime: runtime
         )
         let reattach = try ZmxRemoteSessionCommandBuilder.launchCommand(
-            request: request(
-                backendIdentifier: .zmx,
-                mode: .attachExisting,
-                initialCommand: command
-            ),
+            request: managedAttachmentRequest(backendIdentifier: .zmx),
             runtime: runtime
         )
 
@@ -70,22 +65,64 @@ struct RemoteShellStartupBackendTests {
         #expect(!reattach.contains("$(date)"))
     }
 
-    private func request(
+    @Test
+    func managedStartupActionsReportAttachment() throws {
+        let attached = RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .attached
+        )
+        let tmux = try TmuxRemoteSessionBackend(tmux: RemoteTmuxManager()).launchPlan(
+            for: ensureManagedRequest(initialCommand: "printf ready"),
+            runtime: try tmuxRuntime(shellFamily: .posix)
+        ).command
+        let psmux = try TmuxRemoteSessionBackend(tmux: RemoteTmuxManager()).launchPlan(
+            for: ensureManagedRequest(initialCommand: "Write-Output ready"),
+            runtime: try tmuxRuntime(shellFamily: .powershell)
+        ).command
+        let zmx = try ZmxRemoteSessionCommandBuilder.launchCommand(
+            request: ensureManagedRequest(
+                backendIdentifier: .zmx,
+                initialCommand: "printf ready"
+            ),
+            runtime: try zmxRuntime()
+        )
+
+        #expect(tmux.contains(attached))
+        #expect(psmux.contains(attached))
+        #expect(zmx.contains(attached))
+    }
+
+    private func ensureManagedRequest(
         backendIdentifier: RemoteSessionBackendIdentifier = .tmux,
-        mode: RemoteSessionLaunchMode,
         initialCommand: String?
     ) throws -> RemoteSessionLaunchRequest {
         RemoteSessionLaunchRequest(
-            attachment: RemoteSessionAttachment(
+            intent: .ensureManaged(
+                identifier: try RemoteSessionIdentifier(
+                    backendIdentifier: backendIdentifier,
+                    validating: "managed"
+                ),
+                initialCommand: initialCommand
+            ),
+            workingDirectory: "/srv/default",
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
+            transport: .ssh,
+            themeStyle: deterministicRemoteSessionThemeStyle
+        )
+    }
+
+    private func managedAttachmentRequest(
+        backendIdentifier: RemoteSessionBackendIdentifier = .tmux
+    ) throws -> RemoteSessionLaunchRequest {
+        RemoteSessionLaunchRequest(
+            intent: .attach(RemoteSessionAttachment(
                 identifier: try RemoteSessionIdentifier(
                     backendIdentifier: backendIdentifier,
                     validating: "managed"
                 ),
                 ownership: .managed
-            ),
-            mode: mode,
+            )),
             workingDirectory: "/srv/default",
-            initialCommand: initialCommand,
             lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
             transport: .ssh,
             themeStyle: deterministicRemoteSessionThemeStyle

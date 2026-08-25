@@ -75,12 +75,14 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
             workingDirectory: workingDirectory,
             runtime: runtime
         )
+        let attached = quotedMarker(request.lifecycleEnvelope, .attached)
         let detached = quotedMarker(request.lifecycleEnvelope, .detached)
         let terminated = quotedMarker(request.lifecycleEnvelope, .terminated)
         let creationFailed = quotedMarker(request.lifecycleEnvelope, .creationFailed)
         let attachFailed = quotedMarker(request.lifecycleEnvelope, .attachFailed)
 
         let runAttachExisting = """
+        printf '%s' \(attached)
         \(attachExisting)
         vvtermZmxStatus=$?
         if [ "$vvtermZmxStatus" -ne 0 ]; then
@@ -119,6 +121,7 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
             )
             let managedStartupScript = """
             \(RemoteTerminalBootstrap.shellQuoted(runtime.probe.executable.path)) set . \(RemoteTerminalBootstrap.shellQuoted(managedOwnershipLabel)) >/dev/null 2>&1 || exit 1
+            printf '%s' \(attached)
             \(initialCommand ?? RemoteTerminalBootstrap.defaultLoginShellCommand())
             """
             let createManaged = "\(createBase) \(RemoteTerminalBootstrap.wrapPOSIXShellCommand(managedStartupScript))"

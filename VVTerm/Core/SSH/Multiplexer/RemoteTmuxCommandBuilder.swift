@@ -265,6 +265,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
             ? " && \(tmuxProbe) show-options -v -q -t \(plainSessionOptionTarget) @vvterm-managed 2>/dev/null | grep -Fqx '1'"
             : ""
         let collision = "false\(creationStatusCapture)"
+        let attachedReport = posixAttachedReport(lifecycleEnvelope)
 
         let lifecycleReport: String
         if let lifecycleEnvelope {
@@ -296,9 +297,9 @@ nonisolated enum RemoteTmuxCommandBuilder {
         return """
         \(RemoteTerminalBootstrap.shellPathExport()); \
         if \(tmuxProbe) has-session -t \(exactSession) 2>/dev/null\(exactManagedCheck); then \
-        \(managedConfiguration)\(exactAttach); \
+        \(managedConfiguration)\(attachedReport)\(exactAttach); \
         elif \(tmuxProbe) has-session -t \(plainSession) 2>/dev/null\(plainManagedCheck); then \
-        \(managedConfiguration)\(plainAttach); \
+        \(managedConfiguration)\(attachedReport)\(plainAttach); \
         elif \(requiresManagedMarker ? "\(tmuxProbe) has-session -t \(exactSession) 2>/dev/null || \(tmuxProbe) has-session -t \(plainSession) 2>/dev/null" : "false"); then \
         \(collision); \
         else \(missingCommand)\(creationStatusCapture); fi\(lifecycleReport)
@@ -351,12 +352,13 @@ nonisolated enum RemoteTmuxCommandBuilder {
         let removeBootstrap = "\(tmux) kill-window -t \(bootstrapWindowTarget)"
         let renumberWindows = "\(tmux) move-window -r -t \(sessionWindowTarget)"
         let removeFailedSession = "\(tmux) kill-session -t \(exactSession) 2>/dev/null"
-        let attach = tmuxAttachCommand(
+        let attachCommand = tmuxAttachCommand(
             target: escapedSession,
             backend: backend,
             replacesProcess: lifecycleEnvelope == nil,
             advertisesManagedFeatures: true
         )
+        let attach = "\(posixAttachedReport(lifecycleEnvelope))\(attachCommand)"
         return """
         if \(createBootstrap) 2>/dev/null; then \
         if \(sessionConfiguration) && \
@@ -479,6 +481,14 @@ nonisolated enum RemoteTmuxCommandBuilder {
 
         let features = "-T RGB,hyperlinks"
         return "if \(tmux) \(features) -V >/dev/null 2>&1; then \(processReplacement)\(tmux) \(features) attach-session -t \(target); else \(attach); fi"
+    }
+
+    private static func posixAttachedReport(
+        _ lifecycleEnvelope: RemoteSessionLifecycleEnvelope?
+    ) -> String {
+        guard let marker = attachedMarker(lifecycleEnvelope) else { return "" }
+        let attached = RemoteTerminalBootstrap.shellQuoted(marker)
+        return "printf '%s' \(attached); "
     }
 
     private static func lifecycleMissingSessionCommand(backend: RemoteTmuxBackend) -> String {
@@ -693,7 +703,8 @@ nonisolated enum RemoteTmuxCommandBuilder {
             workingDirectory: workingDirectory,
             initialCommand: initialCommand,
             backend: backend,
-            commandExpression: commandExpression
+            commandExpression: commandExpression,
+            lifecycleEnvelope: lifecycleEnvelope
         )
         return windowsAttachExistingPowerShell(
             sessionName: sessionName,
@@ -726,12 +737,14 @@ nonisolated enum RemoteTmuxCommandBuilder {
         let configDeclaration = usesManagedConfiguration
             ? "$vvtermConfig = \(windowsConfigPathPowerShellExpression())"
             : ""
-        let attachCommand = usesManagedConfiguration
-            ? """
-              & $vvtermPsmux source-file -t $vvtermSession $vvtermConfig 2>$null
-              & $vvtermPsmux -u attach-session -d -t $vvtermSession
-              """
-            : "& $vvtermPsmux -u attach-session -d -t $vvtermSession"
+        let configurationCommand = usesManagedConfiguration
+            ? "& $vvtermPsmux source-file -t $vvtermSession $vvtermConfig 2>$null"
+            : ""
+        let attachCommand = """
+        \(configurationCommand)
+        \(windowsAttachedReport(lifecycleEnvelope))
+        & $vvtermPsmux -u attach-session -d -t $vvtermSession
+        """
         let existingSessionAction: String
         if requiresManagedMarker {
             existingSessionAction = """
@@ -816,18 +829,37 @@ nonisolated enum RemoteTmuxCommandBuilder {
         workingDirectory: String,
         initialCommand: String? = nil,
         backend: RemoteTmuxBackend,
-        commandExpression: String? = nil
+        commandExpression: String? = nil,
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope? = nil
     ) -> String {
         guard backend.isWindows else { return "" }
         let commandName = backend.commandName
         let psmuxExpression = commandExpression ?? powerShellQuoted(commandName)
+        let creationReportArguments = attachedMarker(lifecycleEnvelope).map { attached in
+            return " -P -F \(powerShellQuoted(attached))"
+        } ?? ""
         return """
         $vvtermPsmux = \(psmuxExpression)
         $vvtermConfig = \(windowsConfigPathPowerShellExpression())
         $vvtermSession = \(powerShellQuoted(sessionName))
         $vvtermWorkingDirectory = \(windowsWorkingDirectoryExpression(workingDirectory))
-        & $vvtermPsmux -u -f $vvtermConfig new-session -s $vvtermSession -c $vvtermWorkingDirectory\(initialCommand.map { " " + powerShellQuoted($0) } ?? "")
+        & $vvtermPsmux -u -f $vvtermConfig new-session\(creationReportArguments) -s $vvtermSession -c $vvtermWorkingDirectory\(initialCommand.map { " " + powerShellQuoted($0) } ?? "")
         """
+    }
+
+    private static func windowsAttachedReport(
+        _ lifecycleEnvelope: RemoteSessionLifecycleEnvelope?
+    ) -> String {
+        guard let attached = attachedMarker(lifecycleEnvelope) else { return "" }
+        return "[Console]::Out.Write(\(powerShellQuoted(attached)))"
+    }
+
+    private static func attachedMarker(
+        _ lifecycleEnvelope: RemoteSessionLifecycleEnvelope?
+    ) -> String? {
+        lifecycleEnvelope.map {
+            RemoteSessionLifecycleMarker.sequence(envelope: $0, event: .attached)
+        }
     }
 
     private static func windowsDefaultShellCommand(backend: RemoteTmuxBackend) -> String {
