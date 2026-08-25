@@ -131,9 +131,14 @@ nonisolated enum SSHConnectionRunner {
                         if error is CancellationError || Task.isCancelled {
                             throw CancellationError()
                         }
-                        if let sshError = error as? SSHError,
-                           case .unsupportedRemoteShellForStartupCommand = sshError {
-                            throw sshError
+                        if let sshError = error as? SSHError {
+                            switch sshError {
+                            case .channelOpenFailed,
+                                 .unsupportedRemoteShellForStartupCommand:
+                                throw sshError
+                            default:
+                                break
+                            }
                         }
                         guard freshStartup.mayExecuteStandaloneUserStartupAction else {
                             throw error

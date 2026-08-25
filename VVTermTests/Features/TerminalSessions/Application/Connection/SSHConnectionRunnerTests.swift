@@ -122,6 +122,60 @@ struct SSHConnectionRunnerTests {
     }
 
     @Test
+    func channelOpenFailureBeforeStandaloneActionRemainsRetryable() async {
+        let fixture = makeFixture()
+        let recorder = SSHConnectionRunnerTestRecorder()
+        var attempts: [Int] = []
+        var reportedFailure: SSHError?
+        let transport = SSHConnectionRunnerTransport(
+            connect: { _, _ in },
+            startShell: { columns, rows, _, _, mayExecuteUserStartupAction in
+                #expect(mayExecuteUserStartupAction)
+                await recorder.recordStart(columns: columns, rows: rows)
+                throw SSHError.channelOpenFailed
+            },
+            disconnect: {},
+            closeShell: { _ in },
+            execute: { _, _ in "" }
+        )
+
+        await SSHConnectionRunner.run(
+            server: fixture.server,
+            credentials: fixture.credentials,
+            transport: transport,
+            initialTerminalState: SSHConnectionInitialTerminalState(
+                columns: 132,
+                rows: 43,
+                pixelSize: nil
+            ),
+            logger: Logger(subsystem: "SSHConnectionRunnerTests", category: "Runner"),
+            shouldContinueConnection: { true },
+            onAttempt: { attempts.append($0) },
+            startupPlan: {
+                TerminalShellStartupPlan(
+                    command: "notify-deployment",
+                    remoteSessionLifecycle: nil,
+                    mayExecuteUserStartupAction: true
+                )
+            },
+            restoreMoshShell: { _, _ in nil },
+            registerShell: { _, _ in true },
+            onTitleChange: { _ in },
+            writeOutput: { _ in true },
+            shouldResetClient: { _ in false },
+            onProcessExit: { _, _ in },
+            onFailure: { error in reportedFailure = error as? SSHError }
+        )
+
+        #expect(attempts == [1, 2, 3])
+        #expect(await recorder.recordedStartSizes() == [[132, 43], [132, 43], [132, 43]])
+        guard case .channelOpenFailed = reportedFailure else {
+            Issue.record("Expected the pre-dispatch channel-open failure")
+            return
+        }
+    }
+
+    @Test
     func unsupportedShellStartupActionPreservesTheActionableError() async {
         let fixture = makeFixture()
         var attempts: [Int] = []
