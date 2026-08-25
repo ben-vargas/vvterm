@@ -144,7 +144,7 @@ final class TerminalTabManager {
         case .eternalTerminalResumeContext(let paneId, let context):
             setRemoteSessionLifecycleContext(context, for: paneId)
         case .standaloneStartupActionPendingCompletion(let paneId, let isPending):
-            setStandaloneStartupActionPendingCompletion(isPending, for: paneId)
+            sessionState.setStandaloneStartupActionPendingCompletion(isPending, for: paneId)
         case .connectionState(let paneId, let state):
             updatePaneState(paneId, connectionState: state)
         case .title(let paneId, let title):
@@ -934,17 +934,6 @@ final class TerminalTabManager {
         guard sessionState.paneState(for: paneId)?.remoteSessionResumeContext != context else { return }
         sessionState.updatePane(paneId, persist: true) {
             $0.remoteSessionResumeContext = context
-        }
-    }
-
-    private func setStandaloneStartupActionPendingCompletion(
-        _ isPending: Bool,
-        for paneId: UUID
-    ) {
-        guard sessionState.paneState(for: paneId)?
-            .standaloneStartupActionPendingCompletion != isPending else { return }
-        sessionState.updatePane(paneId, persist: true) {
-            $0.standaloneStartupActionPendingCompletion = isPending
         }
     }
 

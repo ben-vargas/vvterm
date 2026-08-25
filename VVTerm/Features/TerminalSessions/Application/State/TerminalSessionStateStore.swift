@@ -459,6 +459,17 @@ final class TerminalSessionStateStore: ObservableObject {
         return true
     }
 
+    func setStandaloneStartupActionPendingCompletion(
+        _ isPending: Bool,
+        for paneId: UUID
+    ) {
+        let didChange = updatePane(paneId, persist: true) {
+            $0.standaloneStartupActionPendingCompletion = isPending
+        }
+        guard didChange, isPending else { return }
+        persistNow()
+    }
+
     func requestPersistence() {
         schedulePersist()
     }
