@@ -204,7 +204,6 @@ nonisolated enum RemoteTerminalBootstrap {
         bundle: Bundle = .main
     ) -> String {
         let command = trimmedStartupCommand(startCommand)
-            .flatMap { unwrapPOSIXShellInvocationIfNeeded($0) ?? $0 }
             ?? defaultLoginShellCommand()
         return prefixedPOSIXScript(
             for: command,
@@ -359,32 +358,6 @@ nonisolated enum RemoteTerminalBootstrap {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    nonisolated private static func unwrapPOSIXShellInvocationIfNeeded(_ command: String) -> String? {
-        let prefixes = ["sh -lc ", "/bin/sh -lc "]
-        guard let prefix = prefixes.first(where: { command.hasPrefix($0) }) else {
-            return nil
-        }
-
-        let payload = String(command.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !payload.isEmpty else { return nil }
-
-        if payload.hasPrefix("'"), payload.hasSuffix("'"), payload.count >= 2 {
-            let start = payload.index(after: payload.startIndex)
-            let end = payload.index(before: payload.endIndex)
-            let quoted = String(payload[start..<end])
-            return quoted.replacingOccurrences(of: "'\\''", with: "'")
-        }
-
-        if payload.hasPrefix("\""), payload.hasSuffix("\""), payload.count >= 2 {
-            let start = payload.index(after: payload.startIndex)
-            let end = payload.index(before: payload.endIndex)
-            let quoted = String(payload[start..<end])
-            return unescapeDoubleQuotedShellArgument(quoted)
-        }
-
-        return payload
-    }
-
     nonisolated private static func shellPathValue() -> String {
         let paths = [
             "$HOME/.local/bin",
@@ -411,45 +384,6 @@ nonisolated enum RemoteTerminalBootstrap {
             .replacingOccurrences(of: "$", with: "\\$")
             .replacingOccurrences(of: "`", with: "\"'`'\"")
         return "\"\(escaped)\""
-    }
-
-    nonisolated private static func unescapeDoubleQuotedShellArgument(_ value: String) -> String {
-        var result = ""
-        result.reserveCapacity(value.count)
-        var index = value.startIndex
-
-        while index < value.endIndex {
-            if value[index...].hasPrefix("\"'`'\"") {
-                result.append("`")
-                index = value.index(index, offsetBy: 5)
-                continue
-            }
-
-            let character = value[index]
-            guard character == "\\" else {
-                result.append(character)
-                index = value.index(after: index)
-                continue
-            }
-
-            let nextIndex = value.index(after: index)
-            guard nextIndex < value.endIndex else {
-                result.append(character)
-                break
-            }
-
-            let next = value[nextIndex]
-            switch next {
-            case "\\", "\"", "$":
-                result.append(next)
-                index = value.index(after: nextIndex)
-            default:
-                result.append(character)
-                index = nextIndex
-            }
-        }
-
-        return result
     }
 
     nonisolated static func powerShellQuoted(_ value: String) -> String {

@@ -136,7 +136,17 @@ struct RemoteTerminalBootstrapTests {
         let moshScript = RemoteTerminalBootstrap.moshStartupScript(startCommand: wrapped)
 
         #expect(wrapped.hasPrefix("/bin/sh -lc \""))
-        #expect(moshScript.contains(script))
+        #expect(moshScript.hasSuffix(wrapped))
+    }
+
+    @Test
+    func moshPreservesAShellPrefixedUserAction() {
+        let action = #"sh -lc 'printf "%s" "$0"' sentinel"#
+        let moshScript = RemoteTerminalBootstrap.moshStartupScript(
+            startCommand: action
+        )
+
+        #expect(moshScript.hasSuffix(action))
     }
 
     @Test
