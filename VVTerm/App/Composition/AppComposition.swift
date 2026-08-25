@@ -133,9 +133,6 @@ struct AppComposition {
                 )
             )
         }
-        let remoteShellStartupActions = UserDefaultsRemoteShellStartupActionRepository(
-            defaults: defaults
-        )
         let serverManager = ServerManager(
             dependencies: .live(
                 defaults: defaults,
@@ -145,9 +142,7 @@ struct AppComposition {
                 freePlanTracker: analyticsTracker,
                 actionAuthorizer: appLockManager,
                 syncRepository: cloudKitSyncCoordinator,
-                didDeleteServerLocalData: { serverID in
-                    remoteShellStartupActions.save(nil, for: serverID)
-                },
+                didDeleteServerLocalData: { _ in },
                 defaultWorkspaceName: defaultWorkspaceName,
                 canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames,
                 now: now,
@@ -159,7 +154,6 @@ struct AppComposition {
             hostKeys: knownHostsManager,
             connectionOperations: connectionOperations,
             remoteMosh: remoteMosh,
-            remoteShellStartupActions: remoteShellStartupActions,
             remoteSessionBackends: remoteSessions.backendMetadata,
             defaultRemoteSessionEnabled: {
                 defaults.object(forKey: TerminalRemoteSessionDefaults.enabledKey) == nil
@@ -215,7 +209,6 @@ struct AppComposition {
             liveActivityManager: liveActivityManager,
             remoteMosh: remoteMosh,
             remoteSessions: remoteSessions,
-            remoteShellStartupActions: remoteShellStartupActions,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshResumeStore: moshResumeStore,
             terminalSurfaceStore: terminalSurfaceStore,

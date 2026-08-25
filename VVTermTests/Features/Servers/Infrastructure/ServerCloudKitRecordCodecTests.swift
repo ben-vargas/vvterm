@@ -22,6 +22,10 @@ struct ServerCloudKitRecordCodecTests {
         #expect(record["remoteSessionBackendIdentifier"] as? String == "zmx")
         #expect(record["tmuxEnabledOverride"] as? Bool == false)
         #expect(record["tmuxStartupBehaviorOverride"] as? String == "skipTmux")
+        #expect(
+            record["remoteShellStartupCommand"] as? String
+                == "cd /srv/round-trip && exec $SHELL -l"
+        )
         var expected = server
         expected.updatedAt = now
         #expect(ServerCloudKitRecordCodec.server(from: record, now: now) == expected)
@@ -108,6 +112,25 @@ struct ServerCloudKitRecordCodecTests {
 
         #expect(decoded.remoteSessionEnabledOverride == true)
         #expect(decoded.remoteSessionStartupBehaviorOverride == .ask)
+    }
+
+    @Test
+    func invalidSyncedStartupCommandIsIgnored() throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        let now = Date(timeIntervalSinceReferenceDate: 3_000)
+        let record = ServerCloudKitRecordCodec.record(
+            for: makeServer(),
+            in: zoneID,
+            now: now
+        )
+        record["remoteShellStartupCommand"] = String(
+            repeating: "x",
+            count: RemoteShellStartupAction.maximumCommandByteCount + 1
+        )
+
+        let decoded = try #require(ServerCloudKitRecordCodec.server(from: record, now: now))
+
+        #expect(decoded.remoteShellStartupAction == nil)
     }
 
     @Test
@@ -202,6 +225,7 @@ struct ServerCloudKitRecordCodecTests {
             remoteSessionEnabledOverride: false,
             remoteSessionBackendIdentifier: .zmx,
             remoteSessionStartupBehaviorOverride: .plainShell,
+            remoteShellStartupCommand: "cd /srv/round-trip && exec $SHELL -l",
             createdAt: Date(timeIntervalSinceReferenceDate: 1_000),
             updatedAt: Date(timeIntervalSinceReferenceDate: 2_000)
         )

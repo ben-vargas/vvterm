@@ -25,6 +25,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
     var remoteSessionEnabledOverride: Bool?
     var remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier
     var remoteSessionStartupBehaviorOverride: RemoteSessionStartupBehavior?
+    var remoteShellStartupAction: RemoteShellStartupAction?
     var createdAt: Date
     var updatedAt: Date
 
@@ -50,6 +51,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         remoteSessionEnabledOverride: Bool? = nil,
         remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier = .tmux,
         remoteSessionStartupBehaviorOverride: RemoteSessionStartupBehavior? = nil,
+        remoteShellStartupCommand: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -76,6 +78,9 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         self.remoteSessionEnabledOverride = remoteSessionEnabledOverride
         self.remoteSessionBackendIdentifier = remoteSessionBackendIdentifier
         self.remoteSessionStartupBehaviorOverride = remoteSessionStartupBehaviorOverride
+        self.remoteShellStartupAction = remoteShellStartupCommand.flatMap {
+            try? RemoteShellStartupAction(command: $0)
+        }
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -111,6 +116,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         case remoteSessionEnabledOverride
         case remoteSessionBackendIdentifier
         case remoteSessionStartupBehaviorOverride
+        case remoteShellStartupCommand
         case createdAt
         case updatedAt
     }
@@ -163,6 +169,10 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
             forKey: .remoteSessionStartupBehaviorOverride
         ).flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
             ?? legacyTmuxStartupBehavior
+        remoteShellStartupAction = try container.decodeIfPresent(
+            String.self,
+            forKey: .remoteShellStartupCommand
+        ).flatMap { try? RemoteShellStartupAction(command: $0) }
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
@@ -198,6 +208,10 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         try container.encodeIfPresent(
             remoteSessionStartupBehaviorOverride?.rawValue,
             forKey: .remoteSessionStartupBehaviorOverride
+        )
+        try container.encodeIfPresent(
+            remoteShellStartupAction?.command,
+            forKey: .remoteShellStartupCommand
         )
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)

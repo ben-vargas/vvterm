@@ -40,4 +40,12 @@ nonisolated struct RemoteShellStartupActionFormModel: Equatable, Sendable {
         }
         return try RemoteShellStartupAction(command: command)
     }
+
+    func commandForPersistence() -> String? {
+        do {
+            return try makeAction()?.command
+        } catch {
+            return nil
+        }
+    }
 }

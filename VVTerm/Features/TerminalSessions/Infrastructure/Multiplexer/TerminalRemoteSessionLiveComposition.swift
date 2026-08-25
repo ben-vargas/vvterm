@@ -39,7 +39,8 @@ enum TerminalRemoteSessionLiveComposition {
                             name: $0.name,
                             enabledOverride: $0.remoteSessionEnabledOverride,
                             backendIdentifier: $0.remoteSessionBackendIdentifier,
-                            startupBehaviorOverride: $0.remoteSessionStartupBehaviorOverride
+                            startupBehaviorOverride: $0.remoteSessionStartupBehaviorOverride,
+                            startupAction: $0.remoteShellStartupAction
                         )
                     }
             },

@@ -1839,7 +1839,7 @@
 "Create or reconnect to a VVTerm-managed session." = "Créer une session gérée par VVTerm ou s’y reconnecter.";
 "Ask which session to use for each new tab or split." = "Demander quelle session utiliser pour chaque nouvel onglet ou volet.";
 "Startup Command" = "Commande de démarrage";
-"Stored on this device. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Stockée sur cet appareil. S’exécute uniquement quand VVTerm crée une session persistante. N’incluez aucun secret.";
-"Stored on this device. Runs for each new terminal connection. Do not include secrets." = "Stockée sur cet appareil. S’exécute à chaque nouvelle connexion au terminal. N’incluez aucun secret.";
+"Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Synchronisée entre les appareils. S’exécute uniquement quand VVTerm crée une session persistante. N’incluez aucun secret.";
+"Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Synchronisée entre les appareils. S’exécute à chaque nouvelle connexion au terminal. N’incluez aucun secret.";
 "The command contains unsupported control characters." = "La commande contient des caractères de contrôle non pris en charge.";
 "The command is too long." = "La commande est trop longue.";

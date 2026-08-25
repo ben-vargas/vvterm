@@ -121,6 +121,7 @@ struct TerminalRemoteSessionConfiguration {
         let enabledOverride: Bool?
         let backendIdentifier: RemoteSessionBackendIdentifier
         let startupBehaviorOverride: RemoteSessionStartupBehavior?
+        let startupAction: RemoteShellStartupAction?
     }
 
     let deviceID: String
@@ -139,7 +140,6 @@ struct TerminalTabManagerDependencies {
     let appLock: TerminalAppLockSource
     let effects: TerminalSessionApplicationEffects
     let remoteMosh: any TerminalRemoteMoshServicing
-    let remoteShellStartupActions: any RemoteShellStartupActionRepository
     let eternalTerminalRuntime: EternalTerminalRuntimeDependencies
 }
 
@@ -170,18 +170,9 @@ extension TerminalTabManagerDependencies {
                 recordSplitPaneCreated: {}
             ),
             remoteMosh: UnavailableTerminalRemoteMoshService(),
-            remoteShellStartupActions: EmptyRemoteShellStartupActionRepository(),
             eternalTerminalRuntime: .testing
         )
     }
-}
-
-@MainActor
-private final class EmptyRemoteShellStartupActionRepository:
-    RemoteShellStartupActionRepository {
-    func action(for serverID: UUID) -> RemoteShellStartupAction? { nil }
-
-    func save(_ action: RemoteShellStartupAction?, for serverID: UUID) {}
 }
 
 private actor UnavailableTerminalRemoteMoshService: TerminalRemoteMoshServicing {

@@ -30,7 +30,6 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
     let resolver: RemoteSessionAttachResolver
     let sessionState: TerminalSessionStateStore
     let transportLifetime: TerminalTransportLifetime
-    let startupActions: any RemoteShellStartupActionRepository
     let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "VVTerm",
         category: "TerminalRemoteSessionCoordinator"
@@ -43,15 +42,13 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
         remoteSessions: any TerminalRemoteSessionServicing,
         resolver: RemoteSessionAttachResolver,
         sessionState: TerminalSessionStateStore,
-        transportLifetime: TerminalTransportLifetime,
-        startupActions: any RemoteShellStartupActionRepository
+        transportLifetime: TerminalTransportLifetime
     ) {
         self.configuration = configuration
         self.remoteSessions = remoteSessions
         self.resolver = resolver
         self.sessionState = sessionState
         self.transportLifetime = transportLifetime
-        self.startupActions = startupActions
         resolver.objectWillChange
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &cancellables)
@@ -231,8 +228,7 @@ extension TerminalRemoteSessionCoordinator {
             remoteSessions: remoteSessions,
             resolver: resolver,
             sessionState: sessionState,
-            transportLifetime: TerminalTransportLifetime(),
-            startupActions: EmptyRemoteShellStartupActionRepository()
+            transportLifetime: TerminalTransportLifetime()
         )
     }
 }
@@ -242,14 +238,6 @@ private final class EmptyTerminalTabSnapshotStore: TerminalTabSnapshotStoring {
     func loadSnapshotData() -> Data? { nil }
     func saveSnapshotData(_ data: Data) {}
     func removeSnapshotData() {}
-}
-
-@MainActor
-private final class EmptyRemoteShellStartupActionRepository:
-    RemoteShellStartupActionRepository {
-    func action(for serverID: UUID) -> RemoteShellStartupAction? { nil }
-
-    func save(_ action: RemoteShellStartupAction?, for serverID: UUID) {}
 }
 
 extension TerminalRemoteSessionConfiguration {

@@ -39,7 +39,6 @@ struct ServerFormDependencies {
     let credentials: any ServerCredentialRepository
     let connectionTester: any ServerConnectionTesting
     let hostKeys: any ServerHostKeyRepository
-    let remoteShellStartupActions: any RemoteShellStartupActionRepository
     let remoteSessionBackends: [RemoteSessionBackendMetadata]
     let defaultRemoteSessionEnabled: @MainActor () -> Bool
     let defaultRemoteSessionBackendIdentifier: @MainActor () -> RemoteSessionBackendIdentifier

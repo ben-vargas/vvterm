@@ -284,9 +284,6 @@ struct TerminalTabManagerLiveCompositionTests {
             now: Date.init,
             makeID: UUID.init
         )
-        let remoteShellStartupActions = UserDefaultsRemoteShellStartupActionRepository(
-            defaults: defaults
-        )
         let serverManager = ServerManager(
             dependencies: .live(
                 defaults: defaults,
@@ -296,9 +293,7 @@ struct TerminalTabManagerLiveCompositionTests {
                 freePlanTracker: analyticsTracker,
                 actionAuthorizer: appLockManager,
                 syncRepository: cloudKitSync.coordinator,
-                didDeleteServerLocalData: { serverID in
-                    remoteShellStartupActions.save(nil, for: serverID)
-                },
+                didDeleteServerLocalData: { _ in },
                 defaultWorkspaceName: { "Default" },
                 canonicalDefaultWorkspaceNames: { ["Default"] },
                 now: Date.init,
@@ -327,7 +322,6 @@ struct TerminalTabManagerLiveCompositionTests {
             ),
             remoteMosh: LiveCompositionRemoteMoshSpy(),
             remoteSessions: remoteSessions,
-            remoteShellStartupActions: remoteShellStartupActions,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshResumeStore: moshResumeStore,
             terminalSurfaceStore: surfaceStore,

@@ -1838,7 +1838,7 @@
 "Create or reconnect to a VVTerm-managed session." = "Стварыць або аднавіць злучэнне з сесіяй пад кіраваннем VVTerm.";
 "Ask which session to use for each new tab or split." = "Пытацца, якую сесію выкарыстоўваць для кожнай новай укладкі або падзелу.";
 "Startup Command" = "Каманда запуску";
-"Stored on this device. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Захоўваецца на гэтай прыладзе. Запускаецца толькі калі VVTerm стварае пастаянную сесію. Не дадавайце сакрэты.";
-"Stored on this device. Runs for each new terminal connection. Do not include secrets." = "Захоўваецца на гэтай прыладзе. Запускаецца для кожнага новага злучэння з тэрміналам. Не дадавайце сакрэты.";
+"Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Сінхранізуецца паміж прыладамі. Запускаецца толькі калі VVTerm стварае пастаянную сесію. Не дадавайце сакрэты.";
+"Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Сінхранізуецца паміж прыладамі. Запускаецца для кожнага новага злучэння з тэрміналам. Не дадавайце сакрэты.";
 "The command contains unsupported control characters." = "Каманда змяшчае непадтрыманыя кіруючыя сімвалы.";
 "The command is too long." = "Каманда занадта доўгая.";

@@ -33,8 +33,8 @@ struct RemoteShellStartupActionSection: View {
 
     private var footerText: LocalizedStringKey {
         remoteSessionEnabled
-            ? "Stored on this device. Runs only when VVTerm creates a persistent session. Do not include secrets."
-            : "Stored on this device. Runs for each new terminal connection. Do not include secrets."
+            ? "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets."
+            : "Syncs across devices. Runs for each new terminal connection. Do not include secrets."
     }
 
     private var exampleCommand: String {

@@ -271,8 +271,6 @@ extension TerminalTabManagerLifecycleTests {
                     now: Date.init,
                     makeID: UUID.init
                 )
-                let remoteShellStartupActions =
-                    UserDefaultsRemoteShellStartupActionRepository(defaults: defaults)
                 let serverManager = ServerManager(
                     dependencies: .live(
                         defaults: defaults,
@@ -282,9 +280,7 @@ extension TerminalTabManagerLifecycleTests {
                         freePlanTracker: AnalyticsTracker.shared,
                         actionAuthorizer: appLockManager,
                         syncRepository: cloudKitSync.coordinator,
-                        didDeleteServerLocalData: { serverID in
-                            remoteShellStartupActions.save(nil, for: serverID)
-                        },
+                        didDeleteServerLocalData: { _ in },
                         defaultWorkspaceName: { "Default" },
                         canonicalDefaultWorkspaceNames: { ["Default"] },
                         now: Date.init,

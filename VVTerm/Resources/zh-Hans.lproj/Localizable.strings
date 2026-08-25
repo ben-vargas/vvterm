@@ -1834,7 +1834,7 @@
 "Create or reconnect to a VVTerm-managed session." = "创建或重新连接到 VVTerm 管理的会话。";
 "Ask which session to use for each new tab or split." = "为每个新标签页或分屏询问要使用的会话。";
 "Startup Command" = "启动命令";
-"Stored on this device. Runs only when VVTerm creates a persistent session. Do not include secrets." = "存储在此设备上。仅在 VVTerm 创建持久会话时运行。不要包含机密信息。";
-"Stored on this device. Runs for each new terminal connection. Do not include secrets." = "存储在此设备上。为每个新的终端连接运行。不要包含机密信息。";
+"Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "在设备间同步。仅在 VVTerm 创建持久会话时运行。不要包含机密信息。";
+"Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "在设备间同步。为每个新的终端连接运行。不要包含机密信息。";
 "The command contains unsupported control characters." = "命令包含不受支持的控制字符。";
 "The command is too long." = "命令过长。";

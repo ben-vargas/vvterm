@@ -11,7 +11,7 @@ nonisolated enum ServerCloudKitRecordCodec {
         "lastConnected", "isFavorite", "requiresBiometricUnlock", "tmuxEnabledOverride",
         "tmuxStartupBehaviorOverride",
         "remoteSessionEnabledOverride", "remoteSessionBackendIdentifier",
-        "remoteSessionStartupBehaviorOverride",
+        "remoteSessionStartupBehaviorOverride", "remoteShellStartupCommand",
         "createdAt", "updatedAt", "environment"
     ]
 
@@ -98,6 +98,7 @@ nonisolated enum ServerCloudKitRecordCodec {
             remoteSessionEnabledOverride: enabledOverride,
             remoteSessionBackendIdentifier: backendIdentifier,
             remoteSessionStartupBehaviorOverride: startupBehavior,
+            remoteShellStartupCommand: record["remoteShellStartupCommand"] as? String,
             createdAt: record["createdAt"] as? Date ?? now,
             updatedAt: updatedAt
         )
@@ -139,6 +140,7 @@ nonisolated enum ServerCloudKitRecordCodec {
             server.remoteSessionStartupBehaviorOverride?.rawValue
         record["tmuxEnabledOverride"] = legacyTmuxEnabledOverride(for: server)
         record["tmuxStartupBehaviorOverride"] = legacyTmuxStartupBehavior(for: server)
+        record["remoteShellStartupCommand"] = server.remoteShellStartupAction?.command
         record["createdAt"] = server.createdAt
         record["updatedAt"] = now
         if let environment = try? JSONEncoder().encode(server.environment) {

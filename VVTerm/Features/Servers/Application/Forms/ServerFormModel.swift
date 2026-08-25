@@ -80,6 +80,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var remoteSessionEnabled: Bool
     var remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier
     var remoteSessionStartupBehavior: RemoteSessionStartupBehavior
+    var remoteShellStartupAction: RemoteShellStartupActionFormModel
 
     init(
         server: Server? = nil,
@@ -113,6 +114,9 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             ?? defaultRemoteSessionBackendIdentifier
         remoteSessionStartupBehavior = server?.remoteSessionStartupBehaviorOverride
             ?? defaultRemoteSessionStartupBehavior
+        remoteShellStartupAction = RemoteShellStartupActionFormModel(
+            action: server?.remoteShellStartupAction
+        )
     }
 
     var isValid: Bool {
@@ -121,6 +125,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             && validPort(port)
             && (transportSelection != .eternalTerminal || validPort(eternalTerminalPort))
             && hasValidCredentials
+            && remoteShellStartupAction.isValid
     }
 
     var effectiveUsername: String {
@@ -208,6 +213,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             remoteSessionEnabledOverride: remoteSessionEnabled,
             remoteSessionBackendIdentifier: remoteSessionBackendIdentifier,
             remoteSessionStartupBehaviorOverride: remoteSessionStartupBehavior,
+            remoteShellStartupCommand: remoteShellStartupAction.commandForPersistence(),
             createdAt: createdAt
         )
     }

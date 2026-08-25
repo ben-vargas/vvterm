@@ -215,7 +215,8 @@ struct RemoteTmuxOwnershipTests {
                     name: serverName,
                     enabledOverride: true,
                     backendIdentifier: .tmux,
-                    startupBehaviorOverride: .createManaged
+                    startupBehaviorOverride: .createManaged,
+                    startupAction: nil
                 )
             },
             themeStyle: { deterministicRemoteSessionThemeStyle }

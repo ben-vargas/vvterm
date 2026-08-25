@@ -30,20 +30,6 @@ private final class DependencyTestETResumeStore: EternalTerminalResumeStoring, @
     func deleteResumeState(for paneId: UUID) throws {}
 }
 
-@MainActor
-private final class DependencyTestStartupActionRepository:
-    RemoteShellStartupActionRepository {
-    private var actions: [UUID: RemoteShellStartupAction] = [:]
-
-    func action(for serverID: UUID) -> RemoteShellStartupAction? {
-        actions[serverID]
-    }
-
-    func save(_ action: RemoteShellStartupAction?, for serverID: UUID) {
-        actions[serverID] = action
-    }
-}
-
 private actor TerminalAuthorizationGate {
     private var continuation: CheckedContinuation<Bool, Never>?
 
@@ -370,25 +356,20 @@ struct TerminalTabManagerDependencyIsolationTests {
     }
 
     @Test
-    func localStartupActionReplacesPlainShellWithoutRemoteSessionProbe() async throws {
+    func serverStartupActionReplacesPlainShellWithoutRemoteSessionProbe() async throws {
         let remoteSessions = RecordingTerminalRemoteTmuxService()
-        let startupActions = DependencyTestStartupActionRepository()
         let manager = makeManager(
             network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
             effects: TerminalEffectRecorder(),
             remoteSessions: remoteSessions,
             remoteMosh: RecordingTerminalRemoteMoshService(),
-            startupActions: startupActions,
+            startupAction: try RemoteShellStartupAction(
+                command: "cd ~/myproject && printf '%s' \"$(date)\""
+            ),
             deviceID: "custom-startup-device"
         )
         let tab = TerminalTab(serverId: UUID(), title: "Custom startup")
         install(tab, in: manager)
-        startupActions.save(
-            try RemoteShellStartupAction(
-                command: "cd ~/myproject && printf '%s' \"$(date)\""
-            ),
-            for: tab.serverId
-        )
         let client = SSHClient.testing()
         let startToken = try #require(
             manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
@@ -415,22 +396,17 @@ struct TerminalTabManagerDependencyIsolationTests {
     @Test
     func persistentStartupCommandDoesNotRunWhenSessionCannotBeCreated() async throws {
         let remoteSessions = RecordingTerminalRemoteTmuxService()
-        let startupActions = DependencyTestStartupActionRepository()
         let manager = makeManager(
             network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
             effects: TerminalEffectRecorder(),
             remoteSessions: remoteSessions,
             remoteMosh: RecordingTerminalRemoteMoshService(),
-            startupActions: startupActions,
+            startupAction: try RemoteShellStartupAction(command: "touch /tmp/must-not-run"),
             remoteSessionEnabled: true,
             deviceID: "unavailable-persistent-session"
         )
         let tab = TerminalTab(serverId: UUID(), title: "Unavailable persistence")
         install(tab, in: manager)
-        startupActions.save(
-            try RemoteShellStartupAction(command: "touch /tmp/must-not-run"),
-            for: tab.serverId
-        )
         let client = SSHClient.testing()
         let startToken = try #require(
             manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
@@ -468,24 +444,19 @@ struct TerminalTabManagerDependencyIsolationTests {
         let remoteSessions = RecordingTerminalRemoteTmuxService(
             availabilityResult: .available(probe)
         )
-        let startupActions = DependencyTestStartupActionRepository()
+        let command = "cd ~/myproject && printf ready"
         let manager = makeManager(
             network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
             effects: TerminalEffectRecorder(),
             remoteSessions: remoteSessions,
             remoteMosh: RecordingTerminalRemoteMoshService(),
-            startupActions: startupActions,
+            startupAction: try RemoteShellStartupAction(command: command),
             remoteSessionEnabled: true,
             startupBehavior: .createManaged,
             deviceID: "create-only-command"
         )
         let tab = TerminalTab(serverId: UUID(), title: "Create only")
         install(tab, in: manager)
-        let command = "cd ~/myproject && printf ready"
-        startupActions.save(
-            try RemoteShellStartupAction(command: command),
-            for: tab.serverId
-        )
 
         let firstClient = SSHClient.testing()
         let firstToken = try #require(
@@ -643,8 +614,7 @@ struct TerminalTabManagerDependencyIsolationTests {
         effects: TerminalEffectRecorder,
         remoteSessions: any TerminalRemoteSessionServicing,
         remoteMosh: RecordingTerminalRemoteMoshService,
-        startupActions: any RemoteShellStartupActionRepository =
-            DependencyTestStartupActionRepository(),
+        startupAction: RemoteShellStartupAction? = nil,
         remoteSessionEnabled: Bool = false,
         startupBehavior: RemoteSessionStartupBehavior = .plainShell,
         deviceID: String
@@ -664,7 +634,6 @@ struct TerminalTabManagerDependencyIsolationTests {
                 ),
                 effects: effects.effects(),
                 remoteMosh: remoteMosh,
-                remoteShellStartupActions: startupActions,
                 eternalTerminalRuntime: .testing
             ),
             remoteSessionConfiguration: TerminalRemoteSessionConfiguration(
@@ -672,7 +641,15 @@ struct TerminalTabManagerDependencyIsolationTests {
                 enabledByDefault: { remoteSessionEnabled },
                 backendIdentifierByDefault: { .tmux },
                 startupBehaviorByDefault: { startupBehavior },
-                serverSettings: { _ in nil },
+                serverSettings: { _ in
+                    TerminalRemoteSessionConfiguration.ServerSettings(
+                        name: "Test Server",
+                        enabledOverride: remoteSessionEnabled,
+                        backendIdentifier: .tmux,
+                        startupBehaviorOverride: startupBehavior,
+                        startupAction: startupAction
+                    )
+                },
                 themeStyle: { TerminalRemoteSessionLiveComposition.themeStyle(for: nil) }
             ),
             remoteSessions: remoteSessions,

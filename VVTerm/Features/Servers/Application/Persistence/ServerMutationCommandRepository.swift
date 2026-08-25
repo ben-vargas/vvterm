@@ -133,6 +133,7 @@ nonisolated struct ServerMutationCommandRepository: Sendable {
             remoteSessionEnabledOverride: server.remoteSessionEnabledOverride,
             remoteSessionBackendIdentifier: server.remoteSessionBackendIdentifier,
             remoteSessionStartupBehaviorOverride: server.remoteSessionStartupBehaviorOverride,
+            remoteShellStartupCommand: server.remoteShellStartupAction?.command,
             createdAt: now,
             updatedAt: now
         )
@@ -161,6 +162,7 @@ nonisolated struct ServerMutationCommandRepository: Sendable {
             remoteSessionEnabledOverride: server.remoteSessionEnabledOverride,
             remoteSessionBackendIdentifier: server.remoteSessionBackendIdentifier,
             remoteSessionStartupBehaviorOverride: server.remoteSessionStartupBehaviorOverride,
+            remoteShellStartupCommand: server.remoteShellStartupAction?.command,
             createdAt: server.createdAt,
             updatedAt: now
         )
