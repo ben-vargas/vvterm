@@ -160,7 +160,11 @@ final class TerminalPaneSSHCoordinator {
             writeOutput: writeOutput,
             shouldResetClient: { sshError in
                 switch sshError {
-                case .notConnected, .connectionFailed, .socketError, .timeout:
+                case .notConnected,
+                     .disconnectedBeforeShellRequest,
+                     .connectionFailed,
+                     .socketError,
+                     .timeout:
                     return true
                 case .channelOpenFailed, .shellRequestFailed:
                     let hasOtherRegistrations = await context.hasOtherRegistrations()

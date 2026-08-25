@@ -439,7 +439,8 @@ struct SSHStartupIntegrationTests {
                 let shell = try await startup.value
                 await client.closeShell(shell.id)
                 Issue.record("Disconnected \(stage) startup returned a live shell")
-            } catch SSHError.notConnected {
+            } catch SSHError.notConnected,
+                    SSHError.disconnectedBeforeShellRequest {
                 // Expected controlled transport invalidation.
             } catch {
                 Issue.record("Disconnected \(stage) startup returned unexpected error: \(error)")

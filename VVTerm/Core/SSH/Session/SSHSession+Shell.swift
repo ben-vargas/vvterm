@@ -14,7 +14,7 @@ extension SSHSession {
         terminalType: RemoteTerminalType = RemoteTerminalBootstrap.defaultTerminalType
     ) async throws -> ShellHandle {
         guard isActive, let session = libssh2Session else {
-            throw SSHError.notConnected
+            throw SSHError.disconnectedBeforeShellRequest
         }
         guard let wireSize = TerminalGeometryConversion.gridSize(cols: cols, rows: rows) else {
             throw SSHError.unknown("Invalid terminal size \(cols)x\(rows)")
@@ -24,6 +24,7 @@ extension SSHSession {
         shellStartupsInFlight.insert(startupId)
         var pendingChannel: OpaquePointer?
         var shouldInvalidateTransport = false
+        var didAttemptShellRequest = false
         defer {
             if shouldInvalidateTransport {
                 invalidateTransport()
@@ -121,11 +122,13 @@ extension SSHSession {
                 ) {
                 case .shell:
                     shellResult = try await performShellStartupCall(session: session) {
-                        libssh2_channel_process_startup(channel, "shell", 5, nil, 0)
+                        didAttemptShellRequest = true
+                        return libssh2_channel_process_startup(channel, "shell", 5, nil, 0)
                     }
                 case .exec(let command):
                     shellResult = try await performShellStartupCall(session: session) {
-                        command.withCString { pointer in
+                        didAttemptShellRequest = true
+                        return command.withCString { pointer in
                             libssh2_channel_process_startup(
                                 channel,
                                 "exec",
@@ -173,7 +176,10 @@ extension SSHSession {
             throw CancellationError()
         } catch SSHError.notConnected {
             shouldInvalidateTransport = true
-            throw SSHError.notConnected
+            if didAttemptShellRequest {
+                throw SSHError.notConnected
+            }
+            throw SSHError.disconnectedBeforeShellRequest
         } catch {
             if let pendingChannel {
                 if await discardShellStartupChannel(pendingChannel, session: session) {

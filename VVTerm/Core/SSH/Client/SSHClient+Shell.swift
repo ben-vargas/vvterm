@@ -14,14 +14,14 @@ extension SSHClient {
     ) async throws -> ShellHandle {
         try Task.checkCancellation()
         guard !isAborted, let sshSession = session else {
-            throw SSHError.notConnected
+            throw SSHError.disconnectedBeforeShellRequest
         }
 
         let connectionMode = connectedServer?.connectionMode ?? .standard
         let environment = await remoteEnvironment()
-        try validateShellStartupSession(sshSession)
+        try validateShellStartupSessionBeforeShellRequest(sshSession)
         let terminalType = await remoteTerminalType()
-        try validateShellStartupSession(sshSession)
+        try validateShellStartupSessionBeforeShellRequest(sshSession)
         if connectionMode != .mosh {
             let sshShell = try await startValidatedSSHShell(
                 using: sshSession,
@@ -174,6 +174,16 @@ extension SSHClient {
               let currentSession = session,
               currentSession === expectedSession else {
             throw SSHError.notConnected
+        }
+    }
+
+    private func validateShellStartupSessionBeforeShellRequest(
+        _ expectedSession: SSHSession
+    ) throws {
+        do {
+            try validateShellStartupSession(expectedSession)
+        } catch SSHError.notConnected {
+            throw SSHError.disconnectedBeforeShellRequest
         }
     }
 

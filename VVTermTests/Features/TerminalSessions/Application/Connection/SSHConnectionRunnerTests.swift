@@ -62,11 +62,13 @@ private actor SSHConnectionRunnerTestRecorder {
 
 enum SSHConnectionRunnerPreDispatchFailure: CaseIterable, Sendable {
     case channelOpen
+    case disconnected
     case shellRequest
 
     var error: SSHError {
         switch self {
         case .channelOpen: .channelOpenFailed
+        case .disconnected: .disconnectedBeforeShellRequest
         case .shellRequest: .shellRequestFailed
         }
     }
@@ -187,6 +189,11 @@ struct SSHConnectionRunnerTests {
         case .channelOpen:
             guard case .channelOpenFailed = reportedFailure else {
                 Issue.record("Expected the pre-dispatch channel-open failure")
+                return
+            }
+        case .disconnected:
+            guard case .disconnectedBeforeShellRequest = reportedFailure else {
+                Issue.record("Expected the pre-dispatch disconnect")
                 return
             }
         case .shellRequest:

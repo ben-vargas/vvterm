@@ -136,6 +136,7 @@ nonisolated enum SSHConnectionRunner {
                         if let sshError = error as? SSHError {
                             switch sshError {
                             case .channelOpenFailed,
+                                 .disconnectedBeforeShellRequest,
                                  .shellRequestFailed,
                                  .unsupportedRemoteShellForStartupCommand:
                                 throw sshError
