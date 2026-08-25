@@ -130,6 +130,8 @@ nonisolated enum ServerCloudKitRecordCodec {
         record["remoteSessionBackendIdentifier"] = server.remoteSessionBackendIdentifier.rawValue
         record["remoteSessionStartupBehaviorOverride"] =
             server.remoteSessionStartupBehaviorOverride?.rawValue
+        record["tmuxEnabledOverride"] = legacyTmuxEnabledOverride(for: server)
+        record["tmuxStartupBehaviorOverride"] = legacyTmuxStartupBehavior(for: server)
         record["createdAt"] = server.createdAt
         record["updatedAt"] = now
         if let environment = try? JSONEncoder().encode(server.environment) {
@@ -151,5 +153,23 @@ nonisolated enum ServerCloudKitRecordCodec {
     private static func nonempty(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return nil }
         return value
+    }
+
+    private static func legacyTmuxEnabledOverride(for server: Server) -> Bool? {
+        server.remoteSessionBackendIdentifier == .tmux
+            ? server.remoteSessionEnabledOverride
+            : false
+    }
+
+    private static func legacyTmuxStartupBehavior(for server: Server) -> String? {
+        guard server.remoteSessionBackendIdentifier == .tmux else {
+            return "skipTmux"
+        }
+        return switch server.remoteSessionStartupBehaviorOverride {
+        case .createManaged: "vvtermManaged"
+        case .ask: "askEveryTime"
+        case .plainShell: "skipTmux"
+        case nil: nil
+        }
     }
 }
