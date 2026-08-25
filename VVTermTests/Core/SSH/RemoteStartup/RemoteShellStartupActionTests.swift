@@ -20,6 +20,15 @@ struct RemoteShellStartupActionTests {
     }
 
     @Test
+    func commandNormalizesWindowsLineEndings() throws {
+        let action = try RemoteShellStartupAction(
+            command: "cd ~/myproject\r\nprintf 'ready\\n'\r\n"
+        )
+
+        #expect(action.command == "cd ~/myproject\nprintf 'ready\\n'")
+    }
+
+    @Test
     func commandRejectsBlankUnsupportedControlCharactersAndExcessBytes() {
         #expect(throws: RemoteShellStartupAction.ValidationError.empty) {
             try RemoteShellStartupAction(command: " \n\t ")
