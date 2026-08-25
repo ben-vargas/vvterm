@@ -27,12 +27,15 @@ struct ZmxRemoteSessionBackendTests {
     }
 
     @Test
-    func namesOnlyDiscoveryProducesBackendScopedDescriptors() throws {
-        let sessions = try ZmxRemoteSessionParser.parseSessionList("alpha\nteam session\n")
+    func discoveryPreservesBackendAndAttachedClientMetadata() throws {
+        let sessions = try ZmxRemoteSessionParser.parseSessionList("""
+        name=alpha\tpid=10\tclients=0\tcreated=1\tstart_dir=/tmp
+        name=team session\tpid=11\tclients=2\tcreated=2\tstart_dir=/srv/team
+        """)
 
         #expect(sessions.map(\.id.backendIdentifier) == [.zmx, .zmx])
         #expect(sessions.map(\.id.rawValue) == ["alpha", "team session"])
-        #expect(sessions.allSatisfy { $0.attachedClientCount == nil })
+        #expect(sessions.map(\.attachedClientCount) == [0, 2])
         #expect(sessions.allSatisfy { $0.containerCount == nil })
     }
 
@@ -52,8 +55,9 @@ struct ZmxRemoteSessionBackendTests {
             for: try self.identifier("missing"),
             in: output
         ) == nil)
-        #expect(try ZmxRemoteSessionCommandBuilder.detailListCommand(runtime: runtime())
-            .contains("'list'"))
+        let listCommand = try ZmxRemoteSessionCommandBuilder.listCommand(runtime: runtime())
+        #expect(listCommand.contains("'list'"))
+        #expect(!listCommand.contains("'--short'"))
     }
 
     @Test
@@ -87,10 +91,22 @@ struct ZmxRemoteSessionBackendTests {
     @Test
     func discoveryRejectsDuplicatesAndBoundOverruns() {
         #expect(throws: SSHError.self) {
-            try ZmxRemoteSessionParser.parseSessionList("same\nsame\n")
+            try ZmxRemoteSessionParser.parseSessionList("""
+            name=same\tclients=0
+            name=same\tclients=0
+            """)
+        }
+        for malformed in [
+            "name=missing-clients\tpid=1",
+            "name=negative\tclients=-1",
+            "name=invalid\tclients=unknown"
+        ] {
+            #expect(throws: SSHError.self) {
+                try ZmxRemoteSessionParser.parseSessionList(malformed)
+            }
         }
         let tooMany = (0...ZmxRemoteSessionParser.maximumSessionCount)
-            .map { "session-\($0)" }
+            .map { "name=session-\($0)\tclients=0" }
             .joined(separator: "\n")
         #expect(throws: SSHError.self) {
             try ZmxRemoteSessionParser.parseSessionList(tooMany)

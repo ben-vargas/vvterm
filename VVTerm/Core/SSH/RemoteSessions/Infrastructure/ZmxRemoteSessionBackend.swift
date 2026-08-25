@@ -140,7 +140,7 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         do {
             try requireSupported(runtime)
             let output = try await client.execute(
-                ZmxRemoteSessionCommandBuilder.detailListCommand(runtime: runtime),
+                ZmxRemoteSessionCommandBuilder.listCommand(runtime: runtime),
                 timeout: .seconds(8),
                 maxOutputBytes: ZmxRemoteSessionParser.maximumOutputBytes
             )

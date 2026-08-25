@@ -3,6 +3,7 @@ import Foundation
 nonisolated enum ZmxRemoteSessionParser {
     static let maximumOutputBytes = 32 * 1_024
     static let maximumSessionCount = 256
+    static let maximumAttachedClientCount = 4_096
 
     struct ProbeResult: Equatable, Sendable {
         let executable: RemoteSessionExecutable
@@ -43,20 +44,41 @@ nonisolated enum ZmxRemoteSessionParser {
         }
         var seen: Set<RemoteSessionIdentifier> = []
         return try lines.map { rawLine in
-            let name = String(rawLine)
+            let parsed = try parseSessionLine(rawLine)
             let identifier = try RemoteSessionIdentifier(
                 backendIdentifier: .zmx,
-                validating: name
+                validating: parsed.name
             )
             guard seen.insert(identifier).inserted else {
                 throw SSHError.unknown("zmx returned a duplicate session identifier")
             }
             return RemoteSessionDescriptor(
                 id: identifier,
-                attachedClientCount: nil,
+                attachedClientCount: parsed.attachedClientCount,
                 containerCount: nil
             )
         }
+    }
+
+    private static func parseSessionLine(
+        _ line: Substring
+    ) throws -> (name: String, attachedClientCount: Int) {
+        let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
+        guard let nameField = fields.first,
+              nameField.hasPrefix("name=") else {
+            throw SSHError.unknown("zmx returned invalid session metadata")
+        }
+        let clientFields = fields.filter { $0.hasPrefix("clients=") }
+        guard clientFields.count == 1,
+              let clientField = clientFields.first,
+              let attachedClientCount = Int(clientField.dropFirst("clients=".count)),
+              (0...maximumAttachedClientCount).contains(attachedClientCount) else {
+            throw SSHError.unknown("zmx returned invalid client metadata")
+        }
+        return (
+            name: String(nameField.dropFirst("name=".count)),
+            attachedClientCount: attachedClientCount
+        )
     }
 
     static func parseWorkingDirectory(

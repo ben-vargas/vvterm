@@ -38,13 +38,6 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
     }
 
     static func listCommand(runtime: RemoteSessionRuntime) throws -> String {
-        try render(
-            arguments: ["list", "--short"],
-            runtime: runtime
-        )
-    }
-
-    static func detailListCommand(runtime: RemoteSessionRuntime) throws -> String {
         try render(arguments: ["list"], runtime: runtime)
     }
 
@@ -53,7 +46,7 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
         runtime: RemoteSessionRuntime
     ) throws -> String {
         let identifier = request.attachment.identifier.rawValue
-        let list = try listCommand(runtime: runtime)
+        let list = try shortListCommand(runtime: runtime)
         let exists = exactPresenceExpression(
             listCommand: list,
             identifier: identifier
@@ -105,7 +98,7 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
         let markerID = UUID().uuidString
         let existsMarker = "__VVTERM_SESSION_EXISTS_\(markerID)__"
         let missingMarker = "__VVTERM_SESSION_MISSING_\(markerID)__"
-        let list = try listCommand(runtime: runtime)
+        let list = try shortListCommand(runtime: runtime)
         let presence = exactPresenceExpression(
             listCommand: list,
             identifier: identifier.rawValue
@@ -159,6 +152,10 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
         identifier: String
     ) -> String {
         "\(listCommand) | grep -Fqx -- \(RemoteTerminalBootstrap.shellQuoted(identifier))"
+    }
+
+    private static func shortListCommand(runtime: RemoteSessionRuntime) throws -> String {
+        try render(arguments: ["list", "--short"], runtime: runtime)
     }
 
     private static func quotedMarker(
