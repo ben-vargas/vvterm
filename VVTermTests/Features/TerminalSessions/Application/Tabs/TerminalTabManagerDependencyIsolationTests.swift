@@ -395,7 +395,7 @@ struct TerminalTabManagerDependencyIsolationTests {
     }
 
     @Test
-    func pendingStandaloneStartupActionIsNotPlannedAgain() async throws {
+    func pendingStartupActionIsNotPlannedAgain() async throws {
         let remoteSessions = RecordingTerminalRemoteTmuxService()
         let manager = makeManager(
             network: PassthroughSubject<TerminalNetworkReadiness, Never>(),

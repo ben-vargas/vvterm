@@ -263,13 +263,29 @@ struct SSHConnectionRunnerTests {
         }
     }
 
-    @Test
-    func cancellationDuringStandaloneActionKeepsReplayGuard() async {
+    @Test(arguments: [false, true])
+    func cancellationDuringStartupActionKeepsReplayGuard(
+        _ usesPersistentSession: Bool
+    ) async throws {
         let fixture = makeFixture()
         let gate = SSHConnectionRunnerTestGate()
         let recorder = SSHConnectionRunnerTestRecorder()
         let pendingStateRecorder = SSHConnectionRunnerPendingStateRecorder()
         let startupCommand = "notify-deployment"
+        let lifecycle: RemoteSessionLifecycleContext? = if usesPersistentSession {
+            try RemoteSessionLifecycleContext(
+                attachment: RemoteSessionAttachment(
+                    identifier: RemoteSessionIdentifier(
+                        backendIdentifier: .tmux,
+                        validating: "vvterm-managed"
+                    ),
+                    ownership: .managed
+                ),
+                legacyTmuxMarkerToken: "marker-token"
+            )
+        } else {
+            nil
+        }
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
             startShell: { columns, rows, _, command, _ in
@@ -291,11 +307,11 @@ struct SSHConnectionRunnerTests {
                 startupPlan: {
                     TerminalShellStartupPlan(
                         command: startupCommand,
-                        remoteSessionLifecycle: nil,
+                        remoteSessionLifecycle: lifecycle,
                         mayExecuteUserStartupAction: true
                     )
                 },
-                setStandaloneStartupActionPendingCompletion: { isPending in
+                setStartupActionReplayGuard: { isPending in
                     pendingStateRecorder.record(isPending)
                 },
                 registerShell: { _, _ in true }
@@ -536,7 +552,7 @@ struct SSHConnectionRunnerTests {
         transport: SSHConnectionRunnerTransport,
         startupPlan: @MainActor @escaping @Sendable () async throws
             -> TerminalShellStartupPlan = { .plainShell },
-        setStandaloneStartupActionPendingCompletion: @MainActor @escaping @Sendable (
+        setStartupActionReplayGuard: @MainActor @escaping @Sendable (
             Bool
         ) -> Void = { _ in },
         registerShell: @MainActor @escaping @Sendable (
@@ -557,8 +573,7 @@ struct SSHConnectionRunnerTests {
             shouldContinueConnection: { true },
             onAttempt: { _ in },
             startupPlan: startupPlan,
-            setStandaloneStartupActionPendingCompletion:
-                setStandaloneStartupActionPendingCompletion,
+            setStartupActionReplayGuard: setStartupActionReplayGuard,
             restoreMoshShell: { _, _ in nil },
             registerShell: registerShell,
             onTitleChange: { _ in },
