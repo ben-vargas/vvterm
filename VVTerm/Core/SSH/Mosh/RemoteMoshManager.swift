@@ -202,15 +202,15 @@ actor RemoteMoshManager {
         case .invalidConnectLine:
             return mapInvalidConnectLine(output: output)
         case .invalidPort:
-            return .moshBootstrapFailedBeforeStartupCommand(
+            return .moshBootstrapFailed(
                 "mosh-server returned an invalid port"
             )
         case .invalidKey:
-            return .moshBootstrapFailedBeforeStartupCommand(
+            return .moshBootstrapFailed(
                 "mosh-server returned an invalid session key"
             )
         case .processExited:
-            return .moshBootstrapFailedBeforeStartupCommand(
+            return .moshBootstrapFailed(
                 "mosh-server exited before session startup completed"
             )
         case .timedOut:

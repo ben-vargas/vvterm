@@ -45,17 +45,22 @@ struct RemoteMoshManagerTests {
         do {
             _ = try await RemoteMoshManager.shared.bootstrapConnectInfo(
                 terminalType: .xterm256Color,
-                startCommand: nil,
+                startCommand: "printf action",
                 execute: { command, timeout in
                     try await executor.execute(command: command, timeout: timeout)
                 }
             )
             Issue.record("Expected malformed bootstrap failure")
         } catch let error as SSHError {
-            guard case .moshBootstrapFailedBeforeStartupCommand = error else {
+            guard case .moshBootstrapFailed = error else {
                 Issue.record("Unexpected SSHError: \(error.localizedDescription)")
                 return
             }
+            #expect(MoshSSHFallbackPolicy.decision(
+                after: error,
+                startupCommand: "printf action",
+                mayExecuteUserStartupAction: true
+            ) == .rejectToPreventStartupCommandReplay)
         } catch {
             Issue.record("Unexpected error: \(error.localizedDescription)")
         }
@@ -247,16 +252,15 @@ struct RemoteMoshManagerTests {
     }
 
     @Test(arguments: [
-        MoshBootstrapError.permissionDenied,
-        .invalidPort,
+        MoshBootstrapError.invalidPort,
         .invalidKey,
         .processExited
     ])
-    func mapsPreCommandBootstrapFailuresExplicitly(_ error: MoshBootstrapError) {
+    func mapsPostDispatchBootstrapFailuresAsAmbiguous(_ error: MoshBootstrapError) {
         let mapped = RemoteMoshManager.shared.mapBootstrapError(error)
 
-        guard case .moshBootstrapFailedBeforeStartupCommand = mapped else {
-            Issue.record("Expected a pre-command bootstrap failure")
+        guard case .moshBootstrapFailed = mapped else {
+            Issue.record("Expected an ambiguous bootstrap failure")
             return
         }
     }
