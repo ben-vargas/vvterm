@@ -64,7 +64,7 @@ struct RemoteShellStartupBackendTests {
             runtime: runtime
         )
 
-        #expect(create.contains("'/bin/sh' '-lc'"))
+        #expect(create.contains("/bin/sh -lc"))
         #expect(create.contains("cd /srv/custom && printf"))
         #expect(!reattach.contains("cd /srv/custom"))
         #expect(!reattach.contains("$(date)"))
