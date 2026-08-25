@@ -10,6 +10,7 @@ nonisolated struct SSHConnectionInitialTerminalState: Equatable, Sendable {
 nonisolated struct SSHConnectionRestoredShell: Sendable {
     let shell: ShellHandle
     let remoteSessionLifecycle: RemoteSessionLifecycleContext?
+    let standaloneStartupActionPendingCompletion: Bool
 }
 
 nonisolated struct SSHConnectionRunnerTransport: Sendable {
@@ -108,7 +109,8 @@ nonisolated enum SSHConnectionRunner {
                     startup = TerminalShellStartupPlan(
                         command: nil,
                         remoteSessionLifecycle: restored.remoteSessionLifecycle,
-                        mayExecuteUserStartupAction: false
+                        mayExecuteUserStartupAction: restored
+                            .standaloneStartupActionPendingCompletion
                     )
                     logger.info("Restored existing Mosh protocol session")
                 } else {

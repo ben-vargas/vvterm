@@ -300,6 +300,65 @@ struct SSHConnectionRunnerTests {
     }
 
     @Test
+    func restoredMoshActionKeepsItsOneTimeCompletionState() async {
+        let fixture = makeFixture()
+        await fixture.channel.finish()
+        var freshStartupRequested = false
+        var registeredPlan: TerminalShellStartupPlan?
+        var endReason: TerminalShellEndReason?
+        let transport = SSHConnectionRunnerTransport(
+            connect: { _, _ in },
+            startShell: { _, _, _, _, _ in
+                Issue.record("A restored Mosh shell must not start a fresh shell")
+                return fixture.shell
+            },
+            disconnect: {},
+            closeShell: { _ in },
+            execute: { _, _ in "" }
+        )
+
+        await SSHConnectionRunner.run(
+            server: fixture.server,
+            credentials: fixture.credentials,
+            transport: transport,
+            initialTerminalState: SSHConnectionInitialTerminalState(
+                columns: 80,
+                rows: 24,
+                pixelSize: nil
+            ),
+            logger: Logger(subsystem: "SSHConnectionRunnerTests", category: "Runner"),
+            shouldContinueConnection: { true },
+            onAttempt: { _ in },
+            startupPlan: {
+                freshStartupRequested = true
+                return .plainShell
+            },
+            restoreMoshShell: { _, _ in
+                SSHConnectionRestoredShell(
+                    shell: fixture.shell,
+                    remoteSessionLifecycle: nil,
+                    standaloneStartupActionPendingCompletion: true
+                )
+            },
+            registerShell: { _, startupPlan in
+                registeredPlan = startupPlan
+                return true
+            },
+            onTitleChange: { _ in },
+            writeOutput: { _ in true },
+            shouldResetClient: { _ in false },
+            onProcessExit: { _, reason in endReason = reason },
+            onFailure: { error in
+                Issue.record("Unexpected runner failure: \(error.localizedDescription)")
+            }
+        )
+
+        #expect(!freshStartupRequested)
+        #expect(registeredPlan?.mayExecuteStandaloneUserStartupAction == true)
+        #expect(endReason == .standaloneStartupActionCompleted)
+    }
+
+    @Test
     func cancellationAfterShellOpenClosesUnregisteredShellExactlyOnce() async {
         let fixture = makeFixture()
         let gate = SSHConnectionRunnerTestGate()

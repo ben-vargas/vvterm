@@ -131,6 +131,8 @@ struct EternalTerminalRuntimeOwnerAccess {
     ) async throws -> TerminalShellStartupPlan
     let resumeContext: @MainActor @Sendable (UUID) -> RemoteSessionLifecycleContext?
     let setResumeContext: @MainActor @Sendable (UUID, RemoteSessionLifecycleContext?) -> Void
+    let standaloneStartupActionPendingCompletion: @MainActor @Sendable (UUID) -> Bool
+    let setStandaloneStartupActionPendingCompletion: @MainActor @Sendable (UUID, Bool) -> Void
     let updateConnectionState: @MainActor @Sendable (UUID, ConnectionState) -> Void
     let markEternalTerminalTransport: @MainActor @Sendable (UUID) -> Void
     let handleShellEnd: @MainActor @Sendable (UUID, UUID, TerminalShellEndReason) -> Void
@@ -480,6 +482,8 @@ final class EternalTerminalRuntime {
         guard origin == .resumed else { return }
         startupApplied = true
         let context = ownerAccess.resumeContext(paneId)
+        standaloneStartupActionPendingCompletion = context == nil
+            && ownerAccess.standaloneStartupActionPendingCompletion(paneId)
         remoteSessionLifecycle = context
         remoteSessionLifecycleParser = context.map {
             RemoteSessionLifecycleStreamParser(observation: $0.observation)
@@ -496,6 +500,7 @@ final class EternalTerminalRuntime {
         }
         if state == .closed, standaloneStartupActionPendingCompletion {
             standaloneStartupActionPendingCompletion = false
+            ownerAccess.setStandaloneStartupActionPendingCompletion(paneId, false)
             ownerAccess.handleShellEnd(
                 paneId,
                 identityToken,
@@ -569,6 +574,10 @@ final class EternalTerminalRuntime {
     private func acceptStartupPlan(_ plan: TerminalShellStartupPlan) -> Data? {
         guard isCurrentOwner else { return nil }
         standaloneStartupActionPendingCompletion = plan.mayExecuteStandaloneUserStartupAction
+        ownerAccess.setStandaloneStartupActionPendingCompletion(
+            paneId,
+            standaloneStartupActionPendingCompletion
+        )
         let resumeContext = plan.remoteSessionLifecycle
         remoteSessionLifecycle = resumeContext
         remoteSessionLifecycleParser = resumeContext.map {

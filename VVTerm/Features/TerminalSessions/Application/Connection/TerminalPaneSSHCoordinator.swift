@@ -137,6 +137,9 @@ final class TerminalPaneSSHCoordinator {
             restoreMoshShell: context.restoreMoshShell,
             registerShell: { shell, startupPlan in
                 guard await context.registerShell(shell) else { return false }
+                context.setStandaloneStartupActionPendingCompletion(
+                    startupPlan.mayExecuteStandaloneUserStartupAction
+                )
                 context.updateConnectionState(.connected)
                 if shell.origin == .fresh,
                    startupPlan.allowsPostLaunchWorkingDirectoryRestore,

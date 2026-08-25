@@ -21,6 +21,7 @@ struct TerminalTransportSessionAccess {
 nonisolated enum TerminalTransportSessionEvent: Sendable {
     case activeTransport(UUID, ShellTransportState)
     case eternalTerminalResumeContext(UUID, RemoteSessionLifecycleContext?)
+    case standaloneStartupActionPendingCompletion(UUID, Bool)
     case connectionState(UUID, ConnectionState)
     case title(UUID, String)
     case shellEnd(UUID, TerminalShellEndReason, TerminalTransportEndOwnership?)
@@ -632,6 +633,16 @@ final class TerminalTransportCoordinator {
             setResumeContext: { paneId, context in
                 sessionAccess.send(.eternalTerminalResumeContext(paneId, context))
             },
+            standaloneStartupActionPendingCompletion: { paneId in
+                sessionAccess.paneState(paneId)?
+                    .standaloneStartupActionPendingCompletion == true
+            },
+            setStandaloneStartupActionPendingCompletion: { paneId, isPending in
+                sessionAccess.send(.standaloneStartupActionPendingCompletion(
+                    paneId,
+                    isPending
+                ))
+            },
             updateConnectionState: { paneId, state in
                 sessionAccess.send(.connectionState(paneId, state))
             },
@@ -883,10 +894,12 @@ final class TerminalTransportCoordinator {
                     cols: cols,
                     rows: rows
                 ) else { return nil }
+                let paneState = sessionAccess.paneState(paneId)
                 return SSHConnectionRestoredShell(
                     shell: shell,
-                    remoteSessionLifecycle: sessionAccess.paneState(paneId)?
-                        .remoteSessionResumeContext
+                    remoteSessionLifecycle: paneState?.remoteSessionResumeContext,
+                    standaloneStartupActionPendingCompletion: paneState?
+                        .standaloneStartupActionPendingCompletion == true
                 )
             },
             registerShell: { [weak registry] shell in
@@ -904,6 +917,13 @@ final class TerminalTransportCoordinator {
                 }
                 sessionAccess.send(.activeTransport(paneId, shell.transportState))
                 return true
+            },
+            setStandaloneStartupActionPendingCompletion: { isPending in
+                guard ownsConnection() else { return }
+                sessionAccess.send(.standaloneStartupActionPendingCompletion(
+                    paneId,
+                    isPending
+                ))
             },
             persistMoshCheckpoint: { shellId in
                 guard ownsConnection() else { return }

@@ -143,6 +143,8 @@ final class TerminalTabManager {
             setPaneTransport(state, for: paneId)
         case .eternalTerminalResumeContext(let paneId, let context):
             setRemoteSessionLifecycleContext(context, for: paneId)
+        case .standaloneStartupActionPendingCompletion(let paneId, let isPending):
+            setStandaloneStartupActionPendingCompletion(isPending, for: paneId)
         case .connectionState(let paneId, let state):
             updatePaneState(paneId, connectionState: state)
         case .title(let paneId, let title):
@@ -935,6 +937,17 @@ final class TerminalTabManager {
         }
     }
 
+    private func setStandaloneStartupActionPendingCompletion(
+        _ isPending: Bool,
+        for paneId: UUID
+    ) {
+        guard sessionState.paneState(for: paneId)?
+            .standaloneStartupActionPendingCompletion != isPending else { return }
+        sessionState.updatePane(paneId, persist: true) {
+            $0.standaloneStartupActionPendingCompletion = isPending
+        }
+    }
+
     /// DEV-228 compatibility for the excluded SSHSFTPAdapter default provider.
     func sharedStatsClient(for serverId: UUID) -> SSHClient? {
         transportCoordinator.sharedStatsClient(for: serverId)
@@ -1081,6 +1094,7 @@ final class TerminalTabManager {
         case .standaloneStartupActionCompleted:
             sessionState.updatePane(paneId, persist: true) {
                 $0.disconnectReason = .startupActionCompleted
+                $0.standaloneStartupActionPendingCompletion = false
             }
             updatePaneState(paneId, connectionState: .disconnected)
 

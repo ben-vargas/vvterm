@@ -529,6 +529,9 @@ final class TerminalSessionStateStore: ObservableObject {
                         .paneDisconnectReasons?[paneId]
                     paneState.remoteSessionResumeContext = snapshotsByTabId[tab.id]?
                         .remoteSessionResumeContexts?[paneId]
+                    paneState.standaloneStartupActionPendingCompletion = snapshotsByTabId[tab.id]?
+                        .standaloneStartupActionPaneIds?
+                        .contains(paneId) == true
                     restoredPaneStates[paneId] = paneState
                 }
             }
@@ -668,7 +671,7 @@ struct TerminalPanePresentationState: Equatable {
 }
 
 private struct TerminalTabsSnapshot: Codable {
-    private static let currentVersion = 2
+    private static let currentVersion = 3
 
     struct ServerSnapshot: Codable {
         let serverId: UUID
@@ -688,6 +691,7 @@ private struct TerminalTabsSnapshot: Codable {
         let panePresentationOverrides: [UUID: TerminalPresentationOverrides]?
         let paneDisconnectReasons: [UUID: TerminalDisconnectReason]?
         let remoteSessionResumeContexts: [UUID: RemoteSessionLifecycleContext]?
+        let standaloneStartupActionPaneIds: Set<UUID>?
         let remoteSessionAttachments: [UUID: TerminalRemoteSessionAttachmentState]?
 
         private enum CodingKeys: String, CodingKey {
@@ -701,6 +705,7 @@ private struct TerminalTabsSnapshot: Codable {
             case panePresentationOverrides
             case paneDisconnectReasons
             case remoteSessionResumeContexts
+            case standaloneStartupActionPaneIds
             case remoteSessionAttachments
             case eternalTerminalTmuxResumeContexts
             case tmuxAttachments
@@ -744,6 +749,10 @@ private struct TerminalTabsSnapshot: Codable {
                 }
             )
             paneDisconnectReasons = disconnectReasons.isEmpty ? nil : disconnectReasons
+            let actionPaneIds = Set(tab.allPaneIds.filter {
+                paneStates[$0]?.standaloneStartupActionPendingCompletion == true
+            })
+            standaloneStartupActionPaneIds = actionPaneIds.isEmpty ? nil : actionPaneIds
             let resumeContexts: [UUID: RemoteSessionLifecycleContext] = Dictionary(
                 uniqueKeysWithValues: tab.allPaneIds.compactMap { paneId in
                     guard let context = paneStates[paneId]?.remoteSessionResumeContext else {
@@ -777,6 +786,10 @@ private struct TerminalTabsSnapshot: Codable {
             paneDisconnectReasons = try container.decodeIfPresent(
                 [UUID: TerminalDisconnectReason].self,
                 forKey: .paneDisconnectReasons
+            )
+            standaloneStartupActionPaneIds = try container.decodeIfPresent(
+                Set<UUID>.self,
+                forKey: .standaloneStartupActionPaneIds
             )
             let attachments: [UUID: TerminalRemoteSessionAttachmentState]?
             if let current = try container.decodeIfPresent(
@@ -856,6 +869,10 @@ private struct TerminalTabsSnapshot: Codable {
             try container.encodeIfPresent(
                 remoteSessionResumeContexts,
                 forKey: .remoteSessionResumeContexts
+            )
+            try container.encodeIfPresent(
+                standaloneStartupActionPaneIds,
+                forKey: .standaloneStartupActionPaneIds
             )
             try container.encodeIfPresent(
                 remoteSessionAttachments,

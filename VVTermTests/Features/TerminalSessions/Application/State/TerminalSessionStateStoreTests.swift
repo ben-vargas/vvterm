@@ -72,6 +72,7 @@ struct TerminalSessionStateStoreTests {
         )
         pane.presentationOverrides = TerminalPresentationOverrides(fontSize: 18)
         pane.disconnectReason = .transportInterrupted
+        pane.standaloneStartupActionPendingCompletion = true
 
         source.install(tab, paneState: pane, select: true)
         source.selectTab(staleSelectedTabId, for: tab.serverId)
@@ -87,6 +88,10 @@ struct TerminalSessionStateStoreTests {
         #expect(restoredSelections.selection(for: tab.serverId) == .stats)
         #expect(restored.paneState(for: tab.rootPaneId)?.presentationOverrides.fontSize == 18)
         #expect(restored.paneState(for: tab.rootPaneId)?.disconnectReason == .transportInterrupted)
+        #expect(
+            restored.paneState(for: tab.rootPaneId)?
+                .standaloneStartupActionPendingCompletion == true
+        )
         #expect(restored.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
     }
 
@@ -400,7 +405,7 @@ struct TerminalSessionStateStoreTests {
         migrated.persistNow()
         let rewritten = try #require(migratedSnapshot.data)
         let rewrittenText = String(decoding: rewritten, as: UTF8.self)
-        #expect(rewrittenText.contains("\"version\":2"))
+        #expect(rewrittenText.contains("\"version\":3"))
         #expect(rewrittenText.contains("remoteSessionAttachments"))
         #expect(rewrittenText.contains("legacyTmuxMarkerToken"))
         #expect(!rewrittenText.contains("eternalTerminalTmuxResumeContexts"))

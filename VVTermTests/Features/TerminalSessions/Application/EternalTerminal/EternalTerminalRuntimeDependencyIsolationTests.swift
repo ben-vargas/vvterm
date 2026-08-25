@@ -155,10 +155,15 @@ private actor TestEternalTerminalSession: EternalTerminalSession {
 @MainActor
 private final class SequencedEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
     private let sessions: [TestEternalTerminalSession]
+    private let origin: EternalTerminalSessionOrigin
     private var nextIndex = 0
 
-    init(sessions: [TestEternalTerminalSession]) {
+    init(
+        sessions: [TestEternalTerminalSession],
+        origin: EternalTerminalSessionOrigin = .bootstrapped
+    ) {
         self.sessions = sessions
+        self.origin = origin
     }
 
     func prepareSession(
@@ -169,7 +174,7 @@ private final class SequencedEternalTerminalSessionPreparer: EternalTerminalSess
         guard sessions.indices.contains(nextIndex) else { throw CancellationError() }
         let session = sessions[nextIndex]
         nextIndex += 1
-        return PreparedEternalTerminalSession(session: session, origin: .bootstrapped)
+        return PreparedEternalTerminalSession(session: session, origin: origin)
     }
 
     func discardResumeState(for paneId: UUID) throws {}
@@ -212,6 +217,42 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
             if !endReasons.isEmpty { break }
             await Task.yield()
         }
+        #expect(endReasons == [.standaloneStartupActionCompleted])
+        await runtime.close()
+    }
+
+    @Test
+    func resumedStandaloneActionKeepsItsOneTimeCompletionState() async {
+        let session = TestEternalTerminalSession()
+        var endReasons: [TerminalShellEndReason] = []
+        let dependencies = EternalTerminalRuntimeDependencies(
+            recordEvent: { _ in },
+            remoteSessionKiller: EternalTerminalRemoteSessionKillRecorder(),
+            sessionPreparer: SequencedEternalTerminalSessionPreparer(
+                sessions: [session],
+                origin: .resumed
+            )
+        )
+        let runtime = makeRuntime(
+            dependencies: dependencies,
+            resumedStandaloneAction: true,
+            handleShellEnd: { _, _, reason in
+                endReasons.append(reason)
+            }
+        )
+
+        runtime.resize(cols: 80, rows: 24, pixelSize: nil)
+        runtime.startIfNeeded()
+        for _ in 0..<2_000 {
+            if !runtime.isStartInFlight { break }
+            await Task.yield()
+        }
+        await session.finish()
+        for _ in 0..<2_000 {
+            if !endReasons.isEmpty { break }
+            await Task.yield()
+        }
+
         #expect(endReasons == [.standaloneStartupActionCompleted])
         await runtime.close()
     }
@@ -307,6 +348,7 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
 
     private func makeRuntime(
         dependencies: EternalTerminalRuntimeDependencies,
+        resumedStandaloneAction: Bool = false,
         handleShellEnd: @MainActor @Sendable @escaping (
             UUID,
             UUID,
@@ -328,6 +370,10 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
                 startupPlan: { _, _, _, _ in throw CancellationError() },
                 resumeContext: { _ in nil },
                 setResumeContext: { _, _ in },
+                standaloneStartupActionPendingCompletion: { _ in
+                    resumedStandaloneAction
+                },
+                setStandaloneStartupActionPendingCompletion: { _, _ in },
                 updateConnectionState: { _, _ in },
                 markEternalTerminalTransport: { _ in },
                 handleShellEnd: handleShellEnd,
