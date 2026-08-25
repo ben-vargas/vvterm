@@ -55,7 +55,10 @@ nonisolated enum ZmxRemoteSessionParser {
             return RemoteSessionDescriptor(
                 id: identifier,
                 attachedClientCount: parsed.attachedClientCount,
-                containerCount: nil
+                containerCount: nil,
+                cleanupDisposition: RemoteSessionCleanupDisposition(
+                    attachedClientCount: parsed.attachedClientCount
+                )
             )
         }
     }

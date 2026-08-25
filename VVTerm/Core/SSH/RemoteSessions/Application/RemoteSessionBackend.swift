@@ -236,13 +236,13 @@ actor RemoteSessionClient {
         guard let sessions = try? await backend.listSessions(using: client, runtime: runtime) else {
             return
         }
-        for session in sessions {
-            guard backend.isManagedIdentifier(session.id, deviceID: deviceID),
-                  session.attachedClientCount == 0,
-                  !identifiers.contains(session.id) else {
-                continue
-            }
-            await backend.killSession(session.id, using: client, runtime: runtime)
+        let identifiersToDelete = RemoteSessionCleanupPolicy.identifiersToDelete(
+            from: sessions,
+            keeping: identifiers,
+            isManaged: { backend.isManagedIdentifier($0, deviceID: deviceID) }
+        )
+        for identifier in identifiersToDelete {
+            await backend.killSession(identifier, using: client, runtime: runtime)
         }
     }
 

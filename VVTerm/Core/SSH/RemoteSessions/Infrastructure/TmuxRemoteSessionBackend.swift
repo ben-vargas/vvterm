@@ -43,7 +43,10 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
                     validating: session.name
                 ),
                 attachedClientCount: max(0, session.attachedClients),
-                containerCount: max(0, session.windowCount)
+                containerCount: max(0, session.windowCount),
+                cleanupDisposition: RemoteSessionCleanupDisposition(
+                    attachedClientCount: max(0, session.attachedClients)
+                )
             )
         }
     }

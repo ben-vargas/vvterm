@@ -36,6 +36,7 @@ struct ZmxRemoteSessionBackendTests {
         #expect(sessions.map(\.id.backendIdentifier) == [.zmx, .zmx])
         #expect(sessions.map(\.id.rawValue) == ["alpha", "team session"])
         #expect(sessions.map(\.attachedClientCount) == [0, 2])
+        #expect(sessions.map(\.cleanupDisposition) == [.safeToDelete, .inUse])
         #expect(sessions.allSatisfy { $0.containerCount == nil })
     }
 

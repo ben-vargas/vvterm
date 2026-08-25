@@ -316,6 +316,7 @@ nonisolated struct RemoteSessionDescriptor: Codable, Hashable, Identifiable, Sen
     let id: RemoteSessionIdentifier
     let attachedClientCount: Int?
     let containerCount: Int?
+    let cleanupDisposition: RemoteSessionCleanupDisposition
 }
 
 nonisolated struct RemoteSessionAttachment: Codable, Hashable, Sendable {
