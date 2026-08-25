@@ -117,6 +117,13 @@ final class RemoteSessionAttachResolver: ObservableObject {
     ) throws {
         switch selection {
         case .createManaged:
+            if let state = attachments[entityID],
+               state.attachment.ownership == .managed,
+               state.attachment.identifier.backendIdentifier == backendIdentifier {
+                // A restored identifier is authoritative. It can use an older
+                // naming format or contain a server name from before a rename.
+                return
+            }
             let attachment = RemoteSessionAttachment(
                 identifier: try managedIdentifier(
                     for: entityID,
@@ -125,11 +132,9 @@ final class RemoteSessionAttachResolver: ObservableObject {
                 ),
                 ownership: .managed
             )
-            let isSameAttachment = attachments[entityID]?.attachment == attachment
             attachments[entityID] = TerminalRemoteSessionAttachmentState(
                 attachment: attachment,
-                managedSessionConfirmed: isSameAttachment
-                    && attachments[entityID]?.managedSessionConfirmed == true
+                managedSessionConfirmed: false
             )
         case .attachExisting(let identifier):
             guard identifier.backendIdentifier == backendIdentifier else {

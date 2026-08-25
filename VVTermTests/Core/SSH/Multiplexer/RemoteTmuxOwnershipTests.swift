@@ -50,6 +50,38 @@ struct RemoteTmuxOwnershipTests {
     }
 
     @Test @MainActor
+    func createManagedPreservesRestoredIdentifierAndConfirmation() throws {
+        let resolver = makeResolver()
+        let paneId = UUID()
+        let serverId = UUID()
+        let restoredIdentifier = try RemoteSessionIdentifier(
+            backendIdentifier: .tmux,
+            validating: "legacy-session"
+        )
+        resolver.setAttachment(
+            TerminalRemoteSessionAttachmentState(
+                attachment: RemoteSessionAttachment(
+                    identifier: restoredIdentifier,
+                    ownership: .managed
+                ),
+                managedSessionConfirmed: true
+            ),
+            for: paneId
+        )
+
+        try resolver.updateAttachmentState(
+            for: paneId,
+            serverID: serverId,
+            backendIdentifier: .tmux,
+            selection: .createManaged
+        )
+
+        let state = try #require(resolver.attachment(for: paneId))
+        #expect(state.attachment.identifier == restoredIdentifier)
+        #expect(state.managedSessionConfirmed)
+    }
+
+    @Test @MainActor
     func selectedExternalSessionDoesNotLoadVVTermConfiguration() throws {
         let resolver = makeResolver()
         let paneId = UUID()
