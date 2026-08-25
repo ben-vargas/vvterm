@@ -463,10 +463,10 @@ final class TerminalSessionStateStore: ObservableObject {
         _ isPending: Bool,
         for paneId: UUID
     ) {
-        let didChange = updatePane(paneId, persist: true) {
+        let didChange = updatePane(paneId) {
             $0.standaloneStartupActionPendingCompletion = isPending
         }
-        guard didChange, isPending else { return }
+        guard didChange else { return }
         persistNow()
     }
 

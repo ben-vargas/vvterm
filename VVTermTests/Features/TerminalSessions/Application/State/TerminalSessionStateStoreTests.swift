@@ -126,6 +126,35 @@ struct TerminalSessionStateStoreTests {
     }
 
     @Test
+    func clearingStandaloneActionPersistsItsResumeGuardImmediately() {
+        let snapshot = StateStoreSnapshotMemory()
+        let source = makeStore(
+            snapshot: snapshot,
+            selections: ConnectionViewSelectionStore()
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Retry action")
+        var pane = TerminalPaneState(
+            paneId: tab.rootPaneId,
+            tabId: tab.id,
+            serverId: tab.serverId
+        )
+        pane.standaloneStartupActionPendingCompletion = true
+        source.install(tab, paneState: pane, select: true)
+        source.persistNow()
+
+        source.setStandaloneStartupActionPendingCompletion(false, for: tab.rootPaneId)
+
+        let restored = makeStore(
+            snapshot: snapshot,
+            selections: ConnectionViewSelectionStore()
+        )
+        #expect(
+            restored.paneState(for: tab.rootPaneId)?
+                .standaloneStartupActionPendingCompletion == false
+        )
+    }
+
+    @Test
     func completingStandaloneActionPersistsItsTerminalStateImmediately() {
         let snapshot = StateStoreSnapshotMemory()
         let source = makeStore(
