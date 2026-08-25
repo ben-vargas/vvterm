@@ -118,6 +118,7 @@ final class ServerRemoteSyncCoordinator {
             throw error
         }
 
+        cleanLocalData(for: serversRemovedFrom(previousServers))
         stateStore.restorePendingBootstrapWorkspaceID(nil)
         try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
         try clearAmbiguousCloudRecoveryIfNeeded()
@@ -182,6 +183,7 @@ final class ServerRemoteSyncCoordinator {
                 try? stateStore.persistCurrentCollectionsForRemoteAcceptance()
                 throw error
             }
+            cleanLocalData(for: serversRemovedFrom(previousServers))
             stateStore.restorePendingBootstrapWorkspaceID(nil)
             try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
         }
@@ -333,10 +335,7 @@ final class ServerRemoteSyncCoordinator {
         try applyPendingSyncOverlay()
         _ = stateStore.reconcilePendingBootstrapWorkspaceState()
         try repairOrphanedServers()
-        let retainedServerIDs = Set(stateStore.servers.map(\.id))
-        let deletedServers = previousServers.filter {
-            !retainedServerIDs.contains($0.id)
-        }
+        let deletedServers = serversRemovedFrom(previousServers)
 
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
 
@@ -349,6 +348,7 @@ final class ServerRemoteSyncCoordinator {
             return
         }
         mustRestorePersistedCollections = false
+        cleanLocalData(for: deletedServers)
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
         stateStore.refreshFreePlanGeneration(
             persistCurrentIfNeeded: true,
@@ -362,8 +362,6 @@ final class ServerRemoteSyncCoordinator {
             return
         }
         mustRestorePendingBootstrapWorkspaceID = false
-        removeKnownHosts(for: deletedServers)
-        deletedServers.forEach { dependencies.didDeleteServerLocalData($0.id) }
 
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
         await drainPendingMutations()
@@ -373,6 +371,16 @@ final class ServerRemoteSyncCoordinator {
             "Loaded \(self.stateStore.workspaces.count) workspaces and \(self.stateStore.servers.count) servers from CloudKit"
         )
         finishActiveLoad(operationID: operationID, generation: generation)
+    }
+
+    private func serversRemovedFrom(_ previousServers: [Server]) -> [Server] {
+        let retainedServerIDs = Set(stateStore.servers.map(\.id))
+        return previousServers.filter { !retainedServerIDs.contains($0.id) }
+    }
+
+    private func cleanLocalData(for removedServers: [Server]) {
+        removeKnownHosts(for: removedServers)
+        removedServers.forEach { dependencies.didDeleteServerLocalData($0.id) }
     }
 
     private func clearAmbiguousCloudRecoveryIfNeeded() throws {
