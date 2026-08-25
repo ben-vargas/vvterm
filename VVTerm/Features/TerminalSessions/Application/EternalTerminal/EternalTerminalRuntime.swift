@@ -163,6 +163,7 @@ final class EternalTerminalRuntime {
     private var failureReported = false
     private var networkRecoveryProbe = EternalTerminalRecoveryProbe()
     private var startupApplied = false
+    private var standaloneStartupActionPendingCompletion = false
     private var remoteSessionLifecycle: RemoteSessionLifecycleContext?
     private var remoteSessionLifecycleParser: RemoteSessionLifecycleStreamParser?
     private var lastTerminalSize: (cols: Int, rows: Int, pixels: TerminalPixelSize?) = (0, 0, nil)
@@ -493,6 +494,15 @@ final class EternalTerminalRuntime {
         guard isCurrentOwner else {
             return nil
         }
+        if state == .closed, standaloneStartupActionPendingCompletion {
+            standaloneStartupActionPendingCompletion = false
+            ownerAccess.handleShellEnd(
+                paneId,
+                identityToken,
+                .standaloneStartupActionCompleted
+            )
+            return nil
+        }
         let recoveryProbeIDAtEvent = networkRecoveryProbe.pendingID
         if state == .reconnecting || state == .disconnected {
             if !reconnectEventActive {
@@ -558,6 +568,7 @@ final class EternalTerminalRuntime {
 
     private func acceptStartupPlan(_ plan: TerminalShellStartupPlan) -> Data? {
         guard isCurrentOwner else { return nil }
+        standaloneStartupActionPendingCompletion = plan.mayExecuteStandaloneUserStartupAction
         let resumeContext = plan.remoteSessionLifecycle
         remoteSessionLifecycle = resumeContext
         remoteSessionLifecycleParser = resumeContext.map {

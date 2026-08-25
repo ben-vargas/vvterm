@@ -74,22 +74,38 @@ private actor EternalTerminalConnectGate {
     }
 }
 
-private actor BlockingEternalTerminalSession: EternalTerminalSession {
+private actor TestEternalTerminalSession: EternalTerminalSession {
     nonisolated let output = AsyncStream<Data> { _ in }
-    nonisolated let stateChanges = AsyncStream<EternalTerminalSessionState> { _ in }
+    nonisolated let stateChanges: AsyncStream<EternalTerminalSessionState>
 
-    private let connectGate: EternalTerminalConnectGate
+    private let stateContinuation: AsyncStream<EternalTerminalSessionState>.Continuation
+    private let connectGate: EternalTerminalConnectGate?
+    private let startupPlan: TerminalShellStartupPlan
     private var closeCalls = 0
+    private var commandWasSent = false
 
-    init(connectGate: EternalTerminalConnectGate) {
+    init(
+        connectGate: EternalTerminalConnectGate? = nil,
+        startupPlan: TerminalShellStartupPlan = .plainShell
+    ) {
+        let stream = AsyncStream.makeStream(of: EternalTerminalSessionState.self)
+        stateChanges = stream.stream
+        stateContinuation = stream.continuation
         self.connectGate = connectGate
+        self.startupPlan = startupPlan
     }
 
     func connect() async throws {
-        await connectGate.waitIgnoringCancellation()
+        if let connectGate {
+            await connectGate.waitIgnoringCancellation()
+        } else {
+            stateContinuation.yield(.connected)
+        }
     }
 
-    func send(_ data: Data) async throws {}
+    func send(_ data: Data) async throws {
+        commandWasSent = true
+    }
 
     func resize(
         rows: Int,
@@ -109,7 +125,7 @@ private actor BlockingEternalTerminalSession: EternalTerminalSession {
     ) async throws {}
 
     func resumeFromApplicationBackground() async {}
-    func preparedStartupPlan() async -> TerminalShellStartupPlan { .plainShell }
+    func preparedStartupPlan() async -> TerminalShellStartupPlan { startupPlan }
 
     func withBootstrapSSHClient<Result: Sendable>(
         _ operation: @Sendable (SSHClient) async throws -> Result
@@ -122,14 +138,26 @@ private actor BlockingEternalTerminalSession: EternalTerminalSession {
     }
 
     func closeCount() -> Int { closeCalls }
+
+    func waitUntilCommandIsSent() async -> Bool {
+        for _ in 0..<2_000 {
+            if commandWasSent { return true }
+            await Task.yield()
+        }
+        return commandWasSent
+    }
+
+    func finish() {
+        stateContinuation.yield(.closed)
+    }
 }
 
 @MainActor
 private final class SequencedEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
-    private let sessions: [BlockingEternalTerminalSession]
+    private let sessions: [TestEternalTerminalSession]
     private var nextIndex = 0
 
-    init(sessions: [BlockingEternalTerminalSession]) {
+    init(sessions: [TestEternalTerminalSession]) {
         self.sessions = sessions
     }
 
@@ -151,10 +179,48 @@ private final class SequencedEternalTerminalSessionPreparer: EternalTerminalSess
 @MainActor
 struct EternalTerminalRuntimeDependencyIsolationTests {
     @Test
+    func closedStandaloneActionPublishesItsTerminalEndReason() async {
+        let session = TestEternalTerminalSession(
+            startupPlan: TerminalShellStartupPlan(
+                command: "exec /bin/sh -lc 'printf done'",
+                remoteSessionLifecycle: nil,
+                mayExecuteUserStartupAction: true
+            )
+        )
+        var endReasons: [TerminalShellEndReason] = []
+        let dependencies = EternalTerminalRuntimeDependencies(
+            recordEvent: { _ in },
+            remoteSessionKiller: EternalTerminalRemoteSessionKillRecorder(),
+            sessionPreparer: SequencedEternalTerminalSessionPreparer(
+                sessions: [session]
+            )
+        )
+        let runtime = makeRuntime(
+            dependencies: dependencies,
+            handleShellEnd: { _, _, reason in
+                endReasons.append(reason)
+            }
+        )
+
+        runtime.resize(cols: 80, rows: 24, pixelSize: nil)
+        runtime.startIfNeeded()
+        #expect(await session.waitUntilCommandIsSent())
+
+        await session.finish()
+
+        for _ in 0..<2_000 {
+            if !endReasons.isEmpty { break }
+            await Task.yield()
+        }
+        #expect(endReasons == [.standaloneStartupActionCompleted])
+        await runtime.close()
+    }
+
+    @Test
     func cancelledConnectCannotClearReplacementOrCloseAnAcceptedSessionTwice() async {
         let gate = EternalTerminalConnectGate()
-        let firstSession = BlockingEternalTerminalSession(connectGate: gate)
-        let replacementSession = BlockingEternalTerminalSession(connectGate: gate)
+        let firstSession = TestEternalTerminalSession(connectGate: gate)
+        let replacementSession = TestEternalTerminalSession(connectGate: gate)
         let events = EternalTerminalEventRecorder()
         let dependencies = EternalTerminalRuntimeDependencies(
             recordEvent: { [events] event in events.record(event) },
@@ -240,7 +306,12 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
     }
 
     private func makeRuntime(
-        dependencies: EternalTerminalRuntimeDependencies
+        dependencies: EternalTerminalRuntimeDependencies,
+        handleShellEnd: @MainActor @Sendable @escaping (
+            UUID,
+            UUID,
+            TerminalShellEndReason
+        ) -> Void = { _, _, _ in }
     ) -> EternalTerminalRuntime {
         let server = Server(
             workspaceId: UUID(),
@@ -259,7 +330,7 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
                 setResumeContext: { _, _ in },
                 updateConnectionState: { _, _ in },
                 markEternalTerminalTransport: { _ in },
-                handleShellEnd: { _, _, _ in },
+                handleShellEnd: handleShellEnd,
                 unregister: { _, _ in }
             ),
             dependencies: dependencies
