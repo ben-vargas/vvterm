@@ -69,6 +69,16 @@ struct RemoteTerminalBootstrapTests {
     }
 
     @Test
+    func launchPlanWithStartupCommandUsesTerminatingCmdWrapper() {
+        let plan = RemoteTerminalBootstrap.launchPlan(
+            startupCommand: "echo ready",
+            environment: cmdEnvironment
+        )
+
+        #expect(plan == .exec("cmd.exe /d /c echo ready"))
+    }
+
+    @Test
     func launchPlanWithStartupCommandUsesPOSIXExecWrapper() {
         let plan = RemoteTerminalBootstrap.launchPlan(startupCommand: "echo hi", environment: posixEnvironment)
 

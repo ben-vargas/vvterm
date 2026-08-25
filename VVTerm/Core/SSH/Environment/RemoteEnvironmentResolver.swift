@@ -53,7 +53,7 @@ nonisolated struct RemoteShellProfile: Hashable, Sendable {
             guard !trimmed.isEmpty else {
                 return .shell
             }
-            return .exec(RemoteTerminalBootstrap.wrapCmdCommand(trimmed))
+            return .exec(RemoteTerminalBootstrap.wrapCmdExecCommand(trimmed))
         case .unknown:
             guard !trimmed.isEmpty else {
                 return .shell
