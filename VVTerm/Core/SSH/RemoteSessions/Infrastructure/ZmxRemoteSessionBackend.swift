@@ -10,7 +10,8 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
     let metadata = RemoteSessionBackendMetadata(
         identifier: .zmx,
         displayName: "zmx",
-        installation: .documentation(URL(string: "https://zmx.sh")!)
+        installation: .documentation(URL(string: "https://zmx.sh")!),
+        managedStartupCommandSupport: .supported
     )
 
     func availability(using client: SSHClient) async -> RemoteSessionAvailability {
@@ -51,16 +52,26 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
     }
 
     func listSessions(
+        scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] {
         try requireSupported(runtime)
         let output = try await client.execute(
-            ZmxRemoteSessionCommandBuilder.listCommand(runtime: runtime),
+            ZmxRemoteSessionCommandBuilder.listCommand(scope: scope, runtime: runtime),
             timeout: .seconds(12),
             maxOutputBytes: ZmxRemoteSessionParser.maximumOutputBytes
         )
-        return try ZmxRemoteSessionParser.parseSessionList(output)
+        let sessions = try ZmxRemoteSessionParser.parseSessionList(output)
+        switch scope {
+        case .userVisible:
+            return sessions
+        case .managedCleanup:
+            guard sessions.allSatisfy({ $0.attachment.ownership == .managed }) else {
+                throw SSHError.unknown("zmx returned an unowned cleanup session")
+            }
+            return sessions
+        }
     }
 
     func prepareManagedSession(
@@ -126,21 +137,20 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func cleanupLegacySessions(
-        using client: SSHClient,
-        runtime: RemoteSessionRuntime
-    ) async {}
-
     func currentWorkingDirectory(
-        for identifier: RemoteSessionIdentifier,
+        for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async -> String? {
+        let identifier = attachment.identifier
         guard identifier.backendIdentifier == .zmx else { return nil }
         do {
             try requireSupported(runtime)
             let output = try await client.execute(
-                ZmxRemoteSessionCommandBuilder.listCommand(runtime: runtime),
+                ZmxRemoteSessionCommandBuilder.listCommand(
+                    scope: .userVisible,
+                    runtime: runtime
+                ),
                 timeout: .seconds(8),
                 maxOutputBytes: ZmxRemoteSessionParser.maximumOutputBytes
             )

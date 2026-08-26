@@ -8,9 +8,9 @@ nonisolated protocol RemoteSessionBackend: Sendable {
         entityID: UUID,
         serverName: String
     ) throws -> RemoteSessionIdentifier
-    func isManagedIdentifier(_ identifier: RemoteSessionIdentifier, deviceID: String) -> Bool
     func availability(using client: SSHClient) async -> RemoteSessionAvailability
     func listSessions(
+        scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor]
@@ -37,12 +37,8 @@ nonisolated protocol RemoteSessionBackend: Sendable {
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async
-    func cleanupLegacySessions(
-        using client: SSHClient,
-        runtime: RemoteSessionRuntime
-    ) async
     func currentWorkingDirectory(
-        for identifier: RemoteSessionIdentifier,
+        for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async -> String?
@@ -60,17 +56,6 @@ extension RemoteSessionBackend {
             deviceID: deviceID,
             entityID: entityID
         )
-    }
-
-    nonisolated func isManagedIdentifier(
-        _ identifier: RemoteSessionIdentifier,
-        deviceID: String
-    ) -> Bool {
-        identifier.backendIdentifier == metadata.identifier
-            && RemoteSessionManagedIdentifierPolicy.isManagedIdentifier(
-                identifier,
-                deviceID: deviceID
-            )
     }
 }
 
@@ -126,14 +111,6 @@ actor RemoteSessionClient {
         )
     }
 
-    nonisolated func isManagedIdentifier(
-        _ identifier: RemoteSessionIdentifier,
-        deviceID: String
-    ) -> Bool {
-        registry.backend(for: identifier.backendIdentifier)?
-            .isManagedIdentifier(identifier, deviceID: deviceID) == true
-    }
-
     func availability(
         for backendIdentifier: RemoteSessionBackendIdentifier,
         using client: SSHClient
@@ -145,13 +122,18 @@ actor RemoteSessionClient {
     }
 
     func listSessions(
+        scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] {
         guard let backend = registry.backend(for: runtime.backendIdentifier) else {
             throw SSHError.unknown("Unknown remote session backend")
         }
-        return try await backend.listSessions(using: client, runtime: runtime)
+        return try await backend.listSessions(
+            scope: scope,
+            using: client,
+            runtime: runtime
+        )
     }
 
     func prepareManagedSession(
@@ -226,20 +208,21 @@ actor RemoteSessionClient {
     }
 
     func cleanupSessions(
-        deviceID: String,
         keeping identifiers: Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async {
         guard let backend = registry.backend(for: runtime.backendIdentifier) else { return }
-        await backend.cleanupLegacySessions(using: client, runtime: runtime)
-        guard let sessions = try? await backend.listSessions(using: client, runtime: runtime) else {
+        guard let sessions = try? await backend.listSessions(
+            scope: .managedCleanup,
+            using: client,
+            runtime: runtime
+        ) else {
             return
         }
         let identifiersToDelete = RemoteSessionCleanupPolicy.identifiersToDelete(
             from: sessions,
-            keeping: identifiers,
-            isManaged: { backend.isManagedIdentifier($0, deviceID: deviceID) }
+            keeping: identifiers
         )
         for identifier in identifiersToDelete {
             await backend.killSession(identifier, using: client, runtime: runtime)
@@ -247,10 +230,11 @@ actor RemoteSessionClient {
     }
 
     func currentWorkingDirectory(
-        for identifier: RemoteSessionIdentifier,
+        for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime explicitRuntime: RemoteSessionRuntime? = nil
     ) async -> String? {
+        let identifier = attachment.identifier
         guard let backend = registry.backend(for: identifier.backendIdentifier) else { return nil }
         let runtime: RemoteSessionRuntime
         if let explicitRuntime {
@@ -262,7 +246,7 @@ actor RemoteSessionClient {
             runtime = RemoteSessionRuntime(probe: probe)
         }
         return await backend.currentWorkingDirectory(
-            for: identifier,
+            for: attachment,
             using: client,
             runtime: runtime
         )

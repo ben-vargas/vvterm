@@ -53,7 +53,10 @@ nonisolated enum ZmxRemoteSessionParser {
                 throw SSHError.unknown("zmx returned a duplicate session identifier")
             }
             return RemoteSessionDescriptor(
-                id: identifier,
+                attachment: RemoteSessionAttachment(
+                    identifier: identifier,
+                    ownership: parsed.ownership
+                ),
                 attachedClientCount: parsed.attachedClientCount,
                 containerCount: nil,
                 cleanupDisposition: RemoteSessionCleanupDisposition(
@@ -65,7 +68,11 @@ nonisolated enum ZmxRemoteSessionParser {
 
     private static func parseSessionLine(
         _ line: Substring
-    ) throws -> (name: String, attachedClientCount: Int) {
+    ) throws -> (
+        name: String,
+        attachedClientCount: Int,
+        ownership: RemoteSessionOwnership
+    ) {
         let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
         guard let nameField = fields.first,
               nameField.hasPrefix("name=") else {
@@ -80,7 +87,10 @@ nonisolated enum ZmxRemoteSessionParser {
         }
         return (
             name: String(nameField.dropFirst("name=".count)),
-            attachedClientCount: attachedClientCount
+            attachedClientCount: attachedClientCount,
+            ownership: fields.contains(Substring(
+                ZmxRemoteSessionCommandBuilder.managedOwnershipLabel
+            )) ? .managed : .external
         )
     }
 

@@ -4,26 +4,14 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
     let metadata = RemoteSessionBackendMetadata(
         identifier: .tmux,
         displayName: "tmux",
-        installation: .automatic
+        installation: .automatic,
+        managedStartupCommandSupport: .supported
     )
 
     private let tmux: RemoteTmuxManager
 
     init(tmux: RemoteTmuxManager) {
         self.tmux = tmux
-    }
-
-    nonisolated func isManagedIdentifier(
-        _ identifier: RemoteSessionIdentifier,
-        deviceID: String
-    ) -> Bool {
-        RemoteSessionManagedIdentifierPolicy.isManagedIdentifier(
-            identifier,
-            deviceID: deviceID
-        ) || RemoteSessionManagedIdentifierPolicy.isLegacyTmuxIdentifier(
-            identifier,
-            deviceID: deviceID
-        )
     }
 
     func availability(using client: SSHClient) async -> RemoteSessionAvailability {
@@ -43,17 +31,21 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
     }
 
     func listSessions(
+        scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] {
         let backend = try tmuxBackend(from: runtime)
         let sessions = try await tmux.listSessions(using: client, backend: backend)
         guard sessions.count <= 512 else { throw SSHError.outputLimitExceeded }
-        return try sessions.map { session in
+        let descriptors = try sessions.map { session in
             RemoteSessionDescriptor(
-                id: try RemoteSessionIdentifier(
-                    backendIdentifier: .tmux,
-                    validating: session.name
+                attachment: RemoteSessionAttachment(
+                    identifier: try RemoteSessionIdentifier(
+                        backendIdentifier: .tmux,
+                        validating: session.name
+                    ),
+                    ownership: session.ownership
                 ),
                 attachedClientCount: max(0, session.attachedClients),
                 containerCount: max(0, session.windowCount),
@@ -61,6 +53,12 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
                     attachedClientCount: max(0, session.attachedClients)
                 )
             )
+        }
+        switch scope {
+        case .userVisible:
+            return descriptors
+        case .managedCleanup:
+            return descriptors.filter { $0.attachment.ownership == .managed }
         }
     }
 
@@ -84,26 +82,24 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         runtime: RemoteSessionRuntime
     ) throws -> RemoteSessionBackendLaunchPlan {
         let backend = try tmuxBackend(from: runtime)
-        let sessionName = request.attachment.identifier.rawValue
+        let sessionName = request.intent.attachment.identifier.rawValue
         let command: String
-        switch request.mode {
-        case .attachOrCreate:
-            guard request.attachment.ownership == .managed else {
-                throw SSHError.unknown("External tmux sessions cannot be created by VVTerm")
-            }
+        switch request.intent {
+        case .ensureManaged(_, let initialCommand):
             command = RemoteTmuxCommandBuilder.attachCommand(
                 themeStyle: request.themeStyle,
                 sessionName: sessionName,
                 workingDirectory: request.workingDirectory,
+                initialCommand: initialCommand,
                 backend: backend,
                 lifecycleEnvelope: request.lifecycleEnvelope,
                 transport: request.transport
             )
-        case .attachExisting:
+        case .attach(let attachment):
             command = RemoteTmuxCommandBuilder.attachExistingCommand(
                 themeStyle: request.themeStyle,
                 sessionName: sessionName,
-                ownership: request.attachment.ownership,
+                ownership: attachment.ownership,
                 backend: backend,
                 lifecycleEnvelope: request.lifecycleEnvelope,
                 transport: request.transport
@@ -163,22 +159,14 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func cleanupLegacySessions(
-        using client: SSHClient,
-        runtime: RemoteSessionRuntime
-    ) async {
-        guard let backend = try? tmuxBackend(from: runtime) else { return }
-        await tmux.cleanupLegacySessions(using: client, backend: backend)
-    }
-
     func currentWorkingDirectory(
-        for identifier: RemoteSessionIdentifier,
+        for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async -> String? {
         guard let backend = try? tmuxBackend(from: runtime) else { return nil }
         return await tmux.currentPath(
-            sessionName: identifier.rawValue,
+            sessionName: attachment.identifier.rawValue,
             using: client,
             backend: backend
         )

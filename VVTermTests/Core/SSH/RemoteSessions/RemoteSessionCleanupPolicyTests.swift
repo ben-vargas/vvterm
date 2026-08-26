@@ -12,50 +12,36 @@ struct RemoteSessionCleanupPolicyTests {
         let retained = try identifier("vvterm-prod-dabcd-s555555")
         let external = try identifier("shared")
         let sessions = [
-            descriptor(attached, disposition: .inUse),
-            descriptor(detached, disposition: .safeToDelete),
-            descriptor(stopped, disposition: .safeToDelete),
-            descriptor(unknown, disposition: .unknown),
-            descriptor(retained, disposition: .safeToDelete),
-            descriptor(external, disposition: .safeToDelete)
+            descriptor(attached, ownership: .managed, disposition: .inUse),
+            descriptor(detached, ownership: .managed, disposition: .safeToDelete),
+            descriptor(stopped, ownership: .managed, disposition: .safeToDelete),
+            descriptor(unknown, ownership: .managed, disposition: .unknown),
+            descriptor(retained, ownership: .managed, disposition: .safeToDelete),
+            descriptor(external, ownership: .external, disposition: .safeToDelete)
         ]
 
         let result = RemoteSessionCleanupPolicy.identifiersToDelete(
             from: sessions,
-            keeping: [retained],
-            isManaged: { $0.rawValue.hasPrefix("vvterm-") }
+            keeping: [retained]
         )
 
         #expect(result == [detached, stopped])
     }
 
     @Test
-    func deletesDetachedTmuxSessionFromThePreviousDeviceScopedNameFormat() throws {
-        let deviceID = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
-        let legacy = try identifier(
-            "vvterm_\(deviceID)_11111111-2222-3333-4444-555555555555"
-        )
-        let otherDevice = try identifier(
-            "vvterm_BBBBBBBB-BBBB-CCCC-DDDD-EEEEEEEEEEEE_11111111-2222-3333-4444-555555555555"
-        )
-        let malformed = try identifier("vvterm_\(deviceID)_not-a-uuid")
-        let backend = TmuxRemoteSessionBackend(tmux: RemoteTmuxManager())
+    func userOwnedVVTermStyleNameIsNeverDeleted() throws {
+        let external = try identifier("vvterm-prod-dabcd-s111111")
+        let managed = try identifier("managed-without-name-convention")
 
         let result = RemoteSessionCleanupPolicy.identifiersToDelete(
             from: [
-                descriptor(legacy, disposition: .safeToDelete),
-                descriptor(otherDevice, disposition: .safeToDelete),
-                descriptor(malformed, disposition: .safeToDelete)
+                descriptor(external, ownership: .external, disposition: .safeToDelete),
+                descriptor(managed, ownership: .managed, disposition: .safeToDelete)
             ],
-            keeping: [],
-            isManaged: { backend.isManagedIdentifier($0, deviceID: deviceID) }
+            keeping: []
         )
 
-        #expect(result == [legacy])
-        #expect(!ZmxRemoteSessionBackend().isManagedIdentifier(
-            legacy,
-            deviceID: deviceID
-        ))
+        #expect(result == [managed])
     }
 
     private func identifier(_ rawValue: String) throws -> RemoteSessionIdentifier {
@@ -64,10 +50,14 @@ struct RemoteSessionCleanupPolicyTests {
 
     private func descriptor(
         _ identifier: RemoteSessionIdentifier,
+        ownership: RemoteSessionOwnership,
         disposition: RemoteSessionCleanupDisposition
     ) -> RemoteSessionDescriptor {
         RemoteSessionDescriptor(
-            id: identifier,
+            attachment: RemoteSessionAttachment(
+                identifier: identifier,
+                ownership: ownership
+            ),
             attachedClientCount: nil,
             containerCount: nil,
             cleanupDisposition: disposition

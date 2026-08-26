@@ -1,10 +1,11 @@
 import Foundation
 
 struct RemoteSessionSelectionInfo: Identifiable, Equatable {
-    let id: RemoteSessionIdentifier
+    let attachment: RemoteSessionAttachment
     let attachedClientCount: Int?
     let containerCount: Int?
 
+    var id: RemoteSessionIdentifier { attachment.identifier }
     var displayName: String { id.rawValue }
 }
 
@@ -18,6 +19,6 @@ struct RemoteSessionAttachPrompt: Identifiable, Equatable {
 
 enum RemoteSessionAttachSelection: Equatable {
     case createManaged
-    case attachExisting(RemoteSessionIdentifier)
+    case attachExisting(RemoteSessionAttachment)
     case plainShell
 }

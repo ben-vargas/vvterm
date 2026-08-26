@@ -23,15 +23,12 @@ nonisolated protocol TerminalRemoteSessionServicing: Sendable {
         serverName: String,
         backendIdentifier: RemoteSessionBackendIdentifier
     ) throws -> RemoteSessionIdentifier
-    func isManagedIdentifier(
-        _ identifier: RemoteSessionIdentifier,
-        deviceID: String
-    ) -> Bool
     func availability(
         for backendIdentifier: RemoteSessionBackendIdentifier,
         using client: SSHClient
     ) async -> RemoteSessionAvailability
     func listSessions(
+        scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor]
@@ -64,13 +61,12 @@ nonisolated protocol TerminalRemoteSessionServicing: Sendable {
         runtime: RemoteSessionRuntime?
     ) async
     func cleanupSessions(
-        deviceID: String,
         keeping identifiers: Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async
     func currentWorkingDirectory(
-        for identifier: RemoteSessionIdentifier,
+        for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime?
     ) async -> String?
@@ -91,15 +87,6 @@ extension TerminalRemoteSessionServicing {
         )
     }
 
-    nonisolated func isManagedIdentifier(
-        _ identifier: RemoteSessionIdentifier,
-        deviceID: String
-    ) -> Bool {
-        RemoteSessionManagedIdentifierPolicy.isManagedIdentifier(
-            identifier,
-            deviceID: deviceID
-        )
-    }
 }
 
 nonisolated protocol TerminalRemoteMoshServicing: Sendable {

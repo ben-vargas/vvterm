@@ -4,6 +4,7 @@ nonisolated struct RemoteTmuxSession: Hashable, Sendable {
     let name: String
     let attachedClients: Int
     let windowCount: Int
+    let ownership: RemoteSessionOwnership
 }
 
 nonisolated struct RemoteTmuxBackend: Hashable, Sendable {

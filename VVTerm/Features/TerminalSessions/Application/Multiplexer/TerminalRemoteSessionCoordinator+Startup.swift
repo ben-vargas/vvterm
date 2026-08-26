@@ -192,14 +192,19 @@ extension TerminalRemoteSessionCoordinator {
         }
 
         let envelope = RemoteSessionLifecycleEnvelope.make()
-        let mode: RemoteSessionLaunchMode = isReattachingManagedSession
-            || attachmentState.attachment.ownership == .external
-            ? .attachExisting
-            : .attachOrCreate
+        let intent: RemoteSessionLaunchIntent
+        if isReattachingManagedSession
+            || attachmentState.attachment.ownership == .external {
+            intent = .attach(attachmentState.attachment)
+        } else {
+            intent = .ensureManaged(
+                identifier: attachmentState.attachment.identifier,
+                initialCommand: nil
+            )
+        }
         let backendPlan = try await remoteSessions.launchPlan(
             for: RemoteSessionLaunchRequest(
-                attachment: attachmentState.attachment,
-                mode: mode,
+                intent: intent,
                 workingDirectory: workingDirectory,
                 lifecycleEnvelope: envelope,
                 transport: transport,
@@ -283,7 +288,6 @@ extension TerminalRemoteSessionCoordinator {
             identifiers.insert(identifier)
         }
         await remoteSessions.cleanupSessions(
-            deviceID: configuration.deviceID,
             keeping: identifiers,
             using: client,
             runtime: runtime
@@ -315,17 +319,17 @@ extension TerminalRemoteSessionCoordinator {
         runtime: RemoteSessionRuntime?
     ) async -> String {
         if let seedPaneID = sessionState.paneState(for: paneID)?.seedPaneId,
-           let identifier = resolver.attachment(for: seedPaneID)?.attachment.identifier,
+           let attachment = resolver.attachment(for: seedPaneID)?.attachment,
            let path = await remoteSessions.currentWorkingDirectory(
-               for: identifier,
+               for: attachment,
                using: client,
                runtime: runtime
            ) {
             return path
         }
-        if let identifier = resolver.attachment(for: paneID)?.attachment.identifier,
+        if let attachment = resolver.attachment(for: paneID)?.attachment,
            let path = await remoteSessions.currentWorkingDirectory(
-               for: identifier,
+               for: attachment,
                using: client,
                runtime: runtime
            ) {

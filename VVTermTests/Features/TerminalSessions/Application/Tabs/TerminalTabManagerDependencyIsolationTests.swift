@@ -94,7 +94,8 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
     nonisolated let backendMetadata = [RemoteSessionBackendMetadata(
         identifier: .tmux,
         displayName: "tmux",
-        installation: .automatic
+        installation: .automatic,
+        managedStartupCommandSupport: .supported
     )]
     private var killedSessions: [RemoteSessionIdentifier] = []
     private var availabilityProbes = 0
@@ -121,6 +122,7 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
     }
 
     func listSessions(
+        scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] {
@@ -172,7 +174,6 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
     }
 
     func cleanupSessions(
-        deviceID: String,
         keeping identifiers: Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -181,7 +182,7 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
     }
 
     func currentWorkingDirectory(
-        for identifier: RemoteSessionIdentifier,
+        for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime?
     ) async -> String? {

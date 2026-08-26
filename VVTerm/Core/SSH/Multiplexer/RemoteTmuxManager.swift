@@ -6,7 +6,6 @@ actor RemoteTmuxManager {
     private let listTimeout: Duration = .seconds(12)
     private let configTimeout: Duration = .seconds(20)
     private let killTimeout: Duration = .seconds(10)
-    private let cleanupTimeout: Duration = .seconds(20)
     private let pathTimeout: Duration = .seconds(10)
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.vivy.VivyTerm",
@@ -173,18 +172,6 @@ actor RemoteTmuxManager {
             backend: backend
         )
         _ = try? await client.execute(command, timeout: killTimeout)
-    }
-
-    func cleanupLegacySessions(
-        using client: SSHClient,
-        backend explicitBackend: RemoteTmuxBackend? = nil
-    ) async {
-        let backend = await resolveBackend(explicitBackend, using: client)
-        guard let backend,
-              let command = RemoteTmuxCommandBuilder.legacyCleanupCommand(
-                  backend: backend
-              ) else { return }
-        _ = try? await client.execute(command, timeout: cleanupTimeout)
     }
 
     func currentPath(

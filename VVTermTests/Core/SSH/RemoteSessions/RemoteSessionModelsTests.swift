@@ -13,6 +13,41 @@ struct RemoteSessionModelsTests {
         #expect(registry.metadata.map(\.identifier) == [.tmux, .zmx])
         #expect(registry.backend(for: .tmux)?.metadata.displayName == "tmux")
         #expect(registry.backend(for: .zmx)?.metadata.displayName == "zmx")
+        #expect(registry.metadata.allSatisfy {
+            $0.managedStartupCommandSupport == .supported
+        })
+    }
+
+    @Test
+    func launchIntentHasOnlyExplicitAttachOrManagedEnsurePaths() throws {
+        let external = RemoteSessionAttachment(
+            identifier: try RemoteSessionIdentifier(
+                backendIdentifier: .tmux,
+                validating: "vvterm-user-created"
+            ),
+            ownership: .external
+        )
+        let managedIdentifier = try RemoteSessionIdentifier(
+            backendIdentifier: .tmux,
+            validating: "plain-managed-name"
+        )
+
+        let attach = RemoteSessionLaunchIntent.attach(external)
+        let ensure = RemoteSessionLaunchIntent.ensureManaged(
+            identifier: managedIdentifier,
+            initialCommand: "printf ready"
+        )
+
+        #expect(attach.attachment == external)
+        #expect(ensure.attachment == RemoteSessionAttachment(
+            identifier: managedIdentifier,
+            ownership: .managed
+        ))
+        guard case .ensureManaged(_, let initialCommand) = ensure else {
+            Issue.record("Expected a managed launch intent")
+            return
+        }
+        #expect(initialCommand == "printf ready")
     }
 
     @Test(arguments: [

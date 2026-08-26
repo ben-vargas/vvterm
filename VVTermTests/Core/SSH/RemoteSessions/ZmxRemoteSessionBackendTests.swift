@@ -37,7 +37,18 @@ struct ZmxRemoteSessionBackendTests {
         #expect(sessions.map(\.id.rawValue) == ["alpha", "team session"])
         #expect(sessions.map(\.attachedClientCount) == [0, 2])
         #expect(sessions.map(\.cleanupDisposition) == [.safeToDelete, .inUse])
+        #expect(sessions.map(\.attachment.ownership) == [.external, .external])
         #expect(sessions.allSatisfy { $0.containerCount == nil })
+    }
+
+    @Test
+    func explicitLabelIsTheOnlyManagedOwnershipSignal() throws {
+        let sessions = try ZmxRemoteSessionParser.parseSessionList("""
+        name=vvterm-user-created\tclients=0
+        name=plain-name\tclients=0\tvvterm_owner=managed
+        """)
+
+        #expect(sessions.map(\.attachment.ownership) == [.external, .managed])
     }
 
     @Test
@@ -56,9 +67,27 @@ struct ZmxRemoteSessionBackendTests {
             for: try self.identifier("missing"),
             in: output
         ) == nil)
-        let listCommand = try ZmxRemoteSessionCommandBuilder.listCommand(runtime: runtime())
+        let listCommand = try ZmxRemoteSessionCommandBuilder.listCommand(
+            scope: .userVisible,
+            runtime: runtime()
+        )
         #expect(listCommand.contains("'list'"))
         #expect(!listCommand.contains("'--short'"))
+    }
+
+    @Test
+    func listScopesUseUserAndManagedBackendQueries() throws {
+        let userVisible = try ZmxRemoteSessionCommandBuilder.listCommand(
+            scope: .userVisible,
+            runtime: runtime()
+        )
+        let managedCleanup = try ZmxRemoteSessionCommandBuilder.listCommand(
+            scope: .managedCleanup,
+            runtime: runtime()
+        )
+
+        #expect(!userVisible.contains("'--where'"))
+        #expect(managedCleanup.contains("'--where' 'vvterm_owner=managed'"))
     }
 
     @Test
@@ -79,14 +108,6 @@ struct ZmxRemoteSessionBackendTests {
         #expect(first.rawValue.hasPrefix("vvterm-prod-d"))
         #expect(first.rawValue.utf8.count <= RemoteSessionManagedIdentifierPolicy.maximumIdentifierLength)
         #expect(first != second)
-        #expect(backend.isManagedIdentifier(
-            first,
-            deviceID: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
-        ))
-        #expect(!backend.isManagedIdentifier(
-            first,
-            deviceID: "BBBBBBBB-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
-        ))
     }
 
     @Test
@@ -122,11 +143,10 @@ struct ZmxRemoteSessionBackendTests {
     @Test
     func launchUsesTypedArgumentsAbsolutePathAndCleanEnvironment() throws {
         let request = RemoteSessionLaunchRequest(
-            attachment: RemoteSessionAttachment(
+            intent: .ensureManaged(
                 identifier: try identifier("team '$(touch no)"),
-                ownership: .managed
+                initialCommand: "printf startup"
             ),
-            mode: .attachOrCreate,
             workingDirectory: "/srv/$(touch no)",
             lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
             transport: .ssh,
@@ -140,6 +160,8 @@ struct ZmxRemoteSessionBackendTests {
 
         #expect(plan.command.contains("env '-u' 'ZMX_SESSION' '-u' 'ZMX_SESSION_PREFIX'"))
         #expect(plan.command.contains("'/opt/homebrew/bin/zmx' 'attach'"))
+        #expect(plan.command.contains("set . 'vvterm_owner=managed'"))
+        #expect(plan.command.contains("printf startup"))
         #expect(plan.command.contains("grep -Fqx --"))
         #expect(plan.command.contains(#"\$(touch no)"#))
         #expect(!plan.command.contains(#"; $(touch no)"#))
@@ -152,14 +174,36 @@ struct ZmxRemoteSessionBackendTests {
     }
 
     @Test
+    func managedCreationAcceptsAMultilineInitialCommand() throws {
+        let request = RemoteSessionLaunchRequest(
+            intent: .ensureManaged(
+                identifier: try identifier("multiline"),
+                initialCommand: "cd /srv/project\nprintf '%s\\n' ready"
+            ),
+            workingDirectory: "/srv/project",
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
+            transport: .ssh,
+            themeStyle: deterministicRemoteSessionThemeStyle
+        )
+
+        let command = try ZmxRemoteSessionCommandBuilder.launchCommand(
+            request: request,
+            runtime: runtime()
+        )
+
+        #expect(command.contains("/bin/sh -lc"))
+        #expect(command.contains("cd /srv/project"))
+        #expect(command.contains("ready"))
+    }
+
+    @Test
     func attachExistingChecksPresenceAndKillUsesForce() throws {
         let attachment = RemoteSessionAttachment(
             identifier: try identifier("shared"),
             ownership: .external
         )
         let request = RemoteSessionLaunchRequest(
-            attachment: attachment,
-            mode: .attachExisting,
+            intent: .attach(attachment),
             workingDirectory: "~",
             lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
             transport: .ssh,
@@ -176,8 +220,31 @@ struct ZmxRemoteSessionBackendTests {
         )
 
         #expect(launch.contains("if env '-u' 'ZMX_SESSION'"))
-        #expect(launch.contains("attachFailed"))
+        #expect(!launch.contains("set . 'vvterm_owner=managed'"))
+        #expect(!launch.contains("printf startup"))
         #expect(kill.contains("'kill' 'shared' '--force'"))
+    }
+
+    @Test
+    func managedReattachRestoresItsExplicitOwnershipLabel() throws {
+        let request = RemoteSessionLaunchRequest(
+            intent: .attach(RemoteSessionAttachment(
+                identifier: try identifier("legacy-managed"),
+                ownership: .managed
+            )),
+            workingDirectory: "~",
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
+            transport: .ssh,
+            themeStyle: deterministicRemoteSessionThemeStyle
+        )
+
+        let launch = try ZmxRemoteSessionCommandBuilder.launchCommand(
+            request: request,
+            runtime: runtime()
+        )
+
+        #expect(launch.contains("'set' 'legacy-managed' 'vvterm_owner=managed'"))
+        #expect(!launch.contains("printf startup"))
     }
 
     @Test
@@ -196,8 +263,7 @@ struct ZmxRemoteSessionBackendTests {
             shellExecutable: "/bin/zsh"
         ))
         let request = RemoteSessionLaunchRequest(
-            attachment: RemoteSessionAttachment(identifier: identifier, ownership: .managed),
-            mode: .attachOrCreate,
+            intent: .ensureManaged(identifier: identifier, initialCommand: nil),
             workingDirectory: "~",
             lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
             transport: .ssh,

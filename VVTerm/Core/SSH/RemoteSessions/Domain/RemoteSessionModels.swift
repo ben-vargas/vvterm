@@ -20,6 +20,12 @@ nonisolated struct RemoteSessionBackendMetadata: Hashable, Sendable {
     let identifier: RemoteSessionBackendIdentifier
     let displayName: String
     let installation: Installation
+    let managedStartupCommandSupport: ManagedStartupCommandSupport
+}
+
+nonisolated enum ManagedStartupCommandSupport: Hashable, Sendable {
+    case supported
+    case unsupported
 }
 
 nonisolated struct RemoteSessionThemeStyle: Hashable, Sendable {
@@ -312,30 +318,54 @@ nonisolated enum RemoteSessionStartupBehavior: String, Codable, CaseIterable, Id
     }
 }
 
-nonisolated struct RemoteSessionDescriptor: Codable, Hashable, Identifiable, Sendable {
-    let id: RemoteSessionIdentifier
-    let attachedClientCount: Int?
-    let containerCount: Int?
-    let cleanupDisposition: RemoteSessionCleanupDisposition
-}
-
 nonisolated struct RemoteSessionAttachment: Codable, Hashable, Sendable {
     let identifier: RemoteSessionIdentifier
     let ownership: RemoteSessionOwnership
 }
 
-nonisolated enum RemoteSessionLaunchMode: Hashable, Sendable {
-    case attachOrCreate
-    case attachExisting
+nonisolated struct RemoteSessionDescriptor: Codable, Hashable, Identifiable, Sendable {
+    let attachment: RemoteSessionAttachment
+    let attachedClientCount: Int?
+    let containerCount: Int?
+    let cleanupDisposition: RemoteSessionCleanupDisposition
+
+    var id: RemoteSessionIdentifier { attachment.identifier }
+}
+
+nonisolated enum RemoteSessionListScope: Hashable, Sendable {
+    case userVisible
+    case managedCleanup
+}
+
+nonisolated enum RemoteSessionLaunchIntent: Hashable, Sendable {
+    case attach(RemoteSessionAttachment)
+    case ensureManaged(
+        identifier: RemoteSessionIdentifier,
+        initialCommand: String?
+    )
+
+    var attachment: RemoteSessionAttachment {
+        switch self {
+        case .attach(let attachment):
+            return attachment
+        case .ensureManaged(let identifier, _):
+            return RemoteSessionAttachment(
+                identifier: identifier,
+                ownership: .managed
+            )
+        }
+    }
+
 }
 
 nonisolated struct RemoteSessionLaunchRequest: Hashable, Sendable {
-    let attachment: RemoteSessionAttachment
-    let mode: RemoteSessionLaunchMode
+    let intent: RemoteSessionLaunchIntent
     let workingDirectory: String
     let lifecycleEnvelope: RemoteSessionLifecycleEnvelope
     let transport: ShellTransport
     let themeStyle: RemoteSessionThemeStyle
+
+    var attachment: RemoteSessionAttachment { intent.attachment }
 }
 
 nonisolated struct RemoteSessionPresenceProbe: Codable, Hashable, Sendable {

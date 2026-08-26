@@ -50,7 +50,7 @@ struct RemoteSessionManagedIdentifierPolicyTests {
     }
 
     @Test
-    func identifierIsStableUniqueAndDeviceScoped() throws {
+    func identifierIsStableUniqueDeviceScopedAndByteBounded() throws {
         let first = try identifier(deviceID: "device-a", entityID: entityID)
         let repeated = try identifier(deviceID: "device-a", entityID: entityID)
         let otherDevice = try identifier(deviceID: "device-b", entityID: entityID)
@@ -62,14 +62,7 @@ struct RemoteSessionManagedIdentifierPolicyTests {
         #expect(first == repeated)
         #expect(first != otherDevice)
         #expect(first != otherSession)
-        #expect(RemoteSessionManagedIdentifierPolicy.isManagedIdentifier(
-            first,
-            deviceID: "device-a"
-        ))
-        #expect(!RemoteSessionManagedIdentifierPolicy.isManagedIdentifier(
-            first,
-            deviceID: "device-b"
-        ))
+        #expect(first.rawValue.utf8.count <= RemoteSessionManagedIdentifierPolicy.maximumIdentifierLength)
     }
 
     @Test

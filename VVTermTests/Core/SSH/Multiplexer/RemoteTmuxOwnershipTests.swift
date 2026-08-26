@@ -35,7 +35,10 @@ struct RemoteTmuxOwnershipTests {
             for: paneId,
             serverID: serverId,
             backendIdentifier: .tmux,
-            selection: .attachExisting(identifier)
+            selection: .attachExisting(RemoteSessionAttachment(
+                identifier: identifier,
+                ownership: .managed
+            ))
         )
         let ownership = try #require(resolver.attachment(for: paneId)?.attachment.ownership)
         let command = RemoteTmuxCommandBuilder.attachExistingCommand(
@@ -82,25 +85,66 @@ struct RemoteTmuxOwnershipTests {
     }
 
     @Test @MainActor
-    func selectedExternalSessionDoesNotLoadVVTermConfiguration() throws {
-        let resolver = makeResolver()
+    func managedOwnershipSurvivesListingSelectionRestoreAndCleanup() throws {
         let paneId = UUID()
         let serverId = UUID()
         let identifier = try RemoteSessionIdentifier(
             backendIdentifier: .tmux,
-            validating: "shared"
+            validating: "managed-without-name-convention"
+        )
+        let descriptor = RemoteSessionDescriptor(
+            attachment: RemoteSessionAttachment(
+                identifier: identifier,
+                ownership: .managed
+            ),
+            attachedClientCount: 0,
+            containerCount: 1,
+            cleanupDisposition: .safeToDelete
+        )
+        let resolver = makeResolver()
+        let listedAttachment = try #require(
+            resolver.selectionInfo(from: [descriptor]).first?.attachment
         )
 
         try resolver.updateAttachmentState(
             for: paneId,
             serverID: serverId,
             backendIdentifier: .tmux,
-            selection: .attachExisting(identifier)
+            selection: .attachExisting(listedAttachment)
+        )
+        let restoredResolver = makeResolver()
+        restoredResolver.restoreAttachments(resolver.attachments)
+
+        #expect(restoredResolver.attachment(for: paneId)?.attachment.ownership == .managed)
+        #expect(RemoteSessionCleanupPolicy.identifiersToDelete(
+            from: [descriptor],
+            keeping: []
+        ) == [identifier])
+    }
+
+    @Test @MainActor
+    func selectedVVTermStyleUserSessionRemainsExternal() throws {
+        let resolver = makeResolver()
+        let paneId = UUID()
+        let serverId = UUID()
+        let identifier = try RemoteSessionIdentifier(
+            backendIdentifier: .tmux,
+            validating: "vvterm-user-created"
+        )
+
+        try resolver.updateAttachmentState(
+            for: paneId,
+            serverID: serverId,
+            backendIdentifier: .tmux,
+            selection: .attachExisting(RemoteSessionAttachment(
+                identifier: identifier,
+                ownership: .external
+            ))
         )
         let ownership = try #require(resolver.attachment(for: paneId)?.attachment.ownership)
         let command = RemoteTmuxCommandBuilder.attachExistingCommand(
             themeStyle: deterministicRemoteSessionThemeStyle,
-            sessionName: "shared",
+            sessionName: identifier.rawValue,
             ownership: ownership
         )
 

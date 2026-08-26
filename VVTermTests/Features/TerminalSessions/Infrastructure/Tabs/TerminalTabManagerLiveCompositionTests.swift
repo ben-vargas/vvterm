@@ -8,7 +8,8 @@ private actor LiveCompositionRemoteSessionSpy: TerminalRemoteSessionServicing {
     nonisolated let backendMetadata = [RemoteSessionBackendMetadata(
         identifier: .tmux,
         displayName: "tmux",
-        installation: .automatic
+        installation: .automatic,
+        managedStartupCommandSupport: .supported
     )]
     private var killedIdentifiers: [RemoteSessionIdentifier] = []
 
@@ -24,6 +25,7 @@ private actor LiveCompositionRemoteSessionSpy: TerminalRemoteSessionServicing {
     }
 
     func listSessions(
+        scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] {
@@ -68,14 +70,13 @@ private actor LiveCompositionRemoteSessionSpy: TerminalRemoteSessionServicing {
     }
 
     func cleanupSessions(
-        deviceID: String,
         keeping identifiers: Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async {}
 
     func currentWorkingDirectory(
-        for identifier: RemoteSessionIdentifier,
+        for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime?
     ) async -> String? {

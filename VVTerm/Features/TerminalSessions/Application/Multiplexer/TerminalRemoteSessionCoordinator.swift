@@ -262,7 +262,8 @@ actor UnavailableTerminalRemoteSessionService: TerminalRemoteSessionServicing {
     nonisolated let backendMetadata = [RemoteSessionBackendMetadata(
         identifier: .tmux,
         displayName: "tmux",
-        installation: .automatic
+        installation: .automatic,
+        managedStartupCommandSupport: .supported
     )]
 
     func availability(
@@ -271,6 +272,7 @@ actor UnavailableTerminalRemoteSessionService: TerminalRemoteSessionServicing {
     ) async -> RemoteSessionAvailability { .unsupportedEnvironment }
 
     func listSessions(
+        scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] { throw SSHError.notConnected }
@@ -309,14 +311,13 @@ actor UnavailableTerminalRemoteSessionService: TerminalRemoteSessionServicing {
     ) async {}
 
     func cleanupSessions(
-        deviceID: String,
         keeping identifiers: Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async {}
 
     func currentWorkingDirectory(
-        for identifier: RemoteSessionIdentifier,
+        for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime?
     ) async -> String? { nil }

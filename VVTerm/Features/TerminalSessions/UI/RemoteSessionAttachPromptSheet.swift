@@ -60,7 +60,7 @@ struct RemoteSessionAttachPromptSheet: View {
                 Section {
                     ForEach(prompt.existingSessions) { session in
                         Button {
-                            confirm(.attachExisting(session.id))
+                            confirm(.attachExisting(session.attachment))
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "terminal")
@@ -95,7 +95,7 @@ struct RemoteSessionAttachPromptSheet: View {
                 Section {
                     ForEach(prompt.existingSessions) { session in
                         Button {
-                            confirm(.attachExisting(session.id))
+                            confirm(.attachExisting(session.attachment))
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "terminal")

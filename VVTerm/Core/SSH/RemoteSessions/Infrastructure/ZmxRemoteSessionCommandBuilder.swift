@@ -4,6 +4,7 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
     static let availableMarker = "__VVTERM_ZMX_OK__"
     static let missingMarker = "__VVTERM_ZMX_NO__"
     static let pathMarker = "__VVTERM_ZMX_PATH__"
+    static let managedOwnershipLabel = "vvterm_owner=managed"
 
     private static let clearedEnvironment: Set<String> = [
         "ZMX_SESSION",
@@ -37,25 +38,41 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func listCommand(runtime: RemoteSessionRuntime) throws -> String {
-        try render(arguments: ["list"], runtime: runtime)
+    static func listCommand(
+        scope: RemoteSessionListScope,
+        runtime: RemoteSessionRuntime
+    ) throws -> String {
+        let arguments = switch scope {
+        case .userVisible:
+            ["list"]
+        case .managedCleanup:
+            ["list", "--where", managedOwnershipLabel]
+        }
+        return try render(arguments: arguments, runtime: runtime)
     }
 
     static func launchCommand(
         request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) throws -> String {
-        let identifier = request.attachment.identifier.rawValue
+        let attachment = request.intent.attachment
+        let identifier = attachment.identifier.rawValue
         let list = try shortListCommand(runtime: runtime)
         let exists = exactPresenceExpression(
             listCommand: list,
             identifier: identifier
         )
-        let attach = try render(
+        let managedList = try shortManagedListCommand(runtime: runtime)
+        let isManaged = exactPresenceExpression(
+            listCommand: managedList,
+            identifier: identifier
+        )
+        let workingDirectory = request.workingDirectory == "~"
+            ? nil
+            : request.workingDirectory
+        let attachExisting = try render(
             arguments: ["attach", identifier],
-            workingDirectory: request.workingDirectory == "~"
-                ? nil
-                : request.workingDirectory,
+            workingDirectory: workingDirectory,
             runtime: runtime
         )
         let detached = quotedMarker(request.lifecycleEnvelope, .detached)
@@ -63,11 +80,11 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
         let creationFailed = quotedMarker(request.lifecycleEnvelope, .creationFailed)
         let attachFailed = quotedMarker(request.lifecycleEnvelope, .attachFailed)
 
-        let runAttach = """
-        \(attach)
+        let runAttachExisting = """
+        \(attachExisting)
         vvtermZmxStatus=$?
         if [ "$vvtermZmxStatus" -ne 0 ]; then
-          if \(exists); then printf '%s' \(attachFailed); else printf '%s' \(creationFailed); fi
+          printf '%s' \(attachFailed)
         elif \(exists); then
           printf '%s' \(detached)
         else
@@ -76,15 +93,52 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
         """
 
         let script: String
-        switch request.mode {
-        case .attachOrCreate:
-            script = runAttach
-        case .attachExisting:
+        switch request.intent {
+        case .attach:
+            let preserveOwnership: String
+            if attachment.ownership == .managed {
+                preserveOwnership = try render(
+                    arguments: ["set", identifier, managedOwnershipLabel],
+                    runtime: runtime
+                ) + " >/dev/null 2>&1"
+            } else {
+                preserveOwnership = ":"
+            }
             script = """
-            if \(exists); then
-              \(runAttach)
+            if \(exists) && \(preserveOwnership); then
+              \(runAttachExisting)
             else
               printf '%s' \(attachFailed)
+            fi
+            """
+        case .ensureManaged(_, let initialCommand):
+            let createBase = try render(
+                arguments: ["attach", identifier],
+                workingDirectory: workingDirectory,
+                runtime: runtime
+            )
+            let managedStartupScript = """
+            \(RemoteTerminalBootstrap.shellQuoted(runtime.probe.executable.path)) set . \(RemoteTerminalBootstrap.shellQuoted(managedOwnershipLabel)) >/dev/null 2>&1 || exit 1
+            \(initialCommand ?? RemoteTerminalBootstrap.defaultLoginShellCommand())
+            """
+            let createManaged = "\(createBase) \(RemoteTerminalBootstrap.wrapPOSIXShellCommand(managedStartupScript))"
+            script = """
+            if \(isManaged); then
+              \(runAttachExisting)
+            elif \(exists); then
+              printf '%s' \(creationFailed)
+            else
+              \(createManaged)
+              vvtermZmxStatus=$?
+              if [ "$vvtermZmxStatus" -ne 0 ]; then
+                if \(exists); then printf '%s' \(attachFailed); else printf '%s' \(creationFailed); fi
+              elif \(isManaged); then
+                printf '%s' \(detached)
+              elif \(exists); then
+                printf '%s' \(creationFailed)
+              else
+                printf '%s' \(terminated)
+              fi
             fi
             """
         }
@@ -156,6 +210,15 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
 
     private static func shortListCommand(runtime: RemoteSessionRuntime) throws -> String {
         try render(arguments: ["list", "--short"], runtime: runtime)
+    }
+
+    private static func shortManagedListCommand(
+        runtime: RemoteSessionRuntime
+    ) throws -> String {
+        try render(
+            arguments: ["list", "--short", "--where", managedOwnershipLabel],
+            runtime: runtime
+        )
     }
 
     private static func quotedMarker(

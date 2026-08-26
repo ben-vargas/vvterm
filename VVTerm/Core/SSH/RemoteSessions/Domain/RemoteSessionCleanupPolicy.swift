@@ -3,12 +3,11 @@ import Foundation
 nonisolated enum RemoteSessionCleanupPolicy {
     static func identifiersToDelete(
         from sessions: [RemoteSessionDescriptor],
-        keeping identifiers: Set<RemoteSessionIdentifier>,
-        isManaged: (RemoteSessionIdentifier) -> Bool
+        keeping identifiers: Set<RemoteSessionIdentifier>
     ) -> [RemoteSessionIdentifier] {
         sessions.compactMap { session in
             guard session.cleanupDisposition == .safeToDelete,
-                  isManaged(session.id),
+                  session.attachment.ownership == .managed,
                   !identifiers.contains(session.id) else {
                 return nil
             }

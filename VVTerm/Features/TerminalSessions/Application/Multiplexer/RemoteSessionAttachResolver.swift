@@ -136,15 +136,12 @@ final class RemoteSessionAttachResolver: ObservableObject {
                 attachment: attachment,
                 managedSessionConfirmed: false
             )
-        case .attachExisting(let identifier):
-            guard identifier.backendIdentifier == backendIdentifier else {
+        case .attachExisting(let attachment):
+            guard attachment.identifier.backendIdentifier == backendIdentifier else {
                 throw SSHError.unknown("Remote session backend mismatch")
             }
             attachments[entityID] = TerminalRemoteSessionAttachmentState(
-                attachment: RemoteSessionAttachment(
-                    identifier: identifier,
-                    ownership: ownership(for: identifier)
-                ),
+                attachment: attachment,
                 managedSessionConfirmed: false
             )
         case .plainShell:
@@ -167,12 +164,13 @@ final class RemoteSessionAttachResolver: ObservableObject {
                 return .createManaged
             case .external:
                 let sessions = try await remoteSessions.listSessions(
+                    scope: .userVisible,
                     using: client,
                     runtime: runtime
                 )
                 try validateOwner()
                 if sessions.contains(where: { $0.id == state.attachment.identifier }) {
-                    return .attachExisting(state.attachment.identifier)
+                    return .attachExisting(state.attachment)
                 }
             }
         }
@@ -184,6 +182,7 @@ final class RemoteSessionAttachResolver: ObservableObject {
             return .plainShell
         case .ask:
             let sessions = try await remoteSessions.listSessions(
+                scope: .userVisible,
                 using: client,
                 runtime: runtime
             )
@@ -232,25 +231,17 @@ final class RemoteSessionAttachResolver: ObservableObject {
         from sessions: [RemoteSessionDescriptor]
     ) -> [RemoteSessionSelectionInfo] {
         let filtered = sessions.filter {
-            !isInternalSessionName($0.id.rawValue)
+            $0.attachment.ownership == .external
                 || ($0.attachedClientCount ?? 0) > 0
         }
         let source = filtered.isEmpty ? sessions : filtered
         return source.map {
             RemoteSessionSelectionInfo(
-                id: $0.id,
+                attachment: $0.attachment,
                 attachedClientCount: $0.attachedClientCount,
                 containerCount: $0.containerCount
             )
         }
-    }
-
-    func isInternalSessionName(_ name: String) -> Bool {
-        let lowercased = name.lowercased()
-        return lowercased.hasPrefix("vvterm_")
-            || lowercased.hasPrefix("vvterm-")
-            || lowercased.hasPrefix("vivyterm_")
-            || lowercased.hasPrefix("vivyterm-")
     }
 
     func requestSelection(
@@ -297,12 +288,4 @@ final class RemoteSessionAttachResolver: ObservableObject {
         currentPrompt = promptQueue.removeFirst()
     }
 
-    private func ownership(
-        for identifier: RemoteSessionIdentifier
-    ) -> RemoteSessionOwnership {
-        remoteSessions.isManagedIdentifier(
-            identifier,
-            deviceID: configuration.deviceID
-        ) ? .managed : .external
-    }
 }

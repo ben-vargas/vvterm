@@ -303,6 +303,7 @@ struct RemoteTmuxUnixCommandBuilderTests {
         #expect(command.contains("if [ -n \\\"\\$SHELL\\\" ]; then exec \\\"\\$SHELL\\\" -l; fi;"))
         #expect(command.contains("kill-window -t '=vvterm_managed:__vvterm_bootstrap__'"))
         #expect(command.contains("move-window -r -t '=vvterm_managed:'"))
+        #expect(command.contains("set-option -q -t '=vvterm_managed:' @vvterm-managed 1"))
 
         let createWindowOffset = command.range(of: "new-window -d -t '=vvterm_managed:'")
             .map { command.distance(from: command.startIndex, to: $0.lowerBound) }
@@ -327,17 +328,15 @@ struct RemoteTmuxUnixCommandBuilderTests {
     }
 
     @Test
-    func legacyCleanupUsesTheResolvedExecutable() throws {
+    func listingRequestsTheExplicitManagedOwnershipOption() {
         let backend = RemoteTmuxBackend.unixTmux(
             executablePath: "/opt/tools/tmux",
             rawVersion: "tmux 3.7b"
         )
-        let command = try #require(
-            RemoteTmuxCommandBuilder.legacyCleanupCommand(backend: backend)
-        )
+        let commands = RemoteTmuxCommandBuilder.listSessionCommands(backend: backend)
 
-        #expect(command.contains("/opt/tools/tmux"))
-        #expect(!command.contains("command -v tmux"))
+        #expect(commands[0].contains("#{@vvterm-managed}"))
+        #expect(commands[0].contains("/opt/tools/tmux"))
     }
 
 }
