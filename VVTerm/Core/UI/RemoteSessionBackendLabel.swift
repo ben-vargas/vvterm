@@ -10,6 +10,7 @@ struct RemoteSessionBackendLabel: View {
             icon
                 .frame(width: 20, height: 20)
                 .clipped()
+                .padding(.trailing, 6)
         }
     }
 
