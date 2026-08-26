@@ -408,7 +408,7 @@ struct TerminalTabManagerDependencyIsolationTests {
         let tab = TerminalTab(serverId: UUID(), title: "Pending custom startup")
         install(tab, in: manager)
         manager.sessionState.updatePane(tab.rootPaneId) {
-            $0.standaloneStartupActionPendingCompletion = true
+            $0.startupActionReplayPending = true
         }
         let client = SSHClient.testing()
         let startToken = try #require(
@@ -534,10 +534,18 @@ struct TerminalTabManagerDependencyIsolationTests {
 
         let requests = await remoteSessions.launchRequests()
         #expect(requests.count == 2)
-        #expect(requests.first?.mode == .attachOrCreate)
-        #expect(requests.first?.initialCommand == command)
-        #expect(requests.last?.mode == .attachExisting)
-        #expect(requests.last?.initialCommand == nil)
+        let firstRequest = try #require(requests.first)
+        let lastRequest = try #require(requests.last)
+        if case .ensureManaged(_, let initialCommand) = firstRequest.intent {
+            #expect(initialCommand == command)
+        } else {
+            Issue.record("Expected the first launch to ensure a managed session")
+        }
+        if case .attach(let attachment) = lastRequest.intent {
+            #expect(attachment.ownership == .managed)
+        } else {
+            Issue.record("Expected reconnect to attach the existing managed session")
+        }
         #expect(createPlan.mayExecuteUserStartupAction)
         #expect(reconnectPlan.command != nil)
         #expect(!reconnectPlan.mayExecuteUserStartupAction)

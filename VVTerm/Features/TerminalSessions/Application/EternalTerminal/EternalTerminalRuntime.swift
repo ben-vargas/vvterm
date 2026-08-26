@@ -131,8 +131,8 @@ struct EternalTerminalRuntimeOwnerAccess {
     ) async throws -> TerminalShellStartupPlan
     let resumeContext: @MainActor @Sendable (UUID) -> RemoteSessionLifecycleContext?
     let setResumeContext: @MainActor @Sendable (UUID, RemoteSessionLifecycleContext?) -> Void
-    let standaloneStartupActionPendingCompletion: @MainActor @Sendable (UUID) -> Bool
-    let setStandaloneStartupActionPendingCompletion: @MainActor @Sendable (UUID, Bool) -> Void
+    let startupActionReplayPending: @MainActor @Sendable (UUID) -> Bool
+    let setStartupActionReplayPending: @MainActor @Sendable (UUID, Bool) -> Void
     let remoteSessionAttached: @MainActor @Sendable (UUID) -> Void
     let updateConnectionState: @MainActor @Sendable (UUID, ConnectionState) -> Void
     let markEternalTerminalTransport: @MainActor @Sendable (UUID) -> Void
@@ -166,7 +166,7 @@ final class EternalTerminalRuntime {
     private var failureReported = false
     private var networkRecoveryProbe = EternalTerminalRecoveryProbe()
     private var startupApplied = false
-    private var standaloneStartupActionPendingCompletion = false
+    private var standaloneStartupActionAwaitingExit = false
     private var remoteSessionLifecycle: RemoteSessionLifecycleContext?
     private var remoteSessionLifecycleParser: RemoteSessionLifecycleStreamParser?
     private var lastTerminalSize: (cols: Int, rows: Int, pixels: TerminalPixelSize?) = (0, 0, nil)
@@ -483,8 +483,8 @@ final class EternalTerminalRuntime {
         guard origin == .resumed else { return }
         startupApplied = true
         let context = ownerAccess.resumeContext(paneId)
-        standaloneStartupActionPendingCompletion = context == nil
-            && ownerAccess.standaloneStartupActionPendingCompletion(paneId)
+        standaloneStartupActionAwaitingExit = context == nil
+            && ownerAccess.startupActionReplayPending(paneId)
         remoteSessionLifecycle = context
         remoteSessionLifecycleParser = context.map {
             RemoteSessionLifecycleStreamParser(observation: $0.observation)
@@ -499,8 +499,8 @@ final class EternalTerminalRuntime {
         guard isCurrentOwner else {
             return nil
         }
-        if state == .closed, standaloneStartupActionPendingCompletion {
-            standaloneStartupActionPendingCompletion = false
+        if state == .closed, standaloneStartupActionAwaitingExit {
+            standaloneStartupActionAwaitingExit = false
             ownerAccess.handleShellEnd(
                 paneId,
                 identityToken,
@@ -566,6 +566,7 @@ final class EternalTerminalRuntime {
             do {
                 try await session.send(data)
             } catch {
+                self?.handleStartupSendRejection(for: plan)
                 self?.publishFailure(error, host: host, port: port)
             }
         }
@@ -573,8 +574,8 @@ final class EternalTerminalRuntime {
 
     private func acceptStartupPlan(_ plan: TerminalShellStartupPlan) -> Data? {
         guard isCurrentOwner else { return nil }
-        standaloneStartupActionPendingCompletion = plan.mayExecuteStandaloneUserStartupAction
-        ownerAccess.setStandaloneStartupActionPendingCompletion(
+        standaloneStartupActionAwaitingExit = plan.mayExecuteStandaloneUserStartupAction
+        ownerAccess.setStartupActionReplayPending(
             paneId,
             plan.mayExecuteUserStartupAction
         )
@@ -584,9 +585,19 @@ final class EternalTerminalRuntime {
             RemoteSessionLifecycleStreamParser(observation: $0.observation)
         }
         ownerAccess.setResumeContext(paneId, resumeContext)
-        guard let command = plan.command,
-              let data = "\(command)\r".data(using: .utf8) else { return nil }
-        return data
+        guard let command = plan.command else { return nil }
+        return Data("\(command)\r".utf8)
+    }
+
+    private func handleStartupSendRejection(for plan: TerminalShellStartupPlan) {
+        guard isCurrentOwner else { return }
+        standaloneStartupActionAwaitingExit = false
+        if plan.mayExecuteUserStartupAction {
+            ownerAccess.setStartupActionReplayPending(paneId, false)
+        }
+        remoteSessionLifecycle = nil
+        remoteSessionLifecycleParser = nil
+        ownerAccess.setResumeContext(paneId, nil)
     }
 
     private func consumeOutput(_ data: Data) {

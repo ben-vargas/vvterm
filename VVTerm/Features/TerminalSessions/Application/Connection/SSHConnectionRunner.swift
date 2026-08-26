@@ -10,7 +10,7 @@ nonisolated struct SSHConnectionInitialTerminalState: Equatable, Sendable {
 nonisolated struct SSHConnectionRestoredShell: Sendable {
     let shell: ShellHandle
     let remoteSessionLifecycle: RemoteSessionLifecycleContext?
-    let standaloneStartupActionPendingCompletion: Bool
+    let startupActionReplayPending: Bool
 }
 
 nonisolated struct SSHConnectionRunnerTransport: Sendable {
@@ -114,7 +114,7 @@ nonisolated enum SSHConnectionRunner {
                         command: nil,
                         remoteSessionLifecycle: restored.remoteSessionLifecycle,
                         mayExecuteUserStartupAction: restored
-                            .standaloneStartupActionPendingCompletion
+                            .startupActionReplayPending
                     )
                     logger.info("Restored existing Mosh protocol session")
                 } else {
@@ -137,9 +137,6 @@ nonisolated enum SSHConnectionRunner {
                             freshStartup.mayExecuteUserStartupAction
                         )
                     } catch {
-                        if error is CancellationError || Task.isCancelled {
-                            throw CancellationError()
-                        }
                         if let sshError = error as? SSHError,
                            sshError.provesStartupCommandWasNotDispatched {
                             if freshStartup.mayExecuteUserStartupAction {
@@ -147,10 +144,26 @@ nonisolated enum SSHConnectionRunner {
                             }
                             throw sshError
                         }
-                        guard freshStartup.mayExecuteStandaloneUserStartupAction else {
-                            throw error
+                        if error is CancellationError {
+                            if freshStartup.mayExecuteUserStartupAction {
+                                await setStartupActionReplayGuard(false)
+                            }
+                            throw CancellationError()
                         }
-                        throw SSHError.startupCommandMayHaveRun(error.localizedDescription)
+                        if Task.isCancelled {
+                            throw CancellationError()
+                        }
+                        if let sshError = error as? SSHError,
+                           case .processRequestOutcomeUnknown = sshError {
+                            if freshStartup.mayExecuteUserStartupAction {
+                                throw sshError
+                            }
+                            throw SSHError.shellRequestFailed
+                        }
+                        if freshStartup.mayExecuteUserStartupAction {
+                            throw SSHError.startupCommandMayHaveRun
+                        }
+                        throw error
                     }
                     startup = freshStartup
                 }

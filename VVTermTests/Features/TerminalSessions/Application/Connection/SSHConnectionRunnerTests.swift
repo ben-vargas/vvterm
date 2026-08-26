@@ -72,13 +72,15 @@ private final class SSHConnectionRunnerPendingStateRecorder {
 enum SSHConnectionRunnerPreDispatchFailure: CaseIterable, Sendable {
     case channelOpen
     case disconnected
-    case shellRequest
+    case ptyRequest
+    case processRequestDenied
 
     var error: SSHError {
         switch self {
         case .channelOpen: .channelOpenFailed
         case .disconnected: .disconnectedBeforeShellRequest
-        case .shellRequest: .shellRequestFailed
+        case .ptyRequest: .ptyRequestFailed
+        case .processRequestDenied: .processRequestDenied
         }
     }
 }
@@ -93,6 +95,7 @@ struct SSHConnectionRunnerTests {
         let startupCommand = "notify-deployment"
         var attempts: [Int] = []
         var reportedFailure: SSHError?
+        let pendingStateRecorder = SSHConnectionRunnerPendingStateRecorder()
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
             startShell: { columns, rows, _, command, mayExecuteUserStartupAction in
@@ -125,6 +128,7 @@ struct SSHConnectionRunnerTests {
                     mayExecuteUserStartupAction: true
                 )
             },
+            setStartupActionReplayGuard: pendingStateRecorder.record,
             restoreMoshShell: { _, _ in nil },
             registerShell: { _, _ in true },
             onTitleChange: { _ in },
@@ -138,6 +142,7 @@ struct SSHConnectionRunnerTests {
 
         #expect(attempts == [1])
         #expect(await recorder.recordedStartSizes() == [[132, 43]])
+        #expect(pendingStateRecorder.states == [true])
         guard case .startupCommandMayHaveRun = reportedFailure else {
             Issue.record("Expected the possible command execution failure")
             return
@@ -150,6 +155,7 @@ struct SSHConnectionRunnerTests {
     ) async {
         let fixture = makeFixture()
         let recorder = SSHConnectionRunnerTestRecorder()
+        let pendingStateRecorder = SSHConnectionRunnerPendingStateRecorder()
         var attempts: [Int] = []
         var reportedFailure: SSHError?
         let transport = SSHConnectionRunnerTransport(
@@ -183,6 +189,7 @@ struct SSHConnectionRunnerTests {
                     mayExecuteUserStartupAction: true
                 )
             },
+            setStartupActionReplayGuard: pendingStateRecorder.record,
             restoreMoshShell: { _, _ in nil },
             registerShell: { _, _ in true },
             onTitleChange: { _ in },
@@ -194,6 +201,7 @@ struct SSHConnectionRunnerTests {
 
         #expect(attempts == [1, 2, 3])
         #expect(await recorder.recordedStartSizes() == [[132, 43], [132, 43], [132, 43]])
+        #expect(pendingStateRecorder.states == [true, false, true, false, true, false])
         switch failure {
         case .channelOpen:
             guard case .channelOpenFailed = reportedFailure else {
@@ -205,11 +213,85 @@ struct SSHConnectionRunnerTests {
                 Issue.record("Expected the pre-dispatch disconnect")
                 return
             }
-        case .shellRequest:
-            guard case .shellRequestFailed = reportedFailure else {
-                Issue.record("Expected the pre-dispatch shell-request failure")
+        case .ptyRequest:
+            guard case .ptyRequestFailed = reportedFailure else {
+                Issue.record("Expected the pre-dispatch PTY failure")
                 return
             }
+        case .processRequestDenied:
+            guard case .processRequestDenied = reportedFailure else {
+                Issue.record("Expected the explicit process-request denial")
+                return
+            }
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func broadShellRequestFailureDoesNotClearOrReplayStartupAction(
+        _ usesPersistentSession: Bool
+    ) async throws {
+        let fixture = makeFixture()
+        let pendingStateRecorder = SSHConnectionRunnerPendingStateRecorder()
+        var attempts: [Int] = []
+        var reportedFailure: SSHError?
+        let lifecycle: RemoteSessionLifecycleContext? = if usesPersistentSession {
+            try RemoteSessionLifecycleContext(
+                attachment: RemoteSessionAttachment(
+                    identifier: RemoteSessionIdentifier(
+                        backendIdentifier: .tmux,
+                        validating: "vvterm-managed"
+                    ),
+                    ownership: .managed
+                ),
+                legacyTmuxMarkerToken: "marker-token"
+            )
+        } else {
+            nil
+        }
+        let transport = SSHConnectionRunnerTransport(
+            connect: { _, _ in },
+            startShell: { _, _, _, _, _ in
+                throw SSHError.shellRequestFailed
+            },
+            disconnect: {},
+            closeShell: { _ in },
+            execute: { _, _ in "" }
+        )
+
+        await SSHConnectionRunner.run(
+            server: fixture.server,
+            credentials: fixture.credentials,
+            transport: transport,
+            initialTerminalState: SSHConnectionInitialTerminalState(
+                columns: 80,
+                rows: 24,
+                pixelSize: nil
+            ),
+            logger: Logger(subsystem: "SSHConnectionRunnerTests", category: "Runner"),
+            shouldContinueConnection: { true },
+            onAttempt: { attempts.append($0) },
+            startupPlan: {
+                TerminalShellStartupPlan(
+                    command: "notify-deployment",
+                    remoteSessionLifecycle: lifecycle,
+                    mayExecuteUserStartupAction: true
+                )
+            },
+            setStartupActionReplayGuard: pendingStateRecorder.record,
+            restoreMoshShell: { _, _ in nil },
+            registerShell: { _, _ in true },
+            onTitleChange: { _ in },
+            writeOutput: { _ in true },
+            shouldResetClient: { _ in false },
+            onProcessExit: { _, _ in },
+            onFailure: { error in reportedFailure = error as? SSHError }
+        )
+
+        #expect(attempts == [1])
+        #expect(pendingStateRecorder.states == [true])
+        guard case .startupCommandMayHaveRun = reportedFailure else {
+            Issue.record("Expected the ambiguous startup-command failure")
+            return
         }
     }
 
@@ -264,7 +346,7 @@ struct SSHConnectionRunnerTests {
     }
 
     @Test(arguments: [false, true])
-    func cancellationDuringStartupActionKeepsReplayGuard(
+    func cancellationBeforeProcessRequestClearsReplayGuard(
         _ usesPersistentSession: Bool
     ) async throws {
         let fixture = makeFixture()
@@ -324,6 +406,62 @@ struct SSHConnectionRunnerTests {
         await task.value
 
         #expect(await recorder.recordedStartSizes() == [[132, 43]])
+        #expect(pendingStateRecorder.states == [true, false])
+    }
+
+    @Test(arguments: [false, true])
+    func cancellationAfterProcessRequestStartsKeepsReplayGuard(
+        _ usesPersistentSession: Bool
+    ) async throws {
+        let fixture = makeFixture()
+        let gate = SSHConnectionRunnerTestGate()
+        let pendingStateRecorder = SSHConnectionRunnerPendingStateRecorder()
+        let lifecycle: RemoteSessionLifecycleContext? = if usesPersistentSession {
+            try RemoteSessionLifecycleContext(
+                attachment: RemoteSessionAttachment(
+                    identifier: RemoteSessionIdentifier(
+                        backendIdentifier: .tmux,
+                        validating: "vvterm-managed"
+                    ),
+                    ownership: .managed
+                ),
+                legacyTmuxMarkerToken: "marker-token"
+            )
+        } else {
+            nil
+        }
+        let transport = SSHConnectionRunnerTransport(
+            connect: { _, _ in },
+            startShell: { _, _, _, _, _ in
+                await gate.suspend()
+                throw SSHError.processRequestOutcomeUnknown
+            },
+            disconnect: {},
+            closeShell: { _ in },
+            execute: { _, _ in "" }
+        )
+
+        let task = Task {
+            await run(
+                fixture: fixture,
+                transport: transport,
+                startupPlan: {
+                    TerminalShellStartupPlan(
+                        command: "notify-deployment",
+                        remoteSessionLifecycle: lifecycle,
+                        mayExecuteUserStartupAction: true
+                    )
+                },
+                setStartupActionReplayGuard: pendingStateRecorder.record,
+                registerShell: { _, _ in true }
+            )
+        }
+
+        #expect(await gate.waitUntilSuspended())
+        task.cancel()
+        await gate.resume()
+        await task.value
+
         #expect(pendingStateRecorder.states == [true])
     }
 
@@ -467,7 +605,7 @@ struct SSHConnectionRunnerTests {
                 SSHConnectionRestoredShell(
                     shell: fixture.shell,
                     remoteSessionLifecycle: nil,
-                    standaloneStartupActionPendingCompletion: true
+                    startupActionReplayPending: true
                 )
             },
             registerShell: { _, startupPlan in

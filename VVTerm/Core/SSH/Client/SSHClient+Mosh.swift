@@ -96,12 +96,30 @@ extension SSHClient {
     ) async throws -> PreparedMoshBootstrap {
         let configuredHost = connectedServer?.host ?? ""
         let peerHost = await expectedSession.remoteEndpointHost()
-        try validateShellStartupSession(expectedSession)
+        do {
+            try validateShellStartupSession(expectedSession)
+        } catch {
+            if error is CancellationError {
+                throw CancellationError()
+            }
+            throw MoshStartupFailure(
+                stage: .beforeUDPClient,
+                underlying: moshStartupError(
+                    error,
+                    fallback: .disconnectedBeforeShellRequest
+                )
+            )
+        }
         let candidateHosts = MoshEndpointCandidatePolicy.hosts(
             configuredHost: configuredHost,
             sshPeerHost: peerHost
         )
-        guard !candidateHosts.isEmpty else { throw SSHError.moshInvalidEndpoint }
+        guard !candidateHosts.isEmpty else {
+            throw MoshStartupFailure(
+                stage: .beforeUDPClient,
+                underlying: .moshInvalidEndpoint
+            )
+        }
 
         let terminateServer: @Sendable (Int32) async -> Void = { pid in
             await self.moshBootstrap.terminateMoshServer(
@@ -153,7 +171,16 @@ extension SSHClient {
             }
             await lease.bootstrapFailed()
             pendingMoshServerLeases.removeValue(forKey: leaseID)
-            throw error
+            if error is CancellationError {
+                throw CancellationError()
+            }
+            throw MoshStartupFailure(
+                stage: .beforeUDPClient,
+                underlying: moshStartupError(
+                    error,
+                    fallback: .moshBootstrapFailed("mosh-server could not start")
+                )
+            )
         }
 
         do {
@@ -191,90 +218,136 @@ extension SSHClient {
         cols: Int,
         rows: Int
     ) async throws -> PreparedMoshShell {
-        try validateShellStartupSession(expectedSession)
-        guard let wireSize = TerminalGeometryConversion.gridSize(cols: cols, rows: rows) else {
-            throw SSHError.unknown("Invalid terminal size \(cols)x\(rows)")
-        }
-
-        let startupTimeout = candidateHosts.count > 1 ? Duration.seconds(4) : moshStartupTimeout
-        var lastStartupError: Error?
-        var moshSession: MoshClientSession?
-        var pendingOps: [MoshHostOp] = []
-
-        for host in candidateHosts {
-            try validateShellStartupSession(expectedSession)
-            let endpointClass = host == configuredHost ? "configured" : "ssh_peer"
-            startupTrace?.record(
-                .moshEndpoint,
-                stageMilliseconds: 0,
-                outcome: "selected",
-                detail: endpointClass
-            )
-            let udpToken = startupTrace?.begin(.moshUDPSession)
-            let endpoint = MoshEndpoint(
-                host: host,
-                port: connectInfo.port,
-                keyBase64_22: connectInfo.key
-            )
-            let candidateSession = MoshClientSession(endpoint: endpoint)
-
-            do {
-                pendingOps = try await SSHClient.runWithDeadline(
-                    startupTimeout,
-                    onTimeout: {
-                        Task { await candidateSession.stop() }
-                    }
-                ) {
-                    try await candidateSession.start()
-                    try await candidateSession.enqueue(
-                        .resize(cols: wireSize.cols, rows: wireSize.rows)
-                    )
-                    return try await SSHClient.waitForMoshTransportReadiness {
-                        await candidateSession.drainHostOps()
-                    }
-                }
-                moshSession = candidateSession
-                if let udpToken { startupTrace?.end(udpToken, detail: endpointClass) }
-                if host != configuredHost {
-                    logger.info("Using SSH peer endpoint for Mosh: \(host, privacy: .private(mask: .hash))")
-                }
-                break
-            } catch {
-                await candidateSession.stop()
-                if let udpToken {
-                    startupTrace?.end(udpToken, outcome: "failed", detail: endpointClass)
-                }
-                if error is CancellationError || Task.isCancelled {
-                    throw CancellationError()
-                }
-                lastStartupError = error
-                if host != candidateHosts.last {
-                    logger.warning("Mosh startup failed for endpoint \(host, privacy: .private(mask: .hash)), trying next candidate")
-                }
-            }
-        }
-
-        guard let moshSession else {
-            if let sshError = lastStartupError as? SSHError,
-               case .timeout = sshError {
-                throw SSHError.moshUDPTimeout
-            }
-            if let lastStartupError {
-                throw SSHError.moshClientSessionFailed(lastStartupError.localizedDescription)
-            }
-            throw SSHError.moshClientSessionFailed("Failed to start Mosh session")
-        }
-
+        var dispatchStage = MoshStartupDispatchStage.beforeUDPClient
         do {
             try validateShellStartupSession(expectedSession)
-            return PreparedMoshShell(
-                session: moshSession,
-                pendingOps: pendingOps
-            )
+            guard let wireSize = TerminalGeometryConversion.gridSize(
+                cols: cols,
+                rows: rows
+            ) else {
+                throw SSHError.unknown("Invalid terminal size \(cols)x\(rows)")
+            }
+
+            let startupTimeout = candidateHosts.count > 1
+                ? Duration.seconds(4)
+                : moshStartupTimeout
+            var lastStartupError: Error?
+            var moshSession: MoshClientSession?
+            var pendingOps: [MoshHostOp] = []
+
+            for host in candidateHosts {
+                try validateShellStartupSession(expectedSession)
+                let endpointClass = host == configuredHost ? "configured" : "ssh_peer"
+                startupTrace?.record(
+                    .moshEndpoint,
+                    stageMilliseconds: 0,
+                    outcome: "selected",
+                    detail: endpointClass
+                )
+                let udpToken = startupTrace?.begin(.moshUDPSession)
+                let endpoint = MoshEndpoint(
+                    host: host,
+                    port: connectInfo.port,
+                    keyBase64_22: connectInfo.key
+                )
+                let candidateSession = MoshClientSession(endpoint: endpoint)
+
+                do {
+                    dispatchStage = .udpClientStartingOrStarted
+                    pendingOps = try await SSHClient.runWithDeadline(
+                        startupTimeout,
+                        onTimeout: {
+                            Task { await candidateSession.stop() }
+                        }
+                    ) {
+                        try await candidateSession.start()
+                        try await candidateSession.enqueue(
+                            .resize(cols: wireSize.cols, rows: wireSize.rows)
+                        )
+                        return try await SSHClient.waitForMoshTransportReadiness {
+                            await candidateSession.drainHostOps()
+                        }
+                    }
+                    moshSession = candidateSession
+                    if let udpToken {
+                        startupTrace?.end(udpToken, detail: endpointClass)
+                    }
+                    if host != configuredHost {
+                        logger.info(
+                            "Using SSH peer endpoint for Mosh: \(host, privacy: .private(mask: .hash))"
+                        )
+                    }
+                    break
+                } catch {
+                    await candidateSession.stop()
+                    if let udpToken {
+                        startupTrace?.end(
+                            udpToken,
+                            outcome: "failed",
+                            detail: endpointClass
+                        )
+                    }
+                    if error is CancellationError || Task.isCancelled {
+                        throw CancellationError()
+                    }
+                    lastStartupError = error
+                    if host != candidateHosts.last {
+                        logger.warning(
+                            "Mosh startup failed for an endpoint; trying the next candidate"
+                        )
+                    }
+                }
+            }
+
+            guard let moshSession else {
+                if let sshError = lastStartupError as? SSHError,
+                   case .timeout = sshError {
+                    throw SSHError.moshUDPTimeout
+                }
+                throw SSHError.moshClientSessionFailed("Mosh UDP startup failed")
+            }
+
+            do {
+                try validateShellStartupSession(expectedSession)
+                return PreparedMoshShell(
+                    session: moshSession,
+                    pendingOps: pendingOps
+                )
+            } catch {
+                await moshSession.stop()
+                throw error
+            }
         } catch {
-            await moshSession.stop()
-            throw error
+            if error is CancellationError, dispatchStage == .beforeUDPClient {
+                throw CancellationError()
+            }
+            if let failure = error as? MoshStartupFailure {
+                throw failure
+            }
+            throw MoshStartupFailure(
+                stage: dispatchStage,
+                underlying: moshStartupError(
+                    error,
+                    fallback: .moshClientSessionFailed("Mosh UDP startup failed")
+                )
+            )
         }
+    }
+
+    private func moshStartupError(
+        _ error: Error,
+        fallback: SSHError
+    ) -> SSHError {
+        if let failure = error as? MoshStartupFailure {
+            return failure.underlying
+        }
+        if let sshError = error as? SSHError {
+            if case .notConnected = sshError {
+                return .disconnectedBeforeShellRequest
+            }
+            return sshError
+        }
+        return fallback
     }
 
     func registerMoshShell(
@@ -379,7 +452,9 @@ extension SSHClient {
     }
 
     func fallbackReason(for error: Error) -> MoshFallbackReason {
-        guard let sshError = error as? SSHError else {
+        let sshError = (error as? MoshStartupFailure)?.underlying
+            ?? (error as? SSHError)
+        guard let sshError else {
             return .sessionFailed
         }
 
@@ -389,8 +464,6 @@ extension SSHClient {
         case .moshServerRuntimeBroken:
             return .serverRuntimeBroken
         case .moshBootstrapFailed:
-            return .bootstrapFailed
-        case .moshBootstrapFailedBeforeStartupCommand:
             return .bootstrapFailed
         case .moshInvalidEndpoint:
             return .invalidEndpoint

@@ -1840,4 +1840,9 @@
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "デバイス間で同期されます。VVTerm が永続セッションを作成するときだけ実行されます。機密情報を含めないでください。";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "デバイス間で同期されます。新しいターミナル接続ごとに実行されます。機密情報を含めないでください。";
 "The command contains unsupported control characters." = "コマンドに未対応の制御文字が含まれています。";
-"The command is too long." = "コマンドが長すぎます。";
+"The command must be %lld UTF-8 bytes or less." = "コマンドは %lld UTF-8 バイト以下にしてください。";
+"%@ does not support custom startup commands yet." = "%@ はカスタム起動コマンドにまだ対応していません。";
+"The connection ended while starting the shell. The startup command was not run again." = "シェルの起動中に接続が終了しました。起動コマンドは再実行されませんでした。";
+"The remote server rejected the shell command." = "リモートサーバーがシェルコマンドを拒否しました。";
+"The remote server rejected the terminal request." = "リモートサーバーがターミナル要求を拒否しました。";
+"The startup command may have run. VVTerm did not run it again." = "起動コマンドが実行された可能性があります。VVTerm は再実行しませんでした。";

@@ -1847,4 +1847,9 @@
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Синхронізується між пристроями. Запускається лише коли VVTerm створює постійний сеанс. Не додавайте секретні дані.";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Синхронізується між пристроями. Запускається для кожного нового з’єднання з терміналом. Не додавайте секретні дані.";
 "The command contains unsupported control characters." = "Команда містить непідтримувані керівні символи.";
-"The command is too long." = "Команда задовга.";
+"The command must be %lld UTF-8 bytes or less." = "Команда має бути не довшою за %lld байтів UTF-8.";
+"%@ does not support custom startup commands yet." = "%@ ще не підтримує користувацькі команди запуску.";
+"The connection ended while starting the shell. The startup command was not run again." = "З’єднання завершилося під час запуску оболонки. Команду запуску не було запущено повторно.";
+"The remote server rejected the shell command." = "Віддалений сервер відхилив команду оболонки.";
+"The remote server rejected the terminal request." = "Віддалений сервер відхилив запит термінала.";
+"The startup command may have run. VVTerm did not run it again." = "Команда запуску могла виконатися. VVTerm не запускав її повторно.";

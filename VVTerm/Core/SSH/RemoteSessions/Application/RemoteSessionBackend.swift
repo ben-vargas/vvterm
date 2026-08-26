@@ -159,6 +159,13 @@ actor RemoteSessionClient {
               let backend = registry.backend(for: runtime.backendIdentifier) else {
             throw SSHError.unknown("Remote session backend mismatch")
         }
+        if case .ensureManaged(_, let initialCommand) = request.intent,
+           initialCommand?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+           backend.metadata.managedStartupCommandSupport == .unsupported {
+            throw SSHError.managedStartupCommandUnsupported(
+                backend.metadata.displayName
+            )
+        }
         return try backend.launchPlan(for: request, runtime: runtime)
     }
 

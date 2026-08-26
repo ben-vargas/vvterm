@@ -1840,4 +1840,9 @@
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Синхронизируется между устройствами. Запускается только когда VVTerm создаёт постоянную сессию. Не добавляйте секретные данные.";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Синхронизируется между устройствами. Запускается для каждого нового подключения терминала. Не добавляйте секретные данные.";
 "The command contains unsupported control characters." = "Команда содержит неподдерживаемые управляющие символы.";
-"The command is too long." = "Команда слишком длинная.";
+"The command must be %lld UTF-8 bytes or less." = "Команда должна быть не длиннее %lld байт UTF-8.";
+"%@ does not support custom startup commands yet." = "%@ пока не поддерживает пользовательские команды запуска.";
+"The connection ended while starting the shell. The startup command was not run again." = "Соединение завершилось во время запуска оболочки. Команда запуска не была запущена повторно.";
+"The remote server rejected the shell command." = "Удалённый сервер отклонил команду оболочки.";
+"The remote server rejected the terminal request." = "Удалённый сервер отклонил запрос терминала.";
+"The startup command may have run. VVTerm did not run it again." = "Команда запуска могла выполниться. VVTerm не запускал её повторно.";

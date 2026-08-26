@@ -57,10 +57,13 @@ struct RemoteMoshManagerTests {
                 return
             }
             #expect(MoshSSHFallbackPolicy.decision(
-                after: error,
+                after: MoshStartupFailure(
+                    stage: .beforeUDPClient,
+                    underlying: error
+                ),
                 startupCommand: "printf action",
                 mayExecuteUserStartupAction: true
-            ) == .rejectToPreventStartupCommandReplay)
+            ) == .allow)
         } catch {
             Issue.record("Unexpected error: \(error.localizedDescription)")
         }
@@ -244,10 +247,10 @@ struct RemoteMoshManagerTests {
     func mapBootstrapPermissionDeniedProducesReadableSSHError() {
         let mapped = RemoteMoshManager.shared.mapBootstrapError(.permissionDenied)
         switch mapped {
-        case .moshBootstrapFailedBeforeStartupCommand(let message):
+        case .moshBootstrapFailed(let message):
             #expect(message.contains("Permission denied"))
         default:
-            Issue.record("Expected a pre-command bootstrap failure for permissionDenied")
+            Issue.record("Expected a bootstrap failure for permissionDenied")
         }
     }
 
@@ -256,11 +259,11 @@ struct RemoteMoshManagerTests {
         .invalidKey,
         .processExited
     ])
-    func mapsPostDispatchBootstrapFailuresAsAmbiguous(_ error: MoshBootstrapError) {
+    func mapsBootstrapParsingFailuresToOneError(_ error: MoshBootstrapError) {
         let mapped = RemoteMoshManager.shared.mapBootstrapError(error)
 
         guard case .moshBootstrapFailed = mapped else {
-            Issue.record("Expected an ambiguous bootstrap failure")
+            Issue.record("Expected a bootstrap failure")
             return
         }
     }

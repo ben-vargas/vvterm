@@ -81,8 +81,9 @@ struct TerminalPaneState: Equatable {
     /// Minimal non-secret context needed to recognize remote-session lifecycle markers
     /// when an existing Mosh or ET session resumes after process relaunch.
     var remoteSessionResumeContext: RemoteSessionLifecycleContext?
-    /// True while a resumable Mosh or ET shell owns a one-time startup action.
-    var standaloneStartupActionPendingCompletion: Bool
+    /// True after a startup action may have been dispatched. Automatic recovery
+    /// must not dispatch it again until normal completion clears this guard.
+    var startupActionReplayPending: Bool
 
     init(paneId: UUID, tabId: UUID, serverId: UUID) {
         self.paneId = paneId
@@ -98,7 +99,7 @@ struct TerminalPaneState: Equatable {
         self.seedPaneId = nil
         self.transportState = .ssh
         self.remoteSessionResumeContext = nil
-        self.standaloneStartupActionPendingCompletion = false
+        self.startupActionReplayPending = false
     }
 
     mutating func markConnectionEstablished() {

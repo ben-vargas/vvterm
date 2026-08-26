@@ -1839,4 +1839,9 @@
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "기기 간에 동기화됩니다. VVTerm이 지속 세션을 만들 때만 실행됩니다. 비밀 정보를 포함하지 마십시오.";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "기기 간에 동기화됩니다. 새 터미널 연결마다 실행됩니다. 비밀 정보를 포함하지 마십시오.";
 "The command contains unsupported control characters." = "명령에 지원되지 않는 제어 문자가 있습니다.";
-"The command is too long." = "명령이 너무 깁니다.";
+"The command must be %lld UTF-8 bytes or less." = "명령은 %lld UTF-8바이트 이하여야 합니다.";
+"%@ does not support custom startup commands yet." = "%@은(는) 아직 사용자 지정 시작 명령을 지원하지 않습니다.";
+"The connection ended while starting the shell. The startup command was not run again." = "셸을 시작하는 동안 연결이 종료되었습니다. 시작 명령은 다시 실행되지 않았습니다.";
+"The remote server rejected the shell command." = "원격 서버가 셸 명령을 거부했습니다.";
+"The remote server rejected the terminal request." = "원격 서버가 터미널 요청을 거부했습니다.";
+"The startup command may have run. VVTerm did not run it again." = "시작 명령이 실행되었을 수 있습니다. VVTerm은 이 명령을 다시 실행하지 않았습니다.";

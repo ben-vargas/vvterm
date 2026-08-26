@@ -21,7 +21,7 @@ struct TerminalTransportSessionAccess {
 nonisolated enum TerminalTransportSessionEvent: Sendable {
     case activeTransport(UUID, ShellTransportState)
     case eternalTerminalResumeContext(UUID, RemoteSessionLifecycleContext?)
-    case standaloneStartupActionPendingCompletion(UUID, Bool)
+    case startupActionReplayPending(UUID, Bool)
     case connectionState(UUID, ConnectionState)
     case title(UUID, String)
     case shellEnd(UUID, TerminalShellEndReason, TerminalTransportEndOwnership?)
@@ -633,19 +633,19 @@ final class TerminalTransportCoordinator {
             setResumeContext: { paneId, context in
                 sessionAccess.send(.eternalTerminalResumeContext(paneId, context))
             },
-            standaloneStartupActionPendingCompletion: { paneId in
+            startupActionReplayPending: { paneId in
                 sessionAccess.paneState(paneId)?
-                    .standaloneStartupActionPendingCompletion == true
+                    .startupActionReplayPending == true
             },
-            setStandaloneStartupActionPendingCompletion: { paneId, isPending in
-                sessionAccess.send(.standaloneStartupActionPendingCompletion(
+            setStartupActionReplayPending: { paneId, isPending in
+                sessionAccess.send(.startupActionReplayPending(
                     paneId,
                     isPending
                 ))
             },
             remoteSessionAttached: { [weak remoteSessionCoordinator] paneId in
                 remoteSessionCoordinator?.confirmManagedSession(for: paneId)
-                sessionAccess.send(.standaloneStartupActionPendingCompletion(
+                sessionAccess.send(.startupActionReplayPending(
                     paneId,
                     false
                 ))
@@ -905,8 +905,8 @@ final class TerminalTransportCoordinator {
                 return SSHConnectionRestoredShell(
                     shell: shell,
                     remoteSessionLifecycle: paneState?.remoteSessionResumeContext,
-                    standaloneStartupActionPendingCompletion: paneState?
-                        .standaloneStartupActionPendingCompletion == true
+                    startupActionReplayPending: paneState?
+                        .startupActionReplayPending == true
                 )
             },
             registerShell: { [weak registry] shell in
@@ -925,9 +925,9 @@ final class TerminalTransportCoordinator {
                 sessionAccess.send(.activeTransport(paneId, shell.transportState))
                 return true
             },
-            setStandaloneStartupActionPendingCompletion: { isPending in
+            setStartupActionReplayPending: { isPending in
                 guard ownsConnection() else { return }
-                sessionAccess.send(.standaloneStartupActionPendingCompletion(
+                sessionAccess.send(.startupActionReplayPending(
                     paneId,
                     isPending
                 ))
@@ -935,7 +935,7 @@ final class TerminalTransportCoordinator {
             remoteSessionAttached: { [weak remoteSessionCoordinator] in
                 guard ownsConnection() else { return }
                 remoteSessionCoordinator?.confirmManagedSession(for: paneId)
-                sessionAccess.send(.standaloneStartupActionPendingCompletion(
+                sessionAccess.send(.startupActionReplayPending(
                     paneId,
                     false
                 ))

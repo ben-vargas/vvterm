@@ -29,6 +29,7 @@ extension SSHClient {
                 rows: rows,
                 pixelSize: pixelSize,
                 startupCommand: startupCommand,
+                mayExecuteUserStartupAction: mayExecuteUserStartupAction,
                 environment: environment,
                 terminalType: terminalType
             )
@@ -48,6 +49,7 @@ extension SSHClient {
                 rows: rows,
                 pixelSize: pixelSize,
                 startupCommand: startupCommand,
+                mayExecuteUserStartupAction: mayExecuteUserStartupAction,
                 environment: environment,
                 terminalType: terminalType
             )
@@ -77,12 +79,21 @@ extension SSHClient {
                 try validateShellStartupSession(sshSession)
             } catch {
                 await discardPreparedMoshShell(preparedMosh)
-                throw error
+                throw MoshStartupFailure(
+                    stage: .udpClientStartingOrStarted,
+                    underlying: error as? SSHError
+                        ?? .moshClientSessionFailed("Mosh startup validation failed")
+                )
             }
             pendingMoshServerLeases.removeValue(forKey: preparedMosh.leaseID)
             return registerMoshShell(preparedMosh.shell)
         } catch {
-            if error is CancellationError || Task.isCancelled {
+            if error is CancellationError {
+                throw CancellationError()
+            }
+            let moshFailure = error as? MoshStartupFailure
+            if Task.isCancelled,
+               moshFailure?.stage != .udpClientStartingOrStarted {
                 throw CancellationError()
             }
             let moshError = error
@@ -95,12 +106,15 @@ extension SSHClient {
                 logger.error(
                     "Mosh startup failed after the startup command may have run. SSH fallback is disabled to prevent replay."
                 )
-                throw SSHError.startupCommandMayHaveRun(moshError.localizedDescription)
+                throw SSHError.startupCommandMayHaveRun
             }
-            if let sshError = error as? SSHError, case .notConnected = sshError {
-                throw sshError
+            let underlyingSSHError = moshFailure?.underlying ?? (error as? SSHError)
+            if let underlyingSSHError, case .notConnected = underlyingSSHError {
+                throw underlyingSSHError
             }
-            logger.warning("Mosh startup failed, using SSH fallback: \(moshError.localizedDescription)")
+            logger.warning(
+                "Mosh startup failed (\(fallbackReason.rawValue, privacy: .public)); using SSH fallback"
+            )
 
             do {
                 let fallbackToken = startupTrace?.begin(.sshFallback)
@@ -110,6 +124,7 @@ extension SSHClient {
                     rows: rows,
                     pixelSize: pixelSize,
                     startupCommand: startupCommand,
+                    mayExecuteUserStartupAction: mayExecuteUserStartupAction,
                     environment: environment,
                     terminalType: terminalType
                 )
@@ -145,10 +160,11 @@ extension SSHClient {
         rows: Int,
         pixelSize: TerminalPixelSize?,
         startupCommand: String?,
+        mayExecuteUserStartupAction: Bool,
         environment: RemoteEnvironment,
         terminalType: RemoteTerminalType
     ) async throws -> ShellHandle {
-        try validateShellStartupSession(expectedSession)
+        try validateShellStartupSessionBeforeShellRequest(expectedSession)
         let shell = try await expectedSession.startShell(
             cols: cols,
             rows: rows,
@@ -162,6 +178,9 @@ extension SSHClient {
             return shell
         } catch {
             await expectedSession.closeShell(shell.id)
+            if mayExecuteUserStartupAction {
+                throw SSHError.processRequestOutcomeUnknown
+            }
             throw error
         }
     }

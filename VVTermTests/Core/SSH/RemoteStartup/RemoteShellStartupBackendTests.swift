@@ -2,6 +2,73 @@ import Foundation
 import Testing
 @testable import VVTerm
 
+private struct UnsupportedManagedStartupBackend: RemoteSessionBackend {
+    let metadata = RemoteSessionBackendMetadata(
+        identifier: RemoteSessionBackendIdentifier(rawValue: "unsupported-startup"),
+        displayName: "Unsupported Startup",
+        installation: .automatic,
+        managedStartupCommandSupport: .unsupported
+    )
+
+    func availability(using client: SSHClient) async -> RemoteSessionAvailability {
+        .unsupportedEnvironment
+    }
+
+    func listSessions(
+        scope: RemoteSessionListScope,
+        using client: SSHClient,
+        runtime: RemoteSessionRuntime
+    ) async throws -> [RemoteSessionDescriptor] {
+        []
+    }
+
+    func prepareManagedSession(
+        using client: SSHClient,
+        terminalType: RemoteTerminalType,
+        themeStyle: RemoteSessionThemeStyle,
+        runtime: RemoteSessionRuntime
+    ) async {}
+
+    func launchPlan(
+        for request: RemoteSessionLaunchRequest,
+        runtime: RemoteSessionRuntime
+    ) throws -> RemoteSessionBackendLaunchPlan {
+        RemoteSessionBackendLaunchPlan(
+            command: "attach-only",
+            presenceProbe: RemoteSessionPresenceProbe(
+                command: "true",
+                existsMarker: "exists",
+                missingMarker: "missing"
+            )
+        )
+    }
+
+    func installScript(
+        attachment: RemoteSessionAttachment,
+        workingDirectory: String,
+        terminalType: RemoteTerminalType,
+        themeStyle: RemoteSessionThemeStyle,
+        using client: SSHClient,
+        attachAfterInstall: Bool
+    ) async -> String? {
+        nil
+    }
+
+    func killSession(
+        _ identifier: RemoteSessionIdentifier,
+        using client: SSHClient,
+        runtime: RemoteSessionRuntime
+    ) async {}
+
+    func currentWorkingDirectory(
+        for attachment: RemoteSessionAttachment,
+        using client: SSHClient,
+        runtime: RemoteSessionRuntime
+    ) async -> String? {
+        nil
+    }
+}
+
 struct RemoteShellStartupBackendTests {
     @Test
     func tmuxUsesRawCommandOnlyWhenItCreatesManagedSession() throws {
@@ -92,6 +159,45 @@ struct RemoteShellStartupBackendTests {
         #expect(zmx.contains(attached))
     }
 
+    @Test
+    func unsupportedBackendRejectsNonblankManagedStartupCommandAtRuntime() async throws {
+        let backend = UnsupportedManagedStartupBackend()
+        let client = RemoteSessionClient(
+            registry: RemoteSessionBackendRegistry(backends: [backend])
+        )
+        let runtime = try runtime(for: backend.metadata.identifier)
+        let request = try ensureManagedRequest(
+            backendIdentifier: backend.metadata.identifier,
+            initialCommand: "notify-deployment"
+        )
+
+        do {
+            _ = try await client.launchPlan(for: request, runtime: runtime)
+            Issue.record("Expected the unsupported startup-command error")
+        } catch SSHError.managedStartupCommandUnsupported(let backendName) {
+            #expect(backendName == backend.metadata.displayName)
+        } catch {
+            Issue.record("Unexpected error: \(error.localizedDescription)")
+        }
+    }
+
+    @Test
+    func unsupportedBackendStillAllowsBlankManagedStartupCommand() async throws {
+        let backend = UnsupportedManagedStartupBackend()
+        let client = RemoteSessionClient(
+            registry: RemoteSessionBackendRegistry(backends: [backend])
+        )
+        let runtime = try runtime(for: backend.metadata.identifier)
+        let request = try ensureManagedRequest(
+            backendIdentifier: backend.metadata.identifier,
+            initialCommand: " \n\t "
+        )
+
+        let plan = try await client.launchPlan(for: request, runtime: runtime)
+
+        #expect(plan.command == "attach-only")
+    }
+
     private func ensureManagedRequest(
         backendIdentifier: RemoteSessionBackendIdentifier = .tmux,
         initialCommand: String?
@@ -153,6 +259,20 @@ struct RemoteShellStartupBackendTests {
             implementationVariant: "zmx",
             rawVersion: "0.7.0",
             semanticVersion: RemoteSessionSemanticVersion("0.7.0"),
+            shellFamily: .posix,
+            shellExecutable: "/bin/sh"
+        ))
+    }
+
+    private func runtime(
+        for backendIdentifier: RemoteSessionBackendIdentifier
+    ) throws -> RemoteSessionRuntime {
+        RemoteSessionRuntime(probe: RemoteSessionProbe(
+            backendIdentifier: backendIdentifier,
+            executable: try RemoteSessionExecutable(validating: "/opt/tools/backend"),
+            implementationVariant: "test",
+            rawVersion: "1.0.0",
+            semanticVersion: RemoteSessionSemanticVersion("1.0.0"),
             shellFamily: .posix,
             shellExecutable: "/bin/sh"
         ))

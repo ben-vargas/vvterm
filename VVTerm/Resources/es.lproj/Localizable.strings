@@ -1840,4 +1840,9 @@
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Se sincroniza entre dispositivos. Solo se ejecuta cuando VVTerm crea una sesión persistente. No incluyas secretos.";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Se sincroniza entre dispositivos. Se ejecuta para cada conexión de terminal nueva. No incluyas secretos.";
 "The command contains unsupported control characters." = "El comando contiene caracteres de control no compatibles.";
-"The command is too long." = "El comando es demasiado largo.";
+"The command must be %lld UTF-8 bytes or less." = "El comando debe tener %lld bytes UTF-8 como máximo.";
+"%@ does not support custom startup commands yet." = "%@ todavía no admite comandos de inicio personalizados.";
+"The connection ended while starting the shell. The startup command was not run again." = "La conexión terminó al iniciar el shell. El comando de inicio no se volvió a ejecutar.";
+"The remote server rejected the shell command." = "El servidor remoto rechazó el comando del shell.";
+"The remote server rejected the terminal request." = "El servidor remoto rechazó la solicitud del terminal.";
+"The startup command may have run. VVTerm did not run it again." = "Es posible que el comando de inicio se haya ejecutado. VVTerm no lo volvió a ejecutar.";

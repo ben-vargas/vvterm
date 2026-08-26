@@ -1885,4 +1885,9 @@
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Đồng bộ giữa các thiết bị. Chỉ chạy khi VVTerm tạo phiên liên tục. Không thêm thông tin bí mật.";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Đồng bộ giữa các thiết bị. Chạy cho mỗi kết nối thiết bị đầu cuối mới. Không thêm thông tin bí mật.";
 "The command contains unsupported control characters." = "Lệnh chứa ký tự điều khiển không được hỗ trợ.";
-"The command is too long." = "Lệnh quá dài.";
+"The command must be %lld UTF-8 bytes or less." = "Lệnh phải có kích thước không quá %lld byte UTF-8.";
+"%@ does not support custom startup commands yet." = "%@ chưa hỗ trợ lệnh khởi động tùy chỉnh.";
+"The connection ended while starting the shell. The startup command was not run again." = "Kết nối đã kết thúc khi khởi động shell. Lệnh khởi động không được chạy lại.";
+"The remote server rejected the shell command." = "Máy chủ từ xa đã từ chối lệnh shell.";
+"The remote server rejected the terminal request." = "Máy chủ từ xa đã từ chối yêu cầu thiết bị đầu cuối.";
+"The startup command may have run. VVTerm did not run it again." = "Lệnh khởi động có thể đã chạy. VVTerm không chạy lại lệnh đó.";

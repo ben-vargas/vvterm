@@ -1,6 +1,6 @@
 import Foundation
 
-/// A user-provided command. Unix hosts run it with `/bin/sh`; Windows hosts use
+/// A user-provided command. Unix hosts run it with `/bin/sh -lc`; Windows hosts use
 /// the detected PowerShell or cmd.exe shell.
 nonisolated struct RemoteShellStartupAction: Hashable, Sendable {
     enum ValidationError: Error, Equatable, Sendable {

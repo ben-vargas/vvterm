@@ -7,7 +7,7 @@ struct MoshSSHFallbackPolicyTests {
         var executionCount = 1
 
         if MoshSSHFallbackPolicy.decision(
-            after: SSHError.moshUDPTimeout,
+            after: failure(stage: .udpClientStartingOrStarted),
             startupCommand: "deploy --start",
             mayExecuteUserStartupAction: true
         ) == .allow {
@@ -19,12 +19,10 @@ struct MoshSSHFallbackPolicyTests {
 
     @Test
     func commandBlocksFallbackWhenRemoteExecutionIsPossible() {
-        let errors: [SSHError] = [
-            .moshBootstrapFailed("ambiguous bootstrap failure"),
-            .moshSessionFailed("session failure"),
-            .moshUDPTimeout,
-            .moshClientSessionFailed("client failure"),
-            .notConnected
+        let errors: [MoshStartupFailure] = [
+            failure(stage: .udpClientStartingOrStarted, underlying: .moshUDPTimeout),
+            failure(stage: .udpClientStartingOrStarted, underlying: .moshClientSessionFailed("failed")),
+            failure(stage: .udpClientStartingOrStarted, underlying: .notConnected)
         ]
 
         for error in errors {
@@ -41,8 +39,9 @@ struct MoshSSHFallbackPolicyTests {
         var executionCount = 0
 
         #expect(MoshSSHFallbackPolicy.decision(
-            after: SSHError.moshBootstrapFailedBeforeStartupCommand(
-                "mosh-server rejected startup"
+            after: failure(
+                stage: .beforeUDPClient,
+                underlying: .moshBootstrapFailed("mosh-server rejected startup")
             ),
             startupCommand: "notify-send started",
             mayExecuteUserStartupAction: true
@@ -58,13 +57,13 @@ struct MoshSSHFallbackPolicyTests {
             .moshServerMissing,
             .moshServerRuntimeBroken,
             .moshInvalidEndpoint,
-            .moshBootstrapFailedBeforeStartupCommand("rejected"),
-            .channelOpenFailed
+            .moshBootstrapFailed("invalid connect output"),
+            .timeout
         ]
 
         for error in errors {
             #expect(MoshSSHFallbackPolicy.decision(
-                after: error,
+                after: failure(stage: .beforeUDPClient, underlying: error),
                 startupCommand: "echo once",
                 mayExecuteUserStartupAction: true
             ) == .allow)
@@ -74,7 +73,7 @@ struct MoshSSHFallbackPolicyTests {
     @Test
     func managedSessionLauncherWithoutUserActionCanFallbackAfterBootstrap() {
         #expect(MoshSSHFallbackPolicy.decision(
-            after: SSHError.moshUDPTimeout,
+            after: failure(stage: .udpClientStartingOrStarted),
             startupCommand: "tmux new-session -A -s vvterm-workstation",
             mayExecuteUserStartupAction: false
         ) == .allow)
@@ -86,7 +85,6 @@ struct MoshSSHFallbackPolicyTests {
             .moshServerMissing,
             .moshServerRuntimeBroken,
             .moshBootstrapFailed("failed"),
-            .moshBootstrapFailedBeforeStartupCommand("rejected"),
             .moshSessionFailed("failed"),
             .moshInvalidEndpoint,
             .moshUDPTimeout,
@@ -115,7 +113,7 @@ struct MoshSSHFallbackPolicyTests {
         )
         let shellRequest = MoshSSHFallbackPolicy.fallbackFailure(
             moshError: moshError,
-            fallbackError: SSHError.shellRequestFailed
+            fallbackError: SSHError.processRequestDenied
         )
 
         guard case .channelOpenFailed = channel else {
@@ -126,9 +124,29 @@ struct MoshSSHFallbackPolicyTests {
             Issue.record("Expected the pre-request disconnect")
             return
         }
-        guard case .shellRequestFailed = shellRequest else {
-            Issue.record("Expected the shell-request error")
+        guard case .processRequestDenied = shellRequest else {
+            Issue.record("Expected the process-request denial")
             return
         }
+    }
+
+    @Test
+    func fallbackPreservesUnknownProcessRequestOutcome() {
+        let result = MoshSSHFallbackPolicy.fallbackFailure(
+            moshError: failure(stage: .beforeUDPClient),
+            fallbackError: SSHError.processRequestOutcomeUnknown
+        )
+
+        guard case .processRequestOutcomeUnknown = result else {
+            Issue.record("Expected the ambiguous process-request error")
+            return
+        }
+    }
+
+    private func failure(
+        stage: MoshStartupDispatchStage,
+        underlying: SSHError = .moshUDPTimeout
+    ) -> MoshStartupFailure {
+        MoshStartupFailure(stage: stage, underlying: underlying)
     }
 }

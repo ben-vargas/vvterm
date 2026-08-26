@@ -1841,4 +1841,9 @@
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Synchronizuje se mezi zařízeními. Spustí se jen při vytvoření trvalé relace aplikací VVTerm. Nezadávejte tajné údaje.";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Synchronizuje se mezi zařízeními. Spustí se pro každé nové připojení terminálu. Nezadávejte tajné údaje.";
 "The command contains unsupported control characters." = "Příkaz obsahuje nepodporované řídicí znaky.";
-"The command is too long." = "Příkaz je příliš dlouhý.";
+"The command must be %lld UTF-8 bytes or less." = "Příkaz smí mít nejvýše %lld bajtů UTF-8.";
+"%@ does not support custom startup commands yet." = "%@ zatím nepodporuje vlastní příkazy při spuštění.";
+"The connection ended while starting the shell. The startup command was not run again." = "Připojení skončilo při spouštění shellu. Příkaz při spuštění nebyl spuštěn znovu.";
+"The remote server rejected the shell command." = "Vzdálený server odmítl příkaz shellu.";
+"The remote server rejected the terminal request." = "Vzdálený server odmítl požadavek terminálu.";
+"The startup command may have run. VVTerm did not run it again." = "Příkaz při spuštění mohl být proveden. VVTerm jej nespustil znovu.";

@@ -114,7 +114,7 @@ extension TerminalRemoteSessionCoordinator {
     ) async throws -> TerminalShellStartupPlan {
         try validateOwner()
         let startupAction = sessionState.paneState(for: paneID)?
-            .standaloneStartupActionPendingCompletion == true
+            .startupActionReplayPending == true
             ? nil
             : configuration.serverSettings(serverID)?.startupAction
         guard isEnabled(for: serverID) else {
@@ -201,22 +201,22 @@ extension TerminalRemoteSessionCoordinator {
 
         let envelope = RemoteSessionLifecycleEnvelope.make()
         let intent: RemoteSessionLaunchIntent
+        let mayExecuteStartupAction: Bool
         if isReattachingManagedSession
             || attachmentState.attachment.ownership == .external {
             intent = .attach(attachmentState.attachment)
+            mayExecuteStartupAction = false
         } else {
             intent = .ensureManaged(
                 identifier: attachmentState.attachment.identifier,
-                initialCommand: nil
+                initialCommand: startupAction?.command
             )
+            mayExecuteStartupAction = startupAction != nil
         }
         let backendPlan = try await remoteSessions.launchPlan(
             for: RemoteSessionLaunchRequest(
                 intent: intent,
                 workingDirectory: workingDirectory,
-                initialCommand: mode == .attachOrCreate
-                    ? startupAction?.command
-                    : nil,
                 lifecycleEnvelope: envelope,
                 transport: transport,
                 themeStyle: configuration.themeStyle()
@@ -234,7 +234,7 @@ extension TerminalRemoteSessionCoordinator {
         return TerminalShellStartupPlan(
             command: backendPlan.command,
             remoteSessionLifecycle: lifecycle,
-            mayExecuteUserStartupAction: mode == .attachOrCreate && startupAction != nil
+            mayExecuteUserStartupAction: mayExecuteStartupAction
         )
     }
 

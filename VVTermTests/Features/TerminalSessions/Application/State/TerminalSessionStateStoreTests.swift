@@ -72,12 +72,16 @@ struct TerminalSessionStateStoreTests {
         )
         pane.presentationOverrides = TerminalPresentationOverrides(fontSize: 18)
         pane.disconnectReason = .transportInterrupted
-        pane.standaloneStartupActionPendingCompletion = true
+        pane.startupActionReplayPending = true
 
         source.install(tab, paneState: pane, select: true)
         source.selectTab(staleSelectedTabId, for: tab.serverId)
         source.selectView(.stats, for: tab.serverId)
         source.persistNow()
+        let encodedSnapshot = try #require(snapshot.data)
+        let encodedText = try #require(String(data: encodedSnapshot, encoding: .utf8))
+        #expect(encodedText.contains("standaloneStartupActionPaneIds"))
+        #expect(!encodedText.contains("startupActionReplayPendingPaneIds"))
 
         let restoredSelections = ConnectionViewSelectionStore()
         let restored = makeStore(snapshot: snapshot, selections: restoredSelections)
@@ -90,7 +94,7 @@ struct TerminalSessionStateStoreTests {
         #expect(restored.paneState(for: tab.rootPaneId)?.disconnectReason == .transportInterrupted)
         #expect(
             restored.paneState(for: tab.rootPaneId)?
-                .standaloneStartupActionPendingCompletion == true
+                .startupActionReplayPending == true
         )
         #expect(restored.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
     }
@@ -113,7 +117,7 @@ struct TerminalSessionStateStoreTests {
             select: true
         )
 
-        source.setStandaloneStartupActionPendingCompletion(true, for: tab.rootPaneId)
+        source.setStartupActionReplayPending(true, for: tab.rootPaneId)
 
         let restored = makeStore(
             snapshot: snapshot,
@@ -121,7 +125,7 @@ struct TerminalSessionStateStoreTests {
         )
         #expect(
             restored.paneState(for: tab.rootPaneId)?
-                .standaloneStartupActionPendingCompletion == true
+                .startupActionReplayPending == true
         )
     }
 
@@ -138,11 +142,11 @@ struct TerminalSessionStateStoreTests {
             tabId: tab.id,
             serverId: tab.serverId
         )
-        pane.standaloneStartupActionPendingCompletion = true
+        pane.startupActionReplayPending = true
         source.install(tab, paneState: pane, select: true)
         source.persistNow()
 
-        source.setStandaloneStartupActionPendingCompletion(false, for: tab.rootPaneId)
+        source.setStartupActionReplayPending(false, for: tab.rootPaneId)
 
         let restored = makeStore(
             snapshot: snapshot,
@@ -150,7 +154,7 @@ struct TerminalSessionStateStoreTests {
         )
         #expect(
             restored.paneState(for: tab.rootPaneId)?
-                .standaloneStartupActionPendingCompletion == false
+                .startupActionReplayPending == false
         )
     }
 
@@ -167,11 +171,11 @@ struct TerminalSessionStateStoreTests {
             tabId: tab.id,
             serverId: tab.serverId
         )
-        pane.standaloneStartupActionPendingCompletion = true
+        pane.startupActionReplayPending = true
         source.install(tab, paneState: pane, select: true)
         source.persistNow()
 
-        source.markStandaloneStartupActionCompleted(for: tab.rootPaneId)
+        source.markStartupActionCompleted(for: tab.rootPaneId)
 
         let restored = makeStore(
             snapshot: snapshot,
@@ -180,7 +184,7 @@ struct TerminalSessionStateStoreTests {
         #expect(restored.paneState(for: tab.rootPaneId)?.disconnectReason == .startupActionCompleted)
         #expect(
             restored.paneState(for: tab.rootPaneId)?
-                .standaloneStartupActionPendingCompletion == false
+                .startupActionReplayPending == false
         )
     }
 

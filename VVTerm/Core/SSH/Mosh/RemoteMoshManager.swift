@@ -196,7 +196,7 @@ actor RemoteMoshManager {
         case .missingServer:
             return .moshServerMissing
         case .permissionDenied:
-            return .moshBootstrapFailedBeforeStartupCommand(
+            return .moshBootstrapFailed(
                 "Permission denied while starting mosh-server"
             )
         case .invalidConnectLine:

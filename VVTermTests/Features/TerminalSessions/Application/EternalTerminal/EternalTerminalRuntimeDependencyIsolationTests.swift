@@ -12,6 +12,11 @@ private final class EternalTerminalEventRecorder {
     }
 }
 
+@MainActor
+private final class EternalTerminalOwnerState {
+    var isCurrent = true
+}
+
 private actor EternalTerminalRemoteSessionKillRecorder: EternalTerminalRemoteSessionKilling {
     private var identifiers: [RemoteSessionIdentifier] = []
 
@@ -74,24 +79,57 @@ private actor EternalTerminalConnectGate {
     }
 }
 
+private actor EternalTerminalSendGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func waitUntilBlocked() async -> Bool {
+        for _ in 0..<2_000 {
+            if continuation != nil { return true }
+            await Task.yield()
+        }
+        return continuation != nil
+    }
+
+    func release() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
 private actor TestEternalTerminalSession: EternalTerminalSession {
     nonisolated let output = AsyncStream<Data> { _ in }
     nonisolated let stateChanges: AsyncStream<EternalTerminalSessionState>
 
     private let stateContinuation: AsyncStream<EternalTerminalSessionState>.Continuation
     private let connectGate: EternalTerminalConnectGate?
+    private let sendGate: EternalTerminalSendGate?
+    private let sendFailure: EternalTerminalSessionFailure?
+    private let stateBeforeSendReturns: EternalTerminalSessionState?
     private let startupPlan: TerminalShellStartupPlan
     private var closeCalls = 0
     private var commandWasSent = false
+    private var sendAttempts = 0
 
     init(
         connectGate: EternalTerminalConnectGate? = nil,
+        sendGate: EternalTerminalSendGate? = nil,
+        sendFailure: EternalTerminalSessionFailure? = nil,
+        stateBeforeSendReturns: EternalTerminalSessionState? = nil,
         startupPlan: TerminalShellStartupPlan = .plainShell
     ) {
         let stream = AsyncStream.makeStream(of: EternalTerminalSessionState.self)
         stateChanges = stream.stream
         stateContinuation = stream.continuation
         self.connectGate = connectGate
+        self.sendGate = sendGate
+        self.sendFailure = sendFailure
+        self.stateBeforeSendReturns = stateBeforeSendReturns
         self.startupPlan = startupPlan
     }
 
@@ -104,6 +142,16 @@ private actor TestEternalTerminalSession: EternalTerminalSession {
     }
 
     func send(_ data: Data) async throws {
+        sendAttempts += 1
+        if let sendGate {
+            await sendGate.wait()
+        }
+        if let stateBeforeSendReturns {
+            stateContinuation.yield(stateBeforeSendReturns)
+        }
+        if let sendFailure {
+            throw sendFailure
+        }
         commandWasSent = true
     }
 
@@ -145,6 +193,20 @@ private actor TestEternalTerminalSession: EternalTerminalSession {
             await Task.yield()
         }
         return commandWasSent
+    }
+
+    func waitUntilSendIsAttempted() async -> Bool {
+        for _ in 0..<2_000 {
+            if sendAttempts > 0 { return true }
+            await Task.yield()
+        }
+        return sendAttempts > 0
+    }
+
+    func sendAttemptCount() -> Int { sendAttempts }
+
+    func emit(_ state: EternalTerminalSessionState) {
+        stateContinuation.yield(state)
     }
 
     func finish() {
@@ -257,6 +319,185 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
         runtime.resize(cols: 80, rows: 24, pixelSize: nil)
         runtime.startIfNeeded()
         #expect(await session.waitUntilCommandIsSent())
+        #expect(replayGuardStates == [true])
+        await runtime.close()
+    }
+
+    @Test
+    func rejectedStartupSendClearsReplayGuardAndResumeContext() async throws {
+        let plan = try managedStartupPlan()
+        let session = TestEternalTerminalSession(
+            sendFailure: .connectionClosed,
+            startupPlan: plan
+        )
+        var replayGuardStates: [Bool] = []
+        var resumeContexts: [RemoteSessionLifecycleContext?] = []
+        let runtime = makeRuntime(
+            dependencies: EternalTerminalRuntimeDependencies(
+                recordEvent: { _ in },
+                remoteSessionKiller: EternalTerminalRemoteSessionKillRecorder(),
+                sessionPreparer: SequencedEternalTerminalSessionPreparer(
+                    sessions: [session]
+                )
+            ),
+            setResumeContext: { _, context in
+                resumeContexts.append(context)
+            },
+            setStartupActionReplayGuard: { _, isPending in
+                replayGuardStates.append(isPending)
+            }
+        )
+
+        runtime.resize(cols: 80, rows: 24, pixelSize: nil)
+        runtime.startIfNeeded()
+        #expect(await session.waitUntilSendIsAttempted())
+        for _ in 0..<2_000 {
+            if replayGuardStates == [true, false] { break }
+            await Task.yield()
+        }
+
+        #expect(replayGuardStates == [true, false])
+        #expect(resumeContexts.count == 2)
+        if resumeContexts.count == 2 {
+            #expect(resumeContexts[0] == plan.remoteSessionLifecycle)
+            #expect(resumeContexts[1] == nil)
+        }
+        await runtime.close()
+    }
+
+    @Test
+    func disconnectedReliableSendAcceptanceKeepsReplayGuard() async {
+        let session = TestEternalTerminalSession(
+            stateBeforeSendReturns: .disconnected,
+            startupPlan: TerminalShellStartupPlan(
+                command: "notify-deployment",
+                remoteSessionLifecycle: nil,
+                mayExecuteUserStartupAction: true
+            )
+        )
+        var replayGuardStates: [Bool] = []
+        let runtime = makeRuntime(
+            dependencies: EternalTerminalRuntimeDependencies(
+                recordEvent: { _ in },
+                remoteSessionKiller: EternalTerminalRemoteSessionKillRecorder(),
+                sessionPreparer: SequencedEternalTerminalSessionPreparer(
+                    sessions: [session]
+                )
+            ),
+            setStartupActionReplayGuard: { _, isPending in
+                replayGuardStates.append(isPending)
+            }
+        )
+
+        runtime.resize(cols: 80, rows: 24, pixelSize: nil)
+        runtime.startIfNeeded()
+        #expect(await session.waitUntilCommandIsSent())
+
+        #expect(replayGuardStates == [true])
+        await runtime.close()
+    }
+
+    @Test
+    func transportFailureAfterReliableAcceptanceKeepsReplayGuard() async {
+        let session = TestEternalTerminalSession(
+            startupPlan: TerminalShellStartupPlan(
+                command: "notify-deployment",
+                remoteSessionLifecycle: nil,
+                mayExecuteUserStartupAction: true
+            )
+        )
+        var replayGuardStates: [Bool] = []
+        let runtime = makeRuntime(
+            dependencies: EternalTerminalRuntimeDependencies(
+                recordEvent: { _ in },
+                remoteSessionKiller: EternalTerminalRemoteSessionKillRecorder(),
+                sessionPreparer: SequencedEternalTerminalSessionPreparer(
+                    sessions: [session]
+                )
+            ),
+            setStartupActionReplayGuard: { _, isPending in
+                replayGuardStates.append(isPending)
+            }
+        )
+
+        runtime.resize(cols: 80, rows: 24, pixelSize: nil)
+        runtime.startIfNeeded()
+        #expect(await session.waitUntilCommandIsSent())
+        await session.emit(.failed(.transport))
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(replayGuardStates == [true])
+        await runtime.close()
+    }
+
+    @Test
+    func resumedSessionDoesNotSendStartupCommandAgain() async {
+        let session = TestEternalTerminalSession(
+            startupPlan: TerminalShellStartupPlan(
+                command: "notify-deployment",
+                remoteSessionLifecycle: nil,
+                mayExecuteUserStartupAction: true
+            )
+        )
+        let runtime = makeRuntime(
+            dependencies: EternalTerminalRuntimeDependencies(
+                recordEvent: { _ in },
+                remoteSessionKiller: EternalTerminalRemoteSessionKillRecorder(),
+                sessionPreparer: SequencedEternalTerminalSessionPreparer(
+                    sessions: [session],
+                    origin: .resumed
+                )
+            ),
+            resumedStandaloneAction: true
+        )
+
+        runtime.resize(cols: 80, rows: 24, pixelSize: nil)
+        runtime.startIfNeeded()
+        for _ in 0..<2_000 {
+            if !runtime.isStartInFlight { break }
+            await Task.yield()
+        }
+
+        #expect(await session.sendAttemptCount() == 0)
+        await runtime.close()
+    }
+
+    @Test
+    func staleRuntimeCannotClearCurrentReplayGuardAfterSendRejection() async {
+        let ownerState = EternalTerminalOwnerState()
+        let sendGate = EternalTerminalSendGate()
+        let session = TestEternalTerminalSession(
+            sendGate: sendGate,
+            sendFailure: .connectionClosed,
+            startupPlan: TerminalShellStartupPlan(
+                command: "notify-deployment",
+                remoteSessionLifecycle: nil,
+                mayExecuteUserStartupAction: true
+            )
+        )
+        var replayGuardStates: [Bool] = []
+        let runtime = makeRuntime(
+            dependencies: EternalTerminalRuntimeDependencies(
+                recordEvent: { _ in },
+                remoteSessionKiller: EternalTerminalRemoteSessionKillRecorder(),
+                sessionPreparer: SequencedEternalTerminalSessionPreparer(
+                    sessions: [session]
+                )
+            ),
+            ownerState: ownerState,
+            setStartupActionReplayGuard: { _, isPending in
+                replayGuardStates.append(isPending)
+            }
+        )
+
+        runtime.resize(cols: 80, rows: 24, pixelSize: nil)
+        runtime.startIfNeeded()
+        #expect(await sendGate.waitUntilBlocked())
+        #expect(replayGuardStates == [true])
+        ownerState.isCurrent = false
+        await sendGate.release()
+        for _ in 0..<20 { await Task.yield() }
+
         #expect(replayGuardStates == [true])
         await runtime.close()
     }
@@ -389,6 +630,12 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
     private func makeRuntime(
         dependencies: EternalTerminalRuntimeDependencies,
         resumedStandaloneAction: Bool = false,
+        ownerState: EternalTerminalOwnerState? = nil,
+        resumeContext: RemoteSessionLifecycleContext? = nil,
+        setResumeContext: @MainActor @Sendable @escaping (
+            UUID,
+            RemoteSessionLifecycleContext?
+        ) -> Void = { _, _ in },
         setStartupActionReplayGuard: @MainActor @Sendable @escaping (
             UUID,
             Bool
@@ -410,14 +657,14 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
             server: server,
             credentials: ServerCredentials(serverId: server.id),
             ownerAccess: EternalTerminalRuntimeOwnerAccess(
-                isCurrent: { _, _ in true },
+                isCurrent: { _, _ in ownerState?.isCurrent ?? true },
                 startupPlan: { _, _, _, _ in throw CancellationError() },
-                resumeContext: { _ in nil },
-                setResumeContext: { _, _ in },
-                standaloneStartupActionPendingCompletion: { _ in
+                resumeContext: { _ in resumeContext },
+                setResumeContext: setResumeContext,
+                startupActionReplayPending: { _ in
                     resumedStandaloneAction
                 },
-                setStandaloneStartupActionPendingCompletion: setStartupActionReplayGuard,
+                setStartupActionReplayPending: setStartupActionReplayGuard,
                 remoteSessionAttached: { _ in },
                 updateConnectionState: { _, _ in },
                 markEternalTerminalTransport: { _ in },
@@ -425,6 +672,24 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
                 unregister: { _, _ in }
             ),
             dependencies: dependencies
+        )
+    }
+
+    private func managedStartupPlan() throws -> TerminalShellStartupPlan {
+        let lifecycle = try RemoteSessionLifecycleContext(
+            attachment: RemoteSessionAttachment(
+                identifier: RemoteSessionIdentifier(
+                    backendIdentifier: .tmux,
+                    validating: "vvterm-managed"
+                ),
+                ownership: .managed
+            ),
+            legacyTmuxMarkerToken: "marker-token"
+        )
+        return TerminalShellStartupPlan(
+            command: "create-managed-session",
+            remoteSessionLifecycle: lifecycle,
+            mayExecuteUserStartupAction: true
         )
     }
 }

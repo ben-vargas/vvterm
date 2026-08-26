@@ -366,8 +366,11 @@ struct SSHStartupIntegrationTests {
                 let shell = try await startup.value
                 await client.closeShell(shell.id)
                 Issue.record("Cancelled \(stage) startup returned a live shell")
-            } catch is CancellationError {
-                // Expected controlled cancellation.
+            } catch SSHError.processRequestOutcomeUnknown
+                where stage == .processRequestStarted {
+                // The process request already reached libssh2.
+            } catch is CancellationError where stage != .processRequestStarted {
+                // The process request was not sent.
             } catch {
                 Issue.record("Cancelled \(stage) startup returned unexpected error: \(error)")
             }
@@ -439,9 +442,14 @@ struct SSHStartupIntegrationTests {
                 let shell = try await startup.value
                 await client.closeShell(shell.id)
                 Issue.record("Disconnected \(stage) startup returned a live shell")
-            } catch SSHError.notConnected,
-                    SSHError.disconnectedBeforeShellRequest {
-                // Expected controlled transport invalidation.
+            } catch SSHError.processRequestOutcomeUnknown
+                where stage == .processRequestStarted {
+                // The process request already reached libssh2.
+            } catch SSHError.notConnected where stage != .processRequestStarted {
+                // The process request was not sent.
+            } catch SSHError.disconnectedBeforeShellRequest
+                where stage != .processRequestStarted {
+                // The process request was not sent.
             } catch {
                 Issue.record("Disconnected \(stage) startup returned unexpected error: \(error)")
             }
@@ -483,7 +491,7 @@ struct SSHStartupIntegrationTests {
                 let shell = try await client.startShell(cols: 80, rows: 24)
                 await client.closeShell(shell.id)
                 Issue.record("PTY-rejecting server returned a live shell")
-            } catch SSHError.shellRequestFailed {
+            } catch SSHError.ptyRequestFailed {
                 // Expected server rejection.
             } catch {
                 Issue.record("PTY-rejecting server returned unexpected error: \(error)")
@@ -564,6 +572,7 @@ struct SSHStartupIntegrationTests {
             (.ptyRequest, nil),
             (.shellRequest, nil),
             (.shellRequest, "exec /bin/sh"),
+            (.processRequestStarted, "exec /bin/sh"),
         ]
     }
 

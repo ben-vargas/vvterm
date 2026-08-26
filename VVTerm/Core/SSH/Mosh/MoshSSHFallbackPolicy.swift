@@ -5,6 +5,20 @@ nonisolated enum MoshSSHFallbackDecision: Equatable, Sendable {
     case rejectToPreventStartupCommandReplay
 }
 
+nonisolated enum MoshStartupDispatchStage: Equatable, Sendable {
+    case beforeUDPClient
+    case udpClientStartingOrStarted
+}
+
+nonisolated struct MoshStartupFailure: LocalizedError, Sendable {
+    let stage: MoshStartupDispatchStage
+    let underlying: SSHError
+
+    var errorDescription: String? {
+        underlying.errorDescription
+    }
+}
+
 nonisolated enum MoshSSHFallbackPolicy {
     static func decision(
         after error: Error,
@@ -14,38 +28,23 @@ nonisolated enum MoshSSHFallbackPolicy {
         let command = startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !command.isEmpty else { return .allow }
         guard mayExecuteUserStartupAction else { return .allow }
-        guard let sshError = error as? SSHError else {
+        guard let failure = error as? MoshStartupFailure else {
             return .rejectToPreventStartupCommandReplay
         }
-        if sshError.provesStartupCommandWasNotDispatched {
-            return .allow
-        }
-
-        switch sshError {
-        case .moshServerMissing,
-             .moshServerRuntimeBroken,
-             .moshBootstrapFailedBeforeStartupCommand,
-             .moshInvalidEndpoint:
-            return .allow
-        default:
-            return .rejectToPreventStartupCommandReplay
-        }
+        return failure.stage == .beforeUDPClient
+            ? .allow
+            : .rejectToPreventStartupCommandReplay
     }
 
     static func fallbackFailure(
-        moshError: Error,
+        moshError _: Error,
         fallbackError: Error
     ) -> SSHError {
         if let sshError = fallbackError as? SSHError {
-            if sshError.provesStartupCommandWasNotDispatched {
-                return sshError
-            }
-            if case .notConnected = sshError {
-                return sshError
-            }
+            return sshError
         }
         return .moshSessionFailed(
-            "Mosh startup failed (\(moshError.localizedDescription)); SSH fallback failed (\(fallbackError.localizedDescription))"
+            "Mosh and SSH startup both failed"
         )
     }
 }

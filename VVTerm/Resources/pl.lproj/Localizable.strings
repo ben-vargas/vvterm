@@ -1842,4 +1842,9 @@
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Synchronizowane między urządzeniami. Uruchamiane tylko, gdy VVTerm tworzy trwałą sesję. Nie umieszczaj danych poufnych.";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Synchronizowane między urządzeniami. Uruchamiane dla każdego nowego połączenia terminala. Nie umieszczaj danych poufnych.";
 "The command contains unsupported control characters." = "Polecenie zawiera nieobsługiwane znaki sterujące.";
-"The command is too long." = "Polecenie jest zbyt długie.";
+"The command must be %lld UTF-8 bytes or less." = "Polecenie może mieć maksymalnie %lld bajtów UTF-8.";
+"%@ does not support custom startup commands yet." = "%@ nie obsługuje jeszcze niestandardowych poleceń startowych.";
+"The connection ended while starting the shell. The startup command was not run again." = "Połączenie zakończyło się podczas uruchamiania powłoki. Polecenie startowe nie zostało uruchomione ponownie.";
+"The remote server rejected the shell command." = "Serwer zdalny odrzucił polecenie powłoki.";
+"The remote server rejected the terminal request." = "Serwer zdalny odrzucił żądanie terminala.";
+"The startup command may have run. VVTerm did not run it again." = "Polecenie startowe mogło zostać wykonane. VVTerm nie uruchomił go ponownie.";

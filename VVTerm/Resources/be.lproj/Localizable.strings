@@ -1841,4 +1841,9 @@
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Сінхранізуецца паміж прыладамі. Запускаецца толькі калі VVTerm стварае пастаянную сесію. Не дадавайце сакрэты.";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Сінхранізуецца паміж прыладамі. Запускаецца для кожнага новага злучэння з тэрміналам. Не дадавайце сакрэты.";
 "The command contains unsupported control characters." = "Каманда змяшчае непадтрыманыя кіруючыя сімвалы.";
-"The command is too long." = "Каманда занадта доўгая.";
+"The command must be %lld UTF-8 bytes or less." = "Каманда павінна мець не больш за %lld байтаў UTF-8.";
+"%@ does not support custom startup commands yet." = "%@ пакуль не падтрымлівае карыстальніцкія каманды запуску.";
+"The connection ended while starting the shell. The startup command was not run again." = "Злучэнне завяршылася падчас запуску абалонкі. Каманда запуску не была запушчана паўторна.";
+"The remote server rejected the shell command." = "Аддалены сервер адхіліў каманду абалонкі.";
+"The remote server rejected the terminal request." = "Аддалены сервер адхіліў запыт тэрмінала.";
+"The startup command may have run. VVTerm did not run it again." = "Каманда запуску магла выканацца. VVTerm не запускаў яе паўторна.";

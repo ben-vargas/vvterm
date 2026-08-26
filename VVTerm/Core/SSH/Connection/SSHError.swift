@@ -1,6 +1,6 @@
 import Foundation
 
-enum SSHError: LocalizedError {
+enum SSHError: LocalizedError, Sendable {
     case notConnected
     case connectionFailed(String)
     case authenticationFailed
@@ -11,16 +11,19 @@ enum SSHError: LocalizedError {
     case moshServerMissing
     case moshServerRuntimeBroken
     case moshBootstrapFailed(String)
-    case moshBootstrapFailedBeforeStartupCommand(String)
     case moshSessionFailed(String)
     case moshInvalidEndpoint
     case moshUDPTimeout
     case moshClientSessionFailed(String)
     case disconnectedBeforeShellRequest
-    case startupCommandMayHaveRun(String)
+    case startupCommandMayHaveRun
     case timeout
     case channelOpenFailed
+    case ptyRequestFailed
+    case processRequestDenied
+    case processRequestOutcomeUnknown
     case shellRequestFailed
+    case managedStartupCommandUnsupported(String)
     case unsupportedRemoteShellForStartupCommand
     case outputLimitExceeded
     case hostKeyApprovalRequired
@@ -32,7 +35,8 @@ enum SSHError: LocalizedError {
         switch self {
         case .channelOpenFailed,
              .disconnectedBeforeShellRequest,
-             .shellRequestFailed,
+             .ptyRequestFailed,
+             .processRequestDenied,
              .unsupportedRemoteShellForStartupCommand:
             return true
         default:
@@ -51,6 +55,8 @@ enum SSHError: LocalizedError {
              .disconnectedBeforeShellRequest,
              .timeout,
              .channelOpenFailed,
+             .ptyRequestFailed,
+             .processRequestDenied,
              .shellRequestFailed,
              .socketError:
             return true
@@ -61,9 +67,10 @@ enum SSHError: LocalizedError {
              .moshServerMissing,
              .moshServerRuntimeBroken,
              .moshBootstrapFailed,
-             .moshBootstrapFailedBeforeStartupCommand,
              .moshInvalidEndpoint,
              .startupCommandMayHaveRun,
+             .processRequestOutcomeUnknown,
+             .managedStartupCommandUnsupported,
              .hostKeyApprovalRequired,
              .hostKeyVerificationFailed,
              .outputLimitExceeded,
@@ -92,8 +99,6 @@ enum SSHError: LocalizedError {
             return String(localized: "mosh-server is installed but cannot run. Repair its package installation on the remote host.")
         case .moshBootstrapFailed(let msg):
             return "Mosh bootstrap failed: \(msg)"
-        case .moshBootstrapFailedBeforeStartupCommand(let msg):
-            return "Mosh bootstrap failed before the startup command ran: \(msg)"
         case .moshSessionFailed(let msg):
             return "Mosh session failed: \(msg)"
         case .moshInvalidEndpoint:
@@ -104,11 +109,22 @@ enum SSHError: LocalizedError {
             return "Mosh client session failed: \(msg)"
         case .disconnectedBeforeShellRequest:
             return String(localized: "The connection ended before the remote shell request was sent.")
-        case .startupCommandMayHaveRun(let msg):
-            return "The startup command may have run. VVTerm did not run it again. \(msg)"
+        case .startupCommandMayHaveRun:
+            return String(localized: "The startup command may have run. VVTerm did not run it again.")
         case .timeout: return String(localized: "Connection timed out")
         case .channelOpenFailed: return "Failed to open channel"
+        case .ptyRequestFailed:
+            return String(localized: "The remote server rejected the terminal request.")
+        case .processRequestDenied:
+            return String(localized: "The remote server rejected the shell command.")
+        case .processRequestOutcomeUnknown:
+            return String(localized: "The connection ended while starting the shell. The startup command was not run again.")
         case .shellRequestFailed: return "Failed to request shell"
+        case .managedStartupCommandUnsupported(let backendName):
+            return String(
+                format: String(localized: "%@ does not support custom startup commands yet."),
+                backendName
+            )
         case .unsupportedRemoteShellForStartupCommand:
             return String(localized: "VVTerm cannot run the startup command because it could not detect a supported remote shell.")
         case .outputLimitExceeded:

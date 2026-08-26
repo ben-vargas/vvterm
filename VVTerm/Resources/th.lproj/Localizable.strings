@@ -1840,4 +1840,9 @@
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "ซิงค์ระหว่างอุปกรณ์ เรียกใช้เฉพาะเมื่อ VVTerm สร้างเซสชันถาวร อย่าใส่ข้อมูลลับ";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "ซิงค์ระหว่างอุปกรณ์ เรียกใช้สำหรับการเชื่อมต่อเทอร์มินัลใหม่แต่ละครั้ง อย่าใส่ข้อมูลลับ";
 "The command contains unsupported control characters." = "คำสั่งมีอักขระควบคุมที่ไม่รองรับ";
-"The command is too long." = "คำสั่งยาวเกินไป";
+"The command must be %lld UTF-8 bytes or less." = "คำสั่งต้องมีขนาดไม่เกิน %lld ไบต์ UTF-8";
+"%@ does not support custom startup commands yet." = "%@ ยังไม่รองรับคำสั่งเริ่มต้นแบบกำหนดเอง";
+"The connection ended while starting the shell. The startup command was not run again." = "การเชื่อมต่อสิ้นสุดขณะเริ่มเชลล์ คำสั่งเริ่มต้นไม่ได้ถูกเรียกใช้อีกครั้ง";
+"The remote server rejected the shell command." = "เซิร์ฟเวอร์ระยะไกลปฏิเสธคำสั่งเชลล์";
+"The remote server rejected the terminal request." = "เซิร์ฟเวอร์ระยะไกลปฏิเสธคำขอเทอร์มินัล";
+"The startup command may have run. VVTerm did not run it again." = "คำสั่งเริ่มต้นอาจทำงานแล้ว VVTerm ไม่ได้เรียกใช้อีกครั้ง";

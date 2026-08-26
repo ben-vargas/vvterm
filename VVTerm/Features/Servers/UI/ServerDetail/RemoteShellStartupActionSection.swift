@@ -45,12 +45,15 @@ struct RemoteShellStartupActionSection: View {
 
     private func message(
         for error: RemoteShellStartupActionFormModel.ValidationError
-    ) -> LocalizedStringKey {
+    ) -> String {
         switch error {
         case .invalidCommand:
-            "The command contains unsupported control characters."
+            String(localized: "The command contains unsupported control characters.")
         case .commandTooLong:
-            "The command is too long."
+            String(
+                format: String(localized: "The command must be %lld UTF-8 bytes or less."),
+                Int64(RemoteShellStartupAction.maximumCommandByteCount)
+            )
         }
     }
 }

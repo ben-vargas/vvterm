@@ -143,8 +143,8 @@ final class TerminalTabManager {
             setPaneTransport(state, for: paneId)
         case .eternalTerminalResumeContext(let paneId, let context):
             setRemoteSessionLifecycleContext(context, for: paneId)
-        case .standaloneStartupActionPendingCompletion(let paneId, let isPending):
-            sessionState.setStandaloneStartupActionPendingCompletion(isPending, for: paneId)
+        case .startupActionReplayPending(let paneId, let isPending):
+            sessionState.setStartupActionReplayPending(isPending, for: paneId)
         case .connectionState(let paneId, let state):
             updatePaneState(paneId, connectionState: state)
         case .title(let paneId, let title):
@@ -1081,7 +1081,7 @@ final class TerminalTabManager {
             updatePaneState(paneId, connectionState: .disconnected)
 
         case .standaloneStartupActionCompleted:
-            sessionState.markStandaloneStartupActionCompleted(for: paneId)
+            sessionState.markStartupActionCompleted(for: paneId)
             updatePaneState(paneId, connectionState: .disconnected)
 
         case .transportInterrupted, .observationAmbiguous:
