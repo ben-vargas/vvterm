@@ -1152,6 +1152,22 @@ struct TerminalSplitKeyboardUITestHarness: View {
             .padding(.top, 52)
             .padding(.trailing, 8)
             .frame(maxWidth: .infinity, alignment: .topTrailing)
+
+            HStack(spacing: 8) {
+                Button("Pad 32") {
+                    applyContentPadding(32)
+                }
+                .accessibilityIdentifier("vvterm.keyboardTest.padding.maximum")
+
+                Button("Pad 0") {
+                    applyContentPadding(0)
+                }
+                .accessibilityIdentifier("vvterm.keyboardTest.padding.zero")
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.top, 96)
+            .padding(.trailing, 8)
+            .frame(maxWidth: .infinity, alignment: .topTrailing)
         }
         .task {
             ghosttyApp.startIfNeeded()
@@ -1263,6 +1279,8 @@ struct TerminalSplitKeyboardUITestHarness: View {
             diagnostics = "notReady"
             return
         }
+        let firstSize = firstTerminal?.terminalSize()
+        let secondSize = secondTerminal?.terminalSize()
         let totalReloads = (firstTerminal?.keyboardUITestInputViewReloadCount ?? 0)
             + (secondTerminal?.keyboardUITestInputViewReloadCount ?? 0)
         let totalRebuilds = (firstTerminal?.keyboardUITestInputSessionRebuildCount ?? 0)
@@ -1282,8 +1300,27 @@ struct TerminalSplitKeyboardUITestHarness: View {
             + " totalInputRebuilds=\(totalRebuilds)"
             + " coordinatorKeyboardVisible=\(keyboardCoordinator.isSoftwareKeyboardVisible)"
             + " layoutBottomGap=\(layoutBottomGap)"
+            + " paddingX=\(ghosttyApp.configuration.contentPadding.horizontal)"
+            + " paddingY=\(ghosttyApp.configuration.contentPadding.vertical)"
+            + " firstGridCols=\(firstSize?.columns ?? 0)"
+            + " firstGridRows=\(firstSize?.rows ?? 0)"
+            + " secondGridCols=\(secondSize?.columns ?? 0)"
+            + " secondGridRows=\(secondSize?.rows ?? 0)"
             + " paneShortcutActions=\(paneShortcutActionCount)"
             + " lastPaneShortcutAction=\(lastPaneShortcutAction)"
+    }
+
+    private func applyContentPadding(_ points: Double) {
+        let configuration = ghosttyApp.configuration
+        ghosttyApp.applyConfiguration(Ghostty.RuntimeConfiguration(
+            fontName: configuration.fontName,
+            fontSize: configuration.fontSize,
+            contentPadding: TerminalContentPadding(horizontal: points, vertical: points),
+            cursorStyleRawValue: configuration.cursorStyle.rawValue,
+            cursorBlink: configuration.cursorBlink,
+            optionAsAltModeRawValue: configuration.optionAsAltMode.rawValue,
+            remoteClipboardReadPolicyRawValue: configuration.remoteClipboardReadPolicy.rawValue
+        ))
     }
 }
 

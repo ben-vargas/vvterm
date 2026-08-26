@@ -4,6 +4,7 @@ extension Ghostty {
     struct RuntimeConfiguration: Equatable {
         let fontName: String
         let fontSize: Double
+        let contentPadding: TerminalContentPadding
         let cursorStyle: TerminalCursorStyle
         let cursorBlink: Bool
         let optionAsAltMode: TerminalOptionAsAltMode
@@ -12,6 +13,7 @@ extension Ghostty {
         init(
             fontName: String,
             fontSize: Double,
+            contentPadding: TerminalContentPadding,
             cursorStyleRawValue: String,
             cursorBlink: Bool,
             optionAsAltModeRawValue: String,
@@ -19,6 +21,7 @@ extension Ghostty {
         ) {
             self.fontName = fontName
             self.fontSize = TerminalDefaults.clampedFontSize(fontSize)
+            self.contentPadding = contentPadding
             self.cursorStyle = TerminalCursorStyle(rawValue: cursorStyleRawValue)
                 ?? TerminalDefaults.defaultCursorStyle
             self.cursorBlink = cursorBlink
@@ -33,6 +36,7 @@ extension Ghostty {
             Self(
                 fontName: TerminalDefaults.defaultFontName,
                 fontSize: TerminalDefaults.defaultFontSize,
+                contentPadding: .defaultValue,
                 cursorStyleRawValue: TerminalDefaults.defaultCursorStyle.rawValue,
                 cursorBlink: TerminalDefaults.defaultCursorBlink,
                 optionAsAltModeRawValue: TerminalOptionAsAltMode.none.rawValue,

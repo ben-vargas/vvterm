@@ -23,15 +23,23 @@ extension GhosttyTerminalView {
     }
 
     func handleClipboardConfirmation(
-        _ text: String,
+        _ text: String?,
+        availableMIMETypes: [String],
         state: UnsafeMutableRawPointer,
         kind: TerminalClipboardConfirmationKind
     ) {
         guard let surface = surface?.unsafeCValue else { return }
         clipboardConfirmationQueue.enqueue(kind: kind) { decision in
-            let completedValue = decision == .allow ? text : ""
-            completedValue.withCString { pointer in
-                ghostty_surface_complete_clipboard_request(surface, pointer, state, true)
+            if decision == .allow {
+                GhosttyRuntime.completeClipboardRequest(
+                    surface: surface,
+                    text: text,
+                    availableMIMETypes: availableMIMETypes,
+                    state: state,
+                    confirmed: true
+                )
+            } else {
+                ghostty_surface_deny_clipboard_request(surface, state)
             }
         }
         presentNextClipboardConfirmationIfPossible()

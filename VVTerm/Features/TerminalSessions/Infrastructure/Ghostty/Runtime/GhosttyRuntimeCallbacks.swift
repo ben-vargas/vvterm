@@ -62,13 +62,20 @@ extension GhosttyRuntime {
                 guard let app else { return false }
                 return GhosttyRuntime.runtimeAction(app, target: target, action: action)
             },
-            read_clipboard_cb: { userdata, location, state in
-                GhosttyRuntime.readClipboard(userdata, location: location, state: state)
+            read_clipboard_cb: { userdata, location, state, mimes, mimesLength, list in
+                GhosttyRuntime.readClipboard(
+                    userdata,
+                    location: location,
+                    state: state,
+                    mimes: mimes,
+                    mimesLength: mimesLength,
+                    list: list
+                )
             },
-            confirm_read_clipboard_cb: { userdata, string, state, request in
+            confirm_read_clipboard_cb: { userdata, confirmation, state, request in
                 GhosttyRuntime.confirmReadClipboard(
                     userdata,
-                    string: string,
+                    confirmation: confirmation,
                     state: state,
                     request: request
                 )
@@ -233,45 +240,68 @@ extension GhosttyRuntime {
     nonisolated private static func readClipboard(
         _ userdata: UnsafeMutableRawPointer?,
         location: ghostty_clipboard_e,
-        state: UnsafeMutableRawPointer?
-    ) {
-        _ = location
-        guard let terminalView = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata) else { return }
-        let stateAddress = state.map { UInt(bitPattern: $0) }
+        state: UnsafeMutableRawPointer?,
+        mimes: UnsafePointer<UnsafePointer<CChar>?>?,
+        mimesLength: Int,
+        list: Bool
+    ) -> ghostty_clipboard_read_result_e {
+        guard location != GHOSTTY_CLIPBOARD_PRIMARY,
+              let terminalView = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata),
+              let state else {
+            return GHOSTTY_CLIPBOARD_READ_UNSUPPORTED
+        }
+        guard list || requestsPlainText(mimes: mimes, count: mimesLength) else {
+            return GHOSTTY_CLIPBOARD_READ_UNAVAILABLE
+        }
+        let stateAddress = UInt(bitPattern: state)
 
         DispatchQueue.main.async {
             guard let surface = terminalView.surface?.unsafeCValue else { return }
-            let clipboardString = Clipboard.readString() ?? ""
-            let callbackState = stateAddress.flatMap(UnsafeMutableRawPointer.init(bitPattern:))
-            clipboardString.withCString { pointer in
-                ghostty_surface_complete_clipboard_request(
-                    surface,
-                    pointer,
-                    callbackState,
-                    false
-                )
-            }
-            Ghostty.logger.debug("Read clipboard [bytes: \(clipboardString.utf8.count)]")
+            let clipboardString = Clipboard.readString()
+            let callbackState = UnsafeMutableRawPointer(bitPattern: stateAddress)
+            completeClipboardRequest(
+                surface: surface,
+                text: clipboardString,
+                availableMIMETypes: list && clipboardString != nil ? ["text/plain"] : [],
+                state: callbackState,
+                confirmed: false
+            )
+            Ghostty.logger.debug("Read clipboard [bytes: \(clipboardString?.utf8.count ?? 0)]")
         }
+        return GHOSTTY_CLIPBOARD_READ_STARTED
     }
 
     nonisolated private static func confirmReadClipboard(
         _ userdata: UnsafeMutableRawPointer?,
-        string: UnsafePointer<CChar>?,
+        confirmation: UnsafePointer<ghostty_clipboard_confirm_s>?,
         state: UnsafeMutableRawPointer?,
         request: ghostty_clipboard_request_e
     ) {
         guard let terminalView = Ghostty.CallbackContext<GhosttyTerminalView>.resolve(userdata),
-              let string,
               let state else { return }
-        let clipboardString = String(cString: string)
         let stateAddress = UInt(bitPattern: state)
+
+        guard let confirmation else {
+            DispatchQueue.main.async {
+                guard let surface = terminalView.surface?.unsafeCValue,
+                      let callbackState = UnsafeMutableRawPointer(bitPattern: stateAddress) else {
+                    return
+                }
+                ghostty_surface_deny_clipboard_request(surface, callbackState)
+            }
+            return
+        }
+
+        let value = confirmation.pointee
+        let clipboardString = plainText(contents: value.contents, count: value.contents_len)
+        let availableMIMETypes = copiedStrings(value.available, count: value.available_len)
         let kind = clipboardConfirmationKind(request: request)
 
         DispatchQueue.main.async {
             guard let callbackState = UnsafeMutableRawPointer(bitPattern: stateAddress) else { return }
             terminalView.handleClipboardConfirmation(
                 clipboardString,
+                availableMIMETypes: availableMIMETypes,
                 state: callbackState,
                 kind: kind
             )
@@ -285,9 +315,12 @@ extension GhosttyRuntime {
         switch request {
         case GHOSTTY_CLIPBOARD_REQUEST_PASTE:
             return .unsafePaste
-        case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ:
+        case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ,
+             GHOSTTY_CLIPBOARD_REQUEST_KITTY_READ,
+             GHOSTTY_CLIPBOARD_REQUEST_LIST:
             return .remoteRead
-        case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE:
+        case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE,
+             GHOSTTY_CLIPBOARD_REQUEST_KITTY_WRITE:
             return .remoteWrite
         default:
             return .remoteRead
@@ -309,8 +342,11 @@ extension GhosttyRuntime {
 
         for index in 0..<count {
             let entry = contents.advanced(by: index).pointee
-            guard let data = entry.data else { continue }
-            let string = String(cString: data)
+            guard let mime = entry.mime,
+                  String(cString: mime) == "text/plain",
+                  let data = entry.data else { continue }
+            let bytes = UnsafeRawBufferPointer(start: data, count: entry.len)
+            let string = String(decoding: bytes, as: UTF8.self)
             guard !string.isEmpty else { continue }
 
             DispatchQueue.main.async {
@@ -328,6 +364,120 @@ extension GhosttyRuntime {
             }
             return
         }
+    }
+
+    nonisolated static func completeClipboardRequest(
+        surface: ghostty_surface_t,
+        text: String?,
+        availableMIMETypes: [String],
+        state: UnsafeMutableRawPointer?,
+        confirmed: Bool
+    ) {
+        let contents: [(mime: String, data: Data)]
+        if let text {
+            contents = [(mime: "text/plain", data: Data(text.utf8))]
+        } else {
+            contents = []
+        }
+
+        var allocatedStrings: [UnsafeMutablePointer<CChar>] = []
+        var allocatedData: [UnsafeMutableRawPointer] = []
+        defer {
+            allocatedStrings.forEach { free($0) }
+            allocatedData.forEach { $0.deallocate() }
+        }
+
+        var cContents: [ghostty_clipboard_content_s] = []
+        for entry in contents {
+            guard let mime = strdup(entry.mime) else { continue }
+            allocatedStrings.append(mime)
+
+            let buffer = UnsafeMutableRawPointer.allocate(
+                byteCount: max(entry.data.count, 1),
+                alignment: 1
+            )
+            allocatedData.append(buffer)
+            entry.data.withUnsafeBytes { source in
+                guard let sourceAddress = source.baseAddress else { return }
+                buffer.copyMemory(from: sourceAddress, byteCount: source.count)
+            }
+            cContents.append(ghostty_clipboard_content_s(
+                mime: mime,
+                data: buffer.assumingMemoryBound(to: CChar.self),
+                len: entry.data.count
+            ))
+        }
+
+        var cAvailableMIMETypes: [UnsafePointer<CChar>?] = []
+        for availableMIMEType in availableMIMETypes {
+            guard let mime = strdup(availableMIMEType) else { continue }
+            allocatedStrings.append(mime)
+            cAvailableMIMETypes.append(UnsafePointer(mime))
+        }
+
+        cContents.withUnsafeBufferPointer { contentBuffer in
+            cAvailableMIMETypes.withUnsafeBufferPointer { availableBuffer in
+                var completion = ghostty_clipboard_complete_s(
+                    contents: contentBuffer.baseAddress,
+                    contents_len: contentBuffer.count,
+                    available: availableBuffer.baseAddress,
+                    available_len: availableBuffer.count,
+                    confirmed: confirmed,
+                    remember: false
+                )
+                ghostty_surface_complete_clipboard_request(
+                    surface,
+                    &completion,
+                    state
+                )
+            }
+        }
+    }
+
+    nonisolated private static func requestsPlainText(
+        mimes: UnsafePointer<UnsafePointer<CChar>?>?,
+        count: Int
+    ) -> Bool {
+        guard let mimes, count > 0 else { return false }
+        for index in 0..<count {
+            guard let mime = mimes[index] else { continue }
+            if String(cString: mime) == "text/plain" {
+                return true
+            }
+        }
+        return false
+    }
+
+    nonisolated private static func plainText(
+        contents: UnsafePointer<ghostty_clipboard_content_s>?,
+        count: Int
+    ) -> String? {
+        guard let contents, count > 0 else { return nil }
+        for index in 0..<count {
+            let content = contents[index]
+            guard let mime = content.mime,
+                  String(cString: mime) == "text/plain",
+                  let data = content.data else { continue }
+            return String(
+                decoding: UnsafeRawBufferPointer(start: data, count: content.len),
+                as: UTF8.self
+            )
+        }
+        return nil
+    }
+
+    nonisolated private static func copiedStrings(
+        _ strings: UnsafePointer<UnsafePointer<CChar>?>?,
+        count: Int
+    ) -> [String] {
+        guard let strings, count > 0 else { return [] }
+        var result: [String] = []
+        result.reserveCapacity(count)
+        for index in 0..<count {
+            guard let string = strings[index] else { continue }
+            result.append(String(cString: string))
+        }
+        return result
     }
 
     nonisolated private static func closeSurface(

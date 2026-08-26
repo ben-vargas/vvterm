@@ -127,6 +127,10 @@ struct VVTermApp: App {
     // Terminal settings to watch for changes
     @AppStorage(TerminalDefaults.fontNameKey) private var terminalFontName = TerminalDefaults.defaultFontName
     @AppStorage(TerminalDefaults.fontSizeKey) private var terminalFontSize = TerminalDefaults.defaultFontSize
+    @AppStorage(TerminalDefaults.contentPaddingHorizontalKey)
+    private var terminalContentPaddingHorizontal = TerminalDefaults.defaultContentPadding
+    @AppStorage(TerminalDefaults.contentPaddingVerticalKey)
+    private var terminalContentPaddingVertical = TerminalDefaults.defaultContentPadding
     @AppStorage(TerminalDefaults.cursorStyleKey) private var terminalCursorStyle = TerminalDefaults.defaultCursorStyle.rawValue
     @AppStorage(TerminalDefaults.cursorBlinkKey) private var terminalCursorBlink = TerminalDefaults.defaultCursorBlink
     #if os(macOS)
@@ -147,6 +151,10 @@ struct VVTermApp: App {
         Ghostty.RuntimeConfiguration(
             fontName: terminalFontName,
             fontSize: terminalFontSize,
+            contentPadding: TerminalContentPadding(
+                horizontal: terminalContentPaddingHorizontal,
+                vertical: terminalContentPaddingVertical
+            ),
             cursorStyleRawValue: terminalCursorStyle,
             cursorBlink: terminalCursorBlink,
             optionAsAltModeRawValue: terminalOptionAsAltModeRawValue,

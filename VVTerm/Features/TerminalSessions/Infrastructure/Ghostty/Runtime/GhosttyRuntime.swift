@@ -65,18 +65,9 @@ final class GhosttyRuntime: ObservableObject {
 
     /// Track active surfaces for config propagation
     private var activeSurfaces: [Ghostty.SurfaceReference] = []
-    private var surfaceConfigCache: [SurfaceConfigCacheKey: ghostty_config_t] = [:]
+    private var surfaceConfigCache: [Double: ghostty_config_t] = [:]
 
     // MARK: - Initialization
-
-    private struct SurfaceConfigCacheKey: Hashable {
-        let fontName: String
-        let fontSize: Double
-        let themeName: String
-        let cursorStyleRaw: String
-        let cursorBlink: Bool
-        let optionAsAltModeRaw: String
-    }
 
     convenience init(
         appearance: TerminalAppearanceSnapshot = .fallback,
@@ -161,10 +152,6 @@ final class GhosttyRuntime: ObservableObject {
 
         // Free config after app creation (app clones it)
         ghostty_config_free(config)
-
-        // CRITICAL: Unset XDG_CONFIG_HOME after app creation
-        // If left set, fish will look for config.fish in the temp directory instead of ~/.config
-        unsetenv("XDG_CONFIG_HOME")
 
         runtimeState = .ready(
             app: app,
@@ -267,9 +254,6 @@ final class GhosttyRuntime: ObservableObject {
 
         ghostty_config_free(config)
 
-        // Unset XDG_CONFIG_HOME so it doesn't affect fish/shell config loading
-        unsetenv("XDG_CONFIG_HOME")
-
         Ghostty.logger.info("Configuration reloaded and propagated to \(self.activeSurfaces.count) surfaces")
 
         // Notify views to refresh their rendering
@@ -296,7 +280,6 @@ final class GhosttyRuntime: ObservableObject {
     func updateSurfaceConfig(_ surface: ghostty_surface_t, presentationOverrides: TerminalPresentationOverrides) {
         guard let config = cachedSurfaceConfig(for: presentationOverrides) else { return }
         ghostty_surface_update_config(surface, config)
-        unsetenv("XDG_CONFIG_HOME")
         Ghostty.logger.info("Updated surface presentation overrides")
     }
 
@@ -321,16 +304,9 @@ final class GhosttyRuntime: ObservableObject {
     }
 
     private func cachedSurfaceConfig(for presentationOverrides: TerminalPresentationOverrides) -> ghostty_config_t? {
-        let key = SurfaceConfigCacheKey(
-            fontName: configuration.fontName,
-            fontSize: presentationOverrides.fontSize ?? configuration.fontSize,
-            themeName: appearanceSnapshot.activeTheme.name,
-            cursorStyleRaw: configuration.cursorStyle.rawValue,
-            cursorBlink: configuration.cursorBlink,
-            optionAsAltModeRaw: configuration.optionAsAltMode.rawValue
-        )
+        let fontSize = presentationOverrides.fontSize ?? configuration.fontSize
 
-        if let cachedConfig = surfaceConfigCache[key] {
+        if let cachedConfig = surfaceConfigCache[fontSize] {
             return cachedConfig
         }
 
@@ -338,7 +314,7 @@ final class GhosttyRuntime: ObservableObject {
             return nil
         }
 
-        surfaceConfigCache[key] = config
+        surfaceConfigCache[fontSize] = config
         return config
     }
 
@@ -374,6 +350,18 @@ final class GhosttyRuntime: ObservableObject {
                 setupThemes(tempThemesDir: tempThemesDir)
             }
 
+            let activeThemeName = appearanceSnapshot.activeTheme.name
+            let activeThemePath = (tempThemesDir as NSString).appendingPathComponent(activeThemeName)
+            let theme = FileManager.default.fileExists(atPath: activeThemePath)
+                ? activeThemePath
+                : activeThemeName
+
+            if theme == activeThemeName {
+                Ghostty.logger.warning(
+                    "Terminal theme file is unavailable at \(activeThemePath, privacy: .public)"
+                )
+            }
+
             // Detect shell for integration
             let shell = Foundation.ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
             let shellName = (shell as NSString).lastPathComponent
@@ -383,8 +371,9 @@ final class GhosttyRuntime: ObservableObject {
             let configContent = Ghostty.ConfigBuilder.configContent(
                 primaryFontFamily: configuration.fontName,
                 fontSize: effectiveFontSize,
+                contentPadding: configuration.contentPadding,
                 shellName: shellName,
-                themeName: appearanceSnapshot.activeTheme.name,
+                theme: theme,
                 cursorStyle: configuration.cursorStyle,
                 cursorBlink: configuration.cursorBlink,
                 optionAsAltMode: configuration.optionAsAltMode,
@@ -395,16 +384,20 @@ final class GhosttyRuntime: ObservableObject {
 
             try configContent.write(toFile: configFilePath, atomically: true, encoding: String.Encoding.utf8)
 
-            // Set XDG_CONFIG_HOME to our temp directory
-            // Ghostty will look for themes at XDG_CONFIG_HOME/ghostty/themes/
-            setenv("XDG_CONFIG_HOME", (tempDir as NSString).appendingPathComponent(".config"), 1)
-
-            // Load default files - will load our XDG config
-            ghostty_config_load_default_files(config)
+            // Ghostty snapshots the process environment during ghostty_init.
+            // Load this app-owned file directly so later environment changes
+            // cannot hide the terminal settings or custom theme.
+            Self.loadConfigFile(config, atPath: configFilePath)
 
             Ghostty.logger.info("Loaded terminal settings - Font: \(self.configuration.fontName) \(Int(effectiveFontSize))pt, Theme: \(self.appearanceSnapshot.activeTheme.name)")
         } catch {
             Ghostty.logger.warning("Failed to write config: \(error)")
+        }
+    }
+
+    static func loadConfigFile(_ config: ghostty_config_t, atPath path: String) {
+        path.withCString { pathPointer in
+            ghostty_config_load_file(config, pathPointer)
         }
     }
 

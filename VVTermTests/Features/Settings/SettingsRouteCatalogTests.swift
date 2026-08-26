@@ -45,6 +45,10 @@ struct SettingsRouteCatalogTests {
         ("analytics", SettingsRoute.privacyAndAppLock),
         ("fingerprint", SettingsRoute.trustedHosts),
         ("keyboard", SettingsRoute.keyboardAndInput),
+        ("padding", SettingsRoute.terminalAppearance),
+        ("spacing", SettingsRoute.terminalAppearance),
+        ("margin", SettingsRoute.terminalAppearance),
+        ("inset", SettingsRoute.terminalAppearance),
     ])
     func search(query: String, expectedRoute: SettingsRoute) {
         #expect(SettingsRouteCatalog.routes(matching: query).contains(expectedRoute))

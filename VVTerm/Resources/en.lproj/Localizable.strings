@@ -1029,6 +1029,10 @@
 "Remove Theme" = "Remove Theme";
 "Reorder actions, add snippets, and sync your accessory bar across devices." = "Reorder actions, add snippets, and sync your accessory bar across devices.";
 "Reset to Default" = "Reset to Default";
+"Content Padding" = "Content Padding";
+"Horizontal" = "Horizontal";
+"Vertical" = "Vertical";
+"Adds space between the terminal grid and pane edges on this device." = "Adds space between the terminal grid and pane edges on this device.";
 "Save Custom Theme" = "Save Custom Theme";
 "Selection Background" = "Selection Background";
 "Selection Foreground" = "Selection Foreground";

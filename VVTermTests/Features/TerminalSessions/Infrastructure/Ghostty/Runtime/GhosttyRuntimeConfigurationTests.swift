@@ -8,6 +8,7 @@ struct GhosttyRuntimeConfigurationTests {
         let configuration = Ghostty.RuntimeConfiguration(
             fontName: "Menlo",
             fontSize: TerminalDefaults.maximumFontSize + 20,
+            contentPadding: TerminalContentPadding(horizontal: -2, vertical: 50),
             cursorStyleRawValue: "invalid-cursor",
             cursorBlink: false,
             optionAsAltModeRawValue: TerminalOptionAsAltMode.right.rawValue,
@@ -16,6 +17,7 @@ struct GhosttyRuntimeConfigurationTests {
 
         #expect(configuration.fontName == "Menlo")
         #expect(configuration.fontSize == TerminalDefaults.maximumFontSize)
+        #expect(configuration.contentPadding == TerminalContentPadding(horizontal: 0, vertical: 32))
         #expect(configuration.cursorStyle == TerminalDefaults.defaultCursorStyle)
         #expect(configuration.cursorBlink == false)
         #expect(configuration.optionAsAltMode == .right)
@@ -27,6 +29,7 @@ struct GhosttyRuntimeConfigurationTests {
         let configuration = Ghostty.RuntimeConfiguration(
             fontName: "Menlo",
             fontSize: 14,
+            contentPadding: TerminalContentPadding(horizontal: 5, vertical: 7),
             cursorStyleRawValue: TerminalCursorStyle.bar.rawValue,
             cursorBlink: false,
             optionAsAltModeRawValue: TerminalOptionAsAltMode.left.rawValue,
@@ -38,5 +41,29 @@ struct GhosttyRuntimeConfigurationTests {
 
         #expect(app.readiness == .idle)
         #expect(app.configuration == configuration)
+    }
+
+    @Test
+    func paddingParticipatesInRuntimeEquality() {
+        let zeroPadding = configuration(contentPadding: .defaultValue)
+        let customPadding = configuration(
+            contentPadding: TerminalContentPadding(horizontal: 12, vertical: 18)
+        )
+
+        #expect(zeroPadding != customPadding)
+    }
+
+    private func configuration(
+        contentPadding: TerminalContentPadding
+    ) -> Ghostty.RuntimeConfiguration {
+        Ghostty.RuntimeConfiguration(
+            fontName: "Menlo",
+            fontSize: 14,
+            contentPadding: contentPadding,
+            cursorStyleRawValue: TerminalCursorStyle.block.rawValue,
+            cursorBlink: true,
+            optionAsAltModeRawValue: TerminalOptionAsAltMode.none.rawValue,
+            remoteClipboardReadPolicyRawValue: TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
+        )
     }
 }

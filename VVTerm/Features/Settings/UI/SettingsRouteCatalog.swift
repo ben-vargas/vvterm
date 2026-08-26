@@ -134,7 +134,10 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .privacyAndAppLock:
             ["privacy", "analytics", "biometric", "face id", "touch id", "lock", "background", "grace period"]
         case .terminalAppearance:
-            ["font", "font size", "cursor", "blink", "light theme", "dark theme", "custom theme"]
+            [
+                "font", "font size", "padding", "spacing", "margin", "inset",
+                "cursor", "blink", "light theme", "dark theme", "custom theme",
+            ]
         case .keyboardAndInput:
             ["keyboard", "input", "option", "alt", "terminal size", "dismiss", "accessory bar", "custom actions"]
         case .sessionsAndConnections:
@@ -185,7 +188,8 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
             ["Privacy & App Lock", "Privacy Mode", "Help Improve VVTerm", "App Lock"]
         case .terminalAppearance:
             [
-                "Appearance", "Font", "Family", "Size", "Cursor", "Blink", "Theme",
+                "Appearance", "Font", "Family", "Size", "Content Padding", "Horizontal",
+                "Vertical", "Cursor", "Blink", "Theme",
                 "Separate Light and Dark Themes", "Dark Theme", "Light Theme", "Custom Themes",
             ]
         case .keyboardAndInput:

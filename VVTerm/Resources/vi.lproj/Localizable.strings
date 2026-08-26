@@ -1080,6 +1080,10 @@
 "Remove Theme" = "Xóa chủ đề";
 "Reorder actions, add snippets, and sync your accessory bar across devices." = "Sắp xếp lại các hành động, thêm đoạn mã và đồng bộ hóa thanh phụ kiện của bạn trên các thiết bị.";
 "Reset to Default" = "Đặt lại về mặc định";
+"Content Padding" = "Khoảng đệm nội dung";
+"Horizontal" = "Ngang";
+"Vertical" = "Dọc";
+"Adds space between the terminal grid and pane edges on this device." = "Thêm khoảng trống giữa lưới terminal và cạnh ngăn trên thiết bị này.";
 "Save Custom Theme" = "Lưu chủ đề tùy chỉnh";
 "Selection Background" = "Nền lựa chọn";
 "Selection Foreground" = "Lựa chọn tiền cảnh";

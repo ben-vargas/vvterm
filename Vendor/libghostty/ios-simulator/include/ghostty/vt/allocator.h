@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <ghostty/vt/types.h>
 
 /** @defgroup allocator Memory Management
  *
@@ -28,7 +29,7 @@
  *
  * **For the common case, you can pass NULL as the allocator for any
  * function that accepts one,** and libghostty will use a default allocator.
- * The default allocator will be libc malloc/free if libc is linked. 
+ * The default allocator will be libc malloc/free if libc is linked.
  * Otherwise, a custom allocator is used (currently Zig's SMP allocator)
  * that doesn't require any external dependencies.
  *
@@ -44,12 +45,30 @@
  * 2. Create a GhosttyAllocator struct with your vtable and context
  * 3. Pass the allocator to functions that accept one
  *
+ * ## Alloc/Free Helpers
+ *
+ * ghostty_alloc() and ghostty_free() provide a simple malloc/free-style
+ * interface for allocating and freeing byte buffers through the library's
+ * allocator. These are useful when:
+ *
+ * - You need to allocate a buffer to pass into a libghostty-vt function
+ *   (e.g. preparing input data for ghostty_terminal_vt_write()).
+ * - You need to free a buffer returned by a libghostty-vt function
+ *   (e.g. the output of ghostty_formatter_format_alloc()).
+ * - You are on a platform where the library's internal allocator differs
+ *   from the consumer's C runtime (e.g. Windows, where Zig's libc and
+ *   MSVC's CRT maintain separate heaps), so calling the standard C
+ *   free() on library-allocated memory would be undefined behavior.
+ *
+ * Always use the same allocator (or NULL) for both the allocation and
+ * the corresponding free.
+ *
  * @{
  */
 
 /**
  * Function table for custom memory allocator operations.
- * 
+ *
  * This vtable defines the interface for a custom memory allocator. All
  * function pointers must be valid and non-NULL.
  *
@@ -65,7 +84,7 @@
  * the Zig folks, and it enables a diverse set of allocation strategies
  * as shown by the Zig ecosystem. As a consolation, please note that many
  * of the arguments are only needed for advanced use cases and can be
- * safely ignored in simple implementations. For example, if you look at 
+ * safely ignored in simple implementations. For example, if you look at
  * the Zig implementation of the libc allocator in `lib/std/heap.zig`
  * (search for CAllocator), you'll see it is very simple.
  *
@@ -93,7 +112,7 @@ typedef struct {
      * @return Pointer to allocated memory, or NULL if allocation failed
      */
     void* (*alloc)(void *ctx, size_t len, uint8_t alignment, uintptr_t ret_addr);
-    
+
     /**
      * Attempt to expand or shrink memory in place.
      *
@@ -113,7 +132,7 @@ typedef struct {
      * @return true if resize was successful in-place, false if relocation would be required
      */
     bool (*resize)(void *ctx, void *memory, size_t memory_len, uint8_t alignment, size_t new_len, uintptr_t ret_addr);
-    
+
     /**
      * Attempt to expand or shrink memory, allowing relocation.
      *
@@ -140,7 +159,7 @@ typedef struct {
      * @return Pointer to resized memory (may be relocated), or NULL if manual copy is needed
      */
     void* (*remap)(void *ctx, void *memory, size_t memory_len, uint8_t alignment, size_t new_len, uintptr_t ret_addr);
-    
+
     /**
      * Free and invalidate a region of memory.
      *
@@ -162,7 +181,7 @@ typedef struct {
  * Custom memory allocator.
  *
  * For functions that take an allocator pointer, a NULL pointer indicates
- * that the default allocator should be used. The default allocator will 
+ * that the default allocator should be used. The default allocator will
  * be libc malloc/free if we're linking to libc. If libc isn't linked,
  * a custom allocator is used (currently Zig's SMP allocator).
  *
@@ -190,6 +209,46 @@ typedef struct GhosttyAllocator {
      */
     const GhosttyAllocatorVtable *vtable;
 } GhosttyAllocator;
+
+/**
+ * Allocate a buffer of `len` bytes.
+ *
+ * Uses the provided allocator, or the default allocator if NULL is passed.
+ * The returned buffer must be freed with ghostty_free() using the same
+ * allocator.
+ *
+ * @param allocator Pointer to the allocator to use, or NULL for the default
+ * @param len Number of bytes to allocate
+ * @return Pointer to the allocated buffer, or NULL if allocation failed
+ *
+ * @ingroup allocator
+ */
+GHOSTTY_API uint8_t* ghostty_alloc(const GhosttyAllocator* allocator, size_t len);
+
+/**
+ * Free memory that was allocated by a libghostty-vt function.
+ *
+ * Use this to free buffers returned by functions such as
+ * ghostty_formatter_format_alloc(). Pass the same allocator that was
+ * used for the allocation, or NULL if the default allocator was used.
+ *
+ * On platforms where the library's internal allocator differs from the
+ * consumer's C runtime (e.g. Windows, where Zig's libc and MSVC's CRT
+ * maintain separate heaps), calling the standard C free() on memory
+ * allocated by the library causes undefined behavior. This function
+ * guarantees the correct allocator is used regardless of platform.
+ *
+ * It is safe to pass a NULL pointer; the call is a no-op in that case.
+ *
+ * @param allocator Pointer to the allocator that was used to allocate the
+ *   memory, or NULL if the default allocator was used
+ * @param ptr Pointer to the memory to free (may be NULL)
+ * @param len Length of the allocation in bytes (must match the original
+ *   allocation size)
+ *
+ * @ingroup allocator
+ */
+GHOSTTY_API void ghostty_free(const GhosttyAllocator* allocator, uint8_t* ptr, size_t len);
 
 /** @} */
 

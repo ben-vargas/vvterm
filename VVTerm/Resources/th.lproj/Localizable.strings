@@ -1035,6 +1035,10 @@
 "Remove Theme" = "ลบธีม";
 "Reorder actions, add snippets, and sync your accessory bar across devices." = "เรียงลำดับการกระทำใหม่ เพิ่มตัวอย่าง และซิงค์แถบอุปกรณ์เสริมของคุณระหว่างอุปกรณ์ต่างๆ";
 "Reset to Default" = "รีเซ็ตเป็นค่าเริ่มต้น";
+"Content Padding" = "ระยะขอบเนื้อหา";
+"Horizontal" = "แนวนอน";
+"Vertical" = "แนวตั้ง";
+"Adds space between the terminal grid and pane edges on this device." = "เพิ่มพื้นที่ระหว่างตารางเทอร์มินัลกับขอบบานหน้าต่างบนอุปกรณ์นี้";
 "Save Custom Theme" = "บันทึกธีมที่กำหนดเอง";
 "Selection Background" = "พื้นหลังการเลือก";
 "Selection Foreground" = "การเลือกเบื้องหน้า";
