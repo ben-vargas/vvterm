@@ -7,13 +7,15 @@ struct RemoteSessionModelsTests {
     func registryExposesStableBuiltInBackendIdentifiers() {
         let registry = RemoteSessionBackendRegistry(backends: [
             ZmxRemoteSessionBackend(),
+            ZellijRemoteSessionBackend(),
             HerdrRemoteSessionBackend(),
             TmuxRemoteSessionBackend(tmux: RemoteTmuxManager())
         ])
 
-        #expect(registry.metadata.map(\.identifier) == [.herdr, .tmux, .zmx])
+        #expect(registry.metadata.map(\.identifier) == [.herdr, .tmux, .zellij, .zmx])
         #expect(registry.backend(for: .herdr)?.metadata.displayName == "Herdr")
         #expect(registry.backend(for: .tmux)?.metadata.displayName == "tmux")
+        #expect(registry.backend(for: .zellij)?.metadata.displayName == "Zellij")
         #expect(registry.backend(for: .zmx)?.metadata.displayName == "zmx")
         #expect(
             registry.backend(for: .herdr)?.metadata.managedStartupCommandSupport
@@ -21,6 +23,10 @@ struct RemoteSessionModelsTests {
         )
         #expect(
             registry.backend(for: .tmux)?.metadata.managedStartupCommandSupport
+                == .supported
+        )
+        #expect(
+            registry.backend(for: .zellij)?.metadata.managedStartupCommandSupport
                 == .supported
         )
         #expect(

@@ -3,6 +3,7 @@ import Foundation
 nonisolated struct RemoteSessionBackendIdentifier: RawRepresentable, Codable, Hashable, Sendable {
     static let herdr = Self(rawValue: "herdr")
     static let tmux = Self(rawValue: "tmux")
+    static let zellij = Self(rawValue: "zellij")
     static let zmx = Self(rawValue: "zmx")
 
     let rawValue: String

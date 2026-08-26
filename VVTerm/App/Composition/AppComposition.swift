@@ -99,6 +99,7 @@ struct AppComposition {
             registry: RemoteSessionBackendRegistry(backends: [
                 HerdrRemoteSessionBackend(),
                 TmuxRemoteSessionBackend(tmux: remoteTmux),
+                ZellijRemoteSessionBackend(),
                 ZmxRemoteSessionBackend()
             ])
         )
