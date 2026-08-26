@@ -139,7 +139,7 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
             ["keyboard", "input", "option", "alt", "terminal size", "dismiss", "accessory bar", "custom actions"]
         case .sessionsAndConnections:
             [
-                "remote session", "session persistence", "tmux", "zmx", "backend", "connect",
+                "remote session", "session persistence", "herdr", "tmux", "zmx", "backend", "connect",
                 "auto reconnect", "ssh", "keep alive", "keep-alive", "interval"
             ]
         case .clipboardAndPaste:

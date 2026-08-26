@@ -188,6 +188,28 @@ struct ServerFormSheet: View {
         operations.hasValidConnectionTest(for: form.connectionSnapshot)
     }
 
+    private var hasCustomStartupCommand: Bool {
+        !form.remoteShellStartupAction.command
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
+    }
+
+    private var selectedRemoteSessionBackend: RemoteSessionBackendMetadata? {
+        remoteSessionBackends.first {
+            $0.identifier == form.remoteSessionBackendIdentifier
+        }
+    }
+
+    private var unsupportedManagedStartupBackend: RemoteSessionBackendMetadata? {
+        guard form.remoteSessionEnabled,
+              hasCustomStartupCommand,
+              let backend = selectedRemoteSessionBackend,
+              backend.managedStartupCommandSupport == .unsupported else {
+            return nil
+        }
+        return backend
+    }
+
     var isSaving: Bool { operations.isSaving }
 
     private var isLoadingCredentials: Bool { operations.isLoadingCredentials }
@@ -197,6 +219,7 @@ struct ServerFormSheet: View {
     var saveButtonDisabled: Bool {
         !form.isValid || isSaving || isAtLimit
             || isLoadingCredentials || isTestingConnection
+            || unsupportedManagedStartupBackend != nil
     }
 
     private var serverLimitAlertBinding: Binding<Bool> {
@@ -648,6 +671,10 @@ struct ServerFormSheet: View {
                     ForEach(remoteSessionBackends, id: \.identifier) { backend in
                         RemoteSessionBackendLabel(backend: backend)
                             .tag(backend.identifier)
+                            .disabled(
+                                hasCustomStartupCommand
+                                    && backend.managedStartupCommandSupport == .unsupported
+                            )
                     }
                 }
 
@@ -662,9 +689,22 @@ struct ServerFormSheet: View {
             sectionHeader("Session Persistence")
         } footer: {
             if form.remoteSessionEnabled {
-                Text(form.remoteSessionStartupBehavior.descriptionText)
+                if let backend = unsupportedManagedStartupBackend {
+                    Text(
+                        String(
+                            format: String(
+                                localized: "%@ does not support custom startup commands yet."
+                            ),
+                            backend.displayName
+                        )
+                    )
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.red)
+                } else {
+                    Text(form.remoteSessionStartupBehavior.descriptionText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }

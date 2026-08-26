@@ -46,6 +46,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+## Herdr Logo
+Source: https://github.com/herdrdev/herdr/blob/6e8b138d0f7d7d695530657a6d8dc475bd3fba2b/website/assets/logo.svg
+License: Apache-2.0 (see Apache License 2.0 below)
+
 ## Ghostty (libghostty)
 Source: https://github.com/wiedymi/ghostty (fork of https://github.com/ghostty-org/ghostty)
 License: MIT

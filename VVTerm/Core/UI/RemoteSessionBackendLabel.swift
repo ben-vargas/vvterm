@@ -28,7 +28,7 @@ struct RemoteSessionBackendLabel: View {
 
     private var assetName: String? {
         switch backend.identifier.rawValue {
-        case "tmux", "zmx":
+        case "herdr", "tmux", "zmx":
             "RemoteSessionBackend-\(backend.identifier.rawValue)"
         default:
             nil

@@ -97,6 +97,7 @@ struct AppComposition {
         let remoteTmux = RemoteTmuxManager()
         let remoteSessions = RemoteSessionClient(
             registry: RemoteSessionBackendRegistry(backends: [
+                HerdrRemoteSessionBackend(),
                 TmuxRemoteSessionBackend(tmux: remoteTmux),
                 ZmxRemoteSessionBackend()
             ])
