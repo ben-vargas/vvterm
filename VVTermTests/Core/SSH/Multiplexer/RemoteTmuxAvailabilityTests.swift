@@ -61,7 +61,7 @@ struct RemoteTmuxAvailabilityTests {
         outputs: [Result<String, Error>]
     ) async -> (RemoteTmuxAvailability, [String]) {
         let executor = TmuxProbeExecutor(outputs: outputs)
-        let availability = await RemoteTmuxManager.shared.tmuxAvailability(
+        let availability = await RemoteTmuxManager().tmuxAvailability(
             in: environment
         ) { command, timeout in
             try await executor.run(command: command, timeout: timeout)
@@ -72,10 +72,17 @@ struct RemoteTmuxAvailabilityTests {
     @Test
     func explicitAvailabilityMarkerReportsUnixTmuxAvailable() async {
         let (availability, commands) = await resolveAvailability(outputs: [
-            .success("__VVTERM_TMUX_OK__")
+            .success("""
+            __VVTERM_TMUX_OK__
+            __VVTERM_TMUX_PATH__/usr/bin/tmux
+            __VVTERM_TMUX_VERSION__tmux 3.5a
+            """)
         ])
 
-        #expect(availability == .available(.unixTmux))
+        #expect(availability == .available(.unixTmux(
+            executablePath: "/usr/bin/tmux",
+            rawVersion: "tmux 3.5a"
+        )))
         #expect(commands.count == 1)
     }
 
@@ -191,7 +198,11 @@ struct RemoteTmuxAvailabilityTests {
             environment: environment,
             outputs: [
                 .failure(SSHError.timeout),
-                .success("__VVTERM_TMUX_OK__:pmux")
+                .success("""
+                __VVTERM_TMUX_OK__:pmux
+                __VVTERM_TMUX_PATH__C:\\Tools\\pmux.exe
+                __VVTERM_TMUX_VERSION__psmux 0.4.0
+                """)
             ]
         )
 
@@ -199,7 +210,9 @@ struct RemoteTmuxAvailabilityTests {
             availability == .available(.windowsPsmux(
                 commandName: "pmux",
                 shellFamily: .powershell,
-                powerShellExecutable: "pwsh"
+                powerShellExecutable: "pwsh",
+                executablePath: "C:\\Tools\\pmux.exe",
+                rawVersion: "psmux 0.4.0"
             ))
         )
         #expect(commands.count == 2)
@@ -220,4 +233,3 @@ struct RemoteTmuxAvailabilityTests {
         #expect(probe.contains("__VVTERM_TMUX_NO__"))
     }
 }
-

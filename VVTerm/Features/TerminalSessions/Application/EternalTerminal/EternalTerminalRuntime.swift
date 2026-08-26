@@ -52,15 +52,19 @@ nonisolated enum EternalTerminalStartupCommand {
         "/tmp/vvterm-et-start-\(token.uuidString.lowercased()).sh"
     }
 
-    static func script(command: String, remotePath: String) -> String {
-        """
+    static func script(
+        for plan: TerminalShellStartupPlan,
+        remotePath: String
+    ) -> String? {
+        guard let command = plan.command else { return nil }
+        return """
         rm -f -- \(RemoteTerminalBootstrap.shellQuoted(remotePath))
         \(command)
         """
     }
 
     static func invocation(remotePath: String) -> String {
-        "/bin/sh \(RemoteTerminalBootstrap.shellQuoted(remotePath))"
+        "exec /bin/sh \(RemoteTerminalBootstrap.shellQuoted(remotePath))"
     }
 }
 
@@ -125,8 +129,11 @@ struct EternalTerminalRuntimeOwnerAccess {
         _ client: SSHClient,
         _ runtimeToken: UUID
     ) async throws -> TerminalShellStartupPlan
-    let resumeContext: @MainActor @Sendable (UUID) -> EternalTerminalTmuxResumeContext?
-    let setResumeContext: @MainActor @Sendable (UUID, EternalTerminalTmuxResumeContext?) -> Void
+    let resumeContext: @MainActor @Sendable (UUID) -> RemoteSessionLifecycleContext?
+    let setResumeContext: @MainActor @Sendable (UUID, RemoteSessionLifecycleContext?) -> Void
+    let startupActionReplayPending: @MainActor @Sendable (UUID) -> Bool
+    let setStartupActionReplayPending: @MainActor @Sendable (UUID, Bool) -> Void
+    let remoteSessionAttached: @MainActor @Sendable (UUID) -> Void
     let updateConnectionState: @MainActor @Sendable (UUID, ConnectionState) -> Void
     let markEternalTerminalTransport: @MainActor @Sendable (UUID) -> Void
     let handleShellEnd: @MainActor @Sendable (UUID, UUID, TerminalShellEndReason) -> Void
@@ -159,8 +166,9 @@ final class EternalTerminalRuntime {
     private var failureReported = false
     private var networkRecoveryProbe = EternalTerminalRecoveryProbe()
     private var startupApplied = false
-    private var tmuxLifecycle: EternalTerminalTmuxResumeContext?
-    private var tmuxLifecycleParser: TmuxLifecycleStreamParser?
+    private var standaloneStartupActionAwaitingExit = false
+    private var remoteSessionLifecycle: RemoteSessionLifecycleContext?
+    private var remoteSessionLifecycleParser: RemoteSessionLifecycleStreamParser?
     private var lastTerminalSize: (cols: Int, rows: Int, pixels: TerminalPixelSize?) = (0, 0, nil)
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "VVTerm",
@@ -293,16 +301,13 @@ final class EternalTerminalRuntime {
         return try await session.withBootstrapSSHClient(operation)
     }
 
-    func killManagedTmuxSession(named sessionName: String) async {
+    func killManagedRemoteSession(_ identifier: RemoteSessionIdentifier) async {
         do {
             try await withBootstrapSSHClient { [dependencies] client in
-                await dependencies.killTmuxSession(
-                    named: sessionName,
-                    using: client
-                )
+                await dependencies.killRemoteSession(identifier, using: client)
             }
         } catch {
-            logger.warning("Failed to clean up ET tmux session: \(error.localizedDescription, privacy: .public)")
+            logger.warning("Failed to clean up ET remote session: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -478,9 +483,11 @@ final class EternalTerminalRuntime {
         guard origin == .resumed else { return }
         startupApplied = true
         let context = ownerAccess.resumeContext(paneId)
-        tmuxLifecycle = context
-        tmuxLifecycleParser = context.map {
-            TmuxLifecycleStreamParser(markerToken: $0.markerToken)
+        standaloneStartupActionAwaitingExit = context == nil
+            && ownerAccess.startupActionReplayPending(paneId)
+        remoteSessionLifecycle = context
+        remoteSessionLifecycleParser = context.map {
+            RemoteSessionLifecycleStreamParser(observation: $0.observation)
         }
     }
 
@@ -490,6 +497,15 @@ final class EternalTerminalRuntime {
         port: Int
     ) -> ConnectedStateWork? {
         guard isCurrentOwner else {
+            return nil
+        }
+        if state == .closed, standaloneStartupActionAwaitingExit {
+            standaloneStartupActionAwaitingExit = false
+            ownerAccess.handleShellEnd(
+                paneId,
+                identityToken,
+                .standaloneStartupActionCompleted
+            )
             return nil
         }
         let recoveryProbeIDAtEvent = networkRecoveryProbe.pendingID
@@ -550,6 +566,7 @@ final class EternalTerminalRuntime {
             do {
                 try await session.send(data)
             } catch {
+                self?.handleStartupSendRejection(for: plan)
                 self?.publishFailure(error, host: host, port: port)
             }
         }
@@ -557,45 +574,56 @@ final class EternalTerminalRuntime {
 
     private func acceptStartupPlan(_ plan: TerminalShellStartupPlan) -> Data? {
         guard isCurrentOwner else { return nil }
-        let resumeContext = plan.tmuxLifecycle.map {
-            EternalTerminalTmuxResumeContext(
-                ownership: $0.ownership,
-                markerToken: $0.markerToken
-            )
-        }
-        tmuxLifecycle = resumeContext
-        tmuxLifecycleParser = resumeContext.map {
-            TmuxLifecycleStreamParser(markerToken: $0.markerToken)
+        standaloneStartupActionAwaitingExit = plan.mayExecuteStandaloneUserStartupAction
+        ownerAccess.setStartupActionReplayPending(
+            paneId,
+            plan.mayExecuteUserStartupAction
+        )
+        let resumeContext = plan.remoteSessionLifecycle
+        remoteSessionLifecycle = resumeContext
+        remoteSessionLifecycleParser = resumeContext.map {
+            RemoteSessionLifecycleStreamParser(observation: $0.observation)
         }
         ownerAccess.setResumeContext(paneId, resumeContext)
-        guard let command = plan.command,
-              let data = "\(command)\r".data(using: .utf8) else { return nil }
-        return data
+        guard let command = plan.command else { return nil }
+        return Data("\(command)\r".utf8)
+    }
+
+    private func handleStartupSendRejection(for plan: TerminalShellStartupPlan) {
+        guard isCurrentOwner else { return }
+        standaloneStartupActionAwaitingExit = false
+        if plan.mayExecuteUserStartupAction {
+            ownerAccess.setStartupActionReplayPending(paneId, false)
+        }
+        remoteSessionLifecycle = nil
+        remoteSessionLifecycleParser = nil
+        ownerAccess.setResumeContext(paneId, nil)
     }
 
     private func consumeOutput(_ data: Data) {
         guard isCurrentOwner else {
             return
         }
-        guard var parser = tmuxLifecycleParser else {
+        guard var parser = remoteSessionLifecycleParser else {
             outputSink?.receiveTerminalOutput(data)
             return
         }
         let result = parser.consume(data)
-        tmuxLifecycleParser = parser
+        remoteSessionLifecycleParser = parser
         if !result.output.isEmpty {
             outputSink?.receiveTerminalOutput(result.output)
         }
-        guard let event = result.events.last, let tmuxLifecycle else { return }
-        let reason: TerminalShellEndReason
-        switch event {
-        case .detached:
-            reason = .tmuxDetached(tmuxLifecycle.ownership)
-        case .ended:
-            reason = .tmuxEnded(tmuxLifecycle.ownership)
-        case .creationFailed:
-            reason = .tmuxCreationFailed
+        if result.events.contains(.attached) {
+            ownerAccess.remoteSessionAttached(paneId)
         }
+        guard let event = result.events.last,
+              event != .attached,
+              let remoteSessionLifecycle else { return }
+        let reason = TerminalShellEndReason.resolve(
+            lifecycle: remoteSessionLifecycle,
+            event: event,
+            sessionExists: nil
+        )
         ownerAccess.handleShellEnd(paneId, identityToken, reason)
         let runtimeToken = identityToken
         let ownerAccess = ownerAccess

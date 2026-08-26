@@ -22,8 +22,8 @@ struct TerminalConnectionFailurePresentationTests {
                 == String(localized: "Connection timed out. Please retry.")
         )
         #expect(
-            TerminalConnectionFailurePresentation.message(for: .tmuxStartupFailed)
-                == String(localized: "Unable to start tmux session.")
+            TerminalConnectionFailurePresentation.message(for: .remoteSessionStartupFailed)
+                == String(localized: "Unable to start the remote session.")
         )
         #expect(
             TerminalTabOpeningError.alreadyOpening.localizedDescription
@@ -159,11 +159,19 @@ struct TerminalConnectionFailurePresentationTests {
         let approval = TerminalConnectionFailure.transport(
             SSHError.hostKeyApprovalRequired
         )
+        let unsupportedStartupShell = TerminalConnectionFailure.transport(
+            SSHError.unsupportedRemoteShellForStartupCommand
+        )
 
         #expect(timeout.allowsAutomaticReconnectRetry)
         #expect(timeout.requiredAction == nil)
         #expect(!approval.allowsAutomaticReconnectRetry)
         #expect(approval.requiredAction == .approveHostKey)
+        #expect(!unsupportedStartupShell.allowsAutomaticReconnectRetry)
+        #expect(
+            TerminalConnectionFailurePresentation.message(for: unsupportedStartupShell)
+                == SSHError.unsupportedRemoteShellForStartupCommand.localizedDescription
+        )
         #expect(
             TerminalConnectionFailurePresentation.message(for: approval)
                 == SSHError.hostKeyApprovalRequired.localizedDescription

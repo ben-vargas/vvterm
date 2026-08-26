@@ -94,7 +94,15 @@ struct AppComposition {
         let connectionOperations = SSHConnectionOperationService(
             clientFactory: sshClientFactory
         )
-        let remoteTmux = RemoteTmuxManager.shared
+        let remoteTmux = RemoteTmuxManager()
+        let remoteSessions = RemoteSessionClient(
+            registry: RemoteSessionBackendRegistry(backends: [
+                HerdrRemoteSessionBackend(),
+                TmuxRemoteSessionBackend(tmux: remoteTmux),
+                ZellijRemoteSessionBackend(),
+                ZmxRemoteSessionBackend()
+            ])
+        )
         let eternalTerminalResumeStore = EternalTerminalResumeStore.shared
         let moshResumeStore = MoshResumeStore.shared
         let terminalSurfaceStore = GhosttyTerminalSurfaceStore()
@@ -127,6 +135,7 @@ struct AppComposition {
                 )
             )
         }
+        let serverDeletionTerminalCleanup = ServerDeletionTerminalCleanupRelay()
         let serverManager = ServerManager(
             dependencies: .live(
                 defaults: defaults,
@@ -136,6 +145,9 @@ struct AppComposition {
                 freePlanTracker: analyticsTracker,
                 actionAuthorizer: appLockManager,
                 syncRepository: cloudKitSyncCoordinator,
+                didDeleteServerLocalData: { serverID in
+                    serverDeletionTerminalCleanup.handleServerDeletion(serverID)
+                },
                 defaultWorkspaceName: defaultWorkspaceName,
                 canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames,
                 now: now,
@@ -147,14 +159,23 @@ struct AppComposition {
             hostKeys: knownHostsManager,
             connectionOperations: connectionOperations,
             remoteMosh: remoteMosh,
-            defaultTmuxEnabled: {
-                defaults.object(forKey: "terminalTmuxEnabledDefault") == nil
+            remoteSessionBackends: remoteSessions.backendMetadata,
+            defaultRemoteSessionEnabled: {
+                defaults.object(forKey: TerminalRemoteSessionDefaults.enabledKey) == nil
                     ? true
-                    : defaults.bool(forKey: "terminalTmuxEnabledDefault")
+                    : defaults.bool(forKey: TerminalRemoteSessionDefaults.enabledKey)
             },
-            defaultTmuxStartupBehavior: {
-                defaults.string(forKey: "terminalTmuxStartupBehaviorDefault")
-                    .flatMap(TmuxStartupBehavior.init(rawValue:)) ?? .askEveryTime
+            defaultRemoteSessionBackendIdentifier: {
+                let stored = defaults.string(
+                    forKey: TerminalRemoteSessionDefaults.backendIdentifierKey
+                ).map(RemoteSessionBackendIdentifier.init(rawValue:))
+                return remoteSessions.backendMetadata.contains { $0.identifier == stored }
+                    ? stored ?? .tmux
+                    : .tmux
+            },
+            defaultRemoteSessionStartupBehavior: {
+                defaults.string(forKey: TerminalRemoteSessionDefaults.startupBehaviorKey)
+                    .flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:)) ?? .ask
             },
             now: now,
             makeID: makeID
@@ -192,18 +213,19 @@ struct AppComposition {
             analyticsTracker: analyticsTracker,
             liveActivityManager: liveActivityManager,
             remoteMosh: remoteMosh,
-            remoteTmux: remoteTmux,
+            remoteSessions: remoteSessions,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshResumeStore: moshResumeStore,
             terminalSurfaceStore: terminalSurfaceStore,
             deviceID: deviceID,
             themeStyle: {
-                TerminalTmuxSessionLiveComposition.themeStyle(
+                TerminalRemoteSessionLiveComposition.themeStyle(
                     for: terminalThemeManager.themeSelection.darkThemeName
                 )
             },
             applicationIsActive: applicationIsActive
         )
+        serverDeletionTerminalCleanup.bind(to: tabManager)
         let storeManager = StoreManager(
             client: AppStoreKitClient(),
             effects: .live(
@@ -336,7 +358,8 @@ struct AppComposition {
             sshKeySettingsCoordinator: sshKeySettingsCoordinator,
             knownHostSettingsCoordinator: knownHostSettingsCoordinator,
             voiceModelManagers: voiceModelManagers,
-            analyticsOptOutAction: analyticsOptOutAction
+            analyticsOptOutAction: analyticsOptOutAction,
+            remoteSessionBackends: remoteSessions.backendMetadata
         )
         #endif
 

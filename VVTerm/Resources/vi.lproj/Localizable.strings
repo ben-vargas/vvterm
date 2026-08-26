@@ -891,12 +891,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "Cung cấp cả ghi đè miền nhóm và miền ứng dụng cho Cloudflare OAuth.";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "Không thể phát hiện siêu dữ liệu Cloudflare. Thêm ghi đè miền nhóm và miền ứng dụng trong cài đặt máy chủ.";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "Chọn phiên tmux";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "Chọn phiên %@";
 "Existing sessions" = "Các phiên hiện có";
 "Select a session to attach immediately." = "Chọn một phiên để gắn ngay lập tức.";
-"No tmux sessions found" = "Không tìm thấy phiên tmux";
-"Create a new session, or continue without tmux." = "Tạo phiên mới hoặc tiếp tục không dùng tmux.";
+"No %@ sessions found" = "Không tìm thấy phiên %@";
+"Create a new session, or continue without a remote session." = "Tạo phiên mới hoặc tiếp tục mà không dùng phiên từ xa.";
 "Attached" = "Đang gắn";
 "Detached" = "Đã tách";
 "1 client" = "1 máy khách";
@@ -904,13 +904,19 @@
 "1 window" = "1 cửa sổ";
 "%lld windows" = "%lld cửa sổ";
 "New session" = "Phiên mới";
-"Skip tmux" = "Bỏ qua tmux";
+"Continue without a remote session" = "Tiếp tục mà không dùng phiên từ xa";
+"Open Installation Guide" = "Mở hướng dẫn cài đặt";
 "Create VVTerm session" = "Tạo phiên VVTerm";
 "Ask every time" = "Hỏi mỗi lần";
 "Use remembered session" = "Dùng phiên đã ghi nhớ";
 "Always create or attach to a VVTerm-managed tmux session for this connection." = "Luôn tạo hoặc gắn vào phiên tmux do VVTerm quản lý cho kết nối này.";
 "Show a prompt on each new tab or split so you can choose a session." = "Hiển thị lời nhắc ở mỗi tab mới hoặc khi chia màn hình để bạn có thể chọn phiên.";
 "Start a normal shell without tmux session persistence." = "Bắt đầu shell bình thường mà không dùng cơ chế lưu phiên tmux.";
+"Use a normal shell" = "Dùng shell thông thường";
+"Start a normal shell without remote session persistence." = "Khởi động shell thông thường mà không duy trì phiên từ xa.";
+"Installing %@" = "Đang cài đặt %@";
+"Install %@?" = "Cài đặt %@?";
+"The remote session is still running on the server." = "Phiên từ xa vẫn đang chạy trên máy chủ.";
 "Automatically attach to the last tmux session you selected." = "Tự động gắn vào phiên tmux gần nhất bạn đã chọn.";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "Phiên vẫn được giữ qua các lần khởi động lại ứng dụng và mất kết nối khi có tmux.";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "Chọn hành vi mặc định cho máy chủ mới. Bạn vẫn có thể ghi đè theo từng máy chủ trong cài đặt máy chủ.";
@@ -1865,3 +1871,23 @@
 "Remove All Downloaded Models" = "Xóa tất cả mô hình đã tải xuống";
 "Remove All Downloaded Models?" = "Xóa tất cả mô hình đã tải xuống?";
 "Voice input models must be downloaded again before they can work offline." = "Bạn phải tải lại các mô hình nhập liệu bằng giọng nói trước khi dùng ngoại tuyến.";
+"Keep remote sessions running by default" = "Duy trì phiên từ xa chạy theo mặc định";
+"These defaults apply to new servers. You can override them in server settings." = "Các giá trị mặc định này áp dụng cho máy chủ mới. Bạn có thể thay đổi trong cài đặt máy chủ.";
+"Keep remote sessions running" = "Duy trì phiên từ xa hoạt động";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "Tùy chọn đã chọn duy trì phiên từ xa hoạt động sau khi ứng dụng khởi động lại hoặc mất kết nối.";
+"Without session persistence, app backgrounding can interrupt running commands." = "Nếu không duy trì phiên, việc đưa ứng dụng vào nền có thể làm gián đoạn các lệnh đang chạy.";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "Tùy chọn đã chọn duy trì thiết bị đầu cuối hoạt động sau khi ứng dụng khởi động lại hoặc mất kết nối.";
+"Use a persistent session" = "Dùng phiên liên tục";
+"Use persistent sessions by default" = "Dùng phiên liên tục theo mặc định";
+"Create or reconnect to a VVTerm-managed session." = "Tạo hoặc kết nối lại với phiên do VVTerm quản lý.";
+"Ask which session to use for each new tab or split." = "Hỏi phiên cần dùng cho mỗi tab hoặc vùng chia mới.";
+"Startup Command" = "Lệnh khởi động";
+"Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Đồng bộ giữa các thiết bị. Chỉ chạy khi VVTerm tạo phiên liên tục. Không thêm thông tin bí mật.";
+"Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Đồng bộ giữa các thiết bị. Chạy cho mỗi kết nối thiết bị đầu cuối mới. Không thêm thông tin bí mật.";
+"The command contains unsupported control characters." = "Lệnh chứa ký tự điều khiển không được hỗ trợ.";
+"The command must be %lld UTF-8 bytes or less." = "Lệnh phải có kích thước không quá %lld byte UTF-8.";
+"%@ does not support custom startup commands yet." = "%@ chưa hỗ trợ lệnh khởi động tùy chỉnh.";
+"The connection ended while starting the shell. The startup command was not run again." = "Kết nối đã kết thúc khi khởi động shell. Lệnh khởi động không được chạy lại.";
+"The remote server rejected the shell command." = "Máy chủ từ xa đã từ chối lệnh shell.";
+"The remote server rejected the terminal request." = "Máy chủ từ xa đã từ chối yêu cầu thiết bị đầu cuối.";
+"The startup command may have run. VVTerm did not run it again." = "Lệnh khởi động có thể đã chạy. VVTerm không chạy lại lệnh đó.";

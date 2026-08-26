@@ -153,12 +153,26 @@ struct EternalTerminalResumeCredentialStoreTests {
             ), select: true)
             let savedCredentials = try credentials()
             try store.save(savedCredentials, for: secondTab.rootPaneId)
-            let lifecycle = EternalTerminalTmuxResumeContext(
-                ownership: .managed,
-                markerToken: "safe-marker"
+            let lifecycle = RemoteSessionLifecycleContext(
+                attachment: RemoteSessionAttachment(
+                    identifier: try RemoteSessionIdentifier(
+                        backendIdentifier: .tmux,
+                        validating: "safe-session"
+                    ),
+                    ownership: .managed
+                ),
+                envelope: try RemoteSessionLifecycleEnvelope(
+                    token: "safe-marker",
+                    operationID: UUID()
+                ),
+                presenceProbe: RemoteSessionPresenceProbe(
+                    command: "probe",
+                    existsMarker: "exists",
+                    missingMarker: "missing"
+                )
             )
             manager.sessionState.updatePane(secondTab.rootPaneId, persist: true) {
-                $0.eternalTerminalTmuxResumeContext = lifecycle
+                $0.remoteSessionResumeContext = lifecycle
             }
 
             let snapshot = try manager.sessionState.snapshotDataForTesting()
@@ -173,7 +187,7 @@ struct EternalTerminalResumeCredentialStoreTests {
 
             manager.sessionState.persistAndRestoreSnapshotForTesting()
             #expect(
-                manager.sessionState.paneState(for: secondTab.rootPaneId)?.eternalTerminalTmuxResumeContext
+                manager.sessionState.paneState(for: secondTab.rootPaneId)?.remoteSessionResumeContext
                     == lifecycle
             )
         } catch {

@@ -185,10 +185,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             credentialAction: .delete([server])
         )
         let journal = try serverDataMutationTransaction.commit(plan)
-        if journal.presentsResultingState {
-            stateStore.applyCommittedServerDataMutation(plan)
-            remoteSyncCoordinator.removeKnownHostIfUnused(for: server)
-        }
+        applyCommittedServerDataMutation(journal)
         guard journal.phase == .complete else {
             throw VVTermError.serverDataMutationRecoveryPending
         }
@@ -554,6 +551,9 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
                 for: server,
                 excluding: deletedServerIDs
             )
+        }
+        journal.plan.deletedServers.forEach {
+            dependencies.didDeleteServerLocalData($0.id)
         }
     }
 }

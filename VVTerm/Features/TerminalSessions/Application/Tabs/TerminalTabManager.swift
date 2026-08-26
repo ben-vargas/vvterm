@@ -34,7 +34,7 @@ final class TerminalTabManager {
     let keyboardCoordinator = TerminalKeyboardCoordinator()
     #endif
 
-    let tmuxCoordinator: TerminalTmuxSessionCoordinator
+    let remoteSessionCoordinator: TerminalRemoteSessionCoordinator
 
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "TerminalTabManager")
 
@@ -44,17 +44,17 @@ final class TerminalTabManager {
     init(
         snapshotStore: any TerminalTabSnapshotStoring,
         dependencies: TerminalTabManagerDependencies,
-        tmuxConfiguration: TerminalTmuxConfiguration,
-        remoteTmux: any TerminalRemoteTmuxServicing,
+        remoteSessionConfiguration: TerminalRemoteSessionConfiguration,
+        remoteSessions: any TerminalRemoteSessionServicing,
         terminalSurfaceStore: any TerminalSurfaceStoring,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshRecovery: any TerminalMoshRecoveryServicing
     ) {
         self.dependencies = dependencies
         let connectionViewSelections = ConnectionViewSelectionStore()
-        let tmuxResolver = TmuxAttachResolver(
-            configuration: tmuxConfiguration,
-            remoteTmux: remoteTmux
+        let remoteSessionResolver = RemoteSessionAttachResolver(
+            configuration: remoteSessionConfiguration,
+            remoteSessions: remoteSessions
         )
         let transportLifetime = TerminalTransportLifetime()
         let runtimeEvents = PassthroughSubject<TerminalTransportSessionEvent, Never>()
@@ -62,17 +62,17 @@ final class TerminalTabManager {
         let sessionState = TerminalSessionStateStore(
             snapshotStore: snapshotStore,
             connectionViewSelections: connectionViewSelections,
-            tmuxResolver: tmuxResolver
+            remoteSessionResolver: remoteSessionResolver
         )
         self.sessionState = sessionState
-        let tmuxCoordinator = TerminalTmuxSessionCoordinator(
-            configuration: tmuxConfiguration,
-            remoteTmux: remoteTmux,
-            resolver: tmuxResolver,
+        let remoteSessionCoordinator = TerminalRemoteSessionCoordinator(
+            configuration: remoteSessionConfiguration,
+            remoteSessions: remoteSessions,
+            resolver: remoteSessionResolver,
             sessionState: sessionState,
             transportLifetime: transportLifetime
         )
-        self.tmuxCoordinator = tmuxCoordinator
+        self.remoteSessionCoordinator = remoteSessionCoordinator
         self.terminalSurfaceStore = terminalSurfaceStore
         self.transportCoordinator = TerminalTransportCoordinator(
             lifetime: transportLifetime,
@@ -100,14 +100,14 @@ final class TerminalTabManager {
                 workingDirectory: { [weak sessionState] paneId in
                     sessionState?.paneState(for: paneId)?.workingDirectory
                 },
-                shouldApplyWorkingDirectory: { [weak tmuxCoordinator] paneId in
-                    tmuxCoordinator?.shouldApplyWorkingDirectory(for: paneId) == true
+                shouldApplyWorkingDirectory: { [weak remoteSessionCoordinator] paneId in
+                    remoteSessionCoordinator?.shouldApplyWorkingDirectory(for: paneId) == true
                 },
                 send: { event in
                     runtimeEvents.send(event)
                 }
             ),
-            tmuxCoordinator: tmuxCoordinator
+            remoteSessionCoordinator: remoteSessionCoordinator
         )
         runtimeEvents
             .sink { [weak self] event in
@@ -122,7 +122,7 @@ final class TerminalTabManager {
         sessionState.selectedTabChanges
             .dropFirst()
             .sink { [weak self] selectedTabs in
-                self?.tmuxCoordinator.updateSelectionStatuses(selectedTabs: selectedTabs)
+                self?.remoteSessionCoordinator.updateSelectionStatuses(selectedTabs: selectedTabs)
             }
             .store(in: &stateCancellables)
         sessionState.paneConnectionStateChanges
@@ -142,7 +142,9 @@ final class TerminalTabManager {
         case .activeTransport(let paneId, let state):
             setPaneTransport(state, for: paneId)
         case .eternalTerminalResumeContext(let paneId, let context):
-            setEternalTerminalTmuxResumeContext(context, for: paneId)
+            setRemoteSessionLifecycleContext(context, for: paneId)
+        case .startupActionReplayPending(let paneId, let isPending):
+            sessionState.setStartupActionReplayPending(isPending, for: paneId)
         case .connectionState(let paneId, let state):
             updatePaneState(paneId, connectionState: state)
         case .title(let paneId, let title):
@@ -240,8 +242,8 @@ final class TerminalTabManager {
         snapshotStore: any TerminalTabSnapshotStoring,
         networkReadinessPublisher: AnyPublisher<TerminalNetworkReadiness, Never>?,
         liveActivityRefresh: @escaping ([ConnectionState]) -> Void,
-        tmuxConfiguration: TerminalTmuxConfiguration = .testing,
-        remoteTmux: any TerminalRemoteTmuxServicing = UnavailableTerminalRemoteTmuxService(),
+        remoteSessionConfiguration: TerminalRemoteSessionConfiguration = .testing,
+        remoteSessions: any TerminalRemoteSessionServicing = UnavailableTerminalRemoteSessionService(),
         terminalSurfaceStore: any TerminalSurfaceStoring,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
         moshRecovery: any TerminalMoshRecoveryServicing
@@ -252,8 +254,8 @@ final class TerminalTabManager {
                 networkReadinessPublisher: networkReadinessPublisher,
                 liveActivityRefresh: liveActivityRefresh
             ),
-            tmuxConfiguration: tmuxConfiguration,
-            remoteTmux: remoteTmux,
+            remoteSessionConfiguration: remoteSessionConfiguration,
+            remoteSessions: remoteSessions,
             terminalSurfaceStore: terminalSurfaceStore,
             eternalTerminalResumeStore: eternalTerminalResumeStore,
             moshRecovery: moshRecovery
@@ -337,7 +339,7 @@ final class TerminalTabManager {
             title: server.name,
             sourcePaneId: sourcePaneId,
             sourceWorkingDirectory: sourceWorkingDirectory,
-            tmuxStatus: tmuxCoordinator.isEnabled(for: server.id) ? .unknown : .off
+            remoteSessionStatus: remoteSessionCoordinator.isEnabled(for: server.id) ? .unknown : .off
         )
 
         logger.info("Opened new tab for \(server.name), pane: \(tab.rootPaneId)")
@@ -571,13 +573,13 @@ final class TerminalTabManager {
                   in: currentTab,
                   paneId: paneId,
                   placement: placement,
-                  tmuxStatus: tmuxCoordinator.isEnabled(for: currentTab.serverId) ? .unknown : .off
+                  remoteSessionStatus: remoteSessionCoordinator.isEnabled(for: currentTab.serverId) ? .unknown : .off
               ) else {
             logger.warning("createSplitPane: tab or pane not found")
             return nil
         }
         if let updatedTab = sessionState.tab(id: currentTab.id, for: currentTab.serverId) {
-            tmuxCoordinator.updateFocus(for: updatedTab)
+            remoteSessionCoordinator.updateFocus(for: updatedTab)
         }
         logger.info("Split pane \(paneId) \(placement.direction.rawValue), new pane: \(newPaneId)")
         return newPaneId
@@ -601,7 +603,7 @@ final class TerminalTabManager {
         case .closeTab(let currentTab):
             closeTab(currentTab, intent: intent)
         case .removed(let removedPaneId, let paneState, let updatedTab):
-            tmuxCoordinator.updateFocus(for: updatedTab)
+            remoteSessionCoordinator.updateFocus(for: updatedTab)
             cleanupPane(
                 removedPaneId,
                 removedPaneState: paneState,
@@ -613,7 +615,7 @@ final class TerminalTabManager {
 
     func focusPane(in tab: TerminalTab, paneId: UUID) {
         guard let updatedTab = sessionState.focusPane(in: tab, paneId: paneId) else { return }
-        tmuxCoordinator.updateFocus(for: updatedTab)
+        remoteSessionCoordinator.updateFocus(for: updatedTab)
     }
 
     func updateSplitRatio(
@@ -626,12 +628,12 @@ final class TerminalTabManager {
             node: node,
             ratio: ratio
         ) else { return }
-        tmuxCoordinator.updateFocus(for: updatedTab)
+        remoteSessionCoordinator.updateFocus(for: updatedTab)
     }
 
     func equalizeSplitLayout(in tab: TerminalTab) {
         guard let updatedTab = sessionState.equalizeSplitLayout(in: tab) else { return }
-        tmuxCoordinator.updateFocus(for: updatedTab)
+        remoteSessionCoordinator.updateFocus(for: updatedTab)
     }
 
     func isSplitZoomed(in tab: TerminalTab) -> Bool {
@@ -740,7 +742,7 @@ final class TerminalTabManager {
             guard let updatedTab = sessionState.selectAdjacentPane(in: currentTab, paneId: paneId) else {
                 return .unavailable
             }
-            tmuxCoordinator.updateFocus(for: updatedTab)
+            remoteSessionCoordinator.updateFocus(for: updatedTab)
         case .selectNext:
             guard let paneId = currentTab.layout?.pane(after: currentTab.focusedPaneId) else {
                 return .unavailable
@@ -748,7 +750,7 @@ final class TerminalTabManager {
             guard let updatedTab = sessionState.selectAdjacentPane(in: currentTab, paneId: paneId) else {
                 return .unavailable
             }
-            tmuxCoordinator.updateFocus(for: updatedTab)
+            remoteSessionCoordinator.updateFocus(for: updatedTab)
         case .selectAbove:
             return selectNeighbor(in: currentTab, direction: .above)
         case .selectBelow:
@@ -761,7 +763,7 @@ final class TerminalTabManager {
             guard let updatedTab = sessionState.equalizeSplitLayout(in: currentTab) else {
                 return .unavailable
             }
-            tmuxCoordinator.updateFocus(for: updatedTab)
+            remoteSessionCoordinator.updateFocus(for: updatedTab)
         case .moveDividerUp:
             return moveDivider(in: currentTab, direction: .up)
         case .moveDividerDown:
@@ -789,7 +791,7 @@ final class TerminalTabManager {
         guard let updatedTab = sessionState.selectAdjacentPane(in: currentTab, paneId: paneId) else {
             return .unavailable
         }
-        tmuxCoordinator.updateFocus(for: updatedTab)
+        remoteSessionCoordinator.updateFocus(for: updatedTab)
         return .performed
     }
 
@@ -800,7 +802,7 @@ final class TerminalTabManager {
         guard let updatedTab = sessionState.moveDivider(in: tab, direction: direction) else {
             return .unavailable
         }
-        tmuxCoordinator.updateFocus(for: updatedTab)
+        remoteSessionCoordinator.updateFocus(for: updatedTab)
         return .performed
     }
 
@@ -925,13 +927,13 @@ final class TerminalTabManager {
     }
     #endif
 
-    private func setEternalTerminalTmuxResumeContext(
-        _ context: EternalTerminalTmuxResumeContext?,
+    private func setRemoteSessionLifecycleContext(
+        _ context: RemoteSessionLifecycleContext?,
         for paneId: UUID
     ) {
-        guard sessionState.paneState(for: paneId)?.eternalTerminalTmuxResumeContext != context else { return }
+        guard sessionState.paneState(for: paneId)?.remoteSessionResumeContext != context else { return }
         sessionState.updatePane(paneId, persist: true) {
-            $0.eternalTerminalTmuxResumeContext = context
+            $0.remoteSessionResumeContext = context
         }
     }
 
@@ -950,12 +952,12 @@ final class TerminalTabManager {
             assertionFailure("Application termination must preserve the pane descriptor")
             return
         }
-        let tmuxSessionToKill = intent.terminatesManagedTmux
-            ? (removedPaneState?.tmuxStatus ?? tmuxCoordinator.status(for: paneId))
-                .flatMap { tmuxCoordinator.managedSessionNameToKill(for: paneId, status: $0) }
+        let remoteSessionToKill = intent.terminatesManagedRemoteSession
+            ? (removedPaneState?.remoteSessionStatus ?? remoteSessionCoordinator.status(for: paneId))
+                .flatMap { remoteSessionCoordinator.managedSessionIdentifierToKill(for: paneId, status: $0) }
             : nil
 
-        tmuxCoordinator.clearRuntimeState(for: paneId)
+        remoteSessionCoordinator.clearRuntimeState(for: paneId)
         reconnectCoordinator.removePane(paneId)
         richPasteRuntimeStore.removePane(paneId)
         detachTerminalRegistration(for: paneId)
@@ -964,7 +966,7 @@ final class TerminalTabManager {
         transportCoordinator.removePane(
             paneId,
             deletingResumableState: intent.deletesResumableSessionState,
-            killingManagedTmuxSessionNamed: tmuxSessionToKill
+            killingManagedRemoteSession: remoteSessionToKill
         )
     }
 
@@ -1010,8 +1012,8 @@ final class TerminalTabManager {
         case .disconnected, .failed:
             setPanePresentationOverrides(.empty, for: paneId)
             terminalSurfaceStore.surface(for: paneId)?.applyPresentationOverrides(.empty)
-            if tmuxCoordinator.status(for: paneId) == .foreground {
-                tmuxCoordinator.updateStatus(.background, for: paneId)
+            if remoteSessionCoordinator.status(for: paneId) == .foreground {
+                remoteSessionCoordinator.updateStatus(.background, for: paneId)
             }
         case .connected:
             dependencies.effects.recordSuccessfulConnection(
@@ -1048,7 +1050,7 @@ final class TerminalTabManager {
         guard let paneState = sessionState.paneState(for: paneId) else { return }
 
         switch reason {
-        case .tmuxEnded(.managed):
+        case .remoteSessionTerminated(.managed):
             guard let tab = sessionState.tab(
                 id: paneState.tabId,
                 for: paneState.serverId
@@ -1058,28 +1060,32 @@ final class TerminalTabManager {
             closePane(tab: tab, paneId: paneId, intent: .remoteSessionEnded)
             return
 
-        case .tmuxDetached(let ownership):
+        case .remoteSessionDetached(let ownership):
             if ownership == .managed {
-                tmuxCoordinator.confirmManagedSession(for: paneId)
+                remoteSessionCoordinator.confirmManagedSession(for: paneId)
             }
-            sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = .tmuxDetached }
+            sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = .remoteSessionDetached }
             updatePaneState(paneId, connectionState: .disconnected)
 
-        case .tmuxCreationFailed:
-            tmuxCoordinator.clearAttachmentState(for: paneId)
+        case .remoteSessionCreationFailed, .remoteSessionAttachFailed:
+            remoteSessionCoordinator.clearAttachmentState(for: paneId)
             sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = nil }
-            tmuxCoordinator.updateStatus(.unknown, for: paneId)
+            remoteSessionCoordinator.updateStatus(.unknown, for: paneId)
             updatePaneState(
                 paneId,
-                connectionState: .failed(.tmuxStartupFailed)
+                connectionState: .failed(.remoteSessionStartupFailed)
             )
 
-        case .tmuxEnded(.external):
-            sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = .externalTmuxEnded }
+        case .remoteSessionTerminated(.external):
+            sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = .externalRemoteSessionTerminated }
             updatePaneState(paneId, connectionState: .disconnected)
 
-        case .transportEnded:
-            sessionState.updatePane(paneId) { $0.disconnectReason = .transportEnded }
+        case .standaloneStartupActionCompleted:
+            sessionState.markStartupActionCompleted(for: paneId)
+            updatePaneState(paneId, connectionState: .disconnected)
+
+        case .transportInterrupted, .observationAmbiguous:
+            sessionState.updatePane(paneId) { $0.disconnectReason = .transportInterrupted }
             updatePaneState(paneId, connectionState: .disconnected)
         }
 
@@ -1153,7 +1159,7 @@ extension TerminalTabManager {
     func resetForTesting() async {
         let allPaneIds = sessionState.paneIds
             .union(transportCoordinator.ownedPaneIds)
-        tmuxCoordinator.resetRuntimeState(for: allPaneIds)
+        remoteSessionCoordinator.resetRuntimeState(for: allPaneIds)
         sessionState.resetForTesting()
         presentationState.reset()
         titleStore.reset()

@@ -7,13 +7,20 @@ nonisolated struct SSHConnectionInitialTerminalState: Equatable, Sendable {
     let pixelSize: TerminalPixelSize?
 }
 
+nonisolated struct SSHConnectionRestoredShell: Sendable {
+    let shell: ShellHandle
+    let remoteSessionLifecycle: RemoteSessionLifecycleContext?
+    let startupActionReplayPending: Bool
+}
+
 nonisolated struct SSHConnectionRunnerTransport: Sendable {
     let connect: @Sendable (_ server: Server, _ credentials: ServerCredentials) async throws -> Void
     let startShell: @Sendable (
         _ columns: Int,
         _ rows: Int,
         _ pixelSize: TerminalPixelSize?,
-        _ startupCommand: String?
+        _ startupCommand: String?,
+        _ mayExecuteUserStartupAction: Bool
     ) async throws -> ShellHandle
     let disconnect: @Sendable () async -> Void
     let closeShell: @Sendable (_ shellId: UUID) async -> Void
@@ -24,12 +31,13 @@ nonisolated struct SSHConnectionRunnerTransport: Sendable {
             connect: { server, credentials in
                 _ = try await client.connect(to: server, credentials: credentials)
             },
-            startShell: { columns, rows, pixelSize, startupCommand in
+            startShell: { columns, rows, pixelSize, startupCommand, mayExecuteUserStartupAction in
                 try await client.startShell(
                     cols: columns,
                     rows: rows,
                     pixelSize: pixelSize,
-                    startupCommand: startupCommand
+                    startupCommand: startupCommand,
+                    mayExecuteUserStartupAction: mayExecuteUserStartupAction
                 )
             },
             disconnect: {
@@ -55,8 +63,18 @@ nonisolated enum SSHConnectionRunner {
         shouldContinueConnection: @MainActor @escaping @Sendable () -> Bool,
         onAttempt: @MainActor @escaping @Sendable (_ attempt: Int) -> Void,
         startupPlan: @MainActor @escaping @Sendable () async throws -> TerminalShellStartupPlan,
-        restoreMoshShell: @MainActor @escaping @Sendable (_ cols: Int, _ rows: Int) async -> ShellHandle?,
-        registerShell: @MainActor @escaping @Sendable (_ shell: ShellHandle) async -> Bool,
+        setStartupActionReplayGuard: @MainActor @escaping @Sendable (
+            _ isPending: Bool
+        ) -> Void = { _ in },
+        onRemoteSessionAttached: @MainActor @escaping @Sendable () -> Void = {},
+        restoreMoshShell: @MainActor @escaping @Sendable (
+            _ cols: Int,
+            _ rows: Int
+        ) async -> SSHConnectionRestoredShell?,
+        registerShell: @MainActor @escaping @Sendable (
+            _ shell: ShellHandle,
+            _ startupPlan: TerminalShellStartupPlan
+        ) async -> Bool,
         onTitleChange: @MainActor @escaping @Sendable (_ title: String) -> Void,
         writeOutput: @MainActor @escaping @Sendable (_ data: Data) -> Bool,
         shouldResetClient: @escaping @Sendable (_ error: SSHError) async -> Bool,
@@ -89,10 +107,15 @@ nonisolated enum SSHConnectionRunner {
                 let pixelSize = initialTerminalState.pixelSize
 
                 let shell: ShellHandle
-                let startup: TerminalShellStartupPlan?
+                let startup: TerminalShellStartupPlan
                 if let restored = await restoreMoshShell(cols, rows) {
-                    shell = restored
-                    startup = nil
+                    shell = restored.shell
+                    startup = TerminalShellStartupPlan(
+                        command: nil,
+                        remoteSessionLifecycle: restored.remoteSessionLifecycle,
+                        mayExecuteUserStartupAction: restored
+                            .startupActionReplayPending
+                    )
                     logger.info("Restored existing Mosh protocol session")
                 } else {
                     try await transport.connect(server, credentials)
@@ -102,12 +125,46 @@ nonisolated enum SSHConnectionRunner {
                     let freshStartup = try await startupPlan()
                     guard !Task.isCancelled else { return }
                     guard await shouldContinueConnection() else { return }
-                    shell = try await transport.startShell(
-                        cols,
-                        rows,
-                        pixelSize,
-                        freshStartup.command
-                    )
+                    if freshStartup.mayExecuteUserStartupAction {
+                        await setStartupActionReplayGuard(true)
+                    }
+                    do {
+                        shell = try await transport.startShell(
+                            cols,
+                            rows,
+                            pixelSize,
+                            freshStartup.command,
+                            freshStartup.mayExecuteUserStartupAction
+                        )
+                    } catch {
+                        if let sshError = error as? SSHError,
+                           sshError.provesStartupCommandWasNotDispatched {
+                            if freshStartup.mayExecuteUserStartupAction {
+                                await setStartupActionReplayGuard(false)
+                            }
+                            throw sshError
+                        }
+                        if error is CancellationError {
+                            if freshStartup.mayExecuteUserStartupAction {
+                                await setStartupActionReplayGuard(false)
+                            }
+                            throw CancellationError()
+                        }
+                        if Task.isCancelled {
+                            throw CancellationError()
+                        }
+                        if let sshError = error as? SSHError,
+                           case .processRequestOutcomeUnknown = sshError {
+                            if freshStartup.mayExecuteUserStartupAction {
+                                throw sshError
+                            }
+                            throw SSHError.shellRequestFailed
+                        }
+                        if freshStartup.mayExecuteUserStartupAction {
+                            throw SSHError.startupCommandMayHaveRun
+                        }
+                        throw error
+                    }
                     startup = freshStartup
                 }
 
@@ -119,13 +176,13 @@ nonisolated enum SSHConnectionRunner {
                     await transport.closeShell(shell.id)
                     return
                 }
-                guard await registerShell(shell) else { return }
+                guard await registerShell(shell, startup) else { return }
 
                 guard !Task.isCancelled else { return }
-                var lifecycleParser = startup?.tmuxLifecycle.map {
-                    TmuxLifecycleStreamParser(markerToken: $0.markerToken)
+                var lifecycleParser = startup.remoteSessionLifecycle.map {
+                    RemoteSessionLifecycleStreamParser(observation: $0.observation)
                 }
-                var lastLifecycleEvent: TmuxLifecycleEvent?
+                var lastLifecycleEvent: RemoteSessionEvent?
                 for await data in shell.stream {
                     guard !Task.isCancelled else { break }
                     guard await shouldContinueConnection() else { break }
@@ -136,6 +193,9 @@ nonisolated enum SSHConnectionRunner {
                         visibleData = parsed.output
                         if let event = parsed.events.last {
                             lastLifecycleEvent = event
+                        }
+                        if parsed.events.contains(.attached) {
+                            await onRemoteSessionAttached()
                         }
                     } else {
                         visibleData = data
@@ -157,24 +217,29 @@ nonisolated enum SSHConnectionRunner {
                 }
 
                 var sessionExists: Bool?
-                if lastLifecycleEvent == nil, let lifecycle = startup?.tmuxLifecycle {
+                if lastLifecycleEvent == nil || lastLifecycleEvent == .attached,
+                   let presenceProbe = startup.remoteSessionLifecycle?
+                    .observation.presenceProbe {
                     do {
                         let output = try await transport.execute(
-                            lifecycle.presenceProbe.command,
+                            presenceProbe.command,
                             .seconds(8)
                         )
-                        sessionExists = lifecycle.presenceProbe.sessionExists(in: output)
+                        sessionExists = presenceProbe.sessionExists(in: output)
                     } catch {
                         logger.warning(
-                            "Unable to verify tmux session after shell exit: \(error.localizedDescription, privacy: .public)"
+                            "Unable to verify remote session after shell exit: \(error.localizedDescription, privacy: .public)"
                         )
                     }
                 }
-                let endReason = TerminalShellEndReason.resolve(
-                    tmuxLifecycle: startup?.tmuxLifecycle,
-                    markerEvent: lastLifecycleEvent,
-                    sessionExists: sessionExists
-                )
+                let endReason: TerminalShellEndReason =
+                    startup.mayExecuteStandaloneUserStartupAction
+                    ? .standaloneStartupActionCompleted
+                    : TerminalShellEndReason.resolve(
+                        lifecycle: startup.remoteSessionLifecycle,
+                        event: lastLifecycleEvent,
+                        sessionExists: sessionExists
+                    )
                 logger.info("SSH shell ended: \(String(describing: endReason), privacy: .public)")
                 await onProcessExit(shell.id, endReason)
                 return
@@ -183,6 +248,11 @@ nonisolated enum SSHConnectionRunner {
                 guard await shouldContinueConnection() else { return }
                 lastError = error
                 logger.error("SSH connection failed (attempt \(attempt)): \(error.localizedDescription)")
+
+                if let sshError = error as? SSHError,
+                   !sshError.allowsAutomaticReconnectRetry {
+                    break
+                }
 
                 if attempt < maxAttempts, let sshError = error as? SSHError {
                     let shouldReset = await shouldResetClient(sshError)

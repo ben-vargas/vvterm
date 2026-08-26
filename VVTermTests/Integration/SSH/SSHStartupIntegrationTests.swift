@@ -173,10 +173,10 @@ struct SSHStartupIntegrationTests {
         do {
             _ = try await client.connect(to: server, credentials: credentials)
             let createCommand = RemoteTmuxCommandBuilder.attachCommand(
-                themeStyle: deterministicRemoteTmuxThemeStyle,
+                themeStyle: deterministicRemoteSessionThemeStyle,
                 sessionName: sessionName,
                 workingDirectory: "~",
-                lifecycleMarkerToken: UUID().uuidString
+                lifecycleEnvelope: .make()
             )
             let created = try await client.startShell(
                 cols: 80,
@@ -203,10 +203,10 @@ struct SSHStartupIntegrationTests {
             await client.closeShell(created.id)
 
             let reattachCommand = RemoteTmuxCommandBuilder.attachExistingCommand(
-                themeStyle: deterministicRemoteTmuxThemeStyle,
+                themeStyle: deterministicRemoteSessionThemeStyle,
                 sessionName: sessionName,
                 ownership: .managed,
-                lifecycleMarkerToken: UUID().uuidString
+                lifecycleEnvelope: .make()
             )
             let reattached = try await client.startShell(
                 cols: 80,
@@ -247,10 +247,10 @@ struct SSHStartupIntegrationTests {
         do {
             _ = try await client.connect(to: server, credentials: credentials)
             let createCommand = RemoteTmuxCommandBuilder.attachCommand(
-                themeStyle: deterministicRemoteTmuxThemeStyle,
+                themeStyle: deterministicRemoteSessionThemeStyle,
                 sessionName: sessionName,
                 workingDirectory: "~",
-                lifecycleMarkerToken: UUID().uuidString
+                lifecycleEnvelope: .make()
             )
             let shell = try await client.startShell(
                 cols: 80,
@@ -279,10 +279,10 @@ struct SSHStartupIntegrationTests {
             await client.closeShell(shell.id)
 
             let reattachCommand = RemoteTmuxCommandBuilder.attachExistingCommand(
-                themeStyle: deterministicRemoteTmuxThemeStyle,
+                themeStyle: deterministicRemoteSessionThemeStyle,
                 sessionName: sessionName,
                 ownership: .managed,
-                lifecycleMarkerToken: UUID().uuidString
+                lifecycleEnvelope: .make()
             )
             let reattached = try await client.startShell(
                 cols: 80,
@@ -366,8 +366,11 @@ struct SSHStartupIntegrationTests {
                 let shell = try await startup.value
                 await client.closeShell(shell.id)
                 Issue.record("Cancelled \(stage) startup returned a live shell")
-            } catch is CancellationError {
-                // Expected controlled cancellation.
+            } catch SSHError.processRequestOutcomeUnknown
+                where stage == .processRequestStarted {
+                // The process request already reached libssh2.
+            } catch is CancellationError where stage != .processRequestStarted {
+                // The process request was not sent.
             } catch {
                 Issue.record("Cancelled \(stage) startup returned unexpected error: \(error)")
             }
@@ -439,8 +442,14 @@ struct SSHStartupIntegrationTests {
                 let shell = try await startup.value
                 await client.closeShell(shell.id)
                 Issue.record("Disconnected \(stage) startup returned a live shell")
-            } catch SSHError.notConnected {
-                // Expected controlled transport invalidation.
+            } catch SSHError.processRequestOutcomeUnknown
+                where stage == .processRequestStarted {
+                // The process request already reached libssh2.
+            } catch SSHError.notConnected where stage != .processRequestStarted {
+                // The process request was not sent.
+            } catch SSHError.disconnectedBeforeShellRequest
+                where stage != .processRequestStarted {
+                // The process request was not sent.
             } catch {
                 Issue.record("Disconnected \(stage) startup returned unexpected error: \(error)")
             }
@@ -482,7 +491,7 @@ struct SSHStartupIntegrationTests {
                 let shell = try await client.startShell(cols: 80, rows: 24)
                 await client.closeShell(shell.id)
                 Issue.record("PTY-rejecting server returned a live shell")
-            } catch SSHError.shellRequestFailed {
+            } catch SSHError.ptyRequestFailed {
                 // Expected server rejection.
             } catch {
                 Issue.record("PTY-rejecting server returned unexpected error: \(error)")
@@ -515,26 +524,37 @@ struct SSHStartupIntegrationTests {
 
         let staleClient = makeIntegrationSSHClient()
         let replacementClient = makeIntegrationSSHClient()
+        let tmux = RemoteTmuxManager()
         let (server, credentials) = makeStandardConnection(configuration: configuration)
 
         do {
             _ = try await staleClient.connect(to: server, credentials: credentials)
-            let initialAvailability = await RemoteTmuxManager.shared.tmuxAvailability(
+            let initialAvailability = await tmux.tmuxAvailability(
                 using: staleClient
             )
-            #expect(initialAvailability == .available(.unixTmux))
+            guard case .available(let initialBackend) = initialAvailability else {
+                Issue.record("Expected tmux to be available")
+                return
+            }
+            #expect(initialBackend.variant == .unixTmux)
+            #expect(initialBackend.executablePath.hasPrefix("/"))
 
             await staleClient.disconnect()
-            let staleAvailability = await RemoteTmuxManager.shared.tmuxAvailability(
+            let staleAvailability = await tmux.tmuxAvailability(
                 using: staleClient
             )
             #expect(staleAvailability == .indeterminate(.disconnected))
 
             _ = try await replacementClient.connect(to: server, credentials: credentials)
-            let recoveredAvailability = await RemoteTmuxManager.shared.tmuxAvailability(
+            let recoveredAvailability = await tmux.tmuxAvailability(
                 using: replacementClient
             )
-            #expect(recoveredAvailability == .available(.unixTmux))
+            guard case .available(let recoveredBackend) = recoveredAvailability else {
+                Issue.record("Expected tmux to recover")
+                return
+            }
+            #expect(recoveredBackend.variant == .unixTmux)
+            #expect(recoveredBackend.executablePath.hasPrefix("/"))
             await replacementClient.disconnect()
         } catch {
             await staleClient.disconnect()
@@ -552,6 +572,7 @@ struct SSHStartupIntegrationTests {
             (.ptyRequest, nil),
             (.shellRequest, nil),
             (.shellRequest, "exec /bin/sh"),
+            (.processRequestStarted, "exec /bin/sh"),
         ]
     }
 

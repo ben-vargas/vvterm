@@ -5,7 +5,7 @@ extension EternalTerminalRuntimeDependencies {
     static func live(
         resumeStore: any EternalTerminalResumeStoring,
         analyticsTracker: AnalyticsTracker,
-        remoteTmux: any TerminalRemoteTmuxServicing,
+        remoteSessions: any TerminalRemoteSessionServicing,
         sshClientFactory: SSHClientFactory
     ) -> Self {
         Self(
@@ -26,8 +26,8 @@ extension EternalTerminalRuntimeDependencies {
                     )
                 }
             },
-            tmuxSessionKiller: LiveEternalTerminalTmuxSessionKiller(
-                remoteTmux: remoteTmux
+            remoteSessionKiller: LiveEternalTerminalRemoteSessionKiller(
+                remoteSessions: remoteSessions
             ),
             sessionPreparer: LiveEternalTerminalSessionPreparer(
                 resumeStore: resumeStore,
@@ -37,14 +37,10 @@ extension EternalTerminalRuntimeDependencies {
     }
 }
 
-private nonisolated struct LiveEternalTerminalTmuxSessionKiller: EternalTerminalTmuxSessionKilling {
-    let remoteTmux: any TerminalRemoteTmuxServicing
+private nonisolated struct LiveEternalTerminalRemoteSessionKiller: EternalTerminalRemoteSessionKilling {
+    let remoteSessions: any TerminalRemoteSessionServicing
 
-    func killSession(named sessionName: String, using client: SSHClient) async {
-        await remoteTmux.killSession(
-            named: sessionName,
-            using: client,
-            backend: nil
-        )
+    func killSession(_ identifier: RemoteSessionIdentifier, using client: SSHClient) async {
+        await remoteSessions.killSession(identifier, using: client, runtime: nil)
     }
 }

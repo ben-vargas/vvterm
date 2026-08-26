@@ -9,18 +9,19 @@ extension SSHClient {
         cols: Int = 80,
         rows: Int = 24,
         pixelSize: TerminalPixelSize? = nil,
-        startupCommand: String? = nil
+        startupCommand: String? = nil,
+        mayExecuteUserStartupAction: Bool = true
     ) async throws -> ShellHandle {
         try Task.checkCancellation()
         guard !isAborted, let sshSession = session else {
-            throw SSHError.notConnected
+            throw SSHError.disconnectedBeforeShellRequest
         }
 
         let connectionMode = connectedServer?.connectionMode ?? .standard
         let environment = await remoteEnvironment()
-        try validateShellStartupSession(sshSession)
+        try validateShellStartupSessionBeforeShellRequest(sshSession)
         let terminalType = await remoteTerminalType()
-        try validateShellStartupSession(sshSession)
+        try validateShellStartupSessionBeforeShellRequest(sshSession)
         if connectionMode != .mosh {
             let sshShell = try await startValidatedSSHShell(
                 using: sshSession,
@@ -28,6 +29,7 @@ extension SSHClient {
                 rows: rows,
                 pixelSize: pixelSize,
                 startupCommand: startupCommand,
+                mayExecuteUserStartupAction: mayExecuteUserStartupAction,
                 environment: environment,
                 terminalType: terminalType
             )
@@ -47,6 +49,7 @@ extension SSHClient {
                 rows: rows,
                 pixelSize: pixelSize,
                 startupCommand: startupCommand,
+                mayExecuteUserStartupAction: mayExecuteUserStartupAction,
                 environment: environment,
                 terminalType: terminalType
             )
@@ -76,20 +79,42 @@ extension SSHClient {
                 try validateShellStartupSession(sshSession)
             } catch {
                 await discardPreparedMoshShell(preparedMosh)
-                throw error
+                throw MoshStartupFailure(
+                    stage: .udpClientStartingOrStarted,
+                    underlying: error as? SSHError
+                        ?? .moshClientSessionFailed("Mosh startup validation failed")
+                )
             }
             pendingMoshServerLeases.removeValue(forKey: preparedMosh.leaseID)
             return registerMoshShell(preparedMosh.shell)
         } catch {
-            if error is CancellationError || Task.isCancelled {
+            if error is CancellationError {
                 throw CancellationError()
             }
-            if let sshError = error as? SSHError, case .notConnected = sshError {
-                throw sshError
+            let moshFailure = error as? MoshStartupFailure
+            if Task.isCancelled,
+               moshFailure?.stage != .udpClientStartingOrStarted {
+                throw CancellationError()
             }
             let moshError = error
             let fallbackReason = fallbackReason(for: moshError)
-            logger.warning("Mosh startup failed, using SSH fallback: \(moshError.localizedDescription)")
+            if MoshSSHFallbackPolicy.decision(
+                after: moshError,
+                startupCommand: startupCommand,
+                mayExecuteUserStartupAction: mayExecuteUserStartupAction
+            ) == .rejectToPreventStartupCommandReplay {
+                logger.error(
+                    "Mosh startup failed after the startup command may have run. SSH fallback is disabled to prevent replay."
+                )
+                throw SSHError.startupCommandMayHaveRun
+            }
+            let underlyingSSHError = moshFailure?.underlying ?? (error as? SSHError)
+            if let underlyingSSHError, case .notConnected = underlyingSSHError {
+                throw underlyingSSHError
+            }
+            logger.warning(
+                "Mosh startup failed (\(fallbackReason.rawValue, privacy: .public)); using SSH fallback"
+            )
 
             do {
                 let fallbackToken = startupTrace?.begin(.sshFallback)
@@ -99,6 +124,7 @@ extension SSHClient {
                     rows: rows,
                     pixelSize: pixelSize,
                     startupCommand: startupCommand,
+                    mayExecuteUserStartupAction: mayExecuteUserStartupAction,
                     environment: environment,
                     terminalType: terminalType
                 )
@@ -120,11 +146,9 @@ extension SSHClient {
                 if error is CancellationError || Task.isCancelled {
                     throw CancellationError()
                 }
-                if let sshError = error as? SSHError, case .notConnected = sshError {
-                    throw sshError
-                }
-                throw SSHError.moshSessionFailed(
-                    "Mosh startup failed (\(moshError.localizedDescription)); SSH fallback failed (\(error.localizedDescription))"
+                throw MoshSSHFallbackPolicy.fallbackFailure(
+                    moshError: moshError,
+                    fallbackError: error
                 )
             }
         }
@@ -136,10 +160,11 @@ extension SSHClient {
         rows: Int,
         pixelSize: TerminalPixelSize?,
         startupCommand: String?,
+        mayExecuteUserStartupAction: Bool,
         environment: RemoteEnvironment,
         terminalType: RemoteTerminalType
     ) async throws -> ShellHandle {
-        try validateShellStartupSession(expectedSession)
+        try validateShellStartupSessionBeforeShellRequest(expectedSession)
         let shell = try await expectedSession.startShell(
             cols: cols,
             rows: rows,
@@ -153,6 +178,9 @@ extension SSHClient {
             return shell
         } catch {
             await expectedSession.closeShell(shell.id)
+            if mayExecuteUserStartupAction {
+                throw SSHError.processRequestOutcomeUnknown
+            }
             throw error
         }
     }
@@ -163,6 +191,16 @@ extension SSHClient {
               let currentSession = session,
               currentSession === expectedSession else {
             throw SSHError.notConnected
+        }
+    }
+
+    private func validateShellStartupSessionBeforeShellRequest(
+        _ expectedSession: SSHSession
+    ) throws {
+        do {
+            try validateShellStartupSession(expectedSession)
+        } catch SSHError.notConnected {
+            throw SSHError.disconnectedBeforeShellRequest
         }
     }
 

@@ -7,6 +7,10 @@ import Testing
 private final class StateStoreSnapshotMemory: TerminalTabSnapshotStoring {
     private(set) var data: Data?
 
+    init(data: Data? = nil) {
+        self.data = data
+    }
+
     func loadSnapshotData() -> Data? {
         data
     }
@@ -67,12 +71,17 @@ struct TerminalSessionStateStoreTests {
             serverId: tab.serverId
         )
         pane.presentationOverrides = TerminalPresentationOverrides(fontSize: 18)
-        pane.disconnectReason = .transportEnded
+        pane.disconnectReason = .transportInterrupted
+        pane.startupActionReplayPending = true
 
         source.install(tab, paneState: pane, select: true)
         source.selectTab(staleSelectedTabId, for: tab.serverId)
         source.selectView(.stats, for: tab.serverId)
         source.persistNow()
+        let encodedSnapshot = try #require(snapshot.data)
+        let encodedText = try #require(String(data: encodedSnapshot, encoding: .utf8))
+        #expect(encodedText.contains("standaloneStartupActionPaneIds"))
+        #expect(!encodedText.contains("startupActionReplayPendingPaneIds"))
 
         let restoredSelections = ConnectionViewSelectionStore()
         let restored = makeStore(snapshot: snapshot, selections: restoredSelections)
@@ -82,8 +91,101 @@ struct TerminalSessionStateStoreTests {
         #expect(restored.selectedTab(for: tab.serverId) == tab)
         #expect(restoredSelections.selection(for: tab.serverId) == .stats)
         #expect(restored.paneState(for: tab.rootPaneId)?.presentationOverrides.fontSize == 18)
-        #expect(restored.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
+        #expect(restored.paneState(for: tab.rootPaneId)?.disconnectReason == .transportInterrupted)
+        #expect(
+            restored.paneState(for: tab.rootPaneId)?
+                .startupActionReplayPending == true
+        )
         #expect(restored.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
+    }
+
+    @Test
+    func startingStandaloneActionPersistsItsResumeGuardImmediately() {
+        let snapshot = StateStoreSnapshotMemory()
+        let source = makeStore(
+            snapshot: snapshot,
+            selections: ConnectionViewSelectionStore()
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "One-time action")
+        source.install(
+            tab,
+            paneState: TerminalPaneState(
+                paneId: tab.rootPaneId,
+                tabId: tab.id,
+                serverId: tab.serverId
+            ),
+            select: true
+        )
+
+        source.setStartupActionReplayPending(true, for: tab.rootPaneId)
+
+        let restored = makeStore(
+            snapshot: snapshot,
+            selections: ConnectionViewSelectionStore()
+        )
+        #expect(
+            restored.paneState(for: tab.rootPaneId)?
+                .startupActionReplayPending == true
+        )
+    }
+
+    @Test
+    func clearingStandaloneActionPersistsItsResumeGuardImmediately() {
+        let snapshot = StateStoreSnapshotMemory()
+        let source = makeStore(
+            snapshot: snapshot,
+            selections: ConnectionViewSelectionStore()
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Retry action")
+        var pane = TerminalPaneState(
+            paneId: tab.rootPaneId,
+            tabId: tab.id,
+            serverId: tab.serverId
+        )
+        pane.startupActionReplayPending = true
+        source.install(tab, paneState: pane, select: true)
+        source.persistNow()
+
+        source.setStartupActionReplayPending(false, for: tab.rootPaneId)
+
+        let restored = makeStore(
+            snapshot: snapshot,
+            selections: ConnectionViewSelectionStore()
+        )
+        #expect(
+            restored.paneState(for: tab.rootPaneId)?
+                .startupActionReplayPending == false
+        )
+    }
+
+    @Test
+    func completingStandaloneActionPersistsItsTerminalStateImmediately() {
+        let snapshot = StateStoreSnapshotMemory()
+        let source = makeStore(
+            snapshot: snapshot,
+            selections: ConnectionViewSelectionStore()
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Completed action")
+        var pane = TerminalPaneState(
+            paneId: tab.rootPaneId,
+            tabId: tab.id,
+            serverId: tab.serverId
+        )
+        pane.startupActionReplayPending = true
+        source.install(tab, paneState: pane, select: true)
+        source.persistNow()
+
+        source.markStartupActionCompleted(for: tab.rootPaneId)
+
+        let restored = makeStore(
+            snapshot: snapshot,
+            selections: ConnectionViewSelectionStore()
+        )
+        #expect(restored.paneState(for: tab.rootPaneId)?.disconnectReason == .startupActionCompleted)
+        #expect(
+            restored.paneState(for: tab.rootPaneId)?
+                .startupActionReplayPending == false
+        )
     }
 
     @Test
@@ -136,7 +238,7 @@ struct TerminalSessionStateStoreTests {
             in: tab,
             paneId: tab.rootPaneId,
             placement: .right,
-            tmuxStatus: .off
+            remoteSessionStatus: .off
         ), let splitTab = store.tab(id: tab.id, for: tab.serverId) else {
             Issue.record("Expected split pane")
             return
@@ -176,7 +278,7 @@ struct TerminalSessionStateStoreTests {
             in: tab,
             paneId: tab.rootPaneId,
             placement: .right,
-            tmuxStatus: .off
+            remoteSessionStatus: .off
         ))
         let splitTab = try #require(store.tab(id: tab.id, for: tab.serverId))
         let layout = try #require(splitTab.layout)
@@ -283,19 +385,141 @@ struct TerminalSessionStateStoreTests {
         #expect(updateCount == 0)
     }
 
+    @Test
+    func legacyTmuxStateMigratesOnceAndNextWriteUsesCurrentSchema() throws {
+        let sourceSnapshot = StateStoreSnapshotMemory()
+        let sourceResolver = makeResolver()
+        let source = TerminalSessionStateStore(
+            snapshotStore: sourceSnapshot,
+            connectionViewSelections: ConnectionViewSelectionStore(),
+            remoteSessionResolver: sourceResolver
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Migrated")
+        source.install(
+            tab,
+            paneState: TerminalPaneState(
+                paneId: tab.rootPaneId,
+                tabId: tab.id,
+                serverId: tab.serverId
+            ),
+            select: true
+        )
+        let attachment = RemoteSessionAttachment(
+            identifier: try RemoteSessionIdentifier(
+                backendIdentifier: .tmux,
+                validating: "legacy-session"
+            ),
+            ownership: .managed
+        )
+        sourceResolver.setAttachment(
+            TerminalRemoteSessionAttachmentState(
+                attachment: attachment,
+                managedSessionConfirmed: true
+            ),
+            for: tab.rootPaneId
+        )
+        let envelope = try RemoteSessionLifecycleEnvelope(
+            token: "legacy-marker",
+            operationID: #require(UUID(
+                uuidString: "11111111-2222-3333-4444-555555555555"
+            ))
+        )
+        source.updatePane(tab.rootPaneId, persist: true) {
+            $0.remoteSessionResumeContext = RemoteSessionLifecycleContext(
+                attachment: attachment,
+                envelope: envelope,
+                presenceProbe: RemoteSessionPresenceProbe(
+                    command: "probe",
+                    existsMarker: "exists",
+                    missingMarker: "missing"
+                )
+            )
+        }
+        let currentData = try source.snapshotDataForTesting()
+        var root = try #require(
+            JSONSerialization.jsonObject(with: currentData) as? [String: Any]
+        )
+        var servers = try #require(root["servers"] as? [[String: Any]])
+        var tabs = try #require(servers[0]["tabs"] as? [[String: Any]])
+        let currentAttachments = try #require(
+            tabs[0].removeValue(forKey: "remoteSessionAttachments") as? [Any]
+        )
+        var legacyAttachments = currentAttachments
+        for index in stride(from: 1, to: legacyAttachments.count, by: 2) {
+            let state = try #require(legacyAttachments[index] as? [String: Any])
+            let attachment = try #require(state["attachment"] as? [String: Any])
+            let identifier = try #require(attachment["identifier"] as? [String: Any])
+            legacyAttachments[index] = [
+                "sessionName": try #require(identifier["rawValue"] as? String),
+                "ownership": try #require(attachment["ownership"] as? String),
+                "managedSessionConfirmed": state["managedSessionConfirmed"] as? Bool ?? false
+            ]
+        }
+        tabs[0]["tmuxAttachments"] = legacyAttachments
+        let currentContexts = try #require(
+            tabs[0].removeValue(forKey: "remoteSessionResumeContexts") as? [Any]
+        )
+        var legacyContexts = currentContexts
+        for index in stride(from: 1, to: legacyContexts.count, by: 2) {
+            let context = try #require(legacyContexts[index] as? [String: Any])
+            let contextAttachment = try #require(context["attachment"] as? [String: Any])
+            let contextEnvelope = try #require(context["envelope"] as? [String: Any])
+            legacyContexts[index] = [
+                "ownership": try #require(contextAttachment["ownership"] as? String),
+                "markerToken": try #require(contextEnvelope["token"] as? String)
+            ]
+        }
+        tabs[0]["eternalTerminalTmuxResumeContexts"] = legacyContexts
+        servers[0]["tabs"] = tabs
+        root["servers"] = servers
+        root.removeValue(forKey: "version")
+
+        let migratedSnapshot = StateStoreSnapshotMemory(
+            data: try JSONSerialization.data(withJSONObject: root)
+        )
+        let migratedResolver = makeResolver()
+        let migrated = TerminalSessionStateStore(
+            snapshotStore: migratedSnapshot,
+            connectionViewSelections: ConnectionViewSelectionStore(),
+            remoteSessionResolver: migratedResolver
+        )
+
+        let state = try #require(migratedResolver.attachment(for: tab.rootPaneId))
+        #expect(state.attachment.identifier.backendIdentifier == .tmux)
+        #expect(state.attachment.identifier.rawValue == "legacy-session")
+        #expect(state.attachment.ownership == .managed)
+        #expect(state.managedSessionConfirmed)
+        let lifecycle = try #require(
+            migrated.paneState(for: tab.rootPaneId)?.remoteSessionResumeContext
+        )
+        #expect(lifecycle.attachment == attachment)
+        #expect(lifecycle.observation == .legacyTmux(markerToken: "legacy-marker"))
+
+        migrated.persistNow()
+        let rewritten = try #require(migratedSnapshot.data)
+        let rewrittenText = String(decoding: rewritten, as: UTF8.self)
+        #expect(rewrittenText.contains("\"version\":3"))
+        #expect(rewrittenText.contains("remoteSessionAttachments"))
+        #expect(rewrittenText.contains("legacyTmuxMarkerToken"))
+        #expect(!rewrittenText.contains("eternalTerminalTmuxResumeContexts"))
+        #expect(!rewrittenText.contains("tmuxAttachments"))
+    }
+
     private func makeStore(
         snapshot: StateStoreSnapshotMemory,
         selections: ConnectionViewSelectionStore
     ) -> TerminalSessionStateStore {
-        let configuration = TerminalTmuxConfiguration.testing
-        let remoteTmux = UnavailableTerminalRemoteTmuxService()
         return TerminalSessionStateStore(
             snapshotStore: snapshot,
             connectionViewSelections: selections,
-            tmuxResolver: TmuxAttachResolver(
-                configuration: configuration,
-                remoteTmux: remoteTmux
-            )
+            remoteSessionResolver: makeResolver()
+        )
+    }
+
+    private func makeResolver() -> RemoteSessionAttachResolver {
+        RemoteSessionAttachResolver(
+            configuration: .testing,
+            remoteSessions: UnavailableTerminalRemoteSessionService()
         )
     }
 }

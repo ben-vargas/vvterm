@@ -26,8 +26,8 @@ struct RemoteTmuxParserTests {
 
         let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: false)
         #expect(sessions.count == 2)
-        #expect(sessions[0] == RemoteTmuxSession(name: "prod", attachedClients: 2, windowCount: 3))
-        #expect(sessions[1] == RemoteTmuxSession(name: "dev", attachedClients: 0, windowCount: 1))
+        #expect(sessions[0] == session("prod", attachedClients: 2, windowCount: 3))
+        #expect(sessions[1] == session("dev", attachedClients: 0, windowCount: 1))
     }
 
     @Test
@@ -39,8 +39,8 @@ struct RemoteTmuxParserTests {
 
         let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: false)
         #expect(sessions.count == 2)
-        #expect(sessions[0] == RemoteTmuxSession(name: "qa", attachedClients: 1, windowCount: 1))
-        #expect(sessions[1] == RemoteTmuxSession(name: "local", attachedClients: 0, windowCount: 1))
+        #expect(sessions[0] == session("qa", attachedClients: 1, windowCount: 1))
+        #expect(sessions[1] == session("local", attachedClients: 0, windowCount: 1))
     }
 
     @Test
@@ -52,8 +52,8 @@ struct RemoteTmuxParserTests {
 
         let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: false)
         #expect(sessions.count == 2)
-        #expect(sessions[0] == RemoteTmuxSession(name: "restored", attachedClients: 1, windowCount: 1))
-        #expect(sessions[1] == RemoteTmuxSession(name: "detached", attachedClients: 0, windowCount: 2))
+        #expect(sessions[0] == session("restored", attachedClients: 1, windowCount: 1))
+        #expect(sessions[1] == session("detached", attachedClients: 0, windowCount: 2))
     }
 
     @Test
@@ -65,8 +65,21 @@ struct RemoteTmuxParserTests {
 
         let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: true)
         #expect(sessions.count == 2)
-        #expect(sessions[0] == RemoteTmuxSession(name: "ops", attachedClients: 1, windowCount: 2))
-        #expect(sessions[1] == RemoteTmuxSession(name: "api", attachedClients: 0, windowCount: 1))
+        #expect(sessions[0] == session("ops", attachedClients: 1, windowCount: 2))
+        #expect(sessions[1] == session("api", attachedClients: 0, windowCount: 1))
+    }
+
+    @Test
+    func ownershipRequiresTheExplicitSessionOptionField() {
+        let sessions = RemoteTmuxParser.parseSessionListOutput(
+            "vvterm-user\t0\t1\t\nmanaged\t0\t1\t1\n",
+            allowLegacy: false
+        )
+
+        #expect(Dictionary(uniqueKeysWithValues: sessions.map { ($0.name, $0.ownership) }) == [
+            "vvterm-user": .external,
+            "managed": .managed
+        ])
     }
 
     @Test
@@ -82,5 +95,17 @@ struct RemoteTmuxParserTests {
         #expect(sessions.map { $0.name } == ["alpha", "beta", "zeta", "gamma"])
     }
 
-}
+    private func session(
+        _ name: String,
+        attachedClients: Int,
+        windowCount: Int
+    ) -> RemoteTmuxSession {
+        RemoteTmuxSession(
+            name: name,
+            attachedClients: attachedClients,
+            windowCount: windowCount,
+            ownership: .external
+        )
+    }
 
+}

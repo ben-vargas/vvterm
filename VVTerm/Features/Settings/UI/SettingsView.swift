@@ -4,6 +4,7 @@ struct SettingsView: View {
     let statsPreferencesStore: PreferencesStore
     let voiceModelManagers: VoiceSettingsModelManagerOwner
     let analyticsOptOutAction: AnalyticsOptOutAction
+    let remoteSessionBackends: [RemoteSessionBackendMetadata]
 
     @AppStorage(TerminalDefaults.fontNameKey) var terminalFontName = TerminalDefaults.defaultFontName
     @AppStorage(TerminalDefaults.fontSizeKey) var terminalFontSize = TerminalDefaults.defaultFontSize
@@ -56,7 +57,7 @@ struct SettingsView: View {
         case .keyboardAndInput:
             TerminalKeyboardInputSettingsView()
         case .sessionsAndConnections:
-            TerminalSessionsConnectionsSettingsView()
+            TerminalSessionsConnectionsSettingsView(backends: remoteSessionBackends)
         case .clipboardAndPaste:
             TerminalClipboardPasteSettingsView()
         case .sshKeys:

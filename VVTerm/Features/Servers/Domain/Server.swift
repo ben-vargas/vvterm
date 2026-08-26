@@ -22,10 +22,10 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
     var lastConnected: Date?
     var isFavorite: Bool
     var requiresBiometricUnlock: Bool
-    /// Override for tmux persistence (nil = use global default)
-    var tmuxEnabledOverride: Bool?
-    /// Override for tmux startup behavior (nil = use global default)
-    var tmuxStartupBehaviorOverride: TmuxStartupBehavior?
+    var remoteSessionEnabledOverride: Bool?
+    var remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier
+    var remoteSessionStartupBehaviorOverride: RemoteSessionStartupBehavior?
+    var remoteShellStartupAction: RemoteShellStartupAction?
     var createdAt: Date
     var updatedAt: Date
 
@@ -48,8 +48,10 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         lastConnected: Date? = nil,
         isFavorite: Bool = false,
         requiresBiometricUnlock: Bool = false,
-        tmuxEnabledOverride: Bool? = nil,
-        tmuxStartupBehaviorOverride: TmuxStartupBehavior? = nil,
+        remoteSessionEnabledOverride: Bool? = nil,
+        remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier = .tmux,
+        remoteSessionStartupBehaviorOverride: RemoteSessionStartupBehavior? = nil,
+        remoteShellStartupCommand: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -73,8 +75,12 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         self.lastConnected = lastConnected
         self.isFavorite = isFavorite
         self.requiresBiometricUnlock = requiresBiometricUnlock
-        self.tmuxEnabledOverride = tmuxEnabledOverride
-        self.tmuxStartupBehaviorOverride = tmuxStartupBehaviorOverride
+        self.remoteSessionEnabledOverride = remoteSessionEnabledOverride
+        self.remoteSessionBackendIdentifier = remoteSessionBackendIdentifier
+        self.remoteSessionStartupBehaviorOverride = remoteSessionStartupBehaviorOverride
+        self.remoteShellStartupAction = remoteShellStartupCommand.flatMap {
+            try? RemoteShellStartupAction(command: $0)
+        }
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -107,6 +113,10 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         case requiresBiometricUnlock
         case tmuxEnabledOverride
         case tmuxStartupBehaviorOverride
+        case remoteSessionEnabledOverride
+        case remoteSessionBackendIdentifier
+        case remoteSessionStartupBehaviorOverride
+        case remoteShellStartupCommand
         case createdAt
         case updatedAt
     }
@@ -136,12 +146,33 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         lastConnected = try container.decodeIfPresent(Date.self, forKey: .lastConnected)
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
         requiresBiometricUnlock = try container.decodeIfPresent(Bool.self, forKey: .requiresBiometricUnlock) ?? false
-        tmuxEnabledOverride = try container.decodeIfPresent(Bool.self, forKey: .tmuxEnabledOverride)
-        if let raw = try container.decodeIfPresent(String.self, forKey: .tmuxStartupBehaviorOverride) {
-            tmuxStartupBehaviorOverride = TmuxStartupBehavior(rawValue: raw)
-        } else {
-            tmuxStartupBehaviorOverride = nil
-        }
+        let legacyTmuxEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .tmuxEnabledOverride
+        )
+        let legacyTmuxStartupBehavior = try container.decodeIfPresent(
+            String.self,
+            forKey: .tmuxStartupBehaviorOverride
+        ).flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
+        remoteSessionEnabledOverride = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .remoteSessionEnabledOverride
+        ) ?? legacyTmuxEnabled
+        remoteSessionBackendIdentifier = RemoteSessionBackendIdentifier(
+            rawValue: try container.decodeIfPresent(
+                String.self,
+                forKey: .remoteSessionBackendIdentifier
+            ) ?? RemoteSessionBackendIdentifier.tmux.rawValue
+        )
+        remoteSessionStartupBehaviorOverride = try container.decodeIfPresent(
+            String.self,
+            forKey: .remoteSessionStartupBehaviorOverride
+        ).flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
+            ?? legacyTmuxStartupBehavior
+        remoteShellStartupAction = try container.decodeIfPresent(
+            String.self,
+            forKey: .remoteShellStartupCommand
+        ).flatMap { try? RemoteShellStartupAction(command: $0) }
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
@@ -166,8 +197,22 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         try container.encodeIfPresent(lastConnected, forKey: .lastConnected)
         try container.encode(isFavorite, forKey: .isFavorite)
         try container.encode(requiresBiometricUnlock, forKey: .requiresBiometricUnlock)
-        try container.encodeIfPresent(tmuxEnabledOverride, forKey: .tmuxEnabledOverride)
-        try container.encodeIfPresent(tmuxStartupBehaviorOverride, forKey: .tmuxStartupBehaviorOverride)
+        try container.encodeIfPresent(
+            remoteSessionEnabledOverride,
+            forKey: .remoteSessionEnabledOverride
+        )
+        try container.encode(
+            remoteSessionBackendIdentifier.rawValue,
+            forKey: .remoteSessionBackendIdentifier
+        )
+        try container.encodeIfPresent(
+            remoteSessionStartupBehaviorOverride?.rawValue,
+            forKey: .remoteSessionStartupBehaviorOverride
+        )
+        try container.encodeIfPresent(
+            remoteShellStartupAction?.command,
+            forKey: .remoteShellStartupCommand
+        )
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)
     }

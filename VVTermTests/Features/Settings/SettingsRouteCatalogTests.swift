@@ -41,6 +41,7 @@ struct SettingsRouteCatalogTests {
     @Test("Search finds page titles, labels, and common terms", arguments: [
         ("cursor", SettingsRoute.terminalAppearance),
         ("tmux", SettingsRoute.sessionsAndConnections),
+        ("zellij", SettingsRoute.sessionsAndConnections),
         ("analytics", SettingsRoute.privacyAndAppLock),
         ("fingerprint", SettingsRoute.trustedHosts),
         ("keyboard", SettingsRoute.keyboardAndInput),

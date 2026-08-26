@@ -537,7 +537,7 @@ struct TerminalPaneView: View {
     let tabManager: TerminalTabManager
     @StateObject private var panePresentation: TerminalPanePresentationProjection
     @ObservedObject private var reconnectCoordinator: TerminalReconnectCoordinator
-    @ObservedObject private var tmuxCoordinator: TerminalTmuxSessionCoordinator
+    @ObservedObject private var remoteSessionCoordinator: TerminalRemoteSessionCoordinator
     let securityActions: TerminalSecurityActions
     let isFocused: Bool
     let isTabSelected: Bool
@@ -552,11 +552,12 @@ struct TerminalPaneView: View {
     @EnvironmentObject var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var appLockManager: AppLockManager
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
 
     @State private var isReady = false
     @State private var credentials: ServerCredentials?
     @State private var credentialLoadErrorMessage: String?
-    @State private var showingTmuxInstallPrompt = false
+    @State private var showingRemoteSessionInstallPrompt = false
     @State private var moshServerMaintenancePrompt: MoshServerMaintenanceAction?
     @State private var isInstallingMosh = false
     @State private var operationNotice: NoticeItem?
@@ -592,7 +593,7 @@ struct TerminalPaneView: View {
             )
         )
         _reconnectCoordinator = ObservedObject(wrappedValue: tabManager.reconnectCoordinator)
-        _tmuxCoordinator = ObservedObject(wrappedValue: tabManager.tmuxCoordinator)
+        _remoteSessionCoordinator = ObservedObject(wrappedValue: tabManager.remoteSessionCoordinator)
         self.securityActions = securityActions
         self.isFocused = isFocused
         self.isTabSelected = isTabSelected
@@ -708,7 +709,7 @@ struct TerminalPaneView: View {
 
     private var shouldShowMoshDurabilityHint: Bool {
         guard server.connectionMode == .mosh else { return false }
-        return paneState?.tmuxStatus == .off
+        return paneState?.remoteSessionStatus == .off
     }
 
     private var shouldUseReconnectBannerPresentation: Bool {
@@ -728,8 +729,34 @@ struct TerminalPaneView: View {
         return paneState?.disconnectReason?.allowsAutomaticReconnect ?? true
     }
 
-    private var isAwaitingTmuxSelection: Bool {
-        tmuxCoordinator.attachPrompt?.paneId == paneId
+    private var isAwaitingRemoteSessionSelection: Bool {
+        remoteSessionCoordinator.attachPrompt?.paneId == paneId
+    }
+
+    private var remoteSessionBackendMetadata: RemoteSessionBackendMetadata? {
+        let identifier = remoteSessionCoordinator.backendIdentifier(for: server.id)
+        return remoteSessionCoordinator.backendMetadata.first { $0.identifier == identifier }
+    }
+
+    private var remoteSessionBackendName: String {
+        let identifier = remoteSessionCoordinator.backendIdentifier(for: server.id)
+        return remoteSessionBackendMetadata?.displayName ?? identifier.rawValue
+    }
+
+    private var remoteSessionInstallTitle: String {
+        String(
+            format: String(localized: "Install %@?"),
+            remoteSessionBackendName
+        )
+    }
+
+    private var remoteSessionInstallActionTitle: String {
+        switch remoteSessionBackendMetadata?.installation {
+        case .documentation:
+            String(localized: "Open Installation Guide")
+        case .automatic, nil:
+            String(localized: "Install")
+        }
     }
 
     private var noticeSurfaceStyle: NoticeSurfaceStyle {
@@ -744,12 +771,12 @@ struct TerminalPaneView: View {
             return message
         }
 
-        if paneState?.tmuxStatus.indicatesTmux == true {
-            return String(localized: "tmux session is still running on the server.")
+        if paneState?.remoteSessionStatus.indicatesPersistentSession == true {
+            return String(localized: "The remote session is still running on the server.")
         }
 
         if shouldShowMoshDurabilityHint {
-            return String(localized: "Without tmux, app backgrounding can interrupt running commands.")
+            return String(localized: "Without session persistence, app backgrounding can interrupt running commands.")
         }
 
         return nil
@@ -763,7 +790,7 @@ struct TerminalPaneView: View {
             hasEstablishedConnection: paneState?.hasEstablishedConnection == true,
             automaticReconnectAllowed: automaticReconnectAllowed,
             isReconnectPreparationInFlight: reconnectInFlight,
-            isAwaitingTmuxSelection: isAwaitingTmuxSelection,
+            isAwaitingRemoteSessionSelection: isAwaitingRemoteSessionSelection,
             terminalExists: terminalExists,
             isReady: isReady,
             disconnectedMessage: disconnectedStatusMessage
@@ -819,13 +846,16 @@ struct TerminalPaneView: View {
     }
 
     private var bottomOperationNotice: NoticeItem? {
-        if paneState?.tmuxStatus == .installing {
+        if paneState?.remoteSessionStatus == .installing {
             return NoticeItem(
-                id: "pane-tmux-install-\(paneId.uuidString)",
+                id: "pane-remote-session-install-\(paneId.uuidString)",
                 lane: .bottomOperation,
                 level: .info,
                 leading: .activity,
-                title: String(localized: "Installing tmux"),
+                title: String(
+                    format: String(localized: "Installing %@"),
+                    remoteSessionBackendName
+                ),
                 message: String(localized: "Preparing persistent shell support.")
             )
         }
@@ -893,8 +923,9 @@ struct TerminalPaneView: View {
             }
             loadCredentials()
 
-            showingTmuxInstallPrompt = TmuxInstallPromptPolicy.shouldPresent(
-                for: paneState?.tmuxStatus
+            showingRemoteSessionInstallPrompt = RemoteSessionInstallPromptPolicy.shouldPresent(
+                for: paneState?.remoteSessionStatus,
+                installation: remoteSessionBackendMetadata?.installation
             )
             startConnectWatchdog()
             reconcileAutomaticReconnect()
@@ -927,10 +958,13 @@ struct TerminalPaneView: View {
             credentials = nil
             loadCredentials()
         }
-        .onChange(of: paneState?.tmuxStatus) { status in
-            showingTmuxInstallPrompt = TmuxInstallPromptPolicy.shouldPresent(for: status)
+        .onChange(of: paneState?.remoteSessionStatus) { status in
+            showingRemoteSessionInstallPrompt = RemoteSessionInstallPromptPolicy.shouldPresent(
+                for: status,
+                installation: remoteSessionBackendMetadata?.installation
+            )
         }
-        .onChange(of: isAwaitingTmuxSelection) { isAwaitingSelection in
+        .onChange(of: isAwaitingRemoteSessionSelection) { isAwaitingSelection in
             if !isAwaitingSelection {
                 startConnectWatchdog()
             } else {
@@ -962,19 +996,15 @@ struct TerminalPaneView: View {
             reconnectCoordinator.removeAutomaticReconnectContext(for: paneId)
             connectWatchdog.cancel()
         }
-        .alert("Install tmux?", isPresented: $showingTmuxInstallPrompt) {
-            Button("Install") {
-                Task {
-                    await tmuxCoordinator.startInstall(for: paneId) {
-                        retryConnection()
-                    }
-                }
+        .alert(remoteSessionInstallTitle, isPresented: $showingRemoteSessionInstallPrompt) {
+            Button(remoteSessionInstallActionTitle) {
+                handleRemoteSessionInstallation()
             }
             Button("Continue without persistence", role: .cancel) {
-                disableTmuxForServer()
+                continueWithoutRemoteSession()
             }
         } message: {
-            Text("tmux keeps your terminal session alive across app restarts and disconnects.")
+            Text("The selected option keeps the terminal alive across app restarts and disconnects.")
         }
         .alert(moshServerPromptTitle, isPresented: showingMoshServerMaintenancePrompt) {
             Button(moshServerPromptAction) {
@@ -1051,8 +1081,23 @@ struct TerminalPaneView: View {
         #endif
     }
 
-    private func disableTmuxForServer() {
-        tmuxCoordinator.disable(for: server.id)
+    private func continueWithoutRemoteSession() {
+        remoteSessionCoordinator.disable(for: server.id)
+    }
+
+    private func handleRemoteSessionInstallation() {
+        switch remoteSessionBackendMetadata?.installation {
+        case .automatic:
+            Task {
+                await remoteSessionCoordinator.startInstall(for: paneId) {
+                    retryConnection()
+                }
+            }
+        case .documentation(let url):
+            openURL(url)
+        case nil:
+            break
+        }
     }
 
     private func presentHostKeyTrustConfirmation() {
@@ -1139,13 +1184,13 @@ struct TerminalPaneView: View {
             connectionState: connectionState,
             isReady: isReady,
             terminalExists: terminalExists,
-            isAwaitingUserSelection: isAwaitingTmuxSelection
+            isAwaitingUserSelection: isAwaitingRemoteSessionSelection
         ) else {
             connectWatchdog.cancel()
             return
         }
         connectWatchdog.replace {
-            guard !isAwaitingTmuxSelection else { return }
+            guard !isAwaitingRemoteSessionSelection else { return }
             let stillConnecting = connectionState.isConnecting
             let stillConnectedWithoutTerminal = connectionState.isConnected && !isReady && !terminalExists
             guard stillConnecting || stillConnectedWithoutTerminal else { return }

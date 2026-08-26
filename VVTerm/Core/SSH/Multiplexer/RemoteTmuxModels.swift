@@ -4,31 +4,72 @@ nonisolated struct RemoteTmuxSession: Hashable, Sendable {
     let name: String
     let attachedClients: Int
     let windowCount: Int
+    let ownership: RemoteSessionOwnership
 }
 
-nonisolated enum TmuxSessionOwnership: String, Codable, Hashable, Sendable {
-    case managed
-    case external
-}
+nonisolated struct RemoteTmuxBackend: Hashable, Sendable {
+    enum Variant: Hashable, Sendable {
+        case unixTmux
+        case windowsPsmux(
+            shellFamily: RemoteShellFamily,
+            powerShellExecutable: String?
+        )
+    }
 
-nonisolated struct RemoteTmuxThemeStyle: Equatable, Sendable {
-    let name: String
-    let modeStyle: String
-}
-
-nonisolated enum RemoteTmuxBackend: Hashable, Sendable {
-    case unixTmux
-    case windowsPsmux(
-        commandName: String,
-        shellFamily: RemoteShellFamily,
-        powerShellExecutable: String?
+    static let unixTmux = Self(
+        variant: .unixTmux,
+        executablePath: "tmux",
+        rawVersion: ""
     )
 
+    let variant: Variant
+    let executablePath: String
+    let rawVersion: String
+
+    static func unixTmux(executablePath: String, rawVersion: String) -> Self {
+        Self(
+            variant: .unixTmux,
+            executablePath: executablePath,
+            rawVersion: rawVersion
+        )
+    }
+
+    static func windowsPsmux(
+        commandName: String,
+        shellFamily: RemoteShellFamily,
+        powerShellExecutable: String?,
+        executablePath: String? = nil,
+        rawVersion: String = ""
+    ) -> Self {
+        Self(
+            variant: .windowsPsmux(
+                shellFamily: shellFamily,
+                powerShellExecutable: powerShellExecutable
+            ),
+            executablePath: executablePath ?? commandName,
+            rawVersion: rawVersion
+        )
+    }
+
     var isWindows: Bool {
-        if case .windowsPsmux = self {
+        if case .windowsPsmux = variant {
             return true
         }
         return false
+    }
+
+    var commandName: String {
+        executablePath
+    }
+
+    var shellFamily: RemoteShellFamily? {
+        guard case .windowsPsmux(let shellFamily, _) = variant else { return nil }
+        return shellFamily
+    }
+
+    var powerShellExecutable: String? {
+        guard case .windowsPsmux(_, let executable) = variant else { return nil }
+        return executable
     }
 }
 

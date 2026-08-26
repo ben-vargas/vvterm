@@ -3,6 +3,45 @@ import Testing
 @testable import VVTerm
 
 struct RemotePsmuxCommandBuilderTests {
+    @Test(arguments: ["x", "'"])
+    func maximumStartupActionFitsTheCompletePowerShellInvocation(_ character: String) throws {
+        let action = try RemoteShellStartupAction(
+            command: String(
+                repeating: character,
+                count: RemoteShellStartupAction.maximumCommandByteCount
+            )
+        )
+        let backend = RemoteTmuxBackend.windowsPsmux(
+            commandName: "psmux",
+            shellFamily: .powershell,
+            powerShellExecutable: "powershell.exe"
+        )
+        let backendCommand = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteSessionThemeStyle,
+            sessionName: "vvterm_managed_session",
+            workingDirectory: #"C:\Users\VVTerm\project"#,
+            initialCommand: action.command,
+            backend: backend,
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
+        )
+        let environment = RemoteEnvironment(
+            platform: .windows,
+            shellProfile: .powershell(executableName: "powershell.exe"),
+            activeShellName: "powershell.exe",
+            powerShellExecutable: "powershell.exe"
+        )
+        let plan = RemoteTerminalBootstrap.launchPlan(
+            startupCommand: backendCommand,
+            environment: environment
+        )
+        guard case .exec(let command) = plan else {
+            Issue.record("Expected a PowerShell startup command")
+            return
+        }
+
+        #expect(command.utf16.count <= 32_767)
+    }
+
     @Test
     func externalWindowsSessionAttachDoesNotLoadVVTermConfiguration() {
         let backend = RemoteTmuxBackend.windowsPsmux(
@@ -11,7 +50,7 @@ struct RemotePsmuxCommandBuilderTests {
             powerShellExecutable: "pwsh"
         )
         let command = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "external team; session",
             ownership: .external,
             backend: backend
@@ -30,7 +69,7 @@ struct RemotePsmuxCommandBuilderTests {
             powerShellExecutable: "pwsh"
         )
         let command = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_managed",
             ownership: .managed,
             backend: backend
@@ -50,7 +89,7 @@ struct RemotePsmuxCommandBuilderTests {
 
         let command = RemoteTmuxCommandBuilder.windowsConfigWriteCommand(
             terminalType: .xtermGhostty,
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             backend: backend
         )
 
@@ -69,7 +108,7 @@ struct RemotePsmuxCommandBuilderTests {
 
         let command = RemoteTmuxCommandBuilder.windowsConfigWriteCommand(
             terminalType: .xtermGhostty,
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             backend: backend
         )
         let script = try #require(decodedPowerShellScript(from: command))
@@ -88,7 +127,7 @@ struct RemotePsmuxCommandBuilderTests {
         )
 
         let command = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_demo",
             workingDirectory: "C:/Users/me/project",
             backend: backend
@@ -97,7 +136,9 @@ struct RemotePsmuxCommandBuilderTests {
         #expect(command.contains("$vvtermPsmux = 'psmux'"))
         #expect(command.contains("has-session -t $vvtermSession"))
         #expect(command.contains("attach-session -d -t $vvtermSession"))
-        #expect(command.contains("new-session -A -s $vvtermSession -c $vvtermWorkingDirectory"))
+        #expect(command.contains("new-session -s $vvtermSession -c $vvtermWorkingDirectory"))
+        #expect(!command.contains("new-session -A"))
+        #expect(command.contains("#{@vvterm-managed}"))
         #expect(command.contains("[Convert]::FromBase64String('QzpcVXNlcnNcbWVccHJvamVjdA==')"))
         #expect(command.contains("$HOME + '\\.vvterm\\psmux.conf'"))
         #expect(!command.contains("$vvtermExactSession"))
@@ -125,7 +166,7 @@ struct RemotePsmuxCommandBuilderTests {
             powerShellExecutable: "pwsh"
         )
         let command = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_secure",
             workingDirectory: workingDirectory,
             backend: backend
@@ -147,7 +188,7 @@ struct RemotePsmuxCommandBuilderTests {
         )
 
         let command = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_secure",
             workingDirectory: "C:/work",
             backend: backend
@@ -165,18 +206,18 @@ struct RemotePsmuxCommandBuilderTests {
         )
 
         let command = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_demo",
             workingDirectory: "C:/work",
             backend: backend,
-            lifecycleMarkerToken: "marker-token"
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
         )
 
         #expect(command.contains("has-session -t $vvtermSession"))
         #expect(command.contains("[Console]::Out.Write"))
         #expect(command.contains("marker-token"))
         #expect(command.contains("detached"))
-        #expect(command.contains("ended"))
+        #expect(command.contains("terminated"))
         #expect(command.contains("creationFailed"))
         #expect(command.contains("$vvtermTmuxCreateStatus = $LASTEXITCODE"))
     }
@@ -190,7 +231,7 @@ struct RemotePsmuxCommandBuilderTests {
         )
 
         let command = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "shared",
             ownership: .external,
             backend: backend
@@ -208,7 +249,7 @@ struct RemotePsmuxCommandBuilderTests {
         )
 
         let command = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "shared",
             ownership: .external,
             backend: backend
@@ -249,7 +290,7 @@ struct RemotePsmuxCommandBuilderTests {
         )
 
         let script = RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_demo",
             workingDirectory: "C:/work",
             terminalType: .xtermGhostty,

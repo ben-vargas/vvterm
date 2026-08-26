@@ -16,8 +16,9 @@ struct ServerConnectionModeTests {
         cloudflareClientSecret: String
     ) -> ServerCredentials {
         var form = ServerFormModel(
-            defaultTmuxEnabled: true,
-            defaultTmuxStartupBehavior: .vvtermManaged
+            defaultRemoteSessionEnabled: true,
+            defaultRemoteSessionBackendIdentifier: .tmux,
+            defaultRemoteSessionStartupBehavior: .createManaged
         )
         form.transportSelection = transportSelection
         form.authMethod = authMethod
@@ -49,7 +50,7 @@ struct ServerConnectionModeTests {
             notes: "note",
             lastConnected: nil,
             isFavorite: false,
-            tmuxEnabledOverride: nil,
+            remoteSessionEnabledOverride: nil,
             createdAt: Date(),
             updatedAt: Date()
         )

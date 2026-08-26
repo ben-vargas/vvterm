@@ -38,6 +38,23 @@ private actor SSHMoshBootstrapSpy: SSHMoshBootstrapping {
 @MainActor
 struct SSHClientDependencyIsolationTests {
     @Test
+    func disconnectedClientReportsThatNoShellRequestWasSent() async {
+        let client = SSHClient.testing()
+
+        do {
+            _ = try await client.startShell(
+                startupCommand: "notify-deployment",
+                mayExecuteUserStartupAction: true
+            )
+            Issue.record("A disconnected client must not start a shell")
+        } catch SSHError.disconnectedBeforeShellRequest {
+            // The action is safe to retry because no shell request was sent.
+        } catch {
+            Issue.record("Unexpected shell startup error: \(error)")
+        }
+    }
+
+    @Test
     func twoFactoriesKeepHostApprovalMoshAndRuntimeSettingsIsolated() async throws {
         let (firstDefaults, firstSuiteName) = makeDefaults()
         let (secondDefaults, secondSuiteName) = makeDefaults()

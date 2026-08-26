@@ -62,6 +62,7 @@ struct TerminalConnectionStatusPresentationTests {
         #expect(!SSHError.hostKeyVerificationFailed.allowsAutomaticReconnectRetry)
         #expect(!SSHError.hostKeyApprovalRequired.allowsAutomaticReconnectRetry)
         #expect(!SSHError.moshServerMissing.allowsAutomaticReconnectRetry)
+        #expect(!SSHError.startupCommandMayHaveRun.allowsAutomaticReconnectRetry)
     }
 
     @Test
@@ -264,14 +265,22 @@ struct TerminalConnectionStatusPresentationTests {
     }
 
     @Test
-    func tmuxInstallPromptRequiresConfirmedMissingStatus() {
-        #expect(TmuxInstallPromptPolicy.shouldPresent(for: TmuxStatus.missing))
-        #expect(!TmuxInstallPromptPolicy.shouldPresent(for: TmuxStatus.unknown))
-        #expect(!TmuxInstallPromptPolicy.shouldPresent(for: TmuxStatus.background))
-        #expect(!TmuxInstallPromptPolicy.shouldPresent(for: TmuxStatus.foreground))
-        #expect(!TmuxInstallPromptPolicy.shouldPresent(for: TmuxStatus.off))
-        #expect(!TmuxInstallPromptPolicy.shouldPresent(for: TmuxStatus.installing))
-        #expect(!TmuxInstallPromptPolicy.shouldPresent(for: nil))
+    func remoteSessionInstallPromptRequiresConfirmedMissingStatus() {
+        #expect(RemoteSessionInstallPromptPolicy.shouldPresent(
+            for: .missing,
+            installation: .automatic
+        ))
+        #expect(RemoteSessionInstallPromptPolicy.shouldPresent(
+            for: .missing,
+            installation: .documentation(URL(string: "https://example.com")!)
+        ))
+        #expect(!RemoteSessionInstallPromptPolicy.shouldPresent(for: .missing, installation: nil))
+        for status in [RemoteSessionStatus.unknown, .background, .foreground, .off, .installing, nil] {
+            #expect(!RemoteSessionInstallPromptPolicy.shouldPresent(
+                for: status,
+                installation: .automatic
+            ))
+        }
     }
 
     @Test
@@ -317,7 +326,7 @@ struct TerminalConnectionStatusPresentationTests {
     func tmuxSelectionHidesInitialConnectionStatus() {
         let presentation = resolve(
             connectionState: .connecting,
-            isAwaitingTmuxSelection: true,
+            isAwaitingRemoteSessionSelection: true,
             terminalExists: false,
             isReady: false
         )
@@ -361,16 +370,16 @@ struct TerminalConnectionStatusPresentationTests {
     }
 
     @Test
-    func tmuxDisconnectMessagesReflectLifecycleReason() {
+    func remoteSessionDisconnectMessagesReflectLifecycleReason() {
         #expect(
-            TerminalDisconnectReason.externalTmuxEnded.statusMessage
-                == String(localized: "The tmux session has ended.")
+            TerminalDisconnectReason.externalRemoteSessionTerminated.statusMessage
+                == String(localized: "The remote session has ended.")
         )
         #expect(
-            TerminalDisconnectReason.tmuxDetached.statusMessage
-                == String(localized: "tmux session is still running on the server.")
+            TerminalDisconnectReason.remoteSessionDetached.statusMessage
+                == String(localized: "The remote session is still running on the server.")
         )
-        #expect(TerminalDisconnectReason.transportEnded.statusMessage == nil)
+        #expect(TerminalDisconnectReason.transportInterrupted.statusMessage == nil)
     }
 
     @Test
@@ -521,7 +530,7 @@ struct TerminalConnectionStatusPresentationTests {
         hasEstablishedConnection: Bool = false,
         automaticReconnectAllowed: Bool = false,
         isReconnectPreparationInFlight: Bool = false,
-        isAwaitingTmuxSelection: Bool = false,
+        isAwaitingRemoteSessionSelection: Bool = false,
         terminalExists: Bool = true,
         isReady: Bool = true,
         disconnectedMessage: String? = nil
@@ -533,7 +542,7 @@ struct TerminalConnectionStatusPresentationTests {
             hasEstablishedConnection: hasEstablishedConnection,
             automaticReconnectAllowed: automaticReconnectAllowed,
             isReconnectPreparationInFlight: isReconnectPreparationInFlight,
-            isAwaitingTmuxSelection: isAwaitingTmuxSelection,
+            isAwaitingRemoteSessionSelection: isAwaitingRemoteSessionSelection,
             terminalExists: terminalExists,
             isReady: isReady,
             disconnectedMessage: disconnectedMessage

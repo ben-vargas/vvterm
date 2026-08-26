@@ -19,9 +19,118 @@ struct ServerCloudKitRecordCodecTests {
         #expect(record.recordType == "Server")
         #expect(record.recordID.recordName == server.id.uuidString)
         #expect(record.recordID.zoneID == zoneID)
+        #expect(record["remoteSessionBackendIdentifier"] as? String == "zmx")
+        #expect(record["tmuxEnabledOverride"] as? Bool == false)
+        #expect(record["tmuxStartupBehaviorOverride"] as? String == "skipTmux")
+        #expect(
+            record["remoteShellStartupCommand"] as? String
+                == "cd /srv/round-trip && exec $SHELL -l"
+        )
         var expected = server
         expected.updatedAt = now
         #expect(ServerCloudKitRecordCodec.server(from: record, now: now) == expected)
+    }
+
+    @Test(arguments: [
+        (RemoteSessionStartupBehavior.createManaged, "vvtermManaged"),
+        (RemoteSessionStartupBehavior.ask, "askEveryTime"),
+        (RemoteSessionStartupBehavior.plainShell, "skipTmux")
+    ])
+    func currentTmuxSettingsUpdateTheirLegacyCloudKitProjection(
+        behavior: RemoteSessionStartupBehavior,
+        legacyRawValue: String
+    ) {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        var server = makeServer()
+        server.remoteSessionEnabledOverride = true
+        server.remoteSessionBackendIdentifier = .tmux
+        server.remoteSessionStartupBehaviorOverride = behavior
+
+        let record = ServerCloudKitRecordCodec.record(
+            for: server,
+            in: zoneID,
+            now: Date(timeIntervalSinceReferenceDate: 3_000)
+        )
+
+        #expect(record["tmuxEnabledOverride"] as? Bool == true)
+        #expect(record["tmuxStartupBehaviorOverride"] as? String == legacyRawValue)
+    }
+
+    @Test
+    func legacyTmuxRecordMigratesToCurrentRemoteSessionFields() throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        let now = Date(timeIntervalSinceReferenceDate: 3_000)
+        let record = ServerCloudKitRecordCodec.record(
+            for: makeServer(),
+            in: zoneID,
+            now: now
+        )
+        record["remoteSessionEnabledOverride"] = nil
+        record["remoteSessionBackendIdentifier"] = nil
+        record["remoteSessionStartupBehaviorOverride"] = nil
+        record["tmuxEnabledOverride"] = true
+        record["tmuxStartupBehaviorOverride"] = "vvtermManaged"
+
+        let migrated = try #require(ServerCloudKitRecordCodec.server(from: record, now: now))
+
+        #expect(migrated.remoteSessionEnabledOverride == true)
+        #expect(migrated.remoteSessionBackendIdentifier == .tmux)
+        #expect(migrated.remoteSessionStartupBehaviorOverride == .createManaged)
+    }
+
+    @Test
+    func legacyTmuxChangesOverrideStaleCurrentTmuxFields() throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        let now = Date(timeIntervalSinceReferenceDate: 3_000)
+        var server = makeServer()
+        server.remoteSessionBackendIdentifier = .tmux
+        server.remoteSessionEnabledOverride = true
+        server.remoteSessionStartupBehaviorOverride = .createManaged
+        let record = ServerCloudKitRecordCodec.record(for: server, in: zoneID, now: now)
+        record["tmuxEnabledOverride"] = false
+        record["tmuxStartupBehaviorOverride"] = "askEveryTime"
+
+        let decoded = try #require(ServerCloudKitRecordCodec.server(from: record, now: now))
+
+        #expect(decoded.remoteSessionEnabledOverride == false)
+        #expect(decoded.remoteSessionStartupBehaviorOverride == .ask)
+    }
+
+    @Test
+    func legacyTmuxProjectionDoesNotOverrideAnotherBackend() throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        let now = Date(timeIntervalSinceReferenceDate: 3_000)
+        var server = makeServer()
+        server.remoteSessionBackendIdentifier = .zmx
+        server.remoteSessionEnabledOverride = true
+        server.remoteSessionStartupBehaviorOverride = .ask
+        let record = ServerCloudKitRecordCodec.record(for: server, in: zoneID, now: now)
+        record["tmuxEnabledOverride"] = false
+        record["tmuxStartupBehaviorOverride"] = "skipTmux"
+
+        let decoded = try #require(ServerCloudKitRecordCodec.server(from: record, now: now))
+
+        #expect(decoded.remoteSessionEnabledOverride == true)
+        #expect(decoded.remoteSessionStartupBehaviorOverride == .ask)
+    }
+
+    @Test
+    func invalidSyncedStartupCommandIsIgnored() throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        let now = Date(timeIntervalSinceReferenceDate: 3_000)
+        let record = ServerCloudKitRecordCodec.record(
+            for: makeServer(),
+            in: zoneID,
+            now: now
+        )
+        record["remoteShellStartupCommand"] = String(
+            repeating: "x",
+            count: RemoteShellStartupAction.maximumCommandByteCount + 1
+        )
+
+        let decoded = try #require(ServerCloudKitRecordCodec.server(from: record, now: now))
+
+        #expect(decoded.remoteShellStartupAction == nil)
     }
 
     @Test
@@ -113,8 +222,10 @@ struct ServerCloudKitRecordCodecTests {
             lastConnected: Date(timeIntervalSinceReferenceDate: 1_500),
             isFavorite: true,
             requiresBiometricUnlock: true,
-            tmuxEnabledOverride: false,
-            tmuxStartupBehaviorOverride: .skipTmux,
+            remoteSessionEnabledOverride: false,
+            remoteSessionBackendIdentifier: .zmx,
+            remoteSessionStartupBehaviorOverride: .plainShell,
+            remoteShellStartupCommand: "cd /srv/round-trip && exec $SHELL -l",
             createdAt: Date(timeIntervalSinceReferenceDate: 1_000),
             updatedAt: Date(timeIntervalSinceReferenceDate: 2_000)
         )

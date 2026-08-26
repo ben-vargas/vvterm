@@ -853,12 +853,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "Укажіть перевизначення домену команди й домену програми для Cloudflare OAuth.";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "Не вдалося виявити метадані Cloudflare. Додайте перевизначення домену команди й домену програми в налаштуваннях сервера.";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "Вибрати сесію tmux";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "Вибрати сесію %@";
 "Existing sessions" = "Наявні сесії";
 "Select a session to attach immediately." = "Виберіть сесію для негайного підключення.";
-"No tmux sessions found" = "Сесій tmux не знайдено";
-"Create a new session, or continue without tmux." = "Створіть нову сесію або продовжуйте без tmux.";
+"No %@ sessions found" = "Сесій %@ не знайдено";
+"Create a new session, or continue without a remote session." = "Створіть нову сесію або продовжуйте без віддаленої сесії.";
 "Attached" = "Підключена";
 "Detached" = "Від'єднана";
 "1 client" = "1 клієнт";
@@ -866,13 +866,19 @@
 "1 window" = "1 вікно";
 "%lld windows" = "%lld вікон";
 "New session" = "Нова сесія";
-"Skip tmux" = "Пропустити tmux";
+"Continue without a remote session" = "Продовжити без віддаленої сесії";
+"Open Installation Guide" = "Відкрити посібник зі встановлення";
 "Create VVTerm session" = "Створити сесію VVTerm";
 "Ask every time" = "Питати щоразу";
 "Use remembered session" = "Використовувати запам'ятану сесію";
 "Always create or attach to a VVTerm-managed tmux session for this connection." = "Для цього підключення завжди створювати або підключати сесію tmux, керовану VVTerm.";
 "Show a prompt on each new tab or split so you can choose a session." = "Показувати запит на кожній новій вкладці або поділі, щоб ви могли вибрати сесію.";
 "Start a normal shell without tmux session persistence." = "Запускати звичайну оболонку без збереження сесії tmux.";
+"Use a normal shell" = "Використовувати звичайну оболонку";
+"Start a normal shell without remote session persistence." = "Запустити звичайну оболонку без збереження віддаленої сесії.";
+"Installing %@" = "Встановлення %@";
+"Install %@?" = "Встановити %@?";
+"The remote session is still running on the server." = "Віддалена сесія все ще працює на сервері.";
 "Automatically attach to the last tmux session you selected." = "Автоматично підключатися до останньої вибраної сесії tmux.";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "Коли tmux доступний, сесії зберігаються між перезапусками застосунку та відключеннями.";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "Виберіть поведінку за замовчуванням для нових серверів. Її можна перевизначити для кожного сервера в налаштуваннях сервера.";
@@ -1827,3 +1833,23 @@
 "Remove All Downloaded Models" = "Видалити всі завантажені моделі";
 "Remove All Downloaded Models?" = "Видалити всі завантажені моделі?";
 "Voice input models must be downloaded again before they can work offline." = "Щоб моделі голосового введення працювали офлайн, їх потрібно буде завантажити повторно.";
+"Keep remote sessions running by default" = "Типово залишати віддалені сеанси запущеними";
+"These defaults apply to new servers. You can override them in server settings." = "Ці типові параметри застосовуються до нових серверів. Їх можна змінити в параметрах сервера.";
+"Keep remote sessions running" = "Залишати віддалені сеанси запущеними";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "Вибраний варіант залишає віддалені сеанси запущеними після перезапуску програми або відключення.";
+"Without session persistence, app backgrounding can interrupt running commands." = "Без збереження сеансу перехід програми у фоновий режим може перервати команди, що виконуються.";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "Вибраний варіант залишає термінал активним після перезапуску програми або відключення.";
+"Use a persistent session" = "Використовувати постійний сеанс";
+"Use persistent sessions by default" = "Типово використовувати постійні сеанси";
+"Create or reconnect to a VVTerm-managed session." = "Створити сеанс під керуванням VVTerm або підключитися до нього знову.";
+"Ask which session to use for each new tab or split." = "Запитувати, який сеанс використовувати для кожної нової вкладки або області.";
+"Startup Command" = "Команда запуску";
+"Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Синхронізується між пристроями. Запускається лише коли VVTerm створює постійний сеанс. Не додавайте секретні дані.";
+"Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Синхронізується між пристроями. Запускається для кожного нового з’єднання з терміналом. Не додавайте секретні дані.";
+"The command contains unsupported control characters." = "Команда містить непідтримувані керівні символи.";
+"The command must be %lld UTF-8 bytes or less." = "Команда має бути не довшою за %lld байтів UTF-8.";
+"%@ does not support custom startup commands yet." = "%@ ще не підтримує користувацькі команди запуску.";
+"The connection ended while starting the shell. The startup command was not run again." = "З’єднання завершилося під час запуску оболонки. Команду запуску не було запущено повторно.";
+"The remote server rejected the shell command." = "Віддалений сервер відхилив команду оболонки.";
+"The remote server rejected the terminal request." = "Віддалений сервер відхилив запит термінала.";
+"The startup command may have run. VVTerm did not run it again." = "Команда запуску могла виконатися. VVTerm не запускав її повторно.";

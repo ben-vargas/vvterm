@@ -848,12 +848,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "Indiquez les remplacements des domaines d'équipe et d'app pour Cloudflare OAuth.";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "La découverte des métadonnées Cloudflare a échoué. Ajoutez les remplacements des domaines d'équipe et d'app dans les réglages du serveur.";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "Choisir une session tmux";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "Choisir une session %@";
 "Existing sessions" = "Sessions existantes";
 "Select a session to attach immediately." = "Sélectionnez une session à attacher immédiatement.";
-"No tmux sessions found" = "Aucune session tmux trouvée";
-"Create a new session, or continue without tmux." = "Créez une nouvelle session ou continuez sans tmux.";
+"No %@ sessions found" = "Aucune session %@ trouvée";
+"Create a new session, or continue without a remote session." = "Créez une nouvelle session ou continuez sans session distante.";
 "Attached" = "Attachée";
 "Detached" = "Détachée";
 "1 client" = "1 client";
@@ -861,13 +861,19 @@
 "1 window" = "1 fenêtre";
 "%lld windows" = "%lld fenêtres";
 "New session" = "Nouvelle session";
-"Skip tmux" = "Ignorer tmux";
+"Continue without a remote session" = "Continuer sans session distante";
+"Open Installation Guide" = "Ouvrir le guide d’installation";
 "Create VVTerm session" = "Créer une session VVTerm";
 "Ask every time" = "Demander à chaque fois";
 "Use remembered session" = "Utiliser la session mémorisée";
 "Always create or attach to a VVTerm-managed tmux session for this connection." = "Toujours créer ou attacher une session tmux gérée par VVTerm pour cette connexion.";
 "Show a prompt on each new tab or split so you can choose a session." = "Afficher une invite à chaque nouvel onglet ou division pour vous laisser choisir une session.";
 "Start a normal shell without tmux session persistence." = "Démarrer un shell normal sans persistance de session tmux.";
+"Use a normal shell" = "Utiliser un shell normal";
+"Start a normal shell without remote session persistence." = "Démarrer un shell normal sans persistance de session distante.";
+"Installing %@" = "Installation de %@";
+"Install %@?" = "Installer %@ ?";
+"The remote session is still running on the server." = "La session distante est toujours en cours d'exécution sur le serveur.";
 "Automatically attach to the last tmux session you selected." = "Attacher automatiquement la dernière session tmux que vous avez sélectionnée.";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "Les sessions restent actives entre les redémarrages de l'application et les déconnexions lorsque tmux est disponible.";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "Choisissez le comportement par défaut pour les nouveaux serveurs. Vous pouvez toujours le remplacer serveur par serveur dans les réglages du serveur.";
@@ -1822,3 +1828,23 @@
 "Remove All Downloaded Models" = "Supprimer tous les modèles téléchargés";
 "Remove All Downloaded Models?" = "Supprimer tous les modèles téléchargés ?";
 "Voice input models must be downloaded again before they can work offline." = "Les modèles de saisie vocale devront être téléchargés à nouveau pour fonctionner hors ligne.";
+"Keep remote sessions running by default" = "Garder les sessions distantes actives par défaut";
+"These defaults apply to new servers. You can override them in server settings." = "Ces réglages par défaut s’appliquent aux nouveaux serveurs. Vous pouvez les modifier dans les réglages du serveur.";
+"Keep remote sessions running" = "Garder les sessions distantes actives";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "L’option sélectionnée garde les sessions distantes actives après le redémarrage de l’app ou une déconnexion.";
+"Without session persistence, app backgrounding can interrupt running commands." = "Sans persistance de session, le passage de l’app en arrière-plan peut interrompre les commandes en cours.";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "L’option sélectionnée garde le terminal actif après le redémarrage de l’app ou une déconnexion.";
+"Use a persistent session" = "Utiliser une session persistante";
+"Use persistent sessions by default" = "Utiliser des sessions persistantes par défaut";
+"Create or reconnect to a VVTerm-managed session." = "Créer une session gérée par VVTerm ou s’y reconnecter.";
+"Ask which session to use for each new tab or split." = "Demander quelle session utiliser pour chaque nouvel onglet ou volet.";
+"Startup Command" = "Commande de démarrage";
+"Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Synchronisée entre les appareils. S’exécute uniquement quand VVTerm crée une session persistante. N’incluez aucun secret.";
+"Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Synchronisée entre les appareils. S’exécute à chaque nouvelle connexion au terminal. N’incluez aucun secret.";
+"The command contains unsupported control characters." = "La commande contient des caractères de contrôle non pris en charge.";
+"The command must be %lld UTF-8 bytes or less." = "La commande doit contenir au maximum %lld octets UTF-8.";
+"%@ does not support custom startup commands yet." = "%@ ne prend pas encore en charge les commandes de démarrage personnalisées.";
+"The connection ended while starting the shell. The startup command was not run again." = "La connexion a pris fin pendant le démarrage du shell. La commande de démarrage n’a pas été relancée.";
+"The remote server rejected the shell command." = "Le serveur distant a refusé la commande du shell.";
+"The remote server rejected the terminal request." = "Le serveur distant a refusé la demande de terminal.";
+"The startup command may have run. VVTerm did not run it again." = "La commande de démarrage a peut-être été exécutée. VVTerm ne l’a pas relancée.";

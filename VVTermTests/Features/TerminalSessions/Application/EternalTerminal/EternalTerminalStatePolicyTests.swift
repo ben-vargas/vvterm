@@ -203,22 +203,47 @@ struct EternalTerminalStatePolicyTests {
     }
 
     @Test
-    func tmuxStartupUsesAShortSelfDeletingRemoteScript() throws {
+    func remoteSessionStartupUsesAShortSelfDeletingRemoteScript() throws {
         let token = try #require(UUID(uuidString: "45B943D4-58C7-4BC9-B089-A9F0ED25C2D3"))
         let command = String(repeating: "tmux set-option -g mouse on; ", count: 100)
-        let remotePath = EternalTerminalStartupCommand.remoteScriptPath(token: token)
-        let script = EternalTerminalStartupCommand.script(
+        let plan = TerminalShellStartupPlan(
             command: command,
-            remotePath: remotePath
+            remoteSessionLifecycle: nil,
+            mayExecuteUserStartupAction: false
         )
+        let remotePath = EternalTerminalStartupCommand.remoteScriptPath(token: token)
+        let script = try #require(EternalTerminalStartupCommand.script(
+            for: plan,
+            remotePath: remotePath
+        ))
         let invocation = EternalTerminalStartupCommand.invocation(remotePath: remotePath)
 
         #expect(remotePath == "/tmp/vvterm-et-start-45b943d4-58c7-4bc9-b089-a9f0ed25c2d3.sh")
         #expect(script.hasPrefix("rm -f -- '\(remotePath)'\n"))
         #expect(script.hasSuffix(command))
-        #expect(invocation == "/bin/sh '\(remotePath)'")
+        #expect(invocation == "exec /bin/sh '\(remotePath)'")
         #expect(!invocation.contains(command))
         #expect(invocation.count < 100)
+    }
+
+    @Test
+    func standaloneStartupActionAlsoUsesThePOSIXRemoteScript() throws {
+        let token = try #require(UUID(uuidString: "BB456F8B-2669-4DF8-BDD7-48677BAAC3D6"))
+        let command = "VVTERM_MODE=ready printf '%s' \"$VVTERM_MODE\""
+        let plan = TerminalShellStartupPlan(
+            command: command,
+            remoteSessionLifecycle: nil,
+            mayExecuteUserStartupAction: true
+        )
+        let remotePath = EternalTerminalStartupCommand.remoteScriptPath(token: token)
+
+        let script = try #require(EternalTerminalStartupCommand.script(
+            for: plan,
+            remotePath: remotePath
+        ))
+
+        #expect(script.hasPrefix("rm -f -- '\(remotePath)'\n"))
+        #expect(script.hasSuffix(command))
     }
 }
 

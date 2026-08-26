@@ -291,7 +291,7 @@ struct TerminalReconnectUITestHarness: View {
                 username: username,
                 connectionMode: .standard,
                 authMethod: .sshKey,
-                tmuxEnabledOverride: false
+                remoteSessionEnabledOverride: false
             )
 
             if !usesColdRelaunchHarness || seedsColdRelaunchHarness {
@@ -370,7 +370,7 @@ struct TerminalReconnectUITestHarness: View {
                 host: "192.0.2.\(index)",
                 username: "vvterm",
                 authMethod: .password,
-                tmuxEnabledOverride: false
+                remoteSessionEnabledOverride: false
             )
         }
         return fillerServers + [activeServer]

@@ -45,7 +45,7 @@ struct RemoteMoshManagerTests {
         do {
             _ = try await RemoteMoshManager.shared.bootstrapConnectInfo(
                 terminalType: .xterm256Color,
-                startCommand: nil,
+                startCommand: "printf action",
                 execute: { command, timeout in
                     try await executor.execute(command: command, timeout: timeout)
                 }
@@ -56,6 +56,14 @@ struct RemoteMoshManagerTests {
                 Issue.record("Unexpected SSHError: \(error.localizedDescription)")
                 return
             }
+            #expect(MoshSSHFallbackPolicy.decision(
+                after: MoshStartupFailure(
+                    stage: .beforeUDPClient,
+                    underlying: error
+                ),
+                startupCommand: "printf action",
+                mayExecuteUserStartupAction: true
+            ) == .allow)
         } catch {
             Issue.record("Unexpected error: \(error.localizedDescription)")
         }
@@ -173,10 +181,10 @@ struct RemoteMoshManagerTests {
     @Test
     func managedTmuxBootstrapKeepsNestedQuotingOutOfLoginShell() throws {
         let startCommand = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: "vvterm_dev223",
             workingDirectory: "~",
-            lifecycleMarkerToken: "dev223-marker"
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
         )
         let command = RemoteMoshManager.shared.bootstrapCommand(
             terminalType: .xtermGhostty,
@@ -242,7 +250,21 @@ struct RemoteMoshManagerTests {
         case .moshBootstrapFailed(let message):
             #expect(message.contains("Permission denied"))
         default:
-            Issue.record("Expected moshBootstrapFailed for permissionDenied")
+            Issue.record("Expected a bootstrap failure for permissionDenied")
+        }
+    }
+
+    @Test(arguments: [
+        MoshBootstrapError.invalidPort,
+        .invalidKey,
+        .processExited
+    ])
+    func mapsBootstrapParsingFailuresToOneError(_ error: MoshBootstrapError) {
+        let mapped = RemoteMoshManager.shared.mapBootstrapError(error)
+
+        guard case .moshBootstrapFailed = mapped else {
+            Issue.record("Expected a bootstrap failure")
+            return
         }
     }
 

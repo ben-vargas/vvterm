@@ -843,12 +843,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "请为 Cloudflare OAuth 同时提供团队域名和应用域名覆盖。";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "Cloudflare 元数据发现失败。请在服务器设置中添加团队域名和应用域名覆盖。";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "选择 tmux 会话";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "选择 %@ 会话";
 "Existing sessions" = "现有会话";
 "Select a session to attach immediately." = "选择一个会话以立即附加。";
-"No tmux sessions found" = "未找到 tmux 会话";
-"Create a new session, or continue without tmux." = "创建新会话，或不使用 tmux 继续。";
+"No %@ sessions found" = "未找到 %@ 会话";
+"Create a new session, or continue without a remote session." = "创建新会话，或不使用远程会话继续。";
 "Attached" = "已附加";
 "Detached" = "已分离";
 "1 client" = "1 个客户端";
@@ -856,13 +856,19 @@
 "1 window" = "1 个窗口";
 "%lld windows" = "%lld 个窗口";
 "New session" = "新建会话";
-"Skip tmux" = "跳过 tmux";
+"Continue without a remote session" = "不使用远程会话继续";
+"Open Installation Guide" = "打开安装指南";
 "Create VVTerm session" = "创建 VVTerm 会话";
 "Ask every time" = "每次都询问";
 "Use remembered session" = "使用记住的会话";
 "Always create or attach to a VVTerm-managed tmux session for this connection." = "此连接始终创建或附加到由 VVTerm 管理的 tmux 会话。";
 "Show a prompt on each new tab or split so you can choose a session." = "每次新建标签页或分屏时显示提示，让你选择会话。";
 "Start a normal shell without tmux session persistence." = "启动普通 Shell，不使用 tmux 会话持久化。";
+"Use a normal shell" = "使用普通 Shell";
+"Start a normal shell without remote session persistence." = "启动普通 Shell，不保留远程会话。";
+"Installing %@" = "正在安装 %@";
+"Install %@?" = "安装 %@？";
+"The remote session is still running on the server." = "远程会话仍在服务器上运行。";
 "Automatically attach to the last tmux session you selected." = "自动附加到你上次选择的 tmux 会话。";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "当 tmux 可用时，会话会在应用重启和断开连接后继续保持。";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "为新服务器选择默认行为。你仍可在服务器设置中按服务器覆盖。";
@@ -1817,3 +1823,23 @@
 "Remove All Downloaded Models" = "移除所有已下载模型";
 "Remove All Downloaded Models?" = "移除所有已下载模型？";
 "Voice input models must be downloaded again before they can work offline." = "语音输入模型需要重新下载后才能离线使用。";
+"Keep remote sessions running by default" = "默认保持远程会话运行";
+"These defaults apply to new servers. You can override them in server settings." = "这些默认设置适用于新服务器。你可以在服务器设置中更改。";
+"Keep remote sessions running" = "保持远程会话运行";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "所选选项可让远程会话在应用重启或断开连接后继续运行。";
+"Without session persistence, app backgrounding can interrupt running commands." = "如果没有会话持久化，应用进入后台时可能会中断正在运行的命令。";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "所选选项可让终端在应用重启或断开连接后继续运行。";
+"Use a persistent session" = "使用持久会话";
+"Use persistent sessions by default" = "默认使用持久会话";
+"Create or reconnect to a VVTerm-managed session." = "创建或重新连接到 VVTerm 管理的会话。";
+"Ask which session to use for each new tab or split." = "为每个新标签页或分屏询问要使用的会话。";
+"Startup Command" = "启动命令";
+"Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "在设备间同步。仅在 VVTerm 创建持久会话时运行。不要包含机密信息。";
+"Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "在设备间同步。为每个新的终端连接运行。不要包含机密信息。";
+"The command contains unsupported control characters." = "命令包含不受支持的控制字符。";
+"The command must be %lld UTF-8 bytes or less." = "命令不得超过 %lld 个 UTF-8 字节。";
+"%@ does not support custom startup commands yet." = "%@ 尚不支持自定义启动命令。";
+"The connection ended while starting the shell. The startup command was not run again." = "启动 Shell 时连接已结束。启动命令未再次运行。";
+"The remote server rejected the shell command." = "远程服务器拒绝了 Shell 命令。";
+"The remote server rejected the terminal request." = "远程服务器拒绝了终端请求。";
+"The startup command may have run. VVTerm did not run it again." = "启动命令可能已经运行。VVTerm 没有再次运行该命令。";

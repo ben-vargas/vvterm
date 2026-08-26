@@ -110,7 +110,7 @@ struct TerminalTabManagerIndependenceTests {
 
         weak let releasedManager = manager
         weak let releasedTransportOwner = manager?.transportCoordinator
-        weak let releasedTmuxOwner = manager?.tmuxCoordinator
+        weak let releasedTmuxOwner = manager?.remoteSessionCoordinator
         weak let releasedSessionState = manager?.sessionState
         manager = nil
 
@@ -170,9 +170,12 @@ struct TerminalTabManagerIndependenceTests {
             for: tab.rootPaneId,
             serverId: tab.serverId
         ))
-        first.tmuxCoordinator.setAttachment(
+        first.remoteSessionCoordinator.setAttachment(
             for: tab.rootPaneId,
-            sessionName: "vvterm-isolated",
+            identifier: try! RemoteSessionIdentifier(
+                backendIdentifier: .tmux,
+                validating: "vvterm-isolated"
+            ),
             ownership: .managed
         )
         first.registerTerminalSurface(terminal, for: tab.rootPaneId)
@@ -181,8 +184,8 @@ struct TerminalTabManagerIndependenceTests {
         #expect(second.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
         #expect(first.transportCoordinator.activeSSHRoute(for: tab.rootPaneId)?.client === client)
         #expect(second.transportCoordinator.activeSSHRoute(for: tab.rootPaneId) == nil)
-        #expect(first.tmuxCoordinator.attachment(for: tab.rootPaneId)?.sessionName == "vvterm-isolated")
-        #expect(second.tmuxCoordinator.attachment(for: tab.rootPaneId) == nil)
+        #expect(first.remoteSessionCoordinator.attachment(for: tab.rootPaneId)?.attachment.identifier.rawValue == "vvterm-isolated")
+        #expect(second.remoteSessionCoordinator.attachment(for: tab.rootPaneId) == nil)
         #expect(
             first.terminalSurfaceStore.surface(for: tab.rootPaneId) === terminal
         )
@@ -203,9 +206,12 @@ struct TerminalTabManagerIndependenceTests {
 
         install(firstTab, in: first)
         first.sessionState.selectView(.files, for: serverId)
-        first.tmuxCoordinator.setAttachment(
+        first.remoteSessionCoordinator.setAttachment(
             for: firstTab.rootPaneId,
-            sessionName: "first-session",
+            identifier: try! RemoteSessionIdentifier(
+                backendIdentifier: .tmux,
+                validating: "first-session"
+            ),
             ownership: .managed
         )
 
@@ -222,13 +228,13 @@ struct TerminalTabManagerIndependenceTests {
         #expect(restoredFirst.connectionViewSelections.selection(for: serverId) == .files)
         #expect(restoredFirst.sessionState.paneState(for: firstTab.rootPaneId) != nil)
         #expect(restoredFirst.sessionState.paneState(for: secondTab.rootPaneId) == nil)
-        #expect(restoredFirst.tmuxCoordinator.attachment(for: firstTab.rootPaneId)?.sessionName == "first-session")
+        #expect(restoredFirst.remoteSessionCoordinator.attachment(for: firstTab.rootPaneId)?.attachment.identifier.rawValue == "first-session")
 
         #expect(restoredSecond.sessionState.selectedTabId(for: serverId) == secondTab.id)
         #expect(restoredSecond.connectionViewSelections.selection(for: serverId) == .stats)
         #expect(restoredSecond.sessionState.paneState(for: secondTab.rootPaneId) != nil)
         #expect(restoredSecond.sessionState.paneState(for: firstTab.rootPaneId) == nil)
-        #expect(restoredSecond.tmuxCoordinator.attachment(for: firstTab.rootPaneId) == nil)
+        #expect(restoredSecond.remoteSessionCoordinator.attachment(for: firstTab.rootPaneId) == nil)
     }
 
     private func makeManager(

@@ -61,6 +61,7 @@ struct ServerFormSheet: View {
 
     private let now: @Sendable () -> Date
     private let makeID: @Sendable () -> UUID
+    private let remoteSessionBackends: [RemoteSessionBackendMetadata]
 
     var isEditing: Bool { server != nil }
 
@@ -85,6 +86,7 @@ struct ServerFormSheet: View {
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.now = dependencies.now
         self.makeID = dependencies.makeID
+        remoteSessionBackends = dependencies.remoteSessionBackends
         let saveUseCase = ServerSaveUseCase(mutations: serverManager)
         self.onSave = onSave
         _operations = StateObject(
@@ -103,8 +105,10 @@ struct ServerFormSheet: View {
         var initialForm = ServerFormModel(
             server: server,
             workspaceID: workspace?.id,
-            defaultTmuxEnabled: dependencies.defaultTmuxEnabled(),
-            defaultTmuxStartupBehavior: dependencies.defaultTmuxStartupBehavior()
+            defaultRemoteSessionEnabled: dependencies.defaultRemoteSessionEnabled(),
+            defaultRemoteSessionBackendIdentifier:
+                dependencies.defaultRemoteSessionBackendIdentifier(),
+            defaultRemoteSessionStartupBehavior: dependencies.defaultRemoteSessionStartupBehavior()
         )
         if server == nil, let prefill {
             initialForm.applyPrefill(
@@ -184,6 +188,28 @@ struct ServerFormSheet: View {
         operations.hasValidConnectionTest(for: form.connectionSnapshot)
     }
 
+    private var hasCustomStartupCommand: Bool {
+        !form.remoteShellStartupAction.command
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
+    }
+
+    private var selectedRemoteSessionBackend: RemoteSessionBackendMetadata? {
+        remoteSessionBackends.first {
+            $0.identifier == form.remoteSessionBackendIdentifier
+        }
+    }
+
+    private var unsupportedManagedStartupBackend: RemoteSessionBackendMetadata? {
+        guard form.remoteSessionEnabled,
+              hasCustomStartupCommand,
+              let backend = selectedRemoteSessionBackend,
+              backend.managedStartupCommandSupport == .unsupported else {
+            return nil
+        }
+        return backend
+    }
+
     var isSaving: Bool { operations.isSaving }
 
     private var isLoadingCredentials: Bool { operations.isLoadingCredentials }
@@ -191,7 +217,9 @@ struct ServerFormSheet: View {
     private var isTestingConnection: Bool { operations.isTestingConnection }
 
     var saveButtonDisabled: Bool {
-        !form.isValid || isSaving || isAtLimit || isLoadingCredentials || isTestingConnection
+        !form.isValid || isSaving || isAtLimit
+            || isLoadingCredentials || isTestingConnection
+            || unsupportedManagedStartupBackend != nil
     }
 
     private var serverLimitAlertBinding: Binding<Bool> {
@@ -232,6 +260,10 @@ struct ServerFormSheet: View {
         authSection
         connectionSection
         sessionSection
+        RemoteShellStartupActionSection(
+            model: $form.remoteShellStartupAction,
+            remoteSessionEnabled: form.remoteSessionEnabled
+        )
     }
 
     @ViewBuilder
@@ -632,25 +664,48 @@ struct ServerFormSheet: View {
 
     private var sessionSection: some View {
         Section {
-            Toggle("Use tmux to preserve sessions", isOn: $form.tmuxEnabled)
+            Toggle("Use a persistent session", isOn: $form.remoteSessionEnabled)
 
-            if form.tmuxEnabled {
-                Picker("On connect", selection: $form.tmuxStartupBehavior) {
-                    ForEach(TmuxStartupBehavior.configCases) { behavior in
+            if form.remoteSessionEnabled {
+                Picker("Use", selection: $form.remoteSessionBackendIdentifier) {
+                    ForEach(remoteSessionBackends, id: \.identifier) { backend in
+                        RemoteSessionBackendLabel(backend: backend)
+                            .tag(backend.identifier)
+                            .disabled(
+                                hasCustomStartupCommand
+                                    && backend.managedStartupCommandSupport == .unsupported
+                            )
+                    }
+                }
+
+                Picker("On connect", selection: $form.remoteSessionStartupBehavior) {
+                    ForEach(RemoteSessionStartupBehavior.allCases) { behavior in
                         Text(behavior.displayName).tag(behavior)
                     }
                 }
 
-                Text(form.tmuxStartupBehavior.descriptionText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         } header: {
-            sectionHeader("Session")
+            sectionHeader("Session Persistence")
         } footer: {
-            Text("Sessions stay alive across app restarts and disconnects when tmux is available.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if form.remoteSessionEnabled {
+                if let backend = unsupportedManagedStartupBackend {
+                    Text(
+                        String(
+                            format: String(
+                                localized: "%@ does not support custom startup commands yet."
+                            ),
+                            backend.displayName
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                } else {
+                    Text(form.remoteSessionStartupBehavior.descriptionText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
@@ -772,7 +827,7 @@ struct ServerFormSheet: View {
     }
 
     private func buildServer(id: UUID, createdAt: Date) -> Server {
-        form.makeServer(
+        return form.makeServer(
             id: id,
             workspaceID: selectedWorkspace?.id
                 ?? assignmentWorkspaces.first?.id

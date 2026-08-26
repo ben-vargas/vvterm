@@ -117,10 +117,10 @@ struct RemoteTmuxManagerLocalIntegrationTests {
         )
 
         let externalAttach = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: sessionName,
             ownership: .external,
-            lifecycleMarkerToken: "integration"
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
         )
         let socketScopedAttach = """
         tmux() {
@@ -133,8 +133,14 @@ struct RemoteTmuxManagerLocalIntegrationTests {
             ["-c", socketScopedAttach],
             environment: environment
         )
-        let detached = TmuxLifecycleMarker.sequence(token: "integration", event: .detached)
-        let ended = TmuxLifecycleMarker.sequence(token: "integration", event: .ended)
+        let detached = RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .detached
+        )
+        let ended = RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .terminated
+        )
         #expect(attachResult.output.contains(detached))
         #expect(!attachResult.output.contains(ended))
 
@@ -269,10 +275,10 @@ struct RemoteTmuxManagerLocalIntegrationTests {
         )
 
         let managedCreate = RemoteTmuxCommandBuilder.attachCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: managedSession,
             workingDirectory: "/tmp",
-            lifecycleMarkerToken: "create"
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
         )
         let legacySocketScopedCreate = """
         tmux() {
@@ -358,7 +364,7 @@ struct RemoteTmuxManagerLocalIntegrationTests {
         )
         let externalHistoryLimit = try tmuxFormatValue(
             "history_limit",
-            target: externalWindowTarget,
+            target: externalSession,
             tmux: installedTmux,
             socket: socket,
             environment: environment
@@ -379,12 +385,20 @@ struct RemoteTmuxManagerLocalIntegrationTests {
             arguments: ["select-window", "-t", "\(managedSession):\(externalWindowTarget)"],
             environment: environment
         ))
+        let linkedExternalHistoryLimit = try tmuxFormatValue(
+            "history_limit",
+            target: externalSession,
+            tmux: installedTmux,
+            socket: socket,
+            environment: environment
+        )
+        #expect(linkedExternalHistoryLimit == externalHistoryLimit)
 
         let managedReattach = RemoteTmuxCommandBuilder.attachExistingCommand(
-            themeStyle: deterministicRemoteTmuxThemeStyle,
+            themeStyle: deterministicRemoteSessionThemeStyle,
             sessionName: managedSession,
             ownership: .managed,
-            lifecycleMarkerToken: "reattach"
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
         )
         let socketScopedReattach = """
         tmux() {
@@ -400,13 +414,14 @@ struct RemoteTmuxManagerLocalIntegrationTests {
             socket: socket,
             environment: environment
         ) == externalWindowOptions)
-        #expect(try tmuxFormatValue(
+        let reattachedExternalHistoryLimit = try tmuxFormatValue(
             "history_limit",
-            target: externalWindowTarget,
+            target: externalSession,
             tmux: installedTmux,
             socket: socket,
             environment: environment
-        ) == externalHistoryLimit)
+        )
+        #expect(reattachedExternalHistoryLimit == externalHistoryLimit)
 
         let newWindow = try runTmux(
             installedTmux,

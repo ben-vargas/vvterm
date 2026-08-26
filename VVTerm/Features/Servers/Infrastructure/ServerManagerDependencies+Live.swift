@@ -63,6 +63,7 @@ extension ServerManagerDependencies {
         freePlanTracker: any FreePlanAssignmentTracking,
         actionAuthorizer: any ProtectedServerActionAuthorizing,
         syncRepository: any ServerSyncRepository,
+        didDeleteServerLocalData: @escaping (UUID) -> Void,
         defaultWorkspaceName: @escaping () -> String,
         canonicalDefaultWorkspaceNames: @escaping () -> Set<String>,
         now: @escaping () -> Date,
@@ -87,6 +88,7 @@ extension ServerManagerDependencies {
             credentialRepository: credentialRepository,
             actionAuthorizer: actionAuthorizer,
             knownHosts: knownHosts,
+            didDeleteServerLocalData: didDeleteServerLocalData,
             isRemoteSchemaError: ServerCloudKitClient.isSchemaError,
             now: now,
             makeID: makeID

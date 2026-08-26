@@ -846,12 +846,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "ระบุการแทนที่ทั้งโดเมนทีมและโดเมนแอปสำหรับ Cloudflare OAuth";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "ตรวจพบเมตาดาต้า Cloudflare ไม่สำเร็จ เพิ่มการแทนที่โดเมนทีมและโดเมนแอปในการตั้งค่าเซิร์ฟเวอร์";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "เลือกเซสชัน tmux";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "เลือกเซสชัน %@";
 "Existing sessions" = "เซสชันที่มีอยู่";
 "Select a session to attach immediately." = "เลือกเซสชันเพื่อเชื่อมต่อทันที";
-"No tmux sessions found" = "ไม่พบเซสชัน tmux";
-"Create a new session, or continue without tmux." = "สร้างเซสชันใหม่ หรือดำเนินการต่อโดยไม่ใช้ tmux";
+"No %@ sessions found" = "ไม่พบเซสชัน %@";
+"Create a new session, or continue without a remote session." = "สร้างเซสชันใหม่ หรือดำเนินการต่อโดยไม่ใช้เซสชันระยะไกล";
 "Attached" = "เชื่อมต่ออยู่";
 "Detached" = "แยกออก";
 "1 client" = "1 ไคลเอนต์";
@@ -859,13 +859,19 @@
 "1 window" = "1 หน้าต่าง";
 "%lld windows" = "%lld หน้าต่าง";
 "New session" = "เซสชันใหม่";
-"Skip tmux" = "ข้าม tmux";
+"Continue without a remote session" = "ดำเนินการต่อโดยไม่ใช้เซสชันระยะไกล";
+"Open Installation Guide" = "เปิดคู่มือการติดตั้ง";
 "Create VVTerm session" = "สร้างเซสชัน VVTerm";
 "Ask every time" = "ถามทุกครั้ง";
 "Use remembered session" = "ใช้เซสชันที่จดจำไว้";
 "Always create or attach to a VVTerm-managed tmux session for this connection." = "สำหรับการเชื่อมต่อนี้ ให้สร้างหรือเชื่อมต่อกับเซสชัน tmux ที่ VVTerm จัดการเสมอ";
 "Show a prompt on each new tab or split so you can choose a session." = "แสดงพรอมต์ทุกครั้งที่เปิดแท็บใหม่หรือแบ่งหน้าจอ เพื่อให้คุณเลือกเซสชันได้";
 "Start a normal shell without tmux session persistence." = "เริ่มเชลล์ปกติโดยไม่ใช้การคงอยู่ของเซสชัน tmux";
+"Use a normal shell" = "ใช้เชลล์ปกติ";
+"Start a normal shell without remote session persistence." = "เริ่มเชลล์ปกติโดยไม่คงเซสชันระยะไกลไว้";
+"Installing %@" = "กำลังติดตั้ง %@";
+"Install %@?" = "ติดตั้ง %@?";
+"The remote session is still running on the server." = "เซสชันระยะไกลยังคงทำงานอยู่บนเซิร์ฟเวอร์";
 "Automatically attach to the last tmux session you selected." = "เชื่อมต่ออัตโนมัติกับเซสชัน tmux ล่าสุดที่คุณเลือก";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "เซสชันจะยังคงอยู่แม้แอปเริ่มใหม่หรือหลุดการเชื่อมต่อ เมื่อมี tmux ให้ใช้งาน";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "เลือกพฤติกรรมเริ่มต้นสำหรับเซิร์ฟเวอร์ใหม่ คุณยังสามารถกำหนดแยกต่อเซิร์ฟเวอร์ได้ในตั้งค่าเซิร์ฟเวอร์";
@@ -1820,3 +1826,23 @@
 "Remove All Downloaded Models" = "ลบโมเดลที่ดาวน์โหลดทั้งหมด";
 "Remove All Downloaded Models?" = "ลบโมเดลที่ดาวน์โหลดทั้งหมดหรือไม่";
 "Voice input models must be downloaded again before they can work offline." = "ต้องดาวน์โหลดโมเดลป้อนข้อมูลด้วยเสียงอีกครั้งก่อนใช้งานแบบออฟไลน์";
+"Keep remote sessions running by default" = "ให้เซสชันระยะไกลทำงานต่อโดยค่าเริ่มต้น";
+"These defaults apply to new servers. You can override them in server settings." = "ค่าเริ่มต้นเหล่านี้ใช้กับเซิร์ฟเวอร์ใหม่ คุณเปลี่ยนได้ในการตั้งค่าเซิร์ฟเวอร์";
+"Keep remote sessions running" = "ให้เซสชันระยะไกลทำงานต่อ";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "ตัวเลือกที่เลือกจะทำให้เซสชันระยะไกลทำงานต่อหลังจากแอปเริ่มใหม่หรือขาดการเชื่อมต่อ";
+"Without session persistence, app backgrounding can interrupt running commands." = "หากไม่มีการคงอยู่ของเซสชัน การทำงานเบื้องหลังของแอปอาจขัดจังหวะคำสั่งที่กำลังทำงาน";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "ตัวเลือกที่เลือกจะทำให้เทอร์มินัลทำงานต่อหลังจากแอปเริ่มใหม่หรือขาดการเชื่อมต่อ";
+"Use a persistent session" = "ใช้เซสชันถาวร";
+"Use persistent sessions by default" = "ใช้เซสชันถาวรโดยค่าเริ่มต้น";
+"Create or reconnect to a VVTerm-managed session." = "สร้างหรือเชื่อมต่อกับเซสชันที่ VVTerm จัดการอีกครั้ง";
+"Ask which session to use for each new tab or split." = "ถามว่าจะใช้เซสชันใดสำหรับแต่ละแท็บหรือการแบ่งใหม่";
+"Startup Command" = "คำสั่งเริ่มต้น";
+"Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "ซิงค์ระหว่างอุปกรณ์ เรียกใช้เฉพาะเมื่อ VVTerm สร้างเซสชันถาวร อย่าใส่ข้อมูลลับ";
+"Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "ซิงค์ระหว่างอุปกรณ์ เรียกใช้สำหรับการเชื่อมต่อเทอร์มินัลใหม่แต่ละครั้ง อย่าใส่ข้อมูลลับ";
+"The command contains unsupported control characters." = "คำสั่งมีอักขระควบคุมที่ไม่รองรับ";
+"The command must be %lld UTF-8 bytes or less." = "คำสั่งต้องมีขนาดไม่เกิน %lld ไบต์ UTF-8";
+"%@ does not support custom startup commands yet." = "%@ ยังไม่รองรับคำสั่งเริ่มต้นแบบกำหนดเอง";
+"The connection ended while starting the shell. The startup command was not run again." = "การเชื่อมต่อสิ้นสุดขณะเริ่มเชลล์ คำสั่งเริ่มต้นไม่ได้ถูกเรียกใช้อีกครั้ง";
+"The remote server rejected the shell command." = "เซิร์ฟเวอร์ระยะไกลปฏิเสธคำสั่งเชลล์";
+"The remote server rejected the terminal request." = "เซิร์ฟเวอร์ระยะไกลปฏิเสธคำขอเทอร์มินัล";
+"The startup command may have run. VVTerm did not run it again." = "คำสั่งเริ่มต้นอาจทำงานแล้ว VVTerm ไม่ได้เรียกใช้อีกครั้ง";

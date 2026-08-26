@@ -1,21 +1,42 @@
 import SwiftUI
 
 struct TerminalSessionsConnectionsSettingsView: View {
-    @AppStorage("terminalTmuxEnabledDefault") private var tmuxEnabledDefault = true
-    @AppStorage("terminalTmuxStartupBehaviorDefault") private var tmuxStartupBehaviorRaw = TmuxStartupBehavior.askEveryTime.rawValue
+    let backends: [RemoteSessionBackendMetadata]
+
+    @AppStorage(TerminalRemoteSessionDefaults.enabledKey) private var remoteSessionEnabledDefault = true
+    @AppStorage(TerminalRemoteSessionDefaults.backendIdentifierKey)
+    private var remoteSessionBackendIdentifierRaw = RemoteSessionBackendIdentifier.tmux.rawValue
+    @AppStorage(TerminalRemoteSessionDefaults.startupBehaviorKey)
+    private var remoteSessionStartupBehaviorRaw = RemoteSessionStartupBehavior.ask.rawValue
     @AppStorage(SSHRuntimeSettings.keepAliveEnabledKey) private var keepAliveEnabled = true
     @AppStorage(SSHRuntimeSettings.keepAliveIntervalKey) private var keepAliveInterval = 30
     @AppStorage(TerminalDefaults.sshAutoReconnectKey) private var autoReconnect = true
 
-    private var tmuxStartupBehaviorBinding: Binding<TmuxStartupBehavior> {
+    private var remoteSessionBackendIdentifierBinding: Binding<RemoteSessionBackendIdentifier> {
         Binding(
-            get: { TmuxStartupBehavior(rawValue: tmuxStartupBehaviorRaw) ?? .askEveryTime },
-            set: { tmuxStartupBehaviorRaw = $0.rawValue }
+            get: {
+                let stored = RemoteSessionBackendIdentifier(rawValue: remoteSessionBackendIdentifierRaw)
+                if backends.contains(where: { $0.identifier == stored }) {
+                    return stored
+                }
+                if backends.contains(where: { $0.identifier == .tmux }) {
+                    return .tmux
+                }
+                return backends.first?.identifier ?? .tmux
+            },
+            set: { remoteSessionBackendIdentifierRaw = $0.rawValue }
         )
     }
 
-    private var tmuxStartupBehavior: TmuxStartupBehavior {
-        TmuxStartupBehavior(rawValue: tmuxStartupBehaviorRaw) ?? .askEveryTime
+    private var remoteSessionStartupBehaviorBinding: Binding<RemoteSessionStartupBehavior> {
+        Binding(
+            get: {
+                RemoteSessionStartupBehavior(
+                    persistedRawValue: remoteSessionStartupBehaviorRaw
+                ) ?? .ask
+            },
+            set: { remoteSessionStartupBehaviorRaw = $0.rawValue }
+        )
     }
 
     var body: some View {
@@ -23,23 +44,26 @@ struct TerminalSessionsConnectionsSettingsView: View {
             TerminalSessionPlatformSettingsSection()
 
             Section {
-                Toggle("Enable tmux by default", isOn: $tmuxEnabledDefault)
+                Toggle("Use persistent sessions by default", isOn: $remoteSessionEnabledDefault)
 
-                if tmuxEnabledDefault {
-                    Picker("On connect", selection: tmuxStartupBehaviorBinding) {
-                        ForEach(TmuxStartupBehavior.configCases) { behavior in
-                            Text(behavior.displayName).tag(behavior)
+                if remoteSessionEnabledDefault {
+                    Picker("Use", selection: remoteSessionBackendIdentifierBinding) {
+                        ForEach(backends, id: \.identifier) { backend in
+                            RemoteSessionBackendLabel(backend: backend)
+                                .tag(backend.identifier)
                         }
                     }
 
-                    Text(tmuxStartupBehavior.descriptionText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Picker("On connect", selection: remoteSessionStartupBehaviorBinding) {
+                        ForEach(RemoteSessionStartupBehavior.allCases) { behavior in
+                            Text(behavior.displayName).tag(behavior)
+                        }
+                    }
                 }
             } header: {
                 Text("Session Persistence")
             } footer: {
-                Text("Choose the default behavior for new servers. You can still override per server in server settings.")
+                Text("These defaults apply to new servers. You can override them in server settings.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -9,7 +9,10 @@ nonisolated enum ServerCloudKitRecordCodec {
         "connectionMode", "authMethod", "cloudflareAccessMode",
         "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
         "lastConnected", "isFavorite", "requiresBiometricUnlock", "tmuxEnabledOverride",
-        "tmuxStartupBehaviorOverride", "createdAt", "updatedAt", "environment"
+        "tmuxStartupBehaviorOverride",
+        "remoteSessionEnabledOverride", "remoteSessionBackendIdentifier",
+        "remoteSessionStartupBehaviorOverride", "remoteShellStartupCommand",
+        "createdAt", "updatedAt", "environment"
     ]
 
     private static let logger = Logger(
@@ -55,6 +58,23 @@ nonisolated enum ServerCloudKitRecordCodec {
             .flatMap(SSHConnectionMode.init(rawValue:)) ?? .standard
         let cloudflareAccessMode = (record["cloudflareAccessMode"] as? String)
             .flatMap(CloudflareAccessMode.init(rawValue:))
+        let legacyStartupBehavior = (record["tmuxStartupBehaviorOverride"] as? String)
+            .flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
+        let backendIdentifier = RemoteSessionBackendIdentifier(
+            rawValue: record["remoteSessionBackendIdentifier"] as? String
+                ?? RemoteSessionBackendIdentifier.tmux.rawValue
+        )
+        let currentEnabledOverride = record["remoteSessionEnabledOverride"] as? Bool
+        let currentStartupBehavior = (
+            record["remoteSessionStartupBehaviorOverride"] as? String
+        ).flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
+        let enabledOverride = backendIdentifier == .tmux
+            ? (record["tmuxEnabledOverride"] as? Bool) ?? currentEnabledOverride
+            : currentEnabledOverride
+        let startupBehavior = backendIdentifier == .tmux
+            ? (legacyStartupBehavior ?? currentStartupBehavior)
+            : currentStartupBehavior
+        let updatedAt = record["updatedAt"] as? Date ?? now
 
         return Server(
             id: id,
@@ -75,11 +95,12 @@ nonisolated enum ServerCloudKitRecordCodec {
             lastConnected: record["lastConnected"] as? Date,
             isFavorite: record["isFavorite"] as? Bool ?? false,
             requiresBiometricUnlock: record["requiresBiometricUnlock"] as? Bool ?? false,
-            tmuxEnabledOverride: record["tmuxEnabledOverride"] as? Bool,
-            tmuxStartupBehaviorOverride: (record["tmuxStartupBehaviorOverride"] as? String)
-                .flatMap(TmuxStartupBehavior.init(rawValue:)),
+            remoteSessionEnabledOverride: enabledOverride,
+            remoteSessionBackendIdentifier: backendIdentifier,
+            remoteSessionStartupBehaviorOverride: startupBehavior,
+            remoteShellStartupCommand: record["remoteShellStartupCommand"] as? String,
             createdAt: record["createdAt"] as? Date ?? now,
-            updatedAt: record["updatedAt"] as? Date ?? now
+            updatedAt: updatedAt
         )
     }
 
@@ -113,8 +134,13 @@ nonisolated enum ServerCloudKitRecordCodec {
         record["lastConnected"] = server.lastConnected
         record["isFavorite"] = server.isFavorite
         record["requiresBiometricUnlock"] = server.requiresBiometricUnlock
-        record["tmuxEnabledOverride"] = server.tmuxEnabledOverride
-        record["tmuxStartupBehaviorOverride"] = server.tmuxStartupBehaviorOverride?.rawValue
+        record["remoteSessionEnabledOverride"] = server.remoteSessionEnabledOverride
+        record["remoteSessionBackendIdentifier"] = server.remoteSessionBackendIdentifier.rawValue
+        record["remoteSessionStartupBehaviorOverride"] =
+            server.remoteSessionStartupBehaviorOverride?.rawValue
+        record["tmuxEnabledOverride"] = legacyTmuxEnabledOverride(for: server)
+        record["tmuxStartupBehaviorOverride"] = legacyTmuxStartupBehavior(for: server)
+        record["remoteShellStartupCommand"] = server.remoteShellStartupAction?.command
         record["createdAt"] = server.createdAt
         record["updatedAt"] = now
         if let environment = try? JSONEncoder().encode(server.environment) {
@@ -136,5 +162,23 @@ nonisolated enum ServerCloudKitRecordCodec {
     private static func nonempty(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return nil }
         return value
+    }
+
+    private static func legacyTmuxEnabledOverride(for server: Server) -> Bool? {
+        server.remoteSessionBackendIdentifier == .tmux
+            ? server.remoteSessionEnabledOverride
+            : false
+    }
+
+    private static func legacyTmuxStartupBehavior(for server: Server) -> String? {
+        guard server.remoteSessionBackendIdentifier == .tmux else {
+            return "skipTmux"
+        }
+        return switch server.remoteSessionStartupBehaviorOverride {
+        case .createManaged: "vvtermManaged"
+        case .ask: "askEveryTime"
+        case .plainShell: "skipTmux"
+        case nil: nil
+        }
     }
 }

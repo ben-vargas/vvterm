@@ -14,7 +14,7 @@ extension SSHSession {
         terminalType: RemoteTerminalType = RemoteTerminalBootstrap.defaultTerminalType
     ) async throws -> ShellHandle {
         guard isActive, let session = libssh2Session else {
-            throw SSHError.notConnected
+            throw SSHError.disconnectedBeforeShellRequest
         }
         guard let wireSize = TerminalGeometryConversion.gridSize(cols: cols, rows: rows) else {
             throw SSHError.unknown("Invalid terminal size \(cols)x\(rows)")
@@ -24,6 +24,7 @@ extension SSHSession {
         shellStartupsInFlight.insert(startupId)
         var pendingChannel: OpaquePointer?
         var shouldInvalidateTransport = false
+        var processRequestStarted = false
         defer {
             if shouldInvalidateTransport {
                 invalidateTransport()
@@ -105,7 +106,7 @@ extension SSHSession {
             }
             guard ptyResult == 0 else {
                 if let ptyToken { startupTrace?.end(ptyToken, outcome: "failed") }
-                throw SSHError.shellRequestFailed
+                throw SSHError.ptyRequestFailed
             }
             if let ptyToken { startupTrace?.end(ptyToken) }
 
@@ -121,20 +122,41 @@ extension SSHSession {
                 ) {
                 case .shell:
                     shellResult = try await performShellStartupCall(session: session) {
-                        libssh2_channel_process_startup(channel, "shell", 5, nil, 0)
+                        processRequestStarted = true
+                        let result = libssh2_channel_process_startup(
+                            channel,
+                            "shell",
+                            5,
+                            nil,
+                            0
+                        )
+                        #if DEBUG
+                        notifyShellStartupTestHook(.processRequestStarted, session: session)
+                        #endif
+                        return result
                     }
                 case .exec(let command):
+                    guard let commandByteCount = UInt32(exactly: command.utf8.count) else {
+                        throw SSHError.unknown("The shell command is too large")
+                    }
                     shellResult = try await performShellStartupCall(session: session) {
-                        command.withCString { pointer in
+                        processRequestStarted = true
+                        let result = command.withCString { pointer in
                             libssh2_channel_process_startup(
                                 channel,
                                 "exec",
                                 4,
                                 pointer,
-                                UInt32(command.utf8.count)
+                                commandByteCount
                             )
                         }
+                        #if DEBUG
+                        notifyShellStartupTestHook(.processRequestStarted, session: session)
+                        #endif
+                        return result
                     }
+                case .unsupportedStartupCommand:
+                    throw SSHError.unsupportedRemoteShellForStartupCommand
                 }
             } catch {
                 if let shellToken {
@@ -143,11 +165,17 @@ extension SSHSession {
                         outcome: error is CancellationError ? "cancelled" : "failed"
                     )
                 }
+                if processRequestStarted {
+                    throw SSHError.processRequestOutcomeUnknown
+                }
                 throw error
             }
             guard shellResult == 0 else {
                 if let shellToken { startupTrace?.end(shellToken, outcome: "failed") }
-                throw SSHError.shellRequestFailed
+                if shellResult == LIBSSH2_ERROR_CHANNEL_REQUEST_DENIED {
+                    throw SSHError.processRequestDenied
+                }
+                throw SSHError.processRequestOutcomeUnknown
             }
             if let shellToken { startupTrace?.end(shellToken) }
 
@@ -168,10 +196,16 @@ extension SSHSession {
             return ShellHandle(id: shellId, stream: stream)
         } catch is CancellationError {
             shouldInvalidateTransport = true
+            if processRequestStarted {
+                throw SSHError.processRequestOutcomeUnknown
+            }
             throw CancellationError()
         } catch SSHError.notConnected {
             shouldInvalidateTransport = true
-            throw SSHError.notConnected
+            if processRequestStarted {
+                throw SSHError.processRequestOutcomeUnknown
+            }
+            throw SSHError.disconnectedBeforeShellRequest
         } catch {
             if let pendingChannel {
                 if await discardShellStartupChannel(pendingChannel, session: session) {

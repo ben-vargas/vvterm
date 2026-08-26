@@ -1,6 +1,6 @@
 import Foundation
 
-enum SSHError: LocalizedError {
+enum SSHError: LocalizedError, Sendable {
     case notConnected
     case connectionFailed(String)
     case authenticationFailed
@@ -15,14 +15,34 @@ enum SSHError: LocalizedError {
     case moshInvalidEndpoint
     case moshUDPTimeout
     case moshClientSessionFailed(String)
+    case disconnectedBeforeShellRequest
+    case startupCommandMayHaveRun
     case timeout
     case channelOpenFailed
+    case ptyRequestFailed
+    case processRequestDenied
+    case processRequestOutcomeUnknown
     case shellRequestFailed
+    case managedStartupCommandUnsupported(String)
+    case unsupportedRemoteShellForStartupCommand
     case outputLimitExceeded
     case hostKeyApprovalRequired
     case hostKeyVerificationFailed
     case socketError(String)
     case unknown(String)
+
+    var provesStartupCommandWasNotDispatched: Bool {
+        switch self {
+        case .channelOpenFailed,
+             .disconnectedBeforeShellRequest,
+             .ptyRequestFailed,
+             .processRequestDenied,
+             .unsupportedRemoteShellForStartupCommand:
+            return true
+        default:
+            return false
+        }
+    }
 
     var allowsAutomaticReconnectRetry: Bool {
         switch self {
@@ -32,8 +52,11 @@ enum SSHError: LocalizedError {
              .moshSessionFailed,
              .moshUDPTimeout,
              .moshClientSessionFailed,
+             .disconnectedBeforeShellRequest,
              .timeout,
              .channelOpenFailed,
+             .ptyRequestFailed,
+             .processRequestDenied,
              .shellRequestFailed,
              .socketError:
             return true
@@ -45,9 +68,13 @@ enum SSHError: LocalizedError {
              .moshServerRuntimeBroken,
              .moshBootstrapFailed,
              .moshInvalidEndpoint,
+             .startupCommandMayHaveRun,
+             .processRequestOutcomeUnknown,
+             .managedStartupCommandUnsupported,
              .hostKeyApprovalRequired,
              .hostKeyVerificationFailed,
              .outputLimitExceeded,
+             .unsupportedRemoteShellForStartupCommand,
              .unknown:
             return false
         }
@@ -80,9 +107,26 @@ enum SSHError: LocalizedError {
             return "Mosh UDP session timed out"
         case .moshClientSessionFailed(let msg):
             return "Mosh client session failed: \(msg)"
+        case .disconnectedBeforeShellRequest:
+            return String(localized: "The connection ended before the remote shell request was sent.")
+        case .startupCommandMayHaveRun:
+            return String(localized: "The startup command may have run. VVTerm did not run it again.")
         case .timeout: return String(localized: "Connection timed out")
         case .channelOpenFailed: return "Failed to open channel"
+        case .ptyRequestFailed:
+            return String(localized: "The remote server rejected the terminal request.")
+        case .processRequestDenied:
+            return String(localized: "The remote server rejected the shell command.")
+        case .processRequestOutcomeUnknown:
+            return String(localized: "The connection ended while starting the shell. The startup command was not run again.")
         case .shellRequestFailed: return "Failed to request shell"
+        case .managedStartupCommandUnsupported(let backendName):
+            return String(
+                format: String(localized: "%@ does not support custom startup commands yet."),
+                backendName
+            )
+        case .unsupportedRemoteShellForStartupCommand:
+            return String(localized: "VVTerm cannot run the startup command because it could not detect a supported remote shell.")
         case .outputLimitExceeded:
             return String(localized: "The remote command produced too much output.")
         case .hostKeyApprovalRequired:

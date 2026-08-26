@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum RemoteShellFamily: String, Hashable, Sendable {
+nonisolated enum RemoteShellFamily: String, Codable, Hashable, Sendable {
     case posix
     case powershell
     case cmd
@@ -53,12 +53,12 @@ nonisolated struct RemoteShellProfile: Hashable, Sendable {
             guard !trimmed.isEmpty else {
                 return .shell
             }
-            return .exec(RemoteTerminalBootstrap.wrapCmdCommand(trimmed))
+            return .exec(RemoteTerminalBootstrap.wrapCmdExecCommand(trimmed))
         case .unknown:
             guard !trimmed.isEmpty else {
                 return .shell
             }
-            return .shell
+            return .unsupportedStartupCommand
         }
     }
 

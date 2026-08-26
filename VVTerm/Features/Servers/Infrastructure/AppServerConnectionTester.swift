@@ -96,8 +96,10 @@ extension ServerFormDependencies {
         hostKeys: any ServerHostKeyRepository,
         connectionOperations: any ServerConnectionOperationRunning,
         remoteMosh: any ServerMoshConnectionTesting,
-        defaultTmuxEnabled: @escaping @MainActor () -> Bool,
-        defaultTmuxStartupBehavior: @escaping @MainActor () -> TmuxStartupBehavior,
+        remoteSessionBackends: [RemoteSessionBackendMetadata],
+        defaultRemoteSessionEnabled: @escaping @MainActor () -> Bool,
+        defaultRemoteSessionBackendIdentifier: @escaping @MainActor () -> RemoteSessionBackendIdentifier,
+        defaultRemoteSessionStartupBehavior: @escaping @MainActor () -> RemoteSessionStartupBehavior,
         now: @escaping @Sendable () -> Date,
         makeID: @escaping @Sendable () -> UUID
     ) -> Self {
@@ -110,8 +112,10 @@ extension ServerFormDependencies {
                 now: now
             ),
             hostKeys: hostKeys,
-            defaultTmuxEnabled: defaultTmuxEnabled,
-            defaultTmuxStartupBehavior: defaultTmuxStartupBehavior,
+            remoteSessionBackends: remoteSessionBackends,
+            defaultRemoteSessionEnabled: defaultRemoteSessionEnabled,
+            defaultRemoteSessionBackendIdentifier: defaultRemoteSessionBackendIdentifier,
+            defaultRemoteSessionStartupBehavior: defaultRemoteSessionStartupBehavior,
             now: now,
             makeID: makeID
         )

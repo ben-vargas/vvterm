@@ -846,12 +846,12 @@
 "Provide both Team Domain and App Domain overrides for Cloudflare OAuth." = "Proporciona las anulaciones de dominio de equipo y de app para Cloudflare OAuth.";
 "Cloudflare metadata discovery failed. Add Team Domain and App Domain overrides in server settings." = "No se pudieron detectar los metadatos de Cloudflare. Añade las anulaciones de dominio de equipo y de app en los ajustes del servidor.";
 
-/* Tmux Attach Prompt */
-"Choose tmux session" = "Elegir sesión de tmux";
+/* Remote Session Attach Prompt */
+"Choose %@ session" = "Elegir sesión de %@";
 "Existing sessions" = "Sesiones existentes";
 "Select a session to attach immediately." = "Selecciona una sesión para adjuntarte de inmediato.";
-"No tmux sessions found" = "No se encontraron sesiones de tmux";
-"Create a new session, or continue without tmux." = "Crea una sesión nueva o continúa sin tmux.";
+"No %@ sessions found" = "No se encontraron sesiones de %@";
+"Create a new session, or continue without a remote session." = "Crea una sesión nueva o continúa sin una sesión remota.";
 "Attached" = "Adjunta";
 "Detached" = "Desconectada";
 "1 client" = "1 cliente";
@@ -859,13 +859,19 @@
 "1 window" = "1 ventana";
 "%lld windows" = "%lld ventanas";
 "New session" = "Nueva sesión";
-"Skip tmux" = "Omitir tmux";
+"Continue without a remote session" = "Continuar sin una sesión remota";
+"Open Installation Guide" = "Abrir la guía de instalación";
 "Create VVTerm session" = "Crear sesión de VVTerm";
 "Ask every time" = "Preguntar siempre";
 "Use remembered session" = "Usar sesión recordada";
 "Always create or attach to a VVTerm-managed tmux session for this connection." = "Crear o adjuntar siempre una sesión de tmux administrada por VVTerm para esta conexión.";
 "Show a prompt on each new tab or split so you can choose a session." = "Mostrar un aviso en cada pestaña nueva o división para que puedas elegir una sesión.";
 "Start a normal shell without tmux session persistence." = "Iniciar una shell normal sin persistencia de sesión de tmux.";
+"Use a normal shell" = "Usar una shell normal";
+"Start a normal shell without remote session persistence." = "Iniciar una shell normal sin persistencia de la sesión remota.";
+"Installing %@" = "Instalando %@";
+"Install %@?" = "¿Instalar %@?";
+"The remote session is still running on the server." = "La sesión remota todavía se está ejecutando en el servidor.";
 "Automatically attach to the last tmux session you selected." = "Adjuntarse automáticamente a la última sesión de tmux que seleccionaste.";
 "Sessions stay alive across app restarts and disconnects when tmux is available." = "Las sesiones se mantienen activas entre reinicios de la app y desconexiones cuando tmux está disponible.";
 "Choose the default behavior for new servers. You can still override per server in server settings." = "Elige el comportamiento predeterminado para servidores nuevos. Puedes cambiarlo por servidor en la configuración del servidor.";
@@ -1820,3 +1826,23 @@
 "Remove All Downloaded Models" = "Eliminar todos los modelos descargados";
 "Remove All Downloaded Models?" = "¿Eliminar todos los modelos descargados?";
 "Voice input models must be downloaded again before they can work offline." = "Los modelos de entrada de voz deberán descargarse de nuevo para funcionar sin conexión.";
+"Keep remote sessions running by default" = "Mantener activas las sesiones remotas de forma predeterminada";
+"These defaults apply to new servers. You can override them in server settings." = "Estos valores predeterminados se aplican a los servidores nuevos. Puedes cambiarlos en los ajustes del servidor.";
+"Keep remote sessions running" = "Mantener activas las sesiones remotas";
+"The selected option keeps remote sessions running across app restarts and disconnects." = "La opción seleccionada mantiene activas las sesiones remotas después de reiniciar la app o desconectarse.";
+"Without session persistence, app backgrounding can interrupt running commands." = "Sin persistencia de sesión, poner la app en segundo plano puede interrumpir los comandos en ejecución.";
+"The selected option keeps the terminal alive across app restarts and disconnects." = "La opción seleccionada mantiene activo el terminal después de reiniciar la app o desconectarse.";
+"Use a persistent session" = "Usar una sesión persistente";
+"Use persistent sessions by default" = "Usar sesiones persistentes de forma predeterminada";
+"Create or reconnect to a VVTerm-managed session." = "Crear una sesión gestionada por VVTerm o volver a conectarse a ella.";
+"Ask which session to use for each new tab or split." = "Preguntar qué sesión usar para cada pestaña o división nueva.";
+"Startup Command" = "Comando de inicio";
+"Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Se sincroniza entre dispositivos. Solo se ejecuta cuando VVTerm crea una sesión persistente. No incluyas secretos.";
+"Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Se sincroniza entre dispositivos. Se ejecuta para cada conexión de terminal nueva. No incluyas secretos.";
+"The command contains unsupported control characters." = "El comando contiene caracteres de control no compatibles.";
+"The command must be %lld UTF-8 bytes or less." = "El comando debe tener %lld bytes UTF-8 como máximo.";
+"%@ does not support custom startup commands yet." = "%@ todavía no admite comandos de inicio personalizados.";
+"The connection ended while starting the shell. The startup command was not run again." = "La conexión terminó al iniciar el shell. El comando de inicio no se volvió a ejecutar.";
+"The remote server rejected the shell command." = "El servidor remoto rechazó el comando del shell.";
+"The remote server rejected the terminal request." = "El servidor remoto rechazó la solicitud del terminal.";
+"The startup command may have run. VVTerm did not run it again." = "Es posible que el comando de inicio se haya ejecutado. VVTerm no lo volvió a ejecutar.";

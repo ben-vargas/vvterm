@@ -90,11 +90,26 @@ private final class TerminalEffectRecorder {
     }
 }
 
-private actor RecordingTerminalRemoteTmuxService: TerminalRemoteTmuxServicing {
-    private var killedSessions: [String] = []
+private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing {
+    nonisolated let backendMetadata = [RemoteSessionBackendMetadata(
+        identifier: .tmux,
+        displayName: "tmux",
+        installation: .automatic,
+        managedStartupCommandSupport: .supported
+    )]
+    private var killedSessions: [RemoteSessionIdentifier] = []
     private var availabilityProbes = 0
+    private var cleanupKeepSets: [Set<RemoteSessionIdentifier>] = []
+    private var requests: [RemoteSessionLaunchRequest] = []
+    private let availabilityResult: RemoteSessionAvailability
 
-    func killedSessionNames() -> [String] {
+    init(
+        availabilityResult: RemoteSessionAvailability = .unsupportedEnvironment
+    ) {
+        self.availabilityResult = availabilityResult
+    }
+
+    func killedSessionIdentifiers() -> [RemoteSessionIdentifier] {
         killedSessions
     }
 
@@ -102,28 +117,60 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteTmuxServicing {
         availabilityProbes
     }
 
-    func tmuxAvailability(using client: SSHClient) async -> RemoteTmuxAvailability {
-        availabilityProbes += 1
-        return .unsupported
+    func lastCleanupKeepSet() -> Set<RemoteSessionIdentifier>? {
+        cleanupKeepSets.last
     }
 
-    func tmuxInstallBackend(using client: SSHClient) async -> RemoteTmuxBackend? {
-        nil
+    func launchRequests() -> [RemoteSessionLaunchRequest] {
+        requests
+    }
+
+    func availability(
+        for backendIdentifier: RemoteSessionBackendIdentifier,
+        using client: SSHClient
+    ) async -> RemoteSessionAvailability {
+        availabilityProbes += 1
+        return availabilityResult
     }
 
     func listSessions(
+        scope: RemoteSessionListScope,
         using client: SSHClient,
-        backend: RemoteTmuxBackend
-    ) async throws -> [RemoteTmuxSession] {
+        runtime: RemoteSessionRuntime
+    ) async throws -> [RemoteSessionDescriptor] {
         []
     }
 
-    func prepareConfig(
+    func prepareManagedSession(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
-        themeStyle: RemoteTmuxThemeStyle,
-        backend: RemoteTmuxBackend?
+        themeStyle: RemoteSessionThemeStyle,
+        runtime: RemoteSessionRuntime
     ) async {}
+
+    func launchPlan(
+        for request: RemoteSessionLaunchRequest,
+        runtime: RemoteSessionRuntime
+    ) async throws -> RemoteSessionBackendLaunchPlan {
+        requests.append(request)
+        return RemoteSessionBackendLaunchPlan(
+            command: "test-launch",
+            presenceProbe: RemoteSessionPresenceProbe(
+                command: "test-presence",
+                existsMarker: "test-exists",
+                missingMarker: "test-missing"
+            )
+        )
+    }
+
+    func installScript(
+        attachment: RemoteSessionAttachment,
+        workingDirectory: String,
+        terminalType: RemoteTerminalType,
+        themeStyle: RemoteSessionThemeStyle,
+        using client: SSHClient,
+        attachAfterInstall: Bool
+    ) async -> String? { nil }
 
     func sendScript(
         _ script: String,
@@ -132,29 +179,25 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteTmuxServicing {
     ) async throws {}
 
     func killSession(
-        named sessionName: String,
+        _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
-        backend: RemoteTmuxBackend?
+        runtime: RemoteSessionRuntime?
     ) async {
-        killedSessions.append(sessionName)
+        killedSessions.append(identifier)
     }
 
-    func cleanupLegacySessions(
+    func cleanupSessions(
+        keeping identifiers: Set<RemoteSessionIdentifier>,
         using client: SSHClient,
-        backend: RemoteTmuxBackend?
-    ) async {}
+        runtime: RemoteSessionRuntime
+    ) async {
+        cleanupKeepSets.append(identifiers)
+    }
 
-    func cleanupDetachedSessions(
-        deviceId: String,
-        keeping sessionNames: Set<String>,
+    func currentWorkingDirectory(
+        for attachment: RemoteSessionAttachment,
         using client: SSHClient,
-        backend: RemoteTmuxBackend?
-    ) async {}
-
-    func currentPath(
-        sessionName: String,
-        using client: SSHClient,
-        backend: RemoteTmuxBackend?
+        runtime: RemoteSessionRuntime?
     ) async -> String? {
         nil
     }
@@ -176,6 +219,73 @@ private actor RecordingTerminalRemoteMoshService: TerminalRemoteMoshServicing {
 @MainActor
 struct TerminalTabManagerDependencyIsolationTests {
     @Test
+    func cleanupKeepsManagedSessionsForEveryServerProfile() async throws {
+        let remoteSessions = RecordingTerminalRemoteTmuxService()
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: TerminalEffectRecorder(),
+            remoteSessions: remoteSessions,
+            remoteMosh: RecordingTerminalRemoteMoshService(),
+            remoteSessionEnabled: true,
+            startupBehavior: .createManaged,
+            deviceID: "shared-host-device"
+        )
+        let firstTab = TerminalTab(serverId: UUID(), title: "First profile")
+        let secondTab = TerminalTab(serverId: UUID(), title: "Second profile")
+        install(firstTab, in: manager)
+        install(secondTab, in: manager)
+        let firstIdentifier = try RemoteSessionIdentifier(
+            backendIdentifier: .tmux,
+            validating: "first-profile-session"
+        )
+        let secondIdentifier = try RemoteSessionIdentifier(
+            backendIdentifier: .tmux,
+            validating: "second-profile-session"
+        )
+        manager.remoteSessionCoordinator.setAttachment(
+            for: firstTab.rootPaneId,
+            identifier: firstIdentifier,
+            ownership: .managed
+        )
+        manager.remoteSessionCoordinator.setAttachment(
+            for: secondTab.rootPaneId,
+            identifier: secondIdentifier,
+            ownership: .managed
+        )
+
+        let client = SSHClient.testing()
+        let startToken = try #require(
+            manager.transportCoordinator.beginShellStart(
+                for: firstTab.rootPaneId,
+                client: client
+            )
+        )
+        let probe = RemoteSessionProbe(
+            backendIdentifier: .tmux,
+            executable: try RemoteSessionExecutable(validating: "/usr/bin/tmux"),
+            implementationVariant: "tmux-posix",
+            rawVersion: "tmux 3.5",
+            semanticVersion: RemoteSessionSemanticVersion(major: 3, minor: 5, patch: 0),
+            shellFamily: .posix,
+            shellExecutable: "sh"
+        )
+
+        _ = try await manager.remoteSessionCoordinator.startupPlan(
+            for: firstTab.rootPaneId,
+            serverID: firstTab.serverId,
+            client: client,
+            startToken: startToken,
+            availabilityResolver: { .available(probe) }
+        )
+
+        #expect(await remoteSessions.lastCleanupKeepSet() == [
+            firstIdentifier,
+            secondIdentifier
+        ])
+        await manager.resetForTesting()
+    }
+
+    @Test
     func disconnectInvalidatesAuthorizedTabOpenBeforeItMutatesSessionState() async throws {
         let effects = TerminalEffectRecorder()
         let gate = TerminalAuthorizationGate()
@@ -183,7 +293,7 @@ struct TerminalTabManagerDependencyIsolationTests {
         let manager = makeManager(
             network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
             effects: effects,
-            remoteTmux: RecordingTerminalRemoteTmuxService(),
+            remoteSessions: RecordingTerminalRemoteTmuxService(),
             remoteMosh: RecordingTerminalRemoteMoshService(),
             deviceID: "tab-open-generation"
         )
@@ -212,11 +322,11 @@ struct TerminalTabManagerDependencyIsolationTests {
 
     @Test
     func disabledTmuxProducesPlainStartupPlanWithoutRemoteProbe() async throws {
-        let remoteTmux = RecordingTerminalRemoteTmuxService()
+        let remoteSessions = RecordingTerminalRemoteTmuxService()
         let manager = makeManager(
             network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
             effects: TerminalEffectRecorder(),
-            remoteTmux: remoteTmux,
+            remoteSessions: remoteSessions,
             remoteMosh: RecordingTerminalRemoteMoshService(),
             deviceID: "skip-device"
         )
@@ -227,20 +337,222 @@ struct TerminalTabManagerDependencyIsolationTests {
             manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
         )
 
-        let plan = try await manager.tmuxCoordinator.startupPlan(
+        let plan = try await manager.remoteSessionCoordinator.startupPlan(
             for: tab.rootPaneId,
-            serverId: tab.serverId,
+            serverID: tab.serverId,
             client: client,
             startToken: startToken
         )
 
         #expect(plan.command == nil)
-        #expect(plan.tmuxLifecycle == nil)
-        #expect(await remoteTmux.availabilityProbeCount() == 0)
+        #expect(plan.remoteSessionLifecycle == nil)
+        #expect(await remoteSessions.availabilityProbeCount() == 0)
         manager.transportCoordinator.finishShellStart(
             for: tab.rootPaneId,
             client: client,
             startToken: startToken
+        )
+        await manager.resetForTesting()
+    }
+
+    @Test
+    func serverStartupActionReplacesPlainShellWithoutRemoteSessionProbe() async throws {
+        let remoteSessions = RecordingTerminalRemoteTmuxService()
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: TerminalEffectRecorder(),
+            remoteSessions: remoteSessions,
+            remoteMosh: RecordingTerminalRemoteMoshService(),
+            startupAction: try RemoteShellStartupAction(
+                command: "cd ~/myproject && printf '%s' \"$(date)\""
+            ),
+            deviceID: "custom-startup-device"
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Custom startup")
+        install(tab, in: manager)
+        let client = SSHClient.testing()
+        let startToken = try #require(
+            manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
+        )
+
+        let plan = try await manager.remoteSessionCoordinator.startupPlan(
+            for: tab.rootPaneId,
+            serverID: tab.serverId,
+            client: client,
+            startToken: startToken
+        )
+
+        #expect(plan.command == "cd ~/myproject && printf '%s' \"$(date)\"")
+        #expect(plan.remoteSessionLifecycle == nil)
+        #expect(plan.mayExecuteUserStartupAction)
+        #expect(await remoteSessions.availabilityProbeCount() == 0)
+        manager.transportCoordinator.finishShellStart(
+            for: tab.rootPaneId,
+            client: client,
+            startToken: startToken
+        )
+        await manager.resetForTesting()
+    }
+
+    @Test
+    func pendingStartupActionIsNotPlannedAgain() async throws {
+        let remoteSessions = RecordingTerminalRemoteTmuxService()
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: TerminalEffectRecorder(),
+            remoteSessions: remoteSessions,
+            remoteMosh: RecordingTerminalRemoteMoshService(),
+            startupAction: try RemoteShellStartupAction(command: "notify-deployment"),
+            deviceID: "pending-custom-startup-device"
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Pending custom startup")
+        install(tab, in: manager)
+        manager.sessionState.updatePane(tab.rootPaneId) {
+            $0.startupActionReplayPending = true
+        }
+        let client = SSHClient.testing()
+        let startToken = try #require(
+            manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
+        )
+
+        let plan = try await manager.remoteSessionCoordinator.startupPlan(
+            for: tab.rootPaneId,
+            serverID: tab.serverId,
+            client: client,
+            startToken: startToken
+        )
+
+        #expect(plan.command == nil)
+        #expect(!plan.mayExecuteUserStartupAction)
+        #expect(await remoteSessions.availabilityProbeCount() == 0)
+        manager.transportCoordinator.finishShellStart(
+            for: tab.rootPaneId,
+            client: client,
+            startToken: startToken
+        )
+        await manager.resetForTesting()
+    }
+
+    @Test
+    func persistentStartupCommandDoesNotRunWhenSessionCannotBeCreated() async throws {
+        let remoteSessions = RecordingTerminalRemoteTmuxService()
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: TerminalEffectRecorder(),
+            remoteSessions: remoteSessions,
+            remoteMosh: RecordingTerminalRemoteMoshService(),
+            startupAction: try RemoteShellStartupAction(command: "touch /tmp/must-not-run"),
+            remoteSessionEnabled: true,
+            deviceID: "unavailable-persistent-session"
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Unavailable persistence")
+        install(tab, in: manager)
+        let client = SSHClient.testing()
+        let startToken = try #require(
+            manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
+        )
+
+        let plan = try await manager.remoteSessionCoordinator.startupPlan(
+            for: tab.rootPaneId,
+            serverID: tab.serverId,
+            client: client,
+            startToken: startToken
+        )
+
+        #expect(plan.command == nil)
+        #expect(plan.remoteSessionLifecycle == nil)
+        #expect(await remoteSessions.availabilityProbeCount() == 1)
+        manager.transportCoordinator.finishShellStart(
+            for: tab.rootPaneId,
+            client: client,
+            startToken: startToken
+        )
+        await manager.resetForTesting()
+    }
+
+    @Test
+    func persistentStartupCommandRunsForCreateButNotReconnect() async throws {
+        let probe = RemoteSessionProbe(
+            backendIdentifier: .tmux,
+            executable: try RemoteSessionExecutable(validating: "/usr/bin/tmux"),
+            implementationVariant: "unix-tmux",
+            rawVersion: "3.5",
+            semanticVersion: RemoteSessionSemanticVersion("3.5"),
+            shellFamily: .posix,
+            shellExecutable: "/bin/sh"
+        )
+        let remoteSessions = RecordingTerminalRemoteTmuxService(
+            availabilityResult: .available(probe)
+        )
+        let command = "cd ~/myproject && printf ready"
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: TerminalEffectRecorder(),
+            remoteSessions: remoteSessions,
+            remoteMosh: RecordingTerminalRemoteMoshService(),
+            startupAction: try RemoteShellStartupAction(command: command),
+            remoteSessionEnabled: true,
+            startupBehavior: .createManaged,
+            deviceID: "create-only-command"
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Create only")
+        install(tab, in: manager)
+
+        let firstClient = SSHClient.testing()
+        let firstToken = try #require(
+            manager.transportCoordinator.beginShellStart(
+                for: tab.rootPaneId,
+                client: firstClient
+            )
+        )
+        let createPlan = try await manager.remoteSessionCoordinator.startupPlan(
+            for: tab.rootPaneId,
+            serverID: tab.serverId,
+            client: firstClient,
+            startToken: firstToken
+        )
+        manager.transportCoordinator.finishShellStart(
+            for: tab.rootPaneId,
+            client: firstClient,
+            startToken: firstToken
+        )
+
+        manager.remoteSessionCoordinator.confirmManagedSession(for: tab.rootPaneId)
+        let reconnectClient = SSHClient.testing()
+        let reconnectToken = try #require(
+            manager.transportCoordinator.beginShellStart(
+                for: tab.rootPaneId,
+                client: reconnectClient
+            )
+        )
+        let reconnectPlan = try await manager.remoteSessionCoordinator.startupPlan(
+            for: tab.rootPaneId,
+            serverID: tab.serverId,
+            client: reconnectClient,
+            startToken: reconnectToken
+        )
+
+        let requests = await remoteSessions.launchRequests()
+        #expect(requests.count == 2)
+        let firstRequest = try #require(requests.first)
+        let lastRequest = try #require(requests.last)
+        if case .ensureManaged(_, let initialCommand) = firstRequest.intent {
+            #expect(initialCommand == command)
+        } else {
+            Issue.record("Expected the first launch to ensure a managed session")
+        }
+        if case .attach(let attachment) = lastRequest.intent {
+            #expect(attachment.ownership == .managed)
+        } else {
+            Issue.record("Expected reconnect to attach the existing managed session")
+        }
+        #expect(createPlan.mayExecuteUserStartupAction)
+        #expect(reconnectPlan.command != nil)
+        #expect(!reconnectPlan.mayExecuteUserStartupAction)
+        manager.transportCoordinator.finishShellStart(
+            for: tab.rootPaneId,
+            client: reconnectClient,
+            startToken: reconnectToken
         )
         await manager.resetForTesting()
     }
@@ -258,14 +570,14 @@ struct TerminalTabManagerDependencyIsolationTests {
         let first = makeManager(
             network: firstNetwork,
             effects: firstEffects,
-            remoteTmux: firstTmux,
+            remoteSessions: firstTmux,
             remoteMosh: firstMosh,
             deviceID: "first-device"
         )
         let second = makeManager(
             network: secondNetwork,
             effects: secondEffects,
-            remoteTmux: secondTmux,
+            remoteSessions: secondTmux,
             remoteMosh: secondMosh,
             deviceID: "second-device"
         )
@@ -304,16 +616,19 @@ struct TerminalTabManagerDependencyIsolationTests {
             for: tab.rootPaneId,
             serverId: tab.serverId
         ))
-        first.tmuxCoordinator.setAttachment(
+        first.remoteSessionCoordinator.setAttachment(
             for: tab.rootPaneId,
-            sessionName: "first-session",
+            identifier: try! RemoteSessionIdentifier(
+                backendIdentifier: .tmux,
+                validating: "first-session"
+            ),
             ownership: .managed
         )
 
         try await first.transportCoordinator.installMoshServer(for: tab.rootPaneId)
-        first.tmuxCoordinator.killIfNeeded(for: tab.rootPaneId)
+        first.remoteSessionCoordinator.killIfNeeded(for: tab.rootPaneId)
         #expect(await waitUntil {
-            await firstTmux.killedSessionNames() == ["first-session"]
+            await firstTmux.killedSessionIdentifiers().map(\.rawValue) == ["first-session"]
         })
         await first.transportCoordinator.unregisterSSHClient(for: tab.rootPaneId)
         first.closeTab(tab)
@@ -328,10 +643,17 @@ struct TerminalTabManagerDependencyIsolationTests {
         #expect(secondEffects.splitPaneCount == 0)
         #expect(await firstMosh.installCount() == 1)
         #expect(await secondMosh.installCount() == 0)
-        #expect(await secondTmux.killedSessionNames().isEmpty)
+        #expect(await secondTmux.killedSessionIdentifiers().isEmpty)
         #expect(
-            first.tmuxCoordinator.managedSessionName(for: tab.rootPaneId)
-                != second.tmuxCoordinator.managedSessionName(for: tab.rootPaneId)
+            try! first.remoteSessionCoordinator.resolver.managedIdentifier(
+                for: tab.rootPaneId,
+                serverID: tab.serverId,
+                backendIdentifier: .tmux
+            ) != second.remoteSessionCoordinator.resolver.managedIdentifier(
+                for: tab.rootPaneId,
+                serverID: tab.serverId,
+                backendIdentifier: .tmux
+            )
         )
 
         await first.resetForTesting()
@@ -341,8 +663,11 @@ struct TerminalTabManagerDependencyIsolationTests {
     private func makeManager(
         network: PassthroughSubject<TerminalNetworkReadiness, Never>,
         effects: TerminalEffectRecorder,
-        remoteTmux: RecordingTerminalRemoteTmuxService,
+        remoteSessions: any TerminalRemoteSessionServicing,
         remoteMosh: RecordingTerminalRemoteMoshService,
+        startupAction: RemoteShellStartupAction? = nil,
+        remoteSessionEnabled: Bool = false,
+        startupBehavior: RemoteSessionStartupBehavior = .plainShell,
         deviceID: String
     ) -> TerminalTabManager {
         TerminalTabManager(
@@ -362,14 +687,23 @@ struct TerminalTabManagerDependencyIsolationTests {
                 remoteMosh: remoteMosh,
                 eternalTerminalRuntime: .testing
             ),
-            tmuxConfiguration: TerminalTmuxConfiguration(
+            remoteSessionConfiguration: TerminalRemoteSessionConfiguration(
                 deviceID: deviceID,
-                enabledByDefault: { false },
-                startupBehaviorByDefault: { .skipTmux },
-                serverSettings: { _ in nil },
-                themeStyle: { TerminalTmuxSessionLiveComposition.themeStyle(for: nil) }
+                enabledByDefault: { remoteSessionEnabled },
+                backendIdentifierByDefault: { .tmux },
+                startupBehaviorByDefault: { startupBehavior },
+                serverSettings: { _ in
+                    TerminalRemoteSessionConfiguration.ServerSettings(
+                        name: "Test Server",
+                        enabledOverride: remoteSessionEnabled,
+                        backendIdentifier: .tmux,
+                        startupBehaviorOverride: startupBehavior,
+                        startupAction: startupAction
+                    )
+                },
+                themeStyle: { TerminalRemoteSessionLiveComposition.themeStyle(for: nil) }
             ),
-            remoteTmux: remoteTmux,
+            remoteSessions: remoteSessions,
             terminalSurfaceStore: GhosttyTerminalSurfaceStore(),
             eternalTerminalResumeStore: DependencyTestETResumeStore(),
             moshRecovery: UnavailableTerminalMoshRecoveryService()

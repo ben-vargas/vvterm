@@ -12,18 +12,18 @@ extension TerminalTabManagerLifecycleTests {
             await withCleanManager { manager in
                 let tab = TerminalTab(serverId: UUID(), title: "Managed tmux")
                 installTab(tab, in: manager, connectionState: .connected)
-                manager.tmuxCoordinator.setAttachment(
+                manager.remoteSessionCoordinator.setAttachment(
                     for: tab.rootPaneId,
-                    sessionName: "vvterm_test",
+                    identifier: remoteSessionIdentifier("vvterm_test"),
                     ownership: .managed
                 )
-                manager.tmuxCoordinator.updateStatus(.foreground, for: tab.rootPaneId)
+                manager.remoteSessionCoordinator.updateStatus(.foreground, for: tab.rootPaneId)
     
-                manager.handleShellEnd(for: tab.rootPaneId, reason: .tmuxEnded(.managed))
+                manager.handleShellEnd(for: tab.rootPaneId, reason: .remoteSessionTerminated(.managed))
     
                 #expect(manager.sessionState.tabs(for: tab.serverId).isEmpty)
                 #expect(manager.sessionState.paneState(for: tab.rootPaneId) == nil)
-                #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == nil)
+                #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId) == nil)
             }
         }
     
@@ -44,14 +44,14 @@ extension TerminalTabManagerLifecycleTests {
                     tabId: tab.id,
                     serverId: tab.serverId
                 ))
-                manager.tmuxCoordinator.setAttachment(
+                manager.remoteSessionCoordinator.setAttachment(
                     for: secondPaneId,
-                    sessionName: "vvterm_second",
+                    identifier: remoteSessionIdentifier("vvterm_second"),
                     ownership: .managed
                 )
-                manager.tmuxCoordinator.updateStatus(.background, for: secondPaneId)
+                manager.remoteSessionCoordinator.updateStatus(.background, for: secondPaneId)
     
-                manager.handleShellEnd(for: secondPaneId, reason: .tmuxEnded(.managed))
+                manager.handleShellEnd(for: secondPaneId, reason: .remoteSessionTerminated(.managed))
     
                 let remainingTab = manager.sessionState.tabs(for: tab.serverId).first
                 #expect(remainingTab?.allPaneIds == [tab.rootPaneId])
@@ -65,21 +65,24 @@ extension TerminalTabManagerLifecycleTests {
             await withCleanManager { manager in
                 let tab = TerminalTab(serverId: UUID(), title: "Detached tmux")
                 installTab(tab, in: manager, connectionState: .connected)
-                manager.tmuxCoordinator.setAttachment(
+                manager.remoteSessionCoordinator.setAttachment(
                     for: tab.rootPaneId,
-                    sessionName: "vvterm_test",
+                    identifier: remoteSessionIdentifier("vvterm_test"),
                     ownership: .managed
                 )
-                manager.tmuxCoordinator.updateStatus(.foreground, for: tab.rootPaneId)
+                manager.remoteSessionCoordinator.updateStatus(.foreground, for: tab.rootPaneId)
     
-                manager.handleShellEnd(for: tab.rootPaneId, reason: .tmuxDetached(.managed))
+                manager.handleShellEnd(for: tab.rootPaneId, reason: .remoteSessionDetached(.managed))
     
                 #expect(manager.sessionState.tabs(for: tab.serverId) == [tab])
                 #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
-                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .tmuxDetached)
+                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .remoteSessionDetached)
                 #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason?.allowsAutomaticReconnect == false)
-                #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId)?.sessionName == "vvterm_test")
-                #expect(manager.tmuxCoordinator.hasConfirmedManagedSession(for: tab.rootPaneId))
+                #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId)?.attachment.identifier.rawValue == "vvterm_test")
+                #expect(
+                    manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId)?
+                        .managedSessionConfirmed == true
+                )
             }
         }
     
@@ -89,13 +92,13 @@ extension TerminalTabManagerLifecycleTests {
                 await withCleanManager { manager in
                     let tab = TerminalTab(serverId: UUID(), title: "Long-idle tmux reconnect")
                     installTab(tab, in: manager, connectionState: .disconnected)
-                    manager.tmuxCoordinator.setAttachment(
+                    manager.remoteSessionCoordinator.setAttachment(
                         for: tab.rootPaneId,
-                        sessionName: "vvterm_existing",
+                        identifier: remoteSessionIdentifier("vvterm_existing"),
                         ownership: .managed,
                         managedSessionConfirmed: true
                     )
-                    manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
+                    manager.remoteSessionCoordinator.updateStatus(.background, for: tab.rootPaneId)
     
                     let disconnectedClient = SSHClient.testing()
                     guard let startToken = manager.transportCoordinator.beginShellStart(
@@ -107,9 +110,9 @@ extension TerminalTabManagerLifecycleTests {
                     }
     
                     do {
-                        _ = try await manager.tmuxCoordinator.startupPlan(
+                        _ = try await manager.remoteSessionCoordinator.startupPlan(
                             for: tab.rootPaneId,
-                            serverId: tab.serverId,
+                            serverID: tab.serverId,
                             client: disconnectedClient,
                             startToken: startToken,
                             availabilityResolver: {
@@ -121,13 +124,13 @@ extension TerminalTabManagerLifecycleTests {
                         #expect(error is SSHError)
                     }
     
-                    #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.tmuxStatus == .background)
-                    #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == TerminalTmuxAttachmentState(
-                        sessionName: "vvterm_existing",
+                    #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.remoteSessionStatus == .background)
+                    #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId) == TerminalRemoteSessionAttachmentState(
+                        identifier: remoteSessionIdentifier("vvterm_existing"),
                         ownership: .managed,
                         managedSessionConfirmed: true
                     ))
-                    #expect(manager.tmuxCoordinator.attachPrompt == nil)
+                    #expect(manager.remoteSessionCoordinator.attachPrompt == nil)
     
                     manager.transportCoordinator.finishShellStart(
                         for: tab.rootPaneId,
@@ -144,13 +147,13 @@ extension TerminalTabManagerLifecycleTests {
                 await withCleanManager { manager in
                     let tab = TerminalTab(serverId: UUID(), title: "Confirmed missing tmux")
                     installTab(tab, in: manager, connectionState: .disconnected)
-                    manager.tmuxCoordinator.setAttachment(
+                    manager.remoteSessionCoordinator.setAttachment(
                         for: tab.rootPaneId,
-                        sessionName: "vvterm_existing",
+                        identifier: remoteSessionIdentifier("vvterm_existing"),
                         ownership: .managed,
                         managedSessionConfirmed: true
                     )
-                    manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
+                    manager.remoteSessionCoordinator.updateStatus(.background, for: tab.rootPaneId)
     
                     let client = SSHClient.testing()
                     guard let startToken = manager.transportCoordinator.beginShellStart(
@@ -160,16 +163,16 @@ extension TerminalTabManagerLifecycleTests {
                         Issue.record("Expected shell start")
                         return
                     }
-                    _ = try? await manager.tmuxCoordinator.startupPlan(
+                    _ = try? await manager.remoteSessionCoordinator.startupPlan(
                         for: tab.rootPaneId,
-                        serverId: tab.serverId,
+                        serverID: tab.serverId,
                         client: client,
                         startToken: startToken,
                         availabilityResolver: { .confirmedMissing }
                     )
     
-                    #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.tmuxStatus == .missing)
-                    #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == nil)
+                    #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.remoteSessionStatus == .missing)
+                    #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId) == nil)
     
                     manager.transportCoordinator.finishShellStart(
                         for: tab.rootPaneId,
@@ -186,13 +189,13 @@ extension TerminalTabManagerLifecycleTests {
                 await withCleanManager { manager in
                     let tab = TerminalTab(serverId: UUID(), title: "Stale tmux probe")
                     installTab(tab, in: manager, connectionState: .disconnected)
-                    manager.tmuxCoordinator.setAttachment(
+                    manager.remoteSessionCoordinator.setAttachment(
                         for: tab.rootPaneId,
-                        sessionName: "vvterm_existing",
+                        identifier: remoteSessionIdentifier("vvterm_existing"),
                         ownership: .managed,
                         managedSessionConfirmed: true
                     )
-                    manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
+                    manager.remoteSessionCoordinator.updateStatus(.background, for: tab.rootPaneId)
     
                     let client = SSHClient.testing()
                     let gate = TmuxAvailabilityGate()
@@ -206,9 +209,9 @@ extension TerminalTabManagerLifecycleTests {
     
                     let stalePlan = Task { @MainActor in
                         do {
-                            _ = try await manager.tmuxCoordinator.startupPlan(
+                            _ = try await manager.remoteSessionCoordinator.startupPlan(
                                 for: tab.rootPaneId,
-                                serverId: tab.serverId,
+                                serverID: tab.serverId,
                                 client: client,
                                 startToken: staleStartToken,
                                 availabilityResolver: { await gate.waitForResolution() }
@@ -238,9 +241,9 @@ extension TerminalTabManagerLifecycleTests {
                     await gate.resolve(.confirmedMissing)
     
                     #expect(await stalePlan.value)
-                    #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.tmuxStatus == .background)
-                    #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == TerminalTmuxAttachmentState(
-                        sessionName: "vvterm_existing",
+                    #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.remoteSessionStatus == .background)
+                    #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId) == TerminalRemoteSessionAttachmentState(
+                        identifier: remoteSessionIdentifier("vvterm_existing"),
                         ownership: .managed,
                         managedSessionConfirmed: true
                     ))
@@ -260,13 +263,13 @@ extension TerminalTabManagerLifecycleTests {
                 await withCleanManager { manager in
                     let tab = TerminalTab(serverId: UUID(), title: "Cancelled tmux probe")
                     installTab(tab, in: manager, connectionState: .disconnected)
-                    manager.tmuxCoordinator.setAttachment(
+                    manager.remoteSessionCoordinator.setAttachment(
                         for: tab.rootPaneId,
-                        sessionName: "vvterm_existing",
+                        identifier: remoteSessionIdentifier("vvterm_existing"),
                         ownership: .managed,
                         managedSessionConfirmed: true
                     )
-                    manager.tmuxCoordinator.updateStatus(.background, for: tab.rootPaneId)
+                    manager.remoteSessionCoordinator.updateStatus(.background, for: tab.rootPaneId)
     
                     let client = SSHClient.testing()
                     let gate = TmuxAvailabilityGate()
@@ -280,9 +283,9 @@ extension TerminalTabManagerLifecycleTests {
     
                     let cancelledPlan = Task { @MainActor in
                         do {
-                            _ = try await manager.tmuxCoordinator.startupPlan(
+                            _ = try await manager.remoteSessionCoordinator.startupPlan(
                                 for: tab.rootPaneId,
-                                serverId: tab.serverId,
+                                serverID: tab.serverId,
                                 client: client,
                                 startToken: startToken,
                                 availabilityResolver: { await gate.waitForResolution() }
@@ -301,9 +304,9 @@ extension TerminalTabManagerLifecycleTests {
                     await gate.resolve(.confirmedMissing)
     
                     #expect(await cancelledPlan.value)
-                    #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.tmuxStatus == .background)
-                    #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == TerminalTmuxAttachmentState(
-                        sessionName: "vvterm_existing",
+                    #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.remoteSessionStatus == .background)
+                    #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId) == TerminalRemoteSessionAttachmentState(
+                        identifier: remoteSessionIdentifier("vvterm_existing"),
                         ownership: .managed,
                         managedSessionConfirmed: true
                     ))
@@ -319,22 +322,21 @@ extension TerminalTabManagerLifecycleTests {
     
         @Test
         func cancelledTmuxPromptCannotResolveReplacementPromptForSamePane() async {
-            let coordinator = TerminalTmuxSessionCoordinator()
+            let coordinator = TerminalRemoteSessionCoordinator()
             let paneId = UUID()
-            let serverId = UUID()
             let staleRequestId = UUID()
             let replacementRequestId = UUID()
     
             let staleSelection = Task { @MainActor in
                 await coordinator.requestSelection(
-                    requestId: staleRequestId,
-                    paneId: paneId,
-                    serverId: serverId,
+                    requestID: staleRequestId,
+                    paneID: paneId,
+                    backendIdentifier: .tmux,
                     availableSessions: []
                 )
             }
             guard await waitUntil({
-                coordinator.hasPendingPrompt(requestId: staleRequestId)
+                coordinator.hasPendingPrompt(requestID: staleRequestId)
             }) else {
                 Issue.record("Stale tmux prompt was not enqueued")
                 staleSelection.cancel()
@@ -343,14 +345,14 @@ extension TerminalTabManagerLifecycleTests {
     
             let replacementSelection = Task { @MainActor in
                 await coordinator.requestSelection(
-                    requestId: replacementRequestId,
-                    paneId: paneId,
-                    serverId: serverId,
+                    requestID: replacementRequestId,
+                    paneID: paneId,
+                    backendIdentifier: .tmux,
                     availableSessions: []
                 )
             }
             guard await waitUntil({
-                coordinator.hasPendingPrompt(requestId: replacementRequestId)
+                coordinator.hasPendingPrompt(requestID: replacementRequestId)
             }) else {
                 Issue.record("Replacement tmux prompt was not enqueued")
                 staleSelection.cancel()
@@ -361,15 +363,15 @@ extension TerminalTabManagerLifecycleTests {
             staleSelection.cancel()
             #expect(await waitUntil({
                 coordinator.attachPrompt?.id == replacementRequestId
-                    && !coordinator.hasPendingPrompt(requestId: staleRequestId)
+                    && !coordinator.hasPendingPrompt(requestID: staleRequestId)
             }))
     
             coordinator.resolvePrompt(
-                requestId: replacementRequestId,
+                requestID: replacementRequestId,
                 selection: .createManaged
             )
     
-            #expect(await staleSelection.value == .skipTmux)
+            #expect(await staleSelection.value == .plainShell)
             #expect(await replacementSelection.value == .createManaged)
         }
     
@@ -378,17 +380,23 @@ extension TerminalTabManagerLifecycleTests {
             await withCleanManager { manager in
                 let tab = TerminalTab(serverId: UUID(), title: "Unconfirmed tmux")
                 installTab(tab, in: manager, connectionState: .connected)
-                manager.tmuxCoordinator.setAttachment(
+                manager.remoteSessionCoordinator.setAttachment(
                     for: tab.rootPaneId,
-                    sessionName: "vvterm_test",
+                    identifier: remoteSessionIdentifier("vvterm_test"),
                     ownership: .managed
                 )
     
-                #expect(!manager.tmuxCoordinator.shouldReattachManagedSession(for: tab.rootPaneId))
+                #expect(!manager.remoteSessionCoordinator.shouldReattachManagedSession(
+                    for: tab.rootPaneId,
+                    backendIdentifier: .tmux
+                ))
     
-                manager.tmuxCoordinator.confirmManagedSession(for: tab.rootPaneId)
+                manager.remoteSessionCoordinator.confirmManagedSession(for: tab.rootPaneId)
     
-                #expect(manager.tmuxCoordinator.shouldReattachManagedSession(for: tab.rootPaneId))
+                #expect(manager.remoteSessionCoordinator.shouldReattachManagedSession(
+                    for: tab.rootPaneId,
+                    backendIdentifier: .tmux
+                ))
             }
         }
     
@@ -400,22 +408,28 @@ extension TerminalTabManagerLifecycleTests {
                 installTab(confirmedTab, in: manager, connectionState: .connected)
                 installTab(unconfirmedTab, in: manager, connectionState: .connected)
     
-                manager.tmuxCoordinator.setAttachment(
+                manager.remoteSessionCoordinator.setAttachment(
                     for: confirmedTab.rootPaneId,
-                    sessionName: "vvterm_confirmed",
+                    identifier: remoteSessionIdentifier("vvterm_confirmed"),
                     ownership: .managed,
                     managedSessionConfirmed: true
                 )
-                manager.tmuxCoordinator.setAttachment(
+                manager.remoteSessionCoordinator.setAttachment(
                     for: unconfirmedTab.rootPaneId,
-                    sessionName: "vvterm_unconfirmed",
+                    identifier: remoteSessionIdentifier("vvterm_unconfirmed"),
                     ownership: .managed
                 )
     
                 manager.sessionState.persistAndRestoreSnapshotForTesting()
     
-                #expect(manager.tmuxCoordinator.shouldReattachManagedSession(for: confirmedTab.rootPaneId))
-                #expect(!manager.tmuxCoordinator.shouldReattachManagedSession(for: unconfirmedTab.rootPaneId))
+                #expect(manager.remoteSessionCoordinator.shouldReattachManagedSession(
+                    for: confirmedTab.rootPaneId,
+                    backendIdentifier: .tmux
+                ))
+                #expect(!manager.remoteSessionCoordinator.shouldReattachManagedSession(
+                    for: unconfirmedTab.rootPaneId,
+                    backendIdentifier: .tmux
+                ))
             }
         }
     
@@ -424,22 +438,22 @@ extension TerminalTabManagerLifecycleTests {
             await withCleanManager { manager in
                 let tab = TerminalTab(serverId: UUID(), title: "Failed tmux")
                 installTab(tab, in: manager, connectionState: .connected)
-                manager.tmuxCoordinator.setAttachment(
+                manager.remoteSessionCoordinator.setAttachment(
                     for: tab.rootPaneId,
-                    sessionName: "vvterm_test",
+                    identifier: remoteSessionIdentifier("vvterm_test"),
                     ownership: .managed
                 )
-                manager.tmuxCoordinator.updateStatus(.foreground, for: tab.rootPaneId)
+                manager.remoteSessionCoordinator.updateStatus(.foreground, for: tab.rootPaneId)
     
-                manager.handleShellEnd(for: tab.rootPaneId, reason: .tmuxCreationFailed)
+                manager.handleShellEnd(for: tab.rootPaneId, reason: .remoteSessionCreationFailed)
     
                 #expect(manager.sessionState.tabs(for: tab.serverId) == [tab])
                 #expect(
                     manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState
-                        == .failed(.tmuxStartupFailed)
+                        == .failed(.remoteSessionStartupFailed)
                 )
-                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.tmuxStatus == .unknown)
-                #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId) == nil)
+                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.remoteSessionStatus == .unknown)
+                #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId) == nil)
             }
         }
     
@@ -448,18 +462,21 @@ extension TerminalTabManagerLifecycleTests {
             await withCleanManager { manager in
                 let tab = TerminalTab(serverId: UUID(), title: "Installed tmux")
                 installTab(tab, in: manager, connectionState: .connected)
-                manager.sessionState.updatePane(tab.rootPaneId) { $0.disconnectReason = .tmuxDetached }
+                manager.sessionState.updatePane(tab.rootPaneId) { $0.disconnectReason = .remoteSessionDetached }
                 var reconnectRequested = false
     
-                manager.tmuxCoordinator.completeInstall(
+                manager.remoteSessionCoordinator.completeInstall(
                     for: tab.rootPaneId,
-                    sessionName: "vvterm_installed",
+                    attachment: remoteSessionAttachmentState(
+                        "vvterm_installed",
+                        ownership: .managed
+                    ),
                     onInstalled: { reconnectRequested = true }
                 )
     
                 #expect(reconnectRequested)
-                #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId)?.sessionName == "vvterm_installed")
-                #expect(manager.tmuxCoordinator.attachment(for: tab.rootPaneId)?.ownership == .managed)
+                #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId)?.attachment.identifier.rawValue == "vvterm_installed")
+                #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId)?.attachment.ownership == .managed)
             }
         }
     
@@ -469,12 +486,39 @@ extension TerminalTabManagerLifecycleTests {
                 let tab = TerminalTab(serverId: UUID(), title: "Dropped transport")
                 installTab(tab, in: manager, connectionState: .connected)
     
-                manager.handleShellEnd(for: tab.rootPaneId, reason: .transportEnded)
+                manager.handleShellEnd(for: tab.rootPaneId, reason: .transportInterrupted)
     
                 #expect(manager.sessionState.tabs(for: tab.serverId) == [tab])
                 #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .disconnected)
-                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
+                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .transportInterrupted)
                 #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason?.allowsAutomaticReconnect == true)
+            }
+        }
+
+        @Test
+        func completedStandaloneActionPreservesPaneWithoutAutomaticReconnect() async {
+            await withCleanManager { manager in
+                let tab = TerminalTab(serverId: UUID(), title: "Completed action")
+                installTab(tab, in: manager, connectionState: .connected)
+
+                manager.handleShellEnd(
+                    for: tab.rootPaneId,
+                    reason: .standaloneStartupActionCompleted
+                )
+
+                #expect(manager.sessionState.tabs(for: tab.serverId) == [tab])
+                #expect(
+                    manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState
+                        == .disconnected
+                )
+                #expect(
+                    manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason
+                        == .startupActionCompleted
+                )
+                #expect(
+                    manager.sessionState.paneState(for: tab.rootPaneId)?
+                        .disconnectReason?.allowsAutomaticReconnect == false
+                )
             }
         }
     
@@ -484,7 +528,7 @@ extension TerminalTabManagerLifecycleTests {
                 let tab = TerminalTab(serverId: UUID(), title: "Transient retry")
                 installTab(tab, in: manager, connectionState: .connected)
     
-                manager.handleShellEnd(for: tab.rootPaneId, reason: .transportEnded)
+                manager.handleShellEnd(for: tab.rootPaneId, reason: .transportInterrupted)
                 manager.updatePaneState(
                     tab.rootPaneId,
                     connectionState: .reconnecting(attempt: 1)
@@ -494,7 +538,7 @@ extension TerminalTabManagerLifecycleTests {
                     failure: .transport(SSHError.timeout)
                 )
     
-                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
+                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .transportInterrupted)
                 guard case .failed = manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState else {
                     Issue.record("Expected a failed retry state")
                     return
@@ -512,7 +556,7 @@ extension TerminalTabManagerLifecycleTests {
                 let tab = TerminalTab(serverId: UUID(), title: "Unclassified retry")
                 installTab(tab, in: manager, connectionState: .connected)
     
-                manager.handleShellEnd(for: tab.rootPaneId, reason: .transportEnded)
+                manager.handleShellEnd(for: tab.rootPaneId, reason: .transportInterrupted)
                 manager.updatePaneState(
                     tab.rootPaneId,
                     connectionState: .reconnecting(attempt: 1)
@@ -522,7 +566,7 @@ extension TerminalTabManagerLifecycleTests {
                     failure: .transport(UnclassifiedReconnectError())
                 )
     
-                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .transportEnded)
+                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.disconnectReason == .transportInterrupted)
                 guard case .failed = manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState else {
                     Issue.record("Expected a failed retry state")
                     return
@@ -536,7 +580,7 @@ extension TerminalTabManagerLifecycleTests {
                 let tab = TerminalTab(serverId: UUID(), title: "Manual recovery")
                 installTab(tab, in: manager, connectionState: .connected)
     
-                manager.handleShellEnd(for: tab.rootPaneId, reason: .transportEnded)
+                manager.handleShellEnd(for: tab.rootPaneId, reason: .transportInterrupted)
                 manager.handleConnectionFailure(
                     for: tab.rootPaneId,
                     failure: .transport(SSHError.authenticationFailed)
@@ -569,7 +613,7 @@ extension TerminalTabManagerLifecycleTests {
                     for: tab.rootPaneId,
                     client: SSHClient.testing(),
                     shellId: UUID(),
-                    reason: .transportEnded
+                    reason: .transportInterrupted
                 )
     
                 #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.connectionState == .connected)

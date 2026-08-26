@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Simplified vector adaptation of the official zmx logo.png for small UI display. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 160 160">
+    <rect x="4" y="4" width="152" height="152" rx="10" fill="#151922" stroke="#7D8490" stroke-width="5"/>
+    <path d="M24 28H136V49L91 80L136 111V132H24V107L68 80L24 53V28ZM55 52L91 74L123 52H55ZM37 108H105L81 87L37 108Z" fill="#FFFFFF"/>
+</svg>

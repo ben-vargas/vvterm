@@ -66,7 +66,12 @@ actor RemoteMoshManager {
         logger.info(
             "Starting Mosh bootstrap [custom startup: \(startCommand != nil)] [terminal: \(terminalType.rawValue, privacy: .public)]"
         )
-        let output = try await execute(command, bootstrapTimeout)
+        let output: String
+        do {
+            output = try await execute(command, bootstrapTimeout)
+        } catch let error as MoshBootstrapError {
+            throw mapBootstrapError(error)
+        }
         do {
             return try parseConnectInfo(from: output)
         } catch {
@@ -191,15 +196,23 @@ actor RemoteMoshManager {
         case .missingServer:
             return .moshServerMissing
         case .permissionDenied:
-            return .moshBootstrapFailed("Permission denied while starting mosh-server")
+            return .moshBootstrapFailed(
+                "Permission denied while starting mosh-server"
+            )
         case .invalidConnectLine:
             return mapInvalidConnectLine(output: output)
         case .invalidPort:
-            return .moshBootstrapFailed("mosh-server returned an invalid port")
+            return .moshBootstrapFailed(
+                "mosh-server returned an invalid port"
+            )
         case .invalidKey:
-            return .moshBootstrapFailed("mosh-server returned an invalid session key")
+            return .moshBootstrapFailed(
+                "mosh-server returned an invalid session key"
+            )
         case .processExited:
-            return .moshBootstrapFailed("mosh-server exited before session startup completed")
+            return .moshBootstrapFailed(
+                "mosh-server exited before session startup completed"
+            )
         case .timedOut:
             return .moshBootstrapFailed("Timed out waiting for mosh-server startup")
         }

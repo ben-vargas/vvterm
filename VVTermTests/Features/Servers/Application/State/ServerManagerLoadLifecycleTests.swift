@@ -91,7 +91,10 @@ struct ServerManagerLoadLifecycleTests {
         let oldWorkspace = makeWorkspace(name: "Old Local")
         let oldServer = makeServer(workspaceID: oldWorkspace.id)
         let remoteWorkspace = makeWorkspace(name: "Remote")
-        let remoteServer = makeServer(workspaceID: remoteWorkspace.id)
+        let remoteServer = makeServer(
+            id: UUID(uuidString: "20000000-0000-0000-0000-000000000011")!,
+            workspaceID: remoteWorkspace.id
+        )
         let local = ServerLocalRepositoryFake(
             servers: [oldServer],
             workspaces: [oldWorkspace]
@@ -110,11 +113,13 @@ struct ServerManagerLoadLifecycleTests {
             )
         }
         let sync = ServerSyncRepositoryFake()
+        var deletedLocalDataIDs: [UUID] = []
         let manager = makeManager(
             local: local,
             remote: remote,
             sync: sync,
-            isSyncEnabled: { true }
+            isSyncEnabled: { true },
+            didDeleteServerLocalData: { deletedLocalDataIDs.append($0) }
         )
 
         try await manager.clearLocalDataAndResync()
@@ -125,6 +130,7 @@ struct ServerManagerLoadLifecycleTests {
         #expect(local.servers == [remoteServer])
         #expect(remote.acceptedCheckpoints == [checkpoint])
         #expect(sync.clearCount == 1)
+        #expect(deletedLocalDataIDs == [oldServer.id])
     }
 
     @Test
@@ -450,11 +456,13 @@ struct ServerManagerLoadLifecycleTests {
                 checkpoint: checkpoint
             )
         }
+        var deletedLocalDataIDs: [UUID] = []
         let manager = makeManager(
             local: local,
             remote: remote,
             sync: ServerSyncRepositoryFake(),
-            isSyncEnabled: { true }
+            isSyncEnabled: { true },
+            didDeleteServerLocalData: { deletedLocalDataIDs.append($0) }
         )
 
         await manager.loadData()
@@ -464,6 +472,41 @@ struct ServerManagerLoadLifecycleTests {
         #expect(local.ambiguousCloudRecoveryBackup == nil)
         #expect(manager.stateStore.ambiguousCloudRecovery == nil)
         #expect(remote.acceptedCheckpoints == [checkpoint])
+        #expect(deletedLocalDataIDs == [server.id])
+    }
+
+    @Test
+    func durableRemoteDeletionCleansLocalDataWhenCheckpointAcceptanceFails() async {
+        let workspace = makeWorkspace(name: "Deleted remotely")
+        let server = makeServer(workspaceID: workspace.id)
+        let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.acceptError = ServerRemoteTestError.schema
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [],
+                workspaces: [],
+                deletedServerIDs: [server.id],
+                deletedWorkspaceIDs: [workspace.id],
+                isFullFetch: true,
+                checkpoint: ServerRemoteChangeCheckpoint(id: UUID())
+            )
+        }
+        var deletedLocalDataIDs: [UUID] = []
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: ServerSyncRepositoryFake(),
+            isSyncEnabled: { true },
+            didDeleteServerLocalData: { deletedLocalDataIDs.append($0) }
+        )
+
+        await manager.loadData()
+
+        #expect(local.servers.isEmpty)
+        #expect(manager.servers.isEmpty)
+        #expect(remote.acceptedCheckpoints.isEmpty)
+        #expect(deletedLocalDataIDs == [server.id])
     }
 
     @Test
@@ -518,7 +561,10 @@ struct ServerManagerLoadLifecycleTests {
 
     @Test
     func ambiguousEmptyFetchCanReplaceLocalDataAfterExplicitChoice() async throws {
-        let fixture = makeAmbiguousEmptyFetchFixture()
+        var deletedLocalDataIDs: [UUID] = []
+        let fixture = makeAmbiguousEmptyFetchFixture {
+            deletedLocalDataIDs.append($0)
+        }
 
         await fixture.manager.loadData()
         try await fixture.manager.resolveAmbiguousCloudRecovery(.replaceWithCloud)
@@ -532,6 +578,7 @@ struct ServerManagerLoadLifecycleTests {
         #expect(fixture.remote.fetchForceFullModes == [false, true])
         #expect(fixture.local.ambiguousCloudRecoveryBackup == nil)
         #expect(fixture.manager.stateStore.ambiguousCloudRecovery == nil)
+        #expect(deletedLocalDataIDs == [fixture.server.id])
     }
 
     @Test
@@ -894,7 +941,8 @@ struct ServerManagerLoadLifecycleTests {
         preferences: ServerManagerPreferencesFake? = nil,
         isSyncEnabled: @escaping () -> Bool,
         isRemoteSchemaError: @escaping (Error) -> Bool = { _ in false },
-        startsAutomatically: Bool = false
+        startsAutomatically: Bool = false,
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
     ) -> ServerManager {
         ServerManager(
             dependencies: makeDependencies(
@@ -903,13 +951,16 @@ struct ServerManagerLoadLifecycleTests {
                 sync: sync,
                 preferences: preferences,
                 isSyncEnabled: isSyncEnabled,
-                isRemoteSchemaError: isRemoteSchemaError
+                isRemoteSchemaError: isRemoteSchemaError,
+                didDeleteServerLocalData: didDeleteServerLocalData
             ),
             startsAutomatically: startsAutomatically
         )
     }
 
-    private func makeAmbiguousEmptyFetchFixture() -> (
+    private func makeAmbiguousEmptyFetchFixture(
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
+    ) -> (
         manager: ServerManager,
         local: ServerLocalRepositoryFake,
         remote: ServerRemoteRepositoryFake,
@@ -938,7 +989,8 @@ struct ServerManagerLoadLifecycleTests {
             local: local,
             remote: remote,
             sync: sync,
-            isSyncEnabled: { true }
+            isSyncEnabled: { true },
+            didDeleteServerLocalData: didDeleteServerLocalData
         )
         return (manager, local, remote, sync, workspace, server, checkpoint)
     }
@@ -965,7 +1017,8 @@ struct ServerManagerLoadLifecycleTests {
         sync: ServerSyncRepositoryFake,
         preferences: ServerManagerPreferencesFake? = nil,
         isSyncEnabled: @escaping () -> Bool,
-        isRemoteSchemaError: @escaping (Error) -> Bool
+        isRemoteSchemaError: @escaping (Error) -> Bool,
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
     ) -> ServerManagerDependencies {
         let now = { Date(timeIntervalSinceReferenceDate: 20_000) }
         let makeID = { UUID(uuidString: "90000000-0000-0000-0000-000000000002")! }
@@ -988,6 +1041,7 @@ struct ServerManagerLoadLifecycleTests {
             credentialRepository: ServerManagerCredentialRepositoryFake(),
             actionAuthorizer: ProtectedServerActionAuthorizerFake(),
             knownHosts: ServerKnownHostRepositoryFake(),
+            didDeleteServerLocalData: didDeleteServerLocalData,
             isRemoteSchemaError: isRemoteSchemaError,
             now: now,
             makeID: makeID
@@ -1027,9 +1081,12 @@ struct ServerManagerLoadLifecycleTests {
         )
     }
 
-    private func makeServer(workspaceID: UUID) -> Server {
+    private func makeServer(
+        id: UUID = UUID(uuidString: "20000000-0000-0000-0000-000000000010")!,
+        workspaceID: UUID
+    ) -> Server {
         Server(
-            id: UUID(uuidString: "20000000-0000-0000-0000-000000000010")!,
+            id: id,
             workspaceId: workspaceID,
             name: "Server",
             host: "server.example.test",

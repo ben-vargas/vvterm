@@ -120,7 +120,7 @@ private struct InactiveConnectionBannerHarness: View {
 }
 
 private struct ConnectionBannerHandoffHarness: View {
-    @State private var tmuxPrompt: TmuxAttachPrompt?
+    @State private var remoteSessionPrompt: RemoteSessionAttachPrompt?
 
     private let paneId = UUID()
     private let connectionAttemptID = UUID()
@@ -128,7 +128,7 @@ private struct ConnectionBannerHandoffHarness: View {
     var body: some View {
         terminalBackdrop {
             TerminalConnectionStatusView(
-                presentation: tmuxPrompt == nil
+                presentation: remoteSessionPrompt == nil
                     ? .connecting(serverName: "production")
                     : .hidden,
                 connectionAttemptID: connectionAttemptID,
@@ -138,19 +138,19 @@ private struct ConnectionBannerHandoffHarness: View {
                 onTrustNewHostKey: {}
             )
         }
-        .sheet(item: $tmuxPrompt) { prompt in
+        .sheet(item: $remoteSessionPrompt) { prompt in
             NavigationStack {
                 Text("Choose how to continue the connection.")
-                    .navigationTitle("Choose tmux session")
+                    .navigationTitle("Choose \(prompt.backendName) session")
                     .navigationBarTitleDisplayMode(.inline)
             }
         }
         .task {
             try? await Task.sleep(for: .seconds(3))
-            tmuxPrompt = TmuxAttachPrompt(
+            remoteSessionPrompt = RemoteSessionAttachPrompt(
                 id: UUID(),
                 paneId: paneId,
-                serverId: UUID(),
+                backendName: "tmux",
                 existingSessions: []
             )
         }

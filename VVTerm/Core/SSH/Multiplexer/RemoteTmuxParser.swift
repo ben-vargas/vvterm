@@ -1,6 +1,34 @@
 import Foundation
 
 nonisolated enum RemoteTmuxParser {
+    static func resolvedBackend(
+        from output: String,
+        variant: RemoteTmuxBackend.Variant
+    ) -> RemoteTmuxBackend? {
+        let pathPrefix = "__VVTERM_TMUX_PATH__"
+        let versionPrefix = "__VVTERM_TMUX_VERSION__"
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
+        guard let pathLine = lines.first(where: { $0.hasPrefix(pathPrefix) }),
+              let versionLine = lines.first(where: { $0.hasPrefix(versionPrefix) }) else {
+            return nil
+        }
+        let path = String(pathLine.dropFirst(pathPrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let version = String(versionLine.dropFirst(versionPrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (try? RemoteSessionExecutable(validating: path)) != nil,
+              !version.isEmpty,
+              version.utf8.count <= 256,
+              version.rangeOfCharacter(from: .controlCharacters) == nil else {
+            return nil
+        }
+        return RemoteTmuxBackend(
+            variant: variant,
+            executablePath: path,
+            rawVersion: version
+        )
+    }
+
     static func classifyAvailabilityOutput(
         _ output: String,
         availableMarker: String,
@@ -31,7 +59,8 @@ nonisolated enum RemoteTmuxParser {
                     RemoteTmuxSession(
                         name: parsed.name,
                         attachedClients: parsed.attachedClients,
-                        windowCount: parsed.windowCount
+                        windowCount: parsed.windowCount,
+                        ownership: parsed.ownership
                     )
                 )
                 continue
@@ -45,7 +74,12 @@ nonisolated enum RemoteTmuxParser {
 
     private static func parseSessionLine(
         _ line: String
-    ) -> (name: String, attachedClients: Int, windowCount: Int)? {
+    ) -> (
+        name: String,
+        attachedClients: Int,
+        windowCount: Int,
+        ownership: RemoteSessionOwnership
+    )? {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
@@ -65,7 +99,7 @@ nonisolated enum RemoteTmuxParser {
                 .joined(separator: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { return nil }
-            return (name, max(0, attached), max(1, windows))
+            return (name, max(0, attached), max(1, windows), .external)
         }
 
         if parts.count >= 2,
@@ -75,7 +109,7 @@ nonisolated enum RemoteTmuxParser {
                 .joined(separator: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { return nil }
-            return (name, max(0, attached), 1)
+            return (name, max(0, attached), 1, .external)
         }
 
         return nil
@@ -83,7 +117,12 @@ nonisolated enum RemoteTmuxParser {
 
     private static func parseTabSeparatedSessionLine(
         _ line: String
-    ) -> (name: String, attachedClients: Int, windowCount: Int)? {
+    ) -> (
+        name: String,
+        attachedClients: Int,
+        windowCount: Int,
+        ownership: RemoteSessionOwnership
+    )? {
         guard line.contains("\t") else { return nil }
         let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
         guard !parts.isEmpty else { return nil }
@@ -104,7 +143,10 @@ nonisolated enum RemoteTmuxParser {
             windowCount = 1
         }
 
-        return (name, max(0, attachedClients), max(1, windowCount))
+        let ownership: RemoteSessionOwnership = parts.count >= 4 && parts[3] == "1"
+            ? .managed
+            : .external
+        return (name, max(0, attachedClients), max(1, windowCount), ownership)
     }
 
     private static func parseAttachedClients(_ rawValue: String) -> Int? {
@@ -140,7 +182,8 @@ nonisolated enum RemoteTmuxParser {
         return RemoteTmuxSession(
             name: name,
             attachedClients: max(0, attached),
-            windowCount: max(1, windows)
+            windowCount: max(1, windows),
+            ownership: .external
         )
     }
 

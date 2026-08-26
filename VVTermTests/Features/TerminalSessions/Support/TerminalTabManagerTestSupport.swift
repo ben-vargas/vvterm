@@ -3,10 +3,26 @@ import Combine
 import Testing
 @testable import VVTerm
 
-actor TmuxAvailabilityGate {
-    private var continuation: CheckedContinuation<RemoteTmuxAvailability, Never>?
+extension TerminalRemoteSessionAttachmentState {
+    init(
+        identifier: RemoteSessionIdentifier,
+        ownership: RemoteSessionOwnership,
+        managedSessionConfirmed: Bool = false
+    ) {
+        self.init(
+            attachment: RemoteSessionAttachment(
+                identifier: identifier,
+                ownership: ownership
+            ),
+            managedSessionConfirmed: managedSessionConfirmed
+        )
+    }
+}
 
-    func waitForResolution() async -> RemoteTmuxAvailability {
+actor TmuxAvailabilityGate {
+    private var continuation: CheckedContinuation<RemoteSessionAvailability, Never>?
+
+    func waitForResolution() async -> RemoteSessionAvailability {
         return await withCheckedContinuation { continuation in
             self.continuation = continuation
         }
@@ -24,7 +40,7 @@ actor TmuxAvailabilityGate {
         return continuation != nil
     }
 
-    func resolve(_ availability: RemoteTmuxAvailability) {
+    func resolve(_ availability: RemoteSessionAvailability) {
         continuation?.resume(returning: availability)
         continuation = nil
     }
@@ -35,6 +51,34 @@ actor TmuxAvailabilityGate {
 protocol TerminalTabManagerTestSupport {}
 
 extension TerminalTabManagerTestSupport {
+    func remoteSessionIdentifier(
+        _ rawValue: String,
+        backendIdentifier: RemoteSessionBackendIdentifier = .tmux
+    ) -> RemoteSessionIdentifier {
+        try! RemoteSessionIdentifier(
+            backendIdentifier: backendIdentifier,
+            validating: rawValue
+        )
+    }
+
+    func remoteSessionAttachmentState(
+        _ rawValue: String,
+        backendIdentifier: RemoteSessionBackendIdentifier = .tmux,
+        ownership: RemoteSessionOwnership,
+        managedSessionConfirmed: Bool = false
+    ) -> TerminalRemoteSessionAttachmentState {
+        TerminalRemoteSessionAttachmentState(
+            attachment: RemoteSessionAttachment(
+                identifier: remoteSessionIdentifier(
+                    rawValue,
+                    backendIdentifier: backendIdentifier
+                ),
+                ownership: ownership
+            ),
+            managedSessionConfirmed: managedSessionConfirmed
+        )
+    }
+
     func makeServer(
         id: UUID = UUID(),
         name: String = "Test",
@@ -124,4 +168,3 @@ extension TerminalTabManagerTestSupport {
     }
 
 }
-

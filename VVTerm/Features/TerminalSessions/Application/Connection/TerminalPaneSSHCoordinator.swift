@@ -134,11 +134,21 @@ final class TerminalPaneSSHCoordinator {
                 )
             },
             startupPlan: context.startupPlan,
+            setStartupActionReplayGuard: context
+                .setStartupActionReplayPending,
+            onRemoteSessionAttached: context.remoteSessionAttached,
             restoreMoshShell: context.restoreMoshShell,
-            registerShell: { shell in
+            registerShell: { shell, startupPlan in
                 guard await context.registerShell(shell) else { return false }
+                if startupPlan.remoteSessionLifecycle == nil {
+                    context.setStartupActionReplayPending(
+                        startupPlan.mayExecuteStandaloneUserStartupAction
+                    )
+                }
                 context.updateConnectionState(.connected)
-                if shell.origin == .fresh, let cwd = context.workingDirectory() {
+                if shell.origin == .fresh,
+                   startupPlan.allowsPostLaunchWorkingDirectoryRestore,
+                   let cwd = context.workingDirectory() {
                     await applyWorkingDirectory(
                         cwd,
                         shellId: shell.id,
@@ -155,12 +165,38 @@ final class TerminalPaneSSHCoordinator {
             writeOutput: writeOutput,
             shouldResetClient: { sshError in
                 switch sshError {
-                case .notConnected, .connectionFailed, .socketError, .timeout:
+                case .notConnected,
+                     .disconnectedBeforeShellRequest,
+                     .connectionFailed,
+                     .socketError,
+                     .timeout:
                     return true
-                case .channelOpenFailed, .shellRequestFailed:
+                case .channelOpenFailed,
+                     .ptyRequestFailed,
+                     .processRequestDenied,
+                     .shellRequestFailed:
                     let hasOtherRegistrations = await context.hasOtherRegistrations()
                     return !hasOtherRegistrations
-                case .authenticationFailed, .tailscaleAuthenticationNotAccepted, .cloudflareConfigurationRequired, .cloudflareAuthenticationFailed, .cloudflareTunnelFailed, .hostKeyApprovalRequired, .hostKeyVerificationFailed, .moshServerMissing, .moshServerRuntimeBroken, .moshBootstrapFailed, .moshSessionFailed, .moshInvalidEndpoint, .moshUDPTimeout, .moshClientSessionFailed, .outputLimitExceeded, .unknown:
+                case .authenticationFailed,
+                     .tailscaleAuthenticationNotAccepted,
+                     .cloudflareConfigurationRequired,
+                     .cloudflareAuthenticationFailed,
+                     .cloudflareTunnelFailed,
+                     .hostKeyApprovalRequired,
+                     .hostKeyVerificationFailed,
+                     .moshServerMissing,
+                     .moshServerRuntimeBroken,
+                     .moshBootstrapFailed,
+                     .moshSessionFailed,
+                     .moshInvalidEndpoint,
+                     .moshUDPTimeout,
+                     .moshClientSessionFailed,
+                     .startupCommandMayHaveRun,
+                     .processRequestOutcomeUnknown,
+                     .managedStartupCommandUnsupported,
+                     .unsupportedRemoteShellForStartupCommand,
+                     .outputLimitExceeded,
+                     .unknown:
                     return false
                 }
             },

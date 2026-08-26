@@ -39,8 +39,10 @@ struct ServerFormDependencies {
     let credentials: any ServerCredentialRepository
     let connectionTester: any ServerConnectionTesting
     let hostKeys: any ServerHostKeyRepository
-    let defaultTmuxEnabled: @MainActor () -> Bool
-    let defaultTmuxStartupBehavior: @MainActor () -> TmuxStartupBehavior
+    let remoteSessionBackends: [RemoteSessionBackendMetadata]
+    let defaultRemoteSessionEnabled: @MainActor () -> Bool
+    let defaultRemoteSessionBackendIdentifier: @MainActor () -> RemoteSessionBackendIdentifier
+    let defaultRemoteSessionStartupBehavior: @MainActor () -> RemoteSessionStartupBehavior
     let now: @Sendable () -> Date
     let makeID: @Sendable () -> UUID
 }

@@ -10,8 +10,9 @@ struct ServerFormModelTests {
         let createdAt = Date(timeIntervalSince1970: 1_000)
         var model = ServerFormModel(
             workspaceID: workspaceID,
-            defaultTmuxEnabled: false,
-            defaultTmuxStartupBehavior: .askEveryTime
+            defaultRemoteSessionEnabled: false,
+            defaultRemoteSessionBackendIdentifier: .tmux,
+            defaultRemoteSessionStartupBehavior: .ask
         )
         model.name = "Production"
         model.host = "host.example.com"
@@ -29,8 +30,10 @@ struct ServerFormModelTests {
         model.cloudflareTeamDomainOverride = " team.cloudflareaccess.com "
         model.notes = "notes"
         model.requiresBiometricUnlock = true
-        model.tmuxEnabled = true
-        model.tmuxStartupBehavior = .vvtermManaged
+        model.remoteSessionEnabled = true
+        model.remoteSessionBackendIdentifier = .zmx
+        model.remoteSessionStartupBehavior = .createManaged
+        model.remoteShellStartupAction.command = "cd /srv/app && exec $SHELL -l"
 
         #expect(model.isValid)
 
@@ -49,6 +52,10 @@ struct ServerFormModelTests {
         #expect(server.connectionMode == .cloudflare)
         #expect(server.cloudflareAccessMode == .serviceToken)
         #expect(server.cloudflareTeamDomainOverride == "team.cloudflareaccess.com")
+        #expect(server.remoteSessionEnabledOverride == true)
+        #expect(server.remoteSessionBackendIdentifier == .zmx)
+        #expect(server.remoteSessionStartupBehaviorOverride == .createManaged)
+        #expect(server.remoteShellStartupAction?.command == "cd /srv/app && exec $SHELL -l")
         #expect(server.createdAt == createdAt)
         #expect(String(data: try #require(credentials.privateKey), encoding: .utf8) == "PRIVATE")
         #expect(credentials.passphrase == "phrase")
@@ -108,13 +115,16 @@ struct ServerFormModelTests {
             authMethod: .sshKeyWithPassphrase,
             notes: "keep",
             requiresBiometricUnlock: true,
-            tmuxEnabledOverride: false,
-            tmuxStartupBehaviorOverride: .askEveryTime
+            remoteSessionEnabledOverride: false,
+            remoteSessionBackendIdentifier: .zmx,
+            remoteSessionStartupBehaviorOverride: .ask,
+            remoteShellStartupCommand: "cd /srv/edit && exec $SHELL -l"
         )
         var model = ServerFormModel(
             server: server,
-            defaultTmuxEnabled: true,
-            defaultTmuxStartupBehavior: .vvtermManaged
+            defaultRemoteSessionEnabled: true,
+            defaultRemoteSessionBackendIdentifier: .tmux,
+            defaultRemoteSessionStartupBehavior: .createManaged
         )
         var credentials = ServerCredentials(serverId: server.id)
         credentials.privateKey = Data("PRIVATE".utf8)
@@ -135,6 +145,10 @@ struct ServerFormModelTests {
         #expect(rebuilt.host == server.host)
         #expect(rebuilt.username == server.username)
         #expect(rebuilt.notes == server.notes)
+        #expect(rebuilt.remoteSessionEnabledOverride == false)
+        #expect(rebuilt.remoteSessionBackendIdentifier == .zmx)
+        #expect(rebuilt.remoteSessionStartupBehaviorOverride == .ask)
+        #expect(rebuilt.remoteShellStartupAction?.command == "cd /srv/edit && exec $SHELL -l")
         #expect(model.sshKey == "PRIVATE")
         #expect(model.sshPublicKey == "PUBLIC")
         #expect(model.sshPassphrase == "phrase")
@@ -142,8 +156,9 @@ struct ServerFormModelTests {
 
     private func validPasswordModel() -> ServerFormModel {
         var model = ServerFormModel(
-            defaultTmuxEnabled: true,
-            defaultTmuxStartupBehavior: .vvtermManaged
+            defaultRemoteSessionEnabled: true,
+            defaultRemoteSessionBackendIdentifier: .tmux,
+            defaultRemoteSessionStartupBehavior: .createManaged
         )
         model.name = "Server"
         model.host = "example.com"
