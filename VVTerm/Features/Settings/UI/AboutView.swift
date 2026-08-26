@@ -9,7 +9,7 @@ import AppKit
 #endif
 
 struct AboutView: View {
-    @Environment(\.openURL) private var openURL
+    @State private var isShowingOpenSourceLicenses = false
 
     private let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "2.1"
     private let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
@@ -48,37 +48,44 @@ struct AboutView: View {
                 LinkButton(
                     title: String(localized: "Visit Website"),
                     icon: "globe",
-                    isSystemImage: true,
                     url: "https://vvterm.com"
                 )
 
                 LinkButton(
                     title: String(localized: "GitHub"),
                     icon: "chevron.left.forwardslash.chevron.right",
-                    isSystemImage: true,
                     url: "https://github.com/vivy-company/vvterm"
                 )
 
                 LinkButton(
                     title: String(localized: "Report an Issue"),
                     icon: "exclamationmark.bubble",
-                    isSystemImage: true,
                     url: "https://github.com/vivy-company/vvterm/issues"
                 )
 
                 LinkButton(
                     title: String(localized: "Privacy Policy"),
                     icon: "hand.raised",
-                    isSystemImage: true,
                     url: "https://vvterm.com/privacy"
                 )
 
                 LinkButton(
                     title: String(localized: "Terms of Use (EULA)"),
                     icon: "doc.text",
-                    isSystemImage: true,
                     url: "https://vvterm.com/terms"
                 )
+
+                Button {
+                    isShowingOpenSourceLicenses = true
+                } label: {
+                    AboutButtonLabel(
+                        title: String(localized: "Open Source & Licenses"),
+                        icon: "doc.text.magnifyingglass",
+                        trailingIcon: "chevron.right"
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("vvterm.about.openSourceLicenses")
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 24)
@@ -94,6 +101,9 @@ struct AboutView: View {
         }
         .frame(width: 320)
         .fixedSize(horizontal: false, vertical: true)
+        .sheet(isPresented: $isShowingOpenSourceLicenses) {
+            OpenSourceLicensesView()
+        }
     }
 
     private var appIcon: Image {
@@ -112,45 +122,41 @@ struct AboutView: View {
 }
 
 private struct LinkButton: View {
-    @Environment(\.openURL) private var openURL
-
     let title: String
     let icon: String
-    let isSystemImage: Bool
     let url: String
 
     var body: some View {
-        Button {
-            if let url = URL(string: url) {
-                openURL(url)
-            }
-        } label: {
-            HStack(spacing: 10) {
-                if isSystemImage {
-                    Image(systemName: icon)
-                        .frame(width: 18, height: 18)
-                } else {
-                    Image(icon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 18, height: 18)
-                }
-
-                Text(title)
-                    .font(.system(size: 13, weight: .medium))
-
-                Spacer()
-
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(.quaternary.opacity(0.5))
-            .cornerRadius(8)
+        Link(destination: URL(string: url)!) {
+            AboutButtonLabel(title: title, icon: icon)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct AboutButtonLabel: View {
+    let title: String
+    let icon: String
+    var trailingIcon = "arrow.up.right"
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .frame(width: 18, height: 18)
+
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+
+            Spacer()
+
+            Image(systemName: trailingIcon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.quaternary.opacity(0.5))
+        .clipShape(.rect(cornerRadius: 8))
     }
 }
 

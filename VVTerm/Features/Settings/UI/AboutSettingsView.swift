@@ -34,6 +34,7 @@ private let contactOptions: [ContactOption] = [
 
 struct AboutSettingsView: View {
     @Environment(\.openURL) private var openURL
+    @State private var isShowingOpenSourceLicenses = false
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.1"
@@ -179,6 +180,23 @@ struct AboutSettingsView: View {
                 .foregroundStyle(.primary)
             }
 
+            Section("Open Source") {
+                Button {
+                    isShowingOpenSourceLicenses = true
+                } label: {
+                    HStack {
+                        Label("Open Source & Licenses", systemImage: "doc.text.magnifyingglass")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("vvterm.settings.openSourceLicenses")
+            }
+
             Section {
                 #if os(iOS)
                 Button {
@@ -206,6 +224,9 @@ struct AboutSettingsView: View {
         }
         .formStyle(.grouped)
         .adaptiveSoftScrollEdges()
+        .sheet(isPresented: $isShowingOpenSourceLicenses) {
+            OpenSourceLicensesView()
+        }
     }
 
     private func openExternalURL(_ urlString: String) {

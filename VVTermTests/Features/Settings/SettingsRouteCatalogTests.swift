@@ -49,6 +49,12 @@ struct SettingsRouteCatalogTests {
         ("spacing", SettingsRoute.terminalAppearance),
         ("margin", SettingsRoute.terminalAppearance),
         ("inset", SettingsRoute.terminalAppearance),
+        ("open source", SettingsRoute.aboutAndSupport),
+        ("dependencies", SettingsRoute.aboutAndSupport),
+        ("libraries", SettingsRoute.aboutAndSupport),
+        ("licenses", SettingsRoute.aboutAndSupport),
+        ("acknowledgements", SettingsRoute.aboutAndSupport),
+        ("credits", SettingsRoute.aboutAndSupport),
     ])
     func search(query: String, expectedRoute: SettingsRoute) {
         #expect(SettingsRouteCatalog.routes(matching: query).contains(expectedRoute))
