@@ -44,7 +44,7 @@ Usage: $0 [command]
 
 Commands:
   all       Build GhosttyKit + libssh2/OpenSSL (default)
-  ghostty   Build GhosttyKit.xcframework and copy .a libs
+  ghostty   Build GhosttyKit.xcframework
   ssh       Build libssh2 + OpenSSL (macOS + iOS + simulator)
   verify    Verify pinned sources and committed native artifact hashes
   clean     Remove .build + Vendor libraries
@@ -325,50 +325,34 @@ PY
         exit 1
     fi
 
+    rm -rf "${VENDOR_GHOSTTY}/GhosttyKit.xcframework"
+    rsync -a "${xcframework}" "${VENDOR_GHOSTTY}/"
+    local vendored_xcframework="${VENDOR_GHOSTTY}/GhosttyKit.xcframework"
     local macos_lib
     local ios_lib
     local sim_lib
-    macos_lib=$(find "${xcframework}" -path "*/macos-*/*ghostty*.a" -type f -print -quit)
-    ios_lib=$(find "${xcframework}" -path "*/ios-arm64/*ghostty*.a" -type f -print -quit)
-    sim_lib=$(find "${xcframework}" -path "*/ios-arm64-simulator/*ghostty*.a" -type f -print -quit)
+    macos_lib=$(find "${vendored_xcframework}" -path "*/macos-*/*ghostty*.a" -type f -print -quit)
+    ios_lib=$(find "${vendored_xcframework}" -path "*/ios-arm64/*ghostty*.a" -type f -print -quit)
+    sim_lib=$(find "${vendored_xcframework}" -path "*/ios-arm64-simulator/*ghostty*.a" -type f -print -quit)
 
     if [ -z "${macos_lib}" ] || [ -z "${ios_lib}" ] || [ -z "${sim_lib}" ]; then
         log_error "Failed to locate Ghostty static libraries inside xcframework"
         exit 1
     fi
 
-    mkdir -p "${VENDOR_GHOSTTY}/lib" "${VENDOR_GHOSTTY}/ios/lib" "${VENDOR_GHOSTTY}/ios-simulator/lib"
-    cp "${macos_lib}" "${VENDOR_GHOSTTY}/lib/libghostty.a"
-    cp "${ios_lib}" "${VENDOR_GHOSTTY}/ios/lib/libghostty.a"
-    cp "${sim_lib}" "${VENDOR_GHOSTTY}/ios-simulator/lib/libghostty.a"
-
-    if [ -d "${workdir}/ghostty/include" ]; then
-        mkdir -p "${VENDOR_GHOSTTY}/include" "${VENDOR_GHOSTTY}/ios/include" "${VENDOR_GHOSTTY}/ios-simulator/include"
-        rsync -a --exclude='module.modulemap' "${workdir}/ghostty/include/" "${VENDOR_GHOSTTY}/include/"
-        rsync -a --exclude='module.modulemap' "${workdir}/ghostty/include/" "${VENDOR_GHOSTTY}/ios/include/"
-        rsync -a --exclude='module.modulemap' "${workdir}/ghostty/include/" "${VENDOR_GHOSTTY}/ios-simulator/include/"
-    fi
-
-    rm -rf "${VENDOR_GHOSTTY}/GhosttyKit.xcframework"
-    rsync -a "${xcframework}" "${VENDOR_GHOSTTY}/"
-    find "${VENDOR_GHOSTTY}" -type f -name '*.h' -exec perl -pi -e 's/[ \t]+$//' {} +
+    find "${vendored_xcframework}" -type f -name '*.h' -exec perl -pi -e 's/[ \t]+$//' {} +
 
     printf "%s\n" "$(git -C "${workdir}/ghostty" rev-parse HEAD)" > "${VENDOR_GHOSTTY}/VERSION"
 
-    strip_lib "${VENDOR_GHOSTTY}/lib/libghostty.a"
-    strip_lib "${VENDOR_GHOSTTY}/ios/lib/libghostty.a"
-    strip_lib "${VENDOR_GHOSTTY}/ios-simulator/lib/libghostty.a"
-
-    # Also strip static libs inside the xcframework to stay under GitHub size limits.
-    while IFS= read -r -d '' lib; do
-        strip_lib "${lib}"
-    done < <(find "${VENDOR_GHOSTTY}/GhosttyKit.xcframework" -name "*.a" -type f -print0)
+    strip_lib "${macos_lib}"
+    strip_lib "${ios_lib}"
+    strip_lib "${sim_lib}"
     write_native_artifact_manifest
 
     log_info "GhosttyKit done"
-    log_info "  macOS: $(ls -lh "${VENDOR_GHOSTTY}/lib/libghostty.a" | awk '{print $5}')"
-    log_info "  iOS: $(ls -lh "${VENDOR_GHOSTTY}/ios/lib/libghostty.a" | awk '{print $5}')"
-    log_info "  iOS Simulator: $(ls -lh "${VENDOR_GHOSTTY}/ios-simulator/lib/libghostty.a" | awk '{print $5}')"
+    log_info "  macOS: $(ls -lh "${macos_lib}" | awk '{print $5}')"
+    log_info "  iOS: $(ls -lh "${ios_lib}" | awk '{print $5}')"
+    log_info "  iOS Simulator: $(ls -lh "${sim_lib}" | awk '{print $5}')"
 
     if [ "${KEEP_WORKDIR}" = "1" ]; then
         log_warn "Keeping workdir: ${workdir}"
