@@ -1029,6 +1029,10 @@
 "Remove Theme" = "테마 제거";
 "Reorder actions, add snippets, and sync your accessory bar across devices." = "동작을 정렬하고, 스니펫을 추가하고, 기기 간에 액세서리 바를 동기화합니다.";
 "Reset to Default" = "기본값으로 초기화";
+"Content Padding" = "콘텐츠 여백";
+"Horizontal" = "가로";
+"Vertical" = "세로";
+"Adds space between the terminal grid and pane edges on this device." = "이 기기에서 터미널 그리드와 창 가장자리 사이에 공간을 추가합니다.";
 "Save Custom Theme" = "사용자 정의 테마 저장";
 "Selection Background" = "선택 영역 배경";
 "Selection Foreground" = "선택 영역 전경";

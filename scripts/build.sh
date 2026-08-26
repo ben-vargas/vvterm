@@ -18,7 +18,7 @@ MACOS_DEPLOYMENT_TARGET="13.3"
 IOS_DEPLOYMENT_TARGET="16.0"
 
 GHOSTTY_REPO="https://github.com/wiedymi/ghostty.git"
-GHOSTTY_COMMIT="${GHOSTTY_COMMIT:-268a0a9d761fb19673f05d28042488e2002300f2}"
+GHOSTTY_COMMIT="${GHOSTTY_COMMIT:-02af5158c76036291183e746d436eb8f15356662}"
 BUNDLE_ID="app.vivy.VivyTerm"
 NATIVE_ARTIFACT_MANIFEST="$PROJECT_ROOT/Vendor/native-artifacts.sha256"
 
@@ -44,7 +44,7 @@ Usage: $0 [command]
 
 Commands:
   all       Build GhosttyKit + libssh2/OpenSSL (default)
-  ghostty   Build GhosttyKit.xcframework and copy .a libs
+  ghostty   Build GhosttyKit.xcframework
   ssh       Build libssh2 + OpenSSL (macOS + iOS + simulator)
   verify    Verify pinned sources and committed native artifact hashes
   clean     Remove .build + Vendor libraries
@@ -157,17 +157,44 @@ verify_native_sources() {
 
 strip_lib() {
     local lib="$1"
-    if command -v xcrun >/dev/null 2>&1; then
-        xcrun strip -S -x "$lib" || strip -S -x "$lib"
-    else
-        strip -S -x "$lib"
+
+    if command -v xcrun >/dev/null 2>&1 && xcrun strip -S -x "$lib"; then
+        return
     fi
+    if command -v strip >/dev/null 2>&1 && strip -S -x "$lib"; then
+        return
+    fi
+
+    local llvm_strip=""
+    llvm_strip="$(command -v llvm-strip || true)"
+
+    if [ -z "${llvm_strip}" ] && command -v brew >/dev/null 2>&1; then
+        llvm_strip="$(find "$(brew --cellar)" -maxdepth 4 -path '*/bin/llvm-strip' -type f -print -quit)"
+    fi
+
+    if [ -z "${llvm_strip}" ] && command -v rustc >/dev/null 2>&1; then
+        local rust_target_libdir
+        rust_target_libdir="$(rustc --print target-libdir)"
+        local rust_strip="${rust_target_libdir%/lib}/bin/llvm-strip"
+        if [ -x "${rust_strip}" ]; then
+            llvm_strip="${rust_strip}"
+        fi
+    fi
+
+    if [ -z "${llvm_strip}" ]; then
+        log_error "No working strip or llvm-strip tool found"
+        return 1
+    fi
+
+    # LLVM's Mach-O discard-all mode can remove local symbols still used by
+    # relocations. Keep those symbols and remove debug data only.
+    "${llvm_strip}" --strip-debug "$lib"
 }
 
 build_ghosttykit() {
     log_section "GhosttyKit"
 
-    GHOSTTY_WORKDIR="$(mktemp -d "/tmp/ghosttykit.XXXXXX")"
+    GHOSTTY_WORKDIR="$(mktemp -d)"
     local workdir="$GHOSTTY_WORKDIR"
 
     validate_git_commit "${GHOSTTY_COMMIT}" || {
@@ -259,6 +286,7 @@ PY
     log_info "Building GhosttyKit.xcframework..."
 
     local zig_flags=(
+        -Demit-lib-vt=false
         -Dapp-runtime=none
         -Demit-xcframework=true
         -Demit-macos-app=false
@@ -297,49 +325,34 @@ PY
         exit 1
     fi
 
+    rm -rf "${VENDOR_GHOSTTY}/GhosttyKit.xcframework"
+    rsync -a "${xcframework}" "${VENDOR_GHOSTTY}/"
+    local vendored_xcframework="${VENDOR_GHOSTTY}/GhosttyKit.xcframework"
     local macos_lib
     local ios_lib
     local sim_lib
-    macos_lib=$(find "${xcframework}" -path "*/macos-*/libghostty*.a" -type f -print -quit)
-    ios_lib=$(find "${xcframework}" -path "*/ios-arm64/libghostty*.a" -type f -print -quit)
-    sim_lib=$(find "${xcframework}" -path "*/ios-arm64-simulator/libghostty*.a" -type f -print -quit)
+    macos_lib=$(find "${vendored_xcframework}" -path "*/macos-*/*ghostty*.a" -type f -print -quit)
+    ios_lib=$(find "${vendored_xcframework}" -path "*/ios-arm64/*ghostty*.a" -type f -print -quit)
+    sim_lib=$(find "${vendored_xcframework}" -path "*/ios-arm64-simulator/*ghostty*.a" -type f -print -quit)
 
     if [ -z "${macos_lib}" ] || [ -z "${ios_lib}" ] || [ -z "${sim_lib}" ]; then
-        log_error "Failed to locate libghostty.a inside xcframework"
+        log_error "Failed to locate Ghostty static libraries inside xcframework"
         exit 1
     fi
 
-    mkdir -p "${VENDOR_GHOSTTY}/lib" "${VENDOR_GHOSTTY}/ios/lib" "${VENDOR_GHOSTTY}/ios-simulator/lib"
-    cp "${macos_lib}" "${VENDOR_GHOSTTY}/lib/libghostty.a"
-    cp "${ios_lib}" "${VENDOR_GHOSTTY}/ios/lib/libghostty.a"
-    cp "${sim_lib}" "${VENDOR_GHOSTTY}/ios-simulator/lib/libghostty.a"
-
-    if [ -d "${workdir}/ghostty/include" ]; then
-        mkdir -p "${VENDOR_GHOSTTY}/include" "${VENDOR_GHOSTTY}/ios/include" "${VENDOR_GHOSTTY}/ios-simulator/include"
-        rsync -a --exclude='module.modulemap' "${workdir}/ghostty/include/" "${VENDOR_GHOSTTY}/include/"
-        rsync -a --exclude='module.modulemap' "${workdir}/ghostty/include/" "${VENDOR_GHOSTTY}/ios/include/"
-        rsync -a --exclude='module.modulemap' "${workdir}/ghostty/include/" "${VENDOR_GHOSTTY}/ios-simulator/include/"
-    fi
-
-    rm -rf "${VENDOR_GHOSTTY}/GhosttyKit.xcframework"
-    rsync -a "${xcframework}" "${VENDOR_GHOSTTY}/"
+    find "${vendored_xcframework}" -type f -name '*.h' -exec perl -pi -e 's/[ \t]+$//' {} +
 
     printf "%s\n" "$(git -C "${workdir}/ghostty" rev-parse HEAD)" > "${VENDOR_GHOSTTY}/VERSION"
 
-    strip_lib "${VENDOR_GHOSTTY}/lib/libghostty.a"
-    strip_lib "${VENDOR_GHOSTTY}/ios/lib/libghostty.a"
-    strip_lib "${VENDOR_GHOSTTY}/ios-simulator/lib/libghostty.a"
-
-    # Also strip static libs inside the xcframework to stay under GitHub size limits.
-    while IFS= read -r -d '' lib; do
-        strip_lib "${lib}"
-    done < <(find "${VENDOR_GHOSTTY}/GhosttyKit.xcframework" -name "*.a" -type f -print0)
+    strip_lib "${macos_lib}"
+    strip_lib "${ios_lib}"
+    strip_lib "${sim_lib}"
     write_native_artifact_manifest
 
     log_info "GhosttyKit done"
-    log_info "  macOS: $(ls -lh "${VENDOR_GHOSTTY}/lib/libghostty.a" | awk '{print $5}')"
-    log_info "  iOS: $(ls -lh "${VENDOR_GHOSTTY}/ios/lib/libghostty.a" | awk '{print $5}')"
-    log_info "  iOS Simulator: $(ls -lh "${VENDOR_GHOSTTY}/ios-simulator/lib/libghostty.a" | awk '{print $5}')"
+    log_info "  macOS: $(ls -lh "${macos_lib}" | awk '{print $5}')"
+    log_info "  iOS: $(ls -lh "${ios_lib}" | awk '{print $5}')"
+    log_info "  iOS Simulator: $(ls -lh "${sim_lib}" | awk '{print $5}')"
 
     if [ "${KEEP_WORKDIR}" = "1" ]; then
         log_warn "Keeping workdir: ${workdir}"

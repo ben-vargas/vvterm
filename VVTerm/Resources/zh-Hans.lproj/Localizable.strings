@@ -1032,6 +1032,10 @@
 "Remove Theme" = "删除主题";
 "Reorder actions, add snippets, and sync your accessory bar across devices." = "重新排序操作、添加片段以及跨设备同步附件栏。";
 "Reset to Default" = "重置为默认值";
+"Content Padding" = "内容边距";
+"Horizontal" = "水平";
+"Vertical" = "垂直";
+"Adds space between the terminal grid and pane edges on this device." = "在此设备上为终端网格与窗格边缘之间添加空间。";
 "Save Custom Theme" = "保存自定义主题";
 "Selection Background" = "评选背景";
 "Selection Foreground" = "选择前景";

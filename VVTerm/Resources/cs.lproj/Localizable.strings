@@ -1036,6 +1036,10 @@
 "Remove Theme" = "Odebrat motiv";
 "Reorder actions, add snippets, and sync your accessory bar across devices." = "Změňte pořadí akcí, přidejte úryvky a synchronizujte lištu příslušenství mezi zařízeními.";
 "Reset to Default" = "Obnovit výchozí";
+"Content Padding" = "Odsazení obsahu";
+"Horizontal" = "Vodorovné";
+"Vertical" = "Svislé";
+"Adds space between the terminal grid and pane edges on this device." = "Přidá na tomto zařízení prostor mezi mřížku terminálu a okraje panelu.";
 "Save Custom Theme" = "Uložit vlastní motiv";
 "Selection Background" = "Výběr pozadí";
 "Selection Foreground" = "Výběr Popředí";

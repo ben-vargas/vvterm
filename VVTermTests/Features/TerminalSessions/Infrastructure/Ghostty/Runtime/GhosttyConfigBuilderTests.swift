@@ -46,7 +46,7 @@ struct GhosttyConfigBuilderTests {
                 primaryFontFamily: "Menlo",
                 fontSize: 13,
                 shellName: "fish",
-                themeName: "Aizen Light",
+                theme: "Aizen Light",
                 optionAsAltMode: mode
             )
 
@@ -113,7 +113,7 @@ struct GhosttyConfigBuilderTests {
             primaryFontFamily: "  JetBrainsMono Nerd Font  ",
             fontSize: 9,
             shellName: "zsh",
-            themeName: "Aizen Dark"
+            theme: "Aizen Dark"
         )
 
         let fontFamilyLines = content
@@ -132,11 +132,13 @@ struct GhosttyConfigBuilderTests {
             primaryFontFamily: "Menlo",
             fontSize: 13,
             shellName: "fish",
-            themeName: "Aizen Light"
+            theme: "Aizen Light"
         )
 
         #expect(content.contains("font-size = 13"))
         #expect(content.contains("window-inherit-font-size = false"))
+        #expect(content.contains("window-padding-x = 0"))
+        #expect(content.contains("window-padding-y = 0"))
         #expect(content.contains("shell-integration = fish"))
         #expect(content.contains("theme = Aizen Light"))
         #expect(content.contains("cursor-style = block"))
@@ -147,12 +149,27 @@ struct GhosttyConfigBuilderTests {
     }
 
     @Test
+    func configContentIncludesContentPadding() {
+        let content = Ghostty.ConfigBuilder.configContent(
+            primaryFontFamily: "Menlo",
+            fontSize: 13,
+            contentPadding: TerminalContentPadding(horizontal: 12, vertical: 18),
+            shellName: "fish",
+            theme: "Aizen Light"
+        )
+
+        #expect(content.contains("window-padding-x = 12"))
+        #expect(content.contains("window-padding-y = 18"))
+        #expect(content.contains("window-padding-color = extend-always"))
+    }
+
+    @Test
     func configContentIncludesCursorSettings() {
         let content = Ghostty.ConfigBuilder.configContent(
             primaryFontFamily: "Menlo",
             fontSize: 13,
             shellName: "fish",
-            themeName: "Aizen Light",
+            theme: "Aizen Light",
             cursorStyle: .bar,
             cursorBlink: false
         )
@@ -168,7 +185,7 @@ struct GhosttyConfigBuilderTests {
                 primaryFontFamily: "Menlo",
                 fontSize: 13,
                 shellName: "fish",
-                themeName: "Aizen Light",
+                theme: "Aizen Light",
                 remoteClipboardReadPolicy: policy
             )
 
@@ -187,6 +204,21 @@ struct GhosttyConfigBuilderTests {
             GhosttyRuntime.clipboardConfirmationKind(
                 request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE
             ) == .remoteWrite
+        )
+        #expect(
+            GhosttyRuntime.clipboardConfirmationKind(
+                request: GHOSTTY_CLIPBOARD_REQUEST_KITTY_READ
+            ) == .remoteRead
+        )
+        #expect(
+            GhosttyRuntime.clipboardConfirmationKind(
+                request: GHOSTTY_CLIPBOARD_REQUEST_KITTY_WRITE
+            ) == .remoteWrite
+        )
+        #expect(
+            GhosttyRuntime.clipboardConfirmationKind(
+                request: GHOSTTY_CLIPBOARD_REQUEST_LIST
+            ) == .remoteRead
         )
         #expect(
             GhosttyRuntime.clipboardConfirmationKind(

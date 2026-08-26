@@ -1035,6 +1035,10 @@
 "Remove Theme" = "テーマの削除";
 "Reorder actions, add snippets, and sync your accessory bar across devices." = "アクションの順序を変更し、スニペットを追加し、デバイス間でアクセサリ バーを同期します。";
 "Reset to Default" = "デフォルトにリセット";
+"Content Padding" = "コンテンツの余白";
+"Horizontal" = "水平方向";
+"Vertical" = "垂直方向";
+"Adds space between the terminal grid and pane edges on this device." = "このデバイスで、ターミナルのグリッドとペインの端の間に余白を追加します。";
 "Save Custom Theme" = "カスタムテーマの保存";
 "Selection Background" = "選択の背景";
 "Selection Foreground" = "選択範囲の前景";

@@ -48,8 +48,9 @@ extension Ghostty {
         static func configContent(
             primaryFontFamily: String,
             fontSize: Double,
+            contentPadding: TerminalContentPadding = .defaultValue,
             shellName: String,
-            themeName: String,
+            theme: String,
             cursorStyle: TerminalCursorStyle = TerminalDefaults.defaultCursorStyle,
             cursorBlink: Bool = TerminalDefaults.defaultCursorBlink,
             optionAsAltMode: TerminalOptionAsAltMode = .none,
@@ -66,8 +67,8 @@ extension Ghostty {
             font-size = \(Int(fontSize))
             window-inherit-font-size = false
             window-padding-balance = false
-            window-padding-x = 0
-            window-padding-y = 0
+            window-padding-x = \(contentPadding.horizontal)
+            window-padding-y = \(contentPadding.vertical)
             window-padding-color = extend-always
 
             # Enable shell integration (resources dir auto-detected from app bundle)
@@ -78,7 +79,7 @@ extension Ghostty {
             cursor-style = \(cursorStyle.rawValue)
             cursor-style-blink = \(cursorBlink ? "true" : "false")
 
-            theme = \(themeName)
+            theme = \(theme)
 
             # Disable audible bell
             audible-bell = false

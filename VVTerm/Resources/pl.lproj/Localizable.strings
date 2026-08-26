@@ -1037,6 +1037,10 @@
 "Remove Theme" = "Usuń motyw";
 "Reorder actions, add snippets, and sync your accessory bar across devices." = "Zmień kolejność działań, dodaj fragmenty i zsynchronizuj pasek akcesoriów na różnych urządzeniach.";
 "Reset to Default" = "Przywróć ustawienia domyślne";
+"Content Padding" = "Odstęp zawartości";
+"Horizontal" = "Poziomo";
+"Vertical" = "Pionowo";
+"Adds space between the terminal grid and pane edges on this device." = "Dodaje na tym urządzeniu odstęp między siatką terminala a krawędziami panelu.";
 "Save Custom Theme" = "Zapisz niestandardowy motyw";
 "Selection Background" = "Tło wyboru";
 "Selection Foreground" = "Wybór na pierwszym planie";

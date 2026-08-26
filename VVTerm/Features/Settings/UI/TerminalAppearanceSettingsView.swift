@@ -161,6 +161,7 @@ struct TerminalAppearanceSettingsView: View {
     var body: some View {
         Form {
             fontSection
+            TerminalContentPaddingSettingsSection()
             cursorSection
             TerminalThemeSettingsSection()
         }

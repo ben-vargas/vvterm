@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import CoreFoundation
 #if os(iOS)
 import UIKit
 #elseif os(macOS)
@@ -189,6 +190,8 @@ nonisolated enum TerminalDefaults {
     static let fontSizeKey = "terminalFontSize"
     static let cursorStyleKey = "terminalCursorStyle"
     static let cursorBlinkKey = "terminalCursorBlink"
+    static let contentPaddingHorizontalKey = "terminalContentPaddingHorizontal"
+    static let contentPaddingVerticalKey = "terminalContentPaddingVertical"
     static let sshAutoReconnectKey = "sshAutoReconnect"
     static let keepScreenAwakeKey = "terminalKeepScreenAwake"
     static let optionAsAltModeKey = "terminalOptionAsAltMode"
@@ -197,6 +200,10 @@ nonisolated enum TerminalDefaults {
     nonisolated static let minimumFontSize = 4.0
     nonisolated static let maximumFontSize = 32.0
     nonisolated static let fontSizeStep = 1.0
+    nonisolated static let minimumContentPadding = 0.0
+    nonisolated static let maximumContentPadding = 32.0
+    nonisolated static let contentPaddingStep = 1.0
+    nonisolated static let defaultContentPadding = 0.0
     nonisolated static let defaultCursorStyle: TerminalCursorStyle = .block
     nonisolated static let defaultCursorBlink = true
     nonisolated static let defaultKeepScreenAwake = true
@@ -215,6 +222,7 @@ nonisolated enum TerminalDefaults {
     @MainActor static func applyIfNeeded(defaults: UserDefaults) {
         seedFontDefaultsIfNeeded(defaults: defaults)
         seedCursorDefaultsIfNeeded(defaults: defaults)
+        sanitizeStoredContentPadding(defaults: defaults)
 
         if defaults.object(forKey: ImagePasteBehavior.userDefaultsKey) == nil {
             let imagePasteBehavior = RichClipboardSettings.resolvedImagePasteBehavior(defaults: defaults)
@@ -224,6 +232,29 @@ nonisolated enum TerminalDefaults {
 
     nonisolated static func clampedFontSize(_ fontSize: Double) -> Double {
         min(max(fontSize.rounded(), minimumFontSize), maximumFontSize)
+    }
+
+    nonisolated static func clampedContentPadding(_ padding: Double) -> Double {
+        guard padding.isFinite else { return defaultContentPadding }
+        return min(
+            max(padding.rounded(), minimumContentPadding),
+            maximumContentPadding
+        )
+    }
+
+    nonisolated static func storedContentPadding(
+        defaults: UserDefaults = .standard
+    ) -> TerminalContentPadding {
+        TerminalContentPadding(
+            horizontal: storedContentPaddingValue(
+                forKey: contentPaddingHorizontalKey,
+                defaults: defaults
+            ),
+            vertical: storedContentPaddingValue(
+                forKey: contentPaddingVerticalKey,
+                defaults: defaults
+            )
+        )
     }
 
     @MainActor static func storedFontSize(defaults: UserDefaults = .standard) -> Double {
@@ -300,6 +331,32 @@ nonisolated enum TerminalDefaults {
         if defaults.object(forKey: cursorBlinkKey) == nil {
             defaults.set(defaultCursorBlink, forKey: cursorBlinkKey)
         }
+    }
+
+    private static func sanitizeStoredContentPadding(defaults: UserDefaults) {
+        for key in [contentPaddingHorizontalKey, contentPaddingVerticalKey] {
+            guard let storedValue = defaults.object(forKey: key) else { continue }
+
+            let resolvedValue = storedContentPaddingValue(forKey: key, defaults: defaults)
+            guard let number = storedValue as? NSNumber,
+                  CFGetTypeID(number) != CFBooleanGetTypeID(),
+                  number.doubleValue.isFinite,
+                  number.doubleValue == resolvedValue else {
+                defaults.set(resolvedValue, forKey: key)
+                continue
+            }
+        }
+    }
+
+    private static func storedContentPaddingValue(
+        forKey key: String,
+        defaults: UserDefaults
+    ) -> Double {
+        guard let number = defaults.object(forKey: key) as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else {
+            return defaultContentPadding
+        }
+        return clampedContentPadding(number.doubleValue)
     }
 
     #if os(macOS)

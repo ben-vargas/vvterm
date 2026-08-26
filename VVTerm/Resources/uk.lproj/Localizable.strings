@@ -1042,6 +1042,10 @@
 "Remove Theme" = "Видалити тему";
 "Reorder actions, add snippets, and sync your accessory bar across devices." = "Змінюйте порядок дій, додавайте фрагменти та синхронізуйте панель аксесуарів між пристроями.";
 "Reset to Default" = "Скинути до замовчування";
+"Content Padding" = "Відступи вмісту";
+"Horizontal" = "Горизонтальний";
+"Vertical" = "Вертикальний";
+"Adds space between the terminal grid and pane edges on this device." = "Додає простір між сіткою термінала та краями панелі на цьому пристрої.";
 "Save Custom Theme" = "Зберегти спеціальну тему";
 "Selection Background" = "Вибір фону";
 "Selection Foreground" = "Виділення переднього плану";

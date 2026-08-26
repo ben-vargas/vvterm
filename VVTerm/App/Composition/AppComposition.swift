@@ -52,11 +52,13 @@ struct AppComposition {
         #else
         let terminalOptionAsAltMode = TerminalOptionAsAltMode.none.rawValue
         #endif
+        let terminalContentPadding = TerminalDefaults.storedContentPadding(defaults: defaults)
         let ghosttyRuntimeConfiguration = Ghostty.RuntimeConfiguration(
             fontName: defaults.string(forKey: TerminalDefaults.fontNameKey)
                 ?? TerminalDefaults.defaultFontName,
             fontSize: defaults.object(forKey: TerminalDefaults.fontSizeKey) as? Double
                 ?? TerminalDefaults.defaultFontSize,
+            contentPadding: terminalContentPadding,
             cursorStyleRawValue: defaults.string(forKey: TerminalDefaults.cursorStyleKey)
                 ?? TerminalDefaults.defaultCursorStyle.rawValue,
             cursorBlink: defaults.object(forKey: TerminalDefaults.cursorBlinkKey) as? Bool
