@@ -159,7 +159,11 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .transcription:
             ["voice", "speech", "transcription", "whisper", "parakeet", "model", "microphone"]
         case .aboutAndSupport:
-            ["about", "support", "version", "help", "email", "discord", "website", "privacy policy", "terms"]
+            [
+                "about", "support", "version", "help", "email", "discord", "website",
+                "privacy policy", "terms", "open source", "dependencies", "libraries",
+                "licenses", "acknowledgements", "credits",
+            ]
         }
     }
 
@@ -221,7 +225,10 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .transcription:
             ["Voice Input", "Transcription", "Speech", "Microphone"]
         case .aboutAndSupport:
-            ["Help & About", "Rate VVTerm", "Report an Issue", "Visit Website", "Discord", "Email"]
+            [
+                "Help & About", "Rate VVTerm", "Report an Issue", "Visit Website",
+                "Discord", "Email", "Open Source", "Open Source & Licenses",
+            ]
         }
     }
 
