@@ -243,6 +243,12 @@ Safe refactor expectation:
 - Do not rely on "checked on my phone" or manual Xcode testing as the only validation for keyboard/input regressions. Keep simulator UI tests or unit tests that can be rerun by future agents.
 - Before finishing non-documentation code changes, run the narrowest reliable build/test commands that exercise the touched behavior and report exactly what was run. If a test cannot run because of tooling or environment issues, report that as a residual risk.
 
+## Build Storage
+
+- Use Xcode's default Derived Data. Do not pass `-derivedDataPath`.
+- Never put Derived Data in the repository, `.build`, `/tmp`, or `/private/tmp`. Reuse caches and run builds serially.
+- Avoid redundant clean or full builds. Check disk space before large builds, and ask before using an isolated path.
+
 ## Test Source Organization
 
 - Put each new test under the same `App`, `Core`, or `Features/<FeatureName>` owner as the production behavior that it verifies. Do not add unrelated tests to the `VVTermTests` or `VVTermUITests` root.
