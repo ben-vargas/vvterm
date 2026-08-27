@@ -27,32 +27,20 @@ struct ServerWakeNoticeHost<Content: View>: View {
         case .idle:
             noticeHost.set(nil, for: .bottomOperation)
 
-        case .sending(let operation):
+        case .sending(let operationID):
             noticeHost.set(nil, for: .bottomOperation)
             noticeHost.show(
                 operationNotice(
-                    operation: operation,
+                    operationID: operationID,
                     message: String(localized: "Sending wake request…")
                 )
             )
 
-        case .waiting(let operation, let attempt, let totalAttempts):
-            noticeHost.show(
-                operationNotice(
-                    operation: operation,
-                    message: String(localized: "Waiting for SSH…"),
-                    progress: NoticeProgress(
-                        completedUnitCount: attempt,
-                        totalUnitCount: totalAttempts
-                    )
-                )
-            )
+        case .succeeded(let operationID):
+            noticeHost.show(successNotice(operationID: operationID))
 
-        case .succeeded(let operation, let success):
-            noticeHost.show(successNotice(operation: operation, success: success))
-
-        case .failed(let operation, let failure):
-            let noticeID = operation.id.uuidString
+        case .failed(let operationID, let failure):
+            let noticeID = operationID.uuidString
             noticeHost.show(
                 NoticeItem(
                     id: noticeID,
@@ -63,7 +51,7 @@ struct ServerWakeNoticeHost<Content: View>: View {
                     message: failure.message,
                     dismissAction: {
                         noticeHost.dismiss(id: noticeID)
-                        coordinator.dismissOutcome(operationID: operation.id)
+                        coordinator.dismissOutcome(operationID: operationID)
                     }
                 )
             )
@@ -71,50 +59,35 @@ struct ServerWakeNoticeHost<Content: View>: View {
     }
 
     private func operationNotice(
-        operation: ServerWakeOperation,
-        message: String,
-        progress: NoticeProgress? = nil
+        operationID: UUID,
+        message: String
     ) -> NoticeItem {
         NoticeItem(
-            id: operation.id.uuidString,
+            id: operationID.uuidString,
             lane: .bottomOperation,
             level: .info,
             leading: .activity,
             title: String(localized: "Wake-on-LAN"),
             message: message,
-            progress: progress,
             action: NoticeAction(
                 id: "cancel",
                 title: String(localized: "Cancel"),
                 role: .cancel,
                 handler: {
-                    coordinator.cancel(operationID: operation.id)
+                    coordinator.cancel(operationID: operationID)
                 }
             )
         )
     }
 
-    private func successNotice(
-        operation: ServerWakeOperation,
-        success: ServerWakeSuccess
-    ) -> NoticeItem {
-        let message: String
-        switch success {
-        case .packetSent:
-            message = String(localized: "Wake request sent.")
-        case .connectionReady:
-            message = String(localized: "Server is reachable.")
-        case .connectionStarted:
-            message = String(localized: "Server is awake. Connecting…")
-        }
-
-        return NoticeItem(
-            id: operation.id.uuidString,
+    private func successNotice(operationID: UUID) -> NoticeItem {
+        NoticeItem(
+            id: operationID.uuidString,
             lane: .bottomOperation,
             level: .success,
             leading: .icon("checkmark.circle.fill"),
             title: String(localized: "Wake-on-LAN"),
-            message: message,
+            message: String(localized: "Wake request sent."),
             lifetime: .autoDismiss(.seconds(3))
         )
     }
@@ -125,12 +98,6 @@ private extension ServerWakeFailure {
         switch self {
         case .notConfigured:
             return String(localized: "Enable Wake-on-LAN in Server Settings first.")
-        case .invalidEndpoint:
-            return String(localized: "The saved SSH host or port is invalid.")
-        case .timeout:
-            return String(
-                localized: "The wake request was sent, but SSH did not become reachable. Check the server and local network."
-            )
         case .unexpected:
             return String(localized: "VVTerm could not complete the wake request.")
         case .send(let error):
@@ -157,10 +124,10 @@ private extension WakeOnLANSendError {
         case .broadcastConfigurationFailed:
             return String(localized: "VVTerm could not enable UDP broadcast on this device.")
         case .destinationEncodingFailed:
-            return String(localized: "The configured broadcast address is invalid.")
+            return String(localized: "VVTerm could not prepare the network broadcast address.")
         case .datagramSendFailed:
             return String(
-                localized: "VVTerm could not send the wake request. Check Local Network access and the broadcast address."
+                localized: "VVTerm could not send the wake request. Check Local Network access."
             )
         case .incompleteDatagram:
             return String(localized: "The network did not accept the complete wake request.")

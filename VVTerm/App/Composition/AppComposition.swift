@@ -163,11 +163,6 @@ struct AppComposition {
                     interfaceProvider: SystemWakeOnLANInterfaceProvider(),
                     datagramSender: BSDWakeOnLANDatagramSender()
                 ),
-                endpointProbe: NWServerEndpointProbe(),
-                connectPolicy: .standard,
-                sleep: { duration in
-                    try await Task.sleep(for: duration)
-                },
                 makeID: makeID
             )
         )

@@ -2,6 +2,8 @@ import Darwin
 import Foundation
 
 nonisolated struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
+    private static let wakePort: UInt16 = 9
+
     private let interfaceProvider: any WakeOnLANInterfaceProviding
     private let datagramSender: any WakeOnLANDatagramSending
 
@@ -24,7 +26,7 @@ nonisolated struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
     private func sendSynchronously(
         configuration: WakeOnLANConfiguration
     ) throws -> WakeOnLANSendReceipt {
-        let destinations = try destinations(for: configuration)
+        let destinations = try destinations()
         let packet = WakeOnLANMagicPacket.data(for: configuration.macAddress)
 
         var sentDestinations: [WakeOnLANIPv4Address] = []
@@ -34,7 +36,7 @@ nonisolated struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
                 try datagramSender.send(
                     packet,
                     to: destination,
-                    port: configuration.port
+                    port: Self.wakePort
                 )
                 sentDestinations.append(destination)
             } catch let error as WakeOnLANSendError {
@@ -57,27 +59,19 @@ nonisolated struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
         return WakeOnLANSendReceipt(destinations: sentDestinations)
     }
 
-    private func destinations(
-        for configuration: WakeOnLANConfiguration
-    ) throws -> [WakeOnLANIPv4Address] {
-        switch configuration.destination {
-        case .automatic:
-            let interfaces: [WakeOnLANNetworkInterface]
-            do {
-                interfaces = try interfaceProvider.interfaces()
-            } catch let error as WakeOnLANSendError {
-                throw error
-            } catch {
-                throw WakeOnLANSendError.interfaceEnumerationFailed(code: EIO)
-            }
-            let destinations = WakeOnLANBroadcastResolver.destinations(for: interfaces)
-            guard !destinations.isEmpty else {
-                throw WakeOnLANSendError.noEligibleNetworkInterface
-            }
-            return destinations
-
-        case .explicitBroadcast(let address):
-            return [address]
+    private func destinations() throws -> [WakeOnLANIPv4Address] {
+        let interfaces: [WakeOnLANNetworkInterface]
+        do {
+            interfaces = try interfaceProvider.interfaces()
+        } catch let error as WakeOnLANSendError {
+            throw error
+        } catch {
+            throw WakeOnLANSendError.interfaceEnumerationFailed(code: EIO)
         }
+        let destinations = WakeOnLANBroadcastResolver.destinations(for: interfaces)
+        guard !destinations.isEmpty else {
+            throw WakeOnLANSendError.noEligibleNetworkInterface
+        }
+        return destinations
     }
 }

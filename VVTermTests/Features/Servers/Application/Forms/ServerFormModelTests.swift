@@ -28,11 +28,6 @@ struct ServerFormModelTests {
         model.cloudflareClientID = " client-id "
         model.cloudflareClientSecret = " client-secret "
         model.cloudflareTeamDomainOverride = " team.cloudflareaccess.com "
-        model.wakeOnLAN.isEnabled = true
-        model.wakeOnLAN.macAddress = "aa-bb-cc-dd-ee-ff"
-        model.wakeOnLAN.destinationMode = .explicitBroadcast
-        model.wakeOnLAN.broadcastAddress = "192.168.50.255"
-        model.wakeOnLAN.port = "7"
         model.notes = "notes"
         model.requiresBiometricUnlock = true
         model.remoteSessionEnabled = true
@@ -57,8 +52,6 @@ struct ServerFormModelTests {
         #expect(server.connectionMode == .cloudflare)
         #expect(server.cloudflareAccessMode == .serviceToken)
         #expect(server.cloudflareTeamDomainOverride == "team.cloudflareaccess.com")
-        #expect(server.wakeOnLANConfiguration?.macAddress.canonicalValue == "AA:BB:CC:DD:EE:FF")
-        #expect(server.wakeOnLANConfiguration?.port == 7)
         #expect(server.remoteSessionEnabledOverride == true)
         #expect(server.remoteSessionBackendIdentifier == .zmx)
         #expect(server.remoteSessionStartupBehaviorOverride == .createManaged)
@@ -106,6 +99,42 @@ struct ServerFormModelTests {
 
         model.host = "other.example.com"
         #expect(model.connectionSnapshot != snapshot)
+    }
+
+    @Test
+    func wakeOnLANPlanPreservesOnlyTheConfigurationForTheSameHost() throws {
+        let configuration = WakeOnLANConfiguration(
+            macAddress: try WakeOnLANMACAddress("AA:BB:CC:DD:EE:FF")
+        )
+        let server = Server(
+            workspaceId: UUID(),
+            name: "Local",
+            host: " 192.168.1.10 ",
+            username: "root",
+            wakeOnLANConfiguration: configuration
+        )
+        var model = ServerFormModel(
+            server: server,
+            defaultRemoteSessionEnabled: true,
+            defaultRemoteSessionBackendIdentifier: .tmux,
+            defaultRemoteSessionStartupBehavior: .createManaged
+        )
+
+        #expect(model.wakeOnLANSavePlan(sourceHost: "192.168.1.10") == .configured(configuration))
+
+        model.host = "192.168.1.11"
+        #expect(model.wakeOnLANSavePlan(sourceHost: server.host) == .resolveAutomatically)
+
+        model.wakeOnLANEnabled = false
+        #expect(model.wakeOnLANSavePlan(sourceHost: server.host) == .disabled)
+    }
+
+    @Test
+    func enablingWakeOnLANWithoutAStoredAddressRequiresAutomaticResolution() {
+        var model = validPasswordModel()
+        model.wakeOnLANEnabled = true
+
+        #expect(model.wakeOnLANSavePlan(sourceHost: model.host) == .resolveAutomatically)
     }
 
     @Test

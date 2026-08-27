@@ -10,7 +10,7 @@ struct ServerRow: View {
     let onEdit: (Server) -> Void
     var onMove: ((Server) -> Void)? = nil
     let onDuplicate: (Server) -> Void
-    let onWake: (Server, ServerWakeAction) -> Void
+    let onWake: (Server) -> Void
     let onConnect: (Server) -> Void
     var onLockedTap: (() -> Void)? = nil
 
@@ -31,7 +31,7 @@ struct ServerRow: View {
         onEdit: @escaping (Server) -> Void,
         onMove: ((Server) -> Void)? = nil,
         onDuplicate: @escaping (Server) -> Void,
-        onWake: @escaping (Server, ServerWakeAction) -> Void,
+        onWake: @escaping (Server) -> Void,
         onConnect: @escaping (Server) -> Void,
         onLockedTap: (() -> Void)? = nil
     ) {
@@ -114,25 +114,18 @@ struct ServerRow: View {
                     } label: {
                         Label("Open Connection", systemImage: "point.forward.to.point.capsulepath.fill")
                     }
-                    if server.wakeOnLANConfiguration != nil {
-                        ServerWakeActionButton(
-                            action: .wake,
-                            serverID: server.id,
-                            onAction: { onWake(server, $0) }
-                        )
-                        ServerWakeActionButton(
-                            action: .wakeAndConnect,
-                            serverID: server.id,
-                            onAction: { onWake(server, $0) }
-                        )
-                        Divider()
-                    }
                     if let onMove {
                         Button { onMove(server) } label: {
                             Label("Move to Workspace", systemImage: "arrow.turn.right.up")
                         }
                     }
                     duplicateButton
+                    if server.wakeOnLANConfiguration != nil {
+                        ServerWakeActionButton(
+                            serverID: server.id,
+                            onAction: { onWake(server) }
+                        )
+                    }
                     Button { onEdit(server) } label: {
                         Label("Server Settings", systemImage: "slider.horizontal.3")
                     }

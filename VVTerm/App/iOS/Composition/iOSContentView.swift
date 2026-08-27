@@ -167,7 +167,6 @@ struct iOSContentView: View {
         ServerWakeNoticeHost(coordinator: serverWakeCoordinator) {
             navigationContent
         }
-        .onReceive(serverWakeCoordinator.$phase, perform: handleServerWakePhase)
     }
 
     private func reconcileWorkspaceSelection(_ workspaces: [Workspace]) {
@@ -214,17 +213,6 @@ struct iOSContentView: View {
                 }
             }
         }
-    }
-
-    private func handleServerWakePhase(_ phase: ServerWakePhase) {
-        guard case .succeeded(let operation, .connectionReady) = phase,
-              let server = serverManager.servers.first(where: {
-                  $0.id == operation.serverID
-              }) else {
-            return
-        }
-        serverWakeCoordinator.markConnectionStarted(operationID: operation.id)
-        beginConnection(to: server)
     }
 
     @discardableResult

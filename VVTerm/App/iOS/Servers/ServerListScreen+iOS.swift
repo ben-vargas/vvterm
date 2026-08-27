@@ -348,9 +348,7 @@ struct ServerListScreen: View {
                         onEdit: { serverFormIntent = .edit(server) },
                         onMove: { serverToMove = server },
                         onDuplicate: { serverFormIntent = .duplicate(server) },
-                        onWake: { action in
-                            startWake(action, for: server)
-                        },
+                        onWake: { startWake(for: server) },
                         onLockedTap: { lockedServerAlert = server }
                     )
                     .accessibilityIdentifier(
@@ -505,10 +503,10 @@ struct ServerListScreen: View {
         tabManager.disconnectServer(connection.id)
     }
 
-    private func startWake(_ action: ServerWakeAction, for server: Server) {
+    private func startWake(for server: Server) {
         Task {
             guard await appLockManager.ensureServerUnlocked(server) else { return }
-            serverWakeCoordinator.start(action, for: server)
+            serverWakeCoordinator.start(for: server)
         }
     }
 

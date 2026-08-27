@@ -111,6 +111,9 @@ extension ServerFormDependencies {
                 hostKeys: hostKeys,
                 now: now
             ),
+            wakeOnLANMACAddressResolver: SSHServerWakeOnLANMACAddressResolver(
+                connectionOperations: connectionOperations
+            ),
             hostKeys: hostKeys,
             remoteSessionBackends: remoteSessionBackends,
             defaultRemoteSessionEnabled: defaultRemoteSessionEnabled,

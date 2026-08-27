@@ -98,8 +98,8 @@ struct ServerLocalStoreTests {
             name: "Server",
             host: "server.example.test",
             username: "root",
-            wakeOnLANConfiguration: try WakeOnLANConfiguration(
-                macAddress: WakeOnLANMACAddress("00:11:22:33:44:55")
+            wakeOnLANConfiguration: WakeOnLANConfiguration(
+                macAddress: try WakeOnLANMACAddress("00:11:22:33:44:55")
             )
         )
 

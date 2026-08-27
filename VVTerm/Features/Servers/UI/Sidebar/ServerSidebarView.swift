@@ -219,9 +219,7 @@ struct ServerSidebarView: View {
                                 onEdit: { serverFormIntent = .edit($0) },
                                 onMove: { serverToMove = $0 },
                                 onDuplicate: { serverFormIntent = .duplicate($0) },
-                                onWake: { server, action in
-                                    startWake(action, for: server)
-                                },
+                                onWake: { startWake(for: $0) },
                                 onConnect: { connectToServer($0) },
                                 onLockedTap: { lockedServerAlert = server }
                             )
@@ -732,10 +730,10 @@ struct ServerSidebarView: View {
         }
     }
 
-    private func startWake(_ action: ServerWakeAction, for server: Server) {
+    private func startWake(for server: Server) {
         Task {
             guard await appLockManager.ensureServerUnlocked(server) else { return }
-            serverWakeCoordinator.start(action, for: server)
+            serverWakeCoordinator.start(for: server)
         }
     }
 

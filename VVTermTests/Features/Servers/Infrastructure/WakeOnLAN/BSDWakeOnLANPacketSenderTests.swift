@@ -4,7 +4,7 @@ import Testing
 
 struct BSDWakeOnLANPacketSenderTests {
     @Test
-    func automaticModeSendsTheMagicPacketToEachDirectedBroadcast() async throws {
+    func sendsTheMagicPacketToEachDirectedBroadcastOnTheStandardPort() async throws {
         let interfaces = [
             try makeInterface(address: "192.168.1.40", netmask: "255.255.255.0"),
             try makeInterface(address: "10.0.0.140", netmask: "255.255.255.128"),
@@ -14,7 +14,7 @@ struct BSDWakeOnLANPacketSenderTests {
             interfaces: interfaces,
             datagramSender: datagramSender
         )
-        let configuration = try makeConfiguration(port: 7)
+        let configuration = try makeConfiguration()
 
         let receipt = try await sender.send(configuration: configuration)
         let calls = datagramSender.calls
@@ -27,28 +27,8 @@ struct BSDWakeOnLANPacketSenderTests {
             "10.0.0.255",
             "192.168.1.255",
         ])
-        #expect(calls.allSatisfy { $0.port == 7 })
+        #expect(calls.allSatisfy { $0.port == 9 })
         #expect(calls.allSatisfy { $0.data.count == WakeOnLANMagicPacket.byteCount })
-    }
-
-    @Test
-    func explicitModeDoesNotEnumerateInterfaces() async throws {
-        let destination = try WakeOnLANIPv4Address("172.16.0.255")
-        let datagramSender = RecordingWakeOnLANDatagramSender()
-        let sender = BSDWakeOnLANPacketSender(
-            interfaceProvider: FailingWakeOnLANInterfaceProvider(),
-            datagramSender: datagramSender
-        )
-        let configuration = try WakeOnLANConfiguration(
-            macAddress: WakeOnLANMACAddress("00:11:22:33:44:55"),
-            destination: .explicitBroadcast(destination),
-            port: 9
-        )
-
-        let receipt = try await sender.send(configuration: configuration)
-
-        #expect(receipt.destinations == [destination])
-        #expect(datagramSender.calls.map(\.address) == [destination])
     }
 
     @Test
@@ -72,7 +52,7 @@ struct BSDWakeOnLANPacketSenderTests {
     }
 
     @Test
-    func automaticModeFailsWithoutAnEligibleInterface() async throws {
+    func failsWithoutAnEligibleInterface() async throws {
         let sender = makeSender(
             interfaces: [],
             datagramSender: RecordingWakeOnLANDatagramSender()
@@ -93,12 +73,9 @@ struct BSDWakeOnLANPacketSenderTests {
         )
     }
 
-    private func makeConfiguration(
-        port: Int = 9
-    ) throws -> WakeOnLANConfiguration {
-        try WakeOnLANConfiguration(
-            macAddress: WakeOnLANMACAddress("00:11:22:33:44:55"),
-            port: port
+    private func makeConfiguration() throws -> WakeOnLANConfiguration {
+        WakeOnLANConfiguration(
+            macAddress: try WakeOnLANMACAddress("00:11:22:33:44:55")
         )
     }
 
@@ -127,12 +104,6 @@ private struct FixtureWakeOnLANInterfaceProvider: WakeOnLANInterfaceProviding {
 
     func interfaces() throws -> [WakeOnLANNetworkInterface] {
         interfacesValue
-    }
-}
-
-private struct FailingWakeOnLANInterfaceProvider: WakeOnLANInterfaceProviding {
-    func interfaces() throws -> [WakeOnLANNetworkInterface] {
-        throw WakeOnLANSendError.interfaceEnumerationFailed(code: 1)
     }
 }
 

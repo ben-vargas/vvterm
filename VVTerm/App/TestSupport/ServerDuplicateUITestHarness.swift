@@ -12,6 +12,7 @@ struct ServerDuplicateUITestHarness: View {
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
 
     @State private var formIntent: ServerFormIntent?
+    @State private var wakeActionCount = 0
 
     private var workspace: Workspace? {
         serverManager.workspaces.first
@@ -26,6 +27,9 @@ struct ServerDuplicateUITestHarness: View {
             port: 2222,
             username: "wiedy",
             connectionMode: .tailscale,
+            wakeOnLANConfiguration: WakeOnLANConfiguration(
+                macAddress: try! WakeOnLANMACAddress("00:11:22:33:44:55")
+            ),
             notes: "Duplicate form fixture"
         )
     }
@@ -38,12 +42,15 @@ struct ServerDuplicateUITestHarness: View {
                     serverManager: serverManager,
                     server: sourceServer,
                     onTap: {},
-                    onEdit: {},
+                    onEdit: { formIntent = .edit(sourceServer) },
                     onMove: {},
                     onDuplicate: { formIntent = .duplicate(sourceServer) },
-                    onWake: { _ in }
+                    onWake: { wakeActionCount += 1 }
                 )
                 .accessibilityIdentifier("vvterm.serverDuplicateTest.row")
+
+                Text("\(wakeActionCount)")
+                    .accessibilityIdentifier("vvterm.serverWakeTest.actionCount")
                 #else
                 Button {
                     formIntent = .duplicate(sourceServer)

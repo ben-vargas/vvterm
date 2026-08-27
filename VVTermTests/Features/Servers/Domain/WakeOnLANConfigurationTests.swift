@@ -21,7 +21,7 @@ struct WakeOnLANConfigurationTests {
     }
 
     @Test
-    func malformedMACAddressesAreRejected() {
+    func invalidMACAddressesAreRejected() {
         let inputs = [
             "",
             "AA:BB:CC:DD:EE",
@@ -30,6 +30,9 @@ struct WakeOnLANConfigurationTests {
             "AA:BB:CC:DD:EE:GG",
             "AABB.CCDD.EE",
             "AABBCCDDEEFF00",
+            "00:00:00:00:00:00",
+            "01:11:22:33:44:55",
+            "FF:FF:FF:FF:FF:FF",
         ]
 
         for input in inputs {
@@ -61,35 +64,23 @@ struct WakeOnLANConfigurationTests {
     }
 
     @Test
-    func configurationValidatesPortsAndRoundTrips() throws {
-        let macAddress = try WakeOnLANMACAddress("00:11:22:33:44:55")
-        let destination = WakeOnLANDestination.explicitBroadcast(
-            try WakeOnLANIPv4Address("10.20.30.255")
-        )
-
-        #expect(throws: WakeOnLANConfigurationError.invalidPort) {
-            try WakeOnLANConfiguration(
-                macAddress: macAddress,
-                destination: destination,
-                port: 0
-            )
-        }
-        #expect(throws: WakeOnLANConfigurationError.invalidPort) {
-            try WakeOnLANConfiguration(
-                macAddress: macAddress,
-                destination: destination,
-                port: 65_536
-            )
-        }
-
-        let configuration = try WakeOnLANConfiguration(
-            macAddress: macAddress,
-            destination: destination,
-            port: 65_535
+    func configurationRoundTripsAndIgnoresOldAdvancedValues() throws {
+        let configuration = WakeOnLANConfiguration(
+            macAddress: try WakeOnLANMACAddress("00:11:22:33:44:55")
         )
         let encoded = try JSONEncoder().encode(configuration)
+        #expect(
+            try JSONDecoder().decode(WakeOnLANConfiguration.self, from: encoded)
+                == configuration
+        )
 
-        #expect(try JSONDecoder().decode(WakeOnLANConfiguration.self, from: encoded) == configuration)
+        let oldData = Data(
+            #"{"macAddress":"00:11:22:33:44:55","destination":{"mode":"automatic"},"port":9}"#.utf8
+        )
+        #expect(
+            try JSONDecoder().decode(WakeOnLANConfiguration.self, from: oldData)
+                == configuration
+        )
     }
 
     @Test
@@ -111,10 +102,8 @@ struct WakeOnLANConfigurationTests {
 
     @Test
     func serverPersistenceRoundTripsConfiguration() throws {
-        let configuration = try WakeOnLANConfiguration(
-            macAddress: WakeOnLANMACAddress("00:11:22:33:44:55"),
-            destination: .automatic,
-            port: 9
+        let configuration = WakeOnLANConfiguration(
+            macAddress: try WakeOnLANMACAddress("00:11:22:33:44:55")
         )
         let server = Server(
             workspaceId: UUID(),

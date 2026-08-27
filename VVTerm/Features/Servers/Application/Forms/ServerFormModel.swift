@@ -41,6 +41,12 @@ nonisolated enum ServerTransportSelection: String, CaseIterable, Identifiable, E
 }
 
 nonisolated struct ServerFormModel: Equatable, Sendable {
+    nonisolated enum WakeOnLANSavePlan: Equatable, Sendable {
+        case disabled
+        case configured(WakeOnLANConfiguration)
+        case resolveAutomatically
+    }
+
     nonisolated struct ConnectionSnapshot: Equatable, Sendable {
         let host: String
         let port: String
@@ -73,7 +79,8 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var cloudflareClientID: String
     var cloudflareClientSecret: String
     var cloudflareTeamDomainOverride: String
-    var wakeOnLAN: WakeOnLANFormModel
+    var wakeOnLANEnabled: Bool
+    private let existingWakeOnLANConfiguration: WakeOnLANConfiguration?
     var workspaceID: UUID?
     var environment: ServerEnvironment
     var notes: String
@@ -105,9 +112,8 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         cloudflareClientID = ""
         cloudflareClientSecret = ""
         cloudflareTeamDomainOverride = server?.cloudflareTeamDomainOverride ?? ""
-        wakeOnLAN = WakeOnLANFormModel(
-            configuration: server?.wakeOnLANConfiguration
-        )
+        existingWakeOnLANConfiguration = server?.wakeOnLANConfiguration
+        wakeOnLANEnabled = existingWakeOnLANConfiguration != nil
         self.workspaceID = server?.workspaceId ?? workspaceID
         environment = server?.environment ?? .production
         notes = server?.notes ?? ""
@@ -129,7 +135,6 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             && validPort(port)
             && (transportSelection != .eternalTerminal || validPort(eternalTerminalPort))
             && hasValidCredentials
-            && wakeOnLAN.isValid
             && remoteShellStartupAction.isValid
     }
 
@@ -155,6 +160,17 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             cloudflareClientSecret: cloudflareClientSecret,
             cloudflareTeamDomainOverride: cloudflareTeamDomainOverride
         )
+    }
+
+    func wakeOnLANSavePlan(sourceHost: String?) -> WakeOnLANSavePlan {
+        guard wakeOnLANEnabled else { return .disabled }
+
+        let sourceHost = sourceHost.map(Self.normalizedHost)
+        guard sourceHost == Self.normalizedHost(host),
+              let existingWakeOnLANConfiguration else {
+            return .resolveAutomatically
+        }
+        return .configured(existingWakeOnLANConfiguration)
     }
 
     mutating func applyPrefill(
@@ -213,7 +229,6 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
                 ? normalizedOptional(cloudflareTeamDomainOverride)
                 : nil,
             cloudflareAppDomainOverride: nil,
-            wakeOnLANConfiguration: wakeOnLAN.persistedConfiguration,
             notes: notes.isEmpty ? nil : notes,
             requiresBiometricUnlock: requiresBiometricUnlock,
             remoteSessionEnabledOverride: remoteSessionEnabled,
@@ -275,6 +290,10 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
 
     private func validPort(_ value: String) -> Bool {
         Int(value).map { (1...65_535).contains($0) } == true
+    }
+
+    private static func normalizedHost(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private func normalizedOptional(_ value: String) -> String? {

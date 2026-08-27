@@ -15,8 +15,8 @@ struct ServerMutationCommandRepositoryTests {
             name: "New",
             host: "new.example.test",
             username: "root",
-            wakeOnLANConfiguration: try WakeOnLANConfiguration(
-                macAddress: WakeOnLANMACAddress("00:11:22:33:44:55")
+            wakeOnLANConfiguration: WakeOnLANConfiguration(
+                macAddress: try WakeOnLANMACAddress("00:11:22:33:44:55")
             ),
             lastConnected: .distantPast,
             isFavorite: true,
@@ -52,9 +52,8 @@ struct ServerMutationCommandRepositoryTests {
             name: "Edited",
             host: "edited.example.test",
             username: "root",
-            wakeOnLANConfiguration: try WakeOnLANConfiguration(
-                macAddress: WakeOnLANMACAddress("AA:BB:CC:DD:EE:FF"),
-                port: 7
+            wakeOnLANConfiguration: WakeOnLANConfiguration(
+                macAddress: try WakeOnLANMACAddress("AA:BB:CC:DD:EE:FF")
             ),
             lastConnected: lastConnected,
             isFavorite: true,

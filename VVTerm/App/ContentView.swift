@@ -430,18 +430,6 @@ struct ContentView: View {
         ServerWakeNoticeHost(coordinator: serverWakeCoordinator) {
             platformContent
         }
-        .onReceive(serverWakeCoordinator.$phase, perform: handleServerWakePhase)
-    }
-
-    private func handleServerWakePhase(_ phase: ServerWakePhase) {
-        guard case .succeeded(let operation, .connectionReady) = phase,
-              let server = serverManager.servers.first(where: {
-                  $0.id == operation.serverID
-              }) else {
-            return
-        }
-        serverWakeCoordinator.markConnectionStarted(operationID: operation.id)
-        connectToServer(server)
     }
 }
 

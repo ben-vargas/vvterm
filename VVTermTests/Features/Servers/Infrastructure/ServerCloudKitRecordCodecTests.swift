@@ -233,12 +233,8 @@ struct ServerCloudKitRecordCodecTests {
             cloudflareAccessMode: .serviceToken,
             cloudflareTeamDomainOverride: "team.example.test",
             cloudflareAppDomainOverride: "app.example.test",
-            wakeOnLANConfiguration: try! WakeOnLANConfiguration(
-                macAddress: WakeOnLANMACAddress("00:11:22:33:44:55"),
-                destination: .explicitBroadcast(
-                    WakeOnLANIPv4Address("192.168.50.255")
-                ),
-                port: 7
+            wakeOnLANConfiguration: WakeOnLANConfiguration(
+                macAddress: try! WakeOnLANMACAddress("00:11:22:33:44:55")
             ),
             tags: ["one", "two"],
             notes: "Notes",
