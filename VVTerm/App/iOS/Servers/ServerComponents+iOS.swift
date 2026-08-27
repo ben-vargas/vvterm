@@ -82,6 +82,8 @@ struct ServerListRow: View {
                 .tint(.blue)
             }
 
+            duplicateButton
+
             Button {
                 onEdit()
             } label: {

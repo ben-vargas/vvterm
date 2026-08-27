@@ -11,7 +11,13 @@ final class ServerDuplicateUITests: XCTestCase {
         let app = launchHarness()
         defer { app.terminate() }
 
-        let duplicate = app.buttons["vvterm.serverDuplicateTest.action"]
+        let row = app.descendants(matching: .any)["vvterm.serverDuplicateTest.row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.swipeRight()
+
+        let duplicate = app.buttons[
+            "vvterm.serverList.duplicate.4BEE9E2E-E2CF-438C-A44C-B2391D0606E5"
+        ]
         XCTAssertTrue(duplicate.waitForExistence(timeout: 10))
         duplicate.tap()
 
@@ -23,7 +29,7 @@ final class ServerDuplicateUITests: XCTestCase {
         XCTAssertTrue(
             app.textFields["vvterm.serverForm.name"].waitForNonExistence(timeout: 5)
         )
-        XCTAssertTrue(duplicate.exists)
+        XCTAssertTrue(row.exists)
     }
 
     @MainActor

@@ -33,12 +33,24 @@ struct ServerDuplicateUITestHarness: View {
     var body: some View {
         NavigationStack {
             List {
+                #if os(iOS)
+                ServerListRow(
+                    serverManager: serverManager,
+                    server: sourceServer,
+                    onTap: {},
+                    onEdit: {},
+                    onMove: {},
+                    onDuplicate: { formIntent = .duplicate(sourceServer) }
+                )
+                .accessibilityIdentifier("vvterm.serverDuplicateTest.row")
+                #else
                 Button {
                     formIntent = .duplicate(sourceServer)
                 } label: {
                     Label("Duplicate", systemImage: "plus.square.on.square")
                 }
                 .accessibilityIdentifier("vvterm.serverDuplicateTest.action")
+                #endif
             }
             .navigationTitle("Server Duplicate Test")
         }
