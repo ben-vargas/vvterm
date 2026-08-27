@@ -231,15 +231,17 @@ extension ConnectionTerminalContainer {
                 } message: {
                     Text("The SSH connection will be terminated.")
                 }
-                .sheet(item: $serverToEdit) { editingServer in
+                .sheet(item: $serverFormIntent) { intent in
                     ServerFormSheet(
                         serverManager: serverManager,
-                        workspace: serverManager.workspaces.first { $0.id == editingServer.workspaceId },
-                        server: editingServer,
+                        workspace: intent.sourceServer.flatMap { sourceServer in
+                            serverManager.workspaces.first { $0.id == sourceServer.workspaceId }
+                        },
+                        intent: intent,
                         dependencies: serverFormDependencies,
                         makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                         onSave: { _ in
-                            serverToEdit = nil
+                            serverFormIntent = nil
                         }
                     )
                     .adaptiveSoftScrollEdges()
@@ -313,7 +315,9 @@ extension ConnectionTerminalContainer {
         case .openSettings:
             onOpenSettings?()
         case .editServer:
-            serverToEdit = server
+            serverFormIntent = .edit(server)
+        case .duplicateServer:
+            serverFormIntent = .duplicate(server)
         case .disconnect:
             showingDisconnectConfirmation = true
         case .enterZen:
@@ -439,6 +443,11 @@ extension ConnectionTerminalContainer {
                 command: .editServer,
                 title: String(localized: "Edit Server"),
                 systemImage: "pencil"
+            ),
+            ToolbarMenuEntry(
+                command: .duplicateServer,
+                title: String(localized: "Duplicate"),
+                systemImage: "plus.square.on.square"
             ),
             .separator,
             ToolbarMenuEntry(

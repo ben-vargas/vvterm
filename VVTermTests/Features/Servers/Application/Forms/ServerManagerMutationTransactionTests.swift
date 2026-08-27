@@ -6,6 +6,76 @@ import Testing
 @MainActor
 struct ServerManagerMutationTransactionTests {
     @Test
+    func duplicateUsesTheNormalFreePlanLimit() async {
+        let workspace = makeWorkspace()
+        let source = makeServer(workspaceID: workspace.id)
+        let duplicate = makeServer(
+            workspaceID: workspace.id,
+            id: UUID(),
+            name: "\(source.name) Copy"
+        )
+        let local = ServerLocalRepositoryFake(servers: [source], workspaces: [workspace])
+        let credentials = ServerManagerCredentialRepositoryFake()
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+        let useCase = ServerSaveUseCase(mutations: manager)
+
+        await #expect(throws: VVTermError.proRequired(.unlimitedServers)) {
+            try await useCase.execute(
+                .create(duplicate),
+                credentials: ServerCredentials(serverId: duplicate.id),
+                hasProAccess: false
+            )
+        }
+
+        #expect(manager.servers == [source])
+        #expect(credentials.values.isEmpty)
+        #expect(local.serverMutationJournal == nil)
+        #expect(sync.enqueuedServerMutations.isEmpty)
+    }
+
+    @Test
+    func duplicateCredentialPreparationFailureLeavesSourceAndNoOrphan() async {
+        let workspace = makeWorkspace()
+        let source = makeServer(workspaceID: workspace.id)
+        let duplicate = Server(
+            id: UUID(),
+            workspaceId: source.workspaceId,
+            environment: source.environment,
+            name: "\(source.name) Copy",
+            host: source.host,
+            port: source.port,
+            username: source.username,
+            authMethod: source.authMethod
+        )
+        let local = ServerLocalRepositoryFake(servers: [source], workspaces: [workspace])
+        let credentials = ServerManagerCredentialRepositoryFake()
+        var sourceCredentials = ServerCredentials(serverId: source.id)
+        sourceCredentials.password = "source-password"
+        credentials.values[source.id] = sourceCredentials
+        credentials.prepareError = TestTransactionError.persistence
+        let sync = ServerSyncRepositoryFake()
+        let manager = makeManager(local: local, credentials: credentials, sync: sync)
+        let useCase = ServerSaveUseCase(mutations: manager)
+        var duplicateCredentials = ServerCredentials(serverId: duplicate.id)
+        duplicateCredentials.password = "source-password"
+
+        await #expect(throws: VVTermError.self) {
+            try await useCase.execute(
+                .create(duplicate),
+                credentials: duplicateCredentials,
+                hasProAccess: true
+            )
+        }
+
+        #expect(manager.servers == [source])
+        #expect(credentials.values[source.id]?.password == "source-password")
+        #expect(credentials.values[duplicate.id] == nil)
+        #expect(local.serverMutationJournal == nil)
+        #expect(sync.enqueuedServerMutations.isEmpty)
+    }
+
+    @Test
     func createQueueFailureKeepsCommittedMetadataAndCredentialsForRecovery() async throws {
         let workspace = makeWorkspace()
         let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])

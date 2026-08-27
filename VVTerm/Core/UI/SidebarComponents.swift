@@ -9,6 +9,7 @@ struct ServerRow: View {
     let onSelect: () -> Void
     let onEdit: (Server) -> Void
     var onMove: ((Server) -> Void)? = nil
+    let onDuplicate: (Server) -> Void
     let onConnect: (Server) -> Void
     var onLockedTap: (() -> Void)? = nil
 
@@ -28,6 +29,7 @@ struct ServerRow: View {
         onSelect: @escaping () -> Void,
         onEdit: @escaping (Server) -> Void,
         onMove: ((Server) -> Void)? = nil,
+        onDuplicate: @escaping (Server) -> Void,
         onConnect: @escaping (Server) -> Void,
         onLockedTap: (() -> Void)? = nil
     ) {
@@ -39,6 +41,7 @@ struct ServerRow: View {
         self.onSelect = onSelect
         self.onEdit = onEdit
         self.onMove = onMove
+        self.onDuplicate = onDuplicate
         self.onConnect = onConnect
         self.onLockedTap = onLockedTap
     }
@@ -93,6 +96,7 @@ struct ServerRow: View {
                             Label("Move to Workspace", systemImage: "arrow.turn.right.up")
                         }
                     }
+                    duplicateButton
                     Button { onEdit(server) } label: {
                         Label("Server Settings", systemImage: "slider.horizontal.3")
                     }
@@ -112,6 +116,7 @@ struct ServerRow: View {
                             Label("Move to Workspace", systemImage: "arrow.turn.right.up")
                         }
                     }
+                    duplicateButton
                     Button { onEdit(server) } label: {
                         Label("Server Settings", systemImage: "slider.horizontal.3")
                     }
@@ -123,6 +128,13 @@ struct ServerRow: View {
                     }
                 }
             }
+    }
+
+    private var duplicateButton: some View {
+        Button { onDuplicate(server) } label: {
+            Label("Duplicate", systemImage: "plus.square.on.square")
+        }
+        .accessibilityIdentifier("vvterm.serverList.duplicate.\(server.id.uuidString)")
     }
 
     private var serverLabel: some View {

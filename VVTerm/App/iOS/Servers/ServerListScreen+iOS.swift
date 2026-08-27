@@ -25,7 +25,6 @@ struct ServerListScreen: View {
     @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @ObservedObject private var sessionState: TerminalSessionStateStore
-    @State private var showingAddServer = false
     @State private var showingAddWorkspace = false
     @State private var showingSettings = false
     @State private var showingWorkspacePicker = false
@@ -34,11 +33,10 @@ struct ServerListScreen: View {
     @State private var environmentToDelete: ServerEnvironment?
     @State private var environmentDeletionError: String?
     @State private var searchText = ""
-    @State private var serverToEdit: Server?
+    @State private var serverFormIntent: ServerFormIntent?
     @State private var serverToMove: Server?
     @State private var lockedServerAlert: Server?
     @State private var showingCustomEnvironmentAlert = false
-    @State private var addServerPrefill: ServerFormPrefill?
 
     init(
         serverManager: ServerManager,
@@ -115,19 +113,6 @@ struct ServerListScreen: View {
                 .accessibilityIdentifier("vvterm.serverList.settings")
             }
         }
-        .sheet(isPresented: $showingAddServer) {
-            NavigationStack {
-                ServerFormSheet(
-                    serverManager: serverManager,
-                    workspace: selectedWorkspace,
-                    prefill: addServerPrefill,
-                    dependencies: serverFormDependencies,
-                    makeLocalDiscoveryManager: makeLocalDiscoveryManager,
-                    onSave: { _ in showingAddServer = false }
-                )
-            }
-            .adaptiveSoftScrollEdges()
-        }
         .sheet(isPresented: $showingAddWorkspace) {
             NavigationStack {
                 WorkspaceFormSheet(
@@ -160,17 +145,19 @@ struct ServerListScreen: View {
             }
             .adaptiveSoftScrollEdges()
         }
-        .sheet(item: $serverToEdit) { server in
+        .sheet(item: $serverFormIntent) { intent in
             NavigationStack {
                 ServerFormSheet(
                     serverManager: serverManager,
-                    workspace: selectedWorkspace,
-                    server: server,
+                    workspace: workspace(for: intent),
+                    intent: intent,
                     dependencies: serverFormDependencies,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
-                    onSave: { updatedServer in
-                        handleSavedServer(updatedServer, originalServer: server)
-                        serverToEdit = nil
+                    onSave: { savedServer in
+                        if let editedServer = intent.editedServer {
+                            handleSavedServer(savedServer, originalServer: editedServer)
+                        }
+                        serverFormIntent = nil
                     }
                 )
             }
@@ -276,15 +263,6 @@ struct ServerListScreen: View {
             source: .customEnvironment,
             isPresented: $showingCustomEnvironmentAlert
         )
-        .onChange(of: showingAddWorkspace) { isPresented in
-            guard !isPresented else { return }
-            resumePendingPrefilledAddServerIfNeeded()
-        }
-        .onChange(of: showingAddServer) { isPresented in
-            if !isPresented {
-                addServerPrefill = nil
-            }
-        }
     }
 
     private func handleSavedServer(_ server: Server, originalServer: Server) {
@@ -364,8 +342,9 @@ struct ServerListScreen: View {
                         serverManager: serverManager,
                         server: server,
                         onTap: { onServerSelected(server) },
-                        onEdit: { serverToEdit = server },
+                        onEdit: { serverFormIntent = .edit(server) },
                         onMove: { serverToMove = server },
+                        onDuplicate: { serverFormIntent = .duplicate(server) },
                         onLockedTap: { lockedServerAlert = server }
                     )
                     .accessibilityIdentifier(
@@ -482,23 +461,18 @@ struct ServerListScreen: View {
         return counts
     }
 
-    private func presentAddServer(prefill: ServerFormPrefill? = nil) {
-        addServerPrefill = prefill
+    private func presentAddServer() {
         switch ServerCreationPresentationPolicy.initialStep(canAddServer: canAddServer) {
         case .createWorkspace:
             showingAddWorkspace = true
         case .createServer:
-            showingAddServer = true
+            serverFormIntent = .create(prefill: nil)
         }
     }
 
-    private func resumePendingPrefilledAddServerIfNeeded() {
-        guard ServerCreationPresentationPolicy.shouldResumePrefilledServer(
-            hasPrefill: addServerPrefill != nil,
-            canAddServer: canAddServer,
-            isPresentingServer: showingAddServer
-        ) else { return }
-        showingAddServer = true
+    private func workspace(for intent: ServerFormIntent) -> Workspace? {
+        guard let sourceServer = intent.sourceServer else { return selectedWorkspace }
+        return serverManager.workspaces.first { $0.id == sourceServer.workspaceId }
     }
 
     private func openActiveConnection(_ connection: ActiveServerSummary) {

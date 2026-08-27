@@ -14,6 +14,7 @@ struct ServerListRow: View {
     let onTap: () -> Void
     let onEdit: () -> Void
     var onMove: (() -> Void)? = nil
+    let onDuplicate: () -> Void
     var onLockedTap: (() -> Void)? = nil
 
     @EnvironmentObject private var storeManager: StoreManager
@@ -103,18 +104,20 @@ struct ServerListRow: View {
                     Label("Unlock with Pro", systemImage: "lock.open.fill")
                 }
 
-                Button {
-                    onEdit()
-                } label: {
-                    Label("Edit", systemImage: "pencil")
-                }
-
                 if let onMove {
                     Button {
                         onMove()
                     } label: {
                         Label("Move", systemImage: "folder")
                     }
+                }
+
+                duplicateButton
+
+                Button {
+                    onEdit()
+                } label: {
+                    Label("Edit", systemImage: "pencil")
                 }
 
                 Button(role: .destructive) {
@@ -137,6 +140,8 @@ struct ServerListRow: View {
                     }
                 }
 
+                duplicateButton
+
                 Button {
                     onEdit()
                 } label: {
@@ -144,6 +149,15 @@ struct ServerListRow: View {
                 }
             }
         }
+    }
+
+    private var duplicateButton: some View {
+        Button {
+            onDuplicate()
+        } label: {
+            Label("Duplicate", systemImage: "plus.square.on.square")
+        }
+        .accessibilityIdentifier("vvterm.serverList.duplicate.\(server.id.uuidString)")
     }
 }
 

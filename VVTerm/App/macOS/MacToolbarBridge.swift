@@ -19,6 +19,7 @@ enum MacToolbarCommandID: Equatable {
     case filesCopyPath
     case openSettings
     case editServer
+    case duplicateServer
     case disconnect
     case enterZen
 }

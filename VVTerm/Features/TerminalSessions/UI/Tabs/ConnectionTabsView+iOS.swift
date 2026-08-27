@@ -44,16 +44,18 @@ extension ConnectionTerminalContainer {
                 message: String(localized: "The SSH connection will be terminated."),
                 onClose: closeFocusedPaneConfirmed
             )
-            .sheet(item: $serverToEdit) { editingServer in
+            .sheet(item: $serverFormIntent) { intent in
                 NavigationStack {
                     ServerFormSheet(
                         serverManager: serverManager,
-                        workspace: serverManager.workspaces.first { $0.id == editingServer.workspaceId },
-                        server: editingServer,
+                        workspace: intent.sourceServer.flatMap { sourceServer in
+                            serverManager.workspaces.first { $0.id == sourceServer.workspaceId }
+                        },
+                        intent: intent,
                         dependencies: serverFormDependencies,
                         makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                         onSave: { _ in
-                            serverToEdit = nil
+                            serverFormIntent = nil
                         }
                     )
                 }
@@ -232,7 +234,11 @@ extension ConnectionTerminalContainer {
                 },
                 onEditServer: {
                     showingZenPanel = false
-                    serverToEdit = server
+                    serverFormIntent = .edit(server)
+                },
+                onDuplicateServer: {
+                    showingZenPanel = false
+                    serverFormIntent = .duplicate(server)
                 },
                 onDisconnect: {
                     showingZenPanel = false

@@ -21,6 +21,7 @@ struct IOSZenModePanel: View {
     let onNewFileTab: () -> Void
     let onOpenSettings: () -> Void
     let onEditServer: () -> Void
+    let onDuplicateServer: () -> Void
     let onDisconnect: () -> Void
     let onBack: () -> Void
     let onExitZen: () -> Void
@@ -67,6 +68,13 @@ struct IOSZenModePanel: View {
 
                 ZenModeActionButton(title: "Edit Server", systemImage: "pencil", action: onEditServer)
                     .accessibilityIdentifier("vvterm.terminal.zen.editServer")
+
+                ZenModeActionButton(
+                    title: "Duplicate",
+                    systemImage: "plus.square.on.square",
+                    action: onDuplicateServer
+                )
+                .accessibilityIdentifier("vvterm.terminal.zen.duplicateServer")
 
                 ZenModeActionButton(title: "Back", systemImage: "chevron.left", action: onBack)
                     .accessibilityIdentifier("vvterm.terminal.zen.back")

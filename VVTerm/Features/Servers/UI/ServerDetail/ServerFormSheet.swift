@@ -41,8 +41,7 @@ struct ServerFormSheet: View {
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var appLockManager: AppLockManager
     let workspace: Workspace?
-    let server: Server?
-    let prefill: ServerFormPrefill?
+    let intent: ServerFormIntent
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     let onSave: (Server) -> Void
 
@@ -57,13 +56,15 @@ struct ServerFormSheet: View {
     @State private var showingAddKeySheet = false
     @State private var programmaticSSHKeyValue: String?
     @State private var localDiscoveryPresentation: LocalDeviceDiscoveryPresentation?
-    @State private var hasAuthorizedInitialEdit: Bool
+    @State private var hasAuthorizedSourceAccess: Bool
 
     private let now: @Sendable () -> Date
     private let makeID: @Sendable () -> UUID
     private let remoteSessionBackends: [RemoteSessionBackendMetadata]
 
-    var isEditing: Bool { server != nil }
+    var isEditing: Bool { intent.isEditing }
+
+    private var sourceServer: Server? { intent.sourceServer }
 
     private var hostKeyTrustRequest: ServerSecurityApprovalRequest? {
         operations.hostKeyChallenge.map(ServerSecurityApprovalRequest.hostKey)
@@ -72,8 +73,7 @@ struct ServerFormSheet: View {
     init(
         serverManager: ServerManager,
         workspace: Workspace?,
-        server: Server? = nil,
-        prefill: ServerFormPrefill? = nil,
+        intent: ServerFormIntent,
         dependencies: ServerFormDependencies,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         onSave: @escaping (Server) -> Void
@@ -81,8 +81,7 @@ struct ServerFormSheet: View {
         self.serverManager = serverManager
         _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
         self.workspace = workspace
-        self.server = server
-        self.prefill = prefill
+        self.intent = intent
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.now = dependencies.now
         self.makeID = dependencies.makeID
@@ -103,14 +102,14 @@ struct ServerFormSheet: View {
         )
 
         var initialForm = ServerFormModel(
-            server: server,
+            server: intent.sourceServer,
             workspaceID: workspace?.id,
             defaultRemoteSessionEnabled: dependencies.defaultRemoteSessionEnabled(),
             defaultRemoteSessionBackendIdentifier:
                 dependencies.defaultRemoteSessionBackendIdentifier(),
             defaultRemoteSessionStartupBehavior: dependencies.defaultRemoteSessionStartupBehavior()
         )
-        if server == nil, let prefill {
+        if let prefill = intent.prefill {
             initialForm.applyPrefill(
                 name: prefill.name,
                 host: prefill.host,
@@ -118,10 +117,22 @@ struct ServerFormSheet: View {
                 username: prefill.username
             )
         }
+        if case .duplicate(let source) = intent {
+            let baseName = String(
+                format: String(localized: "%@ Copy"),
+                source.name
+            )
+            initialForm.name = ServerDuplicateNamePolicy.uniqueName(
+                baseName: baseName,
+                existingNames: serverManager.servers.map(\.name)
+            )
+        }
         _form = State(initialValue: initialForm)
-        _hasAuthorizedInitialEdit = State(initialValue: server?.requiresBiometricUnlock != true)
+        _hasAuthorizedSourceAccess = State(
+            initialValue: intent.sourceServer?.requiresBiometricUnlock != true
+        )
         _showCloudflareOverrides = State(
-            initialValue: !(server?.cloudflareTeamDomainOverride ?? "").isEmpty
+            initialValue: !(intent.sourceServer?.cloudflareTeamDomainOverride ?? "").isEmpty
         )
     }
 
@@ -134,7 +145,10 @@ struct ServerFormSheet: View {
     }
 
     private var assignmentWorkspaces: [Workspace] {
-        stateStore.assignmentWorkspaces(for: server, hasProAccess: storeManager.allowsProFeatures)
+        stateStore.assignmentWorkspaces(
+            for: sourceServer,
+            hasProAccess: storeManager.allowsProFeatures
+        )
     }
 
     private var selectedWorkspace: Workspace? {
@@ -147,22 +161,25 @@ struct ServerFormSheet: View {
     }
 
     private var workspaceEnvironmentNotice: String? {
-        guard let server,
+        guard let sourceServer,
               let selectedWorkspace,
-              selectedWorkspace.id != server.workspaceId,
-              stateStore.moveRequiresEnvironmentFallback(server, destination: selectedWorkspace) else {
+              selectedWorkspace.id != sourceServer.workspaceId,
+              stateStore.moveRequiresEnvironmentFallback(
+                sourceServer,
+                destination: selectedWorkspace
+              ) else {
             return nil
         }
 
         let resolvedEnvironment = stateStore.resolvedEnvironment(
-            for: server,
+            for: sourceServer,
             destination: selectedWorkspace,
             preferredEnvironment: form.environment
         )
 
         return String(
             format: String(localized: "\"%@\" isn't available in %@. The server will use %@ there."),
-            server.environment.displayName,
+            sourceServer.environment.displayName,
             selectedWorkspace.name,
             resolvedEnvironment.displayName
         )
@@ -242,11 +259,11 @@ struct ServerFormSheet: View {
     var body: some View {
         ZStack {
             platformBody
-                .opacity(hasAuthorizedInitialEdit ? 1 : 0)
-                .allowsHitTesting(hasAuthorizedInitialEdit)
-                .accessibilityHidden(!hasAuthorizedInitialEdit)
+                .opacity(hasAuthorizedSourceAccess ? 1 : 0)
+                .allowsHitTesting(hasAuthorizedSourceAccess)
+                .accessibilityHidden(!hasAuthorizedSourceAccess)
 
-            if !hasAuthorizedInitialEdit {
+            if !hasAuthorizedSourceAccess {
                 ProgressView("Authorizing…")
                     .controlSize(.large)
             }
@@ -289,20 +306,23 @@ struct ServerFormSheet: View {
         styledFormContent
         .interactiveDismissDisabled(isSaving)
         .task {
-            if let server {
-                guard await appLockManager.authorizeProtectedServerAction(server, action: .edit) else {
+            if let sourceServer {
+                guard await appLockManager.authorizeProtectedServerAction(
+                    sourceServer,
+                    action: .edit
+                ) else {
                     dismiss()
                     return
                 }
-                hasAuthorizedInitialEdit = true
+                hasAuthorizedSourceAccess = true
             }
-            operations.loadFormCredentials(for: server) { credentials in
+            operations.loadFormCredentials(for: sourceServer) { credentials in
                 if let privateKey = credentials.privateKey,
                    let key = String(data: privateKey, encoding: .utf8) {
                     programmaticSSHKeyValue = key
                 }
-                guard let server else { return }
-                form.apply(credentials, for: server)
+                guard let sourceServer else { return }
+                form.apply(credentials, for: sourceServer)
             }
         }
             .serverFormPlatformActions(
@@ -332,7 +352,13 @@ struct ServerFormSheet: View {
             }
             .sheet(item: $localDiscoveryPresentation) { presentation in
                 LocalDeviceDiscoverySheet(manager: presentation.manager) { discoveredHost in
-                    applyPrefill(ServerFormPrefill(discoveredHost: discoveredHost))
+                    applyPrefill(
+                        ServerFormPrefill(
+                            name: discoveredHost.displayName,
+                            host: discoveredHost.host,
+                            port: discoveredHost.port
+                        )
+                    )
                 }
                 .adaptiveSoftScrollEdges()
             }
@@ -498,12 +524,14 @@ struct ServerFormSheet: View {
     private var serverSection: some View {
         Section {
             TextField("Name", text: $form.name, prompt: Text(String(localized: "My Server")))
+                .accessibilityIdentifier("vvterm.serverForm.name")
                 #if os(iOS)
                 .textContentType(.name)
                 #endif
 
             HStack(spacing: 12) {
                 TextField("Host", text: $form.host, prompt: Text(String(localized: "203.0.113.10")))
+                    .accessibilityIdentifier("vvterm.serverForm.host")
                     #if os(iOS)
                     .textContentType(.URL)
                     #endif
@@ -827,13 +855,15 @@ struct ServerFormSheet: View {
     }
 
     private func buildServer(id: UUID, createdAt: Date) -> Server {
-        return form.makeServer(
-            id: id,
-            workspaceID: selectedWorkspace?.id
-                ?? assignmentWorkspaces.first?.id
-                ?? stateStore.workspaces.first?.id
-                ?? makeID(),
-            createdAt: createdAt
+        intent.preservingSourceMetadata(
+            in: form.makeServer(
+                id: id,
+                workspaceID: selectedWorkspace?.id
+                    ?? assignmentWorkspaces.first?.id
+                    ?? stateStore.workspaces.first?.id
+                    ?? makeID(),
+                createdAt: createdAt
+            )
         )
     }
 
@@ -866,25 +896,25 @@ struct ServerFormSheet: View {
         guard let selectedWorkspace else { return }
 
         form.environment = ServerMoveSupport.resolveEnvironment(
-            currentEnvironment: server?.environment ?? form.environment,
+            currentEnvironment: sourceServer?.environment ?? form.environment,
             preferredEnvironment: form.environment,
             destination: selectedWorkspace
         )
     }
 
     private func runConnectionTest(force: Bool) async {
-        if let server {
+        if let sourceServer {
             guard await appLockManager.authorizeProtectedServerAction(
-                server,
+                sourceServer,
                 action: .testConnection
             ) else { return }
         }
 
         let snapshot = form.connectionSnapshot
         guard force || !operations.hasValidConnectionTest(for: snapshot) else { return }
-        let serverID = server?.id ?? makeID()
+        let serverID = intent.serverID(makeID: makeID)
         operations.startConnectionTest(
-            server: buildServer(id: serverID, createdAt: server?.createdAt ?? now()),
+            server: buildServer(id: serverID, createdAt: intent.createdAt(now: now)),
             credentials: form.makeCredentials(serverID: serverID),
             snapshot: snapshot
         )
@@ -902,15 +932,18 @@ struct ServerFormSheet: View {
     }
 
     func saveServer() {
-        let serverID = server?.id ?? makeID()
-        let newServer = buildServer(id: serverID, createdAt: server?.createdAt ?? now())
+        let serverID = intent.serverID(makeID: makeID)
+        let newServer = buildServer(id: serverID, createdAt: intent.createdAt(now: now))
         operations.save(
-            mutation: isEditing ? .update(newServer) : .create(newServer),
+            mutation: intent.mutation(for: newServer),
             credentials: form.makeCredentials(serverID: serverID),
             hasProAccess: storeManager.allowsProFeatures,
             authorize: {
-                guard let server else { return true }
-                return await appLockManager.authorizeProtectedServerAction(server, action: .save)
+                guard let editedServer = intent.editedServer else { return true }
+                return await appLockManager.authorizeProtectedServerAction(
+                    editedServer,
+                    action: .save
+                )
             },
             onSaved: { savedServer in
                 onSave(savedServer)
