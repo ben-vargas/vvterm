@@ -15,6 +15,9 @@ struct ServerMutationCommandRepositoryTests {
             name: "New",
             host: "new.example.test",
             username: "root",
+            wakeOnLANConfiguration: try WakeOnLANConfiguration(
+                macAddress: WakeOnLANMACAddress("00:11:22:33:44:55")
+            ),
             lastConnected: .distantPast,
             isFavorite: true,
             createdAt: .distantPast,
@@ -34,6 +37,7 @@ struct ServerMutationCommandRepositoryTests {
         #expect(inserted.updatedAt == now)
         #expect(inserted.lastConnected == nil)
         #expect(!inserted.isFavorite)
+        #expect(inserted.wakeOnLANConfiguration == input.wakeOnLANConfiguration)
         #expect(result.effect == .serverUpsert(inserted))
     }
 
@@ -48,6 +52,10 @@ struct ServerMutationCommandRepositoryTests {
             name: "Edited",
             host: "edited.example.test",
             username: "root",
+            wakeOnLANConfiguration: try WakeOnLANConfiguration(
+                macAddress: WakeOnLANMACAddress("AA:BB:CC:DD:EE:FF"),
+                port: 7
+            ),
             lastConnected: lastConnected,
             isFavorite: true,
             createdAt: createdAt,
@@ -67,6 +75,7 @@ struct ServerMutationCommandRepositoryTests {
         #expect(updated.updatedAt == now)
         #expect(updated.lastConnected == lastConnected)
         #expect(updated.isFavorite)
+        #expect(updated.wakeOnLANConfiguration == input.wakeOnLANConfiguration)
     }
 
     @Test

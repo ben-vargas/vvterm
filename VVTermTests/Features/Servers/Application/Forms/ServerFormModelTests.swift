@@ -28,6 +28,11 @@ struct ServerFormModelTests {
         model.cloudflareClientID = " client-id "
         model.cloudflareClientSecret = " client-secret "
         model.cloudflareTeamDomainOverride = " team.cloudflareaccess.com "
+        model.wakeOnLAN.isEnabled = true
+        model.wakeOnLAN.macAddress = "aa-bb-cc-dd-ee-ff"
+        model.wakeOnLAN.destinationMode = .explicitBroadcast
+        model.wakeOnLAN.broadcastAddress = "192.168.50.255"
+        model.wakeOnLAN.port = "7"
         model.notes = "notes"
         model.requiresBiometricUnlock = true
         model.remoteSessionEnabled = true
@@ -52,6 +57,8 @@ struct ServerFormModelTests {
         #expect(server.connectionMode == .cloudflare)
         #expect(server.cloudflareAccessMode == .serviceToken)
         #expect(server.cloudflareTeamDomainOverride == "team.cloudflareaccess.com")
+        #expect(server.wakeOnLANConfiguration?.macAddress.canonicalValue == "AA:BB:CC:DD:EE:FF")
+        #expect(server.wakeOnLANConfiguration?.port == 7)
         #expect(server.remoteSessionEnabledOverride == true)
         #expect(server.remoteSessionBackendIdentifier == .zmx)
         #expect(server.remoteSessionStartupBehaviorOverride == .createManaged)

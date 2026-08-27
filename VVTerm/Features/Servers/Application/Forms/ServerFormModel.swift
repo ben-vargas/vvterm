@@ -73,6 +73,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var cloudflareClientID: String
     var cloudflareClientSecret: String
     var cloudflareTeamDomainOverride: String
+    var wakeOnLAN: WakeOnLANFormModel
     var workspaceID: UUID?
     var environment: ServerEnvironment
     var notes: String
@@ -104,6 +105,9 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         cloudflareClientID = ""
         cloudflareClientSecret = ""
         cloudflareTeamDomainOverride = server?.cloudflareTeamDomainOverride ?? ""
+        wakeOnLAN = WakeOnLANFormModel(
+            configuration: server?.wakeOnLANConfiguration
+        )
         self.workspaceID = server?.workspaceId ?? workspaceID
         environment = server?.environment ?? .production
         notes = server?.notes ?? ""
@@ -125,6 +129,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             && validPort(port)
             && (transportSelection != .eternalTerminal || validPort(eternalTerminalPort))
             && hasValidCredentials
+            && wakeOnLAN.isValid
             && remoteShellStartupAction.isValid
     }
 
@@ -208,6 +213,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
                 ? normalizedOptional(cloudflareTeamDomainOverride)
                 : nil,
             cloudflareAppDomainOverride: nil,
+            wakeOnLANConfiguration: wakeOnLAN.persistedConfiguration,
             notes: notes.isEmpty ? nil : notes,
             requiresBiometricUnlock: requiresBiometricUnlock,
             remoteSessionEnabledOverride: remoteSessionEnabled,

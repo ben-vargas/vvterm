@@ -134,6 +134,22 @@ struct ServerCloudKitRecordCodecTests {
     }
 
     @Test
+    func invalidSyncedWakeConfigurationIsIgnored() throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        let now = Date(timeIntervalSinceReferenceDate: 3_000)
+        let record = ServerCloudKitRecordCodec.record(
+            for: makeServer(),
+            in: zoneID,
+            now: now
+        )
+        record["wakeOnLANConfiguration"] = Data("invalid".utf8)
+
+        let decoded = try #require(ServerCloudKitRecordCodec.server(from: record, now: now))
+
+        #expect(decoded.wakeOnLANConfiguration == nil)
+    }
+
+    @Test
     func workspaceRecordPreservesIdentityAndRoundTripsFields() throws {
         let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
         let workspace = makeWorkspace()
@@ -217,6 +233,13 @@ struct ServerCloudKitRecordCodecTests {
             cloudflareAccessMode: .serviceToken,
             cloudflareTeamDomainOverride: "team.example.test",
             cloudflareAppDomainOverride: "app.example.test",
+            wakeOnLANConfiguration: try! WakeOnLANConfiguration(
+                macAddress: WakeOnLANMACAddress("00:11:22:33:44:55"),
+                destination: .explicitBroadcast(
+                    WakeOnLANIPv4Address("192.168.50.255")
+                ),
+                port: 7
+            ),
             tags: ["one", "two"],
             notes: "Notes",
             lastConnected: Date(timeIntervalSinceReferenceDate: 1_500),

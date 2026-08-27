@@ -17,6 +17,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
     var cloudflareAccessMode: CloudflareAccessMode?
     var cloudflareTeamDomainOverride: String?
     var cloudflareAppDomainOverride: String?
+    var wakeOnLANConfiguration: WakeOnLANConfiguration?
     var tags: [String]
     var notes: String?
     var lastConnected: Date?
@@ -43,6 +44,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         cloudflareAccessMode: CloudflareAccessMode? = nil,
         cloudflareTeamDomainOverride: String? = nil,
         cloudflareAppDomainOverride: String? = nil,
+        wakeOnLANConfiguration: WakeOnLANConfiguration? = nil,
         tags: [String] = [],
         notes: String? = nil,
         lastConnected: Date? = nil,
@@ -70,6 +72,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         self.cloudflareAccessMode = cloudflareAccessMode
         self.cloudflareTeamDomainOverride = cloudflareTeamDomainOverride
         self.cloudflareAppDomainOverride = cloudflareAppDomainOverride
+        self.wakeOnLANConfiguration = wakeOnLANConfiguration
         self.tags = tags
         self.notes = notes
         self.lastConnected = lastConnected
@@ -106,6 +109,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         case cloudflareAccessMode
         case cloudflareTeamDomainOverride
         case cloudflareAppDomainOverride
+        case wakeOnLANConfiguration
         case tags
         case notes
         case lastConnected
@@ -141,6 +145,10 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         }
         cloudflareTeamDomainOverride = try container.decodeIfPresent(String.self, forKey: .cloudflareTeamDomainOverride)
         cloudflareAppDomainOverride = try container.decodeIfPresent(String.self, forKey: .cloudflareAppDomainOverride)
+        wakeOnLANConfiguration = try container.decodeIfPresent(
+            WakeOnLANConfiguration.self,
+            forKey: .wakeOnLANConfiguration
+        )
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         lastConnected = try container.decodeIfPresent(Date.self, forKey: .lastConnected)
@@ -192,6 +200,10 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         try container.encodeIfPresent(cloudflareAccessMode, forKey: .cloudflareAccessMode)
         try container.encodeIfPresent(cloudflareTeamDomainOverride, forKey: .cloudflareTeamDomainOverride)
         try container.encodeIfPresent(cloudflareAppDomainOverride, forKey: .cloudflareAppDomainOverride)
+        try container.encodeIfPresent(
+            wakeOnLANConfiguration,
+            forKey: .wakeOnLANConfiguration
+        )
         try container.encode(tags, forKey: .tags)
         try container.encodeIfPresent(notes, forKey: .notes)
         try container.encodeIfPresent(lastConnected, forKey: .lastConnected)

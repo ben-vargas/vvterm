@@ -8,6 +8,7 @@ nonisolated enum ServerCloudKitRecordCodec {
         "workspaceId", "name", "host", "port", "eternalTerminalPort", "username",
         "connectionMode", "authMethod", "cloudflareAccessMode",
         "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
+        "wakeOnLANConfiguration",
         "lastConnected", "isFavorite", "requiresBiometricUnlock", "tmuxEnabledOverride",
         "tmuxStartupBehaviorOverride",
         "remoteSessionEnabledOverride", "remoteSessionBackendIdentifier",
@@ -75,6 +76,8 @@ nonisolated enum ServerCloudKitRecordCodec {
             ? (legacyStartupBehavior ?? currentStartupBehavior)
             : currentStartupBehavior
         let updatedAt = record["updatedAt"] as? Date ?? now
+        let wakeOnLANConfiguration = (record["wakeOnLANConfiguration"] as? Data)
+            .flatMap { try? JSONDecoder().decode(WakeOnLANConfiguration.self, from: $0) }
 
         return Server(
             id: id,
@@ -90,6 +93,7 @@ nonisolated enum ServerCloudKitRecordCodec {
             cloudflareAccessMode: cloudflareAccessMode,
             cloudflareTeamDomainOverride: record["cloudflareTeamDomainOverride"] as? String,
             cloudflareAppDomainOverride: record["cloudflareAppDomainOverride"] as? String,
+            wakeOnLANConfiguration: wakeOnLANConfiguration,
             tags: record["tags"] as? [String] ?? [],
             notes: record["notes"] as? String,
             lastConnected: record["lastConnected"] as? Date,
@@ -127,6 +131,10 @@ nonisolated enum ServerCloudKitRecordCodec {
         record["cloudflareAccessMode"] = server.cloudflareAccessMode?.rawValue
         record["cloudflareTeamDomainOverride"] = nonempty(server.cloudflareTeamDomainOverride)
         record["cloudflareAppDomainOverride"] = nonempty(server.cloudflareAppDomainOverride)
+        if let configuration = server.wakeOnLANConfiguration,
+           let encodedConfiguration = try? JSONEncoder().encode(configuration) {
+            record["wakeOnLANConfiguration"] = encodedConfiguration
+        }
         if !server.tags.isEmpty {
             record["tags"] = server.tags
         }
