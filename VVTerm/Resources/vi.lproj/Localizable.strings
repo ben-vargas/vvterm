@@ -1920,6 +1920,26 @@
 "Duplicate" = "Nhân bản";
 "%@ Copy" = "Bản sao của %@";
 
+/* Custom fonts */
+"Automatic" = "Tự động";
+"Custom Fonts" = "Phông chữ tùy chỉnh";
+"Automatic uses the primary font and standard fallback fonts." = "Chế độ tự động dùng phông chữ chính và các phông chữ dự phòng tiêu chuẩn.";
+"Choose a TTF, OTF, TTC, or OTC font file." = "Chọn tệp phông chữ TTF, OTF, TTC hoặc OTC.";
+"Font files must be 48 MB or smaller." = "Tệp phông chữ phải có dung lượng từ 48 MB trở xuống.";
+"The selected file is not a valid font." = "Tệp đã chọn không phải là phông chữ hợp lệ.";
+"The font information is invalid." = "Thông tin phông chữ không hợp lệ.";
+"The font file is incomplete or damaged." = "Tệp phông chữ không đầy đủ hoặc đã bị hỏng.";
+"The font file is not available on this device." = "Tệp phông chữ không có trên thiết bị này.";
+"VVTerm could not load this font: %@" = "VVTerm không thể tải phông chữ này: %@";
+"Delete Custom Font?" = "Xóa phông chữ tùy chỉnh?";
+"This removes the font from VVTerm and synced devices." = "Thao tác này xóa phông chữ khỏi VVTerm và các thiết bị đã đồng bộ hóa.";
+"Custom Font" = "Phông chữ tùy chỉnh";
+"No Custom Fonts" = "Không có phông chữ tùy chỉnh";
+"Import a TTF, OTF, TTC, or OTC font file." = "Nhập tệp phông chữ TTF, OTF, TTC hoặc OTC.";
+"Import Font" = "Nhập phông chữ";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "Phông chữ chỉ nằm trong VVTerm. iCloud Sync giữ chúng trên các thiết bị của bạn.";
+"%lld families" = "%lld họ phông chữ";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
 "Auto Wake-on-LAN" = "Tự động Wake-on-LAN";

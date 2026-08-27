@@ -63,19 +63,19 @@ struct TerminalFontSelectionPolicyTests {
 
     @Test
     func onlyCustomAndUnknownPrimarySelectionsRequirePro() {
-        #expect(!TerminalFontSelectionPolicy.primarySelectionRequiresPro(
+        #expect(!TerminalFontSelectionPolicy.requiresProForPrimarySelection(
             systemFamily,
             catalog: catalog
         ))
-        #expect(TerminalFontSelectionPolicy.primarySelectionRequiresPro(
+        #expect(TerminalFontSelectionPolicy.requiresProForPrimarySelection(
             customFamily,
             catalog: catalog
         ))
-        #expect(TerminalFontSelectionPolicy.primarySelectionRequiresPro(
+        #expect(TerminalFontSelectionPolicy.requiresProForPrimarySelection(
             "Missing Font",
             catalog: catalog
         ))
-        #expect(!TerminalFontSelectionPolicy.primarySelectionRequiresPro(
+        #expect(!TerminalFontSelectionPolicy.requiresProForPrimarySelection(
             TerminalDefaults.symbolFallbackFontFamily,
             catalog: .empty
         ))
@@ -101,12 +101,11 @@ struct TerminalFontSelectionPolicyTests {
         TerminalFontCatalog(families: [
             TerminalFontFamily(
                 name: TerminalDefaults.defaultFontName,
-                source: .builtIn,
-                isMonospaced: true
+                source: .builtIn
             ),
-            TerminalFontFamily(name: systemFamily, source: .system, isMonospaced: true),
-            TerminalFontFamily(name: customFamily, source: .custom, isMonospaced: true),
-            TerminalFontFamily(name: cjkFamily, source: .custom, isMonospaced: false)
+            TerminalFontFamily(name: systemFamily, source: .system),
+            TerminalFontFamily(name: customFamily, source: .custom),
+            TerminalFontFamily(name: cjkFamily, source: .custom)
         ])
     }
 

@@ -1927,6 +1927,26 @@
 "Duplicate" = "Duplicate";
 "%@ Copy" = "%@ Copy";
 
+/* Custom fonts */
+"Automatic" = "Automatic";
+"Custom Fonts" = "Custom Fonts";
+"Automatic uses the primary font and standard fallback fonts." = "Automatic uses the primary font and standard fallback fonts.";
+"Choose a TTF, OTF, TTC, or OTC font file." = "Choose a TTF, OTF, TTC, or OTC font file.";
+"Font files must be 48 MB or smaller." = "Font files must be 48 MB or smaller.";
+"The selected file is not a valid font." = "The selected file is not a valid font.";
+"The font information is invalid." = "The font information is invalid.";
+"The font file is incomplete or damaged." = "The font file is incomplete or damaged.";
+"The font file is not available on this device." = "The font file is not available on this device.";
+"VVTerm could not load this font: %@" = "VVTerm could not load this font: %@";
+"Delete Custom Font?" = "Delete Custom Font?";
+"This removes the font from VVTerm and synced devices." = "This removes the font from VVTerm and synced devices.";
+"Custom Font" = "Custom Font";
+"No Custom Fonts" = "No Custom Fonts";
+"Import a TTF, OTF, TTC, or OTC font file." = "Import a TTF, OTF, TTC, or OTC font file.";
+"Import Font" = "Import Font";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "Fonts stay inside VVTerm. iCloud Sync keeps them on your devices.";
+"%lld families" = "%lld families";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
 "Auto Wake-on-LAN" = "Auto Wake-on-LAN";

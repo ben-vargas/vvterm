@@ -1874,6 +1874,26 @@
 "Duplicate" = "복제";
 "%@ Copy" = "%@ 복사본";
 
+/* Custom fonts */
+"Automatic" = "자동";
+"Custom Fonts" = "사용자 정의 폰트";
+"Automatic uses the primary font and standard fallback fonts." = "자동은 기본 폰트와 표준 대체 폰트를 사용합니다.";
+"Choose a TTF, OTF, TTC, or OTC font file." = "TTF, OTF, TTC 또는 OTC 폰트 파일을 선택하세요.";
+"Font files must be 48 MB or smaller." = "폰트 파일은 48MB 이하여야 합니다.";
+"The selected file is not a valid font." = "선택한 파일은 유효한 폰트가 아닙니다.";
+"The font information is invalid." = "폰트 정보가 올바르지 않습니다.";
+"The font file is incomplete or damaged." = "폰트 파일이 불완전하거나 손상되었습니다.";
+"The font file is not available on this device." = "이 기기에서 폰트 파일을 사용할 수 없습니다.";
+"VVTerm could not load this font: %@" = "VVTerm에서 이 폰트를 불러올 수 없습니다: %@";
+"Delete Custom Font?" = "사용자 정의 폰트를 삭제할까요?";
+"This removes the font from VVTerm and synced devices." = "VVTerm과 동기화된 기기에서 이 폰트를 삭제합니다.";
+"Custom Font" = "사용자 정의 폰트";
+"No Custom Fonts" = "사용자 정의 폰트 없음";
+"Import a TTF, OTF, TTC, or OTC font file." = "TTF, OTF, TTC 또는 OTC 폰트 파일을 가져옵니다.";
+"Import Font" = "폰트 가져오기";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "폰트는 VVTerm 안에 유지됩니다. iCloud 동기화가 기기 간에 폰트를 유지합니다.";
+"%lld families" = "%lld개 패밀리";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
 "Auto Wake-on-LAN" = "자동 Wake-on-LAN";

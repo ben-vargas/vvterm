@@ -1872,6 +1872,26 @@
 "Duplicate" = "复制";
 "%@ Copy" = "%@ 副本";
 
+/* Custom fonts */
+"Automatic" = "自动";
+"Custom Fonts" = "自定义字体";
+"Automatic uses the primary font and standard fallback fonts." = "自动模式使用主要字体和标准后备字体。";
+"Choose a TTF, OTF, TTC, or OTC font file." = "请选择 TTF、OTF、TTC 或 OTC 字体文件。";
+"Font files must be 48 MB or smaller." = "字体文件大小必须不超过 48 MB。";
+"The selected file is not a valid font." = "所选文件不是有效的字体。";
+"The font information is invalid." = "字体信息无效。";
+"The font file is incomplete or damaged." = "字体文件不完整或已损坏。";
+"The font file is not available on this device." = "此设备上没有该字体文件。";
+"VVTerm could not load this font: %@" = "VVTerm 无法加载此字体：%@";
+"Delete Custom Font?" = "删除自定义字体？";
+"This removes the font from VVTerm and synced devices." = "这会从 VVTerm 和已同步的设备中删除该字体。";
+"Custom Font" = "自定义字体";
+"No Custom Fonts" = "没有自定义字体";
+"Import a TTF, OTF, TTC, or OTC font file." = "导入 TTF、OTF、TTC 或 OTC 字体文件。";
+"Import Font" = "导入字体";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "字体仅保存在 VVTerm 中。iCloud 同步会让它们在你的设备上保持可用。";
+"%lld families" = "%lld 个字体系列";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "局域网唤醒";
 "Auto Wake-on-LAN" = "自动局域网唤醒";

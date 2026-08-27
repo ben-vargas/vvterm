@@ -1876,6 +1876,26 @@
 "Duplicate" = "Дубляваць";
 "%@ Copy" = "Копія %@";
 
+/* Custom fonts */
+"Automatic" = "Аўтаматычна";
+"Custom Fonts" = "Карыстальніцкія шрыфты";
+"Automatic uses the primary font and standard fallback fonts." = "Аўтаматычны рэжым выкарыстоўвае асноўны шрыфт і стандартныя рэзервовыя шрыфты.";
+"Choose a TTF, OTF, TTC, or OTC font file." = "Выберыце файл шрыфту TTF, OTF, TTC або OTC.";
+"Font files must be 48 MB or smaller." = "Памер файла шрыфту не павінен перавышаць 48 МБ.";
+"The selected file is not a valid font." = "Выбраны файл не з'яўляецца сапраўдным шрыфтам.";
+"The font information is invalid." = "Звесткі пра шрыфт несапраўдныя.";
+"The font file is incomplete or damaged." = "Файл шрыфту няпоўны або пашкоджаны.";
+"The font file is not available on this device." = "Файл шрыфту недаступны на гэтай прыладзе.";
+"VVTerm could not load this font: %@" = "VVTerm не змог загрузіць гэты шрыфт: %@";
+"Delete Custom Font?" = "Выдаліць карыстальніцкі шрыфт?";
+"This removes the font from VVTerm and synced devices." = "Гэта выдаліць шрыфт з VVTerm і сінхранізаваных прылад.";
+"Custom Font" = "Карыстальніцкі шрыфт";
+"No Custom Fonts" = "Няма карыстальніцкіх шрыфтоў";
+"Import a TTF, OTF, TTC, or OTC font file." = "Імпартуйце файл шрыфту TTF, OTF, TTC або OTC.";
+"Import Font" = "Імпартаваць шрыфт";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "Шрыфты застаюцца ў VVTerm. iCloud Sync захоўвае іх на вашых прыладах.";
+"%lld families" = "%lld сямействаў";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
 "Auto Wake-on-LAN" = "Аўтаматычны Wake-on-LAN";

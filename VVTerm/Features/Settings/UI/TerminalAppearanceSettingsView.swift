@@ -118,7 +118,6 @@ private struct TerminalCursorPreview: View {
 }
 
 struct TerminalAppearanceSettingsView: View {
-    @Binding var fontName: String
     @Binding var fontSize: Double
 
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
@@ -160,11 +159,10 @@ struct TerminalAppearanceSettingsView: View {
     var body: some View {
         Form {
             TerminalFontSettingsSection(
-                primaryFamily: $fontName,
                 fontSize: $fontSize
             )
-            TerminalContentPaddingSettingsSection()
             cursorSection
+            TerminalContentPaddingSettingsSection()
             TerminalThemeSettingsSection()
         }
         .formStyle(.grouped)

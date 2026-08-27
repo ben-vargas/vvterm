@@ -1882,6 +1882,26 @@
 "Duplicate" = "Дублювати";
 "%@ Copy" = "Копія %@";
 
+/* Custom fonts */
+"Automatic" = "Автоматично";
+"Custom Fonts" = "Користувацькі шрифти";
+"Automatic uses the primary font and standard fallback fonts." = "Автоматичний режим використовує основний шрифт і стандартні резервні шрифти.";
+"Choose a TTF, OTF, TTC, or OTC font file." = "Виберіть файл шрифту TTF, OTF, TTC або OTC.";
+"Font files must be 48 MB or smaller." = "Файли шрифтів мають бути не більше 48 МБ.";
+"The selected file is not a valid font." = "Вибраний файл не є дійсним шрифтом.";
+"The font information is invalid." = "Відомості про шрифт недійсні.";
+"The font file is incomplete or damaged." = "Файл шрифту неповний або пошкоджений.";
+"The font file is not available on this device." = "Файл шрифту недоступний на цьому пристрої.";
+"VVTerm could not load this font: %@" = "VVTerm не вдалося завантажити цей шрифт: %@";
+"Delete Custom Font?" = "Видалити користувацький шрифт?";
+"This removes the font from VVTerm and synced devices." = "Це видалить шрифт із VVTerm і синхронізованих пристроїв.";
+"Custom Font" = "Користувацький шрифт";
+"No Custom Fonts" = "Немає користувацьких шрифтів";
+"Import a TTF, OTF, TTC, or OTC font file." = "Імпортуйте файл шрифту TTF, OTF, TTC або OTC.";
+"Import Font" = "Імпортувати шрифт";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "Шрифти залишаються у VVTerm. iCloud Sync зберігає їх на ваших пристроях.";
+"%lld families" = "%lld сімейств";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
 "Auto Wake-on-LAN" = "Автоматичний Wake-on-LAN";

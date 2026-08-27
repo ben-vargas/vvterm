@@ -3,7 +3,7 @@ import Foundation
 nonisolated enum TerminalFontSelectionPolicy {
     static func resolve(
         primaryFamily: String,
-        cjkFamily: String,
+        cjkFamily: String?,
         catalog: TerminalFontCatalog,
         allowsProFeatures: Bool
     ) -> TerminalFontRuntimeSelection {
@@ -24,7 +24,7 @@ nonisolated enum TerminalFontSelectionPolicy {
         )
     }
 
-    static func primarySelectionRequiresPro(
+    static func requiresProForPrimarySelection(
         _ familyName: String,
         catalog: TerminalFontCatalog
     ) -> Bool {
@@ -55,11 +55,11 @@ nonisolated enum TerminalFontSelectionPolicy {
     }
 
     private static func resolvedCJKFamily(
-        _ familyName: String,
+        _ familyName: String?,
         catalog: TerminalFontCatalog,
         allowsProFeatures: Bool
     ) -> String? {
-        let normalizedName = normalized(familyName)
+        let normalizedName = normalized(familyName ?? "")
         guard !normalizedName.isEmpty, allowsProFeatures else { return nil }
         return catalog.family(named: normalizedName)?.name
     }

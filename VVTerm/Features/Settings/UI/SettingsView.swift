@@ -6,7 +6,6 @@ struct SettingsView: View {
     let analyticsOptOutAction: AnalyticsOptOutAction
     let remoteSessionBackends: [RemoteSessionBackendMetadata]
 
-    @AppStorage(TerminalDefaults.fontNameKey) var terminalFontName = TerminalDefaults.defaultFontName
     @AppStorage(TerminalDefaults.fontSizeKey) var terminalFontSize = TerminalDefaults.defaultFontSize
     @AppStorage(SettingsRoutePersistence.selectedRouteKey)
     var selectedRouteRaw = SettingsRoute.defaultRoute.rawValue
@@ -53,7 +52,7 @@ struct SettingsView: View {
         case .privacyAndAppLock:
             PrivacyAppLockSettingsView(analyticsOptOutAction: analyticsOptOutAction)
         case .terminalAppearance:
-            TerminalAppearanceSettingsView(fontName: $terminalFontName, fontSize: $terminalFontSize)
+            TerminalAppearanceSettingsView(fontSize: $terminalFontSize)
         case .keyboardAndInput:
             TerminalKeyboardInputSettingsView()
         case .sessionsAndConnections:

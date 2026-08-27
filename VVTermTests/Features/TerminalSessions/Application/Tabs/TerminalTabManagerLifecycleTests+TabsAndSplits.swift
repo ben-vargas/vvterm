@@ -267,6 +267,9 @@ extension TerminalTabManagerLifecycleTests {
                 let defaults = UserDefaults.standard
                 let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
                     transport: CloudKitManager.shared,
+                    terminalFontRepository: LocalTerminalFontRepository.applicationSupport(
+                        defaults: defaults
+                    ),
                     defaults: defaults,
                     now: Date.init,
                     makeID: UUID.init

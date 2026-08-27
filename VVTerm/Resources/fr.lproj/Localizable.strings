@@ -1877,6 +1877,26 @@
 "Duplicate" = "Dupliquer";
 "%@ Copy" = "Copie de %@";
 
+/* Custom fonts */
+"Automatic" = "Automatique";
+"Custom Fonts" = "Polices personnalisées";
+"Automatic uses the primary font and standard fallback fonts." = "Le mode automatique utilise la police principale et les polices de remplacement standard.";
+"Choose a TTF, OTF, TTC, or OTC font file." = "Choisissez un fichier de police TTF, OTF, TTC ou OTC.";
+"Font files must be 48 MB or smaller." = "Les fichiers de police doivent faire 48 Mo ou moins.";
+"The selected file is not a valid font." = "Le fichier sélectionné n’est pas une police valide.";
+"The font information is invalid." = "Les informations de la police ne sont pas valides.";
+"The font file is incomplete or damaged." = "Le fichier de police est incomplet ou endommagé.";
+"The font file is not available on this device." = "Le fichier de police n’est pas disponible sur cet appareil.";
+"VVTerm could not load this font: %@" = "VVTerm n’a pas pu charger cette police : %@";
+"Delete Custom Font?" = "Supprimer la police personnalisée ?";
+"This removes the font from VVTerm and synced devices." = "Cela supprime la police de VVTerm et des appareils synchronisés.";
+"Custom Font" = "Police personnalisée";
+"No Custom Fonts" = "Aucune police personnalisée";
+"Import a TTF, OTF, TTC, or OTC font file." = "Importez un fichier de police TTF, OTF, TTC ou OTC.";
+"Import Font" = "Importer une police";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "Les polices restent dans VVTerm. iCloud Sync les conserve sur vos appareils.";
+"%lld families" = "%lld familles";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
 "Auto Wake-on-LAN" = "Wake-on-LAN automatique";

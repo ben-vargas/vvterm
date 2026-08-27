@@ -1875,6 +1875,26 @@
 "Duplicate" = "ทำสำเนา";
 "%@ Copy" = "สำเนาของ %@";
 
+/* Custom fonts */
+"Automatic" = "อัตโนมัติ";
+"Custom Fonts" = "แบบอักษรกำหนดเอง";
+"Automatic uses the primary font and standard fallback fonts." = "โหมดอัตโนมัติจะใช้แบบอักษรหลักและแบบอักษรสำรองมาตรฐาน";
+"Choose a TTF, OTF, TTC, or OTC font file." = "เลือกไฟล์แบบอักษร TTF, OTF, TTC หรือ OTC";
+"Font files must be 48 MB or smaller." = "ไฟล์แบบอักษรต้องมีขนาดไม่เกิน 48 MB";
+"The selected file is not a valid font." = "ไฟล์ที่เลือกไม่ใช่แบบอักษรที่ถูกต้อง";
+"The font information is invalid." = "ข้อมูลแบบอักษรไม่ถูกต้อง";
+"The font file is incomplete or damaged." = "ไฟล์แบบอักษรไม่สมบูรณ์หรือเสียหาย";
+"The font file is not available on this device." = "ไฟล์แบบอักษรไม่พร้อมใช้งานบนอุปกรณ์นี้";
+"VVTerm could not load this font: %@" = "VVTerm ไม่สามารถโหลดแบบอักษรนี้ได้: %@";
+"Delete Custom Font?" = "ลบแบบอักษรกำหนดเองหรือไม่";
+"This removes the font from VVTerm and synced devices." = "การดำเนินการนี้จะลบแบบอักษรออกจาก VVTerm และอุปกรณ์ที่ซิงค์";
+"Custom Font" = "แบบอักษรกำหนดเอง";
+"No Custom Fonts" = "ไม่มีแบบอักษรกำหนดเอง";
+"Import a TTF, OTF, TTC, or OTC font file." = "นำเข้าไฟล์แบบอักษร TTF, OTF, TTC หรือ OTC";
+"Import Font" = "นำเข้าแบบอักษร";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "แบบอักษรจะอยู่ภายใน VVTerm และ iCloud Sync จะเก็บไว้บนอุปกรณ์ของคุณ";
+"%lld families" = "%lld ตระกูล";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
 "Auto Wake-on-LAN" = "Wake-on-LAN อัตโนมัติ";

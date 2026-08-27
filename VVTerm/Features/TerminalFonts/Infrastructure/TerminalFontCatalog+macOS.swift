@@ -4,7 +4,9 @@ import CoreText
 
 extension TerminalFontCatalog {
     @MainActor
-    static func live() -> TerminalFontCatalog {
+    static func live(
+        appOwnedFamilies: [TerminalFontFamily]
+    ) -> TerminalFontCatalog {
         let fontManager = NSFontManager.shared
         let bundledFamilies = Set(TerminalDefaults.bundledFontFamilyNames)
         let familyNames = Set(fontManager.availableFontFamilies).union(bundledFamilies)
@@ -18,17 +20,13 @@ extension TerminalFontCatalog {
                 fonts: fonts,
                 bundledFamilies: bundledFamilies
             )
-            let isMonospaced = bundledFamilies.contains(familyName)
-                || fonts.contains(where: isMonospacedFont)
-
             return TerminalFontFamily(
                 name: familyName,
-                source: source,
-                isMonospaced: isMonospaced
+                source: source
             )
         }
 
-        return TerminalFontCatalog(families: families)
+        return TerminalFontCatalog(families: families + appOwnedFamilies)
     }
 
     private static func fontSource(
@@ -60,10 +58,6 @@ extension TerminalFontCatalog {
             return .system
         }
         return .custom
-    }
-
-    private static func isMonospacedFont(_ font: NSFont) -> Bool {
-        font.isFixedPitch || CTFontGetSymbolicTraits(font as CTFont).contains(.traitMonoSpace)
     }
 
     private static func fontURL(_ font: NSFont) -> URL? {

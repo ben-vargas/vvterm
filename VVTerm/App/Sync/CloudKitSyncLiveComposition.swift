@@ -4,6 +4,7 @@ import Foundation
 struct CloudKitSyncClients {
     let serverCloud: any ServerRemoteMutationClient
     let terminalThemeCloud: any TerminalThemeCloudMutationClient
+    let terminalFontCloud: any TerminalFontCloudMutationClient
     let terminalAccessoryCloud: any TerminalAccessoryCloudClient
     let statsPreferencesCloud: any StatsPreferencesCloudClient
 }
@@ -22,6 +23,7 @@ struct CloudKitLiveSyncComposition {
     let statsPreferencesResolutions: StatsPreferencesResolutionChannel
     let serverCloud: ServerCloudKitClient
     let terminalThemeCloud: TerminalThemeCloudKitClient
+    let terminalFontCloud: TerminalFontCloudKitClient
     let terminalAccessoryCloud: TerminalAccessoryCloudKitClient
     let statsPreferencesCloud: StatsPreferencesCloudKitClient
 }
@@ -41,6 +43,7 @@ enum CloudKitSyncLiveComposition {
         let mutationHandler = CloudKitPendingMutationRouter(
             serverCloud: clients.serverCloud,
             terminalThemeCloud: clients.terminalThemeCloud,
+            terminalFontCloud: clients.terminalFontCloud,
             terminalAccessoryHandler: TerminalAccessoryPendingMutationHandler(
                 cloud: clients.terminalAccessoryCloud,
                 resolutionPublisher: terminalAccessoryResolutions
@@ -66,18 +69,24 @@ enum CloudKitSyncLiveComposition {
 
     static func makeLive(
         transport: any CloudKitRecordChangeTransport,
+        terminalFontRepository: any TerminalFontAssetRepository,
         defaults: UserDefaults,
         now: @escaping () -> Date,
         makeID: @escaping () -> UUID
     ) -> CloudKitLiveSyncComposition {
         let serverCloud = ServerCloudKitClient(transport: transport, now: now)
         let terminalThemeCloud = TerminalThemeCloudKitClient(transport: transport)
+        let terminalFontCloud = TerminalFontCloudKitClient(
+            transport: transport,
+            repository: terminalFontRepository
+        )
         let terminalAccessoryCloud = TerminalAccessoryCloudKitClient(transport: transport)
         let statsPreferencesCloud = StatsPreferencesCloudKitClient(transport: transport)
         let composition = make(
             clients: CloudKitSyncClients(
                 serverCloud: serverCloud,
                 terminalThemeCloud: terminalThemeCloud,
+                terminalFontCloud: terminalFontCloud,
                 terminalAccessoryCloud: terminalAccessoryCloud,
                 statsPreferencesCloud: statsPreferencesCloud
             ),
@@ -96,6 +105,7 @@ enum CloudKitSyncLiveComposition {
             statsPreferencesResolutions: composition.statsPreferencesResolutions,
             serverCloud: serverCloud,
             terminalThemeCloud: terminalThemeCloud,
+            terminalFontCloud: terminalFontCloud,
             terminalAccessoryCloud: terminalAccessoryCloud,
             statsPreferencesCloud: statsPreferencesCloud
         )

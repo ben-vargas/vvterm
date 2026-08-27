@@ -128,6 +128,16 @@ struct ProSettingsView: View {
                 value: "Unlimited"
             )
             ProSettingsFeatureRow(
+                title: "Custom Fonts",
+                systemImage: "textformat",
+                value: "Included"
+            )
+            ProSettingsFeatureRow(
+                title: "CJK Font",
+                systemImage: "character.book.closed",
+                value: "Custom"
+            )
+            ProSettingsFeatureRow(
                 title: "Split panes",
                 systemImage: "rectangle.split.2x1",
                 value: "Included"

@@ -1,30 +1,30 @@
 import SwiftUI
 
 struct TerminalFontSettingsSection: View {
-    @Binding var primaryFamily: String
+    private enum PickerRole {
+        case primary
+        case cjk
+    }
+
     @Binding var fontSize: Double
 
-    @AppStorage(TerminalDefaults.cjkFontNameKey) private var cjkFamily = ""
-
-    @EnvironmentObject private var catalogStore: TerminalFontCatalogStore
+    @EnvironmentObject private var fontStore: TerminalFontStore
     @EnvironmentObject private var storeManager: StoreManager
-    @State private var showingProAlert = false
+    #if os(macOS)
+    @State private var showingCustomFonts = false
+    #endif
 
     var body: some View {
         Section {
             Picker("Family", selection: primaryFamilyBinding) {
-                fontGroups(catalogStore.catalog.primaryFamilies(ensuring: primaryFamily))
+                fontGroups(
+                    fontStore.catalog.availableFamilies(
+                        ensuring: fontStore.preference.primaryFamily
+                    ),
+                    role: .primary
+                )
             }
-
-            Picker(selection: cjkFamilyBinding) {
-                Text("System (Default)").tag("")
-                fontGroups(catalogStore.catalog.fallbackFamilies(ensuring: cjkFamily))
-            } label: {
-                HStack(spacing: 6) {
-                    Text("CJK Font")
-                    ProBadge(compact: true)
-                }
-            }
+            .accessibilityIdentifier("vvterm.settings.appearance.primaryFont")
 
             VStack(spacing: 10) {
                 LabeledContent("Size") {
@@ -48,52 +48,75 @@ struct TerminalFontSettingsSection: View {
                     Text(verbatim: "A")
                         .font(.title3)
                 }
+                .accessibilityIdentifier("vvterm.settings.appearance.fontSize")
                 .accessibilityValue(fontSizeLabel)
             }
+
+            Picker(selection: cjkFamilyBinding) {
+                Text("Automatic").tag("")
+                fontGroups(
+                    fontStore.catalog.availableFamilies(
+                        ensuring: fontStore.preference.cjkFamily ?? ""
+                    ),
+                    role: .cjk
+                )
+            } label: {
+                Text("CJK Font")
+            }
+            .accessibilityIdentifier("vvterm.settings.appearance.cjkFont")
+
+            customFontsControl
         } header: {
             Text("Font")
         } footer: {
-            Text("CJK font changes apply to new terminals.")
+            Text("Automatic uses the primary font and standard fallback fonts.")
         }
-        .proFeatureAlert(
-            title: String(localized: "Font"),
-            message: String(localized: "Custom and CJK fonts require Pro."),
-            source: .settings,
-            isPresented: $showingProAlert
-        )
+        #if os(macOS)
+        .sheet(isPresented: $showingCustomFonts) {
+            CustomFontLibraryView {
+                showingCustomFonts = false
+            }
+        }
+        #endif
         .onAppear {
-            catalogStore.refresh()
+            fontStore.refreshCatalog()
         }
     }
 
     private var primaryFamilyBinding: Binding<String> {
         Binding(
-            get: { primaryFamily },
+            get: { fontStore.preference.primaryFamily },
             set: { newValue in
-                guard storeManager.allowsProFeatures
-                        || !TerminalFontSelectionPolicy.primarySelectionRequiresPro(
-                            newValue,
-                            catalog: catalogStore.catalog
-                        ) else {
-                    showingProAlert = true
-                    return
+                updateSelection {
+                    try fontStore.selectPrimaryFamily(
+                        newValue,
+                        allowsProFeatures: storeManager.allowsProFeatures
+                    )
                 }
-                primaryFamily = newValue
             }
         )
     }
 
     private var cjkFamilyBinding: Binding<String> {
         Binding(
-            get: { cjkFamily },
+            get: { fontStore.preference.cjkFamily ?? "" },
             set: { newValue in
-                guard newValue.isEmpty || storeManager.allowsProFeatures else {
-                    showingProAlert = true
-                    return
+                updateSelection {
+                    try fontStore.selectCJKFamily(
+                        newValue.isEmpty ? nil : newValue,
+                        allowsProFeatures: storeManager.allowsProFeatures
+                    )
                 }
-                cjkFamily = newValue
             }
         )
+    }
+
+    private func updateSelection(_ action: () throws -> Void) {
+        do {
+            try action()
+        } catch {
+            fontStore.refreshCatalog()
+        }
     }
 
     private var fontSizeLabel: String {
@@ -101,13 +124,49 @@ struct TerminalFontSettingsSection: View {
     }
 
     @ViewBuilder
-    private func fontGroups(_ families: [TerminalFontFamily]) -> some View {
+    private var customFontsControl: some View {
+        #if os(iOS)
+        NavigationLink {
+            CustomFontLibraryView()
+        } label: {
+            customFontsLabel
+        }
+        .accessibilityIdentifier("vvterm.settings.appearance.customFonts")
+        #else
+        Button {
+            showingCustomFonts = true
+        } label: {
+            customFontsLabel
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("vvterm.settings.appearance.customFonts")
+        #endif
+    }
+
+    private var customFontsLabel: some View {
+        HStack(spacing: 10) {
+            Text("Custom Fonts")
+            Spacer(minLength: 8)
+            Text(fontStore.customFonts.count, format: .number)
+                .foregroundStyle(.secondary)
+        }
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func fontGroups(
+        _ families: [TerminalFontFamily],
+        role: PickerRole
+    ) -> some View {
         ForEach(TerminalFontFamily.Source.allCases, id: \.self) { source in
             let sourceFamilies = families.filter { $0.source == source }
             if !sourceFamilies.isEmpty {
                 Section {
                     ForEach(sourceFamilies) { family in
-                        Text(family.name).tag(family.name)
+                        let isLocked = isLocked(family, in: role)
+                        Text(fontOptionTitle(for: family, isLocked: isLocked))
+                            .tag(family.name)
+                            .disabled(isLocked)
                     }
                 } header: {
                     sourceHeader(source)
@@ -124,10 +183,32 @@ struct TerminalFontSettingsSection: View {
         case .system:
             Text("System")
         case .custom:
-            HStack(spacing: 6) {
-                Text("Custom")
-                ProBadge(compact: true)
-            }
+            Text("Custom")
         }
+    }
+
+    private func isLocked(
+        _ family: TerminalFontFamily,
+        in role: PickerRole
+    ) -> Bool {
+        guard !storeManager.allowsProFeatures else { return false }
+
+        switch role {
+        case .primary:
+            return TerminalFontSelectionPolicy.requiresProForPrimarySelection(
+                family.name,
+                catalog: fontStore.catalog
+            )
+        case .cjk:
+            return true
+        }
+    }
+
+    private func fontOptionTitle(
+        for family: TerminalFontFamily,
+        isLocked: Bool
+    ) -> String {
+        guard isLocked else { return family.name }
+        return "\(family.name) (\(String(localized: "Pro")))"
     }
 }

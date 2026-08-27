@@ -1877,6 +1877,26 @@
 "Duplicate" = "Duplikuj";
 "%@ Copy" = "Kopia %@";
 
+/* Custom fonts */
+"Automatic" = "Automatycznie";
+"Custom Fonts" = "Czcionki niestandardowe";
+"Automatic uses the primary font and standard fallback fonts." = "Tryb automatyczny używa głównej czcionki i standardowych czcionek zastępczych.";
+"Choose a TTF, OTF, TTC, or OTC font file." = "Wybierz plik czcionki TTF, OTF, TTC lub OTC.";
+"Font files must be 48 MB or smaller." = "Pliki czcionek mogą mieć maksymalnie 48 MB.";
+"The selected file is not a valid font." = "Wybrany plik nie jest prawidłową czcionką.";
+"The font information is invalid." = "Informacje o czcionce są nieprawidłowe.";
+"The font file is incomplete or damaged." = "Plik czcionki jest niepełny lub uszkodzony.";
+"The font file is not available on this device." = "Plik czcionki nie jest dostępny na tym urządzeniu.";
+"VVTerm could not load this font: %@" = "VVTerm nie mógł wczytać tej czcionki: %@";
+"Delete Custom Font?" = "Usunąć czcionkę niestandardową?";
+"This removes the font from VVTerm and synced devices." = "Spowoduje to usunięcie czcionki z VVTerm i zsynchronizowanych urządzeń.";
+"Custom Font" = "Czcionka niestandardowa";
+"No Custom Fonts" = "Brak czcionek niestandardowych";
+"Import a TTF, OTF, TTC, or OTC font file." = "Zaimportuj plik czcionki TTF, OTF, TTC lub OTC.";
+"Import Font" = "Importuj czcionkę";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "Czcionki pozostają w VVTerm. iCloud Sync udostępnia je na Twoich urządzeniach.";
+"%lld families" = "%lld rodzin czcionek";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
 "Auto Wake-on-LAN" = "Automatyczne Wake-on-LAN";
