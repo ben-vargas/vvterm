@@ -9,6 +9,7 @@ struct AppComposition {
     let storeManager: StoreManager
     let appLockManager: AppLockManager
     let serverManager: ServerManager
+    let serverWakeCoordinator: ServerWakeCoordinator
     let engagementTracker: EngagementTracker
     let tabManager: TerminalTabManager
     let remoteFileBrowserStore: RemoteFileBrowserStore
@@ -153,6 +154,20 @@ struct AppComposition {
                 defaultWorkspaceName: defaultWorkspaceName,
                 canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames,
                 now: now,
+                makeID: makeID
+            )
+        )
+        let serverWakeCoordinator = ServerWakeCoordinator(
+            dependencies: ServerWakeDependencies(
+                sender: BSDWakeOnLANPacketSender(
+                    interfaceProvider: SystemWakeOnLANInterfaceProvider(),
+                    datagramSender: BSDWakeOnLANDatagramSender()
+                ),
+                endpointProbe: NWServerEndpointProbe(),
+                connectPolicy: .standard,
+                sleep: { duration in
+                    try await Task.sleep(for: duration)
+                },
                 makeID: makeID
             )
         )
@@ -371,6 +386,7 @@ struct AppComposition {
         self.storeManager = storeManager
         self.appLockManager = appLockManager
         self.serverManager = serverManager
+        self.serverWakeCoordinator = serverWakeCoordinator
         self.engagementTracker = engagementTracker
         self.tabManager = tabManager
         self.remoteFileBrowserStore = remoteFileBrowserStore

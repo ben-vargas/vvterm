@@ -10,6 +10,7 @@ struct ServerRow: View {
     let onEdit: (Server) -> Void
     var onMove: ((Server) -> Void)? = nil
     let onDuplicate: (Server) -> Void
+    let onWake: (Server, ServerWakeAction) -> Void
     let onConnect: (Server) -> Void
     var onLockedTap: (() -> Void)? = nil
 
@@ -30,6 +31,7 @@ struct ServerRow: View {
         onEdit: @escaping (Server) -> Void,
         onMove: ((Server) -> Void)? = nil,
         onDuplicate: @escaping (Server) -> Void,
+        onWake: @escaping (Server, ServerWakeAction) -> Void,
         onConnect: @escaping (Server) -> Void,
         onLockedTap: (() -> Void)? = nil
     ) {
@@ -42,6 +44,7 @@ struct ServerRow: View {
         self.onEdit = onEdit
         self.onMove = onMove
         self.onDuplicate = onDuplicate
+        self.onWake = onWake
         self.onConnect = onConnect
         self.onLockedTap = onLockedTap
     }
@@ -110,6 +113,19 @@ struct ServerRow: View {
                         onConnect(server)
                     } label: {
                         Label("Open Connection", systemImage: "point.forward.to.point.capsulepath.fill")
+                    }
+                    if server.wakeOnLANConfiguration != nil {
+                        ServerWakeActionButton(
+                            action: .wake,
+                            serverID: server.id,
+                            onAction: { onWake(server, $0) }
+                        )
+                        ServerWakeActionButton(
+                            action: .wakeAndConnect,
+                            serverID: server.id,
+                            onAction: { onWake(server, $0) }
+                        )
+                        Divider()
                     }
                     if let onMove {
                         Button { onMove(server) } label: {

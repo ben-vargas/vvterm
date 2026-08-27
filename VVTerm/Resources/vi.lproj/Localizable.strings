@@ -1916,3 +1916,36 @@
 "License & Notices" = "Giấy phép và thông báo";
 "Duplicate" = "Nhân bản";
 "%@ Copy" = "Bản sao của %@";
+
+/* Wake-on-LAN */
+"Automatic" = "Tự động";
+"Specific broadcast address" = "Địa chỉ quảng bá cụ thể";
+"Enable Wake-on-LAN" = "Bật Wake-on-LAN";
+"MAC Address" = "Địa chỉ MAC";
+"Broadcast" = "Quảng bá";
+"Broadcast Address" = "Địa chỉ quảng bá";
+"UDP Port" = "Cổng UDP";
+"Wake-on-LAN" = "Wake-on-LAN";
+"Wake-on-LAN works on the same Wi-Fi or Ethernet network. VPN, cellular, and isolated guest networks may block it." = "Wake-on-LAN hoạt động trong cùng mạng Wi-Fi hoặc Ethernet. VPN, mạng di động và mạng khách bị cô lập có thể chặn tính năng này.";
+"Enter a 12-digit MAC address." = "Nhập địa chỉ MAC gồm 12 chữ số.";
+"Enter a valid IPv4 broadcast address." = "Nhập địa chỉ quảng bá IPv4 hợp lệ.";
+"Use a UDP port from 1 to 65535." = "Dùng cổng UDP từ 1 đến 65535.";
+"Wake Server" = "Đánh thức máy chủ";
+"Wake and Connect" = "Đánh thức và kết nối";
+"Sending wake request…" = "Đang gửi yêu cầu đánh thức…";
+"Waiting for SSH…" = "Đang chờ SSH…";
+"Wake request sent." = "Đã gửi yêu cầu đánh thức.";
+"Server is reachable." = "Có thể truy cập máy chủ.";
+"Server is awake. Connecting…" = "Máy chủ đã thức. Đang kết nối…";
+"Enable Wake-on-LAN in Server Settings first." = "Trước tiên, hãy bật Wake-on-LAN trong Cài đặt máy chủ.";
+"The saved SSH host or port is invalid." = "Máy chủ hoặc cổng SSH đã lưu không hợp lệ.";
+"The wake request was sent, but SSH did not become reachable. Check the server and local network." = "Đã gửi yêu cầu đánh thức nhưng chưa thể truy cập SSH. Hãy kiểm tra máy chủ và mạng cục bộ.";
+"VVTerm could not complete the wake request." = "VVTerm không thể hoàn tất yêu cầu đánh thức.";
+"Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "Hãy cho phép VVTerm truy cập Mạng cục bộ trong Cài đặt hệ thống. Trên iPhone và iPad, bản dựng cũng cần quyền mạng multicast của Apple.";
+"No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "Không có giao diện Wi-Fi hoặc Ethernet IPv4 đang hoạt động để gửi yêu cầu này.";
+"VVTerm could not read the active network interfaces." = "VVTerm không thể đọc các giao diện mạng đang hoạt động.";
+"VVTerm could not create the UDP socket." = "VVTerm không thể tạo socket UDP.";
+"VVTerm could not enable UDP broadcast on this device." = "VVTerm không thể bật quảng bá UDP trên thiết bị này.";
+"The configured broadcast address is invalid." = "Địa chỉ quảng bá đã cấu hình không hợp lệ.";
+"VVTerm could not send the wake request. Check Local Network access and the broadcast address." = "VVTerm không thể gửi yêu cầu đánh thức. Hãy kiểm tra quyền truy cập Mạng cục bộ và địa chỉ quảng bá.";
+"The network did not accept the complete wake request." = "Mạng không chấp nhận toàn bộ yêu cầu đánh thức.";

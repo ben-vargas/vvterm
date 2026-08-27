@@ -40,7 +40,8 @@ struct ServerDuplicateUITestHarness: View {
                     onTap: {},
                     onEdit: {},
                     onMove: {},
-                    onDuplicate: { formIntent = .duplicate(sourceServer) }
+                    onDuplicate: { formIntent = .duplicate(sourceServer) },
+                    onWake: { _ in }
                 )
                 .accessibilityIdentifier("vvterm.serverDuplicateTest.row")
                 #else

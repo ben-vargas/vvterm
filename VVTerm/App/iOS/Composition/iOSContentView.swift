@@ -23,6 +23,7 @@ struct iOSContentView: View {
     let analyticsOptOutAction: AnalyticsOptOutAction
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
+    @ObservedObject private var serverWakeCoordinator: ServerWakeCoordinator
     @ObservedObject private var engagementTracker: EngagementTracker
     private let tabManager: TerminalTabManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
@@ -37,6 +38,7 @@ struct iOSContentView: View {
 
     init(
         serverManager: ServerManager,
+        serverWakeCoordinator: ServerWakeCoordinator,
         engagementTracker: EngagementTracker,
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
@@ -50,6 +52,9 @@ struct iOSContentView: View {
         analyticsOptOutAction: AnalyticsOptOutAction
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
+        _serverWakeCoordinator = ObservedObject(
+            wrappedValue: serverWakeCoordinator
+        )
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         self.tabManager = tabManager
         self.fileTabs = fileTabs
@@ -78,7 +83,7 @@ struct iOSContentView: View {
         )
     }
 
-    var body: some View {
+    private var navigationContent: some View {
         NavigationStack {
             ServerListScreen(
                 serverManager: serverManager,
@@ -88,6 +93,7 @@ struct iOSContentView: View {
                 statsDependencies: statsDependencies,
                 analyticsOptOutAction: analyticsOptOutAction,
                 serverFormDependencies: serverFormDependencies,
+                serverWakeCoordinator: serverWakeCoordinator,
                 voiceModelManagers: voiceModelManagers,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 selectedWorkspace: $selectedWorkspace,
@@ -157,6 +163,13 @@ struct iOSContentView: View {
         )
     }
 
+    var body: some View {
+        ServerWakeNoticeHost(coordinator: serverWakeCoordinator) {
+            navigationContent
+        }
+        .onReceive(serverWakeCoordinator.$phase, perform: handleServerWakePhase)
+    }
+
     private func reconcileWorkspaceSelection(_ workspaces: [Workspace]) {
         selectedWorkspace = WorkspaceSelectionPolicy.workspace(
             current: selectedWorkspace,
@@ -201,6 +214,17 @@ struct iOSContentView: View {
                 }
             }
         }
+    }
+
+    private func handleServerWakePhase(_ phase: ServerWakePhase) {
+        guard case .succeeded(let operation, .connectionReady) = phase,
+              let server = serverManager.servers.first(where: {
+                  $0.id == operation.serverID
+              }) else {
+            return
+        }
+        serverWakeCoordinator.markConnectionStarted(operationID: operation.id)
+        beginConnection(to: server)
     }
 
     @discardableResult

@@ -15,6 +15,7 @@ struct ServerListRow: View {
     let onEdit: () -> Void
     var onMove: (() -> Void)? = nil
     let onDuplicate: () -> Void
+    let onWake: (ServerWakeAction) -> Void
     var onLockedTap: (() -> Void)? = nil
 
     @EnvironmentObject private var storeManager: StoreManager
@@ -73,6 +74,15 @@ struct ServerListRow: View {
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            if server.wakeOnLANConfiguration != nil, !isLocked {
+                ServerWakeActionButton(
+                    action: .wakeAndConnect,
+                    serverID: server.id,
+                    onAction: onWake
+                )
+                .tint(.green)
+            }
+
             if let onMove {
                 Button {
                     onMove()
@@ -132,6 +142,20 @@ struct ServerListRow: View {
                     onTap()
                 } label: {
                     Label("Connect", systemImage: "play.fill")
+                }
+
+                if server.wakeOnLANConfiguration != nil {
+                    ServerWakeActionButton(
+                        action: .wake,
+                        serverID: server.id,
+                        onAction: onWake
+                    )
+                    ServerWakeActionButton(
+                        action: .wakeAndConnect,
+                        serverID: server.id,
+                        onAction: onWake
+                    )
+                    Divider()
                 }
 
                 if let onMove {

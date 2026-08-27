@@ -36,6 +36,7 @@ struct TerminalReconnectUITestHarness: View {
 
     private let tabManager: TerminalTabManager
     @ObservedObject private var serverManager: ServerManager
+    @ObservedObject private var serverWakeCoordinator: ServerWakeCoordinator
     @ObservedObject private var engagementTracker: EngagementTracker
     private let statsDependencies: ServerStatsScreenDependencies
     private let terminalSecurityActions: TerminalSecurityActions
@@ -51,6 +52,7 @@ struct TerminalReconnectUITestHarness: View {
     init(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
+        serverWakeCoordinator: ServerWakeCoordinator,
         fileBrowser: RemoteFileBrowserStore,
         engagementTracker: EngagementTracker,
         statsDependencies: ServerStatsScreenDependencies,
@@ -62,6 +64,9 @@ struct TerminalReconnectUITestHarness: View {
     ) {
         self.tabManager = tabManager
         _serverManager = ObservedObject(wrappedValue: serverManager)
+        _serverWakeCoordinator = ObservedObject(
+            wrappedValue: serverWakeCoordinator
+        )
         _fileBrowser = ObservedObject(wrappedValue: fileBrowser)
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         self.statsDependencies = statsDependencies
@@ -144,6 +149,7 @@ struct TerminalReconnectUITestHarness: View {
             if usesNavigationHarness {
                 iOSContentView(
                     serverManager: serverManager,
+                    serverWakeCoordinator: serverWakeCoordinator,
                     engagementTracker: engagementTracker,
                     tabManager: tabManager,
                     fileTabs: fileTabs,

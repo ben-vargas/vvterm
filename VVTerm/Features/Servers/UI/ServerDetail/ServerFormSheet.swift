@@ -274,6 +274,7 @@ struct ServerFormSheet: View {
     private var connectionFormSections: some View {
         limitSection
         serverSection
+        WakeOnLANFormSection(model: $form.wakeOnLAN)
         authSection
         connectionSection
         sessionSection

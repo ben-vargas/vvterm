@@ -17,6 +17,7 @@ struct ServerSidebarView: View {
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     private let tabManager: TerminalTabManager
     @ObservedObject private var terminalNavigation: TerminalSessionNavigationProjection
+    @ObservedObject private var serverWakeCoordinator: ServerWakeCoordinator
     #if os(macOS)
     @EnvironmentObject private var commandBridge: MacShellCommandBridge
     #endif
@@ -42,6 +43,7 @@ struct ServerSidebarView: View {
         serverManager: ServerManager,
         tabManager: TerminalTabManager,
         terminalNavigation: TerminalSessionNavigationProjection,
+        serverWakeCoordinator: ServerWakeCoordinator,
         serverFormDependencies: ServerFormDependencies,
         workspaceSelectionStore: WorkspaceSelectionStore,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
@@ -59,6 +61,7 @@ struct ServerSidebarView: View {
         )
         self.tabManager = tabManager
         _terminalNavigation = ObservedObject(wrappedValue: terminalNavigation)
+        _serverWakeCoordinator = ObservedObject(wrappedValue: serverWakeCoordinator)
         _selectedWorkspace = selectedWorkspace
         _selectedServer = selectedServer
     }
@@ -216,6 +219,9 @@ struct ServerSidebarView: View {
                                 onEdit: { serverFormIntent = .edit($0) },
                                 onMove: { serverToMove = $0 },
                                 onDuplicate: { serverFormIntent = .duplicate($0) },
+                                onWake: { server, action in
+                                    startWake(action, for: server)
+                                },
                                 onConnect: { connectToServer($0) },
                                 onLockedTap: { lockedServerAlert = server }
                             )
@@ -723,6 +729,13 @@ struct ServerSidebarView: View {
             } catch {
                 // No-op: user cancelled biometric auth or the tab limit blocked the open.
             }
+        }
+    }
+
+    private func startWake(_ action: ServerWakeAction, for server: Server) {
+        Task {
+            guard await appLockManager.ensureServerUnlocked(server) else { return }
+            serverWakeCoordinator.start(action, for: server)
         }
     }
 

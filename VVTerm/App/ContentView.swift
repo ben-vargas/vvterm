@@ -22,6 +22,7 @@ struct ContentView: View {
     let onOpenSettings: () -> Void
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
+    @ObservedObject private var serverWakeCoordinator: ServerWakeCoordinator
     @ObservedObject private var engagementTracker: EngagementTracker
     private let tabManager: TerminalTabManager
     @StateObject private var terminalNavigation: TerminalSessionNavigationProjection
@@ -52,6 +53,7 @@ struct ContentView: View {
 
     init(
         serverManager: ServerManager,
+        serverWakeCoordinator: ServerWakeCoordinator,
         engagementTracker: EngagementTracker,
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
@@ -65,6 +67,9 @@ struct ContentView: View {
         onOpenSettings: @escaping () -> Void
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
+        _serverWakeCoordinator = ObservedObject(
+            wrappedValue: serverWakeCoordinator
+        )
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         self.tabManager = tabManager
         _terminalNavigation = StateObject(
@@ -313,6 +318,7 @@ struct ContentView: View {
                     serverManager: serverManager,
                     tabManager: tabManager,
                     terminalNavigation: terminalNavigation,
+                    serverWakeCoordinator: serverWakeCoordinator,
                     serverFormDependencies: serverFormDependencies,
                     workspaceSelectionStore: workspaceSelectionStore,
                     makeLocalDiscoveryManager: makeLocalDiscoveryManager,
@@ -354,6 +360,7 @@ struct ContentView: View {
                             serverManager: serverManager,
                             tabManager: tabManager,
                             terminalNavigation: terminalNavigation,
+                            serverWakeCoordinator: serverWakeCoordinator,
                             serverFormDependencies: serverFormDependencies,
                             workspaceSelectionStore: workspaceSelectionStore,
                             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
@@ -392,7 +399,7 @@ struct ContentView: View {
     }
     #endif
 
-    var body: some View {
+    private var platformContent: some View {
         #if os(macOS)
         macShellContent
             .onChange(of: engagementTracker.reviewRequestToken) { _ in
@@ -417,6 +424,24 @@ struct ContentView: View {
         #if !os(macOS)
         splitViewContent
         #endif
+    }
+
+    var body: some View {
+        ServerWakeNoticeHost(coordinator: serverWakeCoordinator) {
+            platformContent
+        }
+        .onReceive(serverWakeCoordinator.$phase, perform: handleServerWakePhase)
+    }
+
+    private func handleServerWakePhase(_ phase: ServerWakePhase) {
+        guard case .succeeded(let operation, .connectionReady) = phase,
+              let server = serverManager.servers.first(where: {
+                  $0.id == operation.serverID
+              }) else {
+            return
+        }
+        serverWakeCoordinator.markConnectionStarted(operationID: operation.id)
+        connectToServer(server)
     }
 }
 

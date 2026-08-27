@@ -1878,3 +1878,36 @@
 "License & Notices" = "Ліцензія та повідомлення";
 "Duplicate" = "Дублювати";
 "%@ Copy" = "Копія %@";
+
+/* Wake-on-LAN */
+"Automatic" = "Автоматично";
+"Specific broadcast address" = "Певна широкомовна адреса";
+"Enable Wake-on-LAN" = "Увімкнути Wake-on-LAN";
+"MAC Address" = "MAC-адреса";
+"Broadcast" = "Широкомовлення";
+"Broadcast Address" = "Широкомовна адреса";
+"UDP Port" = "UDP-порт";
+"Wake-on-LAN" = "Wake-on-LAN";
+"Wake-on-LAN works on the same Wi-Fi or Ethernet network. VPN, cellular, and isolated guest networks may block it." = "Wake-on-LAN працює в одній мережі Wi-Fi або Ethernet. VPN, стільникова мережа й ізольовані гостьові мережі можуть його блокувати.";
+"Enter a 12-digit MAC address." = "Введіть 12-значну MAC-адресу.";
+"Enter a valid IPv4 broadcast address." = "Введіть дійсну широкомовну IPv4-адресу.";
+"Use a UDP port from 1 to 65535." = "Використовуйте UDP-порт від 1 до 65535.";
+"Wake Server" = "Розбудити сервер";
+"Wake and Connect" = "Розбудити й підключитися";
+"Sending wake request…" = "Надсилання запиту на пробудження…";
+"Waiting for SSH…" = "Очікування SSH…";
+"Wake request sent." = "Запит на пробудження надіслано.";
+"Server is reachable." = "Сервер доступний.";
+"Server is awake. Connecting…" = "Сервер прокинувся. Підключення…";
+"Enable Wake-on-LAN in Server Settings first." = "Спочатку увімкніть Wake-on-LAN у параметрах сервера.";
+"The saved SSH host or port is invalid." = "Збережений SSH-хост або порт недійсний.";
+"The wake request was sent, but SSH did not become reachable. Check the server and local network." = "Запит надіслано, але SSH недоступний. Перевірте сервер і локальну мережу.";
+"VVTerm could not complete the wake request." = "VVTerm не вдалося виконати запит на пробудження.";
+"Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "Дозвольте VVTerm доступ до локальної мережі в системних параметрах. На iPhone та iPad збірці також потрібен дозвіл Apple на багатоадресну мережу.";
+"No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "Немає активного інтерфейсу Wi-Fi або Ethernet IPv4 для надсилання цього запиту.";
+"VVTerm could not read the active network interfaces." = "VVTerm не вдалося прочитати активні мережеві інтерфейси.";
+"VVTerm could not create the UDP socket." = "VVTerm не вдалося створити UDP-сокет.";
+"VVTerm could not enable UDP broadcast on this device." = "VVTerm не вдалося увімкнути UDP-широкомовлення на цьому пристрої.";
+"The configured broadcast address is invalid." = "Налаштована широкомовна адреса недійсна.";
+"VVTerm could not send the wake request. Check Local Network access and the broadcast address." = "VVTerm не вдалося надіслати запит. Перевірте доступ до локальної мережі та широкомовну адресу.";
+"The network did not accept the complete wake request." = "Мережа не прийняла повний запит на пробудження.";

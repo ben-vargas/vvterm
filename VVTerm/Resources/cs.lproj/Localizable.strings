@@ -1872,3 +1872,36 @@
 "License & Notices" = "Licence a oznámení";
 "Duplicate" = "Duplikovat";
 "%@ Copy" = "Kopie %@";
+
+/* Wake-on-LAN */
+"Automatic" = "Automaticky";
+"Specific broadcast address" = "Konkrétní všesměrová adresa";
+"Enable Wake-on-LAN" = "Zapnout Wake-on-LAN";
+"MAC Address" = "MAC adresa";
+"Broadcast" = "Všesměrové vysílání";
+"Broadcast Address" = "Všesměrová adresa";
+"UDP Port" = "Port UDP";
+"Wake-on-LAN" = "Wake-on-LAN";
+"Wake-on-LAN works on the same Wi-Fi or Ethernet network. VPN, cellular, and isolated guest networks may block it." = "Wake-on-LAN funguje ve stejné síti Wi-Fi nebo Ethernet. VPN, mobilní síť a izolované sítě pro hosty jej mohou blokovat.";
+"Enter a 12-digit MAC address." = "Zadejte 12místnou MAC adresu.";
+"Enter a valid IPv4 broadcast address." = "Zadejte platnou všesměrovou adresu IPv4.";
+"Use a UDP port from 1 to 65535." = "Použijte port UDP od 1 do 65535.";
+"Wake Server" = "Probudit server";
+"Wake and Connect" = "Probudit a připojit";
+"Sending wake request…" = "Odesílání požadavku na probuzení…";
+"Waiting for SSH…" = "Čekání na SSH…";
+"Wake request sent." = "Požadavek na probuzení byl odeslán.";
+"Server is reachable." = "Server je dostupný.";
+"Server is awake. Connecting…" = "Server je probuzený. Připojování…";
+"Enable Wake-on-LAN in Server Settings first." = "Nejprve zapněte Wake-on-LAN v nastavení serveru.";
+"The saved SSH host or port is invalid." = "Uložený hostitel nebo port SSH není platný.";
+"The wake request was sent, but SSH did not become reachable. Check the server and local network." = "Požadavek byl odeslán, ale SSH není dostupné. Zkontrolujte server a místní síť.";
+"VVTerm could not complete the wake request." = "VVTerm nemohl dokončit požadavek na probuzení.";
+"Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "Povolte VVTerm přístup k místní síti v Nastavení systému. Na iPhonu a iPadu sestavení také potřebuje oprávnění Apple pro multicast.";
+"No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "Požadavek nemůže odeslat žádné aktivní rozhraní Wi-Fi nebo Ethernet IPv4.";
+"VVTerm could not read the active network interfaces." = "VVTerm nemohl načíst aktivní síťová rozhraní.";
+"VVTerm could not create the UDP socket." = "VVTerm nemohl vytvořit soket UDP.";
+"VVTerm could not enable UDP broadcast on this device." = "VVTerm nemohl na tomto zařízení zapnout všesměrové vysílání UDP.";
+"The configured broadcast address is invalid." = "Nastavená všesměrová adresa není platná.";
+"VVTerm could not send the wake request. Check Local Network access and the broadcast address." = "VVTerm nemohl odeslat požadavek. Zkontrolujte přístup k místní síti a všesměrovou adresu.";
+"The network did not accept the complete wake request." = "Síť nepřijala celý požadavek na probuzení.";

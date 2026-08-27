@@ -1,1 +1,2 @@
 "NSFaceIDUsageDescription" = "VVTerm używa Face ID do odblokowania aplikacji i chronionych serwerów.";
+"NSLocalNetworkUsageDescription" = "VVTerm używa sieci lokalnej do znajdowania, wybudzania i łączenia z serwerami SSH.";

@@ -29,6 +29,9 @@ struct VVTermApp: App {
         _storeManager = StateObject(wrappedValue: composition.storeManager)
         _appLockManager = StateObject(wrappedValue: composition.appLockManager)
         _serverManager = StateObject(wrappedValue: composition.serverManager)
+        _serverWakeCoordinator = StateObject(
+            wrappedValue: composition.serverWakeCoordinator
+        )
         _engagementTracker = StateObject(wrappedValue: composition.engagementTracker)
         _remoteFileBrowserStore = StateObject(wrappedValue: composition.remoteFileBrowserStore)
         _terminalThemeManager = StateObject(wrappedValue: composition.terminalThemeManager)
@@ -87,6 +90,7 @@ struct VVTermApp: App {
     #endif
     @StateObject private var appLockManager: AppLockManager
     @StateObject private var serverManager: ServerManager
+    @StateObject private var serverWakeCoordinator: ServerWakeCoordinator
     @StateObject private var engagementTracker: EngagementTracker
     private let networkMonitor: NetworkMonitor
     private let tabManager: TerminalTabManager
@@ -260,6 +264,7 @@ struct VVTermApp: App {
     private var macOSAppContent: some View {
         ContentView(
             serverManager: serverManager,
+            serverWakeCoordinator: serverWakeCoordinator,
             engagementTracker: engagementTracker,
             tabManager: tabManager,
             fileTabs: remoteFileTabManager,
@@ -326,6 +331,7 @@ struct VVTermApp: App {
             TerminalReconnectUITestHarness(
                 tabManager: tabManager,
                 serverManager: serverManager,
+                serverWakeCoordinator: serverWakeCoordinator,
                 fileBrowser: remoteFileBrowserStore,
                 engagementTracker: engagementTracker,
                 statsDependencies: statsDependencies,
@@ -362,6 +368,7 @@ struct VVTermApp: App {
     private var iOSAppContent: some View {
         iOSContentView(
             serverManager: serverManager,
+            serverWakeCoordinator: serverWakeCoordinator,
             engagementTracker: engagementTracker,
             tabManager: tabManager,
             fileTabs: remoteFileTabManager,
