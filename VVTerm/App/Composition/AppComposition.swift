@@ -13,6 +13,7 @@ struct AppComposition {
     let engagementTracker: EngagementTracker
     let tabManager: TerminalTabManager
     let remoteFileBrowserStore: RemoteFileBrowserStore
+    let terminalFontCatalogStore: TerminalFontCatalogStore
     let terminalThemeManager: TerminalThemeManager
     let terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     let statsPreferencesStore: PreferencesStore
@@ -46,6 +47,16 @@ struct AppComposition {
     private init() {
         let defaults = UserDefaults.standard
         TerminalDefaults.applyIfNeeded(defaults: defaults)
+        let terminalFontCatalogStore = TerminalFontCatalogStore {
+            TerminalFontCatalog.live()
+        }
+        let terminalFontSelection = TerminalFontSelectionPolicy.resolve(
+            primaryFamily: defaults.string(forKey: TerminalDefaults.fontNameKey)
+                ?? TerminalDefaults.defaultFontName,
+            cjkFamily: defaults.string(forKey: TerminalDefaults.cjkFontNameKey) ?? "",
+            catalog: terminalFontCatalogStore.catalog,
+            allowsProFeatures: true
+        )
         #if os(macOS)
         let terminalOptionAsAltMode = defaults.string(
             forKey: TerminalDefaults.optionAsAltModeKey
@@ -55,8 +66,7 @@ struct AppComposition {
         #endif
         let terminalContentPadding = TerminalDefaults.storedContentPadding(defaults: defaults)
         let ghosttyRuntimeConfiguration = Ghostty.RuntimeConfiguration(
-            fontName: defaults.string(forKey: TerminalDefaults.fontNameKey)
-                ?? TerminalDefaults.defaultFontName,
+            fontSelection: terminalFontSelection,
             fontSize: defaults.object(forKey: TerminalDefaults.fontSizeKey) as? Double
                 ?? TerminalDefaults.defaultFontSize,
             contentPadding: terminalContentPadding,
@@ -369,6 +379,7 @@ struct AppComposition {
         let settingsWindowPresenter = SettingsWindowPresenter(
             appLockManager: appLockManager,
             serverManager: serverManager,
+            terminalFontCatalogStore: terminalFontCatalogStore,
             terminalThemeManager: terminalThemeManager,
             terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
             viewTabConfigurationManager: viewTabConfigurationManager,
@@ -393,6 +404,7 @@ struct AppComposition {
         self.engagementTracker = engagementTracker
         self.tabManager = tabManager
         self.remoteFileBrowserStore = remoteFileBrowserStore
+        self.terminalFontCatalogStore = terminalFontCatalogStore
         self.terminalThemeManager = terminalThemeManager
         self.terminalAccessoryPreferencesManager = terminalAccessoryPreferencesManager
         self.statsPreferencesStore = statsPreferencesStore

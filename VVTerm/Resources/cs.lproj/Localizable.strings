@@ -155,6 +155,9 @@
 
 /* Terminal Settings */
 "Font" = "Písmo";
+"CJK Font" = "Písmo CJK";
+"CJK font changes apply to new terminals." = "Změny písma CJK se použijí v nových terminálech.";
+"Custom and CJK fonts require Pro." = "Vlastní písma a písma CJK vyžadují Pro.";
 "Font Family" = "Rodina písem";
 "Size: %lldpt" = "Velikost: %lld pt";
 "Theme" = "Motiv";

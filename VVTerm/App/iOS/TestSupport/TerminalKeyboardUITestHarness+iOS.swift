@@ -1313,7 +1313,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
     private func applyContentPadding(_ points: Double) {
         let configuration = ghosttyApp.configuration
         ghosttyApp.applyConfiguration(Ghostty.RuntimeConfiguration(
-            fontName: configuration.fontName,
+            fontSelection: configuration.fontSelection,
             fontSize: configuration.fontSize,
             contentPadding: TerminalContentPadding(horizontal: points, vertical: points),
             cursorStyleRawValue: configuration.cursorStyle.rawValue,

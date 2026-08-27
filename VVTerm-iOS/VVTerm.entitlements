@@ -18,6 +18,12 @@
     <key>com.apple.developer.ubiquity-kvstore-identifier</key>
     <string>$(TeamIdentifierPrefix)app.vivy.VivyTerm</string>
 
+    <!-- Fonts installed by the user or another app -->
+    <key>com.apple.developer.user-fonts</key>
+    <array>
+        <string>app-usage</string>
+    </array>
+
     <!-- Network -->
     <key>com.apple.security.network.client</key>
     <true/>

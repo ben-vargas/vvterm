@@ -155,6 +155,9 @@
 
 /* Terminal Settings */
 "Font" = "폰트";
+"CJK Font" = "CJK 글꼴";
+"CJK font changes apply to new terminals." = "CJK 글꼴 변경 사항은 새 터미널에 적용됩니다.";
+"Custom and CJK fonts require Pro." = "사용자 지정 글꼴과 CJK 글꼴에는 Pro가 필요합니다.";
 "Font Family" = "폰트 패밀리";
 "Size: %lldpt" = "크기: %lldpt";
 "Theme" = "테마";

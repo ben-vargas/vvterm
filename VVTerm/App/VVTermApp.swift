@@ -34,6 +34,9 @@ struct VVTermApp: App {
         )
         _engagementTracker = StateObject(wrappedValue: composition.engagementTracker)
         _remoteFileBrowserStore = StateObject(wrappedValue: composition.remoteFileBrowserStore)
+        _terminalFontCatalogStore = StateObject(
+            wrappedValue: composition.terminalFontCatalogStore
+        )
         _terminalThemeManager = StateObject(wrappedValue: composition.terminalThemeManager)
         _terminalAccessoryPreferencesManager = StateObject(
             wrappedValue: composition.terminalAccessoryPreferencesManager
@@ -97,6 +100,7 @@ struct VVTermApp: App {
     @StateObject private var storeManager: StoreManager
     @StateObject private var remoteFileTabManager = RemoteFileTabManager()
     @StateObject private var remoteFileBrowserStore: RemoteFileBrowserStore
+    @StateObject private var terminalFontCatalogStore: TerminalFontCatalogStore
     @StateObject private var terminalThemeManager: TerminalThemeManager
     @StateObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @StateObject private var statsPreferencesStore: PreferencesStore
@@ -130,6 +134,7 @@ struct VVTermApp: App {
 
     // Terminal settings to watch for changes
     @AppStorage(TerminalDefaults.fontNameKey) private var terminalFontName = TerminalDefaults.defaultFontName
+    @AppStorage(TerminalDefaults.cjkFontNameKey) private var terminalCJKFontName = ""
     @AppStorage(TerminalDefaults.fontSizeKey) private var terminalFontSize = TerminalDefaults.defaultFontSize
     @AppStorage(TerminalDefaults.contentPaddingHorizontalKey)
     private var terminalContentPaddingHorizontal = TerminalDefaults.defaultContentPadding
@@ -153,7 +158,12 @@ struct VVTermApp: App {
 
     private var ghosttyRuntimeConfiguration: Ghostty.RuntimeConfiguration {
         Ghostty.RuntimeConfiguration(
-            fontName: terminalFontName,
+            fontSelection: TerminalFontSelectionPolicy.resolve(
+                primaryFamily: terminalFontName,
+                cjkFamily: terminalCJKFontName,
+                catalog: terminalFontCatalogStore.catalog,
+                allowsProFeatures: storeManager.allowsProFeatures
+            ),
             fontSize: terminalFontSize,
             contentPadding: TerminalContentPadding(
                 horizontal: terminalContentPaddingHorizontal,
@@ -430,6 +440,7 @@ struct VVTermApp: App {
             .environmentObject(appLockManager)
             .environmentObject(serverManager)
             .environmentObject(storeManager)
+            .environmentObject(terminalFontCatalogStore)
             .environmentObject(viewTabConfigurationManager)
             .environmentObject(syncSettingsCoordinator)
             .environmentObject(sshKeySettingsCoordinator)

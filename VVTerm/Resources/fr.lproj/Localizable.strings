@@ -156,6 +156,9 @@
 
 /* Terminal Settings */
 "Font" = "Police";
+"CJK Font" = "Police CJK";
+"CJK font changes apply to new terminals." = "Les changements de police CJK s’appliquent aux nouveaux terminaux.";
+"Custom and CJK fonts require Pro." = "Les polices personnalisées et CJK nécessitent Pro.";
 "Font Family" = "Famille de police";
 "Size: %lldpt" = "Taille : %lld pt";
 "Theme" = "Thème";

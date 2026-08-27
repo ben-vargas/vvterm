@@ -5,8 +5,12 @@ import Testing
 struct GhosttyRuntimeConfigurationTests {
     @Test
     func rawSettingsMapToTypedRuntimeConfiguration() {
+        let fontSelection = TerminalFontRuntimeSelection(
+            primaryFamily: "Menlo",
+            cjkFamily: "Noto Sans CJK"
+        )
         let configuration = Ghostty.RuntimeConfiguration(
-            fontName: "Menlo",
+            fontSelection: fontSelection,
             fontSize: TerminalDefaults.maximumFontSize + 20,
             contentPadding: TerminalContentPadding(horizontal: -2, vertical: 50),
             cursorStyleRawValue: "invalid-cursor",
@@ -15,7 +19,7 @@ struct GhosttyRuntimeConfigurationTests {
             remoteClipboardReadPolicyRawValue: "invalid-clipboard-policy"
         )
 
-        #expect(configuration.fontName == "Menlo")
+        #expect(configuration.fontSelection == fontSelection)
         #expect(configuration.fontSize == TerminalDefaults.maximumFontSize)
         #expect(configuration.contentPadding == TerminalContentPadding(horizontal: 0, vertical: 32))
         #expect(configuration.cursorStyle == TerminalDefaults.defaultCursorStyle)
@@ -27,7 +31,7 @@ struct GhosttyRuntimeConfigurationTests {
     @Test
     func appAcceptsRuntimeConfigurationBeforeStartup() {
         let configuration = Ghostty.RuntimeConfiguration(
-            fontName: "Menlo",
+            fontSelection: .defaultValue,
             fontSize: 14,
             contentPadding: TerminalContentPadding(horizontal: 5, vertical: 7),
             cursorStyleRawValue: TerminalCursorStyle.bar.rawValue,
@@ -57,7 +61,7 @@ struct GhosttyRuntimeConfigurationTests {
         contentPadding: TerminalContentPadding
     ) -> Ghostty.RuntimeConfiguration {
         Ghostty.RuntimeConfiguration(
-            fontName: "Menlo",
+            fontSelection: .defaultValue,
             fontSize: 14,
             contentPadding: contentPadding,
             cursorStyleRawValue: TerminalCursorStyle.block.rawValue,

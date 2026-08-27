@@ -155,6 +155,9 @@
 
 /* Terminal Settings */
 "Font" = "Czcionka";
+"CJK Font" = "Czcionka CJK";
+"CJK font changes apply to new terminals." = "Zmiany czcionki CJK dotyczą nowych terminali.";
+"Custom and CJK fonts require Pro." = "Czcionki niestandardowe i CJK wymagają Pro.";
 "Font Family" = "Rodzina czcionek";
 "Size: %lldpt" = "Rozmiar: %lld pt";
 "Theme" = "Motyw";

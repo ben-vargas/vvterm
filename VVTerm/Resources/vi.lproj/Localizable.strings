@@ -164,6 +164,9 @@
 
 /* Terminal Settings */
 "Font" = "Phông chữ";
+"CJK Font" = "Phông chữ CJK";
+"CJK font changes apply to new terminals." = "Thay đổi phông chữ CJK áp dụng cho terminal mới.";
+"Custom and CJK fonts require Pro." = "Phông chữ tùy chỉnh và CJK yêu cầu Pro.";
 "Font Family" = "Họ phông chữ";
 "Size: %lldpt" = "Kích thước: %lldpt";
 "Theme" = "Chủ đề";

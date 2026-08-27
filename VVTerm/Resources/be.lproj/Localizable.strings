@@ -155,6 +155,9 @@
 
 /* Terminal Settings */
 "Font" = "Шрыфт";
+"CJK Font" = "Шрыфт CJK";
+"CJK font changes apply to new terminals." = "Змены шрыфту CJK прымяняюцца да новых тэрміналаў.";
+"Custom and CJK fonts require Pro." = "Карыстальніцкія шрыфты і шрыфты CJK патрабуюць Pro.";
 "Font Family" = "Сямейства шрыфтоў";
 "Size: %lldpt" = "Памер: %lld пт";
 "Theme" = "Тэма";

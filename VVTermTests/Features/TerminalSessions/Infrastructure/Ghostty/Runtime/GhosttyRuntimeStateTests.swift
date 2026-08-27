@@ -45,6 +45,28 @@ struct GhosttyRuntimeStateTests {
     }
 
     @Test
+    func cjkCodepointMapLoadsWithoutDiagnostics() throws {
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+
+        let configURL = directoryURL.appendingPathComponent("config")
+        let content = [
+            Ghostty.ConfigBuilder.fontFamilyLines(["Menlo"]),
+            Ghostty.ConfigBuilder.fontCodepointMapLine(cjkFamily: "Menlo")
+        ].joined(separator: "\n")
+        try content.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let config = try #require(ghostty_config_new())
+        defer { ghostty_config_free(config) }
+        GhosttyRuntime.loadConfigFile(config, atPath: configURL.path)
+        ghostty_config_finalize(config)
+
+        #expect(ghostty_config_diagnostics_count(config) == 0)
+    }
+
+    @Test
     func appOwnedConfigFileLoadsDirectlyWithAbsoluteThemePath() throws {
         let runtime = GhosttyRuntime()
         defer { runtime.cleanup() }
@@ -61,7 +83,10 @@ struct GhosttyRuntimeStateTests {
 
         let configURL = directoryURL.appendingPathComponent("config")
         let content = Ghostty.ConfigBuilder.configContent(
-            primaryFontFamily: "Menlo",
+            fontSelection: TerminalFontRuntimeSelection(
+                primaryFamily: "Menlo",
+                cjkFamily: nil
+            ),
             fontSize: 19,
             contentPadding: TerminalContentPadding(horizontal: 7, vertical: 11),
             shellName: "zsh",

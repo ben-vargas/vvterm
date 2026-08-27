@@ -2,7 +2,7 @@ import Foundation
 
 extension Ghostty {
     struct RuntimeConfiguration: Equatable {
-        let fontName: String
+        let fontSelection: TerminalFontRuntimeSelection
         let fontSize: Double
         let contentPadding: TerminalContentPadding
         let cursorStyle: TerminalCursorStyle
@@ -11,7 +11,7 @@ extension Ghostty {
         let remoteClipboardReadPolicy: TerminalRemoteClipboardReadPolicy
 
         init(
-            fontName: String,
+            fontSelection: TerminalFontRuntimeSelection,
             fontSize: Double,
             contentPadding: TerminalContentPadding,
             cursorStyleRawValue: String,
@@ -19,7 +19,7 @@ extension Ghostty {
             optionAsAltModeRawValue: String,
             remoteClipboardReadPolicyRawValue: String
         ) {
-            self.fontName = fontName
+            self.fontSelection = fontSelection
             self.fontSize = TerminalDefaults.clampedFontSize(fontSize)
             self.contentPadding = contentPadding
             self.cursorStyle = TerminalCursorStyle(rawValue: cursorStyleRawValue)
@@ -34,7 +34,7 @@ extension Ghostty {
 
         @MainActor static var defaultValue: Self {
             Self(
-                fontName: TerminalDefaults.defaultFontName,
+                fontSelection: .defaultValue,
                 fontSize: TerminalDefaults.defaultFontSize,
                 contentPadding: .defaultValue,
                 cursorStyleRawValue: TerminalDefaults.defaultCursorStyle.rawValue,

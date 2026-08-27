@@ -187,6 +187,7 @@ nonisolated enum TerminalZoomPresentation {
 
 nonisolated enum TerminalDefaults {
     static let fontNameKey = "terminalFontName"
+    static let cjkFontNameKey = "terminalCJKFontName"
     static let fontSizeKey = "terminalFontSize"
     static let cursorStyleKey = "terminalCursorStyle"
     static let cursorBlinkKey = "terminalCursorBlink"
@@ -197,6 +198,18 @@ nonisolated enum TerminalDefaults {
     static let optionAsAltModeKey = "terminalOptionAsAltMode"
     static let preserveTerminalSizeForKeyboardKey = "terminalPreserveSizeForKeyboard"
     nonisolated static let legacyDefaultFontName = "JetBrainsMono Nerd Font"
+    nonisolated static let bundledFontFamilyNames = [
+        legacyDefaultFontName,
+        "Hack Nerd Font",
+        "FiraCode Nerd Font",
+        "MesloLGS Nerd Font"
+    ]
+    nonisolated static let symbolFallbackFontFamily = legacyDefaultFontName
+    #if os(macOS)
+    nonisolated static let automaticTextFallbackFontFamilies = ["Apple SD Gothic Neo"]
+    #else
+    nonisolated static let automaticTextFallbackFontFamilies: [String] = []
+    #endif
     nonisolated static let minimumFontSize = 4.0
     nonisolated static let maximumFontSize = 32.0
     nonisolated static let fontSizeStep = 1.0
@@ -209,10 +222,6 @@ nonisolated enum TerminalDefaults {
     nonisolated static let defaultKeepScreenAwake = true
     #if os(macOS)
     nonisolated static let defaultPrimaryFontName = "Menlo"
-    nonisolated static let macOSFallbackFontFamilies = [
-        "Apple SD Gothic Neo",
-        legacyDefaultFontName
-    ]
     #endif
 
     @MainActor static func applyIfNeeded() {

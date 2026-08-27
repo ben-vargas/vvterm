@@ -127,7 +127,6 @@ struct TerminalAppearanceSettingsView: View {
 
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @Environment(\.colorScheme) private var colorScheme
-    @State private var availableFonts: [String] = []
 
     private var themeSelection: TerminalThemeSelection {
         terminalThemeManager.themeSelection
@@ -160,7 +159,10 @@ struct TerminalAppearanceSettingsView: View {
 
     var body: some View {
         Form {
-            fontSection
+            TerminalFontSettingsSection(
+                primaryFamily: $fontName,
+                fontSize: $fontSize
+            )
             TerminalContentPaddingSettingsSection()
             cursorSection
             TerminalThemeSettingsSection()
@@ -168,50 +170,6 @@ struct TerminalAppearanceSettingsView: View {
         .formStyle(.grouped)
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("vvterm.settings.page.terminalAppearance")
-        .onAppear {
-            if availableFonts.isEmpty {
-                availableFonts = Self.fontListEnsuringCurrentFont(
-                    systemFonts: loadSystemFonts(),
-                    currentFontName: fontName
-                )
-            }
-        }
-    }
-
-    private var fontSection: some View {
-        Section("Font") {
-            Picker("Family", selection: $fontName) {
-                ForEach(availableFonts, id: \.self) { font in
-                    Text(font).tag(font)
-                }
-            }
-            .disabled(availableFonts.isEmpty)
-
-            VStack(spacing: 10) {
-                LabeledContent("Size") {
-                    Text(fontSizeLabel)
-                        .foregroundStyle(.secondary)
-                }
-
-                Slider(
-                    value: Binding(
-                        get: { fontSize },
-                        set: { fontSize = $0.rounded() }
-                    ),
-                    in: 4...32,
-                    step: 1
-                ) {
-                    Text("Size")
-                } minimumValueLabel: {
-                    Text(verbatim: "A")
-                        .font(.caption2)
-                } maximumValueLabel: {
-                    Text(verbatim: "A")
-                        .font(.title3)
-                }
-                .accessibilityValue(fontSizeLabel)
-            }
-        }
     }
 
     private var cursorSection: some View {
@@ -242,17 +200,4 @@ struct TerminalAppearanceSettingsView: View {
         }
     }
 
-    private var fontSizeLabel: String {
-        String(format: String(localized: "%lld pt"), Int64(fontSize))
-    }
-
-    nonisolated static func fontListEnsuringCurrentFont(
-        systemFonts: [String],
-        currentFontName: String
-    ) -> [String] {
-        let trimmed = currentFontName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return systemFonts }
-        guard !systemFonts.contains(trimmed) else { return systemFonts }
-        return [trimmed] + systemFonts
-    }
 }

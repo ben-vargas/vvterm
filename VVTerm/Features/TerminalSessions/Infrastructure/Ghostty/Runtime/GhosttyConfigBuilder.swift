@@ -2,13 +2,24 @@ import Foundation
 
 extension Ghostty {
     nonisolated enum ConfigBuilder {
-        static func sanitizedFontFamilies(primaryFamily: String) -> [String] {
-            #if os(macOS)
-            let candidates = [primaryFamily] + TerminalDefaults.macOSFallbackFontFamilies
-            #else
-            let candidates = [primaryFamily]
-            #endif
+        private static let cjkCodepointRanges = [
+            "U+1100-U+11FF",
+            "U+2E80-U+4DBF",
+            "U+4E00-U+9FFF",
+            "U+A960-U+A97F",
+            "U+AC00-U+D7AF",
+            "U+D7B0-U+D7FF",
+            "U+F900-U+FAFF",
+            "U+FE10-U+FE1F",
+            "U+FE30-U+FE4F",
+            "U+FF00-U+FFEF",
+            "U+1AFF0-U+1AFFF",
+            "U+1B000-U+1B16F",
+            "U+20000-U+2FA1F",
+            "U+30000-U+323AF"
+        ]
 
+        static func sanitizedFontFamilies(_ candidates: [String]) -> [String] {
             var seen = Set<String>()
             var families: [String] = []
 
@@ -30,10 +41,19 @@ extension Ghostty {
                 .replacingOccurrences(of: "\"", with: "\\\"")
         }
 
-        static func fontFamilyLines(primaryFamily: String) -> String {
-            sanitizedFontFamilies(primaryFamily: primaryFamily)
+        static func fontFamilyLines(_ families: [String]) -> String {
+            sanitizedFontFamilies(families)
                 .map { "font-family = \"\(escapedFontFamilyValue($0))\"" }
                 .joined(separator: "\n")
+        }
+
+        static func fontCodepointMapLine(cjkFamily: String?) -> String {
+            guard let cjkFamily else { return "" }
+            let family = cjkFamily.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !family.isEmpty else { return "" }
+
+            let ranges = cjkCodepointRanges.joined(separator: ",")
+            return "font-codepoint-map = \"\(ranges)=\(escapedFontFamilyValue(family))\""
         }
 
         static func optionAsAltConfigValue(_ mode: TerminalOptionAsAltMode) -> String {
@@ -46,7 +66,7 @@ extension Ghostty {
         }
 
         static func configContent(
-            primaryFontFamily: String,
+            fontSelection: TerminalFontRuntimeSelection,
             fontSize: Double,
             contentPadding: TerminalContentPadding = .defaultValue,
             shellName: String,
@@ -63,7 +83,8 @@ extension Ghostty {
             #endif
 
             return """
-            \(fontFamilyLines(primaryFamily: primaryFontFamily))
+            \(fontFamilyLines(fontSelection.fontFamilies))
+            \(fontCodepointMapLine(cjkFamily: fontSelection.cjkFamily))
             font-size = \(Int(fontSize))
             window-inherit-font-size = false
             window-padding-balance = false
