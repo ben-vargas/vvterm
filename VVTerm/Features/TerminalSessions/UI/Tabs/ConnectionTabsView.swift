@@ -62,7 +62,7 @@ struct ConnectionTerminalContainer: View {
     /// Confirmation before closing the focused split pane via a command/panel
     /// (the in-pane close button has its own confirmation in TerminalTabView).
     @State var showingPaneCloseConfirmation = false
-    @State var serverToEdit: Server?
+    @State var serverFormIntent: ServerFormIntent?
 
     /// Tab limit alert
     @State private var showingTabLimitAlert = false

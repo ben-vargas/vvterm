@@ -44,29 +44,3 @@ nonisolated struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {
         }
     }
 }
-
-nonisolated struct ServerFormPrefill: Equatable, Sendable {
-    var name: String
-    var host: String
-    var port: Int
-    var username: String?
-
-    init(
-        name: String,
-        host: String,
-        port: Int = 22,
-        username: String? = nil
-    ) {
-        self.name = name
-        self.host = host
-        self.port = port
-        self.username = username
-    }
-
-    init(discoveredHost: DiscoveredSSHHost) {
-        self.name = discoveredHost.displayName
-        self.host = discoveredHost.host
-        self.port = discoveredHost.port
-        self.username = nil
-    }
-}

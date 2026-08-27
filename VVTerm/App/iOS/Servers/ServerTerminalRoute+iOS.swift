@@ -13,7 +13,7 @@ import UIKit
 struct ServerTerminalRoute: View {
     private enum PresentedRouteSheet: Hashable, Identifiable {
         case settings
-        case editServer(Server)
+        case serverForm(ServerFormIntent)
 
         var id: Self { self }
     }
@@ -201,12 +201,14 @@ struct ServerTerminalRoute: View {
                     )
                         .modifier(AppearanceModifier())
                         .adaptiveSoftScrollEdges()
-                case .editServer(let server):
+                case .serverForm(let intent):
                     NavigationStack {
                         ServerFormSheet(
                             serverManager: serverManager,
-                            workspace: serverManager.workspaces.first { $0.id == server.workspaceId },
-                            server: server,
+                            workspace: intent.sourceServer.flatMap { sourceServer in
+                                serverManager.workspaces.first { $0.id == sourceServer.workspaceId }
+                            },
+                            intent: intent,
                             dependencies: serverFormDependencies,
                             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                             onSave: { _ in presentedRouteSheet = nil }
@@ -390,10 +392,17 @@ struct ServerTerminalRoute: View {
                     }
 
                     Button {
-                        presentRouteSheet(.editServer(server))
+                        presentRouteSheet(.serverForm(.edit(server)))
                     } label: {
                         Label("Edit Server", systemImage: "pencil")
                     }
+
+                    Button {
+                        presentRouteSheet(.serverForm(.duplicate(server)))
+                    } label: {
+                        Label("Duplicate", systemImage: "plus.square.on.square")
+                    }
+                    .accessibilityIdentifier("vvterm.terminal.duplicateServer")
 
                     Button {
                         presentRouteSheet(.settings)

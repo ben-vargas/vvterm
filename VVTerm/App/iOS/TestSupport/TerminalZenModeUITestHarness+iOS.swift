@@ -57,6 +57,7 @@ struct TerminalZenModeUITestHarness: View {
                                 onNewFileTab: {},
                                 onOpenSettings: {},
                                 onEditServer: {},
+                                onDuplicateServer: {},
                                 onDisconnect: {},
                                 onBack: {},
                                 onExitZen: exitZenMode

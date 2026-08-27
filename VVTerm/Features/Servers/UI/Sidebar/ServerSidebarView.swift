@@ -22,7 +22,6 @@ struct ServerSidebarView: View {
     #endif
 
     @State private var showingWorkspaceSwitcher = false
-    @State private var showingAddServer = false
     @State private var localDiscoveryPresentation: LocalDeviceDiscoveryPresentation?
     @State private var showingSupport = false
     @State private var showingProUpgrade = false
@@ -34,10 +33,9 @@ struct ServerSidebarView: View {
     @State private var environmentToDelete: ServerEnvironment?
     @State private var environmentDeletionError: String?
     @State private var searchText = ""
-    @State private var serverToEdit: Server?
+    @State private var serverFormIntent: ServerFormIntent?
     @State private var serverToMove: Server?
     @State private var lockedServerAlert: Server?
-    @State private var addServerPrefill: ServerFormPrefill?
     @State private var queuedDiscoveryPrefill: ServerFormPrefill?
 
     init(
@@ -215,8 +213,9 @@ struct ServerSidebarView: View {
                                     hasProAccess: storeManager.allowsProFeatures
                                 ),
                                 onSelect: { selectServer(server) },
-                                onEdit: { serverToEdit = $0 },
+                                onEdit: { serverFormIntent = .edit($0) },
                                 onMove: { serverToMove = $0 },
+                                onDuplicate: { serverFormIntent = .duplicate($0) },
                                 onConnect: { connectToServer($0) },
                                 onLockedTap: { lockedServerAlert = server }
                             )
@@ -244,43 +243,28 @@ struct ServerSidebarView: View {
             )
             .adaptiveSoftScrollEdges()
         }
-        .sheet(isPresented: $showingAddServer) {
-            ServerFormSheet(
-                serverManager: serverManager,
-                workspace: selectedWorkspace,
-                prefill: addServerPrefill,
-                dependencies: serverFormDependencies,
-                makeLocalDiscoveryManager: makeLocalDiscoveryManager,
-                onSave: { _ in showingAddServer = false }
-            )
-            .adaptiveSoftScrollEdges()
-            #if os(macOS)
-            .frame(
-                minWidth: 640,
-                idealWidth: 700,
-                maxWidth: 760,
-                minHeight: 520,
-                idealHeight: 620,
-                maxHeight: 680
-            )
-            #endif
-        }
         .sheet(item: $localDiscoveryPresentation, onDismiss: resumeDiscoveredServerCreation) { presentation in
             LocalDeviceDiscoverySheet(manager: presentation.manager) { discoveredHost in
-                queuedDiscoveryPrefill = ServerFormPrefill(discoveredHost: discoveredHost)
+                queuedDiscoveryPrefill = ServerFormPrefill(
+                    name: discoveredHost.displayName,
+                    host: discoveredHost.host,
+                    port: discoveredHost.port
+                )
             }
             .adaptiveSoftScrollEdges()
         }
-        .sheet(item: $serverToEdit) { server in
+        .sheet(item: $serverFormIntent) { intent in
             ServerFormSheet(
                 serverManager: serverManager,
-                workspace: selectedWorkspace,
-                server: server,
+                workspace: workspace(for: intent),
+                intent: intent,
                 dependencies: serverFormDependencies,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
-                onSave: { updatedServer in
-                    handleSavedServer(updatedServer, originalServer: server)
-                    serverToEdit = nil
+                onSave: { savedServer in
+                    if let editedServer = intent.editedServer {
+                        handleSavedServer(savedServer, originalServer: editedServer)
+                    }
+                    serverFormIntent = nil
                 }
             )
             .adaptiveSoftScrollEdges()
@@ -410,11 +394,6 @@ struct ServerSidebarView: View {
             guard !isPresented else { return }
             resumePendingPrefilledAddServerIfNeeded()
         }
-        .onChange(of: showingAddServer) { isPresented in
-            if !isPresented {
-                addServerPrefill = nil
-            }
-        }
         #if os(macOS)
         .focusedValue(\.openLocalSSHDiscovery, {
             presentLocalDiscovery()
@@ -448,7 +427,6 @@ struct ServerSidebarView: View {
 
     private func resumeDiscoveredServerCreation() {
         guard let queued = queuedDiscoveryPrefill else { return }
-        queuedDiscoveryPrefill = nil
         presentAddServer(prefill: queued)
     }
 
@@ -892,26 +870,32 @@ struct ServerSidebarView: View {
     }
 
     private func presentAddServer(prefill: ServerFormPrefill? = nil) {
-        addServerPrefill = prefill
         switch ServerCreationPresentationPolicy.initialStep(canAddServer: canAddServer) {
         case .createWorkspace:
+            queuedDiscoveryPrefill = prefill
             showingWorkspaceSwitcher = true
         case .createServer:
-            showingAddServer = true
+            queuedDiscoveryPrefill = nil
+            serverFormIntent = .create(prefill: prefill)
         }
     }
 
+    private func workspace(for intent: ServerFormIntent) -> Workspace? {
+        guard let sourceServer = intent.sourceServer else { return selectedWorkspace }
+        return stateStore.workspace(withID: sourceServer.workspaceId)
+    }
+
     private func dismissWorkspacePickerForPendingPrefilledAddServerIfNeeded() {
-        guard addServerPrefill != nil, canAddServer else { return }
+        guard queuedDiscoveryPrefill != nil, canAddServer else { return }
         showingWorkspaceSwitcher = false
     }
 
     private func resumePendingPrefilledAddServerIfNeeded() {
         guard ServerCreationPresentationPolicy.shouldResumePrefilledServer(
-            hasPrefill: addServerPrefill != nil,
+            hasPrefill: queuedDiscoveryPrefill != nil,
             canAddServer: canAddServer,
-            isPresentingServer: showingAddServer
+            isPresentingServer: serverFormIntent != nil
         ) else { return }
-        showingAddServer = true
+        presentAddServer(prefill: queuedDiscoveryPrefill)
     }
 }

@@ -183,6 +183,12 @@ struct VVTermApp: App {
             "--vvterm-ui-test-trusted-hosts-settings-harness"
         )
     }
+
+    private var usesServerDuplicateUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-server-duplicate-harness"
+        )
+    }
     #endif
 
     #if os(iOS) && DEBUG
@@ -229,6 +235,12 @@ struct VVTermApp: App {
             SyncSettingsUITestHarness()
         } else if usesTrustedHostsSettingsUITestHarness {
             TrustedHostsSettingsUITestHarness()
+        } else if usesServerDuplicateUITestHarness {
+            ServerDuplicateUITestHarness(
+                serverManager: serverManager,
+                dependencies: serverFormDependencies,
+                makeLocalDiscoveryManager: makeLocalDiscoveryManager
+            )
         } else if Foundation.ProcessInfo.processInfo.arguments.contains(
             "--vvterm-ui-test-mac-terminal-recovery-harness"
         ) {
@@ -288,6 +300,12 @@ struct VVTermApp: App {
             SyncSettingsUITestHarness()
         } else if usesTrustedHostsSettingsUITestHarness {
             TrustedHostsSettingsUITestHarness()
+        } else if usesServerDuplicateUITestHarness {
+            ServerDuplicateUITestHarness(
+                serverManager: serverManager,
+                dependencies: serverFormDependencies,
+                makeLocalDiscoveryManager: makeLocalDiscoveryManager
+            )
         } else if usesNoticePresentationUITestHarness {
             NoticePresentationUITestHarness()
                 .modifier(AppearanceModifier())
