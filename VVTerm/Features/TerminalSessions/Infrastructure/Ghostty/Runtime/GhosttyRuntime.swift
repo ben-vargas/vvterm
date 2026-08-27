@@ -369,7 +369,7 @@ final class GhosttyRuntime: ObservableObject {
             // Create config with font settings, shell integration, and theme
             let effectiveFontSize = presentationOverrides.fontSize ?? configuration.fontSize
             let configContent = Ghostty.ConfigBuilder.configContent(
-                primaryFontFamily: configuration.fontName,
+                fontSelection: configuration.fontSelection,
                 fontSize: effectiveFontSize,
                 contentPadding: configuration.contentPadding,
                 shellName: shellName,
@@ -389,7 +389,8 @@ final class GhosttyRuntime: ObservableObject {
             // cannot hide the terminal settings or custom theme.
             Self.loadConfigFile(config, atPath: configFilePath)
 
-            Ghostty.logger.info("Loaded terminal settings - Font: \(self.configuration.fontName) \(Int(effectiveFontSize))pt, Theme: \(self.appearanceSnapshot.activeTheme.name)")
+            let primaryFont = configuration.fontSelection.primaryFamily
+            Ghostty.logger.info("Loaded terminal settings - Font: \(primaryFont) \(Int(effectiveFontSize))pt, Theme: \(self.appearanceSnapshot.activeTheme.name)")
         } catch {
             Ghostty.logger.warning("Failed to write config: \(error)")
         }

@@ -43,7 +43,7 @@ struct GhosttyConfigBuilderTests {
 
         for (mode, expectedValue) in expectedValues {
             let content = Ghostty.ConfigBuilder.configContent(
-                primaryFontFamily: "Menlo",
+                fontSelection: selection("Menlo"),
                 fontSize: 13,
                 shellName: "fish",
                 theme: "Aizen Light",
@@ -54,82 +54,86 @@ struct GhosttyConfigBuilderTests {
         }
     }
 
+    #endif
+
     @Test
-    func macOSFontFamilyLinesUseDeterministicFallbackStack() {
-        let lines = Ghostty.ConfigBuilder.fontFamilyLines(primaryFamily: "Menlo")
+    func fontFamilyLinesPreserveOrderedFallbackStack() {
+        let lines = Ghostty.ConfigBuilder.fontFamilyLines([
+            "Menlo",
+            "Noto Sans CJK",
+            "JetBrainsMono Nerd Font"
+        ])
             .split(separator: "\n")
             .map(String.init)
 
         #expect(lines == [
             "font-family = \"Menlo\"",
-            "font-family = \"Apple SD Gothic Neo\"",
+            "font-family = \"Noto Sans CJK\"",
             "font-family = \"JetBrainsMono Nerd Font\""
         ])
     }
 
     @Test
-    func macOSFontFamilyLinesTrimWhitespaceAndDeduplicateFamilies() {
-        let appleFallback = TerminalDefaults.macOSFallbackFontFamilies[0]
-        let lines = Ghostty.ConfigBuilder.fontFamilyLines(primaryFamily: "  \(appleFallback)  ")
+    func fontFamilyLinesTrimWhitespaceAndDeduplicateFamilies() {
+        let lines = Ghostty.ConfigBuilder.fontFamilyLines([
+            "  Noto Sans CJK  ",
+            "Noto Sans CJK",
+            "JetBrainsMono Nerd Font"
+        ])
             .split(separator: "\n")
             .map(String.init)
 
         #expect(lines == [
-            "font-family = \"Apple SD Gothic Neo\"",
+            "font-family = \"Noto Sans CJK\"",
             "font-family = \"JetBrainsMono Nerd Font\""
         ])
     }
-    #endif
 
     @Test
-    func fontFamilyLinesIgnoreBlankPrimaryFamily() {
-        let lines = Ghostty.ConfigBuilder.fontFamilyLines(primaryFamily: "   \n  ")
+    func fontFamilyLinesIgnoreBlankFamilies() {
+        let lines = Ghostty.ConfigBuilder.fontFamilyLines(["   \n  "])
             .split(separator: "\n")
             .map(String.init)
 
-        #if os(macOS)
-        #expect(lines == [
-            "font-family = \"Apple SD Gothic Neo\"",
-            "font-family = \"JetBrainsMono Nerd Font\""
-        ])
-        #else
         #expect(lines.isEmpty)
-        #endif
     }
 
     @Test
     func fontFamilyLinesEscapeQuotesBackslashesAndNewlines() {
-        let lines = Ghostty.ConfigBuilder.fontFamilyLines(primaryFamily: "A\"B\\C\nD\rE")
+        let lines = Ghostty.ConfigBuilder.fontFamilyLines(["A\"B\\C\nD\rE"])
             .split(separator: "\n")
             .map(String.init)
 
         #expect(lines.first == "font-family = \"A\\\"B\\\\CDE\"")
     }
 
-    #if os(iOS)
     @Test
-    func iOSConfigContentPreservesSingleFamilyBehavior() {
-        let content = Ghostty.ConfigBuilder.configContent(
-            primaryFontFamily: "  JetBrainsMono Nerd Font  ",
-            fontSize: 9,
-            shellName: "zsh",
-            theme: "Aizen Dark"
-        )
+    func cjkCodepointMapCoversCJKHangulAndSupplementaryPlanes() {
+        let line = Ghostty.ConfigBuilder.fontCodepointMapLine(cjkFamily: "Noto Sans CJK")
 
-        let fontFamilyLines = content
-            .split(separator: "\n")
-            .map(String.init)
-            .filter { $0.hasPrefix("font-family =") }
-
-        #expect(fontFamilyLines == ["font-family = \"JetBrainsMono Nerd Font\""])
-        #expect(!content.contains("macos-option-as-alt"))
+        #expect(line.contains("U+1100-U+11FF"))
+        #expect(line.contains("U+4E00-U+9FFF"))
+        #expect(line.contains("U+AC00-U+D7AF"))
+        #expect(line.contains("U+20000-U+2FA1F"))
+        #expect(line.contains("U+30000-U+323AF"))
+        #expect(line.hasSuffix("=Noto Sans CJK\""))
     }
-    #endif
+
+    @Test
+    func cjkCodepointMapIgnoresBlankAndEscapesUnsafeCharacters() {
+        #expect(Ghostty.ConfigBuilder.fontCodepointMapLine(cjkFamily: nil).isEmpty)
+        #expect(Ghostty.ConfigBuilder.fontCodepointMapLine(cjkFamily: " \n ").isEmpty)
+
+        let line = Ghostty.ConfigBuilder.fontCodepointMapLine(
+            cjkFamily: "A\"B\\C\nD\rE"
+        )
+        #expect(line.hasSuffix("=A\\\"B\\\\CDE\""))
+    }
 
     @Test
     func configContentKeepsNonFontLinesStable() {
         let content = Ghostty.ConfigBuilder.configContent(
-            primaryFontFamily: "Menlo",
+            fontSelection: selection("Menlo", cjk: "Noto Sans CJK"),
             fontSize: 13,
             shellName: "fish",
             theme: "Aizen Light"
@@ -146,12 +150,13 @@ struct GhosttyConfigBuilderTests {
         #expect(content.contains("keybind = shift+enter=text:\\n"))
         #expect(content.contains("clipboard-read = ask"))
         #expect(content.contains("clipboard-write = ask"))
+        #expect(content.contains("font-codepoint-map ="))
     }
 
     @Test
     func configContentIncludesContentPadding() {
         let content = Ghostty.ConfigBuilder.configContent(
-            primaryFontFamily: "Menlo",
+            fontSelection: selection("Menlo"),
             fontSize: 13,
             contentPadding: TerminalContentPadding(horizontal: 12, vertical: 18),
             shellName: "fish",
@@ -166,7 +171,7 @@ struct GhosttyConfigBuilderTests {
     @Test
     func configContentIncludesCursorSettings() {
         let content = Ghostty.ConfigBuilder.configContent(
-            primaryFontFamily: "Menlo",
+            fontSelection: selection("Menlo"),
             fontSize: 13,
             shellName: "fish",
             theme: "Aizen Light",
@@ -182,7 +187,7 @@ struct GhosttyConfigBuilderTests {
     func configContentUsesEachRemoteClipboardReadPolicy() {
         for policy in TerminalRemoteClipboardReadPolicy.allCases {
             let content = Ghostty.ConfigBuilder.configContent(
-                primaryFontFamily: "Menlo",
+                fontSelection: selection("Menlo"),
                 fontSize: 13,
                 shellName: "fish",
                 theme: "Aizen Light",
@@ -191,6 +196,16 @@ struct GhosttyConfigBuilderTests {
 
             #expect(content.contains("clipboard-read = \(policy.rawValue)"))
         }
+    }
+
+    private func selection(
+        _ primaryFamily: String,
+        cjk: String? = nil
+    ) -> TerminalFontRuntimeSelection {
+        TerminalFontRuntimeSelection(
+            primaryFamily: primaryFamily,
+            cjkFamily: cjk
+        )
     }
 
     @Test

@@ -155,6 +155,9 @@
 
 /* Terminal Settings */
 "Font" = "Fuente";
+"CJK Font" = "Fuente CJK";
+"CJK font changes apply to new terminals." = "Los cambios de fuente CJK se aplican a terminales nuevos.";
+"Custom and CJK fonts require Pro." = "Las fuentes personalizadas y CJK requieren Pro.";
 "Font Family" = "Familia de fuente";
 "Size: %lldpt" = "Tamaño: %lld pt";
 "Theme" = "Tema";

@@ -155,6 +155,9 @@
 
 /* Terminal Settings */
 "Font" = "字体";
+"CJK Font" = "CJK 字体";
+"CJK font changes apply to new terminals." = "CJK 字体更改会应用于新终端。";
+"Custom and CJK fonts require Pro." = "自定义字体和 CJK 字体需要 Pro。";
 "Font Family" = "字体族";
 "Size: %lldpt" = "大小：%lldpt";
 "Theme" = "主题";

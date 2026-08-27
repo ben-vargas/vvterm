@@ -25,6 +25,7 @@ final class SettingsWindowPresenter {
     init(
         appLockManager: AppLockManager,
         serverManager: ServerManager,
+        terminalFontCatalogStore: TerminalFontCatalogStore,
         terminalThemeManager: TerminalThemeManager,
         terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager,
         viewTabConfigurationManager: ViewTabConfigurationManager,
@@ -41,6 +42,7 @@ final class SettingsWindowPresenter {
             let settingsView = LocalizedSettingsView(
                 appLockManager: appLockManager,
                 serverManager: serverManager,
+                terminalFontCatalogStore: terminalFontCatalogStore,
                 terminalThemeManager: terminalThemeManager,
                 terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
                 viewTabConfigurationManager: viewTabConfigurationManager,
@@ -101,6 +103,7 @@ private struct LocalizedSettingsView: View {
     @State private var applicationPhase: ScenePhase = NSApplication.shared.isActive ? .active : .inactive
     @ObservedObject var appLockManager: AppLockManager
     @ObservedObject var serverManager: ServerManager
+    @ObservedObject var terminalFontCatalogStore: TerminalFontCatalogStore
     @ObservedObject var terminalThemeManager: TerminalThemeManager
     @ObservedObject var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @ObservedObject var viewTabConfigurationManager: ViewTabConfigurationManager
@@ -130,6 +133,7 @@ private struct LocalizedSettingsView: View {
                 .environmentObject(viewTabConfigurationManager)
                 .environmentObject(serverManager)
                 .environmentObject(storeManager)
+                .environmentObject(terminalFontCatalogStore)
                 .environmentObject(syncSettingsCoordinator)
                 .environmentObject(sshKeySettingsCoordinator)
                 .environmentObject(knownHostSettingsCoordinator)
