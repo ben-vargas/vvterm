@@ -108,6 +108,7 @@ struct TerminalAppLockSource {
 @MainActor
 struct TerminalSessionApplicationEffects {
     let authorizeServer: (Server) async -> Bool
+    let prepareInitialConnection: (Server) -> Void
     let refreshLiveActivity: ([ConnectionState]) -> Void
     let recordSuccessfulConnection: (UUID, String) -> Void
     let noteTerminalSessionEnded: (Bool) -> Void
@@ -164,6 +165,7 @@ extension TerminalTabManagerDependencies {
             ),
             effects: TerminalSessionApplicationEffects(
                 authorizeServer: { _ in true },
+                prepareInitialConnection: { _ in },
                 refreshLiveActivity: liveActivityRefresh,
                 recordSuccessfulConnection: { _, _ in },
                 noteTerminalSessionEnded: { _ in },

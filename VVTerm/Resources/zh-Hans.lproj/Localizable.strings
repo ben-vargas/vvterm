@@ -1868,3 +1868,21 @@
 "License & Notices" = "许可与声明";
 "Duplicate" = "复制";
 "%@ Copy" = "%@ 副本";
+
+/* Wake-on-LAN */
+"Wake-on-LAN" = "局域网唤醒";
+"Auto Wake-on-LAN" = "自动局域网唤醒";
+"For servers on the same local network." = "用于同一局域网中的服务器。";
+"Could not detect the server's MAC address. Make sure it is online, then try again." = "无法检测服务器的 MAC 地址。请确认服务器在线，然后重试。";
+"VVTerm could not prepare the network broadcast address." = "VVTerm 无法准备网络广播地址。";
+"VVTerm could not send the wake request. Check Local Network access." = "VVTerm 无法发送唤醒请求。请检查本地网络访问权限。";
+"Wake Server" = "唤醒服务器";
+"Sending wake request…" = "正在发送唤醒请求…";
+"Wake request sent." = "已发送唤醒请求。";
+"VVTerm could not complete the wake request." = "VVTerm 无法完成唤醒请求。";
+"Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "请在系统设置中允许 VVTerm 访问本地网络。在 iPhone 和 iPad 上，此构建还需要 Apple 的多播网络权限。";
+"No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "没有可发送此请求的活跃 Wi-Fi 或以太网 IPv4 接口。";
+"VVTerm could not read the active network interfaces." = "VVTerm 无法读取活跃的网络接口。";
+"VVTerm could not create the UDP socket." = "VVTerm 无法创建 UDP 套接字。";
+"VVTerm could not enable UDP broadcast on this device." = "VVTerm 无法在此设备上启用 UDP 广播。";
+"The network did not accept the complete wake request." = "网络未接受完整的唤醒请求。";

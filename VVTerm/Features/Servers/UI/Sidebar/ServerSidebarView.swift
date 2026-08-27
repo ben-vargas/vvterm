@@ -17,6 +17,7 @@ struct ServerSidebarView: View {
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     private let tabManager: TerminalTabManager
     @ObservedObject private var terminalNavigation: TerminalSessionNavigationProjection
+    private let serverWakeCoordinator: ServerWakeCoordinator
     #if os(macOS)
     @EnvironmentObject private var commandBridge: MacShellCommandBridge
     #endif
@@ -42,6 +43,7 @@ struct ServerSidebarView: View {
         serverManager: ServerManager,
         tabManager: TerminalTabManager,
         terminalNavigation: TerminalSessionNavigationProjection,
+        serverWakeCoordinator: ServerWakeCoordinator,
         serverFormDependencies: ServerFormDependencies,
         workspaceSelectionStore: WorkspaceSelectionStore,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
@@ -59,6 +61,7 @@ struct ServerSidebarView: View {
         )
         self.tabManager = tabManager
         _terminalNavigation = ObservedObject(wrappedValue: terminalNavigation)
+        self.serverWakeCoordinator = serverWakeCoordinator
         _selectedWorkspace = selectedWorkspace
         _selectedServer = selectedServer
     }
@@ -216,6 +219,7 @@ struct ServerSidebarView: View {
                                 onEdit: { serverFormIntent = .edit($0) },
                                 onMove: { serverToMove = $0 },
                                 onDuplicate: { serverFormIntent = .duplicate($0) },
+                                onWake: { startWake(for: $0) },
                                 onConnect: { connectToServer($0) },
                                 onLockedTap: { lockedServerAlert = server }
                             )
@@ -723,6 +727,13 @@ struct ServerSidebarView: View {
             } catch {
                 // No-op: user cancelled biometric auth or the tab limit blocked the open.
             }
+        }
+    }
+
+    private func startWake(for server: Server) {
+        Task {
+            guard await appLockManager.ensureServerUnlocked(server) else { return }
+            serverWakeCoordinator.start(for: server)
         }
     }
 

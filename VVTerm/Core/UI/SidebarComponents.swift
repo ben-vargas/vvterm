@@ -10,6 +10,7 @@ struct ServerRow: View {
     let onEdit: (Server) -> Void
     var onMove: ((Server) -> Void)? = nil
     let onDuplicate: (Server) -> Void
+    let onWake: (Server) -> Void
     let onConnect: (Server) -> Void
     var onLockedTap: (() -> Void)? = nil
 
@@ -30,6 +31,7 @@ struct ServerRow: View {
         onEdit: @escaping (Server) -> Void,
         onMove: ((Server) -> Void)? = nil,
         onDuplicate: @escaping (Server) -> Void,
+        onWake: @escaping (Server) -> Void,
         onConnect: @escaping (Server) -> Void,
         onLockedTap: (() -> Void)? = nil
     ) {
@@ -42,6 +44,7 @@ struct ServerRow: View {
         self.onEdit = onEdit
         self.onMove = onMove
         self.onDuplicate = onDuplicate
+        self.onWake = onWake
         self.onConnect = onConnect
         self.onLockedTap = onLockedTap
     }
@@ -117,6 +120,10 @@ struct ServerRow: View {
                         }
                     }
                     duplicateButton
+                    ServerWakeActionButton(
+                        serverID: server.id,
+                        onAction: { onWake(server) }
+                    )
                     Button { onEdit(server) } label: {
                         Label("Server Settings", systemImage: "slider.horizontal.3")
                     }

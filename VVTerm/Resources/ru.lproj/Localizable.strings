@@ -1871,3 +1871,21 @@
 "License & Notices" = "Лицензия и уведомления";
 "Duplicate" = "Дублировать";
 "%@ Copy" = "Копия %@";
+
+/* Wake-on-LAN */
+"Wake-on-LAN" = "Wake-on-LAN";
+"Auto Wake-on-LAN" = "Автоматический Wake-on-LAN";
+"For servers on the same local network." = "Для серверов в той же локальной сети.";
+"Could not detect the server's MAC address. Make sure it is online, then try again." = "Не удалось определить MAC-адрес сервера. Убедитесь, что он включён, затем повторите попытку.";
+"VVTerm could not prepare the network broadcast address." = "VVTerm не удалось подготовить широковещательный адрес сети.";
+"VVTerm could not send the wake request. Check Local Network access." = "VVTerm не удалось отправить запрос на пробуждение. Проверьте доступ к локальной сети.";
+"Wake Server" = "Разбудить сервер";
+"Sending wake request…" = "Отправка запроса на пробуждение…";
+"Wake request sent." = "Запрос на пробуждение отправлен.";
+"VVTerm could not complete the wake request." = "VVTerm не удалось выполнить запрос на пробуждение.";
+"Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "Разрешите VVTerm доступ к локальной сети в системных настройках. На iPhone и iPad сборке также требуется разрешение Apple на многоадресную сеть.";
+"No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "Нет активного интерфейса Wi-Fi или Ethernet IPv4 для отправки этого запроса.";
+"VVTerm could not read the active network interfaces." = "VVTerm не удалось прочитать активные сетевые интерфейсы.";
+"VVTerm could not create the UDP socket." = "VVTerm не удалось создать UDP-сокет.";
+"VVTerm could not enable UDP broadcast on this device." = "VVTerm не удалось включить UDP-широковещание на этом устройстве.";
+"The network did not accept the complete wake request." = "Сеть не приняла полный запрос на пробуждение.";

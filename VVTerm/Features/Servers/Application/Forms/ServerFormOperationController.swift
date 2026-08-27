@@ -38,6 +38,7 @@ nonisolated protocol ServerHostKeyRepository: Sendable {
 struct ServerFormDependencies {
     let credentials: any ServerCredentialRepository
     let connectionTester: any ServerConnectionTesting
+    let wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving
     let hostKeys: any ServerHostKeyRepository
     let remoteSessionBackends: [RemoteSessionBackendMetadata]
     let defaultRemoteSessionEnabled: @MainActor () -> Bool
@@ -51,6 +52,7 @@ nonisolated enum ServerFormOperationFailure: Equatable, Sendable {
     case operation(message: String)
     case credentialLoad(message: String)
     case storedKeyLoad(message: String)
+    case wakeOnLANUnavailable
 }
 
 nonisolated enum ServerFormOperationPhase: Equatable, Sendable {
@@ -72,6 +74,7 @@ final class ServerFormOperationController: ObservableObject {
 
     private let credentialLoader: any ServerFormCredentialLoading
     private let connectionTester: any ServerConnectionTesting
+    private let wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving
     private let hostKeys: any ServerHostKeyRepository
     private let saveUseCase: ServerSaveUseCase
     private let now: @Sendable () -> Date
@@ -83,6 +86,7 @@ final class ServerFormOperationController: ObservableObject {
     init(
         credentialLoader: any ServerFormCredentialLoading,
         connectionTester: any ServerConnectionTesting,
+        wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving,
         hostKeys: any ServerHostKeyRepository,
         saveUseCase: ServerSaveUseCase,
         now: @escaping @Sendable () -> Date,
@@ -90,6 +94,7 @@ final class ServerFormOperationController: ObservableObject {
     ) {
         self.credentialLoader = credentialLoader
         self.connectionTester = connectionTester
+        self.wakeOnLANMACAddressResolver = wakeOnLANMACAddressResolver
         self.hostKeys = hostKeys
         self.saveUseCase = saveUseCase
         self.now = now
@@ -291,6 +296,7 @@ final class ServerFormOperationController: ObservableObject {
     func save(
         mutation: ServerMutation,
         credentials: ServerCredentials,
+        wakeOnLANPlan: ServerFormModel.WakeOnLANSavePlan,
         hasProAccess: Bool,
         authorize: @escaping @MainActor () async -> Bool,
         onSaved: @escaping @MainActor (Server) -> Void
@@ -300,6 +306,7 @@ final class ServerFormOperationController: ObservableObject {
         let operationID = makeID()
         phase = .saving(id: operationID)
         let useCase = saveUseCase
+        let wakeOnLANMACAddressResolver = wakeOnLANMACAddressResolver
 
         saveTask = Task { [weak self] in
             guard await authorize() else {
@@ -308,9 +315,41 @@ final class ServerFormOperationController: ObservableObject {
                 self?.phase = .idle
                 return
             }
+            let preparedMutation: ServerMutation
+            do {
+                let configuration: WakeOnLANConfiguration?
+                switch wakeOnLANPlan {
+                case .clearConfiguration:
+                    configuration = nil
+                case .configured(let existingConfiguration):
+                    configuration = existingConfiguration
+                case .resolveAutomatically:
+                    let macAddress = try await wakeOnLANMACAddressResolver
+                        .resolveMACAddress(
+                            for: mutation.server,
+                            credentials: credentials
+                        )
+                    configuration = WakeOnLANConfiguration(
+                        macAddress: macAddress
+                    )
+                }
+                preparedMutation = Self.settingWakeOnLANConfiguration(
+                    configuration,
+                    on: mutation
+                )
+            } catch is CancellationError {
+                return
+            } catch {
+                guard self?.isCurrentSave(operationID) == true else { return }
+                self?.saveTask = nil
+                self?.phase = .failed(.wakeOnLANUnavailable)
+                return
+            }
+            guard !Task.isCancelled else { return }
+            guard self?.isCurrentSave(operationID) == true else { return }
             do {
                 let savedServer = try await useCase.execute(
-                    mutation,
+                    preparedMutation,
                     credentials: credentials,
                     hasProAccess: hasProAccess
                 )
@@ -437,5 +476,19 @@ final class ServerFormOperationController: ObservableObject {
     private func isCurrentSave(_ id: UUID) -> Bool {
         guard case .saving(let currentID) = phase else { return false }
         return currentID == id
+    }
+
+    nonisolated private static func settingWakeOnLANConfiguration(
+        _ configuration: WakeOnLANConfiguration?,
+        on mutation: ServerMutation
+    ) -> ServerMutation {
+        var server = mutation.server
+        server.wakeOnLANConfiguration = configuration
+        switch mutation {
+        case .create:
+            return .create(server)
+        case .update:
+            return .update(server)
+        }
     }
 }

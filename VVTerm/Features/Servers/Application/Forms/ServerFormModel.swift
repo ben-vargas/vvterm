@@ -41,6 +41,12 @@ nonisolated enum ServerTransportSelection: String, CaseIterable, Identifiable, E
 }
 
 nonisolated struct ServerFormModel: Equatable, Sendable {
+    nonisolated enum WakeOnLANSavePlan: Equatable, Sendable {
+        case clearConfiguration
+        case configured(WakeOnLANConfiguration)
+        case resolveAutomatically
+    }
+
     nonisolated struct ConnectionSnapshot: Equatable, Sendable {
         let host: String
         let port: String
@@ -73,6 +79,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var cloudflareClientID: String
     var cloudflareClientSecret: String
     var cloudflareTeamDomainOverride: String
+    var autoWakeOnLANEnabled: Bool
     var workspaceID: UUID?
     var environment: ServerEnvironment
     var notes: String
@@ -104,6 +111,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         cloudflareClientID = ""
         cloudflareClientSecret = ""
         cloudflareTeamDomainOverride = server?.cloudflareTeamDomainOverride ?? ""
+        autoWakeOnLANEnabled = server?.autoWakeOnLANEnabled ?? false
         self.workspaceID = server?.workspaceId ?? workspaceID
         environment = server?.environment ?? .production
         notes = server?.notes ?? ""
@@ -150,6 +158,15 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             cloudflareClientSecret: cloudflareClientSecret,
             cloudflareTeamDomainOverride: cloudflareTeamDomainOverride
         )
+    }
+
+    func wakeOnLANSavePlan(existingServer: Server?) -> WakeOnLANSavePlan {
+        if let existingServer,
+           Self.normalizedHost(existingServer.host) == Self.normalizedHost(host),
+           let configuration = existingServer.wakeOnLANConfiguration {
+            return .configured(configuration)
+        }
+        return autoWakeOnLANEnabled ? .resolveAutomatically : .clearConfiguration
     }
 
     mutating func applyPrefill(
@@ -208,6 +225,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
                 ? normalizedOptional(cloudflareTeamDomainOverride)
                 : nil,
             cloudflareAppDomainOverride: nil,
+            autoWakeOnLANEnabled: autoWakeOnLANEnabled,
             notes: notes.isEmpty ? nil : notes,
             requiresBiometricUnlock: requiresBiometricUnlock,
             remoteSessionEnabledOverride: remoteSessionEnabled,
@@ -269,6 +287,10 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
 
     private func validPort(_ value: String) -> Bool {
         Int(value).map { (1...65_535).contains($0) } == true
+    }
+
+    private static func normalizedHost(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private func normalizedOptional(_ value: String) -> String? {

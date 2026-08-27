@@ -23,6 +23,7 @@ struct iOSContentView: View {
     let analyticsOptOutAction: AnalyticsOptOutAction
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
+    private let serverWakeCoordinator: ServerWakeCoordinator
     @ObservedObject private var engagementTracker: EngagementTracker
     private let tabManager: TerminalTabManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
@@ -37,6 +38,7 @@ struct iOSContentView: View {
 
     init(
         serverManager: ServerManager,
+        serverWakeCoordinator: ServerWakeCoordinator,
         engagementTracker: EngagementTracker,
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
@@ -50,6 +52,7 @@ struct iOSContentView: View {
         analyticsOptOutAction: AnalyticsOptOutAction
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
+        self.serverWakeCoordinator = serverWakeCoordinator
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         self.tabManager = tabManager
         self.fileTabs = fileTabs
@@ -78,7 +81,7 @@ struct iOSContentView: View {
         )
     }
 
-    var body: some View {
+    private var navigationContent: some View {
         NavigationStack {
             ServerListScreen(
                 serverManager: serverManager,
@@ -88,6 +91,7 @@ struct iOSContentView: View {
                 statsDependencies: statsDependencies,
                 analyticsOptOutAction: analyticsOptOutAction,
                 serverFormDependencies: serverFormDependencies,
+                serverWakeCoordinator: serverWakeCoordinator,
                 voiceModelManagers: voiceModelManagers,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                 selectedWorkspace: $selectedWorkspace,
@@ -155,6 +159,12 @@ struct iOSContentView: View {
                 set: { if !$0 { lockedServerName = nil } }
             )
         )
+    }
+
+    var body: some View {
+        ServerWakeNoticeHost(coordinator: serverWakeCoordinator) {
+            navigationContent
+        }
     }
 
     private func reconcileWorkspaceSelection(_ workspaces: [Workspace]) {

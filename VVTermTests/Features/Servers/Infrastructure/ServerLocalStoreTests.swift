@@ -97,7 +97,11 @@ struct ServerLocalStoreTests {
             workspaceId: workspace.id,
             name: "Server",
             host: "server.example.test",
-            username: "root"
+            username: "root",
+            wakeOnLANConfiguration: WakeOnLANConfiguration(
+                macAddress: try WakeOnLANMACAddress("00:11:22:33:44:55")
+            ),
+            autoWakeOnLANEnabled: true
         )
 
         try store.persist(servers: [server], workspaces: [workspace])
@@ -109,6 +113,8 @@ struct ServerLocalStoreTests {
             return
         }
         #expect(loadedServers == [server])
+        #expect(loadedServers.first?.wakeOnLANConfiguration == server.wakeOnLANConfiguration)
+        #expect(loadedServers.first?.autoWakeOnLANEnabled == true)
         #expect(loadedWorkspaces == [workspace])
 
         try store.clearServerData()

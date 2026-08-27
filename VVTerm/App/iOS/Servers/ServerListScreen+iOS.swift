@@ -14,6 +14,7 @@ struct ServerListScreen: View {
     let statsDependencies: ServerStatsScreenDependencies
     let analyticsOptOutAction: AnalyticsOptOutAction
     let serverFormDependencies: ServerFormDependencies
+    let serverWakeCoordinator: ServerWakeCoordinator
     let voiceModelManagers: VoiceSettingsModelManagerOwner
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @Binding var selectedWorkspace: Workspace?
@@ -46,6 +47,7 @@ struct ServerListScreen: View {
         statsDependencies: ServerStatsScreenDependencies,
         analyticsOptOutAction: AnalyticsOptOutAction,
         serverFormDependencies: ServerFormDependencies,
+        serverWakeCoordinator: ServerWakeCoordinator,
         voiceModelManagers: VoiceSettingsModelManagerOwner,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         selectedWorkspace: Binding<Workspace?>,
@@ -60,6 +62,7 @@ struct ServerListScreen: View {
         self.statsDependencies = statsDependencies
         self.analyticsOptOutAction = analyticsOptOutAction
         self.serverFormDependencies = serverFormDependencies
+        self.serverWakeCoordinator = serverWakeCoordinator
         self.voiceModelManagers = voiceModelManagers
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self._selectedWorkspace = selectedWorkspace
@@ -345,6 +348,7 @@ struct ServerListScreen: View {
                         onEdit: { serverFormIntent = .edit(server) },
                         onMove: { serverToMove = server },
                         onDuplicate: { serverFormIntent = .duplicate(server) },
+                        onWake: { startWake(for: server) },
                         onLockedTap: { lockedServerAlert = server }
                     )
                     .accessibilityIdentifier(
@@ -497,6 +501,13 @@ struct ServerListScreen: View {
         fileBrowser.disconnect(serverId: connection.id)
         fileTabs.disconnect(serverId: connection.id)
         tabManager.disconnectServer(connection.id)
+    }
+
+    private func startWake(for server: Server) {
+        Task {
+            guard await appLockManager.ensureServerUnlocked(server) else { return }
+            serverWakeCoordinator.start(for: server)
+        }
     }
 
     private func server(for serverId: UUID) -> Server? {

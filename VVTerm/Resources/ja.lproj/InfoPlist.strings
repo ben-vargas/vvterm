@@ -1,1 +1,2 @@
 "NSFaceIDUsageDescription" = "VVTermは、アプリと保護されたサーバーのロック解除にFace IDを使用します。";
+"NSLocalNetworkUsageDescription" = "VVTermはローカルネットワークを使用してSSHサーバーを検索、起動、接続します。";

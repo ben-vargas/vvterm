@@ -307,6 +307,7 @@ struct TerminalTabManagerLiveCompositionTests {
             networkMonitor: .shared,
             appLockManager: appLockManager,
             serverManager: serverManager,
+            prepareInitialConnection: { _ in },
             engagementTracker: EngagementTracker(
                 dependencies: .live(
                     defaults: defaults,

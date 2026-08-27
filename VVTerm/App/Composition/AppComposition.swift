@@ -9,6 +9,7 @@ struct AppComposition {
     let storeManager: StoreManager
     let appLockManager: AppLockManager
     let serverManager: ServerManager
+    let serverWakeCoordinator: ServerWakeCoordinator
     let engagementTracker: EngagementTracker
     let tabManager: TerminalTabManager
     let remoteFileBrowserStore: RemoteFileBrowserStore
@@ -156,6 +157,20 @@ struct AppComposition {
                 makeID: makeID
             )
         )
+        let serverWakeCoordinator = ServerWakeCoordinator(
+            dependencies: ServerWakeDependencies(
+                sender: BSDWakeOnLANPacketSender(
+                    interfaceProvider: SystemWakeOnLANInterfaceProvider(),
+                    datagramSender: BSDWakeOnLANDatagramSender()
+                ),
+                macAddressResolver: SSHServerWakeOnLANMACAddressResolver(
+                    connectionOperations: connectionOperations
+                ),
+                mutations: serverManager,
+                credentials: keychainManager,
+                makeID: makeID
+            )
+        )
         let serverFormDependencies = ServerFormDependencies.live(
             credentials: keychainManager,
             hostKeys: knownHostsManager,
@@ -211,6 +226,9 @@ struct AppComposition {
             networkMonitor: networkMonitor,
             appLockManager: appLockManager,
             serverManager: serverManager,
+            prepareInitialConnection: { server in
+                serverWakeCoordinator.startAutomaticallyIfEnabled(for: server)
+            },
             engagementTracker: engagementTracker,
             analyticsTracker: analyticsTracker,
             liveActivityManager: liveActivityManager,
@@ -371,6 +389,7 @@ struct AppComposition {
         self.storeManager = storeManager
         self.appLockManager = appLockManager
         self.serverManager = serverManager
+        self.serverWakeCoordinator = serverWakeCoordinator
         self.engagementTracker = engagementTracker
         self.tabManager = tabManager
         self.remoteFileBrowserStore = remoteFileBrowserStore

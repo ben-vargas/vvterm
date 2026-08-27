@@ -11,6 +11,7 @@ enum TerminalTabManagerLiveComposition {
         networkMonitor: NetworkMonitor,
         appLockManager: AppLockManager,
         serverManager: ServerManager,
+        prepareInitialConnection: @escaping @MainActor (Server) -> Void,
         engagementTracker: EngagementTracker,
         analyticsTracker: AnalyticsTracker,
         liveActivityManager: LiveActivityManager,
@@ -50,6 +51,7 @@ enum TerminalTabManagerLiveComposition {
                 authorizeServer: { server in
                     await appLockManager.ensureServerUnlocked(server)
                 },
+                prepareInitialConnection: prepareInitialConnection,
                 refreshLiveActivity: { connectionStates in
                     liveActivityManager.refresh(with: connectionStates)
                 },

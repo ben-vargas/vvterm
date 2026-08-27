@@ -24,6 +24,31 @@ private actor ServerConnectionTesterFake: ServerConnectionTesting {
     }
 }
 
+private actor WakeOnLANMACAddressResolverFake: WakeOnLANMACAddressResolving {
+    private(set) var callCount = 0
+    private let address: WakeOnLANMACAddress
+    private let fails: Bool
+
+    init(
+        address: WakeOnLANMACAddress = try! WakeOnLANMACAddress("00:11:22:33:44:55"),
+        fails: Bool = false
+    ) {
+        self.address = address
+        self.fails = fails
+    }
+
+    func resolveMACAddress(
+        for server: Server,
+        credentials: ServerCredentials
+    ) async throws -> WakeOnLANMACAddress {
+        callCount += 1
+        if fails {
+            throw WakeOnLANMACAddressResolutionError.addressNotFound
+        }
+        return address
+    }
+}
+
 private final class ServerHostKeyRepositoryFake: ServerHostKeyRepository, @unchecked Sendable {
     private let lock = NSLock()
     private let challenge: KnownHostsManager.Challenge?
@@ -77,6 +102,7 @@ private final class ServerOperationIDSequence: @unchecked Sendable {
 private final class ServerMutationRepositoryGate: ServerMutationRepository {
     private var continuation: CheckedContinuation<Server, Error>?
     private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    private(set) var startedMutation: ServerMutation?
 
     func validate(_ mutation: ServerMutation, hasProAccess: Bool) throws {}
 
@@ -88,6 +114,7 @@ private final class ServerMutationRepositoryGate: ServerMutationRepository {
         _ mutation: ServerMutation,
         credentials: ServerCredentials
     ) async throws -> Server {
+        startedMutation = mutation
         let waiters = startWaiters
         startWaiters.removeAll(keepingCapacity: false)
         waiters.forEach { $0.resume() }
@@ -669,8 +696,75 @@ struct ServerFormOperationControllerTests {
     }
 
     @Test
-    func cancellationRejectsALateSaveCompletion() async {
+    func saveResolvesAndPersistsTheMACAddressWhenEnablingWakeOnLAN() async throws {
         let operationID = UUID(uuidString: "00000000-0000-0000-0000-000000000006")!
+        let resolver = WakeOnLANMACAddressResolverFake(
+            address: try WakeOnLANMACAddress("AA:BB:CC:DD:EE:FF")
+        )
+        let mutations = ServerMutationRepositoryGate()
+        let controller = makeController(
+            connectionTester: ServerConnectionTesterFake(),
+            wakeOnLANMACAddressResolver: resolver,
+            mutations: mutations,
+            operationIDs: [operationID]
+        )
+        let input = makeInput(host: "192.168.1.10")
+        var savedServer: Server?
+
+        controller.save(
+            mutation: .update(input.server),
+            credentials: input.credentials,
+            wakeOnLANPlan: .resolveAutomatically,
+            hasProAccess: true,
+            authorize: { true },
+            onSaved: { savedServer = $0 }
+        )
+        await mutations.waitUntilStarted()
+
+        let preparedServer = try #require(mutations.startedMutation?.server)
+        #expect(
+            preparedServer.wakeOnLANConfiguration?.macAddress.canonicalValue
+                == "AA:BB:CC:DD:EE:FF"
+        )
+        #expect(await resolver.callCount == 1)
+
+        mutations.succeed(with: preparedServer)
+        #expect(await waitUntil { savedServer == preparedServer })
+    }
+
+    @Test
+    func saveReportsAutomaticMACAddressResolutionFailure() async {
+        let operationID = UUID(uuidString: "00000000-0000-0000-0000-000000000007")!
+        let resolver = WakeOnLANMACAddressResolverFake(fails: true)
+        let mutations = ServerMutationRepositoryGate()
+        let controller = makeController(
+            connectionTester: ServerConnectionTesterFake(),
+            wakeOnLANMACAddressResolver: resolver,
+            mutations: mutations,
+            operationIDs: [operationID]
+        )
+        let input = makeInput(host: "offline.example.com")
+
+        controller.save(
+            mutation: .update(input.server),
+            credentials: input.credentials,
+            wakeOnLANPlan: .resolveAutomatically,
+            hasProAccess: true,
+            authorize: { true },
+            onSaved: { _ in }
+        )
+
+        #expect(
+            await waitUntil {
+                controller.phase == .failed(.wakeOnLANUnavailable)
+            }
+        )
+        #expect(mutations.startedMutation == nil)
+    }
+
+    @Test
+    func cancellationRejectsALateSaveCompletion() async {
+        let operationID = UUID(uuidString: "00000000-0000-0000-0000-000000000008")!
         let tester = ServerConnectionTesterFake()
         let mutations = ServerMutationRepositoryGate()
         let controller = makeController(
@@ -684,6 +778,7 @@ struct ServerFormOperationControllerTests {
         controller.save(
             mutation: .create(input.server),
             credentials: input.credentials,
+            wakeOnLANPlan: .clearConfiguration,
             hasProAccess: true,
             authorize: { true },
             onSaved: { savedServer = $0 }
@@ -702,6 +797,7 @@ struct ServerFormOperationControllerTests {
     private func makeController(
         credentialLoader: (any ServerFormCredentialLoading)? = nil,
         connectionTester: any ServerConnectionTesting,
+        wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving = WakeOnLANMACAddressResolverFake(),
         hostKeys: any ServerHostKeyRepository = ServerHostKeyRepositoryFake(),
         mutations: (any ServerMutationRepository)? = nil,
         now: @escaping @Sendable () -> Date = { .distantPast },
@@ -711,6 +807,7 @@ struct ServerFormOperationControllerTests {
         return ServerFormOperationController(
             credentialLoader: credentialLoader ?? ServerFormCredentialLoaderStub(),
             connectionTester: connectionTester,
+            wakeOnLANMACAddressResolver: wakeOnLANMACAddressResolver,
             hostKeys: hostKeys,
             saveUseCase: ServerSaveUseCase(
                 mutations: mutations ?? ServerMutationRepositoryGate()

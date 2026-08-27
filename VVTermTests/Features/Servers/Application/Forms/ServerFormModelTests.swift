@@ -102,6 +102,45 @@ struct ServerFormModelTests {
     }
 
     @Test
+    func wakeOnLANPlanPreservesOnlyTheConfigurationForTheSameHost() throws {
+        let configuration = WakeOnLANConfiguration(
+            macAddress: try WakeOnLANMACAddress("AA:BB:CC:DD:EE:FF")
+        )
+        let server = Server(
+            workspaceId: UUID(),
+            name: "Local",
+            host: " 192.168.1.10 ",
+            username: "root",
+            wakeOnLANConfiguration: configuration
+        )
+        var model = ServerFormModel(
+            server: server,
+            defaultRemoteSessionEnabled: true,
+            defaultRemoteSessionBackendIdentifier: .tmux,
+            defaultRemoteSessionStartupBehavior: .createManaged
+        )
+
+        #expect(model.wakeOnLANSavePlan(existingServer: server) == .configured(configuration))
+
+        model.host = "192.168.1.11"
+        #expect(model.wakeOnLANSavePlan(existingServer: server) == .clearConfiguration)
+
+        model.autoWakeOnLANEnabled = true
+        #expect(model.wakeOnLANSavePlan(existingServer: server) == .resolveAutomatically)
+
+        model.autoWakeOnLANEnabled = false
+        #expect(model.wakeOnLANSavePlan(existingServer: server) == .clearConfiguration)
+    }
+
+    @Test
+    func enablingAutomaticWakeWithoutAStoredAddressRequiresAutomaticResolution() {
+        var model = validPasswordModel()
+        model.autoWakeOnLANEnabled = true
+
+        #expect(model.wakeOnLANSavePlan(existingServer: nil) == .resolveAutomatically)
+    }
+
+    @Test
     func editModelRestoresServerIdentityAndCredentialValues() throws {
         let server = Server(
             id: UUID(),

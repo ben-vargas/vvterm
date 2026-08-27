@@ -94,6 +94,7 @@ struct ServerFormSheet: View {
                     repository: dependencies.credentials
                 ),
                 connectionTester: dependencies.connectionTester,
+                wakeOnLANMACAddressResolver: dependencies.wakeOnLANMACAddressResolver,
                 hostKeys: dependencies.hostKeys,
                 saveUseCase: saveUseCase,
                 now: dependencies.now,
@@ -126,6 +127,9 @@ struct ServerFormSheet: View {
                 baseName: baseName,
                 existingNames: serverManager.servers.map(\.name)
             )
+        }
+        if !intent.isEditing {
+            initialForm.autoWakeOnLANEnabled = false
         }
         _form = State(initialValue: initialForm)
         _hasAuthorizedSourceAccess = State(
@@ -288,6 +292,9 @@ struct ServerFormSheet: View {
         securitySection
         assignmentSection
         notesSection
+        if isEditing {
+            advancedSection
+        }
         errorSection
     }
 
@@ -769,6 +776,18 @@ struct ServerFormSheet: View {
         }
     }
 
+    private var advancedSection: some View {
+        Section {
+            Toggle("Auto Wake-on-LAN", isOn: $form.autoWakeOnLANEnabled)
+                .accessibilityIdentifier("vvterm.serverForm.wakeOnLAN.enabled")
+        } header: {
+            sectionHeader("Advanced")
+                .accessibilityIdentifier("vvterm.serverForm.advanced")
+        } footer: {
+            Text("For servers on the same local network.")
+        }
+    }
+
     @ViewBuilder
     private var errorSection: some View {
         if let error = operationFailureMessage {
@@ -933,10 +952,17 @@ struct ServerFormSheet: View {
 
     func saveServer() {
         let serverID = intent.serverID(makeID: makeID)
-        let newServer = buildServer(id: serverID, createdAt: intent.createdAt(now: now))
+        let wakeOnLANSavePlan = form.wakeOnLANSavePlan(
+            existingServer: intent.editedServer
+        )
+        let newServer = buildServer(
+            id: serverID,
+            createdAt: intent.createdAt(now: now)
+        )
         operations.save(
             mutation: intent.mutation(for: newServer),
             credentials: form.makeCredentials(serverID: serverID),
+            wakeOnLANPlan: wakeOnLANSavePlan,
             hasProAccess: storeManager.allowsProFeatures,
             authorize: {
                 guard let editedServer = intent.editedServer else { return true }
@@ -966,6 +992,10 @@ struct ServerFormSheet: View {
             return String(
                 format: String(localized: "Failed to load key: %@"),
                 message
+            )
+        case .wakeOnLANUnavailable:
+            return String(
+                localized: "Could not detect the server's MAC address. Make sure it is online, then try again."
             )
         }
     }

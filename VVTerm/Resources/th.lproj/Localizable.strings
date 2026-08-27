@@ -1871,3 +1871,21 @@
 "License & Notices" = "ใบอนุญาตและประกาศ";
 "Duplicate" = "ทำสำเนา";
 "%@ Copy" = "สำเนาของ %@";
+
+/* Wake-on-LAN */
+"Wake-on-LAN" = "Wake-on-LAN";
+"Auto Wake-on-LAN" = "Wake-on-LAN อัตโนมัติ";
+"For servers on the same local network." = "สำหรับเซิร์ฟเวอร์ที่อยู่ในเครือข่ายภายในเดียวกัน";
+"Could not detect the server's MAC address. Make sure it is online, then try again." = "ไม่สามารถตรวจหาที่อยู่ MAC ของเซิร์ฟเวอร์ได้ โปรดตรวจสอบว่าเซิร์ฟเวอร์ออนไลน์ แล้วลองอีกครั้ง";
+"VVTerm could not prepare the network broadcast address." = "VVTerm ไม่สามารถเตรียมที่อยู่บรอดแคสต์ของเครือข่ายได้";
+"VVTerm could not send the wake request. Check Local Network access." = "VVTerm ไม่สามารถส่งคำขอปลุกได้ โปรดตรวจสอบสิทธิ์การเข้าถึงเครือข่ายภายใน";
+"Wake Server" = "ปลุกเซิร์ฟเวอร์";
+"Sending wake request…" = "กำลังส่งคำขอปลุก…";
+"Wake request sent." = "ส่งคำขอปลุกแล้ว";
+"VVTerm could not complete the wake request." = "VVTerm ไม่สามารถดำเนินการคำขอปลุกให้เสร็จได้";
+"Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "อนุญาตให้ VVTerm เข้าถึงเครือข่ายภายในในการตั้งค่าระบบ บน iPhone และ iPad บิลด์ยังต้องมีสิทธิ์เครือข่ายมัลติคาสต์ของ Apple";
+"No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "ไม่มีอินเทอร์เฟซ Wi-Fi หรือ Ethernet IPv4 ที่ใช้งานอยู่สำหรับส่งคำขอนี้";
+"VVTerm could not read the active network interfaces." = "VVTerm ไม่สามารถอ่านอินเทอร์เฟซเครือข่ายที่ใช้งานอยู่ได้";
+"VVTerm could not create the UDP socket." = "VVTerm ไม่สามารถสร้างซ็อกเก็ต UDP ได้";
+"VVTerm could not enable UDP broadcast on this device." = "VVTerm ไม่สามารถเปิดใช้บรอดแคสต์ UDP บนอุปกรณ์นี้ได้";
+"The network did not accept the complete wake request." = "เครือข่ายไม่ยอมรับคำขอปลุกที่สมบูรณ์";

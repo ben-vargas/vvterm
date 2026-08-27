@@ -1,1 +1,2 @@
 "NSFaceIDUsageDescription" = "VVTerm 使用 Face ID 解锁应用和受保护的服务器。";
+"NSLocalNetworkUsageDescription" = "VVTerm 使用本地网络查找、唤醒和连接 SSH 服务器。";

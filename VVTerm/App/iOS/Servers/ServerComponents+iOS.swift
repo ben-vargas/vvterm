@@ -15,6 +15,7 @@ struct ServerListRow: View {
     let onEdit: () -> Void
     var onMove: (() -> Void)? = nil
     let onDuplicate: () -> Void
+    let onWake: () -> Void
     var onLockedTap: (() -> Void)? = nil
 
     @EnvironmentObject private var storeManager: StoreManager
@@ -143,6 +144,11 @@ struct ServerListRow: View {
                 }
 
                 duplicateButton
+
+                ServerWakeActionButton(
+                    serverID: server.id,
+                    onAction: onWake
+                )
 
                 Button {
                     onEdit()

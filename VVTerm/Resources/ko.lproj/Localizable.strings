@@ -1870,3 +1870,21 @@
 "License & Notices" = "라이선스 및 고지";
 "Duplicate" = "복제";
 "%@ Copy" = "%@ 복사본";
+
+/* Wake-on-LAN */
+"Wake-on-LAN" = "Wake-on-LAN";
+"Auto Wake-on-LAN" = "자동 Wake-on-LAN";
+"For servers on the same local network." = "같은 로컬 네트워크에 있는 서버용입니다.";
+"Could not detect the server's MAC address. Make sure it is online, then try again." = "서버의 MAC 주소를 찾을 수 없습니다. 서버가 온라인 상태인지 확인한 후 다시 시도하세요.";
+"VVTerm could not prepare the network broadcast address." = "VVTerm에서 네트워크 브로드캐스트 주소를 준비할 수 없습니다.";
+"VVTerm could not send the wake request. Check Local Network access." = "VVTerm에서 깨우기 요청을 보낼 수 없습니다. 로컬 네트워크 접근 권한을 확인하세요.";
+"Wake Server" = "서버 깨우기";
+"Sending wake request…" = "깨우기 요청을 보내는 중…";
+"Wake request sent." = "깨우기 요청을 보냈습니다.";
+"VVTerm could not complete the wake request." = "VVTerm에서 깨우기 요청을 완료할 수 없습니다.";
+"Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "시스템 설정에서 VVTerm의 로컬 네트워크 접근을 허용하십시오. iPhone과 iPad에서는 빌드에 Apple의 멀티캐스트 네트워크 권한도 필요합니다.";
+"No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "이 요청을 보낼 수 있는 활성 Wi-Fi 또는 Ethernet IPv4 인터페이스가 없습니다.";
+"VVTerm could not read the active network interfaces." = "VVTerm에서 활성 네트워크 인터페이스를 읽을 수 없습니다.";
+"VVTerm could not create the UDP socket." = "VVTerm에서 UDP 소켓을 만들 수 없습니다.";
+"VVTerm could not enable UDP broadcast on this device." = "VVTerm에서 이 기기의 UDP 브로드캐스트를 활성화할 수 없습니다.";
+"The network did not accept the complete wake request." = "네트워크에서 전체 깨우기 요청을 받지 않았습니다.";

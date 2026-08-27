@@ -1872,3 +1872,21 @@
 "License & Notices" = "Licence a oznámení";
 "Duplicate" = "Duplikovat";
 "%@ Copy" = "Kopie %@";
+
+/* Wake-on-LAN */
+"Wake-on-LAN" = "Wake-on-LAN";
+"Auto Wake-on-LAN" = "Automatické Wake-on-LAN";
+"For servers on the same local network." = "Pro servery ve stejné místní síti.";
+"Could not detect the server's MAC address. Make sure it is online, then try again." = "Nepodařilo se zjistit MAC adresu serveru. Ověřte, že je online, a zkuste to znovu.";
+"VVTerm could not prepare the network broadcast address." = "VVTerm nemohl připravit adresu síťového vysílání.";
+"VVTerm could not send the wake request. Check Local Network access." = "VVTerm nemohl odeslat požadavek na probuzení. Zkontrolujte přístup k místní síti.";
+"Wake Server" = "Probudit server";
+"Sending wake request…" = "Odesílání požadavku na probuzení…";
+"Wake request sent." = "Požadavek na probuzení byl odeslán.";
+"VVTerm could not complete the wake request." = "VVTerm nemohl dokončit požadavek na probuzení.";
+"Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "Povolte VVTerm přístup k místní síti v Nastavení systému. Na iPhonu a iPadu sestavení také potřebuje oprávnění Apple pro multicast.";
+"No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "Požadavek nemůže odeslat žádné aktivní rozhraní Wi-Fi nebo Ethernet IPv4.";
+"VVTerm could not read the active network interfaces." = "VVTerm nemohl načíst aktivní síťová rozhraní.";
+"VVTerm could not create the UDP socket." = "VVTerm nemohl vytvořit soket UDP.";
+"VVTerm could not enable UDP broadcast on this device." = "VVTerm nemohl na tomto zařízení zapnout všesměrové vysílání UDP.";
+"The network did not accept the complete wake request." = "Síť nepřijala celý požadavek na probuzení.";

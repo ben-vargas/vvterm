@@ -134,6 +134,38 @@ struct ServerCloudKitRecordCodecTests {
     }
 
     @Test
+    func invalidSyncedWakeConfigurationIsIgnored() throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        let now = Date(timeIntervalSinceReferenceDate: 3_000)
+        let record = ServerCloudKitRecordCodec.record(
+            for: makeServer(),
+            in: zoneID,
+            now: now
+        )
+        record["wakeOnLANConfiguration"] = Data("invalid".utf8)
+
+        let decoded = try #require(ServerCloudKitRecordCodec.server(from: record, now: now))
+
+        #expect(decoded.wakeOnLANConfiguration == nil)
+    }
+
+    @Test
+    func missingAutomaticWakeFieldDefaultsToOff() throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        let now = Date(timeIntervalSinceReferenceDate: 3_000)
+        let record = ServerCloudKitRecordCodec.record(
+            for: makeServer(),
+            in: zoneID,
+            now: now
+        )
+        record["autoWakeOnLANEnabled"] = nil
+
+        let decoded = try #require(ServerCloudKitRecordCodec.server(from: record, now: now))
+
+        #expect(!decoded.autoWakeOnLANEnabled)
+    }
+
+    @Test
     func workspaceRecordPreservesIdentityAndRoundTripsFields() throws {
         let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
         let workspace = makeWorkspace()
@@ -217,6 +249,10 @@ struct ServerCloudKitRecordCodecTests {
             cloudflareAccessMode: .serviceToken,
             cloudflareTeamDomainOverride: "team.example.test",
             cloudflareAppDomainOverride: "app.example.test",
+            wakeOnLANConfiguration: WakeOnLANConfiguration(
+                macAddress: try! WakeOnLANMACAddress("00:11:22:33:44:55")
+            ),
+            autoWakeOnLANEnabled: true,
             tags: ["one", "two"],
             notes: "Notes",
             lastConnected: Date(timeIntervalSinceReferenceDate: 1_500),
