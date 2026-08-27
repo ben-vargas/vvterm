@@ -18,6 +18,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
     var cloudflareTeamDomainOverride: String?
     var cloudflareAppDomainOverride: String?
     var wakeOnLANConfiguration: WakeOnLANConfiguration?
+    var autoWakeOnLANEnabled: Bool
     var tags: [String]
     var notes: String?
     var lastConnected: Date?
@@ -45,6 +46,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         cloudflareTeamDomainOverride: String? = nil,
         cloudflareAppDomainOverride: String? = nil,
         wakeOnLANConfiguration: WakeOnLANConfiguration? = nil,
+        autoWakeOnLANEnabled: Bool = false,
         tags: [String] = [],
         notes: String? = nil,
         lastConnected: Date? = nil,
@@ -73,6 +75,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         self.cloudflareTeamDomainOverride = cloudflareTeamDomainOverride
         self.cloudflareAppDomainOverride = cloudflareAppDomainOverride
         self.wakeOnLANConfiguration = wakeOnLANConfiguration
+        self.autoWakeOnLANEnabled = autoWakeOnLANEnabled
         self.tags = tags
         self.notes = notes
         self.lastConnected = lastConnected
@@ -110,6 +113,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         case cloudflareTeamDomainOverride
         case cloudflareAppDomainOverride
         case wakeOnLANConfiguration
+        case autoWakeOnLANEnabled
         case tags
         case notes
         case lastConnected
@@ -149,6 +153,10 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
             WakeOnLANConfiguration.self,
             forKey: .wakeOnLANConfiguration
         )
+        autoWakeOnLANEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .autoWakeOnLANEnabled
+        ) ?? false
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         lastConnected = try container.decodeIfPresent(Date.self, forKey: .lastConnected)
@@ -204,6 +212,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
             wakeOnLANConfiguration,
             forKey: .wakeOnLANConfiguration
         )
+        try container.encode(autoWakeOnLANEnabled, forKey: .autoWakeOnLANEnabled)
         try container.encode(tags, forKey: .tags)
         try container.encodeIfPresent(notes, forKey: .notes)
         try container.encodeIfPresent(lastConnected, forKey: .lastConnected)

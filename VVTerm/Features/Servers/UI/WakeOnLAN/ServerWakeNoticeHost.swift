@@ -96,8 +96,10 @@ struct ServerWakeNoticeHost<Content: View>: View {
 private extension ServerWakeFailure {
     var message: String {
         switch self {
-        case .notConfigured:
-            return String(localized: "Enable Wake-on-LAN in Server Settings first.")
+        case .macAddressUnavailable:
+            return String(
+                localized: "Could not detect the server's MAC address. Make sure it is online, then try again."
+            )
         case .unexpected:
             return String(localized: "VVTerm could not complete the wake request.")
         case .send(let error):

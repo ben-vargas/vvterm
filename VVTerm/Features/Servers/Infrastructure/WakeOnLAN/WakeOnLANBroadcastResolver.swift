@@ -1,7 +1,6 @@
 import Foundation
 
 nonisolated struct WakeOnLANNetworkInterface: Equatable, Sendable {
-    let name: String
     let address: WakeOnLANIPv4Address
     let netmask: WakeOnLANIPv4Address
     let isUp: Bool

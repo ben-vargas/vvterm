@@ -17,7 +17,7 @@ struct ServerSidebarView: View {
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     private let tabManager: TerminalTabManager
     @ObservedObject private var terminalNavigation: TerminalSessionNavigationProjection
-    @ObservedObject private var serverWakeCoordinator: ServerWakeCoordinator
+    private let serverWakeCoordinator: ServerWakeCoordinator
     #if os(macOS)
     @EnvironmentObject private var commandBridge: MacShellCommandBridge
     #endif
@@ -61,7 +61,7 @@ struct ServerSidebarView: View {
         )
         self.tabManager = tabManager
         _terminalNavigation = ObservedObject(wrappedValue: terminalNavigation)
-        _serverWakeCoordinator = ObservedObject(wrappedValue: serverWakeCoordinator)
+        self.serverWakeCoordinator = serverWakeCoordinator
         _selectedWorkspace = selectedWorkspace
         _selectedServer = selectedServer
     }

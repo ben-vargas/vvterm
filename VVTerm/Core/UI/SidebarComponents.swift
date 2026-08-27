@@ -120,12 +120,10 @@ struct ServerRow: View {
                         }
                     }
                     duplicateButton
-                    if server.wakeOnLANConfiguration != nil {
-                        ServerWakeActionButton(
-                            serverID: server.id,
-                            onAction: { onWake(server) }
-                        )
-                    }
+                    ServerWakeActionButton(
+                        serverID: server.id,
+                        onAction: { onWake(server) }
+                    )
                     Button { onEdit(server) } label: {
                         Label("Server Settings", systemImage: "slider.horizontal.3")
                     }

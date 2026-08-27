@@ -22,7 +22,7 @@ struct ContentView: View {
     let onOpenSettings: () -> Void
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
-    @ObservedObject private var serverWakeCoordinator: ServerWakeCoordinator
+    private let serverWakeCoordinator: ServerWakeCoordinator
     @ObservedObject private var engagementTracker: EngagementTracker
     private let tabManager: TerminalTabManager
     @StateObject private var terminalNavigation: TerminalSessionNavigationProjection
@@ -67,9 +67,7 @@ struct ContentView: View {
         onOpenSettings: @escaping () -> Void
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
-        _serverWakeCoordinator = ObservedObject(
-            wrappedValue: serverWakeCoordinator
-        )
+        self.serverWakeCoordinator = serverWakeCoordinator
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         self.tabManager = tabManager
         _terminalNavigation = StateObject(

@@ -16,13 +16,9 @@ struct BSDWakeOnLANPacketSenderTests {
         )
         let configuration = try makeConfiguration()
 
-        let receipt = try await sender.send(configuration: configuration)
+        try await sender.send(configuration: configuration)
         let calls = datagramSender.calls
 
-        #expect(receipt.destinations.map(\.canonicalValue) == [
-            "10.0.0.255",
-            "192.168.1.255",
-        ])
         #expect(calls.map { $0.address.canonicalValue } == [
             "10.0.0.255",
             "192.168.1.255",
@@ -45,9 +41,8 @@ struct BSDWakeOnLANPacketSenderTests {
             datagramSender: datagramSender
         )
 
-        let receipt = try await sender.send(configuration: makeConfiguration())
+        try await sender.send(configuration: makeConfiguration())
 
-        #expect(receipt.destinations.map(\.canonicalValue) == ["192.168.1.255"])
         #expect(datagramSender.calls.count == 2)
     }
 
@@ -84,7 +79,6 @@ struct BSDWakeOnLANPacketSenderTests {
         netmask: String = "255.255.255.0"
     ) throws -> WakeOnLANNetworkInterface {
         WakeOnLANNetworkInterface(
-            name: address,
             address: try WakeOnLANIPv4Address(address),
             netmask: try WakeOnLANIPv4Address(netmask),
             isUp: true,

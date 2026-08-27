@@ -7,7 +7,7 @@ final class ServerWakeOnLANUITests: XCTestCase {
     }
 
     @MainActor
-    func testWakeActionIsInTheServerContextMenu() {
+    func testWakeActionIsAvailableWithoutSavedConfiguration() {
         let app = launchHarness()
         defer { app.terminate() }
 
@@ -24,6 +24,29 @@ final class ServerWakeOnLANUITests: XCTestCase {
         let actionCount = app.staticTexts["vvterm.serverWakeTest.actionCount"]
         XCTAssertTrue(actionCount.waitForExistence(timeout: 5))
         XCTAssertEqual(actionCount.label, "1")
+    }
+
+    @MainActor
+    func testAutoWakeSettingIsInAdvancedSection() {
+        let app = launchHarness()
+        defer { app.terminate() }
+
+        let row = app.descendants(matching: .any)["vvterm.serverDuplicateTest.row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.press(forDuration: 1)
+        app.buttons["Edit"].tap()
+
+        XCTAssertTrue(app.navigationBars["Edit Server"].waitForExistence(timeout: 10))
+        let advanced = app.descendants(matching: .any)["vvterm.serverForm.advanced"]
+        let autoWake = app.switches["vvterm.serverForm.wakeOnLAN.enabled"]
+        for _ in 0..<12 where !autoWake.isHittable {
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(advanced.exists)
+        XCTAssertTrue(autoWake.isHittable)
+        XCTAssertEqual(autoWake.label, "Auto Wake-on-LAN")
+        XCTAssertGreaterThan(autoWake.frame.minY, advanced.frame.minY)
     }
 
     @MainActor

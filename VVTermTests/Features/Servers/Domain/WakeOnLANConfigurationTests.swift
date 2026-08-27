@@ -84,7 +84,7 @@ struct WakeOnLANConfigurationTests {
     }
 
     @Test
-    func serverPersistenceMigratesMissingConfigurationToDisabled() throws {
+    func serverPersistenceMigratesMissingWakeFactsToDefaults() throws {
         let server = Server(
             workspaceId: UUID(),
             name: "Legacy",
@@ -97,7 +97,9 @@ struct WakeOnLANConfigurationTests {
         )
 
         #expect(object["wakeOnLANConfiguration"] == nil)
-        #expect(try JSONDecoder().decode(Server.self, from: data).wakeOnLANConfiguration == nil)
+        let decoded = try JSONDecoder().decode(Server.self, from: data)
+        #expect(decoded.wakeOnLANConfiguration == nil)
+        #expect(!decoded.autoWakeOnLANEnabled)
     }
 
     @Test
@@ -110,7 +112,8 @@ struct WakeOnLANConfigurationTests {
             name: "Wakeable",
             host: "wakeable.example.test",
             username: "root",
-            wakeOnLANConfiguration: configuration
+            wakeOnLANConfiguration: configuration,
+            autoWakeOnLANEnabled: true
         )
 
         let decoded = try JSONDecoder().decode(
@@ -120,5 +123,6 @@ struct WakeOnLANConfigurationTests {
 
         #expect(decoded == server)
         #expect(decoded.wakeOnLANConfiguration == configuration)
+        #expect(decoded.autoWakeOnLANEnabled)
     }
 }

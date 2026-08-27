@@ -5,12 +5,91 @@ import Testing
 @MainActor
 struct ServerWakeCoordinatorTests {
     @Test
-    func wakeSendsTheConfiguredPacket() async throws {
+    func wakeSendsTheConfiguredPacketWithoutResolvingAgain() async throws {
         let sender = FixtureWakeOnLANPacketSender()
-        let coordinator = makeCoordinator(sender: sender)
+        let resolver = FixtureWakeOnLANMACAddressResolver()
         let server = try makeServer()
+        let (coordinator, mutations) = makeCoordinator(
+            sender: sender,
+            resolver: resolver,
+            servers: [server]
+        )
 
         coordinator.start(for: server)
+
+        #expect(await waitUntil {
+            if case .succeeded = coordinator.phase { return true }
+            return false
+        })
+        #expect(await sender.callCount == 1)
+        #expect(resolver.callCount == 0)
+        #expect(mutations.applyCount == 0)
+    }
+
+    @Test
+    func missingConfigurationIsDetectedPersistedAndSent() async throws {
+        let sender = FixtureWakeOnLANPacketSender()
+        let resolver = FixtureWakeOnLANMACAddressResolver(
+            address: try WakeOnLANMACAddress("AA:BB:CC:DD:EE:FF")
+        )
+        let server = makeServerWithoutConfiguration()
+        let (coordinator, mutations) = makeCoordinator(
+            sender: sender,
+            resolver: resolver,
+            servers: [server]
+        )
+
+        coordinator.start(for: server)
+
+        #expect(await waitUntil {
+            if case .succeeded = coordinator.phase { return true }
+            return false
+        })
+        #expect(resolver.callCount == 1)
+        #expect(await sender.callCount == 1)
+        #expect(mutations.applyCount == 1)
+        #expect(
+            mutations.server(id: server.id)?
+                .wakeOnLANConfiguration?.macAddress.canonicalValue
+                == "AA:BB:CC:DD:EE:FF"
+        )
+    }
+
+    @Test
+    func addressDetectionFailureStopsBeforePacketDelivery() async {
+        let sender = FixtureWakeOnLANPacketSender()
+        let resolver = FixtureWakeOnLANMACAddressResolver(address: nil)
+        let server = makeServerWithoutConfiguration()
+        let (coordinator, mutations) = makeCoordinator(
+            sender: sender,
+            resolver: resolver,
+            servers: [server]
+        )
+
+        coordinator.start(for: server)
+
+        #expect(await waitUntil {
+            guard case .failed(_, .macAddressUnavailable) = coordinator.phase else {
+                return false
+            }
+            return true
+        })
+        #expect(await sender.callCount == 0)
+        #expect(mutations.applyCount == 0)
+    }
+
+    @Test
+    func automaticWakeStartsOnlyForAnEnabledServer() async throws {
+        let sender = FixtureWakeOnLANPacketSender()
+        var server = try makeServer()
+        let (coordinator, _) = makeCoordinator(sender: sender, servers: [server])
+
+        coordinator.startAutomaticallyIfEnabled(for: server)
+        #expect(coordinator.phase == .idle)
+        #expect(await sender.callCount == 0)
+
+        server.autoWakeOnLANEnabled = true
+        coordinator.startAutomaticallyIfEnabled(for: server)
 
         #expect(await waitUntil {
             if case .succeeded = coordinator.phase { return true }
@@ -22,9 +101,12 @@ struct ServerWakeCoordinatorTests {
     @Test
     func replacementSuppressesTheCancelledSendResult() async throws {
         let sender = FirstSendGatePacketSender()
-        let coordinator = makeCoordinator(sender: sender)
         let firstServer = try makeServer(name: "First")
         let secondServer = try makeServer(name: "Second")
+        let (coordinator, _) = makeCoordinator(
+            sender: sender,
+            servers: [firstServer, secondServer]
+        )
 
         coordinator.start(for: firstServer)
         await sender.waitUntilFirstSendStarts()
@@ -49,9 +131,10 @@ struct ServerWakeCoordinatorTests {
     @Test
     func cancellationReturnsTheCoordinatorToIdle() async throws {
         let sender = FirstSendGatePacketSender()
-        let coordinator = makeCoordinator(sender: sender)
+        let server = try makeServer()
+        let (coordinator, _) = makeCoordinator(sender: sender, servers: [server])
 
-        coordinator.start(for: try makeServer())
+        coordinator.start(for: server)
         await sender.waitUntilFirstSendStarts()
         coordinator.cancel()
         await sender.releaseFirstSend()
@@ -62,13 +145,15 @@ struct ServerWakeCoordinatorTests {
 
     @Test
     func sendFailureKeepsItsActionableError() async throws {
-        let coordinator = makeCoordinator(
+        let server = try makeServer()
+        let (coordinator, _) = makeCoordinator(
             sender: FixtureWakeOnLANPacketSender(
                 error: .localNetworkAccessDenied
-            )
+            ),
+            servers: [server]
         )
 
-        coordinator.start(for: try makeServer())
+        coordinator.start(for: server)
 
         #expect(await waitUntil {
             guard case .failed(_, .send(.localNetworkAccessDenied)) = coordinator.phase else {
@@ -78,34 +163,24 @@ struct ServerWakeCoordinatorTests {
         })
     }
 
-    @Test
-    func missingConfigurationFailsBeforeNetworkWork() async {
-        let sender = FixtureWakeOnLANPacketSender()
-        let coordinator = makeCoordinator(sender: sender)
-        let server = Server(
-            workspaceId: UUID(),
-            name: "No Wake",
-            host: "server.example.test",
-            username: "root"
-        )
-
-        coordinator.start(for: server)
-
-        guard case .failed(_, .notConfigured) = coordinator.phase else {
-            Issue.record("Expected missing configuration failure")
-            return
-        }
-        #expect(await sender.callCount == 0)
-    }
-
     private func makeCoordinator(
-        sender: any WakeOnLANPacketSending
-    ) -> ServerWakeCoordinator {
-        ServerWakeCoordinator(
-            dependencies: ServerWakeDependencies(
-                sender: sender,
-                makeID: UUID.init
-            )
+        sender: any WakeOnLANPacketSending,
+        resolver: FixtureWakeOnLANMACAddressResolver = FixtureWakeOnLANMACAddressResolver(),
+        servers: [Server]
+    ) -> (ServerWakeCoordinator, WakeServerMutationRepositoryFake) {
+        let mutations = WakeServerMutationRepositoryFake(servers: servers)
+        let credentials = WakeServerCredentialRepositoryFake(servers: servers)
+        return (
+            ServerWakeCoordinator(
+                dependencies: ServerWakeDependencies(
+                    sender: sender,
+                    macAddressResolver: resolver,
+                    mutations: mutations,
+                    credentials: credentials,
+                    makeID: UUID.init
+                )
+            ),
+            mutations
         )
     }
 
@@ -121,6 +196,15 @@ struct ServerWakeCoordinatorTests {
         )
     }
 
+    private func makeServerWithoutConfiguration() -> Server {
+        Server(
+            workspaceId: UUID(),
+            name: "No cached address",
+            host: "wake.example.test",
+            username: "root"
+        )
+    }
+
     private func waitUntil(
         _ condition: @MainActor () -> Bool
     ) async -> Bool {
@@ -129,6 +213,92 @@ struct ServerWakeCoordinatorTests {
             await Task.yield()
         }
         return condition()
+    }
+}
+
+private enum FixtureWakeOnLANMACAddressResolutionError: Error {
+    case unavailable
+}
+
+private final class FixtureWakeOnLANMACAddressResolver: WakeOnLANMACAddressResolving, @unchecked Sendable {
+    private let lock = NSLock()
+    private var callCountStorage = 0
+    private let address: WakeOnLANMACAddress?
+
+    var callCount: Int {
+        lock.withLock { callCountStorage }
+    }
+
+    init(
+        address: WakeOnLANMACAddress? = try! WakeOnLANMACAddress("00:11:22:33:44:55")
+    ) {
+        self.address = address
+    }
+
+    func resolveMACAddress(
+        for server: Server,
+        credentials: ServerCredentials
+    ) async throws -> WakeOnLANMACAddress {
+        lock.withLock { callCountStorage += 1 }
+        guard let address else {
+            throw FixtureWakeOnLANMACAddressResolutionError.unavailable
+        }
+        return address
+    }
+}
+
+@MainActor
+private final class WakeServerMutationRepositoryFake: ServerMutationRepository {
+    private var serversByID: [UUID: Server]
+    private(set) var applyCount = 0
+
+    init(servers: [Server]) {
+        serversByID = Dictionary(uniqueKeysWithValues: servers.map { ($0.id, $0) })
+    }
+
+    func validate(_ mutation: ServerMutation, hasProAccess: Bool) throws {}
+
+    func server(id: UUID) -> Server? {
+        serversByID[id]
+    }
+
+    func apply(
+        _ mutation: ServerMutation,
+        credentials: ServerCredentials
+    ) async throws -> Server {
+        applyCount += 1
+        let server = mutation.server
+        serversByID[server.id] = server
+        return server
+    }
+}
+
+@MainActor
+private final class WakeServerCredentialRepositoryFake: ServerCredentialRepository {
+    private var credentialsByServerID: [UUID: ServerCredentials]
+
+    init(servers: [Server]) {
+        credentialsByServerID = Dictionary(uniqueKeysWithValues: servers.map {
+            ($0.id, ServerCredentials(serverId: $0.id))
+        })
+    }
+
+    func storeCredentials(_ credentials: ServerCredentials, for server: Server) throws {
+        credentialsByServerID[server.id] = credentials
+    }
+
+    func getCredentials(for server: Server) throws -> ServerCredentials {
+        credentialsByServerID[server.id] ?? ServerCredentials(serverId: server.id)
+    }
+
+    func deleteCredentials(for serverID: UUID) throws {
+        credentialsByServerID[serverID] = nil
+    }
+
+    func getStoredSSHKeys() -> [SSHKeyEntry] { [] }
+
+    func getStoredSSHKeyData(for id: UUID) throws -> (key: Data, passphrase: String?)? {
+        nil
     }
 }
 
@@ -142,10 +312,9 @@ private actor FixtureWakeOnLANPacketSender: WakeOnLANPacketSending {
 
     func send(
         configuration: WakeOnLANConfiguration
-    ) async throws -> WakeOnLANSendReceipt {
+    ) async throws {
         callCount += 1
         if let error { throw error }
-        return WakeOnLANSendReceipt(destinations: [])
     }
 }
 
@@ -157,10 +326,10 @@ private actor FirstSendGatePacketSender: WakeOnLANPacketSending {
 
     func send(
         configuration: WakeOnLANConfiguration
-    ) async throws -> WakeOnLANSendReceipt {
+    ) async throws {
         callCount += 1
         guard callCount == 1 else {
-            return WakeOnLANSendReceipt(destinations: [])
+            return
         }
 
         firstSendStarted = true
@@ -169,7 +338,6 @@ private actor FirstSendGatePacketSender: WakeOnLANPacketSending {
         await withCheckedContinuation { continuation in
             firstSendContinuation = continuation
         }
-        return WakeOnLANSendReceipt(destinations: [])
     }
 
     func waitUntilFirstSendStarts() async {

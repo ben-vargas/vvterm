@@ -27,9 +27,6 @@ struct ServerDuplicateUITestHarness: View {
             port: 2222,
             username: "wiedy",
             connectionMode: .tailscale,
-            wakeOnLANConfiguration: WakeOnLANConfiguration(
-                macAddress: try! WakeOnLANMACAddress("00:11:22:33:44:55")
-            ),
             notes: "Duplicate form fixture"
         )
     }

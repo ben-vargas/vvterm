@@ -778,7 +778,7 @@ struct ServerFormOperationControllerTests {
         controller.save(
             mutation: .create(input.server),
             credentials: input.credentials,
-            wakeOnLANPlan: .disabled,
+            wakeOnLANPlan: .clearConfiguration,
             hasProAccess: true,
             authorize: { true },
             onSaved: { savedServer = $0 }

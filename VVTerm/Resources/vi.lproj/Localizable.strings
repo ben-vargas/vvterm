@@ -1919,14 +1919,14 @@
 
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
+"Auto Wake-on-LAN" = "Tự động Wake-on-LAN";
 "For servers on the same local network." = "Dành cho các máy chủ trong cùng mạng cục bộ.";
-"Could not enable Wake-on-LAN. Make sure the server is online and reachable, then try again." = "Không thể bật Wake-on-LAN. Hãy bảo đảm máy chủ đang trực tuyến và có thể truy cập, rồi thử lại.";
+"Could not detect the server's MAC address. Make sure it is online, then try again." = "Không thể phát hiện địa chỉ MAC của máy chủ. Hãy bảo đảm máy chủ đang trực tuyến, rồi thử lại.";
 "VVTerm could not prepare the network broadcast address." = "VVTerm không thể chuẩn bị địa chỉ quảng bá mạng.";
 "VVTerm could not send the wake request. Check Local Network access." = "VVTerm không thể gửi yêu cầu đánh thức. Hãy kiểm tra quyền truy cập Mạng cục bộ.";
 "Wake Server" = "Đánh thức máy chủ";
 "Sending wake request…" = "Đang gửi yêu cầu đánh thức…";
 "Wake request sent." = "Đã gửi yêu cầu đánh thức.";
-"Enable Wake-on-LAN in Server Settings first." = "Trước tiên, hãy bật Wake-on-LAN trong Cài đặt máy chủ.";
 "VVTerm could not complete the wake request." = "VVTerm không thể hoàn tất yêu cầu đánh thức.";
 "Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "Hãy cho phép VVTerm truy cập Mạng cục bộ trong Cài đặt hệ thống. Trên iPhone và iPad, bản dựng cũng cần quyền mạng multicast của Apple.";
 "No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "Không có giao diện Wi-Fi hoặc Ethernet IPv4 đang hoạt động để gửi yêu cầu này.";

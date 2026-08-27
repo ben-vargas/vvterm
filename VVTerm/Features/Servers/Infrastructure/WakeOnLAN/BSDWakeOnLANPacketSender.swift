@@ -17,7 +17,7 @@ nonisolated struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
 
     func send(
         configuration: WakeOnLANConfiguration
-    ) async throws -> WakeOnLANSendReceipt {
+    ) async throws {
         try await Task.detached(priority: .userInitiated) {
             try sendSynchronously(configuration: configuration)
         }.value
@@ -25,11 +25,11 @@ nonisolated struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
 
     private func sendSynchronously(
         configuration: WakeOnLANConfiguration
-    ) throws -> WakeOnLANSendReceipt {
+    ) throws {
         let destinations = try destinations()
         let packet = WakeOnLANMagicPacket.data(for: configuration.macAddress)
 
-        var sentDestinations: [WakeOnLANIPv4Address] = []
+        var didSend = false
         var firstFailure: WakeOnLANSendError?
         for destination in destinations {
             do {
@@ -38,7 +38,7 @@ nonisolated struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
                     to: destination,
                     port: Self.wakePort
                 )
-                sentDestinations.append(destination)
+                didSend = true
             } catch let error as WakeOnLANSendError {
                 if firstFailure == nil {
                     firstFailure = error
@@ -53,10 +53,9 @@ nonisolated struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
             }
         }
 
-        guard !sentDestinations.isEmpty else {
+        guard didSend else {
             throw firstFailure ?? WakeOnLANSendError.noEligibleNetworkInterface
         }
-        return WakeOnLANSendReceipt(destinations: sentDestinations)
     }
 
     private func destinations() throws -> [WakeOnLANIPv4Address] {

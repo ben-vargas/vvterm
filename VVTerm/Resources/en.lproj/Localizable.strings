@@ -1926,14 +1926,14 @@
 
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
+"Auto Wake-on-LAN" = "Auto Wake-on-LAN";
 "For servers on the same local network." = "For servers on the same local network.";
-"Could not enable Wake-on-LAN. Make sure the server is online and reachable, then try again." = "Could not enable Wake-on-LAN. Make sure the server is online and reachable, then try again.";
+"Could not detect the server's MAC address. Make sure it is online, then try again." = "Could not detect the server's MAC address. Make sure it is online, then try again.";
 "VVTerm could not prepare the network broadcast address." = "VVTerm could not prepare the network broadcast address.";
 "VVTerm could not send the wake request. Check Local Network access." = "VVTerm could not send the wake request. Check Local Network access.";
 "Wake Server" = "Wake Server";
 "Sending wake request…" = "Sending wake request…";
 "Wake request sent." = "Wake request sent.";
-"Enable Wake-on-LAN in Server Settings first." = "Enable Wake-on-LAN in Server Settings first.";
 "VVTerm could not complete the wake request." = "VVTerm could not complete the wake request.";
 "Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement.";
 "No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "No active Wi-Fi or Ethernet IPv4 interface can send this wake request.";

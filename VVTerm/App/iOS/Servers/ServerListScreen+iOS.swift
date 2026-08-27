@@ -14,7 +14,7 @@ struct ServerListScreen: View {
     let statsDependencies: ServerStatsScreenDependencies
     let analyticsOptOutAction: AnalyticsOptOutAction
     let serverFormDependencies: ServerFormDependencies
-    @ObservedObject var serverWakeCoordinator: ServerWakeCoordinator
+    let serverWakeCoordinator: ServerWakeCoordinator
     let voiceModelManagers: VoiceSettingsModelManagerOwner
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @Binding var selectedWorkspace: Workspace?

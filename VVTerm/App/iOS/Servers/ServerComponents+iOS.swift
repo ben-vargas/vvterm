@@ -145,12 +145,10 @@ struct ServerListRow: View {
 
                 duplicateButton
 
-                if server.wakeOnLANConfiguration != nil {
-                    ServerWakeActionButton(
-                        serverID: server.id,
-                        onAction: onWake
-                    )
-                }
+                ServerWakeActionButton(
+                    serverID: server.id,
+                    onAction: onWake
+                )
 
                 Button {
                     onEdit()

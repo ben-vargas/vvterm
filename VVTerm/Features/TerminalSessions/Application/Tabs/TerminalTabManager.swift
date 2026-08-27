@@ -331,6 +331,10 @@ final class TerminalTabManager {
             throw VVTermError.authenticationFailed
         }
 
+        if sessionState.tabs(for: server.id).isEmpty {
+            dependencies.effects.prepareInitialConnection(server)
+        }
+
         let sourcePaneId = sessionState.selectedTab(for: server.id)?.focusedPaneId
         let sourceWorkingDirectory = sourcePaneId
             .flatMap { sessionState.paneState(for: $0)?.workingDirectory }

@@ -129,7 +129,7 @@ struct ServerFormSheet: View {
             )
         }
         if !intent.isEditing {
-            initialForm.wakeOnLANEnabled = false
+            initialForm.autoWakeOnLANEnabled = false
         }
         _form = State(initialValue: initialForm)
         _hasAuthorizedSourceAccess = State(
@@ -293,7 +293,7 @@ struct ServerFormSheet: View {
         assignmentSection
         notesSection
         if isEditing {
-            wakeOnLANSection
+            advancedSection
         }
         errorSection
     }
@@ -776,10 +776,13 @@ struct ServerFormSheet: View {
         }
     }
 
-    private var wakeOnLANSection: some View {
+    private var advancedSection: some View {
         Section {
-            Toggle("Wake-on-LAN", isOn: $form.wakeOnLANEnabled)
+            Toggle("Auto Wake-on-LAN", isOn: $form.autoWakeOnLANEnabled)
                 .accessibilityIdentifier("vvterm.serverForm.wakeOnLAN.enabled")
+        } header: {
+            sectionHeader("Advanced")
+                .accessibilityIdentifier("vvterm.serverForm.advanced")
         } footer: {
             Text("For servers on the same local network.")
         }
@@ -950,7 +953,7 @@ struct ServerFormSheet: View {
     func saveServer() {
         let serverID = intent.serverID(makeID: makeID)
         let wakeOnLANSavePlan = form.wakeOnLANSavePlan(
-            sourceHost: intent.editedServer?.host
+            existingServer: intent.editedServer
         )
         let newServer = buildServer(
             id: serverID,
@@ -992,7 +995,7 @@ struct ServerFormSheet: View {
             )
         case .wakeOnLANUnavailable:
             return String(
-                localized: "Could not enable Wake-on-LAN. Make sure the server is online and reachable, then try again."
+                localized: "Could not detect the server's MAC address. Make sure it is online, then try again."
             )
         }
     }

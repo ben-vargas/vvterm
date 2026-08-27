@@ -60,6 +60,7 @@ private final class TerminalEffectRecorder {
     var authorizeResult = true
     var authorizationGate: TerminalAuthorizationGate?
     private(set) var authorizationRequests: [UUID] = []
+    private(set) var initialConnectionPreparations: [UUID] = []
     private(set) var liveActivityRefreshCount = 0
     private(set) var successfulConnections: [(UUID, String)] = []
     private(set) var sessionEndStates: [Bool] = []
@@ -73,6 +74,9 @@ private final class TerminalEffectRecorder {
                     return await authorizationGate.wait()
                 }
                 return authorizeResult
+            },
+            prepareInitialConnection: { [self] server in
+                initialConnectionPreparations.append(server.id)
             },
             refreshLiveActivity: { [self] _ in
                 liveActivityRefreshCount += 1
@@ -218,6 +222,25 @@ private actor RecordingTerminalRemoteMoshService: TerminalRemoteMoshServicing {
 @Suite(.serialized)
 @MainActor
 struct TerminalTabManagerDependencyIsolationTests {
+    @Test
+    func openingTheFirstTabPreparesTheConnectionOnce() async throws {
+        let effects = TerminalEffectRecorder()
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: effects,
+            remoteSessions: RecordingTerminalRemoteTmuxService(),
+            remoteMosh: RecordingTerminalRemoteMoshService(),
+            deviceID: "initial-connection"
+        )
+        let server = makeServer()
+
+        _ = try await manager.openTab(for: server)
+        _ = try await manager.openTab(for: server)
+
+        #expect(effects.initialConnectionPreparations == [server.id])
+        await manager.resetForTesting()
+    }
+
     @Test
     func cleanupKeepsManagedSessionsForEveryServerProfile() async throws {
         let remoteSessions = RecordingTerminalRemoteTmuxService()

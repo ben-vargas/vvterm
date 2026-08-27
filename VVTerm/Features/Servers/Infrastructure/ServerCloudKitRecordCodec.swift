@@ -8,7 +8,7 @@ nonisolated enum ServerCloudKitRecordCodec {
         "workspaceId", "name", "host", "port", "eternalTerminalPort", "username",
         "connectionMode", "authMethod", "cloudflareAccessMode",
         "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
-        "wakeOnLANConfiguration",
+        "wakeOnLANConfiguration", "autoWakeOnLANEnabled",
         "lastConnected", "isFavorite", "requiresBiometricUnlock", "tmuxEnabledOverride",
         "tmuxStartupBehaviorOverride",
         "remoteSessionEnabledOverride", "remoteSessionBackendIdentifier",
@@ -94,6 +94,7 @@ nonisolated enum ServerCloudKitRecordCodec {
             cloudflareTeamDomainOverride: record["cloudflareTeamDomainOverride"] as? String,
             cloudflareAppDomainOverride: record["cloudflareAppDomainOverride"] as? String,
             wakeOnLANConfiguration: wakeOnLANConfiguration,
+            autoWakeOnLANEnabled: record["autoWakeOnLANEnabled"] as? Bool ?? false,
             tags: record["tags"] as? [String] ?? [],
             notes: record["notes"] as? String,
             lastConnected: record["lastConnected"] as? Date,
@@ -135,6 +136,7 @@ nonisolated enum ServerCloudKitRecordCodec {
            let encodedConfiguration = try? JSONEncoder().encode(configuration) {
             record["wakeOnLANConfiguration"] = encodedConfiguration
         }
+        record["autoWakeOnLANEnabled"] = server.autoWakeOnLANEnabled
         if !server.tags.isEmpty {
             record["tags"] = server.tags
         }

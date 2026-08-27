@@ -1874,14 +1874,14 @@
 
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
+"Auto Wake-on-LAN" = "Wake-on-LANを自動実行";
 "For servers on the same local network." = "同じローカルネットワーク上のサーバー用です。";
-"Could not enable Wake-on-LAN. Make sure the server is online and reachable, then try again." = "Wake-on-LANを有効にできませんでした。サーバーがオンラインで接続可能か確認して、もう一度お試しください。";
+"Could not detect the server's MAC address. Make sure it is online, then try again." = "サーバーのMACアドレスを検出できませんでした。サーバーがオンラインであることを確認して、もう一度お試しください。";
 "VVTerm could not prepare the network broadcast address." = "VVTermはネットワークのブロードキャストアドレスを準備できませんでした。";
 "VVTerm could not send the wake request. Check Local Network access." = "VVTermは起動要求を送信できませんでした。ローカルネットワークへのアクセスを確認してください。";
 "Wake Server" = "サーバーを起動";
 "Sending wake request…" = "起動要求を送信中…";
 "Wake request sent." = "起動要求を送信しました。";
-"Enable Wake-on-LAN in Server Settings first." = "先にサーバー設定でWake-on-LANを有効にしてください。";
 "VVTerm could not complete the wake request." = "VVTermは起動要求を完了できませんでした。";
 "Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "システム設定でVVTermのローカルネットワークアクセスを許可してください。iPhoneとiPadでは、ビルドにAppleのマルチキャストネットワーク権限も必要です。";
 "No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "この起動要求を送信できる有効なWi-FiまたはEthernet IPv4インターフェースがありません。";

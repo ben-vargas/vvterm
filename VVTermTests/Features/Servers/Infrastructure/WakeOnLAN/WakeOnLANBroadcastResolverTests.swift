@@ -51,7 +51,6 @@ struct WakeOnLANBroadcastResolverTests {
         isLoopback: Bool = false
     ) throws -> WakeOnLANNetworkInterface {
         WakeOnLANNetworkInterface(
-            name: address,
             address: try WakeOnLANIPv4Address(address),
             netmask: try WakeOnLANIPv4Address(netmask),
             isUp: isUp,

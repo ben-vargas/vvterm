@@ -12,21 +12,21 @@ nonisolated enum WakeOnLANSendError: Error, Equatable, Sendable {
     case incompleteDatagram(address: String, expected: Int, actual: Int)
 }
 
-nonisolated struct WakeOnLANSendReceipt: Equatable, Sendable {
-    let destinations: [WakeOnLANIPv4Address]
-}
-
 nonisolated protocol WakeOnLANPacketSending: Sendable {
-    func send(configuration: WakeOnLANConfiguration) async throws -> WakeOnLANSendReceipt
+    func send(configuration: WakeOnLANConfiguration) async throws
 }
 
-nonisolated struct ServerWakeDependencies: Sendable {
+@MainActor
+struct ServerWakeDependencies {
     let sender: any WakeOnLANPacketSending
+    let macAddressResolver: any WakeOnLANMACAddressResolving
+    let mutations: any ServerMutationRepository
+    let credentials: any ServerCredentialRepository
     let makeID: @Sendable () -> UUID
 }
 
 nonisolated enum ServerWakeFailure: Equatable, Sendable {
-    case notConfigured
+    case macAddressUnavailable
     case send(WakeOnLANSendError)
     case unexpected
 }
@@ -66,19 +66,29 @@ final class ServerWakeCoordinator: ObservableObject {
 
     func start(for server: Server) {
         task?.cancel()
-        task = nil
 
         let operationID = dependencies.makeID()
-        guard let configuration = server.wakeOnLANConfiguration else {
-            phase = .failed(id: operationID, .notConfigured)
-            return
-        }
-
         phase = .sending(id: operationID)
-        let sender = dependencies.sender
+        let dependencies = dependencies
         task = Task { [weak self] in
+            let configuration: WakeOnLANConfiguration
             do {
-                _ = try await sender.send(configuration: configuration)
+                configuration = try await Self.configuration(
+                    for: server,
+                    dependencies: dependencies
+                )
+            } catch is CancellationError {
+                return
+            } catch is ServerWakePreparationError {
+                self?.fail(operationID: operationID, with: .macAddressUnavailable)
+                return
+            } catch {
+                self?.fail(operationID: operationID, with: .unexpected)
+                return
+            }
+
+            do {
+                try await dependencies.sender.send(configuration: configuration)
                 try Task.checkCancellation()
                 self?.complete(operationID: operationID)
             } catch is CancellationError {
@@ -89,6 +99,11 @@ final class ServerWakeCoordinator: ObservableObject {
                 self?.fail(operationID: operationID, with: .unexpected)
             }
         }
+    }
+
+    func startAutomaticallyIfEnabled(for server: Server) {
+        guard server.autoWakeOnLANEnabled else { return }
+        start(for: server)
     }
 
     func cancel(operationID: UUID? = nil) {
@@ -124,4 +139,43 @@ final class ServerWakeCoordinator: ObservableObject {
         task = nil
         phase = .failed(id: operationID, failure)
     }
+
+    private static func configuration(
+        for server: Server,
+        dependencies: ServerWakeDependencies
+    ) async throws -> WakeOnLANConfiguration {
+        guard var currentServer = dependencies.mutations.server(id: server.id) else {
+            throw VVTermError.serverNotFound
+        }
+        if let configuration = currentServer.wakeOnLANConfiguration {
+            return configuration
+        }
+
+        let credentials: ServerCredentials
+        let macAddress: WakeOnLANMACAddress
+        do {
+            credentials = try dependencies.credentials.getCredentials(for: currentServer)
+            macAddress = try await dependencies.macAddressResolver.resolveMACAddress(
+                for: currentServer,
+                credentials: credentials
+            )
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw ServerWakePreparationError.macAddressUnavailable
+        }
+        try Task.checkCancellation()
+
+        let configuration = WakeOnLANConfiguration(macAddress: macAddress)
+        currentServer.wakeOnLANConfiguration = configuration
+        let savedServer = try await dependencies.mutations.apply(
+            .update(currentServer),
+            credentials: credentials
+        )
+        return savedServer.wakeOnLANConfiguration ?? configuration
+    }
+}
+
+private enum ServerWakePreparationError: Error {
+    case macAddressUnavailable
 }

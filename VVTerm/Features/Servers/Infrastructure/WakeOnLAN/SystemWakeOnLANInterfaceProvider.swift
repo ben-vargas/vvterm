@@ -17,8 +17,7 @@ nonisolated struct SystemWakeOnLANInterfaceProvider: WakeOnLANInterfaceProviding
 
             guard let address = entry.ifa_addr,
                   address.pointee.sa_family == UInt8(AF_INET),
-                  let netmask = entry.ifa_netmask,
-                  let name = String(validatingCString: entry.ifa_name) else {
+                  let netmask = entry.ifa_netmask else {
                 continue
             }
 
@@ -30,21 +29,20 @@ nonisolated struct SystemWakeOnLANInterfaceProvider: WakeOnLANInterfaceProviding
                 to: sockaddr_in.self,
                 capacity: 1
             ) { $0.pointee }
-            let flags = Int32(entry.ifa_flags)
+            let flags = entry.ifa_flags
 
             result.append(
                 WakeOnLANNetworkInterface(
-                    name: name,
                     address: WakeOnLANIPv4Address(
                         hostOrderValue: UInt32(bigEndian: ipv4.sin_addr.s_addr)
                     ),
                     netmask: WakeOnLANIPv4Address(
                         hostOrderValue: UInt32(bigEndian: mask.sin_addr.s_addr)
                     ),
-                    isUp: flags & IFF_UP != 0,
-                    isRunning: flags & IFF_RUNNING != 0,
-                    supportsBroadcast: flags & IFF_BROADCAST != 0,
-                    isLoopback: flags & IFF_LOOPBACK != 0
+                    isUp: flags & UInt32(IFF_UP) != 0,
+                    isRunning: flags & UInt32(IFF_RUNNING) != 0,
+                    supportsBroadcast: flags & UInt32(IFF_BROADCAST) != 0,
+                    isLoopback: flags & UInt32(IFF_LOOPBACK) != 0
                 )
             )
         }

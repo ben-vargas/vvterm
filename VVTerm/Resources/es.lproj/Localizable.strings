@@ -1874,14 +1874,14 @@
 
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
+"Auto Wake-on-LAN" = "Wake-on-LAN automático";
 "For servers on the same local network." = "Para servidores en la misma red local.";
-"Could not enable Wake-on-LAN. Make sure the server is online and reachable, then try again." = "No se pudo activar Wake-on-LAN. Comprueba que el servidor esté encendido y accesible e inténtalo de nuevo.";
+"Could not detect the server's MAC address. Make sure it is online, then try again." = "No se pudo detectar la dirección MAC del servidor. Comprueba que esté encendido e inténtalo de nuevo.";
 "VVTerm could not prepare the network broadcast address." = "VVTerm no pudo preparar la dirección de difusión de la red.";
 "VVTerm could not send the wake request. Check Local Network access." = "VVTerm no pudo enviar la solicitud de activación. Comprueba el acceso a la red local.";
 "Wake Server" = "Activar servidor";
 "Sending wake request…" = "Enviando solicitud de activación…";
 "Wake request sent." = "Solicitud de activación enviada.";
-"Enable Wake-on-LAN in Server Settings first." = "Activa primero Wake-on-LAN en los ajustes del servidor.";
 "VVTerm could not complete the wake request." = "VVTerm no pudo completar la solicitud de activación.";
 "Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "Permite a VVTerm acceder a la red local en Ajustes del Sistema. En iPhone y iPad, la compilación también necesita la autorización de multidifusión de Apple.";
 "No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "Ninguna interfaz IPv4 Wi-Fi o Ethernet activa puede enviar esta solicitud.";

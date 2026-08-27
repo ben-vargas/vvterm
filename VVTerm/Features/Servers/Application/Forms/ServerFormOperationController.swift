@@ -319,7 +319,7 @@ final class ServerFormOperationController: ObservableObject {
             do {
                 let configuration: WakeOnLANConfiguration?
                 switch wakeOnLANPlan {
-                case .disabled:
+                case .clearConfiguration:
                     configuration = nil
                 case .configured(let existingConfiguration):
                     configuration = existingConfiguration

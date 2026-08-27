@@ -42,7 +42,7 @@ nonisolated enum ServerTransportSelection: String, CaseIterable, Identifiable, E
 
 nonisolated struct ServerFormModel: Equatable, Sendable {
     nonisolated enum WakeOnLANSavePlan: Equatable, Sendable {
-        case disabled
+        case clearConfiguration
         case configured(WakeOnLANConfiguration)
         case resolveAutomatically
     }
@@ -79,8 +79,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var cloudflareClientID: String
     var cloudflareClientSecret: String
     var cloudflareTeamDomainOverride: String
-    var wakeOnLANEnabled: Bool
-    private let existingWakeOnLANConfiguration: WakeOnLANConfiguration?
+    var autoWakeOnLANEnabled: Bool
     var workspaceID: UUID?
     var environment: ServerEnvironment
     var notes: String
@@ -112,8 +111,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         cloudflareClientID = ""
         cloudflareClientSecret = ""
         cloudflareTeamDomainOverride = server?.cloudflareTeamDomainOverride ?? ""
-        existingWakeOnLANConfiguration = server?.wakeOnLANConfiguration
-        wakeOnLANEnabled = existingWakeOnLANConfiguration != nil
+        autoWakeOnLANEnabled = server?.autoWakeOnLANEnabled ?? false
         self.workspaceID = server?.workspaceId ?? workspaceID
         environment = server?.environment ?? .production
         notes = server?.notes ?? ""
@@ -162,15 +160,13 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         )
     }
 
-    func wakeOnLANSavePlan(sourceHost: String?) -> WakeOnLANSavePlan {
-        guard wakeOnLANEnabled else { return .disabled }
-
-        let sourceHost = sourceHost.map(Self.normalizedHost)
-        guard sourceHost == Self.normalizedHost(host),
-              let existingWakeOnLANConfiguration else {
-            return .resolveAutomatically
+    func wakeOnLANSavePlan(existingServer: Server?) -> WakeOnLANSavePlan {
+        if let existingServer,
+           Self.normalizedHost(existingServer.host) == Self.normalizedHost(host),
+           let configuration = existingServer.wakeOnLANConfiguration {
+            return .configured(configuration)
         }
-        return .configured(existingWakeOnLANConfiguration)
+        return autoWakeOnLANEnabled ? .resolveAutomatically : .clearConfiguration
     }
 
     mutating func applyPrefill(
@@ -229,6 +225,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
                 ? normalizedOptional(cloudflareTeamDomainOverride)
                 : nil,
             cloudflareAppDomainOverride: nil,
+            autoWakeOnLANEnabled: autoWakeOnLANEnabled,
             notes: notes.isEmpty ? nil : notes,
             requiresBiometricUnlock: requiresBiometricUnlock,
             remoteSessionEnabledOverride: remoteSessionEnabled,

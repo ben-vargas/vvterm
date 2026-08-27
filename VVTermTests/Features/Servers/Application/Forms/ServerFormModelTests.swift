@@ -120,21 +120,24 @@ struct ServerFormModelTests {
             defaultRemoteSessionStartupBehavior: .createManaged
         )
 
-        #expect(model.wakeOnLANSavePlan(sourceHost: "192.168.1.10") == .configured(configuration))
+        #expect(model.wakeOnLANSavePlan(existingServer: server) == .configured(configuration))
 
         model.host = "192.168.1.11"
-        #expect(model.wakeOnLANSavePlan(sourceHost: server.host) == .resolveAutomatically)
+        #expect(model.wakeOnLANSavePlan(existingServer: server) == .clearConfiguration)
 
-        model.wakeOnLANEnabled = false
-        #expect(model.wakeOnLANSavePlan(sourceHost: server.host) == .disabled)
+        model.autoWakeOnLANEnabled = true
+        #expect(model.wakeOnLANSavePlan(existingServer: server) == .resolveAutomatically)
+
+        model.autoWakeOnLANEnabled = false
+        #expect(model.wakeOnLANSavePlan(existingServer: server) == .clearConfiguration)
     }
 
     @Test
-    func enablingWakeOnLANWithoutAStoredAddressRequiresAutomaticResolution() {
+    func enablingAutomaticWakeWithoutAStoredAddressRequiresAutomaticResolution() {
         var model = validPasswordModel()
-        model.wakeOnLANEnabled = true
+        model.autoWakeOnLANEnabled = true
 
-        #expect(model.wakeOnLANSavePlan(sourceHost: model.host) == .resolveAutomatically)
+        #expect(model.wakeOnLANSavePlan(existingServer: nil) == .resolveAutomatically)
     }
 
     @Test

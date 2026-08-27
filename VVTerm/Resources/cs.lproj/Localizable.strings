@@ -1875,14 +1875,14 @@
 
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
+"Auto Wake-on-LAN" = "Automatické Wake-on-LAN";
 "For servers on the same local network." = "Pro servery ve stejné místní síti.";
-"Could not enable Wake-on-LAN. Make sure the server is online and reachable, then try again." = "Wake-on-LAN se nepodařilo zapnout. Ověřte, že je server online a dostupný, a zkuste to znovu.";
+"Could not detect the server's MAC address. Make sure it is online, then try again." = "Nepodařilo se zjistit MAC adresu serveru. Ověřte, že je online, a zkuste to znovu.";
 "VVTerm could not prepare the network broadcast address." = "VVTerm nemohl připravit adresu síťového vysílání.";
 "VVTerm could not send the wake request. Check Local Network access." = "VVTerm nemohl odeslat požadavek na probuzení. Zkontrolujte přístup k místní síti.";
 "Wake Server" = "Probudit server";
 "Sending wake request…" = "Odesílání požadavku na probuzení…";
 "Wake request sent." = "Požadavek na probuzení byl odeslán.";
-"Enable Wake-on-LAN in Server Settings first." = "Nejprve zapněte Wake-on-LAN v nastavení serveru.";
 "VVTerm could not complete the wake request." = "VVTerm nemohl dokončit požadavek na probuzení.";
 "Allow Local Network access for VVTerm in System Settings. On iPhone and iPad, the build also needs Apple's multicast networking entitlement." = "Povolte VVTerm přístup k místní síti v Nastavení systému. Na iPhonu a iPadu sestavení také potřebuje oprávnění Apple pro multicast.";
 "No active Wi-Fi or Ethernet IPv4 interface can send this wake request." = "Požadavek nemůže odeslat žádné aktivní rozhraní Wi-Fi nebo Ethernet IPv4.";

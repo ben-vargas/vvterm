@@ -23,7 +23,7 @@ struct iOSContentView: View {
     let analyticsOptOutAction: AnalyticsOptOutAction
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
-    @ObservedObject private var serverWakeCoordinator: ServerWakeCoordinator
+    private let serverWakeCoordinator: ServerWakeCoordinator
     @ObservedObject private var engagementTracker: EngagementTracker
     private let tabManager: TerminalTabManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
@@ -52,9 +52,7 @@ struct iOSContentView: View {
         analyticsOptOutAction: AnalyticsOptOutAction
     ) {
         _serverManager = ObservedObject(wrappedValue: serverManager)
-        _serverWakeCoordinator = ObservedObject(
-            wrappedValue: serverWakeCoordinator
-        )
+        self.serverWakeCoordinator = serverWakeCoordinator
         _engagementTracker = ObservedObject(wrappedValue: engagementTracker)
         self.tabManager = tabManager
         self.fileTabs = fileTabs

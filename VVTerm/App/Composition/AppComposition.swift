@@ -163,6 +163,11 @@ struct AppComposition {
                     interfaceProvider: SystemWakeOnLANInterfaceProvider(),
                     datagramSender: BSDWakeOnLANDatagramSender()
                 ),
+                macAddressResolver: SSHServerWakeOnLANMACAddressResolver(
+                    connectionOperations: connectionOperations
+                ),
+                mutations: serverManager,
+                credentials: keychainManager,
                 makeID: makeID
             )
         )
@@ -221,6 +226,9 @@ struct AppComposition {
             networkMonitor: networkMonitor,
             appLockManager: appLockManager,
             serverManager: serverManager,
+            prepareInitialConnection: { server in
+                serverWakeCoordinator.startAutomaticallyIfEnabled(for: server)
+            },
             engagementTracker: engagementTracker,
             analyticsTracker: analyticsTracker,
             liveActivityManager: liveActivityManager,
