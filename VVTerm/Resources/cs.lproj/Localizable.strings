@@ -1876,6 +1876,26 @@
 "Duplicate" = "Duplikovat";
 "%@ Copy" = "Kopie %@";
 
+/* Custom fonts */
+"Automatic" = "Automaticky";
+"Custom Fonts" = "Vlastní písma";
+"Automatic uses the primary font and standard fallback fonts." = "Automatický režim používá hlavní písmo a standardní náhradní písma.";
+"Choose a TTF, OTF, TTC, or OTC font file." = "Vyberte soubor písma TTF, OTF, TTC nebo OTC.";
+"Font files must be 48 MB or smaller." = "Soubory písem mohou mít nejvýše 48 MB.";
+"The selected file is not a valid font." = "Vybraný soubor není platné písmo.";
+"The font information is invalid." = "Informace o písmu nejsou platné.";
+"The font file is incomplete or damaged." = "Soubor písma je neúplný nebo poškozený.";
+"The font file is not available on this device." = "Soubor písma není na tomto zařízení dostupný.";
+"VVTerm could not load this font: %@" = "VVTerm nemohl načíst toto písmo: %@";
+"Delete Custom Font?" = "Odstranit vlastní písmo?";
+"This removes the font from VVTerm and synced devices." = "Písmo se odstraní z VVTerm a synchronizovaných zařízení.";
+"Custom Font" = "Vlastní písmo";
+"No Custom Fonts" = "Žádná vlastní písma";
+"Import a TTF, OTF, TTC, or OTC font file." = "Importujte soubor písma TTF, OTF, TTC nebo OTC.";
+"Import Font" = "Importovat písmo";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "Písma zůstávají ve VVTerm. iCloud Sync je udržuje ve vašich zařízeních.";
+"%lld families" = "%lld rodin písem";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
 "Auto Wake-on-LAN" = "Automatické Wake-on-LAN";

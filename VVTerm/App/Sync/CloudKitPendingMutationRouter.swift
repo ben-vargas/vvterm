@@ -4,17 +4,20 @@ import Foundation
 final class CloudKitPendingMutationRouter: PendingCloudKitMutationHandling {
     private let serverCloud: any ServerRemoteMutationClient
     private let terminalThemeCloud: any TerminalThemeCloudMutationClient
+    private let terminalFontCloud: any TerminalFontCloudMutationClient
     private let terminalAccessoryHandler: TerminalAccessoryPendingMutationHandler
     private let statsPreferencesHandler: StatsPreferencesPendingMutationHandler
 
     init(
         serverCloud: any ServerRemoteMutationClient,
         terminalThemeCloud: any TerminalThemeCloudMutationClient,
+        terminalFontCloud: any TerminalFontCloudMutationClient,
         terminalAccessoryHandler: TerminalAccessoryPendingMutationHandler,
         statsPreferencesHandler: StatsPreferencesPendingMutationHandler
     ) {
         self.serverCloud = serverCloud
         self.terminalThemeCloud = terminalThemeCloud
+        self.terminalFontCloud = terminalFontCloud
         self.terminalAccessoryHandler = terminalAccessoryHandler
         self.statsPreferencesHandler = statsPreferencesHandler
     }
@@ -43,6 +46,18 @@ final class CloudKitPendingMutationRouter: PendingCloudKitMutationHandling {
             mutation.payload
         ) {
             try await terminalThemeCloud.saveTerminalThemePreference(preference)
+            return
+        }
+
+        if let font = try TerminalFontPendingCloudKitPayloadCodec.decodeFont(mutation.payload) {
+            try await terminalFontCloud.saveTerminalFont(font)
+            return
+        }
+
+        if let preference = try TerminalFontPendingCloudKitPayloadCodec.decodePreference(
+            mutation.payload
+        ) {
+            try await terminalFontCloud.saveTerminalFontPreference(preference)
             return
         }
 

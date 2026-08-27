@@ -13,7 +13,7 @@ struct AppComposition {
     let engagementTracker: EngagementTracker
     let tabManager: TerminalTabManager
     let remoteFileBrowserStore: RemoteFileBrowserStore
-    let terminalFontCatalogStore: TerminalFontCatalogStore
+    let terminalFontStore: TerminalFontStore
     let terminalThemeManager: TerminalThemeManager
     let terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     let statsPreferencesStore: PreferencesStore
@@ -47,16 +47,6 @@ struct AppComposition {
     private init() {
         let defaults = UserDefaults.standard
         TerminalDefaults.applyIfNeeded(defaults: defaults)
-        let terminalFontCatalogStore = TerminalFontCatalogStore {
-            TerminalFontCatalog.live()
-        }
-        let terminalFontSelection = TerminalFontSelectionPolicy.resolve(
-            primaryFamily: defaults.string(forKey: TerminalDefaults.fontNameKey)
-                ?? TerminalDefaults.defaultFontName,
-            cjkFamily: defaults.string(forKey: TerminalDefaults.cjkFontNameKey) ?? "",
-            catalog: terminalFontCatalogStore.catalog,
-            allowsProFeatures: true
-        )
         #if os(macOS)
         let terminalOptionAsAltMode = defaults.string(
             forKey: TerminalDefaults.optionAsAltModeKey
@@ -65,20 +55,6 @@ struct AppComposition {
         let terminalOptionAsAltMode = TerminalOptionAsAltMode.none.rawValue
         #endif
         let terminalContentPadding = TerminalDefaults.storedContentPadding(defaults: defaults)
-        let ghosttyRuntimeConfiguration = Ghostty.RuntimeConfiguration(
-            fontSelection: terminalFontSelection,
-            fontSize: defaults.object(forKey: TerminalDefaults.fontSizeKey) as? Double
-                ?? TerminalDefaults.defaultFontSize,
-            contentPadding: terminalContentPadding,
-            cursorStyleRawValue: defaults.string(forKey: TerminalDefaults.cursorStyleKey)
-                ?? TerminalDefaults.defaultCursorStyle.rawValue,
-            cursorBlink: defaults.object(forKey: TerminalDefaults.cursorBlinkKey) as? Bool
-                ?? TerminalDefaults.defaultCursorBlink,
-            optionAsAltModeRawValue: terminalOptionAsAltMode,
-            remoteClipboardReadPolicyRawValue: defaults.string(
-                forKey: TerminalRemoteClipboardReadPolicy.userDefaultsKey
-            ) ?? TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
-        )
         let notificationCenter = NotificationCenter.default
         let calendar = Calendar.current
         let now: @Sendable () -> Date = Date.init
@@ -133,8 +109,12 @@ struct AppComposition {
             now: now
         )
         let isSyncEnabled = { SyncSettings.isEnabled(in: defaults) }
+        let terminalFontRepository = LocalTerminalFontRepository.applicationSupport(
+            defaults: defaults
+        )
         let cloudKitSync = CloudKitSyncLiveComposition.makeLive(
             transport: cloudKitManager,
+            terminalFontRepository: terminalFontRepository,
             defaults: defaults,
             now: now,
             makeID: makeID
@@ -214,6 +194,16 @@ struct AppComposition {
                 now: now,
                 calendar: calendar,
                 applicationIsActive: applicationIsActive
+            )
+        )
+        let terminalFontStore = TerminalFontStore(
+            dependencies: .live(
+                repository: terminalFontRepository,
+                cloud: cloudKitSync.terminalFontCloud,
+                mutationQueue: cloudKitSyncCoordinator,
+                syncLifecycle: syncLifecycle,
+                isSyncEnabled: isSyncEnabled,
+                now: now
             )
         )
         let terminalThemeManager = TerminalThemeManager(
@@ -344,6 +334,7 @@ struct AppComposition {
             keychain: keychainManager,
             serverManager: serverManager,
             terminalTheme: terminalThemeManager,
+            terminalFont: terminalFontStore,
             terminalAccessory: terminalAccessoryPreferencesManager,
             statsPreferences: statsPreferencesStore,
             pendingSync: cloudKitSyncCoordinator,
@@ -356,6 +347,25 @@ struct AppComposition {
             knownHosts: knownHostsManager
         )
         let appLifecycleDependencies = platform.lifecycleDependencies
+        let ghosttyRuntimeConfiguration = Ghostty.RuntimeConfiguration(
+            fontSelection: TerminalFontSelectionPolicy.resolve(
+                primaryFamily: terminalFontStore.preference.primaryFamily,
+                cjkFamily: terminalFontStore.preference.cjkFamily,
+                catalog: terminalFontStore.catalog,
+                allowsProFeatures: true
+            ),
+            fontSize: defaults.object(forKey: TerminalDefaults.fontSizeKey) as? Double
+                ?? TerminalDefaults.defaultFontSize,
+            contentPadding: terminalContentPadding,
+            cursorStyleRawValue: defaults.string(forKey: TerminalDefaults.cursorStyleKey)
+                ?? TerminalDefaults.defaultCursorStyle.rawValue,
+            cursorBlink: defaults.object(forKey: TerminalDefaults.cursorBlinkKey) as? Bool
+                ?? TerminalDefaults.defaultCursorBlink,
+            optionAsAltModeRawValue: terminalOptionAsAltMode,
+            remoteClipboardReadPolicyRawValue: defaults.string(
+                forKey: TerminalRemoteClipboardReadPolicy.userDefaultsKey
+            ) ?? TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
+        )
         let ghosttyApp = GhosttyRuntime(
             configuration: ghosttyRuntimeConfiguration,
             autoStart: false
@@ -379,7 +389,7 @@ struct AppComposition {
         let settingsWindowPresenter = SettingsWindowPresenter(
             appLockManager: appLockManager,
             serverManager: serverManager,
-            terminalFontCatalogStore: terminalFontCatalogStore,
+            terminalFontStore: terminalFontStore,
             terminalThemeManager: terminalThemeManager,
             terminalAccessoryPreferencesManager: terminalAccessoryPreferencesManager,
             viewTabConfigurationManager: viewTabConfigurationManager,
@@ -404,7 +414,7 @@ struct AppComposition {
         self.engagementTracker = engagementTracker
         self.tabManager = tabManager
         self.remoteFileBrowserStore = remoteFileBrowserStore
-        self.terminalFontCatalogStore = terminalFontCatalogStore
+        self.terminalFontStore = terminalFontStore
         self.terminalThemeManager = terminalThemeManager
         self.terminalAccessoryPreferencesManager = terminalAccessoryPreferencesManager
         self.statsPreferencesStore = statsPreferencesStore

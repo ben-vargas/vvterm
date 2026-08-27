@@ -1875,6 +1875,26 @@
 "Duplicate" = "Duplicar";
 "%@ Copy" = "Copia de %@";
 
+/* Custom fonts */
+"Automatic" = "Automático";
+"Custom Fonts" = "Fuentes personalizadas";
+"Automatic uses the primary font and standard fallback fonts." = "El modo automático usa la fuente principal y las fuentes de reserva estándar.";
+"Choose a TTF, OTF, TTC, or OTC font file." = "Elige un archivo de fuente TTF, OTF, TTC o OTC.";
+"Font files must be 48 MB or smaller." = "Los archivos de fuente deben tener 48 MB o menos.";
+"The selected file is not a valid font." = "El archivo seleccionado no es una fuente válida.";
+"The font information is invalid." = "La información de la fuente no es válida.";
+"The font file is incomplete or damaged." = "El archivo de fuente está incompleto o dañado.";
+"The font file is not available on this device." = "El archivo de fuente no está disponible en este dispositivo.";
+"VVTerm could not load this font: %@" = "VVTerm no pudo cargar esta fuente: %@";
+"Delete Custom Font?" = "¿Eliminar fuente personalizada?";
+"This removes the font from VVTerm and synced devices." = "Esto elimina la fuente de VVTerm y de los dispositivos sincronizados.";
+"Custom Font" = "Fuente personalizada";
+"No Custom Fonts" = "No hay fuentes personalizadas";
+"Import a TTF, OTF, TTC, or OTC font file." = "Importa un archivo de fuente TTF, OTF, TTC o OTC.";
+"Import Font" = "Importar fuente";
+"Fonts stay inside VVTerm. iCloud Sync keeps them on your devices." = "Las fuentes permanecen dentro de VVTerm. iCloud Sync las mantiene en tus dispositivos.";
+"%lld families" = "%lld familias";
+
 /* Wake-on-LAN */
 "Wake-on-LAN" = "Wake-on-LAN";
 "Auto Wake-on-LAN" = "Wake-on-LAN automático";

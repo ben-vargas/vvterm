@@ -119,6 +119,7 @@ private final class KeychainSyncSettingsAdapter: SyncSettingsCredentialSyncing {
 private final class AppSyncSettingsDataAdapter: SyncSettingsDataRefreshing {
     private let serverManager: ServerManager
     private let terminalTheme: TerminalThemeManager
+    private let terminalFont: TerminalFontStore
     private let terminalAccessory: TerminalAccessoryPreferencesManager
     private let statsPreferences: PreferencesStore
     private let pendingSync: CloudKitSyncCoordinator
@@ -126,12 +127,14 @@ private final class AppSyncSettingsDataAdapter: SyncSettingsDataRefreshing {
     init(
         serverManager: ServerManager,
         terminalTheme: TerminalThemeManager,
+        terminalFont: TerminalFontStore,
         terminalAccessory: TerminalAccessoryPreferencesManager,
         statsPreferences: PreferencesStore,
         pendingSync: CloudKitSyncCoordinator
     ) {
         self.serverManager = serverManager
         self.terminalTheme = terminalTheme
+        self.terminalFont = terminalFont
         self.terminalAccessory = terminalAccessory
         self.statsPreferences = statsPreferences
         self.pendingSync = pendingSync
@@ -149,6 +152,7 @@ private final class AppSyncSettingsDataAdapter: SyncSettingsDataRefreshing {
             throw SyncSettingsDataRefreshError.serverData
         }
         try await terminalTheme.refreshFromCloud()
+        try await terminalFont.refreshFromCloud()
         try await terminalAccessory.refreshFromCloud()
         try await statsPreferences.refreshFromCloud()
         await pendingSync.drainPendingMutations()
@@ -164,15 +168,18 @@ private final class AppSyncSettingsContentSummaryAdapter: SyncSettingsContentSum
     private let serverManager: ServerManager
     private let keychain: KeychainManager
     private let terminalTheme: TerminalThemeManager
+    private let terminalFont: TerminalFontStore
 
     init(
         serverManager: ServerManager,
         keychain: KeychainManager,
-        terminalTheme: TerminalThemeManager
+        terminalTheme: TerminalThemeManager,
+        terminalFont: TerminalFontStore
     ) {
         self.serverManager = serverManager
         self.keychain = keychain
         self.terminalTheme = terminalTheme
+        self.terminalFont = terminalFont
     }
 
     var currentSummary: SyncSettingsContentSummary {
@@ -180,6 +187,7 @@ private final class AppSyncSettingsContentSummaryAdapter: SyncSettingsContentSum
             workspaceCount: serverManager.workspaces.count,
             serverCount: serverManager.servers.count,
             customThemeCount: terminalTheme.customThemes.filter { !$0.isDeleted }.count,
+            customFontCount: terminalFont.customFonts.count,
             serverCredentialCount: serverManager.servers.filter(hasCredentials).count,
             reusableSSHKeyCount: keychain.getStoredSSHKeys().count
         )
@@ -227,6 +235,7 @@ enum SyncSettingsLiveComposition {
         keychain: KeychainManager,
         serverManager: ServerManager,
         terminalTheme: TerminalThemeManager,
+        terminalFont: TerminalFontStore,
         terminalAccessory: TerminalAccessoryPreferencesManager,
         statsPreferences: PreferencesStore,
         pendingSync: CloudKitSyncCoordinator,
@@ -241,6 +250,7 @@ enum SyncSettingsLiveComposition {
             data: AppSyncSettingsDataAdapter(
                 serverManager: serverManager,
                 terminalTheme: terminalTheme,
+                terminalFont: terminalFont,
                 terminalAccessory: terminalAccessory,
                 statsPreferences: statsPreferences,
                 pendingSync: pendingSync
@@ -248,7 +258,8 @@ enum SyncSettingsLiveComposition {
             content: AppSyncSettingsContentSummaryAdapter(
                 serverManager: serverManager,
                 keychain: keychain,
-                terminalTheme: terminalTheme
+                terminalTheme: terminalTheme,
+                terminalFont: terminalFont
             ),
             history: UserDefaultsSyncSettingsHistoryStore(defaults: defaults),
             runtime: runtimeInfo

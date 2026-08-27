@@ -38,6 +38,20 @@ private final class AppThemeMutationClientStub: TerminalThemeCloudMutationClient
 }
 
 @MainActor
+private final class AppFontCloudClientStub: TerminalFontCloudMutationClient {
+    private(set) var fonts: [TerminalFont] = []
+    private(set) var preferences: [TerminalFontPreference] = []
+
+    func saveTerminalFont(_ font: TerminalFont) async throws {
+        fonts.append(font)
+    }
+
+    func saveTerminalFontPreference(_ preference: TerminalFontPreference) async throws {
+        preferences.append(preference)
+    }
+}
+
+@MainActor
 private final class AppAccessoryCloudClientStub: TerminalAccessoryCloudClient {
     private(set) var profiles: [TerminalAccessoryProfile] = []
 
@@ -70,12 +84,14 @@ struct CloudKitSyncLiveCompositionTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let server = AppServerMutationClientStub()
         let theme = AppThemeMutationClientStub()
+        let font = AppFontCloudClientStub()
         let accessory = AppAccessoryCloudClientStub()
         let stats = AppStatsCloudClientStub()
         let generation = UUID()
         let clients = CloudKitSyncClients(
             serverCloud: server,
             terminalThemeCloud: theme,
+            terminalFontCloud: font,
             terminalAccessoryCloud: accessory,
             statsPreferencesCloud: stats
         )
@@ -93,6 +109,7 @@ struct CloudKitSyncLiveCompositionTests {
 
         #expect(clients.serverCloud === server)
         #expect(clients.terminalThemeCloud === theme)
+        #expect(clients.terminalFontCloud === font)
         #expect(clients.terminalAccessoryCloud === accessory)
         #expect(clients.statsPreferencesCloud === stats)
         #expect(composition.coordinator.snapshot().isEmpty)
@@ -105,6 +122,7 @@ struct CloudKitSyncLiveCompositionTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let serverClient = AppServerMutationClientStub()
         let themeClient = AppThemeMutationClientStub()
+        let fontClient = AppFontCloudClientStub()
         let accessoryClient = AppAccessoryCloudClientStub()
         let statsClient = AppStatsCloudClientStub()
         let generation = UUID()
@@ -112,6 +130,7 @@ struct CloudKitSyncLiveCompositionTests {
             clients: CloudKitSyncClients(
                 serverCloud: serverClient,
                 terminalThemeCloud: themeClient,
+                terminalFontCloud: fontClient,
                 terminalAccessoryCloud: accessoryClient,
                 statsPreferencesCloud: statsClient
             ),
@@ -161,6 +180,12 @@ struct CloudKitSyncLiveCompositionTests {
             usePerAppearanceTheme: false,
             updatedAt: Date(timeIntervalSinceReferenceDate: 200)
         )
+        let font = makeFont()
+        let fontPreference = TerminalFontPreference(
+            primaryFamily: font.displayName,
+            cjkFamily: nil,
+            updatedAt: Date(timeIntervalSinceReferenceDate: 250)
+        )
         let profile = makeProfile()
         let stats = makeStatsPreferences()
 
@@ -170,6 +195,8 @@ struct CloudKitSyncLiveCompositionTests {
         try coordinator.enqueueWorkspaceDelete(deletedWorkspace)
         try coordinator.enqueueTerminalThemeUpsert(theme)
         try coordinator.enqueueTerminalThemePreferenceUpsert(preference)
+        try coordinator.enqueueTerminalFontUpsert(font)
+        try coordinator.enqueueTerminalFontPreferenceUpsert(fontPreference)
         try coordinator.enqueueTerminalAccessoryProfileUpsert(profile)
         try coordinator.enqueueStatsPreferencesUpsert(stats)
         await coordinator.drainPendingMutations()
@@ -182,6 +209,8 @@ struct CloudKitSyncLiveCompositionTests {
         ])
         #expect(themeClient.themes == [theme])
         #expect(themeClient.preferences == [preference])
+        #expect(fontClient.fonts == [font])
+        #expect(fontClient.preferences == [fontPreference])
         #expect(accessoryClient.profiles == [profile])
         #expect(statsClient.preferences == [stats])
         #expect(publishedProfiles == [profile])
@@ -200,6 +229,7 @@ struct CloudKitSyncLiveCompositionTests {
             clients: CloudKitSyncClients(
                 serverCloud: AppServerMutationClientStub(),
                 terminalThemeCloud: AppThemeMutationClientStub(),
+                terminalFontCloud: AppFontCloudClientStub(),
                 terminalAccessoryCloud: AppAccessoryCloudClientStub(),
                 statsPreferencesCloud: AppStatsCloudClientStub()
             ),
@@ -280,6 +310,16 @@ struct CloudKitSyncLiveCompositionTests {
 
     private func makeProfile() -> TerminalAccessoryProfile {
         TerminalAccessoryProfile.defaultValue(lastWriterDeviceId: "device")
+    }
+
+    private func makeFont() -> TerminalFont {
+        TerminalFont(
+            familyNames: ["Queued Font"],
+            originalFilename: "QueuedFont.ttf",
+            fileSize: 1_024,
+            sha256: String(repeating: "a", count: 64),
+            updatedAt: Date(timeIntervalSinceReferenceDate: 225)
+        )
     }
 
     private func makeStatsPreferences() -> StatsPreferences {

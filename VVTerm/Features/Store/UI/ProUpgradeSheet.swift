@@ -412,6 +412,20 @@ struct ProUpgradeSheet: View {
                 pro: .unlimited(accessibilityLabel: String(localized: "Unlimited custom actions"))
             ),
             ComparisonFeature(
+                icon: "textformat",
+                title: String(localized: "Custom Fonts"),
+                free: .notIncluded(
+                    accessibilityLabel: String(localized: "Custom and CJK fonts require Pro.")
+                ),
+                pro: .included(accessibilityLabel: String(localized: "Included"))
+            ),
+            ComparisonFeature(
+                icon: "character.book.closed",
+                title: String(localized: "CJK Font"),
+                free: .text(String(localized: "Automatic"), emphasized: false),
+                pro: .text(String(localized: "Custom"), emphasized: true)
+            ),
+            ComparisonFeature(
                 icon: "terminal",
                 title: String(localized: "SSH terminal"),
                 free: .included(accessibilityLabel: String(localized: "SSH terminal included on Free")),
@@ -720,6 +734,7 @@ private struct ComparisonTable: View {
                 }
             }
         }
+        .accessibilityIdentifier("vvterm.pro.comparison")
         .overlay {
             GeometryReader { proxy in
                 Path { path in

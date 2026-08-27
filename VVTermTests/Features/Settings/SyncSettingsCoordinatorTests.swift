@@ -105,6 +105,7 @@ private final class SyncSettingsContentSpy: SyncSettingsContentSummarizing {
         workspaceCount: 2,
         serverCount: 7,
         customThemeCount: 3,
+        customFontCount: 2,
         serverCredentialCount: 6,
         reusableSSHKeyCount: 4
     )
@@ -159,6 +160,7 @@ struct SyncSettingsCoordinatorTests {
             workspaceCount: 3,
             serverCount: 8,
             customThemeCount: 4,
+            customFontCount: 3,
             serverCredentialCount: 7,
             reusableSSHKeyCount: 5
         )

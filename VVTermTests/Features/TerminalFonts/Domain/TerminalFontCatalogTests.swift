@@ -5,30 +5,39 @@ struct TerminalFontCatalogTests {
     @Test
     func catalogNormalizesDeduplicatesAndSortsFamilies() {
         let catalog = TerminalFontCatalog(families: [
-            family(" Zebra ", source: .system, isMonospaced: false),
+            family(" Zebra ", source: .system),
             family("Alpha", source: .system),
-            family("Zebra", source: .custom, isMonospaced: true),
+            family("Zebra", source: .custom),
             family(" ", source: .builtIn)
         ])
 
         #expect(catalog.families.map(\.name) == ["Alpha", "Zebra"])
         #expect(catalog.family(named: " Zebra ")?.source == .custom)
-        #expect(catalog.family(named: "Zebra")?.isMonospaced == true)
     }
 
     @Test
-    func primaryFamiliesIncludeMonospacedAndAppOwnedFonts() {
+    func availableFamiliesIncludeEveryFont() {
         let catalog = TerminalFontCatalog(families: [
-            family("System Proportional", source: .system, isMonospaced: false),
+            family("System Proportional", source: .system),
             family("System Mono", source: .system),
-            family("Custom Proportional", source: .custom, isMonospaced: false),
-            family("Built-in", source: .builtIn, isMonospaced: false)
+            family("Custom Proportional", source: .custom),
+            family("Built-in", source: .builtIn)
         ])
 
-        #expect(catalog.primaryFamilies.map(\.name) == [
+        #expect(catalog.availableFamilies(ensuring: "").map(\.name) == [
             "Built-in",
             "Custom Proportional",
-            "System Mono"
+            "System Mono",
+            "System Proportional"
+        ])
+    }
+
+    @Test
+    func sourceOrderIsBuiltInCustomThenSystem() {
+        #expect(TerminalFontFamily.Source.allCases == [
+            .builtIn,
+            .custom,
+            .system
         ])
     }
 
@@ -36,7 +45,7 @@ struct TerminalFontCatalogTests {
     func unavailableStoredFamilyRemainsVisibleWithoutChangingCatalog() {
         let catalog = TerminalFontCatalog(families: [family("Menlo", source: .system)])
 
-        let visible = catalog.primaryFamilies(ensuring: " User Font ")
+        let visible = catalog.availableFamilies(ensuring: " User Font ")
 
         #expect(visible.map(\.name) == ["Menlo", "User Font"])
         #expect(visible.last?.source == .custom)
@@ -45,13 +54,11 @@ struct TerminalFontCatalogTests {
 
     private func family(
         _ name: String,
-        source: TerminalFontFamily.Source,
-        isMonospaced: Bool = true
+        source: TerminalFontFamily.Source
     ) -> TerminalFontFamily {
         TerminalFontFamily(
             name: name,
-            source: source,
-            isMonospaced: isMonospaced
+            source: source
         )
     }
 }

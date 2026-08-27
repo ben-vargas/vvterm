@@ -69,6 +69,7 @@ private final class SyncSettingsUITestContent: SyncSettingsContentSummarizing {
         workspaceCount: 2,
         serverCount: 7,
         customThemeCount: 3,
+        customFontCount: 2,
         serverCredentialCount: 6,
         reusableSSHKeyCount: 4
     )

@@ -95,6 +95,7 @@ nonisolated struct SyncSettingsContentSummary: Equatable, Sendable {
     let workspaceCount: Int
     let serverCount: Int
     let customThemeCount: Int
+    let customFontCount: Int
     let serverCredentialCount: Int
     let reusableSSHKeyCount: Int
 }

@@ -14,15 +14,13 @@ nonisolated struct TerminalFontCatalog: Equatable, Sendable {
 
             let normalized = TerminalFontFamily(
                 name: name,
-                source: family.source,
-                isMonospaced: family.isMonospaced
+                source: family.source
             )
 
             if let existing = familiesByName[name] {
                 familiesByName[name] = TerminalFontFamily(
                     name: name,
-                    source: Self.mergedSource(existing.source, normalized.source),
-                    isMonospaced: existing.isMonospaced || normalized.isMonospaced
+                    source: Self.mergedSource(existing.source, normalized.source)
                 )
             } else {
                 familiesByName[name] = normalized
@@ -34,41 +32,23 @@ nonisolated struct TerminalFontCatalog: Equatable, Sendable {
         }
     }
 
-    var primaryFamilies: [TerminalFontFamily] {
-        families.filter { family in
-            family.isMonospaced || family.source != .system
-        }
-    }
-
     func family(named name: String) -> TerminalFontFamily? {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return families.first { $0.name == normalizedName }
     }
 
-    func primaryFamilies(ensuring currentName: String) -> [TerminalFontFamily] {
-        families(primaryFamilies, ensuring: currentName)
-    }
-
-    func fallbackFamilies(ensuring currentName: String) -> [TerminalFontFamily] {
-        families(families, ensuring: currentName)
-    }
-
-    private func families(
-        _ availableFamilies: [TerminalFontFamily],
-        ensuring currentName: String
-    ) -> [TerminalFontFamily] {
+    func availableFamilies(ensuring currentName: String) -> [TerminalFontFamily] {
         let normalizedName = currentName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedName.isEmpty else { return availableFamilies }
-        guard !availableFamilies.contains(where: { $0.name == normalizedName }) else {
-            return availableFamilies
+        guard !normalizedName.isEmpty else { return families }
+        guard !families.contains(where: { $0.name == normalizedName }) else {
+            return families
         }
 
         return (
-            availableFamilies + [
+            families + [
                 TerminalFontFamily(
                     name: normalizedName,
-                    source: .custom,
-                    isMonospaced: true
+                    source: .custom
                 )
             ]
         ).sorted {

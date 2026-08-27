@@ -52,6 +52,12 @@ struct SyncSettingsDetailsSections: View {
                 count: summary.customThemeCount,
                 accessibilityIdentifier: "vvterm.settings.sync.details.customThemes"
             )
+            SyncSettingsDetailsCountRow(
+                title: "Custom Fonts",
+                systemImage: "textformat",
+                count: summary.customFontCount,
+                accessibilityIdentifier: "vvterm.settings.sync.details.customFonts"
+            )
             SyncSettingsDetailsStatusRow(
                 title: "Terminal Appearance",
                 systemImage: "circle.lefthalf.filled",
