@@ -26,6 +26,6 @@ nonisolated enum RemotePlatform: String, Sendable {
             return .windows
         }
 
-        return .linux
+        return .unknown
     }
 }

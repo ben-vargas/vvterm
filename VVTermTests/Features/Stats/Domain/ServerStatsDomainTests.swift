@@ -200,8 +200,8 @@ final class ServerStatsDomainTests: XCTestCase {
         XCTAssertEqual(RemotePlatform.detect(from: "Windows_NT"), .windows)
     }
 
-    func testRemotePlatformDefaultsUnknownUnixLikeOutputToLinux() {
-        XCTAssertEqual(RemotePlatform.detect(from: "Solaris"), .linux)
+    func testRemotePlatformKeepsUnknownUnixLikeOutputUnknown() {
+        XCTAssertEqual(RemotePlatform.detect(from: "Solaris"), .unknown)
     }
 
     func testResolvedCPUCoreCountAllowsLiveCountToReplaceFallbackOne() {

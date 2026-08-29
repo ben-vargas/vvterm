@@ -25,7 +25,7 @@ extension SSHClient {
             lifecycle = .connected(state)
         }
         logger.info(
-            "Resolved remote environment [platform: \(environment.platform.rawValue, privacy: .public), shell: \(environment.shellProfile.family.rawValue, privacy: .public), active: \(environment.activeShellName ?? "unknown", privacy: .private(mask: .hash))]"
+            "Resolved remote environment [platform: \(environment.platform.rawValue, privacy: .public), system: \(environment.systemIdentity?.kind.rawValue ?? "unavailable", privacy: .public), shell: \(environment.shellProfile.family.rawValue, privacy: .public), active: \(environment.activeShellName ?? "unknown", privacy: .private(mask: .hash))]"
         )
         return environment
     }

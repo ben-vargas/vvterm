@@ -107,6 +107,31 @@ nonisolated struct RemoteEnvironment: Hashable, Sendable {
     let shellProfile: RemoteShellProfile
     let activeShellName: String?
     let powerShellExecutable: String?
+    let systemIdentity: RemoteSystemIdentity?
+
+    init(
+        platform: RemotePlatform,
+        shellProfile: RemoteShellProfile,
+        activeShellName: String?,
+        powerShellExecutable: String?,
+        systemIdentity: RemoteSystemIdentity? = nil
+    ) {
+        self.platform = platform
+        self.shellProfile = shellProfile
+        self.activeShellName = activeShellName
+        self.powerShellExecutable = powerShellExecutable
+        self.systemIdentity = systemIdentity
+    }
+
+    func withSystemIdentity(_ identity: RemoteSystemIdentity?) -> Self {
+        Self(
+            platform: platform,
+            shellProfile: shellProfile,
+            activeShellName: activeShellName,
+            powerShellExecutable: powerShellExecutable,
+            systemIdentity: identity
+        )
+    }
 
     nonisolated var supportsTmuxRuntime: Bool {
         if platform != .windows {
@@ -145,7 +170,8 @@ nonisolated struct RemoteEnvironment: Hashable, Sendable {
 nonisolated enum RemoteEnvironmentResolver {
     typealias CommandExecutor = @Sendable (_ command: String, _ timeout: Duration?) async throws -> String
 
-    private static let probeTimeout: Duration = .seconds(2)
+    static let probeTimeout: Duration = .seconds(2)
+    static let maximumProbeOutputBytes = 16 * 1_024
     private static let platformMarker = "__VVTERM_PLATFORM__="
     private static let shellMarker = "__VVTERM_SHELL__="
     private static let windowsDefaultShellMarker = "__VVTERM_DEFAULT_SHELL_BEGIN__"
@@ -155,19 +181,23 @@ nonisolated enum RemoteEnvironmentResolver {
 
     static func resolve(using client: SSHClient) async -> RemoteEnvironment {
         await resolve { command, timeout in
-            try await client.execute(command, timeout: timeout)
+            try await client.execute(
+                command,
+                timeout: timeout,
+                maxOutputBytes: maximumProbeOutputBytes
+            )
         }
     }
 
     static func resolve(execute: CommandExecutor) async -> RemoteEnvironment {
         if let output = await probe(posixEnvironmentProbeCommand(), execute: execute),
            let environment = parsePOSIXEnvironmentProbe(output) {
-            return environment
+            return await resolveSystemIdentity(for: environment, execute: execute)
         }
 
         if let output = await probe(windowsEnvironmentProbeCommand(), execute: execute),
            let environment = parseWindowsEnvironmentProbe(output) {
-            return environment
+            return await resolveSystemIdentity(for: environment, execute: execute)
         }
 
         let platform = await detectPlatform(execute: execute)
@@ -190,23 +220,36 @@ nonisolated enum RemoteEnvironmentResolver {
             case .posix:
                 profile = .posix(shellName: nil)
             }
-            return RemoteEnvironment(
+            let environment = RemoteEnvironment(
                 platform: .windows,
                 shellProfile: profile,
                 activeShellName: profile.shellName,
                 powerShellExecutable: powerShellExecutable
             )
+            return await resolveSystemIdentity(for: environment, execute: execute)
 
         case .linux, .darwin, .freebsd, .openbsd, .netbsd, .unknown:
             let shellName = await detectUnixShellName(execute: execute)
             let profile = resolveUnixProfile(shellName: shellName)
-            return RemoteEnvironment(
+            let environment = RemoteEnvironment(
                 platform: platform,
                 shellProfile: profile,
                 activeShellName: shellName,
                 powerShellExecutable: nil
             )
+            return await resolveSystemIdentity(for: environment, execute: execute)
         }
+    }
+
+    private static func resolveSystemIdentity(
+        for environment: RemoteEnvironment,
+        execute: CommandExecutor
+    ) async -> RemoteEnvironment {
+        let identity = await RemoteSystemIdentityResolver.resolve(
+            environment: environment,
+            execute: execute
+        )
+        return environment.withSystemIdentity(identity)
     }
 
     nonisolated static func posixEnvironmentProbeCommand() -> String {
@@ -470,7 +513,14 @@ nonisolated enum RemoteEnvironmentResolver {
     }
 
     private static func probe(_ command: String, execute: CommandExecutor) async -> String? {
-        try? await execute(command, probeTimeout)
+        guard !Task.isCancelled else { return nil }
+        do {
+            let output = try await execute(command, probeTimeout)
+            guard !Task.isCancelled else { return nil }
+            return output
+        } catch {
+            return nil
+        }
     }
 }
 
