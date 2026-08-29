@@ -3,6 +3,12 @@ import SwiftUI
 
 struct TerminalZenModeUITestHarness: View {
     private static let paneId = UUID(uuidString: "5E798DA7-3488-4D78-BEE0-7E01E241A31E")!
+    private static let server = Server(
+        workspaceId: UUID(),
+        name: "Test Server",
+        host: "test.example.com",
+        username: "root"
+    )
 
     @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     private let tabManager: TerminalTabManager
@@ -39,7 +45,7 @@ struct TerminalZenModeUITestHarness: View {
                         ZenModeFloatingOverlay(isPanelPresented: $showingZenPanel) { width in
                             IOSZenModePanel(
                                 width: width,
-                                serverName: "Test Server",
+                                server: Self.server,
                                 selectedView: selectedView,
                                 selectedViewBinding: $selectedView,
                                 viewTabs: [.terminal, .files],
