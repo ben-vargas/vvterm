@@ -55,7 +55,6 @@ nonisolated enum ServerFormIntent: Equatable, Hashable, Identifiable, Sendable {
         guard let sourceServer else { return server }
 
         var result = server
-        result.cloudflareAppDomainOverride = sourceServer.cloudflareAppDomainOverride
         result.tags = sourceServer.tags
         result.isFavorite = sourceServer.isFavorite
         if isEditing {

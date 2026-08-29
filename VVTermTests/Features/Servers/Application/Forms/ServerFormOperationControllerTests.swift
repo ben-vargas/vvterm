@@ -68,6 +68,10 @@ private final class ServerHostKeyRepositoryFake: ServerHostKeyRepository, @unche
         lock.withLock { approvedAtStorage }
     }
 
+    var rejectedChallenge: KnownHostsManager.Challenge? {
+        lock.withLock { rejectedStorage }
+    }
+
     func pendingChallenge(for host: String, port: Int, now: Date) -> KnownHostsManager.Challenge? {
         challenge
     }
@@ -584,6 +588,68 @@ struct ServerFormOperationControllerTests {
         )
         await tester.complete(call: 1, with: .failure(failure))
         #expect(await waitUntil { controller.connectionTestFailure == failure })
+        #expect(controller.hasCompletedConnectionTest(for: second.snapshot))
+    }
+
+    @Test
+    func successfulTestPublishesDetectedSystemOnlyForCurrentRequest() async {
+        let firstOperationID = UUID(uuidString: "00000000-0000-0000-0000-000000000011")!
+        let secondOperationID = UUID(uuidString: "00000000-0000-0000-0000-000000000012")!
+        let tester = ServerConnectionTesterFake()
+        let controller = makeController(
+            connectionTester: tester,
+            operationIDs: [firstOperationID, secondOperationID]
+        )
+        let first = makeInput(host: "first.example.com")
+        let second = makeInput(host: "second.example.com")
+        let staleIdentity = RemoteSystemIdentity(kind: .ubuntu)
+        let currentIdentity = RemoteSystemIdentity(kind: .debian, displayName: "Debian 13")
+        var publishedIdentities: [RemoteSystemIdentity] = []
+
+        controller.startConnectionTest(
+            server: first.server,
+            credentials: first.credentials,
+            snapshot: first.snapshot,
+            onDetectedSystem: { publishedIdentities.append($0) }
+        )
+        #expect(await tester.waitForCallCount(1))
+        controller.startConnectionTest(
+            server: second.server,
+            credentials: second.credentials,
+            snapshot: second.snapshot,
+            onDetectedSystem: { publishedIdentities.append($0) }
+        )
+        #expect(await tester.waitForCallCount(2))
+
+        await tester.complete(call: 0, with: .successWithDetectedSystem(staleIdentity))
+        for _ in 0..<20 { await Task.yield() }
+        #expect(publishedIdentities.isEmpty)
+
+        await tester.complete(call: 1, with: .successWithDetectedSystem(currentIdentity))
+        #expect(await waitUntil { publishedIdentities == [currentIdentity] })
+        #expect(controller.phase == .testSucceeded(snapshot: second.snapshot))
+        #expect(controller.hasCompletedConnectionTest(for: second.snapshot))
+    }
+
+    @Test
+    func successfulConnectionKeepsDetectionFailureNonBlocking() async {
+        let operationID = UUID(uuidString: "00000000-0000-0000-0000-000000000013")!
+        let tester = ServerConnectionTesterFake()
+        let controller = makeController(
+            connectionTester: tester,
+            operationIDs: [operationID]
+        )
+        let input = makeInput(host: "unknown.example.com")
+
+        controller.startConnectionTest(
+            server: input.server,
+            credentials: input.credentials,
+            snapshot: input.snapshot
+        )
+        #expect(await tester.waitForCallCount(1))
+        await tester.complete(call: 0, with: .success)
+
+        #expect(await waitUntil { controller.phase == .testSucceeded(snapshot: input.snapshot) })
     }
 
     @Test
@@ -696,6 +762,124 @@ struct ServerFormOperationControllerTests {
     }
 
     @Test
+    func rejectingHostKeyKeepsTheSnapshotCompletedWithoutRepeatingTheCheck() async {
+        let challenge = KnownHostsManager.Challenge(
+            id: UUID(),
+            host: "rejected.example.com",
+            port: 22,
+            fingerprint: "SHA256:rejected",
+            keyType: 0,
+            keyTypeName: "ssh-ed25519",
+            kind: .firstUse,
+            createdAt: .now
+        )
+        let tester = ServerConnectionTesterFake()
+        let hostKeys = ServerHostKeyRepositoryFake(challenge: challenge)
+        let controller = makeController(
+            connectionTester: tester,
+            hostKeys: hostKeys,
+            operationIDs: [UUID()]
+        )
+        let input = makeInput(host: challenge.host)
+        let failure = ServerConnectionTestFailure(
+            reason: .message("Approval required"),
+            requiresCloudflareOverrides: false,
+            hostKeyChallenge: challenge
+        )
+
+        controller.startConnectionTest(
+            server: input.server,
+            credentials: input.credentials,
+            snapshot: input.snapshot
+        )
+        #expect(await tester.waitForCallCount(1))
+        await tester.complete(call: 0, with: .failure(failure))
+        #expect(await waitUntil { controller.hostKeyChallenge == challenge })
+
+        controller.rejectHostKeyChallenge()
+
+        #expect(hostKeys.rejectedChallenge == challenge)
+        #expect(controller.hostKeyChallenge == nil)
+        #expect(controller.hasCompletedConnectionTest(for: input.snapshot))
+    }
+
+    @Test
+    func saveDetectionPersistsIdentityWithoutChangingManualIcon() async throws {
+        let operationID = UUID(uuidString: "00000000-0000-0000-0000-000000000014")!
+        let tester = ServerConnectionTesterFake()
+        let mutations = ServerMutationRepositoryGate()
+        let controller = makeController(
+            connectionTester: tester,
+            mutations: mutations,
+            operationIDs: [operationID]
+        )
+        let input = makeInput(host: "detected-on-save.example.com")
+        var server = input.server
+        server.iconSelection = .custom(.database)
+        let identity = RemoteSystemIdentity(
+            kind: .nixOS,
+            displayName: "NixOS 26.05"
+        )
+        var savedServer: Server?
+
+        controller.save(
+            mutation: .update(server),
+            credentials: input.credentials,
+            systemDetection: .attempt,
+            wakeOnLANPlan: .clearConfiguration,
+            hasProAccess: true,
+            authorize: { true },
+            onSaved: { savedServer = $0 }
+        )
+        #expect(await tester.waitForCallCount(1))
+        await tester.complete(call: 0, with: .successWithDetectedSystem(identity))
+        await mutations.waitUntilStarted()
+
+        let preparedServer = try #require(mutations.startedMutation?.server)
+        #expect(preparedServer.detectedSystemIdentity == identity)
+        #expect(preparedServer.iconSelection == .custom(.database))
+        mutations.succeed(with: preparedServer)
+        #expect(await waitUntil { savedServer == preparedServer })
+    }
+
+    @Test
+    func saveDetectionFailureDoesNotBlockPersistence() async throws {
+        let operationID = UUID(uuidString: "00000000-0000-0000-0000-000000000015")!
+        let tester = ServerConnectionTesterFake()
+        let mutations = ServerMutationRepositoryGate()
+        let controller = makeController(
+            connectionTester: tester,
+            mutations: mutations,
+            operationIDs: [operationID]
+        )
+        let input = makeInput(host: "offline-on-save.example.com")
+        let failure = ServerConnectionTestFailure(
+            reason: .message("Offline"),
+            requiresCloudflareOverrides: false,
+            hostKeyChallenge: nil
+        )
+        var savedServer: Server?
+
+        controller.save(
+            mutation: .create(input.server),
+            credentials: input.credentials,
+            systemDetection: .attempt,
+            wakeOnLANPlan: .clearConfiguration,
+            hasProAccess: true,
+            authorize: { true },
+            onSaved: { savedServer = $0 }
+        )
+        #expect(await tester.waitForCallCount(1))
+        await tester.complete(call: 0, with: .failure(failure))
+        await mutations.waitUntilStarted()
+
+        let preparedServer = try #require(mutations.startedMutation?.server)
+        #expect(preparedServer.detectedSystemIdentity == nil)
+        mutations.succeed(with: preparedServer)
+        #expect(await waitUntil { savedServer == preparedServer })
+    }
+
+    @Test
     func saveResolvesAndPersistsTheMACAddressWhenEnablingWakeOnLAN() async throws {
         let operationID = UUID(uuidString: "00000000-0000-0000-0000-000000000006")!
         let resolver = WakeOnLANMACAddressResolverFake(
@@ -714,6 +898,7 @@ struct ServerFormOperationControllerTests {
         controller.save(
             mutation: .update(input.server),
             credentials: input.credentials,
+            systemDetection: .skip,
             wakeOnLANPlan: .resolveAutomatically,
             hasProAccess: true,
             authorize: { true },
@@ -748,6 +933,7 @@ struct ServerFormOperationControllerTests {
         controller.save(
             mutation: .update(input.server),
             credentials: input.credentials,
+            systemDetection: .skip,
             wakeOnLANPlan: .resolveAutomatically,
             hasProAccess: true,
             authorize: { true },
@@ -778,6 +964,7 @@ struct ServerFormOperationControllerTests {
         controller.save(
             mutation: .create(input.server),
             credentials: input.credentials,
+            systemDetection: .skip,
             wakeOnLANPlan: .clearConfiguration,
             hasProAccess: true,
             authorize: { true },

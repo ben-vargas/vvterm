@@ -10,6 +10,7 @@ private actor ServerConnectionOperationRunnerFake: ServerConnectionOperationRunn
     }
 
     private let behavior: Behavior
+    private let client = SSHClient.testing()
     private var callCount = 0
 
     init(behavior: Behavior = .run) {
@@ -24,7 +25,7 @@ private actor ServerConnectionOperationRunnerFake: ServerConnectionOperationRunn
         callCount += 1
         switch behavior {
         case .run:
-            try await operation(SSHClient.testing())
+            try await operation(client)
         case .cancel:
             throw CancellationError()
         case .hostKeyApprovalRequired:
@@ -34,6 +35,28 @@ private actor ServerConnectionOperationRunnerFake: ServerConnectionOperationRunn
 
     func calls() -> Int {
         callCount
+    }
+
+    func clientIdentity() -> ObjectIdentifier {
+        ObjectIdentifier(client)
+    }
+}
+
+private actor ServerRemoteSystemDetectorFake: ServerRemoteSystemDetecting {
+    private let result: RemoteSystemIdentity?
+    private var clientIdentities: [ObjectIdentifier] = []
+
+    init(result: RemoteSystemIdentity? = nil) {
+        self.result = result
+    }
+
+    func detect(using client: SSHClient) async -> RemoteSystemIdentity? {
+        clientIdentities.append(ObjectIdentifier(client))
+        return result
+    }
+
+    func detectedClientIdentities() -> [ObjectIdentifier] {
+        clientIdentities
     }
 }
 
@@ -135,9 +158,12 @@ struct AppServerConnectionTestPlanTests {
         let unusedConnectionOperations = ServerConnectionOperationRunnerFake()
         let usedMosh = ServerMoshConnectionTesterFake()
         let unusedMosh = ServerMoshConnectionTesterFake()
+        let identity = RemoteSystemIdentity(kind: .ubuntu, displayName: "Ubuntu 24.04")
+        let detector = ServerRemoteSystemDetectorFake(result: identity)
         let tester = AppServerConnectionTester(
             connectionOperations: usedConnectionOperations,
             remoteMosh: usedMosh,
+            remoteSystemDetector: detector,
             hostKeys: ConnectionTestHostKeyRepositoryFake(),
             now: { .distantPast }
         )
@@ -148,11 +174,16 @@ struct AppServerConnectionTestPlanTests {
             credentials: ServerCredentials(serverId: server.id)
         )
 
-        #expect(result == .success)
+        #expect(result == .successWithDetectedSystem(identity))
         #expect(await usedConnectionOperations.calls() == 1)
         #expect(await unusedConnectionOperations.calls() == 0)
         #expect(await usedMosh.portRanges() == [60_001...61_000])
         #expect(await unusedMosh.portRanges().isEmpty)
+        let operationClientIdentity = await usedConnectionOperations.clientIdentity()
+        #expect(
+            await detector.detectedClientIdentities()
+                == [operationClientIdentity]
+        )
     }
 
     @Test
@@ -161,6 +192,7 @@ struct AppServerConnectionTestPlanTests {
         let tester = AppServerConnectionTester(
             connectionOperations: ServerConnectionOperationRunnerFake(behavior: .cancel),
             remoteMosh: ServerMoshConnectionTesterFake(),
+            remoteSystemDetector: ServerRemoteSystemDetectorFake(),
             hostKeys: ConnectionTestHostKeyRepositoryFake(),
             now: { .distantPast }
         )
@@ -181,6 +213,7 @@ struct AppServerConnectionTestPlanTests {
                 behavior: .hostKeyApprovalRequired
             ),
             remoteMosh: ServerMoshConnectionTesterFake(),
+            remoteSystemDetector: ServerRemoteSystemDetectorFake(),
             hostKeys: ConnectionTestHostKeyRepositoryFake(),
             now: { .distantPast }
         )

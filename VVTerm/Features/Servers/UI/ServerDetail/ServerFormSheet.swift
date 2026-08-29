@@ -205,8 +205,20 @@ struct ServerFormSheet: View {
         return String(localized: "No additional workspace is available for this server right now.")
     }
 
-    private var hasValidConnectionTest: Bool {
-        operations.hasValidConnectionTest(for: form.connectionSnapshot)
+    private var automaticConnectionTestSnapshot: ServerFormModel.ConnectionSnapshot? {
+        let snapshot = form.connectionSnapshot
+        guard hasAuthorizedSourceAccess,
+              form.iconSelection == .automatic,
+              form.isValid,
+              !isLoadingCredentials,
+              !isTestingConnection,
+              !isSaving,
+              operations.failure == nil,
+              !operations.requiresUpgrade,
+              !operations.hasCompletedConnectionTest(for: snapshot) else {
+            return nil
+        }
+        return snapshot
     }
 
     private var hasCustomStartupCommand: Bool {
@@ -279,7 +291,7 @@ struct ServerFormSheet: View {
         limitSection
         serverSection
         authSection
-        connectionSection
+        iconSection
         sessionSection
         RemoteShellStartupActionSection(
             model: $form.remoteShellStartupAction,
@@ -380,6 +392,16 @@ struct ServerFormSheet: View {
 
     private var lifecycleFormContent: some View {
         presentedFormContent
+            .task(id: automaticConnectionTestSnapshot) {
+                guard let snapshot = automaticConnectionTestSnapshot else { return }
+                do {
+                    try await Task.sleep(nanoseconds: 700_000_000)
+                } catch {
+                    return
+                }
+                guard snapshot == form.connectionSnapshot else { return }
+                await runConnectionTest(force: false)
+            }
             .onAppear {
                 reconcileAssignmentWorkspace()
             }
@@ -667,33 +689,15 @@ struct ServerFormSheet: View {
         }
     }
 
-    private var connectionSection: some View {
+    private var iconSection: some View {
         Section {
-            Button {
-                Task {
-                    await runConnectionTest(force: true)
-                }
-            } label: {
-                Text(String(localized: "Test Connection"))
-                    .opacity(isTestingConnection ? 0 : 1)
-                    .overlay {
-                        if isTestingConnection {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                                Text(String(localized: "Testing..."))
-                            }
-                        }
-                    }
-            }
-            .buttonStyle(.bordered)
-            .tint(.secondary)
-            .controlSize(.regular)
-            .disabled(!form.isValid || isTestingConnection)
+            ServerIconPicker(
+                selection: $form.iconSelection,
+                detectedSystemIdentity: form.currentDetectedSystemIdentity,
+                isDetecting: isTestingConnection
+            )
         } header: {
-            sectionHeader("Connection")
-        } footer: {
-            connectionFooter
+            sectionHeader("Icon")
         }
     }
 
@@ -799,19 +803,6 @@ struct ServerFormSheet: View {
     }
 
     // MARK: - Key Input View
-
-    @ViewBuilder
-    private var connectionFooter: some View {
-        if hasValidConnectionTest {
-            Label(String(localized: "Connection successful"), systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .font(.caption)
-        } else if let connectionTestError = operations.connectionTestFailure?.message {
-            Text(connectionTestError)
-                .foregroundStyle(.red)
-                .font(.caption)
-        }
-    }
 
     @ViewBuilder
     private var keyInputView: some View {
@@ -930,12 +921,15 @@ struct ServerFormSheet: View {
         }
 
         let snapshot = form.connectionSnapshot
-        guard force || !operations.hasValidConnectionTest(for: snapshot) else { return }
+        guard force || !operations.hasCompletedConnectionTest(for: snapshot) else { return }
         let serverID = intent.serverID(makeID: makeID)
         operations.startConnectionTest(
             server: buildServer(id: serverID, createdAt: intent.createdAt(now: now)),
             credentials: form.makeCredentials(serverID: serverID),
-            snapshot: snapshot
+            snapshot: snapshot,
+            onDetectedSystem: { identity in
+                form.applyDetectedSystemIdentity(identity)
+            }
         )
     }
 
@@ -962,6 +956,10 @@ struct ServerFormSheet: View {
         operations.save(
             mutation: intent.mutation(for: newServer),
             credentials: form.makeCredentials(serverID: serverID),
+            systemDetection: form.iconSelection == .automatic
+                && !operations.hasCompletedConnectionTest(for: form.connectionSnapshot)
+                ? .attempt
+                : .skip,
             wakeOnLANPlan: wakeOnLANSavePlan,
             hasProAccess: storeManager.allowsProFeatures,
             authorize: {
@@ -979,6 +977,9 @@ struct ServerFormSheet: View {
     }
 
     private var operationFailureMessage: String? {
+        if let connectionTestFailure = operations.connectionTestFailure {
+            return connectionTestFailure.message
+        }
         guard let failure = operations.failure else { return nil }
         switch failure {
         case .operation(let message):

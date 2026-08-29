@@ -20,8 +20,14 @@ nonisolated struct ServerConnectionTestFailure: Equatable, Sendable {
 
 nonisolated enum ServerConnectionTestResult: Equatable, Sendable {
     case success
+    case successWithDetectedSystem(RemoteSystemIdentity)
     case failure(ServerConnectionTestFailure)
     case cancelled
+}
+
+nonisolated enum ServerSaveSystemDetection: Equatable, Sendable {
+    case skip
+    case attempt
 }
 
 nonisolated protocol ServerConnectionTesting: Sendable {
@@ -140,9 +146,14 @@ final class ServerFormOperationController: ObservableObject {
         connectionTestFailure?.hostKeyChallenge
     }
 
-    func hasValidConnectionTest(for snapshot: ServerFormModel.ConnectionSnapshot) -> Bool {
-        guard case .testSucceeded(let completedSnapshot) = phase else { return false }
-        return completedSnapshot == snapshot
+    func hasCompletedConnectionTest(for snapshot: ServerFormModel.ConnectionSnapshot) -> Bool {
+        switch phase {
+        case .testSucceeded(let completedSnapshot),
+             .testFailed(let completedSnapshot, _):
+            return completedSnapshot == snapshot
+        default:
+            return false
+        }
     }
 
     func clearPresentation() {
@@ -249,7 +260,8 @@ final class ServerFormOperationController: ObservableObject {
     func startConnectionTest(
         server: Server,
         credentials: ServerCredentials,
-        snapshot: ServerFormModel.ConnectionSnapshot
+        snapshot: ServerFormModel.ConnectionSnapshot,
+        onDetectedSystem: @escaping @MainActor (RemoteSystemIdentity) -> Void = { _ in }
     ) {
         invalidateCredentialLoading()
         connectionTestTask?.cancel()
@@ -263,15 +275,24 @@ final class ServerFormOperationController: ObservableObject {
             self?.completeConnectionTest(
                 id: operationID,
                 snapshot: snapshot,
-                result: result
+                result: result,
+                onDetectedSystem: onDetectedSystem
             )
         }
     }
 
     func rejectHostKeyChallenge() {
-        guard let challenge = hostKeyChallenge else { return }
+        guard let challenge = hostKeyChallenge,
+              case .testFailed(let snapshot, let failure) = phase else { return }
         hostKeys.reject(challenge)
-        phase = .idle
+        phase = .testFailed(
+            snapshot: snapshot,
+            failure: ServerConnectionTestFailure(
+                reason: failure.reason,
+                requiresCloudflareOverrides: failure.requiresCloudflareOverrides,
+                hostKeyChallenge: nil
+            )
+        )
     }
 
     @discardableResult
@@ -296,6 +317,7 @@ final class ServerFormOperationController: ObservableObject {
     func save(
         mutation: ServerMutation,
         credentials: ServerCredentials,
+        systemDetection: ServerSaveSystemDetection,
         wakeOnLANPlan: ServerFormModel.WakeOnLANSavePlan,
         hasProAccess: Bool,
         authorize: @escaping @MainActor () async -> Bool,
@@ -306,6 +328,7 @@ final class ServerFormOperationController: ObservableObject {
         let operationID = makeID()
         phase = .saving(id: operationID)
         let useCase = saveUseCase
+        let connectionTester = connectionTester
         let wakeOnLANMACAddressResolver = wakeOnLANMACAddressResolver
 
         saveTask = Task { [weak self] in
@@ -315,7 +338,19 @@ final class ServerFormOperationController: ObservableObject {
                 self?.phase = .idle
                 return
             }
-            let preparedMutation: ServerMutation
+            var preparedServer = mutation.server
+            if systemDetection == .attempt {
+                let result = await connectionTester.test(
+                    server: mutation.server,
+                    credentials: credentials
+                )
+                guard !Task.isCancelled else { return }
+                guard self?.isCurrentSave(operationID) == true else { return }
+                if case .successWithDetectedSystem(let identity) = result {
+                    preparedServer.detectedSystemIdentity = identity
+                }
+            }
+
             do {
                 let configuration: WakeOnLANConfiguration?
                 switch wakeOnLANPlan {
@@ -333,10 +368,7 @@ final class ServerFormOperationController: ObservableObject {
                         macAddress: macAddress
                     )
                 }
-                preparedMutation = Self.settingWakeOnLANConfiguration(
-                    configuration,
-                    on: mutation
-                )
+                preparedServer.wakeOnLANConfiguration = configuration
             } catch is CancellationError {
                 return
             } catch {
@@ -347,6 +379,10 @@ final class ServerFormOperationController: ObservableObject {
             }
             guard !Task.isCancelled else { return }
             guard self?.isCurrentSave(operationID) == true else { return }
+            let preparedMutation: ServerMutation = switch mutation {
+            case .create: .create(preparedServer)
+            case .update: .update(preparedServer)
+            }
             do {
                 let savedServer = try await useCase.execute(
                     preparedMutation,
@@ -457,7 +493,8 @@ final class ServerFormOperationController: ObservableObject {
     private func completeConnectionTest(
         id: UUID,
         snapshot: ServerFormModel.ConnectionSnapshot,
-        result: ServerConnectionTestResult
+        result: ServerConnectionTestResult,
+        onDetectedSystem: @MainActor (RemoteSystemIdentity) -> Void
     ) {
         guard case .testing(let currentID, let currentSnapshot) = phase,
               currentID == id,
@@ -465,6 +502,9 @@ final class ServerFormOperationController: ObservableObject {
         connectionTestTask = nil
         switch result {
         case .success:
+            phase = .testSucceeded(snapshot: snapshot)
+        case .successWithDetectedSystem(let identity):
+            onDetectedSystem(identity)
             phase = .testSucceeded(snapshot: snapshot)
         case .failure(let failure):
             phase = .testFailed(snapshot: snapshot, failure: failure)
@@ -478,17 +518,4 @@ final class ServerFormOperationController: ObservableObject {
         return currentID == id
     }
 
-    nonisolated private static func settingWakeOnLANConfiguration(
-        _ configuration: WakeOnLANConfiguration?,
-        on mutation: ServerMutation
-    ) -> ServerMutation {
-        var server = mutation.server
-        server.wakeOnLANConfiguration = configuration
-        switch mutation {
-        case .create:
-            return .create(server)
-        case .update:
-            return .update(server)
-        }
-    }
 }
