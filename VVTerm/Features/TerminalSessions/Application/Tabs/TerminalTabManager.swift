@@ -1031,6 +1031,13 @@ final class TerminalTabManager {
         reconnectCoordinator.connectionStateDidChange(for: paneId)
     }
 
+    func publishDetectedSystem(
+        _ identity: RemoteSystemIdentity,
+        detectedFor server: Server
+    ) async {
+        await dependencies.effects.publishDetectedSystem(server, identity)
+    }
+
     func handleConnectionFailure(
         for paneId: UUID,
         failure: TerminalConnectionFailure

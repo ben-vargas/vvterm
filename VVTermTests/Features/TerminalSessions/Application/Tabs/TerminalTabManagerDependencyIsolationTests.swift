@@ -63,6 +63,7 @@ private final class TerminalEffectRecorder {
     private(set) var initialConnectionPreparations: [UUID] = []
     private(set) var liveActivityRefreshCount = 0
     private(set) var successfulConnections: [(UUID, String)] = []
+    private(set) var detectedSystems: [(UUID, RemoteSystemIdentity)] = []
     private(set) var sessionEndStates: [Bool] = []
     private(set) var splitPaneCount = 0
 
@@ -83,6 +84,9 @@ private final class TerminalEffectRecorder {
             },
             recordSuccessfulConnection: { [self] id, transport in
                 successfulConnections.append((id, transport))
+            },
+            publishDetectedSystem: { [self] server, identity in
+                detectedSystems.append((server.id, identity))
             },
             noteTerminalSessionEnded: { [self] otherTerminalsActive in
                 sessionEndStates.append(otherTerminalsActive)

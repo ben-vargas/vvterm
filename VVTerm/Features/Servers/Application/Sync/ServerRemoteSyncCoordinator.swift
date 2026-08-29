@@ -37,6 +37,8 @@ final class ServerRemoteSyncCoordinator {
     )
     private var activeLoad: ActiveLoad?
     private var startupTask: Task<Void, Never>?
+    private var scheduledMutationDrainTask: Task<Void, Never>?
+    private var scheduledMutationDrainRequested = false
 
     init(dependencies: ServerRemoteSyncCoordinatorDependencies) {
         self.dependencies = dependencies
@@ -46,6 +48,7 @@ final class ServerRemoteSyncCoordinator {
     deinit {
         startupTask?.cancel()
         activeLoad?.task.cancel()
+        scheduledMutationDrainTask?.cancel()
     }
 
     func startAutomaticLoad() {
@@ -204,6 +207,22 @@ final class ServerRemoteSyncCoordinator {
         await dependencies.syncRepository.drainPendingMutations()
     }
 
+    func schedulePendingMutationDrain() {
+        scheduledMutationDrainRequested = true
+        guard scheduledMutationDrainTask == nil else { return }
+
+        let stateStore = dependencies.stateStore
+        let syncRepository = dependencies.syncRepository
+        scheduledMutationDrainTask = Task { [weak self, stateStore, syncRepository] in
+            while !Task.isCancelled {
+                guard self?.consumeScheduledMutationDrainRequest() == true else { return }
+                guard stateStore.isSyncEnabled,
+                      !stateStore.hasPendingServerDataMutation else { continue }
+                await syncRepository.drainPendingMutations()
+            }
+        }
+    }
+
     func removeKnownHostIfUnused(
         for server: Server,
         excluding deletedServerIDs: Set<UUID> = []
@@ -280,6 +299,15 @@ final class ServerRemoteSyncCoordinator {
         self.activeLoad = nil
         activeLoad.task.cancel()
         stateStore.finishLoading(operationID: activeLoad.operationID)
+    }
+
+    private func consumeScheduledMutationDrainRequest() -> Bool {
+        guard scheduledMutationDrainRequested else {
+            scheduledMutationDrainTask = nil
+            return false
+        }
+        scheduledMutationDrainRequested = false
+        return true
     }
 
     private func acceptsLoad(_ generation: LoadGeneration) -> Bool {
