@@ -340,6 +340,15 @@ struct ServerTerminalRoute: View {
                 )
                 .fixedSize()
             }
+        } else if let server = selectedServer {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 7) {
+                    ServerIconView(server: server, size: 19)
+                    Text(server.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                }
+            }
         }
 
         ToolbarItemGroup(placement: .navigationBarTrailing) {

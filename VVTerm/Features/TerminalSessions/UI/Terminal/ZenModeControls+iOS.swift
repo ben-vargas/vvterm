@@ -3,7 +3,7 @@ import SwiftUI
 
 struct IOSZenModePanel: View {
     let width: CGFloat
-    let serverName: String
+    let server: Server
     let selectedView: ConnectionViewTabID
     let selectedViewBinding: Binding<ConnectionViewTabID>
     let viewTabs: [ConnectionViewTabID]
@@ -29,7 +29,7 @@ struct IOSZenModePanel: View {
     var body: some View {
         ZenModePanelCard(width: width) {
             ZenModeStatusLine(
-                title: serverName,
+                server: server,
                 subtitle: statusText,
                 indicatorColor: indicatorColor
             )

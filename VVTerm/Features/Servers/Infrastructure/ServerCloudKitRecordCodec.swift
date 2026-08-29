@@ -7,6 +7,8 @@ nonisolated enum ServerCloudKitRecordCodec {
     static let recordKeys = [
         "workspaceId", "name", "host", "port", "eternalTerminalPort", "username",
         "connectionMode", "authMethod", "cloudflareAccessMode",
+        "iconSelection", "detectedSystemKind", "detectedSystemDisplayName",
+        "appleHardwareModelIdentifier",
         "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
         "wakeOnLANConfiguration", "autoWakeOnLANEnabled",
         "lastConnected", "isFavorite", "requiresBiometricUnlock", "tmuxEnabledOverride",
@@ -78,6 +80,16 @@ nonisolated enum ServerCloudKitRecordCodec {
         let updatedAt = record["updatedAt"] as? Date ?? now
         let wakeOnLANConfiguration = (record["wakeOnLANConfiguration"] as? Data)
             .flatMap { try? JSONDecoder().decode(WakeOnLANConfiguration.self, from: $0) }
+        let detectedSystemIdentity = (record["detectedSystemKind"] as? String)
+            .flatMap(RemoteSystemKind.init(rawValue:))
+            .map { kind in
+                RemoteSystemIdentity(
+                    kind: kind,
+                    displayName: record["detectedSystemDisplayName"] as? String,
+                    appleHardwareModelIdentifier: (record["appleHardwareModelIdentifier"] as? String)
+                        .flatMap(AppleHardwareModelIdentifier.init(rawValue:))
+                )
+            }
 
         return Server(
             id: id,
@@ -90,6 +102,10 @@ nonisolated enum ServerCloudKitRecordCodec {
             username: username,
             connectionMode: connectionMode,
             authMethod: authMethod,
+            iconSelection: ServerIconSelection(
+                persistedValue: record["iconSelection"] as? String
+            ),
+            detectedSystemIdentity: detectedSystemIdentity,
             cloudflareAccessMode: cloudflareAccessMode,
             cloudflareTeamDomainOverride: record["cloudflareTeamDomainOverride"] as? String,
             cloudflareAppDomainOverride: record["cloudflareAppDomainOverride"] as? String,
@@ -129,6 +145,11 @@ nonisolated enum ServerCloudKitRecordCodec {
             ? nil
             : server.connectionMode.rawValue
         record["authMethod"] = server.authMethod.rawValue
+        record["iconSelection"] = server.iconSelection.persistedValue
+        record["detectedSystemKind"] = server.detectedSystemIdentity?.kind.rawValue
+        record["detectedSystemDisplayName"] = server.detectedSystemIdentity?.displayName
+        record["appleHardwareModelIdentifier"] =
+            server.detectedSystemIdentity?.appleHardwareModelIdentifier?.rawValue
         record["cloudflareAccessMode"] = server.cloudflareAccessMode?.rawValue
         record["cloudflareTeamDomainOverride"] = nonempty(server.cloudflareTeamDomainOverride)
         record["cloudflareAppDomainOverride"] = nonempty(server.cloudflareAppDomainOverride)

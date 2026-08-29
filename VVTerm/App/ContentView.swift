@@ -394,6 +394,7 @@ struct ContentView: View {
             .environmentObject(commandBridge)
             .environment(\.locale, locale)
             .environment(\.privacyModeEnabled, privacyModeEnabled)
+            .installLiveServerIconArtwork()
     }
     #endif
 
@@ -428,6 +429,7 @@ struct ContentView: View {
         ServerWakeNoticeHost(coordinator: serverWakeCoordinator) {
             platformContent
         }
+        .installLiveServerIconArtwork()
     }
 }
 

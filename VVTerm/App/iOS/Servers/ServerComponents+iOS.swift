@@ -41,9 +41,7 @@ struct ServerListRow: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 32)
                 } else {
-                    Image(systemName: "server.rack")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
+                    ServerIconView(server: server, size: 27)
                         .frame(width: 32)
                 }
 

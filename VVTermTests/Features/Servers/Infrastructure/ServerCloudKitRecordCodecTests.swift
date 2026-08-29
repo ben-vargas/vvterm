@@ -20,6 +20,9 @@ struct ServerCloudKitRecordCodecTests {
         #expect(record.recordID.recordName == server.id.uuidString)
         #expect(record.recordID.zoneID == zoneID)
         #expect(record["remoteSessionBackendIdentifier"] as? String == "zmx")
+        #expect(record["iconSelection"] as? String == "custom:database")
+        #expect(record["detectedSystemKind"] as? String == "macos")
+        #expect(record["appleHardwareModelIdentifier"] as? String == "MacBookPro18,3")
         #expect(record["tmuxEnabledOverride"] as? Bool == false)
         #expect(record["tmuxStartupBehaviorOverride"] as? String == "skipTmux")
         #expect(
@@ -29,6 +32,26 @@ struct ServerCloudKitRecordCodecTests {
         var expected = server
         expected.updatedAt = now
         #expect(ServerCloudKitRecordCodec.server(from: record, now: now) == expected)
+    }
+
+    @Test
+    func legacyCloudRecordDefaultsToAutomaticWithoutDetection() throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: "test-owner")
+        let now = Date(timeIntervalSinceReferenceDate: 3_000)
+        let record = ServerCloudKitRecordCodec.record(
+            for: makeServer(),
+            in: zoneID,
+            now: now
+        )
+        record["iconSelection"] = nil
+        record["detectedSystemKind"] = nil
+        record["detectedSystemDisplayName"] = nil
+        record["appleHardwareModelIdentifier"] = nil
+
+        let decoded = try #require(ServerCloudKitRecordCodec.server(from: record, now: now))
+
+        #expect(decoded.iconSelection == .automatic)
+        #expect(decoded.detectedSystemIdentity == nil)
     }
 
     @Test(arguments: [
@@ -246,6 +269,14 @@ struct ServerCloudKitRecordCodecTests {
             username: "tester",
             connectionMode: .cloudflare,
             authMethod: .sshKeyWithPassphrase,
+            iconSelection: .custom(.database),
+            detectedSystemIdentity: RemoteSystemIdentity(
+                kind: .macOS,
+                displayName: "macOS",
+                appleHardwareModelIdentifier: AppleHardwareModelIdentifier(
+                    rawValue: "MacBookPro18,3"
+                )!
+            ),
             cloudflareAccessMode: .serviceToken,
             cloudflareTeamDomainOverride: "team.example.test",
             cloudflareAppDomainOverride: "app.example.test",

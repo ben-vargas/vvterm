@@ -19,6 +19,16 @@ nonisolated protocol ServerMoshConnectionTesting: Sendable {
     ) async throws
 }
 
+nonisolated protocol ServerRemoteSystemDetecting: Sendable {
+    func detect(using client: SSHClient) async -> RemoteSystemIdentity?
+}
+
+nonisolated struct AppServerRemoteSystemDetector: ServerRemoteSystemDetecting {
+    func detect(using client: SSHClient) async -> RemoteSystemIdentity? {
+        await client.remoteEnvironment().systemIdentity
+    }
+}
+
 extension SSHConnectionOperationService: ServerConnectionOperationRunning {
     func runServerConnectionTest(
         server: Server,
@@ -108,6 +118,7 @@ extension ServerFormDependencies {
             connectionTester: AppServerConnectionTester(
                 connectionOperations: connectionOperations,
                 remoteMosh: remoteMosh,
+                remoteSystemDetector: AppServerRemoteSystemDetector(),
                 hostKeys: hostKeys,
                 now: now
             ),
@@ -128,23 +139,28 @@ extension ServerFormDependencies {
 nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
     private let connectionOperations: any ServerConnectionOperationRunning
     private let remoteMosh: any ServerMoshConnectionTesting
+    private let remoteSystemDetector: any ServerRemoteSystemDetecting
     private let hostKeys: any ServerHostKeyRepository
     private let now: @Sendable () -> Date
 
     init(
         connectionOperations: any ServerConnectionOperationRunning,
         remoteMosh: any ServerMoshConnectionTesting,
+        remoteSystemDetector: any ServerRemoteSystemDetecting,
         hostKeys: any ServerHostKeyRepository,
         now: @escaping @Sendable () -> Date
     ) {
         self.connectionOperations = connectionOperations
         self.remoteMosh = remoteMosh
+        self.remoteSystemDetector = remoteSystemDetector
         self.hostKeys = hostKeys
         self.now = now
     }
 
     func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult {
         let plan = ServerConnectionTestPlan(server: server)
+        let detectedSystem = ServerConnectionDetectedSystemCapture()
+        let remoteSystemDetector = remoteSystemDetector
         do {
             try Task.checkCancellation()
             try await connectionOperations.runServerConnectionTest(
@@ -175,8 +191,15 @@ nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
                         throw error
                     }
                 }
+                try Task.checkCancellation()
+                if let identity = await remoteSystemDetector.detect(using: client) {
+                    await detectedSystem.store(identity)
+                }
             }
             try Task.checkCancellation()
+            if let identity = await detectedSystem.value() {
+                return .successWithDetectedSystem(identity)
+            }
             return .success
         } catch is CancellationError {
             return .cancelled
@@ -223,5 +246,17 @@ nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
             requiresCloudflareOverrides: requiresCloudflareOverrides,
             hostKeyChallenge: hostKeyChallenge
         )
+    }
+}
+
+private actor ServerConnectionDetectedSystemCapture {
+    private var detectedSystem: RemoteSystemIdentity?
+
+    func store(_ identity: RemoteSystemIdentity) {
+        detectedSystem = identity
+    }
+
+    func value() -> RemoteSystemIdentity? {
+        detectedSystem
     }
 }

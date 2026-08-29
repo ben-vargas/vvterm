@@ -11,7 +11,7 @@ final class ServerDuplicateUITests: XCTestCase {
         let app = launchHarness()
         defer { app.terminate() }
 
-        let duplicate = app.buttons["vvterm.serverDuplicateTest.action"]
+        let duplicate = app.buttons["vvterm.serverDuplicateTest.action"].firstMatch
         XCTAssertTrue(duplicate.waitForExistence(timeout: 10))
         duplicate.click()
 
@@ -27,6 +27,37 @@ final class ServerDuplicateUITests: XCTestCase {
     }
 
     @MainActor
+    func testIconPickerKeepsManualChoiceAndCanSelectAutomatic() {
+        let app = launchHarness()
+        defer { app.terminate() }
+
+        let duplicate = app.buttons["vvterm.serverDuplicateTest.action"].firstMatch
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 10))
+        duplicate.click()
+
+        let picker = app.descendants(matching: .any)["vvterm.serverIcon.picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertTrue((picker.value as? String)?.contains("Database") == true)
+        picker.click()
+
+        let database = app.buttons["vvterm.serverIcon.custom.database"]
+        XCTAssertTrue(database.waitForExistence(timeout: 5))
+        XCTAssertTrue(database.isSelected)
+
+        let automatic = app.descendants(matching: .any)["vvterm.serverIcon.automatic"]
+        XCTAssertTrue(automatic.waitForExistence(timeout: 5))
+        automatic.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        XCTAssertTrue((picker.value as? String)?.contains("Automatic") == true)
+        let detectedMacBook = NSPredicate { evaluatedObject, _ in
+            guard let picker = evaluatedObject as? XCUIElement,
+                  let value = picker.value as? String else { return false }
+            return value.contains("Detected: MacBook Pro")
+        }
+        expectation(for: detectedMacBook, evaluatedWith: picker)
+        waitForExpectations(timeout: 5)
+    }
+
+    @MainActor
     private func launchHarness() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -39,6 +70,11 @@ final class ServerDuplicateUITests: XCTestCase {
             "-security.fullAppLockEnabled", "NO",
         ]
         app.launch()
+        app.activate()
+        let root = app.descendants(matching: .any)["vvterm.serverDuplicateTest.root"]
+        if !root.waitForExistence(timeout: 3) {
+            app.typeKey("n", modifierFlags: .command)
+        }
         return app
     }
 

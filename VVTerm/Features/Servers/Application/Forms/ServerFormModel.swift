@@ -71,6 +71,8 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var username: String
     var transportSelection: ServerTransportSelection
     var authMethod: AuthMethod
+    var iconSelection: ServerIconSelection
+    private(set) var detectedSystemIdentity: RemoteSystemIdentity?
     var password: String
     var sshKey: String
     var sshPassphrase: String
@@ -79,6 +81,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var cloudflareClientID: String
     var cloudflareClientSecret: String
     var cloudflareTeamDomainOverride: String
+    var cloudflareAppDomainOverride: String
     var autoWakeOnLANEnabled: Bool
     var workspaceID: UUID?
     var environment: ServerEnvironment
@@ -88,6 +91,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier
     var remoteSessionStartupBehavior: RemoteSessionStartupBehavior
     var remoteShellStartupAction: RemoteShellStartupActionFormModel
+    private var detectedSystemEndpoint: ServerRemoteEndpoint?
 
     init(
         server: Server? = nil,
@@ -103,6 +107,8 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         username = server?.username ?? ""
         transportSelection = server.map(ServerTransportSelection.init) ?? .standard
         authMethod = server?.authMethod ?? .password
+        iconSelection = server?.iconSelection ?? .automatic
+        detectedSystemIdentity = server?.detectedSystemIdentity
         password = ""
         sshKey = ""
         sshPassphrase = ""
@@ -111,6 +117,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         cloudflareClientID = ""
         cloudflareClientSecret = ""
         cloudflareTeamDomainOverride = server?.cloudflareTeamDomainOverride ?? ""
+        cloudflareAppDomainOverride = server?.cloudflareAppDomainOverride ?? ""
         autoWakeOnLANEnabled = server?.autoWakeOnLANEnabled ?? false
         self.workspaceID = server?.workspaceId ?? workspaceID
         environment = server?.environment ?? .production
@@ -125,6 +132,10 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         remoteShellStartupAction = RemoteShellStartupActionFormModel(
             action: server?.remoteShellStartupAction
         )
+        detectedSystemEndpoint = server.flatMap { server in
+            guard server.detectedSystemIdentity != nil else { return nil }
+            return ServerRemoteEndpoint(server: server)
+        }
     }
 
     var isValid: Bool {
@@ -158,6 +169,10 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             cloudflareClientSecret: cloudflareClientSecret,
             cloudflareTeamDomainOverride: cloudflareTeamDomainOverride
         )
+    }
+
+    var currentDetectedSystemIdentity: RemoteSystemIdentity? {
+        detectedSystemEndpoint == endpointSnapshot ? detectedSystemIdentity : nil
     }
 
     func wakeOnLANSavePlan(existingServer: Server?) -> WakeOnLANSavePlan {
@@ -204,6 +219,11 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         cloudflareClientSecret = credentials.cloudflareClientSecret ?? ""
     }
 
+    mutating func applyDetectedSystemIdentity(_ identity: RemoteSystemIdentity) {
+        detectedSystemIdentity = identity
+        detectedSystemEndpoint = endpointSnapshot
+    }
+
     func makeServer(
         id: UUID,
         workspaceID: UUID,
@@ -220,11 +240,15 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             username: effectiveUsername,
             connectionMode: transportSelection.connectionMode,
             authMethod: transportSelection == .tailscale ? .password : authMethod,
+            iconSelection: iconSelection,
+            detectedSystemIdentity: currentDetectedSystemIdentity,
             cloudflareAccessMode: transportSelection == .cloudflare ? cloudflareAccessMode : nil,
             cloudflareTeamDomainOverride: transportSelection == .cloudflare
                 ? normalizedOptional(cloudflareTeamDomainOverride)
                 : nil,
-            cloudflareAppDomainOverride: nil,
+            cloudflareAppDomainOverride: transportSelection == .cloudflare
+                ? normalizedOptional(cloudflareAppDomainOverride)
+                : nil,
             autoWakeOnLANEnabled: autoWakeOnLANEnabled,
             notes: notes.isEmpty ? nil : notes,
             requiresBiometricUnlock: requiresBiometricUnlock,
@@ -283,6 +307,17 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         case .sshKeyWithPassphrase:
             return !sshKey.isEmpty && !sshPassphrase.isEmpty
         }
+    }
+
+    private var endpointSnapshot: ServerRemoteEndpoint {
+        ServerRemoteEndpoint(
+            host: host,
+            sshPort: Int(port),
+            connectionMode: transportSelection.connectionMode,
+            eternalTerminalPort: Int(eternalTerminalPort),
+            cloudflareTeamDomainOverride: cloudflareTeamDomainOverride,
+            cloudflareAppDomainOverride: cloudflareAppDomainOverride
+        )
     }
 
     private func validPort(_ value: String) -> Bool {

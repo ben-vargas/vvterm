@@ -3,6 +3,22 @@ import SwiftUI
 
 @MainActor
 struct ServerDuplicateUITestHarness: View {
+    private actor AutomaticConnectionTester: ServerConnectionTesting {
+        func test(
+            server: Server,
+            credentials: ServerCredentials
+        ) async -> ServerConnectionTestResult {
+            .successWithDetectedSystem(
+                RemoteSystemIdentity(
+                    kind: .macOS,
+                    appleHardwareModelIdentifier: AppleHardwareModelIdentifier(
+                        rawValue: "MacBookPro18,3"
+                    )
+                )
+            )
+        }
+    }
+
     private static let fallbackWorkspaceID = UUID(
         uuidString: "9B678329-F5FC-4A81-971C-CFCAC3261656"
     )!
@@ -27,6 +43,11 @@ struct ServerDuplicateUITestHarness: View {
             port: 2222,
             username: "wiedy",
             connectionMode: .tailscale,
+            iconSelection: .custom(.database),
+            detectedSystemIdentity: RemoteSystemIdentity(
+                kind: .ubuntu,
+                displayName: "Ubuntu 24.04 LTS"
+            ),
             notes: "Duplicate form fixture"
         )
     }
@@ -89,9 +110,26 @@ struct ServerDuplicateUITestHarness: View {
             serverManager: serverManager,
             workspace: workspace,
             intent: intent,
-            dependencies: dependencies,
+            dependencies: automaticDetectionDependencies,
             makeLocalDiscoveryManager: makeLocalDiscoveryManager,
             onSave: { _ in formIntent = nil }
+        )
+    }
+
+    private var automaticDetectionDependencies: ServerFormDependencies {
+        ServerFormDependencies(
+            credentials: dependencies.credentials,
+            connectionTester: AutomaticConnectionTester(),
+            wakeOnLANMACAddressResolver: dependencies.wakeOnLANMACAddressResolver,
+            hostKeys: dependencies.hostKeys,
+            remoteSessionBackends: dependencies.remoteSessionBackends,
+            defaultRemoteSessionEnabled: dependencies.defaultRemoteSessionEnabled,
+            defaultRemoteSessionBackendIdentifier:
+                dependencies.defaultRemoteSessionBackendIdentifier,
+            defaultRemoteSessionStartupBehavior:
+                dependencies.defaultRemoteSessionStartupBehavior,
+            now: dependencies.now,
+            makeID: dependencies.makeID
         )
     }
 }

@@ -204,6 +204,52 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         try stateStore.updateLastConnected(for: server.id, at: dependencies.now())
     }
 
+    func publishDetectedSystemIdentity(
+        _ identity: RemoteSystemIdentity,
+        detectedFor connectedServer: Server
+    ) async {
+        guard var storedServer = servers.first(where: { $0.id == connectedServer.id }) else {
+            return
+        }
+        guard ServerRemoteEndpoint(server: storedServer) == ServerRemoteEndpoint(server: connectedServer) else {
+            logger.info("Ignored stale system detection for server: \(connectedServer.name)")
+            return
+        }
+        guard storedServer.detectedSystemIdentity != identity else { return }
+
+        let previousServers = servers
+        let previousWorkspaces = workspaces
+        storedServer.detectedSystemIdentity = identity
+        do {
+            let result = try stateStore.planMutation(
+                .updateServer(storedServer),
+                now: dependencies.now()
+            )
+            guard case .serverUpsert(let savedServer) = result.effect else {
+                preconditionFailure("A detected system update must produce a server upsert")
+            }
+            let plan = ServerDataMutationPlan(
+                id: dependencies.makeID(),
+                kind: .serverSave(savedServer.id),
+                previousServers: previousServers,
+                previousWorkspaces: previousWorkspaces,
+                resultingServers: result.servers,
+                resultingWorkspaces: result.workspaces,
+                pendingMutations: [
+                    ServerPendingMutation(
+                        id: dependencies.makeID(),
+                        payload: .serverUpsert(savedServer),
+                        createdAt: dependencies.now()
+                    )
+                ]
+            )
+            try commitServerDataMutation(plan)
+            remoteSyncCoordinator.schedulePendingMutationDrain()
+        } catch {
+            logger.error("Failed to save detected system identity")
+        }
+    }
+
     // MARK: - Workspace CRUD
 
     func addWorkspace(_ workspace: Workspace, hasProAccess: Bool) async throws {

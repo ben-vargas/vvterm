@@ -193,6 +193,100 @@ struct ServerFormModelTests {
         #expect(model.sshPassphrase == "phrase")
     }
 
+    @Test
+    func endpointChangeClearsDetectionButKeepsManualIcon() throws {
+        let identity = RemoteSystemIdentity(kind: .ubuntu, displayName: "Ubuntu 24.04")
+        let server = Server(
+            workspaceId: UUID(),
+            name: "Server",
+            host: "old.example.com",
+            port: 22,
+            username: "root",
+            iconSelection: .custom(.database),
+            detectedSystemIdentity: identity
+        )
+        var model = ServerFormModel(
+            server: server,
+            defaultRemoteSessionEnabled: true,
+            defaultRemoteSessionBackendIdentifier: .tmux,
+            defaultRemoteSessionStartupBehavior: .createManaged
+        )
+        model.host = "new.example.com"
+
+        #expect(model.currentDetectedSystemIdentity == nil)
+
+        let rebuilt = model.makeServer(
+            id: server.id,
+            workspaceID: server.workspaceId,
+            createdAt: server.createdAt
+        )
+
+        #expect(rebuilt.iconSelection == .custom(.database))
+        #expect(rebuilt.detectedSystemIdentity == nil)
+    }
+
+    @Test
+    func freshDetectionForChangedEndpointIsPersisted() {
+        let oldIdentity = RemoteSystemIdentity(kind: .ubuntu)
+        let newIdentity = RemoteSystemIdentity(kind: .windows, displayName: "Windows 11")
+        let server = Server(
+            workspaceId: UUID(),
+            name: "Server",
+            host: "old.example.com",
+            username: "root",
+            detectedSystemIdentity: oldIdentity
+        )
+        var model = ServerFormModel(
+            server: server,
+            defaultRemoteSessionEnabled: true,
+            defaultRemoteSessionBackendIdentifier: .tmux,
+            defaultRemoteSessionStartupBehavior: .createManaged
+        )
+        model.host = "new.example.com"
+        model.applyDetectedSystemIdentity(newIdentity)
+
+        #expect(model.currentDetectedSystemIdentity == newIdentity)
+
+        let rebuilt = model.makeServer(
+            id: server.id,
+            workspaceID: server.workspaceId,
+            createdAt: server.createdAt
+        )
+
+        #expect(rebuilt.detectedSystemIdentity == newIdentity)
+    }
+
+    @Test
+    func equivalentEndpointFormattingKeepsDetection() {
+        let identity = RemoteSystemIdentity(kind: .debian)
+        let server = Server(
+            workspaceId: UUID(),
+            name: "Server",
+            host: "Example.COM",
+            port: 22,
+            username: "root",
+            detectedSystemIdentity: identity
+        )
+        var model = ServerFormModel(
+            server: server,
+            defaultRemoteSessionEnabled: true,
+            defaultRemoteSessionBackendIdentifier: .tmux,
+            defaultRemoteSessionStartupBehavior: .createManaged
+        )
+        model.host = " example.com "
+        model.port = "022"
+
+        #expect(model.currentDetectedSystemIdentity == identity)
+
+        let rebuilt = model.makeServer(
+            id: server.id,
+            workspaceID: server.workspaceId,
+            createdAt: server.createdAt
+        )
+
+        #expect(rebuilt.detectedSystemIdentity == identity)
+    }
+
     private func validPasswordModel() -> ServerFormModel {
         var model = ServerFormModel(
             defaultRemoteSessionEnabled: true,

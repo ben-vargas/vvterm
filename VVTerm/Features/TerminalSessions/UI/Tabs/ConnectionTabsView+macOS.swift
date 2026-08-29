@@ -524,7 +524,7 @@ extension ConnectionTerminalContainer {
     private var zenPanelView: some View {
         ZenModePanel(
             width: 360,
-            serverName: server.name,
+            server: server,
             statusText: tabsStatusText,
             statusColor: zenIndicatorColor,
             selectedView: selectedView,

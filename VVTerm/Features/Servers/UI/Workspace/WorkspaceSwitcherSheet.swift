@@ -364,8 +364,7 @@ struct LockedWorkspaceServerManagementSheet: View {
                     Section {
                         ForEach(workspaceServers) { server in
                             HStack(spacing: 12) {
-                                Image(systemName: "server.rack")
-                                    .foregroundStyle(.secondary)
+                                ServerIconView(server: server, size: 20)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(server.name)

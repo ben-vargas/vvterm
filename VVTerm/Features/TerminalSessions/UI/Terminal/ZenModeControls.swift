@@ -273,17 +273,18 @@ struct ZenModeActionButton: View {
 }
 
 struct ZenModeStatusLine: View {
-    let title: String
+    let server: Server
     let subtitle: String
     let indicatorColor: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
+                ServerIconView(server: server, size: 20)
                 Circle()
                     .fill(indicatorColor)
                     .frame(width: 8, height: 8)
-                Text(title)
+                Text(server.name)
                     .font(.headline)
             }
 

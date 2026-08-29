@@ -111,6 +111,7 @@ struct TerminalSessionApplicationEffects {
     let prepareInitialConnection: (Server) -> Void
     let refreshLiveActivity: ([ConnectionState]) -> Void
     let recordSuccessfulConnection: (UUID, String) -> Void
+    let publishDetectedSystem: (Server, RemoteSystemIdentity) async -> Void
     let noteTerminalSessionEnded: (Bool) -> Void
     let recordSplitPaneCreated: () -> Void
 }
@@ -168,6 +169,7 @@ extension TerminalTabManagerDependencies {
                 prepareInitialConnection: { _ in },
                 refreshLiveActivity: liveActivityRefresh,
                 recordSuccessfulConnection: { _, _ in },
+                publishDetectedSystem: { _, _ in },
                 noteTerminalSessionEnded: { _ in },
                 recordSplitPaneCreated: {}
             ),

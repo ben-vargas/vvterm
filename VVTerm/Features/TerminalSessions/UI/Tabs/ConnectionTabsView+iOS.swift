@@ -202,7 +202,7 @@ extension ConnectionTerminalContainer {
         ZenModeFloatingOverlay(isPanelPresented: $showingZenPanel) { panelWidth in
             IOSZenModePanel(
                 width: panelWidth,
-                serverName: server.name,
+                server: server,
                 selectedView: selectedView,
                 selectedViewBinding: selectedViewBinding,
                 viewTabs: visibleViewTabs,

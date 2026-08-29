@@ -4,7 +4,7 @@ import Foundation
 
 struct ZenModePanel: View {
     let width: CGFloat
-    let serverName: String
+    let server: Server
     let statusText: String
     let statusColor: Color
     let selectedView: ConnectionViewTabID
@@ -54,7 +54,7 @@ struct ZenModePanel: View {
     @ViewBuilder
     private var panelContent: some View {
         ZenModeStatusLine(
-            title: serverName,
+            server: server,
             subtitle: statusText,
             indicatorColor: statusColor
         )

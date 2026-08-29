@@ -62,6 +62,7 @@ final class TerminalPaneSSHCoordinator {
         }
 
         let sshClient = self.sshClient
+        let tabManager = self.tabManager
         let server = self.server
         let credentials = self.credentials
         let logger = self.logger
@@ -84,6 +85,12 @@ final class TerminalPaneSSHCoordinator {
                     context: context,
                     hasEstablishedConnection: hasEstablishedConnection,
                     logger: logger,
+                    publishDetectedSystem: { identity in
+                        await tabManager.publishDetectedSystem(
+                            identity,
+                            detectedFor: server
+                        )
+                    },
                     writeOutput: { [weak terminal] data in
                         guard context.isCurrent(), let terminal else { return false }
                         terminal.receiveTerminalOutput(data)
@@ -115,6 +122,7 @@ final class TerminalPaneSSHCoordinator {
         context: TerminalSSHConnectionContext,
         hasEstablishedConnection: Bool,
         logger: Logger,
+        publishDetectedSystem: @MainActor @escaping @Sendable (RemoteSystemIdentity) async -> Void,
         writeOutput: @MainActor @escaping @Sendable (Data) -> Bool,
         reportFailure: @MainActor @escaping @Sendable (TerminalConnectionFailure) -> Void
     ) async {
@@ -155,6 +163,10 @@ final class TerminalPaneSSHCoordinator {
                         sshClient: sshClient,
                         logger: logger
                     )
+                }
+                let environment = await sshClient.remoteEnvironment()
+                if let identity = environment.systemIdentity {
+                    await publishDetectedSystem(identity)
                 }
                 if shell.transport == .mosh {
                     await context.persistMoshCheckpoint(shell.id)

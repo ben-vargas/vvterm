@@ -61,6 +61,12 @@ enum TerminalTabManagerLiveComposition {
                         transport: transport
                     )
                 },
+                publishDetectedSystem: { server, identity in
+                    await serverManager.publishDetectedSystemIdentity(
+                        identity,
+                        detectedFor: server
+                    )
+                },
                 noteTerminalSessionEnded: { otherTerminalsActive in
                     engagementTracker.noteTerminalSessionEnded(
                         otherTerminalsActive: otherTerminalsActive
