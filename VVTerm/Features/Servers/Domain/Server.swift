@@ -14,6 +14,8 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
     var username: String
     var connectionMode: SSHConnectionMode
     var authMethod: AuthMethod
+    var iconSelection: ServerIconSelection
+    var detectedSystemIdentity: RemoteSystemIdentity?
     var cloudflareAccessMode: CloudflareAccessMode?
     var cloudflareTeamDomainOverride: String?
     var cloudflareAppDomainOverride: String?
@@ -42,6 +44,8 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         username: String,
         connectionMode: SSHConnectionMode = .standard,
         authMethod: AuthMethod = .password,
+        iconSelection: ServerIconSelection = .automatic,
+        detectedSystemIdentity: RemoteSystemIdentity? = nil,
         cloudflareAccessMode: CloudflareAccessMode? = nil,
         cloudflareTeamDomainOverride: String? = nil,
         cloudflareAppDomainOverride: String? = nil,
@@ -71,6 +75,8 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         self.username = username
         self.connectionMode = connectionMode
         self.authMethod = authMethod
+        self.iconSelection = iconSelection
+        self.detectedSystemIdentity = detectedSystemIdentity
         self.cloudflareAccessMode = cloudflareAccessMode
         self.cloudflareTeamDomainOverride = cloudflareTeamDomainOverride
         self.cloudflareAppDomainOverride = cloudflareAppDomainOverride
@@ -109,6 +115,8 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         case username
         case connectionMode
         case authMethod
+        case iconSelection
+        case detectedSystemIdentity
         case cloudflareAccessMode
         case cloudflareTeamDomainOverride
         case cloudflareAppDomainOverride
@@ -142,6 +150,14 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         username = try container.decode(String.self, forKey: .username)
         connectionMode = try container.decodeIfPresent(SSHConnectionMode.self, forKey: .connectionMode) ?? .standard
         authMethod = try container.decodeIfPresent(AuthMethod.self, forKey: .authMethod) ?? .password
+        iconSelection = (try? container.decode(
+            ServerIconSelection.self,
+            forKey: .iconSelection
+        )) ?? .automatic
+        detectedSystemIdentity = try? container.decode(
+            RemoteSystemIdentity.self,
+            forKey: .detectedSystemIdentity
+        )
         if let rawCloudflareMode = try container.decodeIfPresent(String.self, forKey: .cloudflareAccessMode) {
             cloudflareAccessMode = CloudflareAccessMode(rawValue: rawCloudflareMode)
         } else {
@@ -205,6 +221,11 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         try container.encode(username, forKey: .username)
         try container.encode(connectionMode, forKey: .connectionMode)
         try container.encode(authMethod, forKey: .authMethod)
+        try container.encode(iconSelection, forKey: .iconSelection)
+        try container.encodeIfPresent(
+            detectedSystemIdentity,
+            forKey: .detectedSystemIdentity
+        )
         try container.encodeIfPresent(cloudflareAccessMode, forKey: .cloudflareAccessMode)
         try container.encodeIfPresent(cloudflareTeamDomainOverride, forKey: .cloudflareTeamDomainOverride)
         try container.encodeIfPresent(cloudflareAppDomainOverride, forKey: .cloudflareAppDomainOverride)

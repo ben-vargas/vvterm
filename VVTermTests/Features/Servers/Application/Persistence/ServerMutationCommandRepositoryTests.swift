@@ -15,6 +15,8 @@ struct ServerMutationCommandRepositoryTests {
             name: "New",
             host: "new.example.test",
             username: "root",
+            iconSelection: .custom(.database),
+            detectedSystemIdentity: RemoteSystemIdentity(kind: .ubuntu),
             wakeOnLANConfiguration: WakeOnLANConfiguration(
                 macAddress: try WakeOnLANMACAddress("00:11:22:33:44:55")
             ),
@@ -40,6 +42,8 @@ struct ServerMutationCommandRepositoryTests {
         #expect(!inserted.isFavorite)
         #expect(inserted.wakeOnLANConfiguration == input.wakeOnLANConfiguration)
         #expect(inserted.autoWakeOnLANEnabled)
+        #expect(inserted.iconSelection == .custom(.database))
+        #expect(inserted.detectedSystemIdentity == RemoteSystemIdentity(kind: .ubuntu))
         #expect(result.effect == .serverUpsert(inserted))
     }
 
@@ -54,6 +58,8 @@ struct ServerMutationCommandRepositoryTests {
             name: "Edited",
             host: "edited.example.test",
             username: "root",
+            iconSelection: .custom(.cloud),
+            detectedSystemIdentity: RemoteSystemIdentity(kind: .debian),
             wakeOnLANConfiguration: WakeOnLANConfiguration(
                 macAddress: try WakeOnLANMACAddress("AA:BB:CC:DD:EE:FF")
             ),
@@ -79,6 +85,8 @@ struct ServerMutationCommandRepositoryTests {
         #expect(updated.isFavorite)
         #expect(updated.wakeOnLANConfiguration == input.wakeOnLANConfiguration)
         #expect(updated.autoWakeOnLANEnabled)
+        #expect(updated.iconSelection == .custom(.cloud))
+        #expect(updated.detectedSystemIdentity == RemoteSystemIdentity(kind: .debian))
     }
 
     @Test
