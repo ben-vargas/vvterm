@@ -25,6 +25,8 @@
     </array>
 
     <!-- Network -->
+    <key>com.apple.developer.networking.multicast</key>
+    <true/>
     <key>com.apple.security.network.client</key>
     <true/>
     <key>com.apple.security.network.server</key>
