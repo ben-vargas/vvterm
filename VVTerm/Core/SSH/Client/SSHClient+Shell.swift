@@ -10,7 +10,8 @@ extension SSHClient {
         rows: Int = 24,
         pixelSize: TerminalPixelSize? = nil,
         startupCommand: String? = nil,
-        mayExecuteUserStartupAction: Bool = true
+        mayExecuteUserStartupAction: Bool = true,
+        startupShellProfile: RemoteShellProfile? = nil
     ) async throws -> ShellHandle {
         try Task.checkCancellation()
         guard !isAborted, let sshSession = session else {
@@ -18,7 +19,14 @@ extension SSHClient {
         }
 
         let connectionMode = connectedServer?.connectionMode ?? .standard
-        let environment = await remoteEnvironment()
+        var environment = await remoteEnvironment()
+        if let startupShellProfile {
+            environment = RemoteEnvironment(
+                platform: environment.platform, shellProfile: startupShellProfile,
+                activeShellName: environment.activeShellName,
+                powerShellExecutable: environment.powerShellExecutable
+            )
+        }
         try validateShellStartupSessionBeforeShellRequest(sshSession)
         let terminalType = await remoteTerminalType()
         try validateShellStartupSessionBeforeShellRequest(sshSession)
@@ -165,14 +173,25 @@ extension SSHClient {
         terminalType: RemoteTerminalType
     ) async throws -> ShellHandle {
         try validateShellStartupSessionBeforeShellRequest(expectedSession)
-        let shell = try await expectedSession.startShell(
-            cols: cols,
-            rows: rows,
-            pixelSize: pixelSize,
-            startupCommand: startupCommand,
-            environment: environment,
-            terminalType: terminalType
+        let stagedScript = try await prepareWindowsShellScript(
+            startupCommand, environment: environment, using: expectedSession
         )
+        let shell: ShellHandle
+        do {
+            shell = try await expectedSession.startShell(
+                cols: cols,
+                rows: rows,
+                pixelSize: pixelSize,
+                startupCommand: stagedScript?.launcher ?? startupCommand,
+                environment: environment,
+                terminalType: terminalType
+            )
+        } catch {
+            if let stagedScript {
+                await removeWindowsShellScript(stagedScript, using: expectedSession)
+            }
+            throw error
+        }
         do {
             try validateShellStartupSession(expectedSession)
             return shell
@@ -194,7 +213,7 @@ extension SSHClient {
         }
     }
 
-    private func validateShellStartupSessionBeforeShellRequest(
+    func validateShellStartupSessionBeforeShellRequest(
         _ expectedSession: SSHSession
     ) throws {
         do {

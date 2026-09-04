@@ -22,13 +22,6 @@ private struct UnsupportedManagedStartupBackend: RemoteSessionBackend {
         []
     }
 
-    func prepareManagedSession(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        runtime: RemoteSessionRuntime
-    ) async {}
-
     func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
@@ -70,6 +63,62 @@ private struct UnsupportedManagedStartupBackend: RemoteSessionBackend {
 }
 
 struct RemoteShellStartupBackendTests {
+    @Test(arguments: [RemoteShellFamily.powershell, .cmd])
+    func managedWindowsConfigurationUsesOneWrite(_ shellFamily: RemoteShellFamily) throws {
+        let backend = TmuxRemoteSessionBackend(tmux: RemoteTmuxManager())
+        let plan = try backend.launchPlan(
+            for: managedAttachmentRequest(), runtime: try tmuxRuntime(shellFamily: shellFamily)
+        )
+        let preparation = try #require(plan.preparationCommand)
+        let script: String
+        if shellFamily == .cmd {
+            let encoded = try #require(preparation.split(separator: " ").last)
+            let data = try #require(Data(base64Encoded: String(encoded)))
+            script = try #require(String(data: data, encoding: .utf16LittleEndian))
+        } else {
+            script = preparation
+        }
+        #expect(script.components(separatedBy: "Set-Content").count == 2)
+    }
+
+    @Test(arguments: [RemoteShellFamily.powershell, .cmd], [nil, "x", "'", "界"] as [String?])
+    func managedWindowsLaunchFitsOpenSSHPTY(shellFamily: RemoteShellFamily, character: String?) throws {
+        let initialCommand = character.map {
+            String(repeating: $0, count: RemoteShellStartupAction.maximumCommandByteCount / $0.utf8.count)
+        }
+        let backend = TmuxRemoteSessionBackend(tmux: RemoteTmuxManager())
+        let plan = try backend.launchPlan(
+            for: ensureManagedRequest(initialCommand: initialCommand),
+            runtime: try tmuxRuntime(shellFamily: shellFamily)
+        )
+        let environment = RemoteEnvironment(
+            platform: .windows,
+            shellProfile: try #require(plan.shellProfile),
+            activeShellName: nil, powerShellExecutable: "powershell.exe"
+        )
+        #expect(environment.shellProfile.family == .powershell)
+        let startupCommand: String
+        if WindowsShellScript.needsTransfer(command: plan.command, environment: environment) {
+            let script = try WindowsShellScript(command: plan.command, homeDirectory: "/C:/Users/O'Brien")
+            #expect(String(decoding: script.contents, as: UTF8.self).hasSuffix(plan.command))
+            startupCommand = script.launcher
+        } else {
+            startupCommand = plan.command
+        }
+        guard case .exec(let command) = RemoteTerminalBootstrap.launchPlan(
+            startupCommand: startupCommand, environment: environment
+        ) else { Issue.record("Expected a Windows exec command"); return }
+        // Windows OpenSSH adds the default shell and ConPTY launcher before
+        // copying into its 8,191-character buffer, including the null terminator.
+        let shell = shellFamily == .cmd
+            ? #""C:\Windows\System32\cmd.exe" /c "#
+            : #""C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -c "#
+        let completeCommand = #"C:\Windows\System32\conhost.exe --headless --width 132 --height 43 --signal 0xffff -- "#
+            + shell + command
+        #expect(completeCommand.utf16.count + 1 <= 8_191)
+        #expect(command.utf16.count <= WindowsShellScript.directCommandLimit)
+    }
+
     @Test
     func tmuxUsesRawCommandOnlyWhenItCreatesManagedSession() throws {
         let command = "cd /srv/custom && printf '%s' \"$(date)\""

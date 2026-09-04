@@ -249,7 +249,8 @@ extension TerminalRemoteSessionCoordinator {
             clearRuntimeState(for: paneID)
         }
         resolver.cancelAllPrompts()
-        completedCleanup.removeAll()
+        for paneID in directoryRefreshes.keys { cancelDirectoryRefresh(for: paneID) }
+        cancelAllCleanup()
     }
 
     private func shellRegistration(

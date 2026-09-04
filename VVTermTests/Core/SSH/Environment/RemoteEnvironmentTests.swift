@@ -96,10 +96,9 @@ struct RemoteEnvironmentTests {
     }
 
     @Test
-    func posixEnvironmentUsesOneCombinedEnvironmentProbeAndOneIdentityProbe() async {
+    func posixEnvironmentDoesNotWaitForOptionalIdentity() async {
         let executor = FakeExecutor(outputs: [
-            .success("__VVTERM_PLATFORM__=Linux\n__VVTERM_SHELL__=zsh"),
-            .success("ID=ubuntu\nPRETTY_NAME=\"Ubuntu 24.04 LTS\"")
+            .success("__VVTERM_PLATFORM__=Linux\n__VVTERM_SHELL__=zsh")
         ])
 
         let environment = await RemoteEnvironmentResolver.resolve { command, timeout in
@@ -109,9 +108,7 @@ struct RemoteEnvironmentTests {
         #expect(environment.platform == .linux)
         #expect(environment.shellProfile.family == .posix)
         #expect(environment.activeShellName == "zsh")
-        #expect(environment.systemIdentity?.kind == .ubuntu)
-        #expect(environment.systemIdentity?.displayName == "Ubuntu 24.04 LTS")
-        #expect(await executor.recordedCommands().count == 2)
+        #expect(await executor.recordedCommands().count == 1)
     }
 
     @Test
@@ -131,13 +128,6 @@ struct RemoteEnvironmentTests {
                 __VVTERM_WINDOWS_PROBE_END__
                 """
             ),
-            .success(
-                """
-                __VVTERM_WINDOWS_CAPTION__=Microsoft Windows 11 Pro
-                __VVTERM_WINDOWS_VERSION__=10.0.26100
-                __VVTERM_WINDOWS_PRODUCT_TYPE__=1
-                """
-            ),
         ])
 
         let environment = await RemoteEnvironmentResolver.resolve { command, timeout in
@@ -148,10 +138,8 @@ struct RemoteEnvironmentTests {
         #expect(environment.shellProfile.family == .powershell)
         #expect(environment.activeShellName == "pwsh")
         #expect(environment.powerShellExecutable == "pwsh")
-        #expect(environment.systemIdentity?.kind == .windows)
-        #expect(environment.systemIdentity?.displayName == "Microsoft Windows 11 Pro")
         let commands = await executor.recordedCommands()
-        #expect(commands.count == 3)
+        #expect(commands.count == 2)
         #expect(commands[1] == RemoteEnvironmentResolver.windowsEnvironmentProbeCommand())
     }
 

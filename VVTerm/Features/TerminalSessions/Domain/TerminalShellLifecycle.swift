@@ -71,6 +71,15 @@ nonisolated struct TerminalShellStartupPlan: Sendable {
     let command: String?
     let remoteSessionLifecycle: RemoteSessionLifecycleContext?
     let mayExecuteUserStartupAction: Bool
+    let shellProfile: RemoteShellProfile?
+
+    init(command: String?, remoteSessionLifecycle: RemoteSessionLifecycleContext?,
+         mayExecuteUserStartupAction: Bool, shellProfile: RemoteShellProfile? = nil) {
+        self.command = command
+        self.remoteSessionLifecycle = remoteSessionLifecycle
+        self.mayExecuteUserStartupAction = mayExecuteUserStartupAction
+        self.shellProfile = shellProfile
+    }
 
     var mayExecuteStandaloneUserStartupAction: Bool {
         remoteSessionLifecycle == nil && mayExecuteUserStartupAction

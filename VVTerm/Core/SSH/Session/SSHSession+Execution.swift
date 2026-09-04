@@ -67,6 +67,7 @@ extension SSHSession {
 
     func finishExecRequest(_ requestId: UUID, error: Error?) async {
         guard let request = execRequests.removeValue(forKey: requestId) else { return }
+        let exitStatus = request.channel.map { libssh2_channel_get_exit_status($0) } ?? -1
 
         if let channel = request.channel {
             request.channel = nil
@@ -100,7 +101,7 @@ extension SSHSession {
                 logger.debug("Exec command produced stderr [bytes: \(stderr.utf8.count)]")
             }
             let output = String(data: request.output, encoding: .utf8) ?? ""
-            request.continuation.resume(returning: output)
+            request.continuation.resume(returning: SSHCommandResult(output: output, exitStatus: exitStatus))
         }
     }
 
@@ -110,6 +111,14 @@ extension SSHSession {
         _ command: String,
         maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes
     ) async throws -> String {
+        try await executeResult(command, maxOutputBytes: maxOutputBytes).output
+    }
+
+    func executeResult(
+        _ command: String,
+        maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes
+    ) async throws -> SSHCommandResult {
+        try Task.checkCancellation()
         guard libssh2Session != nil else {
             throw SSHError.notConnected
         }

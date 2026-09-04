@@ -58,7 +58,6 @@ enum SSHError: LocalizedError, Sendable {
              .timeout,
              .channelOpenFailed,
              .ptyRequestFailed,
-             .processRequestDenied,
              .shellRequestFailed,
              .socketError:
             return true
@@ -71,6 +70,7 @@ enum SSHError: LocalizedError, Sendable {
              .moshBootstrapFailed,
              .moshInvalidEndpoint,
              .startupCommandMayHaveRun,
+             .processRequestDenied,
              .processRequestOutcomeUnknown,
              .managedStartupCommandUnsupported,
              .persistentSessionStartupCommandConflict,

@@ -2025,3 +2025,4 @@
 "Drag past the left or right edge to hide the controls." = "Drag past the left or right edge to hide the controls.";
 "Hide on Left" = "Hide on Left";
 "Hide on Right" = "Hide on Right";
+"Remote command failed (exit code %d)." = "Remote command failed (exit code %d).";

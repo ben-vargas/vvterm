@@ -389,4 +389,14 @@ nonisolated struct RemoteSessionPresenceProbe: Codable, Hashable, Sendable {
 nonisolated struct RemoteSessionBackendLaunchPlan: Hashable, Sendable {
     let command: String
     let presenceProbe: RemoteSessionPresenceProbe
+    let preparationCommand: String?
+    let shellProfile: RemoteShellProfile?
+
+    init(command: String, presenceProbe: RemoteSessionPresenceProbe, preparationCommand: String? = nil,
+         shellProfile: RemoteShellProfile? = nil) {
+        self.command = command
+        self.presenceProbe = presenceProbe
+        self.preparationCommand = preparationCommand
+        self.shellProfile = shellProfile
+    }
 }

@@ -36,7 +36,9 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] {
         let backend = try tmuxBackend(from: runtime)
-        let sessions = try await tmux.listSessions(using: client, backend: backend)
+        let sessions = try await tmux.listSessions(
+            using: client, backend: backend, requireSuccessfulExit: scope == .managedCleanup
+        )
         guard sessions.count <= 512 else { throw SSHError.outputLimitExceeded }
         let descriptors = try sessions.map { session in
             RemoteSessionDescriptor(
@@ -62,21 +64,6 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    func prepareManagedSession(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        runtime: RemoteSessionRuntime
-    ) async {
-        guard let backend = try? tmuxBackend(from: runtime) else { return }
-        await tmux.prepareConfig(
-            using: client,
-            terminalType: terminalType,
-            themeStyle: themeStyle,
-            backend: backend
-        )
-    }
-
     func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
@@ -84,28 +71,31 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         let backend = try tmuxBackend(from: runtime)
         let sessionName = request.intent.attachment.identifier.rawValue
         let command: String
-        switch request.intent {
-        case .ensureManaged(_, let initialCommand):
-            command = RemoteTmuxCommandBuilder.attachCommand(
-                themeStyle: request.themeStyle,
-                sessionName: sessionName,
-                workingDirectory: request.workingDirectory,
-                initialCommand: initialCommand,
-                backend: backend,
-                lifecycleEnvelope: request.lifecycleEnvelope,
-                transport: request.transport
-            )
-        case .attach(let attachment):
-            command = RemoteTmuxCommandBuilder.attachExistingCommand(
-                themeStyle: request.themeStyle,
-                sessionName: sessionName,
-                ownership: attachment.ownership,
-                backend: backend,
-                lifecycleEnvelope: request.lifecycleEnvelope,
-                transport: request.transport
-            )
+        if backend.isWindows {
+            command = RemoteTmuxCommandBuilder.windowsLaunchScript(for: request, backend: backend)
+        } else {
+            switch request.intent {
+            case .ensureManaged(_, let initialCommand):
+                command = RemoteTmuxCommandBuilder.attachCommand(
+                    themeStyle: request.themeStyle,
+                    sessionName: sessionName,
+                    workingDirectory: request.workingDirectory,
+                    initialCommand: initialCommand,
+                    backend: backend,
+                    lifecycleEnvelope: request.lifecycleEnvelope,
+                    transport: request.transport
+                )
+            case .attach(let attachment):
+                command = RemoteTmuxCommandBuilder.attachExistingCommand(
+                    themeStyle: request.themeStyle,
+                    sessionName: sessionName,
+                    ownership: attachment.ownership,
+                    backend: backend,
+                    lifecycleEnvelope: request.lifecycleEnvelope,
+                    transport: request.transport
+                )
+            }
         }
-
         let markerID = UUID().uuidString
         let existsMarker = "__VVTERM_SESSION_EXISTS_\(markerID)__"
         let missingMarker = "__VVTERM_SESSION_MISSING_\(markerID)__"
@@ -120,7 +110,13 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
                 ),
                 existsMarker: existsMarker,
                 missingMarker: missingMarker
-            )
+            ),
+            preparationCommand: request.intent.attachment.ownership == .managed
+                ? RemoteTmuxCommandBuilder.separateManagedConfigurationCommand(
+                    themeStyle: request.themeStyle, backend: backend
+                ) : nil,
+            shellProfile: backend.isWindows
+                ? .powershell(executableName: backend.powerShellExecutable ?? "powershell.exe") : nil
         )
     }
 
@@ -150,9 +146,9 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
-    ) async {
-        guard let backend = try? tmuxBackend(from: runtime) else { return }
-        await tmux.killSession(
+    ) async throws {
+        let backend = try tmuxBackend(from: runtime)
+        try await tmux.killSession(
             named: identifier.rawValue,
             using: client,
             backend: backend

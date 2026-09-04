@@ -1973,3 +1973,4 @@
 "Drag past the left or right edge to hide the controls." = "左端または右端を越えてドラッグするとコントロールが非表示になります。";
 "Hide on Left" = "左側に隠す";
 "Hide on Right" = "右側に隠す";
+"Remote command failed (exit code %d)." = "リモートコマンドが失敗しました（終了コード %d）。";

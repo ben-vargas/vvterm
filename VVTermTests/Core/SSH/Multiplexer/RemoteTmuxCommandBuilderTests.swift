@@ -56,7 +56,6 @@ struct RemoteTmuxCommandBuilderTests {
         )
 
         #expect(first == second)
-        #expect(first.contains("from theme: Aizen Dark"))
         #expect(first.contains("set -g mode-style \"fg=#d0d6f0,bg=#333333\""))
     }
 

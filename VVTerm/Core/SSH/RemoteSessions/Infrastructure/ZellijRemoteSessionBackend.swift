@@ -76,7 +76,7 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] {
         try requireSupported(runtime)
-        let output = try await client.execute(
+        let output = try await client.executeChecked(
             ZellijRemoteSessionCommandBuilder.listCommand(
                 scope: scope,
                 runtime: runtime
@@ -97,15 +97,6 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
             }
         }
         return sessions
-    }
-
-    func prepareManagedSession(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        runtime: RemoteSessionRuntime
-    ) async {
-        // Managed creation disables serialization without replacing user configuration.
     }
 
     func launchPlan(
@@ -143,19 +134,14 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
-    ) async {
-        guard identifier.backendIdentifier == .zellij else { return }
-        let command: String
-        do {
-            try requireSupported(runtime)
-            command = try ZellijRemoteSessionCommandBuilder.killManagedCommand(
-                identifier: identifier,
-                runtime: runtime
-            )
-        } catch {
-            return
-        }
-        _ = try? await client.execute(
+    ) async throws {
+        guard identifier.backendIdentifier == .zellij else { throw SSHError.unknown("Remote session backend mismatch") }
+        try requireSupported(runtime)
+        let command = try ZellijRemoteSessionCommandBuilder.killManagedCommand(
+            identifier: identifier,
+            runtime: runtime
+        )
+        try await client.executeChecked(
             command,
             timeout: .seconds(18),
             maxOutputBytes: ZellijRemoteSessionParser.maximumMutationOutputBytes
@@ -176,7 +162,8 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
                     runtime: runtime
                 ),
                 timeout: .seconds(8),
-                maxOutputBytes: ZellijRemoteSessionParser.maximumOutputBytes
+                maxOutputBytes: ZellijRemoteSessionParser.maximumOutputBytes,
+                timeoutScope: .command
             )
             guard !Task.isCancelled else { return nil }
             return ZellijRemoteSessionParser.parseWorkingDirectory(output)

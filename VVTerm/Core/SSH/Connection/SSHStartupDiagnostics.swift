@@ -5,6 +5,12 @@ nonisolated enum SSHStartupStage: String, Sendable {
     case transportPreparation
     case dnsResolution
     case dnsFirstAddress
+    case environmentProbe
+    case systemIdentity
+    case sessionProbe
+    case sessionList
+    case sessionWorkingDirectory
+    case sessionCleanup
     case tcpAddressAttempt
     case sshHandshake
     case hostKeyVerification

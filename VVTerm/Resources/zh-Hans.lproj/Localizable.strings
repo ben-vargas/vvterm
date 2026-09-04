@@ -1970,3 +1970,4 @@
 "Drag past the left or right edge to hide the controls." = "拖过左侧或右侧边缘即可隐藏控制。";
 "Hide on Left" = "隐藏到左侧";
 "Hide on Right" = "隐藏到右侧";
+"Remote command failed (exit code %d)." = "远程命令失败（退出代码 %d）。";

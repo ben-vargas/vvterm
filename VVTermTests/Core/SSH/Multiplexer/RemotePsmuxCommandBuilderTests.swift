@@ -3,8 +3,38 @@ import Testing
 @testable import VVTerm
 
 struct RemotePsmuxCommandBuilderTests {
+    @Test
+    func managedStartupFitsCmdInvocation() {
+        let backend = RemoteTmuxBackend.windowsPsmux(
+            commandName: "psmux", shellFamily: .cmd, powerShellExecutable: "powershell.exe"
+        )
+        let command = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteSessionThemeStyle,
+            sessionName: "vvterm_managed_session",
+            workingDirectory: #"C:\Users\VVTerm\project"#,
+            backend: backend,
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope
+        )
+        #expect(RemoteTerminalBootstrap.wrapCmdExecCommand(command).utf16.count <= 8_191)
+    }
+
+    @Test(arguments: [false, true])
+    func availabilityRunsVersionOnceAndChecksOnlyAliases(_ isAlias: Bool) {
+        let backend = RemoteTmuxBackend.windowsPsmux(
+            commandName: isAlias ? "tmux" : "psmux",
+            shellFamily: .powershell,
+            powerShellExecutable: "pwsh"
+        )
+        let command = RemoteTmuxCommandBuilder.windowsPsmuxAvailabilityProbeCommand(
+            commandName: backend.commandName, backend: backend, requirePsmuxExtension: isAlias
+        )
+        #expect(command.components(separatedBy: " -V").count == 2)
+        #expect(command.contains("list-commands") == isAlias)
+        #expect(command.contains("@(& $cmd.Source -V 2>$null)"))
+    }
+
     @Test(arguments: ["x", "'"])
-    func maximumStartupActionFitsTheCompletePowerShellInvocation(_ character: String) throws {
+    func maximumStartupActionRequiresScriptTransfer(_ character: String) throws {
         let action = try RemoteShellStartupAction(
             command: String(
                 repeating: character,
@@ -30,16 +60,7 @@ struct RemotePsmuxCommandBuilderTests {
             activeShellName: "powershell.exe",
             powerShellExecutable: "powershell.exe"
         )
-        let plan = RemoteTerminalBootstrap.launchPlan(
-            startupCommand: backendCommand,
-            environment: environment
-        )
-        guard case .exec(let command) = plan else {
-            Issue.record("Expected a PowerShell startup command")
-            return
-        }
-
-        #expect(command.utf16.count <= 32_767)
+        #expect(WindowsShellScript.needsTransfer(command: backendCommand, environment: environment))
     }
 
     @Test
@@ -76,22 +97,21 @@ struct RemotePsmuxCommandBuilderTests {
         )
 
         #expect(command.contains("source-file -t $vvtermSession $vvtermConfig"))
+        #expect(!command.contains("Set-Content"))
         #expect(command.contains("-u attach-session"))
     }
 
     @Test
-    func managedWindowsConfigUsesActivePowerShellExecutableAsDefaultShellOnce() {
+    func managedWindowsConfigUsesActivePowerShellExecutableAsDefaultShellOnce() throws {
         let backend = RemoteTmuxBackend.windowsPsmux(
             commandName: "psmux",
             shellFamily: .powershell,
             powerShellExecutable: "pwsh"
         )
 
-        let command = RemoteTmuxCommandBuilder.windowsConfigWriteCommand(
-            terminalType: .xtermGhostty,
-            themeStyle: deterministicRemoteSessionThemeStyle,
-            backend: backend
-        )
+        let command = try #require(RemoteTmuxCommandBuilder.separateManagedConfigurationCommand(
+            themeStyle: deterministicRemoteSessionThemeStyle, backend: backend
+        ))
 
         #expect(command.contains("[System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName"))
         #expect(command.contains("set -o default-shell"))
@@ -106,11 +126,9 @@ struct RemotePsmuxCommandBuilderTests {
             powerShellExecutable: "powershell"
         )
 
-        let command = RemoteTmuxCommandBuilder.windowsConfigWriteCommand(
-            terminalType: .xtermGhostty,
-            themeStyle: deterministicRemoteSessionThemeStyle,
-            backend: backend
-        )
+        let command = try #require(RemoteTmuxCommandBuilder.separateManagedConfigurationCommand(
+            themeStyle: deterministicRemoteSessionThemeStyle, backend: backend
+        ))
         let script = try #require(decodedPowerShellScript(from: command))
 
         #expect(script.contains("$vvtermDefaultShell = $env:ComSpec"))

@@ -76,6 +76,9 @@ struct TerminalSSHConnectionContext {
 nonisolated extension TerminalConnectionFailure {
     static func transport(_ error: Error) -> Self {
         let message = error.localizedDescription
+        if error is SSHShellPreparationError || error is SSHCommandExitError {
+            return .external(message: message, retryDisposition: .manual, requiredAction: nil)
+        }
         guard let sshError = error as? SSHError else {
             return .external(
                 message: message,

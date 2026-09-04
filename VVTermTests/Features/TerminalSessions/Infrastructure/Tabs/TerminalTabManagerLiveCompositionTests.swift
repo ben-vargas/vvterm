@@ -32,13 +32,6 @@ private actor LiveCompositionRemoteSessionSpy: TerminalRemoteSessionServicing {
         []
     }
 
-    func prepareManagedSession(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        runtime: RemoteSessionRuntime
-    ) async {}
-
     func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
@@ -70,7 +63,7 @@ private actor LiveCompositionRemoteSessionSpy: TerminalRemoteSessionServicing {
     }
 
     func cleanupSessions(
-        keeping identifiers: Set<RemoteSessionIdentifier>,
+        keeping identifiers: @escaping @Sendable () async throws -> Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async {}

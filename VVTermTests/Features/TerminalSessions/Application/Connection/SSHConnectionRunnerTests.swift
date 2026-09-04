@@ -89,6 +89,49 @@ enum SSHConnectionRunnerPreDispatchFailure: CaseIterable, Sendable {
 @MainActor
 struct SSHConnectionRunnerTests {
     @Test
+    func scriptPreparationFailureAllowsManualRetryWithoutReplayingAnAction() async {
+        let fixture = makeFixture()
+        let pending = SSHConnectionRunnerPendingStateRecorder()
+        var attempts: [Int] = []
+        var reportedPreparationFailure = false
+        let transport = SSHConnectionRunnerTransport(
+            connect: { _, _ in },
+            startShell: { _, _, _, _, _, profile in
+                #expect(profile?.family == .powershell)
+                throw SSHShellPreparationError(underlying: SFTPTransportError.invalidEntryName)
+            },
+            disconnect: {}, closeShell: { _ in }, execute: { _, _ in "" }
+        )
+        await SSHConnectionRunner.run(
+            server: fixture.server, credentials: fixture.credentials, transport: transport,
+            initialTerminalState: .init(columns: 80, rows: 24, pixelSize: nil),
+            logger: Logger(subsystem: "SSHConnectionRunnerTests", category: "Runner"),
+            shouldContinueConnection: { true }, onAttempt: { attempts.append($0) },
+            startupPlan: {
+                TerminalShellStartupPlan(
+                    command: "notify-deployment", remoteSessionLifecycle: nil,
+                    mayExecuteUserStartupAction: true,
+                    shellProfile: .powershell(executableName: "powershell.exe")
+                )
+            },
+            setStartupActionReplayGuard: pending.record,
+            restoreMoshShell: { _, _ in nil }, registerShell: { _, _ in true },
+            onTitleChange: { _ in }, writeOutput: { _ in true }, shouldResetClient: { _ in false },
+            onProcessExit: { _, _ in },
+            onFailure: { reportedPreparationFailure = $0 is SSHShellPreparationError }
+        )
+        #expect(attempts == [1])
+        #expect(pending.states == [true, false])
+        #expect(reportedPreparationFailure)
+        #expect(!TerminalConnectionFailure.transport(
+            SSHShellPreparationError(underlying: SFTPTransportError.invalidEntryName)
+        ).allowsAutomaticReconnectRetry)
+        #expect(!TerminalConnectionFailure.transport(
+            SSHCommandExitError(exitStatus: 1)
+        ).allowsAutomaticReconnectRetry)
+    }
+
+    @Test
     func plainStartupActionFailureStopsConnectionAttempts() async {
         let fixture = makeFixture()
         let recorder = SSHConnectionRunnerTestRecorder()
@@ -98,7 +141,7 @@ struct SSHConnectionRunnerTests {
         let pendingStateRecorder = SSHConnectionRunnerPendingStateRecorder()
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { columns, rows, _, command, mayExecuteUserStartupAction in
+            startShell: { columns, rows, _, command, mayExecuteUserStartupAction, _ in
                 #expect(command == startupCommand)
                 #expect(mayExecuteUserStartupAction)
                 await recorder.recordStart(columns: columns, rows: rows)
@@ -150,7 +193,7 @@ struct SSHConnectionRunnerTests {
     }
 
     @Test(arguments: SSHConnectionRunnerPreDispatchFailure.allCases)
-    func preDispatchFailureBeforeStandaloneActionRemainsRetryable(
+    func preDispatchFailureClearsReplayGuardAndRetriesOnlyTransientErrors(
         _ failure: SSHConnectionRunnerPreDispatchFailure
     ) async {
         let fixture = makeFixture()
@@ -160,7 +203,7 @@ struct SSHConnectionRunnerTests {
         var reportedFailure: SSHError?
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { columns, rows, _, _, mayExecuteUserStartupAction in
+            startShell: { columns, rows, _, _, mayExecuteUserStartupAction, _ in
                 #expect(mayExecuteUserStartupAction)
                 await recorder.recordStart(columns: columns, rows: rows)
                 throw failure.error
@@ -199,9 +242,10 @@ struct SSHConnectionRunnerTests {
             onFailure: { error in reportedFailure = error as? SSHError }
         )
 
-        #expect(attempts == [1, 2, 3])
-        #expect(await recorder.recordedStartSizes() == [[132, 43], [132, 43], [132, 43]])
-        #expect(pendingStateRecorder.states == [true, false, true, false, true, false])
+        let attemptCount = failure == .processRequestDenied ? 1 : 3
+        #expect(attempts == Array(1...attemptCount))
+        #expect(await recorder.recordedStartSizes() == Array(repeating: [132, 43], count: attemptCount))
+        #expect(pendingStateRecorder.states == (0..<attemptCount).flatMap { _ in [true, false] })
         switch failure {
         case .channelOpen:
             guard case .channelOpenFailed = reportedFailure else {
@@ -250,7 +294,7 @@ struct SSHConnectionRunnerTests {
         }
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { _, _, _, _, _ in
+            startShell: { _, _, _, _, _, _ in
                 throw SSHError.shellRequestFailed
             },
             disconnect: {},
@@ -302,7 +346,7 @@ struct SSHConnectionRunnerTests {
         var reportedFailure: SSHError?
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { _, _, _, _, _ in
+            startShell: { _, _, _, _, _, _ in
                 throw SSHError.unsupportedRemoteShellForStartupCommand
             },
             disconnect: {},
@@ -370,7 +414,7 @@ struct SSHConnectionRunnerTests {
         }
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { columns, rows, _, command, _ in
+            startShell: { columns, rows, _, command, _, _ in
                 #expect(command == startupCommand)
                 await recorder.recordStart(columns: columns, rows: rows)
                 await gate.suspend()
@@ -432,7 +476,7 @@ struct SSHConnectionRunnerTests {
         }
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { _, _, _, _, _ in
+            startShell: { _, _, _, _, _, _ in
                 await gate.suspend()
                 throw SSHError.processRequestOutcomeUnknown
             },
@@ -523,7 +567,7 @@ struct SSHConnectionRunnerTests {
         var endReason: TerminalShellEndReason?
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { _, _, _, _, _ in fixture.shell },
+            startShell: { _, _, _, _, _, _ in fixture.shell },
             disconnect: {},
             closeShell: { _ in },
             execute: { _, _ in "" }
@@ -576,7 +620,7 @@ struct SSHConnectionRunnerTests {
         var endReason: TerminalShellEndReason?
         let transport = SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { _, _, _, _, _ in
+            startShell: { _, _, _, _, _, _ in
                 Issue.record("A restored Mosh shell must not start a fresh shell")
                 return fixture.shell
             },
@@ -723,7 +767,7 @@ struct SSHConnectionRunnerTests {
     ) -> SSHConnectionRunnerTransport {
         SSHConnectionRunnerTransport(
             connect: { _, _ in },
-            startShell: { columns, rows, _, _, _ in
+            startShell: { columns, rows, _, _, _, _ in
                 await startShell(columns, rows)
                 return shell
             },
