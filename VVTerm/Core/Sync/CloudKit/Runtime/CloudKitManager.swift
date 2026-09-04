@@ -21,6 +21,7 @@ final class CloudKitManager {
 
     let container: CKContainer
     let database: CKDatabase
+    let zoneClient: CloudKitZoneClient
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "CloudKit")
     let recordZoneName = CloudKitSyncConstants.recordZoneName
     lazy var recordZone = CKRecordZone(zoneName: recordZoneName)
@@ -70,7 +71,8 @@ final class CloudKitManager {
         self.init(
             container: container,
             syncEnabled: { SyncSettings.isEnabled },
-            accountStatus: { try await container.accountStatus() }
+            accountStatus: { try await container.accountStatus() },
+            zoneClient: .live(database: container.privateCloudDatabase)
         )
     }
 
@@ -78,12 +80,14 @@ final class CloudKitManager {
         container: CKContainer,
         syncEnabled: @escaping @MainActor @Sendable () -> Bool,
         accountStatus: @escaping @MainActor @Sendable () async throws -> CKAccountStatus,
+        zoneClient: CloudKitZoneClient,
         initialZoneReady: Bool = UserDefaults.standard.bool(
             forKey: CloudKitSyncConstants.zoneReadyKey()
         )
     ) {
         self.container = container
         database = container.privateCloudDatabase
+        self.zoneClient = zoneClient
         self.syncEnabled = syncEnabled
         fetchAccountStatus = accountStatus
         zoneReady = initialZoneReady
