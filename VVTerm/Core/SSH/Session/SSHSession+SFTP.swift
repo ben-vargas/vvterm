@@ -228,32 +228,46 @@ extension SSHSession {
             mode: permissions,
             operation: "write file"
         )
-        defer { libssh2_sftp_close_handle(handle) }
+        do {
+            var totalBytesWritten = 0
+            while totalBytesWritten < data.count {
+                try Task.checkCancellation()
 
-        var totalBytesWritten = 0
-        while totalBytesWritten < data.count {
-            try Task.checkCancellation()
+                let bytesWritten = data.withUnsafeBytes { rawBuffer -> Int in
+                    guard let baseAddress = rawBuffer.baseAddress else { return 0 }
+                    let remainingCount = min(64 * 1024, data.count - totalBytesWritten)
+                    let writeBaseAddress = baseAddress
+                        .advanced(by: totalBytesWritten)
+                        .assumingMemoryBound(to: CChar.self)
+                    return Int(libssh2_sftp_write(handle, writeBaseAddress, remainingCount))
+                }
 
-            let bytesWritten = data.withUnsafeBytes { rawBuffer -> Int in
-                guard let baseAddress = rawBuffer.baseAddress else { return 0 }
-                let remainingCount = min(64 * 1024, data.count - totalBytesWritten)
-                let writeBaseAddress = baseAddress
-                    .advanced(by: totalBytesWritten)
-                    .assumingMemoryBound(to: CChar.self)
-                return Int(libssh2_sftp_write(handle, writeBaseAddress, remainingCount))
+                if bytesWritten > 0 {
+                    totalBytesWritten += bytesWritten
+                    continue
+                }
+
+                if bytesWritten == Int(LIBSSH2_ERROR_EAGAIN) {
+                    await waitForSocket()
+                    continue
+                }
+
+                throw Self.remoteFileError(from: sftp, operation: "write file", path: normalizedPath)
             }
+        } catch {
+            _ = await closeWrittenSFTPFile(handle)
+            throw error
+        }
+        let closeResult = await closeWrittenSFTPFile(handle)
+        guard closeResult == 0 else {
+            throw SSHError.socketError("SFTP file close failed: \(closeResult)")
+        }
+    }
 
-            if bytesWritten > 0 {
-                totalBytesWritten += bytesWritten
-                continue
-            }
-
-            if bytesWritten == Int(LIBSSH2_ERROR_EAGAIN) {
-                await waitForSocket()
-                continue
-            }
-
-            throw Self.remoteFileError(from: sftp, operation: "write file", path: normalizedPath)
+    private func closeWrittenSFTPFile(_ handle: OpaquePointer) async -> Int32 {
+        guard let session = libssh2Session else { return -1 }
+        return await completeActiveChannelCleanupCall(session: session) {
+            libssh2_sftp_close_handle(handle)
         }
     }
 
@@ -333,11 +347,15 @@ extension SSHSession {
             guard totalBytesWritten == expectedBytes else {
                 throw SFTPTransportError.resourceLimitExceeded
             }
-            libssh2_sftp_close_handle(remoteHandle)
         } catch {
-            libssh2_sftp_close_handle(remoteHandle)
+            _ = await closeWrittenSFTPFile(remoteHandle)
             await removePartialFile(at: normalizedPath, sftp: sftp)
             throw error
+        }
+        let closeResult = await closeWrittenSFTPFile(remoteHandle)
+        guard closeResult == 0 else {
+            await removePartialFile(at: normalizedPath, sftp: sftp)
+            throw SSHError.socketError("SFTP file close failed: \(closeResult)")
         }
     }
 
