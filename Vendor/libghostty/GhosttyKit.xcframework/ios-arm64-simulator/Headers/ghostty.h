@@ -1184,9 +1184,11 @@ GHOSTTY_API bool ghostty_surface_needs_confirm_quit(ghostty_surface_t);
 GHOSTTY_API bool ghostty_surface_process_exited(ghostty_surface_t);
 GHOSTTY_API void ghostty_surface_refresh(ghostty_surface_t);
 GHOSTTY_API void ghostty_surface_draw(ghostty_surface_t);
-GHOSTTY_API void ghostty_surface_feed_data(ghostty_surface_t,
-                                           const uint8_t*,
-                                           size_t);
+/// Synchronously process external terminal output. Call this from a
+/// dedicated worker thread, never the UI thread or Ghostty's termio thread.
+GHOSTTY_API void ghostty_surface_feed_data_blocking(ghostty_surface_t,
+                                                    const uint8_t*,
+                                                    size_t);
 GHOSTTY_API void ghostty_surface_set_write_callback(ghostty_surface_t,
                                                      ghostty_surface_write_fn,
                                                      void*);

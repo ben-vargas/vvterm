@@ -53,7 +53,9 @@ struct GhosttyTerminalContextMenuTests {
             reportedData.append(data)
         }
         terminal.setupWriteCallback()
-        terminal.feedData(Data("\u{1B}[?1000h\u{1B}[?1006h".utf8))
+        #expect(await terminal.receiveTerminalOutput(
+            Data("\u{1B}[?1000h\u{1B}[?1006h".utf8)
+        ))
 
         let surface = try #require(terminal.surface)
         #expect(surface.mouseCaptured)

@@ -9,18 +9,13 @@
 import Foundation
 
 extension GhosttyTerminalView {
-    /// Feed data from SSH channel to the terminal for rendering
-    func feedData(_ data: Data) {
-        guard let surface = surface?.unsafeCValue else { return }
-
-        // Feed data immediately - SSH read loop already batches appropriately
-        data.withUnsafeBytes { buffer in
-            guard let ptr = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
-            ghostty_surface_feed_data(surface, ptr, buffer.count)
-        }
-
-        // Request render via display link (event-driven, will auto-stop when idle)
+    @discardableResult
+    func receiveTerminalOutput(_ data: Data) async -> Bool {
+        guard !isShuttingDown, let terminalOutputRuntime else { return false }
+        guard await terminalOutputRuntime.write(data) else { return false }
+        guard !isShuttingDown else { return false }
         requestRender()
+        return true
     }
 
     /// Setup the write callback to capture keyboard input

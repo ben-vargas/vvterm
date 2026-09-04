@@ -36,6 +36,9 @@ struct TerminalKeyboardUITestHarness: View {
                 .joined(separator: "\r\n") + "\r\n"
         ).utf8
     )
+    private static let terminalResponseBurst = Data(
+        String(repeating: "\u{1B}[c", count: 96).utf8
+    )
 
     init(
         tabManager: TerminalTabManager,
@@ -125,6 +128,8 @@ struct TerminalKeyboardUITestHarness: View {
     @State private var receivedInput = Data()
     @State private var returnInputCount = 0
     @State private var codexResponseCount = 0
+    @State private var outputBurstRequestID = 0
+    @State private var completedOutputBurstCount = 0
     @State private var zoomActionCount = 0
     @State private var lastZoomAction = "none"
     @State private var paneShortcutActionCount = 0
@@ -238,9 +243,10 @@ struct TerminalKeyboardUITestHarness: View {
                             returnInputCount += 1
                         }
                         if simulatesCodexTUIResponse, data.contains(0x0D), codexResponseCount == 0 {
-                            DispatchQueue.main.async {
-                                terminalView?.feedData(Self.codexTUIResponse)
-                                codexResponseCount += 1
+                            codexResponseCount += 1
+                            Task { @MainActor in
+                                guard let terminalView else { return }
+                                _ = await terminalView.receiveTerminalOutput(Self.codexTUIResponse)
                             }
                         }
                     },
@@ -508,7 +514,9 @@ struct TerminalKeyboardUITestHarness: View {
                 }
 
                 Button("Cursor Bottom") {
-                    terminalView?.keyboardUITestMoveCursorToBottom()
+                    Task { @MainActor in
+                        await terminalView?.keyboardUITestMoveCursorToBottom()
+                    }
                 }
                 .accessibilityIdentifier("vvterm.keyboardTest.cursor.bottom")
 
@@ -599,6 +607,11 @@ struct TerminalKeyboardUITestHarness: View {
                         }
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.privacy.resume")
+
+                    Button("Output Burst") {
+                        outputBurstRequestID += 1
+                    }
+                    .accessibilityIdentifier("vvterm.keyboardTest.output.burst")
                 }
             }
             .font(.system(size: 12, weight: .semibold))
@@ -649,9 +662,15 @@ struct TerminalKeyboardUITestHarness: View {
         .task {
             ghosttyApp.startIfNeeded()
         }
-        .onChange(of: terminalReady) { isReady in
-            guard isReady else { return }
-            configureLifecycleHarness()
+        .task(id: terminalReady) {
+            guard terminalReady else { return }
+            await configureLifecycleHarness()
+        }
+        .task(id: outputBurstRequestID) {
+            guard outputBurstRequestID > 0, let terminalView else { return }
+            if await terminalView.receiveTerminalOutput(Self.terminalResponseBurst) {
+                completedOutputBurstCount += 1
+            }
         }
         .onChange(of: scenePhase) { phase in
             switch phase {
@@ -924,6 +943,7 @@ struct TerminalKeyboardUITestHarness: View {
             + " orphanAccessoryObserved=\(keyboardAccessoryPairingObservation.observedAccessoryOnly)"
             + " reconnect=\(lifecycleStatus.rawValue) inputHex=\(receivedInputHex)"
             + " returnInputs=\(returnInputCount) codexResponses=\(codexResponseCount)"
+            + " outputBursts=\(completedOutputBurstCount)"
             + " findPresented=\(terminalView.isFindNavigatorVisible)"
             + " mouseCaptured=\(terminalView.surface?.mouseCaptured == true)"
             + " primaryMousePresses=\(primaryMousePresses) primaryMouseReleases=\(primaryMouseReleases)"
@@ -974,7 +994,7 @@ struct TerminalKeyboardUITestHarness: View {
         )
     }
 
-    private func configureLifecycleHarness() {
+    private func configureLifecycleHarness() async {
         guard let terminalView else { return }
         let manager = tabManager
         if manager.sessionState.paneState(for: Self.paneId) == nil {
@@ -990,10 +1010,10 @@ struct TerminalKeyboardUITestHarness: View {
         manager.keyboardCoordinator.setActivePane(Self.paneId)
         manager.keyboardCoordinator.setViewActive(true)
         if seedsTerminalSelectionFixture || simulatesTerminalMouseCapture {
-            terminalView.feedData(Self.touchSelectionFixture)
+            _ = await terminalView.receiveTerminalOutput(Self.touchSelectionFixture)
         }
         if simulatesTerminalMouseCapture {
-            terminalView.feedData(Self.mouseCaptureSequence)
+            _ = await terminalView.receiveTerminalOutput(Self.mouseCaptureSequence)
         }
         if seedsTerminalPasteboard {
             UIPasteboard.general.string = "touch-paste"

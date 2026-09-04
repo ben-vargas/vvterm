@@ -76,13 +76,13 @@ nonisolated enum SSHConnectionRunner {
             _ startupPlan: TerminalShellStartupPlan
         ) async -> Bool,
         onTitleChange: @MainActor @escaping @Sendable (_ title: String) -> Void,
-        writeOutput: @MainActor @escaping @Sendable (_ data: Data) -> Bool,
+        writeOutput: @MainActor @escaping @Sendable (_ data: Data) async -> Bool,
         shouldResetClient: @escaping @Sendable (_ error: SSHError) async -> Bool,
         onProcessExit: @MainActor @escaping @Sendable (
             _ shellId: UUID,
             _ reason: TerminalShellEndReason
         ) -> Void,
-        onFailure: @MainActor @escaping @Sendable (_ error: Error) -> Void
+        onFailure: @MainActor @escaping @Sendable (_ error: Error) async -> Void
     ) async {
         guard credentials.isAuthorized(for: server) else {
             await onFailure(KeychainError.credentialServerMismatch)

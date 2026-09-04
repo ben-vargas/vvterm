@@ -7,7 +7,7 @@ import Testing
 @MainActor
 struct GhosttyScrollbackSemanticsTests {
     @Test
-    func csiTwoJPreservesHistoryAndCsiThreeJErasesIt() throws {
+    func csiTwoJPreservesHistoryAndCsiThreeJErasesIt() async throws {
         let app = GhosttyRuntime()
         let appHandle = try #require(app.app)
         let terminal: GhosttyTerminalView
@@ -46,15 +46,17 @@ struct GhosttyScrollbackSemanticsTests {
         let lines = (0..<(rowCount + 8)).map { index in
             index == 0 ? oldestMarker : "vvterm-scrollback-line-\(index)"
         }
-        surface.feedText(lines.joined(separator: "\r\n") + "\r\n")
+        #expect(await terminal.receiveTerminalOutput(
+            Data((lines.joined(separator: "\r\n") + "\r\n").utf8)
+        ))
 
         #expect(!terminalText(cSurface, region: GHOSTTY_POINT_VIEWPORT).contains(oldestMarker))
         #expect(terminalText(cSurface, region: GHOSTTY_POINT_SCREEN).contains(oldestMarker))
 
-        surface.feedText("\u{1B}[2J")
+        #expect(await terminal.receiveTerminalOutput(Data("\u{1B}[2J".utf8)))
         #expect(terminalText(cSurface, region: GHOSTTY_POINT_SCREEN).contains(oldestMarker))
 
-        surface.feedText("\u{1B}[3J")
+        #expect(await terminal.receiveTerminalOutput(Data("\u{1B}[3J".utf8)))
         #expect(!terminalText(cSurface, region: GHOSTTY_POINT_SCREEN).contains(oldestMarker))
     }
 

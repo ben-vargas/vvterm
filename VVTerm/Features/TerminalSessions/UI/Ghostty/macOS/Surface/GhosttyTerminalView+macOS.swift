@@ -24,6 +24,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     var ghosttyApp: ghostty_app_t?
     weak var ghosttyAppWrapper: GhosttyRuntime?
     internal var surface: Ghostty.Surface?
+    var terminalOutputRuntime: GhosttyTerminalOutputRuntime?
     var surfaceReference: Ghostty.SurfaceReference?
     let worktreePath: String
     let paneId: String?
