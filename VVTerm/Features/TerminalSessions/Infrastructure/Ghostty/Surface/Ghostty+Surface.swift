@@ -219,33 +219,19 @@ extension Ghostty {
 
         // MARK: - Custom I/O API (for SSH clients)
 
-        /// Feed data into the terminal for display.
-        ///
-        /// This is used for custom I/O backends like SSH clients where data comes from
-        /// an external source (e.g., SSH channel) instead of a local pty.
-        /// The data should be raw terminal output including escape sequences.
-        ///
-        /// - Parameter data: The raw terminal data to display
-        @MainActor
-        func feedData(_ data: Data) {
-            guard let surface = unsafeCValue else { return }
-            guard !data.isEmpty else { return }
-            data.withUnsafeBytes { buffer in
-                if let ptr = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) {
-                    ghostty_surface_feed_data(surface, ptr, buffer.count)
+        /// Process external terminal output synchronously.
+        /// The caller must use a dedicated worker, never the main actor or
+        /// Ghostty's IO thread.
+        func processTerminalOutput(_ data: Data) -> Bool {
+            guard let surface = unsafeCValue else { return false }
+            guard !data.isEmpty else { return true }
+            return data.withUnsafeBytes { buffer in
+                guard let ptr = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                    return false
                 }
+                ghostty_surface_feed_data_blocking(surface, ptr, buffer.count)
+                return true
             }
-        }
-
-        /// Feed string data into the terminal for display.
-        ///
-        /// Convenience method that converts a string to UTF-8 data and feeds it to the terminal.
-        ///
-        /// - Parameter text: The text to display in the terminal
-        @MainActor
-        func feedText(_ text: String) {
-            guard let data = text.data(using: .utf8) else { return }
-            feedData(data)
         }
 
         /// Callback type for receiving terminal write data.

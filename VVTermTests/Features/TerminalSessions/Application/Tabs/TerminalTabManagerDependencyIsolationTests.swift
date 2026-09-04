@@ -498,6 +498,48 @@ struct TerminalTabManagerDependencyIsolationTests {
     }
 
     @Test
+    func persistentSessionRejectsSavedSessionManagerCommandBeforeRemoteProbe() async throws {
+        let remoteSessions = RecordingTerminalRemoteTmuxService()
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: TerminalEffectRecorder(),
+            remoteSessions: remoteSessions,
+            remoteMosh: RecordingTerminalRemoteMoshService(),
+            startupAction: try RemoteShellStartupAction(command: "zmx attach main"),
+            remoteSessionEnabled: true,
+            deviceID: "conflicting-session-command"
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Conflicting session command")
+        install(tab, in: manager)
+        let client = SSHClient.testing()
+        let startToken = try #require(
+            manager.transportCoordinator.beginShellStart(for: tab.rootPaneId, client: client)
+        )
+
+        do {
+            _ = try await manager.remoteSessionCoordinator.startupPlan(
+                for: tab.rootPaneId,
+                serverID: tab.serverId,
+                client: client,
+                startToken: startToken
+            )
+            Issue.record("Expected a persistent-session startup command conflict")
+        } catch SSHError.persistentSessionStartupCommandConflict {
+            // Expected.
+        } catch {
+            Issue.record("Expected the conflict error, got \(error)")
+        }
+
+        #expect(await remoteSessions.availabilityProbeCount() == 0)
+        manager.transportCoordinator.finishShellStart(
+            for: tab.rootPaneId,
+            client: client,
+            startToken: startToken
+        )
+        await manager.resetForTesting()
+    }
+
+    @Test
     func persistentStartupCommandRunsForCreateButNotReconnect() async throws {
         let probe = RemoteSessionProbe(
             backendIdentifier: .tmux,

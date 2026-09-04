@@ -127,10 +127,7 @@ extension GhosttyTerminalView {
         }
         surfaceReference = nil
 
-        // CRITICAL: Explicitly free the surface to release Metal resources
-        // Do not rely on deinit - Task.detached may never run
-        surface?.free()
-        surface = nil
+        releaseTerminalSurface()
     }
 
     /// Pause rendering and input without destroying the surface.
@@ -252,6 +249,7 @@ extension GhosttyTerminalView {
             cSurface: cSurface,
             callbackContext: callbackContext
         )
+        configureTerminalOutputRuntime()
 
         // Register surface with app wrapper for config update tracking
         if let wrapper = ghosttyAppWrapper {
@@ -459,18 +457,14 @@ extension GhosttyTerminalView {
 
     // MARK: - Custom I/O API (for SSH clients)
 
-    /// Feed data from SSH channel to the terminal for rendering.
-    func feedData(_ data: Data) {
-        guard let surface = surface?.unsafeCValue else { return }
-
-        // Feed data to terminal
-        data.withUnsafeBytes { buffer in
-            guard let ptr = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
-            ghostty_surface_feed_data(surface, ptr, buffer.count)
-        }
-
+    @discardableResult
+    func receiveTerminalOutput(_ data: Data) async -> Bool {
+        guard !isShuttingDown, let terminalOutputRuntime else { return false }
+        guard await terminalOutputRuntime.write(data) else { return false }
+        guard !isShuttingDown else { return false }
         scheduleCustomIORedraw()
         requestRender()
+        return true
     }
 
     /// Setup the write callback to capture keyboard input

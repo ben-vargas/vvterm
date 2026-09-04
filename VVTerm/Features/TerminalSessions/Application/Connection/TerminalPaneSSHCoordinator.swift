@@ -93,13 +93,12 @@ final class TerminalPaneSSHCoordinator {
                     },
                     writeOutput: { [weak terminal] data in
                         guard context.isCurrent(), let terminal else { return false }
-                        terminal.receiveTerminalOutput(data)
-                        return true
+                        return await terminal.receiveTerminalOutput(data)
                     },
                     reportFailure: { [weak terminal] failure in
                         guard context.isCurrent() else { return }
                         if let data = failureOutput(failure) {
-                            terminal?.receiveTerminalOutput(data)
+                            _ = await terminal?.receiveTerminalOutput(data)
                         }
                     }
                 )
@@ -123,8 +122,8 @@ final class TerminalPaneSSHCoordinator {
         hasEstablishedConnection: Bool,
         logger: Logger,
         publishDetectedSystem: @MainActor @escaping @Sendable (RemoteSystemIdentity) async -> Void,
-        writeOutput: @MainActor @escaping @Sendable (Data) -> Bool,
-        reportFailure: @MainActor @escaping @Sendable (TerminalConnectionFailure) -> Void
+        writeOutput: @MainActor @escaping @Sendable (Data) async -> Bool,
+        reportFailure: @MainActor @escaping @Sendable (TerminalConnectionFailure) async -> Void
     ) async {
         await SSHConnectionRunner.run(
             server: server,
@@ -206,6 +205,7 @@ final class TerminalPaneSSHCoordinator {
                      .startupCommandMayHaveRun,
                      .processRequestOutcomeUnknown,
                      .managedStartupCommandUnsupported,
+                     .persistentSessionStartupCommandConflict,
                      .unsupportedRemoteShellForStartupCommand,
                      .outputLimitExceeded,
                      .unknown:
@@ -216,7 +216,7 @@ final class TerminalPaneSSHCoordinator {
             onFailure: { error in
                 guard context.isCurrent() else { return }
                 let failure = TerminalConnectionFailure.transport(error)
-                reportFailure(failure)
+                await reportFailure(failure)
                 context.handleFailure(failure)
             }
         )

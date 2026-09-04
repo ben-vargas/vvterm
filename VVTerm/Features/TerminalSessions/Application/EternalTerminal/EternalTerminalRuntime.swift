@@ -452,7 +452,7 @@ final class EternalTerminalRuntime {
         outputTask = Task { [weak self] in
             for await data in session.output {
                 guard !Task.isCancelled else { return }
-                self?.consumeOutput(data)
+                await self?.consumeOutput(data)
             }
         }
 
@@ -600,19 +600,20 @@ final class EternalTerminalRuntime {
         ownerAccess.setResumeContext(paneId, nil)
     }
 
-    private func consumeOutput(_ data: Data) {
+    private func consumeOutput(_ data: Data) async {
         guard isCurrentOwner else {
             return
         }
         guard var parser = remoteSessionLifecycleParser else {
-            outputSink?.receiveTerminalOutput(data)
+            _ = await outputSink?.receiveTerminalOutput(data)
             return
         }
         let result = parser.consume(data)
         remoteSessionLifecycleParser = parser
         if !result.output.isEmpty {
-            outputSink?.receiveTerminalOutput(result.output)
+            _ = await outputSink?.receiveTerminalOutput(result.output)
         }
+        guard isCurrentOwner else { return }
         if result.events.contains(.attached) {
             ownerAccess.remoteSessionAttached(paneId)
         }

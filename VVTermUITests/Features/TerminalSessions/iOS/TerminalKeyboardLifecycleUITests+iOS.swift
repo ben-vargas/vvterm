@@ -285,6 +285,10 @@ final class TerminalKeyboardLifecycleUITests: TerminalKeyboardUITestCase {
         )
         assertKeyboardAndAccessoryHidden(in: app)
 
+        let outputBurst = app.buttons["vvterm.keyboardTest.output.burst"]
+        XCTAssertTrue(outputBurst.waitForExistence(timeout: 5), diagnosticsText(in: app))
+        outputBurst.tap()
+
         app.buttons["vvterm.keyboardTest.privacy.resume"].tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["vvterm.keyboardTest.privacyShield"]
@@ -295,6 +299,12 @@ final class TerminalKeyboardLifecycleUITests: TerminalKeyboardUITestCase {
             for: app.staticTexts["vvterm.keyboardTest.diagnostics"],
             labelContaining: "renderingPaused=false",
             timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: app.staticTexts["vvterm.keyboardTest.diagnostics"],
+            labelContaining: "outputBursts=1",
+            timeout: 8,
             diagnostics: diagnosticsText(in: app)
         )
         assertKeyboardAndAccessoryVisible(in: app)
@@ -653,4 +663,3 @@ final class TerminalKeyboardLifecycleUITests: TerminalKeyboardUITestCase {
 
 }
 #endif
-

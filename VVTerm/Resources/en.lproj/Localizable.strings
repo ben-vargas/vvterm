@@ -1896,6 +1896,8 @@
 "Create or reconnect to a VVTerm-managed session." = "Create or reconnect to a VVTerm-managed session.";
 "Ask which session to use for each new tab or split." = "Ask which session to use for each new tab or split.";
 "Startup Command" = "Startup Command";
+"Initial Session Command" = "Initial Session Command";
+"Turn off session persistence before starting tmux, zmx, Zellij, Herdr, or psmux in this command." = "Turn off session persistence before starting tmux, zmx, Zellij, Herdr, or psmux in this command.";
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets.";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Syncs across devices. Runs for each new terminal connection. Do not include secrets.";
 "The command contains unsupported control characters." = "The command contains unsupported control characters.";

@@ -8,8 +8,9 @@ import Testing
 private final class RecordingTerminalOutputSink: TerminalOutputSink {
     private(set) var output: [Data] = []
 
-    func receiveTerminalOutput(_ data: Data) {
+    func receiveTerminalOutput(_ data: Data) async -> Bool {
         output.append(data)
+        return true
     }
 }
 
@@ -52,11 +53,11 @@ struct EternalTerminalSessionAdapterTests {
     }
 
     @Test @MainActor
-    func semanticOutputSinkReceivesTerminalBytesWithoutVendorTypes() {
+    func semanticOutputSinkReceivesTerminalBytesWithoutVendorTypes() async {
         let sink = RecordingTerminalOutputSink()
         let output = Data("ready\r\n".utf8)
 
-        sink.receiveTerminalOutput(output)
+        _ = await sink.receiveTerminalOutput(output)
 
         #expect(sink.output == [output])
     }

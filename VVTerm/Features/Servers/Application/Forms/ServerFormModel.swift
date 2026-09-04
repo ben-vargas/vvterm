@@ -144,7 +144,9 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             && validPort(port)
             && (transportSelection != .eternalTerminal || validPort(eternalTerminalPort))
             && hasValidCredentials
-            && remoteShellStartupAction.isValid
+            && remoteShellStartupAction.isValid(
+                remoteSessionEnabled: remoteSessionEnabled
+            )
     }
 
     var effectiveUsername: String {

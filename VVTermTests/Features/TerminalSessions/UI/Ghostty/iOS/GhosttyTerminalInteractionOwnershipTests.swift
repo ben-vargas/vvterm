@@ -77,7 +77,7 @@ struct GhosttyTerminalInteractionOwnershipTests {
     }
 
     @Test
-    func textInteractionBeginsOnlyForSettledNativeSelection() throws {
+    func textInteractionBeginsOnlyForSettledNativeSelection() async throws {
         let app = GhosttyRuntime()
         defer { app.cleanup() }
         let appHandle = try #require(app.app)
@@ -98,7 +98,7 @@ struct GhosttyTerminalInteractionOwnershipTests {
 
         #expect(!terminal.interactionShouldBegin(interaction, at: .zero))
 
-        terminal.feedData(Data("one two".utf8))
+        #expect(await terminal.receiveTerminalOutput(Data("one two".utf8)))
         terminal.refreshNativeSelectionSnapshot()
         let selectionLength = min(3, terminal.nativeSelectionSnapshot.length)
         try #require(selectionLength > 0)

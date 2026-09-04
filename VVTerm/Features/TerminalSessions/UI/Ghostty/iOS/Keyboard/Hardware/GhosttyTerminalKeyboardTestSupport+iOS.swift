@@ -88,9 +88,9 @@ extension GhosttyTerminalView {
         ].joined(separator: " ")
     }
 
-    func keyboardUITestMoveCursorToBottom() {
+    func keyboardUITestMoveCursorToBottom() async {
         let lines = (0..<200).map { "line-\($0)" }.joined(separator: "\r\n") + "\r\n"
-        feedData(Data(lines.utf8))
+        _ = await receiveTerminalOutput(Data(lines.utf8))
     }
 
     func keyboardUITestSetMarkedText(_ text: String) {

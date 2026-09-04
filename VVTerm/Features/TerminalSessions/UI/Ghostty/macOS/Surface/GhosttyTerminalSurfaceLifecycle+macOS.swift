@@ -65,10 +65,7 @@ extension GhosttyTerminalView {
         }
         surfaceReference = nil
 
-        // CRITICAL: Explicitly free the surface to release Metal resources
-        // Do not rely on deinit - Task.detached may never run
-        surface?.free()
-        surface = nil
+        releaseTerminalSurface()
     }
 
     /// Configure the Metal-backed layer for terminal rendering
@@ -104,6 +101,7 @@ extension GhosttyTerminalView {
             cSurface: cSurface,
             callbackContext: callbackContext
         )
+        configureTerminalOutputRuntime()
 
         // Update handlers with surface
         imeHandler.updateSurface(self.surface)

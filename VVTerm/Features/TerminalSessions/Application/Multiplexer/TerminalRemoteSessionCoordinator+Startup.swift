@@ -113,13 +113,21 @@ extension TerminalRemoteSessionCoordinator {
         validateOwner: () throws -> Void
     ) async throws -> TerminalShellStartupPlan {
         try validateOwner()
+        let configuredStartupAction = configuration.serverSettings(serverID)?
+            .startupAction
         let startupAction = sessionState.paneState(for: paneID)?
             .startupActionReplayPending == true
             ? nil
-            : configuration.serverSettings(serverID)?.startupAction
+            : configuredStartupAction
         guard isEnabled(for: serverID) else {
             disableAttachment(for: paneID, status: .off)
             return plainShellStartupPlan(startupAction)
+        }
+        if let configuredStartupAction,
+           RemoteSessionStartupConflictPolicy.invokesSessionManager(
+               in: configuredStartupAction.command
+           ) {
+            throw SSHError.persistentSessionStartupCommandConflict
         }
 
         let availability = await availabilityResolver()

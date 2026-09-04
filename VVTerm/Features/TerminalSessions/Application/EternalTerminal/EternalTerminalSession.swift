@@ -64,8 +64,3 @@ protocol EternalTerminalSessionPreparing: Sendable {
 
     func discardResumeState(for paneId: UUID) throws
 }
-
-@MainActor
-protocol TerminalOutputSink: AnyObject {
-    func receiveTerminalOutput(_ data: Data)
-}

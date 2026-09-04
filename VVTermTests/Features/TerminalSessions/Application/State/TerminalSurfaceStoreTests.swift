@@ -34,8 +34,9 @@ struct GhosttyTerminalSurfaceStoreTests {
         var isHostingSceneActive: Bool?
         private(set) var receivedOutput: [Data] = []
 
-        func receiveTerminalOutput(_ data: Data) {
+        func receiveTerminalOutput(_ data: Data) async -> Bool {
             receivedOutput.append(data)
+            return true
         }
         func applyPresentationOverrides(_ overrides: TerminalPresentationOverrides) {}
         func cleanup() {}
@@ -55,7 +56,7 @@ struct GhosttyTerminalSurfaceStoreTests {
     }
 
     @Test
-    func surfacePortCarriesSemanticGeometryAndOutput() throws {
+    func surfacePortCarriesSemanticGeometryAndOutput() async throws {
         let store = GhosttyTerminalSurfaceStore()
         let paneId = UUID()
         let surface = Surface()
@@ -67,7 +68,7 @@ struct GhosttyTerminalSurfaceStoreTests {
         store.register(surface, for: paneId)
 
         let registered = try #require(store.surface(for: paneId))
-        registered.receiveTerminalOutput(Data("ready".utf8))
+        await registered.receiveTerminalOutput(Data("ready".utf8))
 
         #expect(registered.terminalGeometry == surface.terminalGeometry)
         #expect(surface.receivedOutput == [Data("ready".utf8)])

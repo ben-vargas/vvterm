@@ -19,13 +19,15 @@ struct RemoteShellStartupActionSection: View {
             .textInputAutocapitalization(.never)
             #endif
 
-            if let validationError = model.validationError {
+            if let validationError = model.validationError(
+                remoteSessionEnabled: remoteSessionEnabled
+            ) {
                 Text(message(for: validationError))
                     .font(.caption)
                     .foregroundStyle(.red)
             }
         } header: {
-            Text("Startup Command")
+            Text(remoteSessionEnabled ? "Initial Session Command" : "Startup Command")
         } footer: {
             Text(footerText)
         }
@@ -53,6 +55,10 @@ struct RemoteShellStartupActionSection: View {
             String(
                 format: String(localized: "The command must be %lld UTF-8 bytes or less."),
                 Int64(RemoteShellStartupAction.maximumCommandByteCount)
+            )
+        case .startsAnotherPersistentSession:
+            String(
+                localized: "Turn off session persistence before starting tmux, zmx, Zellij, Herdr, or psmux in this command."
             )
         }
     }
