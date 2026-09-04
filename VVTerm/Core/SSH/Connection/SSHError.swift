@@ -24,6 +24,7 @@ enum SSHError: LocalizedError, Sendable {
     case processRequestOutcomeUnknown
     case shellRequestFailed
     case managedStartupCommandUnsupported(String)
+    case persistentSessionStartupCommandConflict
     case unsupportedRemoteShellForStartupCommand
     case outputLimitExceeded
     case hostKeyApprovalRequired
@@ -37,6 +38,7 @@ enum SSHError: LocalizedError, Sendable {
              .disconnectedBeforeShellRequest,
              .ptyRequestFailed,
              .processRequestDenied,
+             .persistentSessionStartupCommandConflict,
              .unsupportedRemoteShellForStartupCommand:
             return true
         default:
@@ -71,6 +73,7 @@ enum SSHError: LocalizedError, Sendable {
              .startupCommandMayHaveRun,
              .processRequestOutcomeUnknown,
              .managedStartupCommandUnsupported,
+             .persistentSessionStartupCommandConflict,
              .hostKeyApprovalRequired,
              .hostKeyVerificationFailed,
              .outputLimitExceeded,
@@ -124,6 +127,10 @@ enum SSHError: LocalizedError, Sendable {
             return String(
                 format: String(localized: "%@ does not support custom startup commands yet."),
                 backendName
+            )
+        case .persistentSessionStartupCommandConflict:
+            return String(
+                localized: "Turn off session persistence before starting tmux, zmx, Zellij, Herdr, or psmux in this command."
             )
         case .unsupportedRemoteShellForStartupCommand:
             return String(localized: "VVTerm cannot run the startup command because it could not detect a supported remote shell.")

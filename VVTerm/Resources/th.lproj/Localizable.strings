@@ -1844,6 +1844,8 @@
 "Create or reconnect to a VVTerm-managed session." = "สร้างหรือเชื่อมต่อกับเซสชันที่ VVTerm จัดการอีกครั้ง";
 "Ask which session to use for each new tab or split." = "ถามว่าจะใช้เซสชันใดสำหรับแต่ละแท็บหรือการแบ่งใหม่";
 "Startup Command" = "คำสั่งเริ่มต้น";
+"Initial Session Command" = "คำสั่งเริ่มต้นเซสชัน";
+"Turn off session persistence before starting tmux, zmx, Zellij, Herdr, or psmux in this command." = "ปิดเซสชันถาวรก่อนเริ่ม tmux, zmx, Zellij, Herdr หรือ psmux ในคำสั่งนี้";
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "ซิงค์ระหว่างอุปกรณ์ เรียกใช้เฉพาะเมื่อ VVTerm สร้างเซสชันถาวร อย่าใส่ข้อมูลลับ";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "ซิงค์ระหว่างอุปกรณ์ เรียกใช้สำหรับการเชื่อมต่อเทอร์มินัลใหม่แต่ละครั้ง อย่าใส่ข้อมูลลับ";
 "The command contains unsupported control characters." = "คำสั่งมีอักขระควบคุมที่ไม่รองรับ";

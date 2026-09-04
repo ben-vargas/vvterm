@@ -205,6 +205,7 @@ final class TerminalPaneSSHCoordinator {
                      .startupCommandMayHaveRun,
                      .processRequestOutcomeUnknown,
                      .managedStartupCommandUnsupported,
+                     .persistentSessionStartupCommandConflict,
                      .unsupportedRemoteShellForStartupCommand,
                      .outputLimitExceeded,
                      .unknown:

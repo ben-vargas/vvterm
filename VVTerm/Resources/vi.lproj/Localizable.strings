@@ -1889,6 +1889,8 @@
 "Create or reconnect to a VVTerm-managed session." = "Tạo hoặc kết nối lại với phiên do VVTerm quản lý.";
 "Ask which session to use for each new tab or split." = "Hỏi phiên cần dùng cho mỗi tab hoặc vùng chia mới.";
 "Startup Command" = "Lệnh khởi động";
+"Initial Session Command" = "Lệnh khởi tạo phiên";
+"Turn off session persistence before starting tmux, zmx, Zellij, Herdr, or psmux in this command." = "Tắt phiên duy trì trước khi chạy tmux, zmx, Zellij, Herdr hoặc psmux trong lệnh này.";
 "Syncs across devices. Runs only when VVTerm creates a persistent session. Do not include secrets." = "Đồng bộ giữa các thiết bị. Chỉ chạy khi VVTerm tạo phiên liên tục. Không thêm thông tin bí mật.";
 "Syncs across devices. Runs for each new terminal connection. Do not include secrets." = "Đồng bộ giữa các thiết bị. Chạy cho mỗi kết nối thiết bị đầu cuối mới. Không thêm thông tin bí mật.";
 "The command contains unsupported control characters." = "Lệnh chứa ký tự điều khiển không được hỗ trợ.";

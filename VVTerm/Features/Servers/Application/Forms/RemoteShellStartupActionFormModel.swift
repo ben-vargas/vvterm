@@ -4,6 +4,7 @@ nonisolated struct RemoteShellStartupActionFormModel: Equatable, Sendable {
     enum ValidationError: Equatable, Sendable {
         case invalidCommand
         case commandTooLong
+        case startsAnotherPersistentSession
     }
 
     var command: String
@@ -12,9 +13,16 @@ nonisolated struct RemoteShellStartupActionFormModel: Equatable, Sendable {
         command = action?.command ?? ""
     }
 
-    var validationError: ValidationError? {
+    func validationError(remoteSessionEnabled: Bool) -> ValidationError? {
         do {
-            _ = try makeAction()
+            let action = try makeAction()
+            if remoteSessionEnabled,
+               let action,
+               RemoteSessionStartupConflictPolicy.invokesSessionManager(
+                   in: action.command
+               ) {
+                return .startsAnotherPersistentSession
+            }
             return nil
         } catch let error as RemoteShellStartupAction.ValidationError {
             return switch error {
@@ -30,8 +38,8 @@ nonisolated struct RemoteShellStartupActionFormModel: Equatable, Sendable {
         }
     }
 
-    var isValid: Bool {
-        validationError == nil
+    func isValid(remoteSessionEnabled: Bool) -> Bool {
+        validationError(remoteSessionEnabled: remoteSessionEnabled) == nil
     }
 
     func makeAction() throws -> RemoteShellStartupAction? {
