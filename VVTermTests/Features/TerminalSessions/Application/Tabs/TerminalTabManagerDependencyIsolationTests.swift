@@ -109,12 +109,19 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
     private var availabilityProbes = 0
     private var cleanupKeepSets: [Set<RemoteSessionIdentifier>] = []
     private var requests: [RemoteSessionLaunchRequest] = []
+    private var directoryRequests = 0
     private let availabilityResult: RemoteSessionAvailability
+    private let readDirectory: @Sendable () async -> String?
+    private var failNextCleanup: Bool
 
     init(
-        availabilityResult: RemoteSessionAvailability = .unsupportedEnvironment
+        availabilityResult: RemoteSessionAvailability = .unsupportedEnvironment,
+        readDirectory: @escaping @Sendable () async -> String? = { nil },
+        failNextCleanup: Bool = false
     ) {
         self.availabilityResult = availabilityResult
+        self.readDirectory = readDirectory
+        self.failNextCleanup = failNextCleanup
     }
 
     func killedSessionIdentifiers() -> [RemoteSessionIdentifier] {
@@ -133,6 +140,8 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
         requests
     }
 
+    func directoryRequestCount() -> Int { directoryRequests }
+
     func availability(
         for backendIdentifier: RemoteSessionBackendIdentifier,
         using client: SSHClient
@@ -148,13 +157,6 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
     ) async throws -> [RemoteSessionDescriptor] {
         []
     }
-
-    func prepareManagedSession(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        runtime: RemoteSessionRuntime
-    ) async {}
 
     func launchPlan(
         for request: RemoteSessionLaunchRequest,
@@ -195,11 +197,15 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
     }
 
     func cleanupSessions(
-        keeping identifiers: Set<RemoteSessionIdentifier>,
+        keeping identifiers: @escaping @Sendable () async throws -> Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
-    ) async {
-        cleanupKeepSets.append(identifiers)
+    ) async throws {
+        if failNextCleanup {
+            failNextCleanup = false
+            throw SSHCommandExitError(exitStatus: 1)
+        }
+        cleanupKeepSets.append(try await identifiers())
     }
 
     func currentWorkingDirectory(
@@ -207,7 +213,8 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
         using client: SSHClient,
         runtime: RemoteSessionRuntime?
     ) async -> String? {
-        nil
+        directoryRequests += 1
+        return await readDirectory()
     }
 }
 
@@ -226,6 +233,101 @@ private actor RecordingTerminalRemoteMoshService: TerminalRemoteMoshServicing {
 @Suite(.serialized)
 @MainActor
 struct TerminalTabManagerDependencyIsolationTests {
+    enum DirectoryRefreshOutcome: CaseIterable {
+        case apply
+        case cancel
+        case newerLocalDirectory
+    }
+
+    @Test(arguments: DirectoryRefreshOutcome.allCases)
+    func directoryRefreshRespectsItsOwnerAndNewerUpdates(_ outcome: DirectoryRefreshOutcome) async throws {
+        let (started, signal) = AsyncStream<Void>.makeStream()
+        let (released, release) = AsyncStream<Void>.makeStream()
+        let remoteSessions = RecordingTerminalRemoteTmuxService(readDirectory: {
+            signal.yield(())
+            for await _ in released { break }
+            return "/remote-current"
+        })
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: TerminalEffectRecorder(), remoteSessions: remoteSessions,
+            remoteMosh: RecordingTerminalRemoteMoshService(), deviceID: "directory-refresh"
+        )
+        let tab = TerminalTab(serverId: UUID(), title: "Directory")
+        install(tab, in: manager)
+        manager.sessionState.updatePane(tab.rootPaneId) { $0.workingDirectory = "/saved" }
+        manager.remoteSessionCoordinator.setAttachment(
+            for: tab.rootPaneId,
+            identifier: try RemoteSessionIdentifier(backendIdentifier: .tmux, validating: "managed"),
+            ownership: .managed
+        )
+        manager.remoteSessionCoordinator.directoryRefreshes[tab.rootPaneId] = .pending(
+            client: .testing(), runtime: try directoryTestRuntime()
+        )
+        manager.remoteSessionCoordinator.startDirectoryRefresh(for: tab.rootPaneId)
+        guard case .running(let task) = manager.remoteSessionCoordinator.directoryRefreshes[tab.rootPaneId] else {
+            Issue.record("Directory refresh did not start")
+            await manager.resetForTesting()
+            return
+        }
+        for await _ in started { break }
+        switch outcome {
+        case .apply: break
+        case .cancel: manager.remoteSessionCoordinator.clearRuntimeState(for: tab.rootPaneId)
+        case .newerLocalDirectory:
+            manager.sessionState.updatePane(tab.rootPaneId) { $0.workingDirectory = "/newer-local" }
+        }
+        release.yield(())
+        await task.value
+        let expected = switch outcome {
+        case .apply: "/remote-current"
+        case .cancel: "/saved"
+        case .newerLocalDirectory: "/newer-local"
+        }
+        #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.workingDirectory == expected)
+        #expect(manager.remoteSessionCoordinator.directoryRefreshes.isEmpty)
+        await manager.resetForTesting()
+    }
+
+    @Test
+    func splitStillReadsItsSourceDirectoryBeforeLaunch() async throws {
+        let remoteSessions = RecordingTerminalRemoteTmuxService(readDirectory: { "/source-current" })
+        let manager = makeManager(
+            network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
+            effects: TerminalEffectRecorder(), remoteSessions: remoteSessions,
+            remoteMosh: RecordingTerminalRemoteMoshService(), deviceID: "split-directory"
+        )
+        let source = TerminalTab(serverId: UUID(), title: "Source")
+        let split = TerminalTab(serverId: source.serverId, title: "Split")
+        install(source, in: manager)
+        install(split, in: manager)
+        manager.sessionState.updatePane(split.rootPaneId) {
+            $0.seedPaneId = source.rootPaneId
+            $0.workingDirectory = "/saved"
+        }
+        manager.remoteSessionCoordinator.setAttachment(
+            for: source.rootPaneId,
+            identifier: try RemoteSessionIdentifier(backendIdentifier: .tmux, validating: "source"),
+            ownership: .managed
+        )
+        let directory = await manager.remoteSessionCoordinator.resolveWorkingDirectory(
+            for: split.rootPaneId, using: .testing(), runtime: try directoryTestRuntime()
+        )
+        #expect(directory == "/source-current")
+        #expect(await remoteSessions.directoryRequestCount() == 1)
+        await manager.resetForTesting()
+    }
+
+    private func directoryTestRuntime() throws -> RemoteSessionRuntime {
+        RemoteSessionRuntime(probe: RemoteSessionProbe(
+            backendIdentifier: .tmux,
+            executable: try RemoteSessionExecutable(validating: "/usr/bin/tmux"),
+            implementationVariant: "tmux-posix", rawVersion: "tmux 3.5",
+            semanticVersion: .init(major: 3, minor: 5, patch: 0),
+            shellFamily: .posix, shellExecutable: "sh"
+        ))
+    }
+
     @Test
     func openingTheFirstTabPreparesTheConnectionOnce() async throws {
         let effects = TerminalEffectRecorder()
@@ -245,9 +347,9 @@ struct TerminalTabManagerDependencyIsolationTests {
         await manager.resetForTesting()
     }
 
-    @Test
-    func cleanupKeepsManagedSessionsForEveryServerProfile() async throws {
-        let remoteSessions = RecordingTerminalRemoteTmuxService()
+    @Test(arguments: [false, true], [false, true])
+    func cleanupWaitsForAttachmentAndKeepsEveryServerProfile(cancelBeforeAttachment: Bool, failFirstAttempt: Bool) async throws {
+        let remoteSessions = RecordingTerminalRemoteTmuxService(failNextCleanup: failFirstAttempt)
         let manager = makeManager(
             network: PassthroughSubject<TerminalNetworkReadiness, Never>(),
             effects: TerminalEffectRecorder(),
@@ -305,10 +407,45 @@ struct TerminalTabManagerDependencyIsolationTests {
             availabilityResolver: { .available(probe) }
         )
 
-        #expect(await remoteSessions.lastCleanupKeepSet() == [
-            firstIdentifier,
-            secondIdentifier
-        ])
+        #expect(await remoteSessions.lastCleanupKeepSet() == nil)
+        #expect(await remoteSessions.directoryRequestCount() == 0)
+        if cancelBeforeAttachment {
+            manager.remoteSessionCoordinator.clearRuntimeState(for: firstTab.rootPaneId)
+        }
+        manager.remoteSessionCoordinator.confirmManagedSession(for: firstTab.rootPaneId)
+        if case .running(let task) = manager.remoteSessionCoordinator.directoryRefreshes[firstTab.rootPaneId] {
+            await task.value
+        }
+        for state in manager.remoteSessionCoordinator.cleanupStates.values {
+            if case .running(_, let task) = state { await task.value }
+        }
+        if failFirstAttempt && !cancelBeforeAttachment {
+            #expect(manager.remoteSessionCoordinator.cleanupStates.isEmpty)
+            #expect(await remoteSessions.lastCleanupKeepSet() == nil)
+            _ = try await manager.remoteSessionCoordinator.startupPlan(
+                for: firstTab.rootPaneId, serverID: firstTab.serverId,
+                client: client, startToken: startToken,
+                availabilityResolver: { .available(probe) }
+            )
+            manager.remoteSessionCoordinator.confirmManagedSession(for: firstTab.rootPaneId)
+            if case .running(let task) = manager.remoteSessionCoordinator.directoryRefreshes[firstTab.rootPaneId] {
+                await task.value
+            }
+            for state in manager.remoteSessionCoordinator.cleanupStates.values {
+                if case .running(_, let task) = state { await task.value }
+            }
+            #expect(manager.remoteSessionCoordinator.cleanupStates.values.contains {
+                if case .completed = $0 { return true }
+                return false
+            })
+        }
+        if cancelBeforeAttachment {
+            #expect(await remoteSessions.lastCleanupKeepSet() == nil)
+            #expect(await remoteSessions.directoryRequestCount() == 0)
+        } else {
+            #expect(await remoteSessions.lastCleanupKeepSet() == [firstIdentifier, secondIdentifier])
+            #expect(await remoteSessions.directoryRequestCount() == (failFirstAttempt ? 2 : 1))
+        }
         await manager.resetForTesting()
     }
 

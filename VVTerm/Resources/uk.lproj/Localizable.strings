@@ -1980,3 +1980,4 @@
 "Drag past the left or right edge to hide the controls." = "Перетягніть елементи керування за лівий або правий край, щоб сховати їх.";
 "Hide on Left" = "Сховати ліворуч";
 "Hide on Right" = "Сховати праворуч";
+"Remote command failed (exit code %d)." = "Віддалену команду не виконано (код виходу %d).";

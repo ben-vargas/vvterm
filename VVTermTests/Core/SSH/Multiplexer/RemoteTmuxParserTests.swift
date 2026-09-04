@@ -3,6 +3,28 @@ import Testing
 @testable import VVTerm
 
 struct RemoteTmuxParserTests {
+    @Test(arguments: ["\n", "\r\n"])
+    func invalidBackendMetadataIsRejectedForBothLineEndings(lineEnding: String) {
+        let invalidMetadata = [
+            (path: "psmux.exe", version: "tmux 3.3.8"),
+            (path: "C:\\Tools\\psmux.exe", version: ""),
+            (path: "C:\\Tools\\psmux\u{0}.exe", version: "tmux 3.3.8"),
+            (path: "C:\\Tools\\psmux.exe", version: "tmux\u{0} 3.3.8")
+        ]
+        for metadata in invalidMetadata {
+            let output = [
+                "__VVTERM_TMUX_OK__:psmux",
+                "__VVTERM_TMUX_PATH__" + metadata.path,
+                "__VVTERM_TMUX_VERSION__" + metadata.version
+            ].joined(separator: lineEnding)
+
+            #expect(RemoteTmuxParser.resolvedBackend(
+                from: output,
+                variant: .windowsPsmux(shellFamily: .powershell, powerShellExecutable: "pwsh")
+            ) == nil)
+        }
+    }
+
     @Test
     func parseWhitespaceFormatFromRealTmuxOutput() {
         let output = """
@@ -43,17 +65,16 @@ struct RemoteTmuxParserTests {
         #expect(sessions[1] == session("local", attachedClients: 0, windowCount: 1))
     }
 
-    @Test
-    func parseBooleanAttachedFormatFromPsmuxOutput() {
-        let output = """
-        restored true 1
-        detached false 2
-        """
+    @Test(arguments: ["\n", "\r\n", "\r"])
+    func parseBooleanAttachedFormatFromPsmuxOutput(lineEnding: String) {
+        let output = ["restored true 1", "detached false 2", ""]
+            .joined(separator: lineEnding)
 
         let sessions = RemoteTmuxParser.parseSessionListOutput(output, allowLegacy: false)
-        #expect(sessions.count == 2)
-        #expect(sessions[0] == session("restored", attachedClients: 1, windowCount: 1))
-        #expect(sessions[1] == session("detached", attachedClients: 0, windowCount: 2))
+        #expect(sessions == [
+            session("restored", attachedClients: 1, windowCount: 1),
+            session("detached", attachedClients: 0, windowCount: 2)
+        ])
     }
 
     @Test
@@ -69,10 +90,10 @@ struct RemoteTmuxParserTests {
         #expect(sessions[1] == session("api", attachedClients: 0, windowCount: 1))
     }
 
-    @Test
-    func ownershipRequiresTheExplicitSessionOptionField() {
+    @Test(arguments: ["\n", "\r\n", "\r"])
+    func ownershipRequiresTheExplicitSessionOptionField(lineEnding: String) {
         let sessions = RemoteTmuxParser.parseSessionListOutput(
-            "vvterm-user\t0\t1\t\nmanaged\t0\t1\t1\n",
+            ["vvterm-user\t0\t1\t", "managed\t0\t1\t1", ""].joined(separator: lineEnding),
             allowLegacy: false
         )
 

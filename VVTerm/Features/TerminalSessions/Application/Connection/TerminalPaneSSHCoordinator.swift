@@ -125,6 +125,8 @@ final class TerminalPaneSSHCoordinator {
         writeOutput: @MainActor @escaping @Sendable (Data) async -> Bool,
         reportFailure: @MainActor @escaping @Sendable (TerminalConnectionFailure) async -> Void
     ) async {
+        var systemIdentityTask: Task<Void, Never>?
+        defer { systemIdentityTask?.cancel() }
         await SSHConnectionRunner.run(
             server: server,
             credentials: credentials,
@@ -163,8 +165,10 @@ final class TerminalPaneSSHCoordinator {
                         logger: logger
                     )
                 }
-                let environment = await sshClient.remoteEnvironment()
-                if let identity = environment.systemIdentity {
+                systemIdentityTask?.cancel()
+                systemIdentityTask = Task { @concurrent in
+                    guard let identity = await sshClient.remoteSystemIdentity(),
+                          !Task.isCancelled, await context.isCurrent() else { return }
                     await publishDetectedSystem(identity)
                 }
                 if shell.transport == .mosh {
@@ -184,7 +188,6 @@ final class TerminalPaneSSHCoordinator {
                     return true
                 case .channelOpenFailed,
                      .ptyRequestFailed,
-                     .processRequestDenied,
                      .shellRequestFailed:
                     let hasOtherRegistrations = await context.hasOtherRegistrations()
                     return !hasOtherRegistrations
@@ -203,6 +206,7 @@ final class TerminalPaneSSHCoordinator {
                      .moshUDPTimeout,
                      .moshClientSessionFailed,
                      .startupCommandMayHaveRun,
+                     .processRequestDenied,
                      .processRequestOutcomeUnknown,
                      .managedStartupCommandUnsupported,
                      .persistentSessionStartupCommandConflict,

@@ -12,9 +12,20 @@ struct TerminalRemoteSessionShellRegistration {
 /// Owns persistent remote-session selection, launch, cleanup, and termination.
 @MainActor
 final class TerminalRemoteSessionCoordinator: ObservableObject {
-    struct CleanupKey: Hashable {
+    nonisolated struct CleanupKey: Hashable, Sendable {
         let serverID: UUID
         let backendIdentifier: RemoteSessionBackendIdentifier
+    }
+
+    nonisolated enum CleanupState: Sendable {
+        case pending(paneID: UUID, client: SSHClient, runtime: RemoteSessionRuntime)
+        case running(paneID: UUID, task: Task<Void, Never>)
+        case completed
+    }
+
+    nonisolated enum DirectoryRefreshState: Sendable {
+        case pending(client: SSHClient, runtime: RemoteSessionRuntime)
+        case running(Task<Void, Never>)
     }
 
     var attachPrompt: RemoteSessionAttachPrompt? {
@@ -34,7 +45,8 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
         subsystem: Bundle.main.bundleIdentifier ?? "VVTerm",
         category: "TerminalRemoteSessionCoordinator"
     )
-    var completedCleanup: Set<CleanupKey> = []
+    var cleanupStates: [CleanupKey: CleanupState] = [:]
+    var directoryRefreshes: [UUID: DirectoryRefreshState] = [:]
     private var cancellables: Set<AnyCancellable> = []
 
     init(
@@ -87,12 +99,15 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
     }
 
     func clearAttachmentState(for paneID: UUID) {
+        cancelDirectoryRefresh(for: paneID)
         resolver.clearAttachmentState(for: paneID)
         clearResumeContext(for: paneID)
     }
 
     func confirmManagedSession(for paneID: UUID) {
         resolver.confirmManagedSession(for: paneID)
+        startDirectoryRefresh(for: paneID)
+        startPendingCleanup(for: paneID)
     }
 
     func shouldReattachManagedSession(
@@ -142,6 +157,8 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
     }
 
     func clearRuntimeState(for paneID: UUID) {
+        cancelDirectoryRefresh(for: paneID)
+        cancelCleanup(for: paneID)
         resolver.clearRuntimeState(for: paneID)
         clearResumeContext(for: paneID)
     }
@@ -204,6 +221,15 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
         for state in sessionState.paneStates(forServer: serverID) {
             updateStatus(.off, for: state.paneId)
             clearRuntimeState(for: state.paneId)
+        }
+    }
+
+    deinit {
+        for state in directoryRefreshes.values {
+            if case .running(let task) = state { task.cancel() }
+        }
+        for state in cleanupStates.values {
+            if case .running(_, let task) = state { task.cancel() }
         }
     }
 
@@ -277,13 +303,6 @@ actor UnavailableTerminalRemoteSessionService: TerminalRemoteSessionServicing {
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] { throw SSHError.notConnected }
 
-    func prepareManagedSession(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        runtime: RemoteSessionRuntime
-    ) async {}
-
     func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
@@ -311,7 +330,7 @@ actor UnavailableTerminalRemoteSessionService: TerminalRemoteSessionServicing {
     ) async {}
 
     func cleanupSessions(
-        keeping identifiers: Set<RemoteSessionIdentifier>,
+        keeping identifiers: @escaping @Sendable () async throws -> Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async {}

@@ -32,12 +32,6 @@ nonisolated protocol TerminalRemoteSessionServicing: Sendable {
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor]
-    func prepareManagedSession(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        runtime: RemoteSessionRuntime
-    ) async
     func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
@@ -61,10 +55,10 @@ nonisolated protocol TerminalRemoteSessionServicing: Sendable {
         runtime: RemoteSessionRuntime?
     ) async
     func cleanupSessions(
-        keeping identifiers: Set<RemoteSessionIdentifier>,
+        keeping identifiers: @escaping @Sendable () async throws -> Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
-    ) async
+    ) async throws
     func currentWorkingDirectory(
         for attachment: RemoteSessionAttachment,
         using client: SSHClient,

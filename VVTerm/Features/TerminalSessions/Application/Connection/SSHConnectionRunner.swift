@@ -20,7 +20,8 @@ nonisolated struct SSHConnectionRunnerTransport: Sendable {
         _ rows: Int,
         _ pixelSize: TerminalPixelSize?,
         _ startupCommand: String?,
-        _ mayExecuteUserStartupAction: Bool
+        _ mayExecuteUserStartupAction: Bool,
+        _ shellProfile: RemoteShellProfile?
     ) async throws -> ShellHandle
     let disconnect: @Sendable () async -> Void
     let closeShell: @Sendable (_ shellId: UUID) async -> Void
@@ -29,15 +30,19 @@ nonisolated struct SSHConnectionRunnerTransport: Sendable {
     static func live(client: SSHClient) -> Self {
         Self(
             connect: { server, credentials in
-                _ = try await client.connect(to: server, credentials: credentials)
+                _ = try await client.connect(
+                    to: server, credentials: credentials,
+                    preferredPlatform: server.detectedSystemIdentity?.kind == .windows ? .windows : nil
+                )
             },
-            startShell: { columns, rows, pixelSize, startupCommand, mayExecuteUserStartupAction in
+            startShell: { columns, rows, pixelSize, startupCommand, mayExecuteUserStartupAction, shellProfile in
                 try await client.startShell(
                     cols: columns,
                     rows: rows,
                     pixelSize: pixelSize,
                     startupCommand: startupCommand,
-                    mayExecuteUserStartupAction: mayExecuteUserStartupAction
+                    mayExecuteUserStartupAction: mayExecuteUserStartupAction,
+                    startupShellProfile: shellProfile
                 )
             },
             disconnect: {
@@ -134,9 +139,16 @@ nonisolated enum SSHConnectionRunner {
                             rows,
                             pixelSize,
                             freshStartup.command,
-                            freshStartup.mayExecuteUserStartupAction
+                            freshStartup.mayExecuteUserStartupAction,
+                            freshStartup.shellProfile
                         )
                     } catch {
+                        if error is SSHShellPreparationError {
+                            if freshStartup.mayExecuteUserStartupAction {
+                                await setStartupActionReplayGuard(false)
+                            }
+                            throw error
+                        }
                         if let sshError = error as? SSHError,
                            sshError.provesStartupCommandWasNotDispatched {
                             if freshStartup.mayExecuteUserStartupAction {
@@ -249,10 +261,7 @@ nonisolated enum SSHConnectionRunner {
                 lastError = error
                 logger.error("SSH connection failed (attempt \(attempt)): \(error.localizedDescription)")
 
-                if let sshError = error as? SSHError,
-                   !sshError.allowsAutomaticReconnectRetry {
-                    break
-                }
+                if !TerminalConnectionFailure.transport(error).allowsAutomaticReconnectRetry { break }
 
                 if attempt < maxAttempts, let sshError = error as? SSHError {
                     let shouldReset = await shouldResetClient(sshError)

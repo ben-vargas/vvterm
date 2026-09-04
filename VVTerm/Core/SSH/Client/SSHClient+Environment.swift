@@ -3,31 +3,19 @@ import os.log
 
 extension SSHClient {
     func remoteEnvironment(forceRefresh: Bool = false) async -> RemoteEnvironment {
-        if !forceRefresh,
-           case .connected(let state) = lifecycle,
-           let remoteEnvironment = state.remoteEnvironment {
-            return remoteEnvironment
-        }
-
-        let connectionID: UUID?
-        if case .connected(let state) = lifecycle {
-            connectionID = state.id
-        } else {
-            connectionID = nil
-        }
-        let token = startupTrace?.begin(.remoteEnvironment)
-        let environment = await RemoteEnvironmentResolver.resolve(using: self)
-        if let token {
-            startupTrace?.end(token, detail: environment.platform.rawValue)
-        }
-        if case .connected(var state) = lifecycle, state.id == connectionID {
-            state.remoteEnvironment = environment
-            lifecycle = .connected(state)
-        }
-        logger.info(
-            "Resolved remote environment [platform: \(environment.platform.rawValue, privacy: .public), system: \(environment.systemIdentity?.kind.rawValue ?? "unavailable", privacy: .public), shell: \(environment.shellProfile.family.rawValue, privacy: .public), active: \(environment.activeShellName ?? "unknown", privacy: .private(mask: .hash))]"
-        )
+        guard case .connected(let state) = lifecycle else { return .fallbackPOSIX }
+        let environment = await state.environmentCoordinator.environment(forceRefresh: forceRefresh)
+        guard case .connected(let current) = lifecycle, current.id == state.id,
+              !Task.isCancelled else { return .fallbackPOSIX }
         return environment
+    }
+
+    func remoteSystemIdentity() async -> RemoteSystemIdentity? {
+        guard case .connected(let state) = lifecycle else { return nil }
+        let identity = await state.environmentCoordinator.systemIdentity()
+        guard case .connected(let current) = lifecycle, current.id == state.id,
+              !Task.isCancelled else { return nil }
+        return identity
     }
 
     func remoteTerminalType(forceRefresh: Bool = false) async -> RemoteTerminalType {

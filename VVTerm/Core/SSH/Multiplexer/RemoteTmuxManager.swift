@@ -4,7 +4,6 @@ import os.log
 actor RemoteTmuxManager {
     private let availabilityTimeout: Duration = .seconds(8)
     private let listTimeout: Duration = .seconds(12)
-    private let configTimeout: Duration = .seconds(20)
     private let killTimeout: Duration = .seconds(10)
     private let pathTimeout: Duration = .seconds(10)
     private let logger = Logger(
@@ -15,6 +14,9 @@ actor RemoteTmuxManager {
     init() {}
 
     func tmuxAvailability(using client: SSHClient) async -> RemoteTmuxAvailability {
+        let trace = await client.startupTrace
+        let token = trace?.begin(.sessionProbe)
+        defer { if let token { trace?.end(token) } }
         let probeId = UUID().uuidString
         let startedAt = ContinuousClock.now
         logger.info("Starting tmux availability probe \(probeId, privacy: .public)")
@@ -109,49 +111,64 @@ actor RemoteTmuxManager {
 
     func listSessions(
         using client: SSHClient,
-        backend: RemoteTmuxBackend
+        backend: RemoteTmuxBackend,
+        requireSuccessfulExit: Bool = false
+    ) async throws -> [RemoteTmuxSession] {
+        let trace = await client.startupTrace
+        let token = trace?.begin(.sessionList)
+        do {
+            let sessions = try await listSessions(backend: backend) { command, timeout in
+                if requireSuccessfulExit {
+                    return try await client.executeChecked(command, timeout: timeout)
+                }
+                return try await client.execute(command, timeout: timeout, timeoutScope: .command)
+            }
+            if let token { trace?.end(token) }
+            return sessions
+        } catch {
+            if let token { trace?.end(token, outcome: "failed") }
+            throw error
+        }
+    }
+
+    func listSessions(
+        backend: RemoteTmuxBackend,
+        execute: RemoteEnvironmentResolver.CommandExecutor
     ) async throws -> [RemoteTmuxSession] {
         let candidates = RemoteTmuxCommandBuilder.listSessionCommands(backend: backend)
         var lastError: Error?
-        var completedProbe = false
 
         for (index, command) in candidates.enumerated() {
+            try Task.checkCancellation()
             do {
-                let output = try await client.execute(command, timeout: listTimeout)
-                completedProbe = true
+                let output = try await execute(command, listTimeout)
+                try Task.checkCancellation()
+                let lines = output.split(whereSeparator: \.isNewline)
+                let reportedSuccess = !backend.isWindows || lines.contains {
+                    $0.trimmingCharacters(in: .whitespaces) == RemoteTmuxCommandBuilder.sessionListSuccessMarker
+                }
+                let confirmedEmpty = backend.isWindows
+                    && lines.map { $0.trimmingCharacters(in: .whitespaces) }
+                        == [RemoteTmuxCommandBuilder.sessionListSuccessMarker]
                 let sessions = RemoteTmuxParser.parseSessionListOutput(
-                    output,
+                    lines.filter { $0 != RemoteTmuxCommandBuilder.sessionListSuccessMarker }
+                        .joined(separator: "\n"),
                     allowLegacy: index == candidates.count - 1
                 )
 
-                if !sessions.isEmpty {
+                if reportedSuccess && (!sessions.isEmpty || confirmedEmpty) {
                     return sessions
                 }
+                if !backend.isWindows && output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return []
+                }
             } catch {
+                if error is CancellationError { throw error }
                 lastError = error
             }
         }
 
-        if completedProbe {
-            return []
-        }
         throw lastError ?? SSHError.unknown("Unable to list tmux sessions")
-    }
-
-    func prepareConfig(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        backend explicitBackend: RemoteTmuxBackend? = nil
-    ) async {
-        let backend = await resolveBackend(explicitBackend, using: client)
-        guard let backend, backend.isWindows else { return }
-        let command = RemoteTmuxCommandBuilder.windowsConfigWriteCommand(
-            terminalType: terminalType,
-            themeStyle: themeStyle,
-            backend: backend
-        )
-        _ = try? await client.execute(command, timeout: configTimeout)
     }
 
     func sendScript(_ script: String, using client: SSHClient, shellId: UUID) async throws {
@@ -164,14 +181,14 @@ actor RemoteTmuxManager {
         named sessionName: String,
         using client: SSHClient,
         backend explicitBackend: RemoteTmuxBackend? = nil
-    ) async {
+    ) async throws {
         let backend = await resolveBackend(explicitBackend, using: client)
-        guard let backend else { return }
+        guard let backend else { throw SSHError.notConnected }
         let command = RemoteTmuxCommandBuilder.killSessionCommand(
             named: sessionName,
             backend: backend
         )
-        _ = try? await client.execute(command, timeout: killTimeout)
+        try await client.executeChecked(command, timeout: killTimeout)
     }
 
     func currentPath(
@@ -179,13 +196,16 @@ actor RemoteTmuxManager {
         using client: SSHClient,
         backend explicitBackend: RemoteTmuxBackend? = nil
     ) async -> String? {
+        let trace = await client.startupTrace
+        let token = trace?.begin(.sessionWorkingDirectory)
+        defer { if let token { trace?.end(token) } }
         let backend = await resolveBackend(explicitBackend, using: client)
         guard let backend else { return nil }
         let command = RemoteTmuxCommandBuilder.currentPathCommand(
             sessionName: sessionName,
             backend: backend
         )
-        guard let output = try? await client.execute(command, timeout: pathTimeout) else { return nil }
+        guard let output = try? await client.execute(command, timeout: pathTimeout, timeoutScope: .command) else { return nil }
         let trimmed = output
             .split(separator: "\n", omittingEmptySubsequences: false)
             .first

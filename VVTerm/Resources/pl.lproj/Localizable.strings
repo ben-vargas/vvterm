@@ -1975,3 +1975,4 @@
 "Drag past the left or right edge to hide the controls." = "Przeciągnij elementy sterujące poza lewą lub prawą krawędź, aby je ukryć.";
 "Hide on Left" = "Ukryj po lewej";
 "Hide on Right" = "Ukryj po prawej";
+"Remote command failed (exit code %d)." = "Polecenie zdalne nie powiodło się (kod wyjścia %d).";

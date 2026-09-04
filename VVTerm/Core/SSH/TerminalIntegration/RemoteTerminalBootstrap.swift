@@ -390,7 +390,7 @@ nonisolated enum RemoteTerminalBootstrap {
         "'\(value.replacingOccurrences(of: "'", with: "''"))'"
     }
 
-    nonisolated private static func normalizedWindowsPath(from path: String) -> String? {
+    nonisolated static func normalizedWindowsPath(from path: String) -> String? {
         if let directDriveLetter = directWindowsDriveLetter(in: path) {
             let startIndex = path.index(path.startIndex, offsetBy: 2)
             let suffix = startIndex < path.endIndex ? String(path[startIndex...]) : ""

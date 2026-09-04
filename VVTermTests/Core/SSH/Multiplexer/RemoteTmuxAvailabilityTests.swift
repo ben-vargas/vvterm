@@ -56,6 +56,39 @@ enum InjectedTmuxProbeError: CaseIterable, Sendable {
 }
 
 struct RemoteTmuxAvailabilityTests {
+    @Test(arguments: ["\n", "\r\n", "\r"])
+    func windowsProbeAcceptsShellLineEndings(lineEnding: String) async {
+        let environment = RemoteEnvironment(
+            platform: .windows,
+            shellProfile: .powershell(executableName: "pwsh"),
+            activeShellName: "pwsh",
+            powerShellExecutable: "pwsh"
+        )
+        let output = [
+            "__VVTERM_TMUX_OK__:psmux",
+            "__VVTERM_TMUX_PATH__C:\\Program Files\\psmux\\psmux.exe",
+            "__VVTERM_TMUX_VERSION__tmux 3.3.8",
+            ""
+        ].joined(separator: lineEnding)
+        let (availability, commands) = await resolveAvailability(
+            environment: environment,
+            outputs: [
+                .success(output),
+                .success("__VVTERM_TMUX_NO__:pmux"),
+                .success("__VVTERM_TMUX_NO__:tmux")
+            ]
+        )
+
+        #expect(availability == .available(.windowsPsmux(
+            commandName: "psmux",
+            shellFamily: .powershell,
+            powerShellExecutable: "pwsh",
+            executablePath: "C:\\Program Files\\psmux\\psmux.exe",
+            rawVersion: "tmux 3.3.8"
+        )))
+        #expect(commands.count == 1)
+    }
+
     private func resolveAvailability(
         environment: RemoteEnvironment = .fallbackPOSIX,
         outputs: [Result<String, Error>]

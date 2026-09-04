@@ -1973,3 +1973,4 @@
 "Drag past the left or right edge to hide the controls." = "Перетащите элементы управления за левый или правый край, чтобы скрыть их.";
 "Hide on Left" = "Скрыть слева";
 "Hide on Right" = "Скрыть справа";
+"Remote command failed (exit code %d)." = "Удалённая команда не выполнена (код выхода %d).";

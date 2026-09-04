@@ -264,6 +264,7 @@ final class TerminalTabManager {
     #endif
 
     private func setPaneWorkingDirectory(_ workingDirectory: String, for paneId: UUID) {
+        remoteSessionCoordinator.cancelDirectoryRefresh(for: paneId)
         sessionState.updatePane(paneId) { $0.workingDirectory = workingDirectory }
     }
 

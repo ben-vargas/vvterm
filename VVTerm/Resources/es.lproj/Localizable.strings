@@ -1973,3 +1973,4 @@
 "Drag past the left or right edge to hide the controls." = "Arrastra los controles más allá del borde izquierdo o derecho para ocultarlos.";
 "Hide on Left" = "Ocultar a la izquierda";
 "Hide on Right" = "Ocultar a la derecha";
+"Remote command failed (exit code %d)." = "El comando remoto falló (código de salida %d).";

@@ -1974,3 +1974,4 @@
 "Drag past the left or right edge to hide the controls." = "Přetažením za levý nebo pravý okraj ovládání skryjete.";
 "Hide on Left" = "Skrýt vlevo";
 "Hide on Right" = "Skrýt vpravo";
+"Remote command failed (exit code %d)." = "Vzdálený příkaz selhal (návratový kód %d).";

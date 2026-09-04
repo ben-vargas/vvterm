@@ -1972,3 +1972,4 @@
 "Drag past the left or right edge to hide the controls." = "왼쪽 또는 오른쪽 가장자리 너머로 드래그하여 컨트롤을 숨기세요.";
 "Hide on Left" = "왼쪽에 숨기기";
 "Hide on Right" = "오른쪽에 숨기기";
+"Remote command failed (exit code %d)." = "원격 명령이 실패했습니다(종료 코드 %d).";

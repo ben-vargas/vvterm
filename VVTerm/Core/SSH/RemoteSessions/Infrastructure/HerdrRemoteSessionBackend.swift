@@ -80,22 +80,13 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] {
         try requireSupported(runtime)
-        let output = try await client.execute(
+        let output = try await client.executeChecked(
             HerdrRemoteSessionCommandBuilder.listCommand(runtime: runtime),
             timeout: .seconds(12),
             maxOutputBytes: HerdrRemoteSessionParser.maximumOutputBytes
         )
         try Task.checkCancellation()
         return try HerdrRemoteSessionParser.parseSessionList(output, scope: scope)
-    }
-
-    func prepareManagedSession(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        runtime: RemoteSessionRuntime
-    ) async {
-        // Herdr owns its configuration and session state.
     }
 
     func launchPlan(
@@ -133,33 +124,29 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
-    ) async {
-        guard identifier.backendIdentifier == .herdr else { return }
-        let stop: String
-        let delete: String?
-        do {
-            try requireSupported(runtime)
-            stop = try HerdrRemoteSessionCommandBuilder.stopCommand(
+    ) async throws {
+        guard identifier.backendIdentifier == .herdr else { throw SSHError.unknown("Remote session backend mismatch") }
+        try requireSupported(runtime)
+        let stop = try HerdrRemoteSessionCommandBuilder.stopCommand(
+            identifier: identifier,
+            runtime: runtime
+        )
+        let delete =
+            identifier.rawValue == "default"
+            ? nil
+            : try HerdrRemoteSessionCommandBuilder.deleteCommand(
                 identifier: identifier,
                 runtime: runtime
             )
-            delete = identifier.rawValue == "default"
-                ? nil
-                : try HerdrRemoteSessionCommandBuilder.deleteCommand(
-                    identifier: identifier,
-                    runtime: runtime
-                )
-        } catch {
-            return
-        }
 
-        _ = try? await client.execute(
+        try await client.executeChecked(
             stop,
             timeout: .seconds(18),
             maxOutputBytes: HerdrRemoteSessionParser.maximumMutationOutputBytes
         )
-        guard !Task.isCancelled, let delete else { return }
-        _ = try? await client.execute(
+        try Task.checkCancellation()
+        guard let delete else { return }
+        try await client.executeChecked(
             delete,
             timeout: .seconds(8),
             maxOutputBytes: HerdrRemoteSessionParser.maximumMutationOutputBytes
@@ -181,7 +168,8 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
             let output = try await client.execute(
                 command,
                 timeout: .seconds(8),
-                maxOutputBytes: HerdrRemoteSessionParser.maximumOutputBytes
+                maxOutputBytes: HerdrRemoteSessionParser.maximumOutputBytes,
+                timeoutScope: .command
             )
             guard !Task.isCancelled else { return nil }
             return HerdrRemoteSessionParser.parseWorkingDirectory(output)

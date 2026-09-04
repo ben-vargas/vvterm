@@ -57,7 +57,7 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] {
         try requireSupported(runtime)
-        let output = try await client.execute(
+        let output = try await client.executeChecked(
             ZmxRemoteSessionCommandBuilder.listCommand(scope: scope, runtime: runtime),
             timeout: .seconds(12),
             maxOutputBytes: ZmxRemoteSessionParser.maximumOutputBytes
@@ -72,15 +72,6 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
             }
             return sessions
         }
-    }
-
-    func prepareManagedSession(
-        using client: SSHClient,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        runtime: RemoteSessionRuntime
-    ) async {
-        // zmx does not use a VVTerm-generated configuration file.
     }
 
     func launchPlan(
@@ -118,19 +109,14 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
-    ) async {
-        guard identifier.backendIdentifier == .zmx else { return }
-        let command: String
-        do {
-            try requireSupported(runtime)
-            command = try ZmxRemoteSessionCommandBuilder.killCommand(
-                identifier: identifier,
-                runtime: runtime
-            )
-        } catch {
-            return
-        }
-        _ = try? await client.execute(
+    ) async throws {
+        guard identifier.backendIdentifier == .zmx else { throw SSHError.unknown("Remote session backend mismatch") }
+        try requireSupported(runtime)
+        let command = try ZmxRemoteSessionCommandBuilder.killCommand(
+            identifier: identifier,
+            runtime: runtime
+        )
+        try await client.executeChecked(
             command,
             timeout: .seconds(10),
             maxOutputBytes: 8 * 1_024
@@ -152,7 +138,8 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
                     runtime: runtime
                 ),
                 timeout: .seconds(8),
-                maxOutputBytes: ZmxRemoteSessionParser.maximumOutputBytes
+                maxOutputBytes: ZmxRemoteSessionParser.maximumOutputBytes,
+                timeoutScope: .command
             )
             return ZmxRemoteSessionParser.parseWorkingDirectory(
                 for: identifier,

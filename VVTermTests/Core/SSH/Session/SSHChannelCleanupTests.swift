@@ -3,8 +3,8 @@ import Testing
 @testable import VVTerm
 
 struct SSHChannelCleanupTests {
-    @Test
-    func nonblockingChannelCleanupRetriesUntilComplete() async {
+    @Test(arguments: [Int32(0), Int32(LIBSSH2_ERROR_SFTP_PROTOCOL)])
+    func nonblockingCleanupRetriesAndPreservesTheFinalStatus(_ finalStatus: Int32) async {
         let session = SSHSession(
             config: SSHSessionConfig(
                 host: "test.invalid",
@@ -21,11 +21,11 @@ struct SSHChannelCleanupTests {
             results: [
                 Int32(LIBSSH2_ERROR_EAGAIN),
                 Int32(LIBSSH2_ERROR_EAGAIN),
-                0,
+                finalStatus,
             ]
         )
 
-        #expect(result.result == 0)
+        #expect(result.result == finalStatus)
         #expect(result.callCount == 3)
     }
 }

@@ -466,6 +466,84 @@ struct SSHStartupIntegrationTests {
     }
 
     @Test
+    func commandScopedTimeoutLeavesConnectionUsable() async throws {
+        guard let configuration = try Configuration.fromEnvironment() else { return }
+        let previousKnownHost = KnownHostsManager.shared.entry(for: configuration.host, port: configuration.port)
+        defer { restoreKnownHost(previousKnownHost, host: configuration.host, port: configuration.port) }
+        let client = makeIntegrationSSHClient()
+        let (server, credentials) = makeStandardConnection(configuration: configuration)
+        do {
+            _ = try await client.connect(to: server, credentials: credentials)
+            do {
+                _ = try await client.execute("sleep 5", timeout: .milliseconds(100), timeoutScope: .command)
+                Issue.record("The slow command must time out")
+            } catch SSHError.timeout {
+                // Only this exec channel is cancelled; the authenticated connection stays usable.
+            }
+            let output = try await client.execute("printf 'still-connected'", timeout: .seconds(3))
+            #expect(output == "still-connected")
+            await client.disconnect()
+        } catch {
+            await client.disconnect()
+            throw error
+        }
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["VVTERM_SSH_INTEGRATION"] == "1"))
+    func checkedCommandReceivesExitStatusAfterOutputEnds() async throws {
+        let configuration = try #require(try Configuration.fromEnvironment())
+        let previousKnownHost = KnownHostsManager.shared.entry(for: configuration.host, port: configuration.port)
+        defer { restoreKnownHost(previousKnownHost, host: configuration.host, port: configuration.port) }
+        let client = makeIntegrationSSHClient()
+        let (server, credentials) = makeStandardConnection(configuration: configuration)
+        do {
+            _ = try await client.connect(to: server, credentials: credentials)
+            let command = "printf result; exec 1>&- 2>&-; sleep 0.1; exit 23"
+            let output = try await client.execute(command, timeout: .seconds(3))
+            #expect(output == "result")
+            do {
+                try await client.executeChecked(command, timeout: .seconds(3))
+                Issue.record("A nonzero exit must fail even when stdout ends first")
+            } catch let error as SSHCommandExitError {
+                #expect(error.exitStatus == 23)
+            }
+            #expect(try await client.executeChecked("printf ready", timeout: .seconds(3)) == "ready")
+            await client.disconnect()
+        } catch {
+            await client.disconnect()
+            throw error
+        }
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["VVTERM_SSH_INTEGRATION"] == "1"))
+    func uploadedFileIsClosedBeforeTheShellReadsAndRemovesIt() async throws {
+        let configuration = try #require(try Configuration.fromEnvironment())
+        let previousKnownHost = KnownHostsManager.shared.entry(for: configuration.host, port: configuration.port)
+        defer { restoreKnownHost(previousKnownHost, host: configuration.host, port: configuration.port) }
+        let client = makeIntegrationSSHClient()
+        let (server, credentials) = makeStandardConnection(configuration: configuration)
+        do {
+            let session = try await client.connect(to: server, credentials: credentials)
+            let directory = try await session.resolveHomeDirectory()
+            let path = directory + "/.vvterm-write-test-" + UUID().uuidString
+            let data = Data(String(repeating: "test data\n", count: 1_000).utf8)
+            do {
+                try await session.writeFile(data, to: path, permissions: 0o600)
+                let quoted = RemoteTerminalBootstrap.shellQuoted(path)
+                let output = try await client.executeChecked("cat \(quoted) && rm -f \(quoted)", timeout: .seconds(3))
+                #expect(Data(output.utf8) == data)
+            } catch {
+                try? await session.deleteFile(at: path)
+                throw error
+            }
+            await client.disconnect()
+        } catch {
+            await client.disconnect()
+            throw error
+        }
+    }
+
+    @Test
     func rejectedPTYCleansChannelAndLeavesSessionUsable() async throws {
         guard let configuration = try Configuration.fromEnvironment(),
               let rejectedPTYPort = integrationPort(named: "VVTERM_SSH_REJECT_PTY_PORT") else { return }

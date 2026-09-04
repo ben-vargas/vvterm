@@ -113,6 +113,7 @@ extension TerminalRemoteSessionCoordinator {
         validateOwner: () throws -> Void
     ) async throws -> TerminalShellStartupPlan {
         try validateOwner()
+        cancelDirectoryRefresh(for: paneID)
         let configuredStartupAction = configuration.serverSettings(serverID)?
             .startupAction
         let startupAction = sessionState.paneState(for: paneID)?
@@ -179,20 +180,7 @@ extension TerminalRemoteSessionCoordinator {
             return .plainShell
         }
 
-        await runCleanupIfNeeded(
-            for: serverID,
-            paneID: paneID,
-            using: client,
-            runtime: runtime
-        )
-        try validateOwner()
-        await prepareActivePane(
-            for: paneID,
-            serverID: serverID,
-            using: client,
-            runtime: runtime
-        )
-        try validateOwner()
+        prepareActivePane(for: paneID, serverID: serverID)
 
         let workingDirectory = await resolveWorkingDirectory(
             for: paneID,
@@ -231,6 +219,11 @@ extension TerminalRemoteSessionCoordinator {
             ),
             runtime: runtime
         )
+        try validateOwner()
+        if let preparationCommand = backendPlan.preparationCommand {
+            try await client.executeChecked(preparationCommand, timeout: .seconds(20))
+            try validateOwner()
+        }
         let lifecycle = RemoteSessionLifecycleContext(
             attachment: attachmentState.attachment,
             envelope: envelope,
@@ -239,10 +232,17 @@ extension TerminalRemoteSessionCoordinator {
         sessionState.updatePane(paneID, persist: true) {
             $0.remoteSessionResumeContext = lifecycle
         }
+        try validateOwner()
+        let cleanupKey = CleanupKey(serverID: serverID, backendIdentifier: runtime.backendIdentifier)
+        directoryRefreshes[paneID] = .pending(client: client, runtime: runtime)
+        if cleanupStates[cleanupKey] == nil {
+            cleanupStates[cleanupKey] = .pending(paneID: paneID, client: client, runtime: runtime)
+        }
         return TerminalShellStartupPlan(
             command: backendPlan.command,
             remoteSessionLifecycle: lifecycle,
-            mayExecuteUserStartupAction: mayExecuteStartupAction
+            mayExecuteUserStartupAction: mayExecuteStartupAction,
+            shellProfile: backendPlan.shellProfile
         )
     }
 
@@ -284,7 +284,7 @@ extension TerminalRemoteSessionCoordinator {
         }
     }
 
-    private func managedIdentifiers(
+    func managedIdentifiers(
         backendIdentifier: RemoteSessionBackendIdentifier
     ) -> Set<RemoteSessionIdentifier> {
         // Several server profiles can share one remote host. Cleanup cannot
@@ -300,47 +300,14 @@ extension TerminalRemoteSessionCoordinator {
         })
     }
 
-    private func runCleanupIfNeeded(
-        for serverID: UUID,
-        paneID: UUID,
-        using client: SSHClient,
-        runtime: RemoteSessionRuntime
-    ) async {
-        let key = CleanupKey(
-            serverID: serverID,
-            backendIdentifier: runtime.backendIdentifier
-        )
-        guard completedCleanup.insert(key).inserted else { return }
-        var identifiers = managedIdentifiers(
-            backendIdentifier: runtime.backendIdentifier
-        )
-        if let identifier = resolver.attachment(for: paneID)?.attachment.identifier {
-            identifiers.insert(identifier)
-        }
-        await remoteSessions.cleanupSessions(
-            keeping: identifiers,
-            using: client,
-            runtime: runtime
-        )
-    }
-
     private func prepareActivePane(
         for paneID: UUID,
-        serverID: UUID,
-        using client: SSHClient,
-        runtime: RemoteSessionRuntime
-    ) async {
+        serverID: UUID
+    ) {
         let selectedTab = sessionState.selectedTab(for: serverID)
         let isForeground = selectedTab?.id == sessionState.selectedTabId(for: serverID)
             && selectedTab?.focusedPaneId == paneID
         updateStatus(isForeground ? .foreground : .background, for: paneID)
-        let terminalType = await client.remoteTerminalType()
-        await remoteSessions.prepareManagedSession(
-            using: client,
-            terminalType: terminalType,
-            themeStyle: configuration.themeStyle(),
-            runtime: runtime
-        )
     }
 
     func resolveWorkingDirectory(
@@ -357,14 +324,8 @@ extension TerminalRemoteSessionCoordinator {
            ) {
             return path
         }
-        if let attachment = resolver.attachment(for: paneID)?.attachment,
-           let path = await remoteSessions.currentWorkingDirectory(
-               for: attachment,
-               using: client,
-               runtime: runtime
-           ) {
-            return path
-        }
+        // Existing sessions keep their own directory. Only a split needs its
+        // source pane's current remote path before launch.
         if let candidate = sessionState.paneState(for: paneID)?.workingDirectory?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !candidate.isEmpty {

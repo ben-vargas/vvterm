@@ -438,11 +438,10 @@ nonisolated enum ZellijRemoteSessionCommandBuilder {
         \(managedMetadataSetupScript())
         vvtermZellijSessionName=\(RemoteTerminalBootstrap.shellQuoted(identifier.rawValue))
         vvtermZellijOwnershipMarker="$vvtermZellijOwnershipRoot/$vvtermZellijSessionName"
-        if [ -f "$vvtermZellijOwnershipMarker" ] \
-           && [ ! -L "$vvtermZellijOwnershipMarker" ] \
-           && \(kill) >/dev/null 2>&1; then
-          rm -f "$vvtermZellijOwnershipMarker"
-        fi
+        [ -f "$vvtermZellijOwnershipMarker" ] \
+          && [ ! -L "$vvtermZellijOwnershipMarker" ] || exit 1
+        \(kill) >/dev/null 2>&1 || exit $?
+        rm -f "$vvtermZellijOwnershipMarker"
         """
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }

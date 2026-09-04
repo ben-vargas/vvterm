@@ -15,7 +15,7 @@ actor SSHSession {
     final class ExecRequest {
         let id: UUID
         let command: String
-        let continuation: CheckedContinuation<String, Error>
+        let continuation: CheckedContinuation<SSHCommandResult, Error>
         var channel: OpaquePointer?
         var output = Data()
         var stderr = Data()
@@ -26,7 +26,7 @@ actor SSHSession {
             id: UUID,
             command: String,
             maximumOutputBytes: Int,
-            continuation: CheckedContinuation<String, Error>
+            continuation: CheckedContinuation<SSHCommandResult, Error>
         ) {
             self.id = id
             self.command = command
@@ -333,8 +333,16 @@ actor SSHSession {
                     }
 
                     if let currentChannel = request.channel, libssh2_channel_eof(currentChannel) != 0 {
-                        await finishExecRequest(requestId, error: nil)
-                        didWork = true
+                        // EOF ends output, not necessarily the process. Receive the
+                        // close packet before reading its final exit status.
+                        let result = libssh2_channel_wait_closed(currentChannel)
+                        if result == 0 {
+                            await finishExecRequest(requestId, error: nil)
+                            didWork = true
+                        } else if result != LIBSSH2_ERROR_EAGAIN {
+                            await finishExecRequest(requestId, error: SSHError.socketError("Exec close failed: \(result)"))
+                            didWork = true
+                        }
                     }
                 }
             }

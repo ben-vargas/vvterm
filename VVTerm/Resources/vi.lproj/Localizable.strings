@@ -2018,3 +2018,4 @@
 "Drag past the left or right edge to hide the controls." = "Kéo qua cạnh trái hoặc phải để ẩn các điều khiển.";
 "Hide on Left" = "Ẩn bên trái";
 "Hide on Right" = "Ẩn bên phải";
+"Remote command failed (exit code %d)." = "Lệnh từ xa thất bại (mã thoát %d).";

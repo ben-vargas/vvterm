@@ -1973,3 +1973,4 @@
 "Drag past the left or right edge to hide the controls." = "ลากเลยขอบซ้ายหรือขวาเพื่อซ่อนตัวควบคุม";
 "Hide on Left" = "ซ่อนทางซ้าย";
 "Hide on Right" = "ซ่อนทางขวา";
+"Remote command failed (exit code %d)." = "คำสั่งระยะไกลล้มเหลว (รหัสออก %d)";

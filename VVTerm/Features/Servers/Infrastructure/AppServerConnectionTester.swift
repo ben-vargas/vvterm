@@ -25,7 +25,7 @@ nonisolated protocol ServerRemoteSystemDetecting: Sendable {
 
 nonisolated struct AppServerRemoteSystemDetector: ServerRemoteSystemDetecting {
     func detect(using client: SSHClient) async -> RemoteSystemIdentity? {
-        await client.remoteEnvironment().systemIdentity
+        await client.remoteSystemIdentity()
     }
 }
 

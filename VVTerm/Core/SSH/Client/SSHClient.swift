@@ -20,7 +20,7 @@ actor SSHClient {
         let key: String
         var server: Server
         let session: SSHSession
-        var remoteEnvironment: RemoteEnvironment?
+        let environmentCoordinator: RemoteEnvironmentCoordinator
         var remoteTerminalType: RemoteTerminalType?
         let startupTrace: SSHStartupTrace
     }
@@ -192,6 +192,7 @@ actor SSHClient {
                 )
             )
         case .connected(let state):
+            Task { await state.environmentCoordinator.cancel() }
             state.session.abort()
             lifecycle = .aborted(
                 AbortedState(operationID: state.id, session: state.session, connectTask: nil)
@@ -207,7 +208,8 @@ actor SSHClient {
 
     // MARK: - Connection
 
-    func connect(to server: Server, credentials: ServerCredentials) async throws -> SSHSession {
+    func connect(to server: Server, credentials: ServerCredentials,
+                 preferredPlatform: RemotePlatform? = nil) async throws -> SSHSession {
         let key = connectionKey(for: server)
 
         connectionPreparation: while true {
@@ -255,6 +257,7 @@ actor SSHClient {
                     operationID: state.id,
                     key: key,
                     server: server,
+                    preferredPlatform: preferredPlatform,
                     task: state.task
                 )
 
@@ -289,6 +292,7 @@ actor SSHClient {
             operationID: operationID,
             key: key,
             server: server,
+            preferredPlatform: preferredPlatform,
             task: task
         )
     }
@@ -392,6 +396,7 @@ actor SSHClient {
         operationID: UUID,
         key: String,
         server: Server,
+        preferredPlatform: RemotePlatform?,
         task: Task<SSHSession, Error>
     ) async throws -> SSHSession {
         do {
@@ -420,7 +425,15 @@ actor SSHClient {
                         key: key,
                         server: server,
                         session: connectedSession,
-                        remoteEnvironment: nil,
+                        environmentCoordinator: RemoteEnvironmentCoordinator(execute: { command, timeout in
+                            try await SSHClient.runWithDeadline(timeout ?? RemoteEnvironmentResolver.probeTimeout) {
+                                try Task.checkCancellation()
+                                return try await connectedSession.execute(
+                                    command,
+                                    maxOutputBytes: RemoteEnvironmentResolver.maximumProbeOutputBytes
+                                )
+                            }
+                        }, trace: state.startupTrace, preferredPlatform: preferredPlatform),
                         remoteTerminalType: nil,
                         startupTrace: state.startupTrace
                     )
@@ -491,6 +504,12 @@ actor SSHClient {
         moshRuntimeGeneration = UUID()
 
         let activeSession: SSHSession?
+        let environmentCoordinator: RemoteEnvironmentCoordinator?
+        if case .connected(let state) = lifecycle {
+            environmentCoordinator = state.environmentCoordinator
+        } else {
+            environmentCoordinator = nil
+        }
         switch lifecycle {
         case .connecting(let state):
             state.task.cancel()
@@ -519,6 +538,7 @@ actor SSHClient {
         let cloudflareTransportManager = self.cloudflareTransportManager
         let logger = self.logger
         let task = Task {
+            await environmentCoordinator?.cancel()
             let cleanupFinished = await SSHClient.cleanupPendingMoshServerLeases(
                 pendingMoshServerLeases
             )
