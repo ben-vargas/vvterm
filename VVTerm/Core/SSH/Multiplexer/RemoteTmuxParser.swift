@@ -7,7 +7,8 @@ nonisolated enum RemoteTmuxParser {
     ) -> RemoteTmuxBackend? {
         let pathPrefix = "__VVTERM_TMUX_PATH__"
         let versionPrefix = "__VVTERM_TMUX_VERSION__"
-        let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
+        // Swift treats CRLF as one Character, so an LF-only separator misses Windows lines.
+        let lines = output.split(whereSeparator: \.isNewline)
         guard let pathLine = lines.first(where: { $0.hasPrefix(pathPrefix) }),
               let versionLine = lines.first(where: { $0.hasPrefix(versionPrefix) }) else {
             return nil
@@ -52,7 +53,7 @@ nonisolated enum RemoteTmuxParser {
         allowLegacy: Bool
     ) -> [RemoteTmuxSession] {
         var sessions: [RemoteTmuxSession] = []
-        for rawLine in output.split(separator: "\n") {
+        for rawLine in output.split(whereSeparator: \.isNewline) {
             let line = String(rawLine)
             if let parsed = parseSessionLine(line) {
                 sessions.append(
