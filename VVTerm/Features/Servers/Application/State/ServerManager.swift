@@ -137,12 +137,6 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         }
         await remoteSyncCoordinator.drainPendingMutations()
 
-        if case .create = mutation {
-            stateStore.promotePendingBootstrapWorkspaceIfNeeded(
-                for: savedServer.workspaceId,
-                reason: "adding a server"
-            )
-        }
         let action: String
         switch mutation {
         case .create:
@@ -282,7 +276,6 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             ]
         )
         try commitServerDataMutation(plan)
-        stateStore.clearPendingBootstrapWorkspace(reason: "adding a workspace")
         await remoteSyncCoordinator.drainPendingMutations()
         logger.info("Added workspace: \(workspace.name)")
     }
@@ -313,10 +306,6 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             ]
         )
         try commitServerDataMutation(plan)
-        stateStore.promotePendingBootstrapWorkspaceIfNeeded(
-            for: workspace.id,
-            reason: "updating workspace metadata"
-        )
         await remoteSyncCoordinator.drainPendingMutations()
         logger.info("Updated workspace: \(workspace.name)")
     }
@@ -392,7 +381,6 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             }
         )
         try commitServerDataMutation(plan)
-        stateStore.clearPendingBootstrapWorkspace(reason: "reordering workspaces")
         await remoteSyncCoordinator.drainPendingMutations()
         logger.info("Reordered workspaces")
     }
@@ -574,10 +562,6 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             workspace: plan.updatedWorkspace,
             selectedEnvironment: plan.fallback
         )
-    }
-
-    func handleAppLanguageChange() {
-        stateStore.handleAppLanguageChange()
     }
 
     private func commitServerDataMutation(_ plan: ServerDataMutationPlan) throws {

@@ -29,6 +29,8 @@ final class CloudKitPendingMutationRouter: PendingCloudKitMutationHandling {
                 try await serverCloud.saveServer(server)
             case .serverDelete(let server):
                 try await serverCloud.deleteServer(server)
+            case .initialWorkspaceCreate(let workspace):
+                _ = try await serverCloud.createWorkspaceIfAbsent(workspace)
             case .workspaceUpsert(let workspace):
                 try await serverCloud.saveWorkspace(workspace)
             case .workspaceDelete(let workspace):

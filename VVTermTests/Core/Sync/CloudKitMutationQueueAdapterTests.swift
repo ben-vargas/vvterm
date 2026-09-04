@@ -19,6 +19,10 @@ struct CloudKitMutationQueueAdapterTests {
             id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
             name: "Saved Workspace"
         )
+        let initialWorkspace = makeWorkspace(
+            id: InitialWorkspaceBootstrapState.workspaceID,
+            name: "My Servers"
+        )
         let deletedWorkspace = makeWorkspace(
             id: UUID(uuidString: "10000000-0000-0000-0000-000000000002")!,
             name: "Deleted Workspace"
@@ -45,6 +49,11 @@ struct CloudKitMutationQueueAdapterTests {
         try repository.enqueueServerDataMutations([
             ServerPendingMutation(
                 id: UUID(),
+                payload: .initialWorkspaceCreate(initialWorkspace),
+                createdAt: Date(timeIntervalSinceReferenceDate: 1)
+            ),
+            ServerPendingMutation(
+                id: UUID(),
                 payload: .serverUpsert(server),
                 createdAt: Date(timeIntervalSinceReferenceDate: 2)
             ),
@@ -67,12 +76,14 @@ struct CloudKitMutationQueueAdapterTests {
 
         let expectedPayloads = [
             statsPayload,
+            try PendingCloudKitMutationPayload.initialWorkspaceCreate(initialWorkspace),
             try PendingCloudKitMutationPayload.serverUpsert(server),
             try PendingCloudKitMutationPayload.serverDelete(deletedServer),
             try PendingCloudKitMutationPayload.workspaceUpsert(workspace),
             try PendingCloudKitMutationPayload.workspaceDelete(deletedWorkspace)
         ]
         let expectedServerPayloads: [ServerPendingMutation.Payload] = [
+            .initialWorkspaceCreate(initialWorkspace),
             .serverUpsert(server),
             .serverDelete(deletedServer),
             .workspaceUpsert(workspace),

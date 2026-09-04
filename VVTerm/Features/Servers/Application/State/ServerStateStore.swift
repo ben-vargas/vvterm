@@ -11,7 +11,6 @@ struct ServerStateStoreDependencies {
     let now: () -> Date
     let makeID: () -> UUID
     let defaultWorkspaceName: () -> String
-    let canonicalDefaultWorkspaceNames: () -> Set<String>
 }
 
 nonisolated enum ServerStateStoreError: Error, Equatable, Sendable {
@@ -28,6 +27,7 @@ final class ServerStateStore: ObservableObject {
         subsystem: "app.vivy.VVTerm",
         category: "ServerStateStore"
     )
+    private(set) var initialWorkspaceBootstrapState = InitialWorkspaceBootstrapState.inactive
 
     init(dependencies: ServerStateStoreDependencies) {
         self.dependencies = dependencies
@@ -52,38 +52,25 @@ final class ServerStateStore: ObservableObject {
     var isLoading: Bool { loadState.isLoading }
     var error: String? { loadState.errorMessage }
     var isSyncEnabled: Bool { dependencies.isSyncEnabled() }
-    var transientBootstrapWorkspaceID: UUID? { pendingBootstrapWorkspaceID }
-    var shouldForceRemoteFullFetchForBootstrap: Bool { pendingBootstrapWorkspaceID != nil }
+    var shouldForceRemoteFullFetchForBootstrap: Bool {
+        initialWorkspaceBootstrapState == .awaitingAuthoritativeRemoteState
+    }
 
     var hasPendingServerDataMutation: Bool {
         (try? dependencies.localRepository.loadServerDataMutationJournal()) != nil
     }
 
     var localCacheContainsUserData: Bool {
-        if !servers.isEmpty {
-            return true
-        }
-
-        let effectiveWorkspaces = workspaces.filter { $0.id != transientBootstrapWorkspaceID }
-        guard !effectiveWorkspaces.isEmpty else { return false }
-        guard effectiveWorkspaces.count == 1, let workspace = effectiveWorkspaces.first else {
-            return true
-        }
-        return !isCanonicalDefaultWorkspaceCandidate(workspace)
+        !servers.isEmpty || !workspaces.isEmpty
     }
 
-    private var didBootstrapDefaultWorkspace: Bool {
-        get { dependencies.preferences.didBootstrapDefaultWorkspace }
-        set { dependencies.preferences.didBootstrapDefaultWorkspace = newValue }
+    private var hasResolvedInitialWorkspace: Bool {
+        get { dependencies.preferences.hasResolvedInitialWorkspace }
+        set { dependencies.preferences.hasResolvedInitialWorkspace = newValue }
     }
 
     private var hasSeenWelcome: Bool {
         dependencies.preferences.hasSeenWelcome
-    }
-
-    private(set) var pendingBootstrapWorkspaceID: UUID? {
-        get { dependencies.preferences.pendingBootstrapWorkspaceID }
-        set { dependencies.preferences.pendingBootstrapWorkspaceID = newValue }
     }
 
     func startLoading(operationID: UUID) -> UUID {
@@ -133,12 +120,17 @@ final class ServerStateStore: ObservableObject {
         let deletedWorkspaceIDs = Set(changes.deletedWorkspaceIDs)
         var explainedServerIDs = cloudServerIDs.union(deletedServerIDs)
         var explainedWorkspaceIDs = cloudWorkspaceIDs.union(deletedWorkspaceIDs)
+        if initialWorkspaceBootstrapState == .awaitingAuthoritativeRemoteState {
+            explainedWorkspaceIDs.insert(InitialWorkspaceBootstrapState.workspaceID)
+        }
 
         for mutation in pendingMutations {
             switch mutation.payload {
             case .serverUpsert(let server), .serverDelete(let server):
                 explainedServerIDs.insert(server.id)
-            case .workspaceUpsert(let workspace), .workspaceDelete(let workspace):
+            case .initialWorkspaceCreate(let workspace),
+                 .workspaceUpsert(let workspace),
+                 .workspaceDelete(let workspace):
                 explainedWorkspaceIDs.insert(workspace.id)
             }
         }
@@ -147,9 +139,8 @@ final class ServerStateStore: ObservableObject {
             !explainedServerIDs.contains(server.id)
                 && !deletedWorkspaceIDs.contains(server.workspaceId)
         }
-        let hasUnexplainedWorkspace = workspaces.contains { workspace in
-            workspace.id != transientBootstrapWorkspaceID
-                && !explainedWorkspaceIDs.contains(workspace.id)
+        let hasUnexplainedWorkspace = workspaces.contains {
+            !explainedWorkspaceIDs.contains($0.id)
         }
         return hasUnexplainedServer || hasUnexplainedWorkspace
     }
@@ -189,13 +180,8 @@ final class ServerStateStore: ObservableObject {
         applyPersistedCollections(dependencies.localRepository.loadSnapshot())
     }
 
-    func restorePendingBootstrapWorkspaceID(_ workspaceID: UUID?) {
-        pendingBootstrapWorkspaceID = workspaceID
-    }
-
     func clearLocalDataAndState() throws {
         try dependencies.localRepository.clearServerData()
-        pendingBootstrapWorkspaceID = nil
         var nextSnapshot = snapshot
         nextSnapshot.servers = []
         nextSnapshot.workspaces = []
@@ -253,10 +239,6 @@ final class ServerStateStore: ObservableObject {
             servers: plan.resultingServers,
             workspaces: plan.resultingWorkspaces
         )
-        if case .workspaceDelete(let workspaceID) = plan.kind,
-           pendingBootstrapWorkspaceID == workspaceID {
-            pendingBootstrapWorkspaceID = nil
-        }
     }
 
     func replaceCollections(servers: [Server], workspaces: [Workspace]) {
@@ -271,7 +253,13 @@ final class ServerStateStore: ObservableObject {
         var updatedWorkspaces = workspaces
 
         for mutation in mutations {
-            guard case .workspaceUpsert(let workspace) = mutation.payload else { continue }
+            let workspace: Workspace
+            switch mutation.payload {
+            case .initialWorkspaceCreate(let candidate), .workspaceUpsert(let candidate):
+                workspace = candidate
+            case .serverUpsert, .serverDelete, .workspaceDelete:
+                continue
+            }
             if let index = updatedWorkspaces.firstIndex(where: { $0.id == workspace.id }) {
                 updatedWorkspaces[index] = workspace
             } else {
@@ -300,6 +288,20 @@ final class ServerStateStore: ObservableObject {
         }
 
         replaceCollections(servers: updatedServers, workspaces: updatedWorkspaces)
+    }
+
+    @discardableResult
+    func replaceWorkspaceIfUnchanged(
+        _ expected: Workspace,
+        with replacement: Workspace
+    ) -> Bool {
+        guard expected.id == replacement.id,
+              let index = workspaces.firstIndex(where: { $0.id == expected.id }),
+              workspaces[index] == expected else {
+            return false
+        }
+        updateSnapshot { $0.workspaces[index] = replacement }
+        return true
     }
 
     func applyRemoteChanges(
@@ -344,7 +346,7 @@ final class ServerStateStore: ObservableObject {
         var updatedWorkspaces = workspaces
         var repairWorkspace: Workspace?
         if updatedWorkspaces.isEmpty {
-            let fallbackWorkspace = createDefaultWorkspace()
+            let fallbackWorkspace = makeDefaultWorkspace(id: dependencies.makeID())
             repairWorkspace = Self.workspaceForOrphanRepair(
                 existingWorkspaces: updatedWorkspaces,
                 servers: servers,
@@ -408,53 +410,48 @@ final class ServerStateStore: ObservableObject {
         }
     }
 
-    func promotePendingBootstrapWorkspaceIfNeeded(for workspaceID: UUID, reason: String) {
-        guard pendingBootstrapWorkspaceID == workspaceID else { return }
-        pendingBootstrapWorkspaceID = nil
-        logger.info("Promoted pending bootstrap workspace after \(reason)")
-    }
-
-    func clearPendingBootstrapWorkspace(reason: String) {
-        guard pendingBootstrapWorkspaceID != nil else { return }
-        pendingBootstrapWorkspaceID = nil
-        logger.info("Promoted pending bootstrap workspace after \(reason)")
-    }
-
-    func takePendingBootstrapWorkspaceForAuthoritativeEmptyFetch(
+    func initialWorkspaceAfterAuthoritativeEmptyRemoteState(
         _ changes: ServerRemoteChanges
     ) -> Workspace? {
-        guard changes.isFullFetch,
+        guard initialWorkspaceBootstrapState == .awaitingAuthoritativeRemoteState,
+              changes.isFullFetch,
               changes.workspaces.isEmpty,
-              let pendingBootstrapWorkspaceID,
-              let workspace = workspace(withID: pendingBootstrapWorkspaceID) else {
+              changes.servers.isEmpty,
+              workspaces.isEmpty,
+              servers.isEmpty else {
             return nil
         }
-        self.pendingBootstrapWorkspaceID = nil
-        return workspace
+        return makeDefaultWorkspace(id: InitialWorkspaceBootstrapState.workspaceID)
     }
 
-    @discardableResult
-    func reconcilePendingBootstrapWorkspaceState() -> Bool {
-        guard let pendingBootstrapWorkspaceID else { return false }
-
-        guard workspaces.contains(where: { $0.id == pendingBootstrapWorkspaceID }) else {
-            self.pendingBootstrapWorkspaceID = nil
-            return true
+    func completeInitialWorkspaceBootstrap(after changes: ServerRemoteChanges) {
+        guard changes.isFullFetch,
+              initialWorkspaceBootstrapState == .awaitingAuthoritativeRemoteState else {
+            return
         }
-
-        if servers.contains(where: { $0.workspaceId == pendingBootstrapWorkspaceID })
-            || workspaces.count > 1 {
-            self.pendingBootstrapWorkspaceID = nil
-            return true
-        }
-
-        return refreshPendingBootstrapWorkspaceLocalizationIfNeeded()
+        resolveInitialWorkspaceBootstrap()
     }
 
-    func handleAppLanguageChange() {
+    func createInitialWorkspaceForLocalUseIfNeeded() {
+        guard initialWorkspaceBootstrapState == .awaitingAuthoritativeRemoteState else {
+            return
+        }
         guard !hasPendingServerDataMutation else { return }
-        guard refreshPendingBootstrapWorkspaceLocalizationIfNeeded() else { return }
-        persistCurrentCollections()
+        guard !localCacheContainsUserData else {
+            resolveInitialWorkspaceBootstrap()
+            return
+        }
+        let workspace = makeDefaultWorkspace(id: InitialWorkspaceBootstrapState.workspaceID)
+        do {
+            try dependencies.localRepository.persist(
+                servers: servers,
+                workspaces: [workspace]
+            )
+            replaceCollections(servers: servers, workspaces: [workspace])
+            resolveInitialWorkspaceBootstrap()
+        } catch {
+            logger.error("Failed to persist the initial workspace: \(error.localizedDescription)")
+        }
     }
 
     func servers(in workspace: Workspace, environment: ServerEnvironment?) -> [Server] {
@@ -619,27 +616,6 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    static func shouldCreateBootstrapWorkspace(
-        didBootstrapDefaultWorkspace: Bool,
-        hasSeenWelcome: Bool,
-        hasLocalWorkspaces: Bool
-    ) -> Bool {
-        !(didBootstrapDefaultWorkspace || hasSeenWelcome) && !hasLocalWorkspaces
-    }
-
-    static func isCanonicalDefaultWorkspaceCandidate(
-        _ workspace: Workspace,
-        canonicalNames: Set<String>
-    ) -> Bool {
-        canonicalNames.contains(workspace.name)
-            && workspace.colorHex == "#007AFF"
-            && workspace.icon == nil
-            && workspace.order == 0
-            && workspace.environments == ServerEnvironment.builtInEnvironments
-            && workspace.lastSelectedEnvironmentId == nil
-            && workspace.lastSelectedServerId == nil
-    }
-
     static func backfillCandidates(
         pendingMutations: [ServerPendingMutation],
         cloudWorkspaceIDs: Set<UUID>,
@@ -655,7 +631,7 @@ final class ServerStateStore: ObservableObject {
                 pendingWorkspacesByID[workspace.id] = workspace
             case .serverUpsert(let server):
                 pendingServersByID[server.id] = server
-            case .workspaceDelete, .serverDelete:
+            case .initialWorkspaceCreate, .workspaceDelete, .serverDelete:
                 continue
             }
         }
@@ -705,22 +681,24 @@ final class ServerStateStore: ObservableObject {
     private func loadLocalData() {
         let persisted = dependencies.localRepository.loadSnapshot()
         applyPersistedCollections(persisted)
+        let pendingJournal = try? dependencies.localRepository.loadServerDataMutationJournal()
         if (try? dependencies.localRepository.loadAmbiguousCloudRecoveryBackup()) != nil {
             updateSnapshot { $0.ambiguousCloudRecovery = .decisionRequired }
         }
-        guard !hasPendingServerDataMutation else { return }
-        var shouldPersist = reconcilePendingBootstrapWorkspaceState()
-        if Self.shouldCreateBootstrapWorkspace(
-            didBootstrapDefaultWorkspace: didBootstrapDefaultWorkspace,
+        let containsInitialWorkspace = workspaces.contains {
+            $0.id == InitialWorkspaceBootstrapState.workspaceID
+        } || pendingJournal?.plan.resultingWorkspaces.contains {
+            $0.id == InitialWorkspaceBootstrapState.workspaceID
+        } == true
+        initialWorkspaceBootstrapState = InitialWorkspaceBootstrapState.initial(
+            hasResolvedInitialWorkspace: hasResolvedInitialWorkspace,
             hasSeenWelcome: hasSeenWelcome,
-            hasLocalWorkspaces: !workspaces.isEmpty
-        ) {
-            createBootstrapWorkspace()
-            didBootstrapDefaultWorkspace = true
-            shouldPersist = true
-        }
-        if shouldPersist {
-            persistCurrentCollections()
+            hasLocalWorkspaces: !workspaces.isEmpty,
+            hasInitialWorkspace: containsInitialWorkspace,
+            hasPendingMutation: pendingJournal != nil
+        )
+        if !isSyncEnabled {
+            createInitialWorkspaceForLocalUseIfNeeded()
         }
     }
 
@@ -777,16 +755,10 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    private func createBootstrapWorkspace() {
-        let workspace = createDefaultWorkspace()
-        replaceCollections(servers: servers, workspaces: [workspace])
-        pendingBootstrapWorkspaceID = isSyncEnabled ? workspace.id : nil
-    }
-
-    private func createDefaultWorkspace() -> Workspace {
+    private func makeDefaultWorkspace(id: UUID) -> Workspace {
         let date = dependencies.now()
         return Workspace(
-            id: dependencies.makeID(),
+            id: id,
             name: dependencies.defaultWorkspaceName(),
             colorHex: "#007AFF",
             order: 0,
@@ -795,19 +767,9 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    @discardableResult
-    private func refreshPendingBootstrapWorkspaceLocalizationIfNeeded() -> Bool {
-        guard let pendingBootstrapWorkspaceID,
-              let index = workspaces.firstIndex(where: { $0.id == pendingBootstrapWorkspaceID }) else {
-            return false
-        }
-        let localizedName = dependencies.defaultWorkspaceName()
-        guard workspaces[index].name != localizedName,
-              isCanonicalDefaultWorkspaceCandidate(workspaces[index]) else {
-            return false
-        }
-        updateSnapshot { $0.workspaces[index].name = localizedName }
-        return true
+    private func resolveInitialWorkspaceBootstrap() {
+        hasResolvedInitialWorkspace = true
+        initialWorkspaceBootstrapState = .inactive
     }
 
     private func dedupedWorkspaces(from workspaces: [Workspace]) -> [Workspace] {
@@ -832,12 +794,6 @@ final class ServerStateStore: ObservableObject {
         snapshot = nextSnapshot
     }
 
-    private func isCanonicalDefaultWorkspaceCandidate(_ workspace: Workspace) -> Bool {
-        Self.isCanonicalDefaultWorkspaceCandidate(
-            workspace,
-            canonicalNames: dependencies.canonicalDefaultWorkspaceNames()
-        )
-    }
 }
 
 private extension Array {

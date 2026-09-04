@@ -133,11 +133,13 @@ final class ServerRemoteRepositoryFake: ServerRemoteRepository {
     var fetchHandler: (@MainActor (Bool, Int) async throws -> ServerRemoteChanges)?
     var saveServerHandler: (@MainActor (Server) async throws -> Void)?
     var saveWorkspaceHandler: (@MainActor (Workspace) async throws -> Void)?
+    var createWorkspaceIfAbsentHandler: (@MainActor (Workspace) async throws -> Workspace)?
     var acceptError: Error?
     private(set) var fetchCount = 0
     private(set) var fetchForceFullModes: [Bool] = []
     private(set) var savedServers: [Server] = []
     private(set) var savedWorkspaces: [Workspace] = []
+    private(set) var initialWorkspaceCandidates: [Workspace] = []
     private(set) var acceptedCheckpoints: [ServerRemoteChangeCheckpoint] = []
 
     init(isAvailable: Bool = false) {
@@ -176,6 +178,14 @@ final class ServerRemoteRepositoryFake: ServerRemoteRepository {
         savedWorkspaces.append(workspace)
         try await saveWorkspaceHandler?(workspace)
     }
+
+    func createWorkspaceIfAbsent(_ workspace: Workspace) async throws -> Workspace {
+        initialWorkspaceCandidates.append(workspace)
+        if let createWorkspaceIfAbsentHandler {
+            return try await createWorkspaceIfAbsentHandler(workspace)
+        }
+        return workspace
+    }
 }
 
 @MainActor
@@ -196,7 +206,9 @@ final class ServerSyncRepositoryFake: ServerSyncRepository {
         if let clearError { throw clearError }
         enqueuedServerMutations.removeAll()
     }
-    func removePendingServerMutation(_ mutationID: UUID) {}
+    func removePendingServerMutation(_ mutationID: UUID) {
+        enqueuedServerMutations.removeAll { $0.id == mutationID }
+    }
     func enqueueServerUpsert(_ server: Server) throws {
         if let enqueueError { throw enqueueError }
         enqueuedServerUpserts.append(server)
@@ -301,7 +313,9 @@ private extension ServerPendingMutation.Payload {
         switch self {
         case .serverUpsert(let server), .serverDelete(let server):
             return "server:\(server.id.uuidString)"
-        case .workspaceUpsert(let workspace), .workspaceDelete(let workspace):
+        case .initialWorkspaceCreate(let workspace),
+             .workspaceUpsert(let workspace),
+             .workspaceDelete(let workspace):
             return "workspace:\(workspace.id.uuidString)"
         }
     }
@@ -333,10 +347,9 @@ final class FreePlanAssignmentTrackerFake: FreePlanAssignmentTracking {
 
 @MainActor
 final class ServerManagerPreferencesFake: ServerManagerPreferences {
-    var didBootstrapDefaultWorkspace = true
+    var hasResolvedInitialWorkspace = true
     var hasSeenWelcome = true
     var freePlanGeneration: FreePlanGeneration? = .currentOneServer
-    var pendingBootstrapWorkspaceID: UUID?
 }
 
 enum TestTransactionError: Error {

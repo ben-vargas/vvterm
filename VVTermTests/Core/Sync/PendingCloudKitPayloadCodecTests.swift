@@ -83,6 +83,42 @@ struct PendingCloudKitPayloadCodecTests {
     }
 
     @Test
+    func initialWorkspaceCreateUsesItsOwnConditionalOperation() throws {
+        let workspace = Workspace(
+            id: InitialWorkspaceBootstrapState.workspaceID,
+            name: "My Servers"
+        )
+
+        let payload = try ServerPendingCloudKitPayloadCodec.encode(
+            .initialWorkspaceCreate(workspace)
+        )
+
+        #expect(payload.entityType == "workspace")
+        #expect(payload.entityKey == workspace.id.uuidString)
+        #expect(payload.operation == .createIfAbsent)
+        #expect(payload.drainPriority == 0)
+        #expect(try ServerPendingCloudKitPayloadCodec.decode(payload) == .initialWorkspaceCreate(workspace))
+
+        let invalidWorkspace = Workspace(id: UUID(), name: "Not Initial")
+        #expect(throws: PendingCloudKitPayloadEnvelopeError.self) {
+            try ServerPendingCloudKitPayloadCodec.encode(
+                .initialWorkspaceCreate(invalidWorkspace)
+            )
+        }
+        let invalidPayload = try PendingCloudKitPayloadEnvelope(
+            entityType: ServerPendingCloudKitPayloadCodec.workspaceEntityType,
+            entityKey: invalidWorkspace.id.uuidString,
+            operation: .createIfAbsent,
+            drainPriority: 0,
+            value: invalidWorkspace
+        )
+        #expect(throws: PendingCloudKitPayloadEnvelopeError.self) {
+            try ServerPendingCloudKitPayloadCodec.decode(invalidPayload)
+        }
+        #expect(!ServerPendingCloudKitPayloadCodec.contains(invalidPayload))
+    }
+
+    @Test
     func themeCodecRoundTripsThemeAndPreference() throws {
         let updatedAt = Date(timeIntervalSinceReferenceDate: 100)
         let theme = TerminalTheme(

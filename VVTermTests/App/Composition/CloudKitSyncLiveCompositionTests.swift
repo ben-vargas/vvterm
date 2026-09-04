@@ -18,6 +18,11 @@ private final class AppServerMutationClientStub: ServerRemoteMutationClient {
         events.append("saveWorkspace:\(workspace.id)")
     }
 
+    func createWorkspaceIfAbsent(_ workspace: Workspace) async throws -> Workspace {
+        events.append("createWorkspaceIfAbsent:\(workspace.id)")
+        return workspace
+    }
+
     func deleteWorkspace(_ workspace: Workspace) async throws {
         events.append("deleteWorkspace:\(workspace.id)")
     }
@@ -162,6 +167,10 @@ struct CloudKitSyncLiveCompositionTests {
             statsPreferencesResolutions.removeStatsPreferencesObserver(statsObserverID)
         }
         let coordinator = composition.coordinator
+        let initialWorkspace = Workspace(
+            id: InitialWorkspaceBootstrapState.workspaceID,
+            name: "My Servers"
+        )
         let workspace = makeWorkspace(name: "Saved Workspace")
         let deletedWorkspace = makeWorkspace(name: "Deleted Workspace")
         let server = makeServer(workspaceID: workspace.id, name: "Saved Server")
@@ -189,6 +198,14 @@ struct CloudKitSyncLiveCompositionTests {
         let profile = makeProfile()
         let stats = makeStatsPreferences()
 
+        let serverRepository: any ServerSyncRepository = coordinator
+        try serverRepository.enqueueServerDataMutations([
+            ServerPendingMutation(
+                id: UUID(),
+                payload: .initialWorkspaceCreate(initialWorkspace),
+                createdAt: .distantPast
+            )
+        ])
         try coordinator.enqueueServerUpsert(server)
         try coordinator.enqueueServerDelete(deletedServer)
         try coordinator.enqueueWorkspaceUpsert(workspace)
@@ -202,6 +219,7 @@ struct CloudKitSyncLiveCompositionTests {
         await coordinator.drainPendingMutations()
 
         #expect(serverClient.events == [
+            "createWorkspaceIfAbsent:\(initialWorkspace.id)",
             "saveWorkspace:\(workspace.id)",
             "saveServer:\(server.id)",
             "deleteServer:\(deletedServer.id)",

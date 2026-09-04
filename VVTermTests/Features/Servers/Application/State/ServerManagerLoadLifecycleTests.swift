@@ -614,53 +614,6 @@ struct ServerManagerLoadLifecycleTests {
     }
 
     @Test
-    func failedFullFetchRestoresBootstrapFetchIdentityUntilCheckpointAcceptance() async {
-        let workspace = makeWorkspace(name: "Bootstrap")
-        let local = ServerLocalRepositoryFake(servers: [], workspaces: [workspace])
-        local.persistError = TestTransactionError.persistence
-        let preferences = ServerManagerPreferencesFake()
-        preferences.pendingBootstrapWorkspaceID = workspace.id
-        let remote = ServerRemoteRepositoryFake(isAvailable: true)
-        let checkpoint = ServerRemoteChangeCheckpoint(
-            id: UUID(uuidString: "80000000-0000-0000-0000-000000000006")!
-        )
-        let changes = ServerRemoteChanges(
-            servers: [],
-            workspaces: [],
-            deletedServerIDs: [],
-            deletedWorkspaceIDs: [],
-            isFullFetch: true,
-            checkpoint: checkpoint
-        )
-        remote.fetchHandler = { _, _ in changes }
-        let sync = ServerSyncRepositoryFake()
-        let manager = makeManager(
-            local: local,
-            remote: remote,
-            sync: sync,
-            preferences: preferences,
-            isSyncEnabled: { true }
-        )
-
-        await manager.loadData()
-
-        #expect(remote.fetchForceFullModes == [true])
-        #expect(manager.stateStore.transientBootstrapWorkspaceID == workspace.id)
-        #expect(manager.workspaces == [workspace])
-        #expect(manager.stateStore.ambiguousCloudRecovery == nil)
-        #expect(remote.acceptedCheckpoints.isEmpty)
-        #expect(sync.drainCount == 0)
-
-        local.persistError = nil
-        await manager.loadData()
-
-        #expect(remote.fetchForceFullModes == [true, true])
-        #expect(manager.stateStore.transientBootstrapWorkspaceID == nil)
-        #expect(remote.acceptedCheckpoints == [checkpoint])
-        #expect(sync.drainCount == 1)
-    }
-
-    @Test
     func staleLoadGenerationCannotReplaceNewerLoad() async {
         var syncEnabled = true
         let firstGate = ServerCancellationIgnoringGate<ServerRemoteChanges>()
@@ -1030,8 +983,7 @@ struct ServerManagerLoadLifecycleTests {
                 isSyncEnabled: isSyncEnabled,
                 now: now,
                 makeID: makeID,
-                defaultWorkspaceName: { "My Servers" },
-                canonicalDefaultWorkspaceNames: { ["My Servers"] }
+                defaultWorkspaceName: { "My Servers" }
             )
         )
         return ServerManagerDependencies(

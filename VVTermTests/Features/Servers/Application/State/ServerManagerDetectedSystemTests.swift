@@ -118,8 +118,7 @@ struct ServerManagerDetectedSystemTests {
                 isSyncEnabled: isSyncEnabled,
                 now: now,
                 makeID: UUID.init,
-                defaultWorkspaceName: { "My Servers" },
-                canonicalDefaultWorkspaceNames: { ["My Servers"] }
+                defaultWorkspaceName: { "My Servers" }
             )
         )
         return ServerManager(

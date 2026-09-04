@@ -1,6 +1,7 @@
 import Foundation
 
 nonisolated enum PendingCloudKitMutationOperation: String, Codable, Equatable, Sendable {
+    case createIfAbsent
     case upsert
     case delete
 }
