@@ -4,6 +4,52 @@ import Testing
 @testable import VVTerm
 
 struct SSHAddressConnectorIntegrationTests {
+    @Test(arguments: [AF_INET, AF_INET6])
+    func firstResolvedFamilyConnectsWithoutWaitingForOtherFamily(fastFamily: Int32) async throws {
+        let listener = try LoopbackListener()
+        defer { listener.close() }
+        let candidates = try SSHAddressConnector.resolvedCandidates(host: "127.0.0.1", port: listener.port)
+        let startedAt = ContinuousClock.now
+        let descriptor = try await SSHAddressConnector.connect(resolving: { family in
+            if family != fastFamily {
+                try await Task.sleep(for: .seconds(30))
+            }
+            return candidates
+        }, trace: nil)
+        Darwin.close(descriptor)
+        #expect(startedAt.duration(to: .now) < .seconds(2))
+    }
+
+    @Test
+    func failedFamilyDoesNotDiscardOtherFamily() async throws {
+        let listener = try LoopbackListener()
+        defer { listener.close() }
+        let candidates = try SSHAddressConnector.resolvedCandidates(host: "127.0.0.1", port: listener.port)
+        let descriptor = try await SSHAddressConnector.connect(resolving: { family in
+            if family == AF_INET6 { throw SSHError.connectionFailed("No IPv6 record") }
+            return candidates
+        }, trace: nil)
+        Darwin.close(descriptor)
+    }
+
+    @Test
+    func cancellingConnectionCancelsBothAddressLookups() async {
+        let task = Task {
+            try await SSHAddressConnector.connect(resolving: { _ in
+                try await Task.sleep(for: .seconds(30))
+                return []
+            }, trace: nil)
+        }
+        task.cancel()
+        do {
+            let descriptor = try await task.value
+            Darwin.close(descriptor)
+            Issue.record("Cancelled DNS lookup returned a connection")
+        } catch {
+            #expect(error is CancellationError)
+        }
+    }
+
     @Test
     func unreachableFirstAddressDoesNotBlockReachableFallback() async throws {
         let listener = try LoopbackListener()

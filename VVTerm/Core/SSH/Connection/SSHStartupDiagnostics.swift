@@ -4,6 +4,7 @@ import os
 nonisolated enum SSHStartupStage: String, Sendable {
     case transportPreparation
     case dnsResolution
+    case dnsFirstAddress
     case tcpAddressAttempt
     case sshHandshake
     case hostKeyVerification

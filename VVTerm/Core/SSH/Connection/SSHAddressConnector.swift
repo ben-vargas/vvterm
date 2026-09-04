@@ -128,17 +128,79 @@ nonisolated enum SSHAddressConnector {
         port: Int,
         trace: SSHStartupTrace?
     ) async throws -> Int32 {
-        let dnsToken = trace?.begin(.dnsResolution)
-        let candidates: [Candidate]
-        do {
-            candidates = try await resolveCancellable(host: host, port: port)
-            if let dnsToken { trace?.end(dnsToken, detail: "candidates_\(min(candidates.count, 9))") }
-        } catch {
-            if let dnsToken { trace?.end(dnsToken, outcome: "failed") }
-            throw error
+        if resolutionFlags(for: host) & AI_NUMERICHOST != 0 {
+            let candidates = try resolvedCandidates(host: host, port: port)
+            return try await connect(candidates: candidates, trace: trace)
         }
+        return try await connect(resolving: { family in
+            try await resolveCancellable(host: host, port: port, family: family)
+        }, trace: trace)
+    }
 
-        return try await connect(candidates: candidates, trace: trace)
+    static func connect(
+        resolving resolve: @escaping @Sendable (Int32) async throws -> [Candidate],
+        trace: SSHStartupTrace?
+    ) async throws -> Int32 {
+        // Resolve each family independently: an unanswered AAAA query must not
+        // hold an already usable IPv4 address, or vice versa.
+        try await withThrowingTaskGroup(of: Result<Int32, Error>.self) { group in
+            for family in [AF_INET6, AF_INET] {
+                group.addTask {
+                    let token = trace?.begin(.dnsResolution)
+                    let candidates: [Candidate]
+                    do {
+                        candidates = try await resolve(family)
+                        try Task.checkCancellation()
+                        if let token {
+                            trace?.end(token, detail: SSHAddressFamily(rawValue: family).rawValue)
+                        }
+                    } catch {
+                        if let token {
+                            trace?.end(token, outcome: error is CancellationError ? "cancelled" : "failed",
+                                       detail: SSHAddressFamily(rawValue: family).rawValue)
+                        }
+                        return .failure(error)
+                    }
+                    if !candidates.isEmpty {
+                        trace?.recordOnce(.dnsFirstAddress, detail: SSHAddressFamily(rawValue: family).rawValue)
+                    }
+                    do {
+                        let descriptor = try await connect(
+                            candidates: candidates,
+                            trace: trace
+                        )
+                        if Task.isCancelled {
+                            Darwin.close(descriptor)
+                            return .failure(CancellationError())
+                        }
+                        return .success(descriptor)
+                    } catch {
+                        return .failure(error)
+                    }
+                }
+            }
+            var lastError: Error = SSHError.connectionFailed("No usable addresses")
+            while let result = try await group.next() {
+                switch result {
+                case .failure(let error):
+                    lastError = error
+                case .success(let descriptor):
+                    group.cancelAll()
+                    // A second connect can finish at the same time as the winner.
+                    // Drain and close it before transferring ownership to the caller.
+                    for try await remaining in group {
+                        if case .success(let unused) = remaining { Darwin.close(unused) }
+                    }
+                    if Task.isCancelled {
+                        Darwin.close(descriptor)
+                        throw CancellationError()
+                    }
+                    return descriptor
+                }
+            }
+            try Task.checkCancellation()
+            throw lastError
+        }
     }
 
     static func connect(
@@ -275,9 +337,9 @@ nonisolated enum SSHAddressConnector {
         throw SSHError.connectionFailed("Failed to connect: \(message)")
     }
 
-    static func resolvedCandidates(host: String, port: Int) throws -> [Candidate] {
+    static func resolvedCandidates(host: String, port: Int, family: Int32 = AF_UNSPEC) throws -> [Candidate] {
         var hints = addrinfo()
-        hints.ai_family = AF_UNSPEC
+        hints.ai_family = family
         hints.ai_socktype = SOCK_STREAM
         hints.ai_protocol = IPPROTO_TCP
         hints.ai_flags = resolutionFlags(for: host)
@@ -323,14 +385,14 @@ nonisolated enum SSHAddressConnector {
         return AI_NUMERICSERV
     }
 
-    private static func resolveCancellable(host: String, port: Int) async throws -> [Candidate] {
+    private static func resolveCancellable(host: String, port: Int, family: Int32) async throws -> [Candidate] {
         let state = ResolutionState()
         return try await withTaskCancellationHandler(operation: {
             try await withCheckedThrowingContinuation { continuation in
                 guard state.install(continuation) else { return }
                 DispatchQueue.global(qos: .userInitiated).async {
                     state.complete(Result {
-                        try resolvedCandidates(host: host, port: port)
+                        try resolvedCandidates(host: host, port: port, family: family)
                     })
                 }
             }
