@@ -67,12 +67,14 @@ nonisolated struct ServerPendingMutation: Codable, Equatable, Identifiable, Send
     nonisolated enum Payload: Codable, Equatable, Sendable {
         case serverUpsert(Server)
         case serverDelete(Server)
+        case initialWorkspaceCreate(Workspace)
         case workspaceUpsert(Workspace)
         case workspaceDelete(Workspace)
 
         private enum Kind: String, Codable {
             case serverUpsert
             case serverDelete
+            case initialWorkspaceCreate
             case workspaceUpsert
             case workspaceDelete
         }
@@ -89,6 +91,10 @@ nonisolated struct ServerPendingMutation: Codable, Equatable, Identifiable, Send
                 self = .serverUpsert(try container.decode(Server.self, forKey: .payload))
             case .serverDelete:
                 self = .serverDelete(try container.decode(Server.self, forKey: .payload))
+            case .initialWorkspaceCreate:
+                self = .initialWorkspaceCreate(
+                    try container.decode(Workspace.self, forKey: .payload)
+                )
             case .workspaceUpsert:
                 self = .workspaceUpsert(try container.decode(Workspace.self, forKey: .payload))
             case .workspaceDelete:
@@ -105,6 +111,9 @@ nonisolated struct ServerPendingMutation: Codable, Equatable, Identifiable, Send
             case .serverDelete(let server):
                 try container.encode(Kind.serverDelete, forKey: .kind)
                 try container.encode(server, forKey: .payload)
+            case .initialWorkspaceCreate(let workspace):
+                try container.encode(Kind.initialWorkspaceCreate, forKey: .kind)
+                try container.encode(workspace, forKey: .payload)
             case .workspaceUpsert(let workspace):
                 try container.encode(Kind.workspaceUpsert, forKey: .kind)
                 try container.encode(workspace, forKey: .payload)

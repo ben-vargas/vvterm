@@ -480,8 +480,7 @@ struct ServerManagerMutationTransactionTests {
                 isSyncEnabled: { false },
                 now: now,
                 makeID: makeID,
-                defaultWorkspaceName: { "My Servers" },
-                canonicalDefaultWorkspaceNames: { ["My Servers"] }
+                defaultWorkspaceName: { "My Servers" }
             )
         )
         return ServerManager(

@@ -7,6 +7,7 @@ protocol ServerRemoteRepository: AnyObject {
     func acceptServerChanges(_ checkpoint: ServerRemoteChangeCheckpoint) throws
     func saveServer(_ server: Server) async throws
     func saveWorkspace(_ workspace: Workspace) async throws
+    func createWorkspaceIfAbsent(_ workspace: Workspace) async throws -> Workspace
 }
 
 @MainActor
@@ -14,6 +15,7 @@ protocol ServerRemoteMutationClient: AnyObject {
     func saveServer(_ server: Server) async throws
     func deleteServer(_ server: Server) async throws
     func saveWorkspace(_ workspace: Workspace) async throws
+    func createWorkspaceIfAbsent(_ workspace: Workspace) async throws -> Workspace
     func deleteWorkspace(_ workspace: Workspace) async throws
 }
 

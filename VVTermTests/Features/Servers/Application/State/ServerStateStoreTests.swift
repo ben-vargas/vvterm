@@ -8,7 +8,7 @@ struct ServerStateStoreTests {
     func bootstrapUsesTheInjectedDefaultWorkspaceName() {
         let repository = ServerStateLocalRepository(servers: [], workspaces: [])
         let preferences = ServerStatePreferences()
-        preferences.didBootstrapDefaultWorkspace = false
+        preferences.hasResolvedInitialWorkspace = false
         preferences.hasSeenWelcome = false
 
         let store = ServerStateStore(
@@ -21,8 +21,7 @@ struct ServerStateStoreTests {
                 makeID: {
                     UUID(uuidString: "90000000-0000-0000-0000-000000000002")!
                 },
-                defaultWorkspaceName: { "Mes serveurs" },
-                canonicalDefaultWorkspaceNames: { ["My Servers", "Mes serveurs"] }
+                defaultWorkspaceName: { "Mes serveurs" }
             )
         )
 
@@ -161,6 +160,125 @@ struct ServerStateStoreTests {
     }
 
     @Test
+    func remoteInitialWorkspaceResultDoesNotReplaceANewerLocalEdit() {
+        let expected = makeWorkspace(id: "10000000-0000-0000-0000-000000000006")
+        var edited = expected
+        edited.name = "Edited While Syncing"
+        var remote = expected
+        remote.name = "Remote Result"
+        let store = makeStore(
+            repository: ServerStateLocalRepository(servers: [], workspaces: [edited])
+        )
+
+        let didReplace = store.replaceWorkspaceIfUnchanged(expected, with: remote)
+
+        #expect(!didReplace)
+        #expect(store.workspaces == [edited])
+    }
+
+    @Test
+    func backfillCandidatesUseOnlyExplicitPendingUpdates() {
+        let workspace = Workspace(id: UUID(), name: "Remote", order: 1)
+        let server = Server(
+            id: UUID(),
+            workspaceId: workspace.id,
+            name: "Needs Upload",
+            host: "remote.example.com",
+            username: "root"
+        )
+
+        let candidates = ServerStateStore.backfillCandidates(
+            pendingMutations: [
+                ServerPendingMutation(
+                    id: UUID(),
+                    payload: .serverUpsert(server),
+                    createdAt: .distantPast
+                )
+            ],
+            cloudWorkspaceIDs: [workspace.id],
+            cloudServerIDs: [],
+            deletedWorkspaceIDs: [],
+            deletedServerIDs: []
+        )
+
+        #expect(candidates.workspaces.isEmpty)
+        #expect(candidates.servers.map(\.id) == [server.id])
+    }
+
+    @Test
+    func remoteDeletionExcludesPendingBackfillCandidate() {
+        let workspace = Workspace(id: UUID(), name: "Workspace", order: 0)
+        let server = Server(
+            id: UUID(),
+            workspaceId: workspace.id,
+            name: "Deleted Elsewhere",
+            host: "deleted.example.com",
+            username: "root"
+        )
+        let candidates = ServerStateStore.backfillCandidates(
+            pendingMutations: [
+                ServerPendingMutation(
+                    id: UUID(),
+                    payload: .workspaceUpsert(workspace),
+                    createdAt: .distantPast
+                ),
+                ServerPendingMutation(
+                    id: UUID(),
+                    payload: .serverUpsert(server),
+                    createdAt: .distantPast
+                )
+            ],
+            cloudWorkspaceIDs: [],
+            cloudServerIDs: [],
+            deletedWorkspaceIDs: [],
+            deletedServerIDs: [server.id]
+        )
+
+        #expect(candidates.workspaces.map(\.id) == [workspace.id])
+        #expect(candidates.servers.isEmpty)
+    }
+
+    @Test
+    func orphanRepairCreatesFallbackWorkspaceWhenServersHaveNoWorkspace() {
+        let server = Server(
+            id: UUID(),
+            workspaceId: UUID(),
+            name: "Lost Server",
+            host: "lost.example.com",
+            username: "root"
+        )
+        let fallback = Workspace(id: UUID(), name: "My Servers", order: 0)
+
+        let repair = ServerStateStore.workspaceForOrphanRepair(
+            existingWorkspaces: [],
+            servers: [server],
+            fallbackWorkspace: fallback
+        )
+
+        #expect(repair?.id == fallback.id)
+    }
+
+    @Test
+    func orphanRepairDoesNothingWhenServersHaveValidWorkspaces() {
+        let workspace = Workspace(id: UUID(), name: "Main", order: 0)
+        let server = Server(
+            id: UUID(),
+            workspaceId: workspace.id,
+            name: "Healthy",
+            host: "healthy.example.com",
+            username: "root"
+        )
+
+        let repair = ServerStateStore.workspaceForOrphanRepair(
+            existingWorkspaces: [workspace],
+            servers: [server],
+            fallbackWorkspace: Workspace(name: "Fallback")
+        )
+
+        #expect(repair == nil)
+    }
+
+    @Test
     func unreadableLocalCollectionIssueBelongsToItsStoreAndCanBeDismissed() {
         let issue = ServerLocalStorageIssue(
             collection: .servers,
@@ -198,8 +316,7 @@ struct ServerStateStoreTests {
                 isSyncEnabled: { false },
                 now: now,
                 makeID: makeID,
-                defaultWorkspaceName: { "My Servers" },
-                canonicalDefaultWorkspaceNames: { ["My Servers"] }
+                defaultWorkspaceName: { "My Servers" }
             )
         )
     }
@@ -310,10 +427,9 @@ private final class ServerStateLocalRepository: ServerLocalRepository {
 
 @MainActor
 private final class ServerStatePreferences: ServerManagerPreferences {
-    var didBootstrapDefaultWorkspace = true
+    var hasResolvedInitialWorkspace = true
     var hasSeenWelcome = true
     var freePlanGeneration: FreePlanGeneration? = .currentOneServer
-    var pendingBootstrapWorkspaceID: UUID?
 }
 
 @MainActor

@@ -68,9 +68,6 @@ struct AppComposition {
                 rawValue: defaults.string(forKey: AppLanguage.storageKey)
             )
         }
-        let canonicalDefaultWorkspaceNames: () -> Set<String> = {
-            AppLanguage.localizedValues(for: "My Servers")
-        }
         let networkMonitor = NetworkMonitor.shared
         let analyticsTracker = AnalyticsTracker.shared
         let cloudKitManager = CloudKitManager.shared
@@ -145,7 +142,6 @@ struct AppComposition {
                     serverDeletionTerminalCleanup.handleServerDeletion(serverID)
                 },
                 defaultWorkspaceName: defaultWorkspaceName,
-                canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames,
                 now: now,
                 makeID: makeID
             )

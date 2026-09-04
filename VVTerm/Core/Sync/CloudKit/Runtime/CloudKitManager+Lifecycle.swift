@@ -68,24 +68,32 @@ extension CloudKitManager {
     }
 
     func createZoneIfNeeded() async throws {
-        let results = try await database.recordZones(for: [recordZoneID])
-        if let result = results[recordZoneID] {
-            switch result {
-            case .success:
+        do {
+            if try await zoneClient.fetch(recordZoneID) != nil {
                 setZoneReady(true)
                 return
-            case .failure(let error):
-                if isZoneNotFound(error) {
-                    _ = try await database.modifyRecordZones(saving: [recordZone], deleting: [])
-                    setZoneReady(true)
-                    return
-                }
-                throw error
             }
+            logger.warning("CloudKit custom zone was not returned; starting recreation")
+        } catch {
+            guard CloudKitErrorClassifier.isMissingItem(error) else { throw error }
+            logger.warning("CloudKit custom zone is missing; starting recreation")
         }
 
-        _ = try await database.modifyRecordZones(saving: [recordZone], deleting: [])
-        setZoneReady(true)
+        do {
+            try await zoneClient.save(recordZone)
+            setZoneReady(true)
+            logger.info("CloudKit custom zone recreation succeeded")
+        } catch {
+            setZoneReady(false)
+            if let cloudKitError = error as? CKError {
+                logger.error(
+                    "CloudKit custom zone recreation failed with CKError code \(cloudKitError.code.rawValue, privacy: .public)"
+                )
+            } else {
+                logger.error("CloudKit custom zone recreation failed with a non-CloudKit error")
+            }
+            throw error
+        }
     }
 
     func setZoneReady(_ ready: Bool) {
@@ -97,7 +105,7 @@ extension CloudKitManager {
         do {
             return try await operation()
         } catch {
-            guard isZoneNotFound(error) else {
+            guard CloudKitErrorClassifier.isMissingItem(error) else {
                 throw error
             }
 
@@ -106,12 +114,5 @@ extension CloudKitManager {
             try await ensureCustomZone()
             return try await operation()
         }
-    }
-
-    func isZoneNotFound(_ error: Error) -> Bool {
-        guard let ckError = error as? CKError else {
-            return false
-        }
-        return ckError.code == .zoneNotFound || ckError.code == .unknownItem
     }
 }

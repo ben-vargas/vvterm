@@ -128,9 +128,8 @@ extension CloudKitManager {
     }
 
     func isCloudKitRecordMissing(_ error: Error) -> Bool {
-        isUnknownItemError(error)
+        CloudKitErrorClassifier.isMissingItem(error)
     }
-
 
     // MARK: - Record Fetching (No Queries)
 
@@ -343,21 +342,6 @@ extension CloudKitManager {
         }
 
         return nil
-    }
-
-    func isUnknownItemError(_ error: Error) -> Bool {
-        guard let ckError = error as? CKError else { return false }
-
-        if ckError.code == .unknownItem || ckError.code == .zoneNotFound {
-            return true
-        }
-
-        if ckError.code == .partialFailure,
-           let partialErrors = ckError.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Error] {
-            return partialErrors.values.contains { isUnknownItemError($0) }
-        }
-
-        return false
     }
 
     // MARK: - Upsert Helper

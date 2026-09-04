@@ -180,14 +180,7 @@ final class CloudKitSyncCoordinator {
 
     private func isIgnorableDeleteSyncError(_ error: Error, for mutation: PendingCloudKitMutation) -> Bool {
         guard mutation.payload.isDelete else { return false }
-        guard let ckError = error as? CKError else { return false }
-
-        switch ckError.code {
-        case .unknownItem, .zoneNotFound:
-            return true
-        default:
-            return false
-        }
+        return CloudKitErrorClassifier.isMissingItem(error)
     }
 
     private func shouldPausePendingSyncDrain(for error: Error) -> Bool {

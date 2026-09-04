@@ -62,6 +62,167 @@ private final class CloudKitSyncEnabledState {
 @MainActor
 struct CloudKitManagerLifecycleTests {
     @Test
+    func nestedPartialFailureContainingUnknownItemIsRecognized() {
+        let zoneID = CKRecordZone.ID(zoneName: CloudKitSyncConstants.recordZoneName)
+        let error = CKError(
+            .partialFailure,
+            userInfo: [
+                CKPartialErrorsByItemIDKey: [
+                    zoneID: CKError(
+                        .partialFailure,
+                        userInfo: [
+                            CKPartialErrorsByItemIDKey: [
+                                CKRecord.ID(recordName: "missing-record"): CKError(.unknownItem)
+                            ]
+                        ]
+                    )
+                ]
+            ]
+        )
+
+        #expect(CloudKitErrorClassifier.isMissingItem(error))
+    }
+
+    @Test
+    func staleReadyZoneRecoversAndRetriesAfterTopLevelMissingZone() async throws {
+        var fetchCount = 0
+        var saveCount = 0
+        let manager = makeManager(
+            zoneClient: CloudKitZoneClient(
+                fetchZone: { _ in
+                    fetchCount += 1
+                    return nil
+                },
+                saveZone: { _ in saveCount += 1 }
+            ),
+            initialZoneReady: true
+        )
+        var operationCount = 0
+
+        let value = try await manager.withZoneRetry {
+            operationCount += 1
+            if operationCount == 1 {
+                throw CKError(.zoneNotFound)
+            }
+            return 42
+        }
+
+        #expect(value == 42)
+        #expect(operationCount == 2)
+        #expect(fetchCount == 1)
+        #expect(saveCount == 1)
+        #expect(manager.zoneReady)
+    }
+
+    @Test
+    func partialMissingZoneRecoversAndRetries() async throws {
+        var saveCount = 0
+        let manager = makeManager(
+            zoneClient: CloudKitZoneClient(
+                fetchZone: { _ in nil },
+                saveZone: { _ in saveCount += 1 }
+            ),
+            initialZoneReady: true
+        )
+        var operationCount = 0
+
+        _ = try await manager.withZoneRetry {
+            operationCount += 1
+            if operationCount == 1 {
+                throw self.partialMissingZoneError(for: manager.recordZoneID)
+            }
+            return true
+        }
+
+        #expect(operationCount == 2)
+        #expect(saveCount == 1)
+        #expect(manager.zoneReady)
+    }
+
+    @Test
+    func zoneLookupPartialFailureRecreatesZone() async throws {
+        var fetchCount = 0
+        var saveCount = 0
+        let zoneID = CKRecordZone.ID(zoneName: CloudKitSyncConstants.recordZoneName)
+        let manager = makeManager(
+            zoneClient: CloudKitZoneClient(
+                fetchZone: { _ in
+                    fetchCount += 1
+                    throw self.partialMissingZoneError(for: zoneID)
+                },
+                saveZone: { _ in saveCount += 1 }
+            ),
+            initialZoneReady: false
+        )
+
+        try await manager.ensureCustomZone()
+
+        #expect(fetchCount == 1)
+        #expect(saveCount == 1)
+        #expect(manager.zoneReady)
+    }
+
+    @Test
+    func failedZoneRecreationIsSurfacedWithoutRetryLoop() async {
+        var saveCount = 0
+        let manager = makeManager(
+            zoneClient: CloudKitZoneClient(
+                fetchZone: { _ in nil },
+                saveZone: { _ in
+                    saveCount += 1
+                    throw CKError(.networkFailure)
+                }
+            ),
+            initialZoneReady: true
+        )
+        var operationCount = 0
+
+        do {
+            let _: Bool = try await manager.withZoneRetry {
+                operationCount += 1
+                throw CKError(.zoneNotFound)
+            }
+            Issue.record("Expected zone recreation to fail")
+        } catch let error as CKError {
+            #expect(error.code == .networkFailure)
+        } catch {
+            Issue.record("Expected a CloudKit error")
+        }
+
+        #expect(operationCount == 1)
+        #expect(saveCount == 1)
+        #expect(!manager.zoneReady)
+    }
+
+    @Test
+    func missingZoneRetryStopsAfterOneAttempt() async {
+        var saveCount = 0
+        let manager = makeManager(
+            zoneClient: CloudKitZoneClient(
+                fetchZone: { _ in nil },
+                saveZone: { _ in saveCount += 1 }
+            ),
+            initialZoneReady: true
+        )
+        var operationCount = 0
+
+        do {
+            let _: Bool = try await manager.withZoneRetry {
+                operationCount += 1
+                throw CKError(.zoneNotFound)
+            }
+            Issue.record("Expected the retry to fail")
+        } catch let error as CKError {
+            #expect(error.code == .zoneNotFound)
+        } catch {
+            Issue.record("Expected a CloudKit error")
+        }
+
+        #expect(operationCount == 2)
+        #expect(saveCount == 1)
+    }
+
+    @Test
     func disabledInitializationPublishesDisabledState() {
         let syncEnabled = CloudKitSyncEnabledState()
         syncEnabled.value = false
@@ -70,7 +231,8 @@ struct CloudKitManagerLifecycleTests {
                 identifier: CloudKitSyncConstants.cloudKitContainerIdentifier
             ),
             syncEnabled: { syncEnabled.value },
-            accountStatus: { .available }
+            accountStatus: { .available },
+            zoneClient: unusedZoneClient()
         )
 
         #expect(manager.accountState == .disabled)
@@ -86,7 +248,8 @@ struct CloudKitManagerLifecycleTests {
                 identifier: CloudKitSyncConstants.cloudKitContainerIdentifier
             ),
             syncEnabled: { syncEnabled.value },
-            accountStatus: { await gate.next() }
+            accountStatus: { await gate.next() },
+            zoneClient: unusedZoneClient()
         )
         #expect(await gate.waitForPendingRequest())
 
@@ -119,6 +282,7 @@ struct CloudKitManagerLifecycleTests {
             ),
             syncEnabled: { syncEnabled.value },
             accountStatus: { .available },
+            zoneClient: unusedZoneClient(),
             initialZoneReady: true
         )
         #expect(await waitUntil { manager.isAvailable })
@@ -149,6 +313,37 @@ struct CloudKitManagerLifecycleTests {
         for _ in 0..<10 {
             await Task.yield()
         }
+    }
+
+    private func makeManager(
+        zoneClient: CloudKitZoneClient,
+        initialZoneReady: Bool
+    ) -> CloudKitManager {
+        CloudKitManager(
+            container: CKContainer(
+                identifier: CloudKitSyncConstants.cloudKitContainerIdentifier
+            ),
+            syncEnabled: { false },
+            accountStatus: { .available },
+            zoneClient: zoneClient,
+            initialZoneReady: initialZoneReady
+        )
+    }
+
+    private func partialMissingZoneError(for zoneID: CKRecordZone.ID) -> CKError {
+        CKError(
+            .partialFailure,
+            userInfo: [
+                CKPartialErrorsByItemIDKey: [zoneID: CKError(.zoneNotFound)]
+            ]
+        )
+    }
+
+    private func unusedZoneClient() -> CloudKitZoneClient {
+        CloudKitZoneClient(
+            fetchZone: { _ in nil },
+            saveZone: { _ in }
+        )
     }
 
     private func waitUntil(_ condition: () -> Bool) async -> Bool {

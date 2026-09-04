@@ -298,7 +298,6 @@ struct TerminalTabManagerLiveCompositionTests {
                 syncRepository: cloudKitSync.coordinator,
                 didDeleteServerLocalData: { _ in },
                 defaultWorkspaceName: { "Default" },
-                canonicalDefaultWorkspaceNames: { ["Default"] },
                 now: Date.init,
                 makeID: UUID.init
             ),

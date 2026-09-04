@@ -22,6 +22,17 @@ nonisolated enum ServerPendingCloudKitPayloadCodec {
                 drainPriority: 6,
                 value: server
             )
+        case .initialWorkspaceCreate(let workspace):
+            guard workspace.id == InitialWorkspaceBootstrapState.workspaceID else {
+                throw PendingCloudKitPayloadEnvelopeError.invalidRoutingMetadata
+            }
+            return try PendingCloudKitPayloadEnvelope(
+                entityType: workspaceEntityType,
+                entityKey: workspace.id.uuidString,
+                operation: .createIfAbsent,
+                drainPriority: 0,
+                value: workspace
+            )
         case .workspaceUpsert(let workspace):
             return try PendingCloudKitPayloadEnvelope(
                 entityType: workspaceEntityType,
@@ -51,6 +62,13 @@ nonisolated enum ServerPendingCloudKitPayloadCodec {
             let server = try JSONDecoder().decode(Server.self, from: payload.encodedValue)
             try payload.validate(entityKey: server.id.uuidString, drainPriority: 6)
             return .serverDelete(server)
+        case (workspaceEntityType, .createIfAbsent):
+            let workspace = try JSONDecoder().decode(Workspace.self, from: payload.encodedValue)
+            try payload.validate(entityKey: workspace.id.uuidString, drainPriority: 0)
+            guard workspace.id == InitialWorkspaceBootstrapState.workspaceID else {
+                throw PendingCloudKitPayloadEnvelopeError.invalidRoutingMetadata
+            }
+            return .initialWorkspaceCreate(workspace)
         case (workspaceEntityType, .upsert):
             let workspace = try JSONDecoder().decode(Workspace.self, from: payload.encodedValue)
             try payload.validate(entityKey: workspace.id.uuidString, drainPriority: 0)
@@ -106,6 +124,10 @@ nonisolated extension PendingCloudKitPayloadEnvelope {
 
     static func workspaceUpsert(_ workspace: Workspace) throws -> Self {
         try ServerPendingCloudKitPayloadCodec.encode(.workspaceUpsert(workspace))
+    }
+
+    static func initialWorkspaceCreate(_ workspace: Workspace) throws -> Self {
+        try ServerPendingCloudKitPayloadCodec.encode(.initialWorkspaceCreate(workspace))
     }
 
     static func workspaceDelete(_ workspace: Workspace) throws -> Self {

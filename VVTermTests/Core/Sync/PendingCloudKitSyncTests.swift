@@ -536,6 +536,7 @@ private struct PendingSyncFixtures {
         UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", $0))!
     }
 
+    let initialWorkspace: Workspace
     let workspace: Workspace
     let deletedWorkspace: Workspace
     let server: Server
@@ -555,6 +556,12 @@ private struct PendingSyncFixtures {
         let deletedWorkspaceID = UUID(uuidString: "10000000-0000-0000-0000-000000000002")!
         let serverID = UUID(uuidString: "20000000-0000-0000-0000-000000000001")!
 
+        initialWorkspace = Workspace(
+            id: InitialWorkspaceBootstrapState.workspaceID,
+            name: "My Servers",
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
         workspace = Workspace(
             id: workspaceID,
             name: "Primary",
@@ -648,6 +655,7 @@ private struct PendingSyncFixtures {
         [
             try .serverUpsert(server),
             try .serverDelete(deletedServer),
+            try .initialWorkspaceCreate(initialWorkspace),
             try .workspaceUpsert(workspace),
             try .workspaceDelete(deletedWorkspace),
             try .terminalThemeUpsert(theme),
@@ -660,6 +668,7 @@ private struct PendingSyncFixtures {
     func payloadsInDrainOrder() throws -> [PendingCloudKitMutationPayload] {
         [
             try .workspaceUpsert(workspace),
+            try .initialWorkspaceCreate(initialWorkspace),
             try .serverUpsert(server),
             try .terminalThemeUpsert(theme),
             try .terminalThemePreferenceUpsert(themePreference),

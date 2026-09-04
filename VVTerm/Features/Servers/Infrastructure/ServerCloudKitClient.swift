@@ -79,6 +79,44 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         )
     }
 
+    func createWorkspaceIfAbsent(_ workspace: Workspace) async throws -> Workspace {
+        let candidateRecord = WorkspaceCloudKitRecordCodec.record(
+            for: workspace,
+            in: transport.cloudKitRecordZoneID,
+            now: now()
+        )
+
+        do {
+            let resolvedRecord = try await transport.performCloudKitRecordMutation { [transport] in
+                do {
+                    try await transport.saveCloudKitRecordIfUnchanged(candidateRecord)
+                    return candidateRecord
+                } catch {
+                    guard let serverRecord = transport.cloudKitServerRecord(from: error) else {
+                        throw error
+                    }
+                    return serverRecord
+                }
+            }
+            guard resolvedRecord.recordID == candidateRecord.recordID,
+                  resolvedRecord.recordType == WorkspaceCloudKitRecordCodec.recordType,
+                  let resolvedWorkspace = WorkspaceCloudKitRecordCodec.workspace(
+                      from: resolvedRecord,
+                      now: now()
+                  ) else {
+                throw ServerCloudKitDecodingError.malformedKnownRecord(
+                    recordType: resolvedRecord.recordType,
+                    recordName: resolvedRecord.recordID.recordName
+                )
+            }
+            logger.info("Resolved initial workspace in CloudKit")
+            return resolvedWorkspace
+        } catch {
+            logger.error("Failed to resolve initial workspace: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
     func deleteWorkspace(_ workspace: Workspace) async throws {
         try await deleteRecord(
             named: workspace.id.uuidString,

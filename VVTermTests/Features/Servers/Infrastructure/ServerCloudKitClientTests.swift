@@ -23,10 +23,12 @@ private final class ServerCloudKitRecordTransportStub: CloudKitRecordChangeTrans
         )
     )
     var upsertResult: Result<Void, Error> = .success(())
+    var saveIfUnchangedResult: Result<Void, Error> = .success(())
     var deleteResult: Result<Void, Error> = .success(())
     private(set) var fetchRequests: [(forceFullFetch: Bool, desiredKeys: [String])] = []
     private(set) var mutationCount = 0
     private(set) var upsertedRecords: [CKRecord] = []
+    private(set) var conditionallySavedRecords: [CKRecord] = []
     private(set) var deletedRecordIDs: [CKRecord.ID] = []
     private(set) var committedCheckpoints: [CloudKitRecordChangeCheckpoint] = []
 
@@ -70,9 +72,15 @@ private final class ServerCloudKitRecordTransportStub: CloudKitRecordChangeTrans
         try deleteResult.get()
     }
 
-    func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws {}
+    func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws {
+        conditionallySavedRecords.append(record)
+        try saveIfUnchangedResult.get()
+    }
 
-    func cloudKitServerRecord(from error: Error) -> CKRecord? { nil }
+    func cloudKitServerRecord(from error: Error) -> CKRecord? {
+        guard let cloudKitError = error as? CKError else { return nil }
+        return cloudKitError.userInfo[CKRecordChangedErrorServerRecordKey] as? CKRecord
+    }
     func isCloudKitRecordMissing(_ error: Error) -> Bool { false }
 }
 
@@ -227,6 +235,30 @@ struct ServerCloudKitClientTests {
         #expect(transport.deletedRecordIDs.allSatisfy {
             $0.zoneID == transport.cloudKitRecordZoneID
         })
+    }
+
+    @Test
+    func createWorkspaceIfAbsentReturnsTheExistingCloudWorkspaceOnCollision() async throws {
+        let transport = ServerCloudKitRecordTransportStub()
+        let date = Date(timeIntervalSinceReferenceDate: 5_000)
+        let candidate = makeWorkspace(id: UUID(), name: "My Servers")
+        var existing = makeWorkspace(id: candidate.id, name: "Renamed Remotely")
+        existing.updatedAt = date
+        let existingRecord = workspaceRecord(existing, transport: transport, now: date)
+        transport.saveIfUnchangedResult = .failure(
+            CKError(
+                .serverRecordChanged,
+                userInfo: [CKRecordChangedErrorServerRecordKey: existingRecord]
+            )
+        )
+        let client = ServerCloudKitClient(transport: transport, now: { date })
+
+        let resolved = try await client.createWorkspaceIfAbsent(candidate)
+
+        #expect(resolved == existing)
+        #expect(transport.mutationCount == 1)
+        #expect(transport.conditionallySavedRecords.count == 1)
+        #expect(transport.upsertedRecords.isEmpty)
     }
 
     @Test

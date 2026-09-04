@@ -65,7 +65,6 @@ extension ServerManagerDependencies {
         syncRepository: any ServerSyncRepository,
         didDeleteServerLocalData: @escaping (UUID) -> Void,
         defaultWorkspaceName: @escaping () -> String,
-        canonicalDefaultWorkspaceNames: @escaping () -> Set<String>,
         now: @escaping () -> Date,
         makeID: @escaping () -> UUID
     ) -> Self {
@@ -77,8 +76,7 @@ extension ServerManagerDependencies {
                 isSyncEnabled: { SyncSettings.isEnabled(in: defaults) },
                 now: now,
                 makeID: makeID,
-                defaultWorkspaceName: defaultWorkspaceName,
-                canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames
+                defaultWorkspaceName: defaultWorkspaceName
             )
         )
         return Self(
