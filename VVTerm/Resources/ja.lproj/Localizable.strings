@@ -1930,3 +1930,44 @@
 "System not detected" = "システムを検出できませんでした";
 "Detected: %@" = "検出: %@";
 "Search Icons" = "アイコンを検索";
+
+/* Floating Input Control */
+"Floating Input Control" = "フローティング入力コントロール";
+"Keyboard Hidden" = "キーボード非表示時";
+"Choose the controls that appear after you hide the software keyboard." = "ソフトウェアキーボードを隠した後に表示するコントロールを選択します。";
+"Style" = "スタイル";
+"Compact Buttons" = "コンパクトボタン";
+"Radial Control" = "ラジアルコントロール";
+"Compact Buttons is active until Pro is restored." = "Proが復元されるまでコンパクトボタンが有効です。";
+"Position" = "位置";
+"Reset Position" = "位置をリセット";
+"Starting voice input" = "音声入力を開始中";
+"Stop and transcribe" = "停止して文字起こし";
+"Send Return" = "Returnを送信";
+"Show Keyboard" = "キーボードを表示";
+"Move Up" = "上へ移動";
+"Move Down" = "下へ移動";
+"Move to Left" = "左へ移動";
+"Move to Right" = "右へ移動";
+"Input" = "入力";
+
+/* フローティング入力コントロールのカスタマイズ */
+"No floating control" = "フローティングコントロールなし";
+"Control preview" = "コントロールのプレビュー";
+"Primary Action" = "メインアクション";
+"Secondary Actions" = "サブアクション";
+"Add Action" = "アクションを追加";
+"Action %lld" = "アクション%lld";
+"Listening…" = "聞き取り中…";
+"Speak now…" = "話してください…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "Proにアップグレードすると、ラジアルコントロールとフローティングアクションのカスタマイズを使用できます。";
+"The primary button opens the keyboard while Voice Input is off." = "音声入力がオフのとき、メインボタンはキーボードを開きます。";
+"The primary action uses the main button." = "主要アクションはメインボタンを使います。";
+"No secondary actions" = "サブアクションなし";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "ラジアルコントロールには最大7個のサブアクションを表示できます。編集を使って並べ替えまたは削除できます。繰り返し可能なアクションは長押しすると繰り返されます。";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "コンパクトボタンには最大3個のサブアクションを表示できます。編集を使って並べ替えまたは削除できます。繰り返し可能なアクションは長押しすると繰り返されます。";
+"Show Floating Controls" = "フローティングコントロールを表示";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "どのボタンも自由にドラッグできます。左端または右端を越えて押すと非表示になります。端のタブをタップすると再表示されます。位置はこのデバイスに保存されます。";
+"Drag past the left or right edge to hide the controls." = "左端または右端を越えてドラッグするとコントロールが非表示になります。";
+"Hide on Left" = "左側に隠す";
+"Hide on Right" = "右側に隠す";

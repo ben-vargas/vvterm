@@ -37,13 +37,23 @@ struct TerminalKeyboardUITestHarness: View {
         ).utf8
     )
 
-    init(tabManager: TerminalTabManager) {
+    init(
+        tabManager: TerminalTabManager,
+        voiceInputRuntimeStore: VoiceInputRuntimeStore
+    ) {
         self.tabManager = tabManager
+        self.voiceInputRuntimeStore = voiceInputRuntimeStore
         _keyboardCoordinator = ObservedObject(
             wrappedValue: tabManager.keyboardCoordinator
         )
         _presentationState = ObservedObject(
             wrappedValue: tabManager.presentationState
+        )
+        _floatingVoiceOperation = ObservedObject(
+            wrappedValue: voiceInputRuntimeStore.runtime(for: Self.paneId).recordingOperation
+        )
+        _floatingControlPreferences = State(
+            initialValue: Self.floatingControlPreferencesForUITest()
         )
         _ = Self.clearTerminalBackgroundCacheForUITest
     }
@@ -91,8 +101,10 @@ struct TerminalKeyboardUITestHarness: View {
     @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var appLockManager: AppLockManager
     private let tabManager: TerminalTabManager
+    private let voiceInputRuntimeStore: VoiceInputRuntimeStore
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @ObservedObject private var presentationState: TerminalPresentationStateStore
+    @ObservedObject private var floatingVoiceOperation: VoiceRecordingOperationCoordinator
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
     @State private var terminalView: GhosttyTerminalView?
     @State private var terminalReady = false
@@ -121,6 +133,7 @@ struct TerminalKeyboardUITestHarness: View {
     @StateObject private var terminalMetadataChurn = MetadataChurnCounter()
     @State private var showingPaneCloseConfirmation = false
     @State private var lastPaneCloseDialogAction = "none"
+    @State private var floatingControlPreferences: TerminalFloatingControlPreferences
     @Environment(\.scenePhase) private var scenePhase
 
     private var preservesTerminalSize: Bool {
@@ -159,8 +172,46 @@ struct TerminalKeyboardUITestHarness: View {
         )
     }
 
+    private var simulatesSlowFloatingTranscription: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-floating-slow-transcription"
+        )
+    }
+
     private var voicePresentation: TerminalVoicePresentationState {
         presentationState.voicePresentation(for: Self.paneId)
+    }
+
+    private var floatingInputPhase: TerminalFloatingInputPhase {
+        TerminalFloatingInputPhase(
+            voiceOperationPhase: floatingVoiceOperation.phase,
+            voicePresentation: voicePresentation
+        )
+    }
+
+    private var floatingControlPresentation:
+        TerminalFloatingControlPresentationPolicy.Presentation {
+        TerminalFloatingControlPresentationPolicy.presentation(
+            for: TerminalFloatingControlPresentationPolicy.Facts(
+                isPhone: true,
+                isTerminalSelected: showsTerminal,
+                hasFocusedPane: terminalReady,
+                keyboardIsUserHidden: keyboardCoordinator.isUserHidden,
+                isSoftwareKeyboardVisible: keyboardCoordinator.isSoftwareKeyboardVisible,
+                findNavigatorIsVisible: false,
+                isZenModeEnabled: false,
+                isFloatingControlShownInZen: true,
+                preferences: floatingControlPreferences,
+                hasProAccess: hasFloatingControlProAccess,
+                inputPhase: floatingInputPhase
+            )
+        )
+    }
+
+    private var hasFloatingControlProAccess: Bool {
+        !Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--vvterm-ui-test-floating-free"
+        )
     }
 
     private var simulatesStaleLightAccessoryCacheOnResume: Bool {
@@ -241,50 +292,7 @@ struct TerminalKeyboardUITestHarness: View {
                     .accessibilityIdentifier("vvterm.keyboardTest.privacyShield")
             }
 
-            if keyboardCoordinator.isUserHidden {
-                VStack {
-                    Spacer()
-                    HStack(spacing: 10) {
-                        Button("Keyboard") {
-                            requestSoftwareKeyboard()
-                        }
-                        .accessibilityIdentifier("vvterm.terminal.floating.keyboard")
-
-                        if !voicePresentation.isRecording {
-                            Button("Voice input") {
-                                presentationState.applyVoiceEvent(
-                                    .recordingStarted,
-                                    for: Self.paneId
-                                )
-                            }
-                            .accessibilityIdentifier("vvterm.terminal.floating.voiceInput")
-                        }
-
-                        if voicePresentation.isPendingReturn {
-                            Button("Enter") {
-                                presentationState.applyVoiceEvent(
-                                    .pendingReturnDismissed,
-                                    for: Self.paneId
-                                )
-                            }
-                            .accessibilityIdentifier("vvterm.terminal.floating.return")
-                        }
-
-                        if voicePresentation.isRecording {
-                            Button("Finish voice test") {
-                                presentationState.applyVoiceEvent(
-                                    .transcriptionSent,
-                                    for: Self.paneId
-                                )
-                            }
-                            .accessibilityIdentifier("vvterm.keyboardTest.voice.transcriptionSent")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .padding(.bottom, 12)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            floatingInputControl
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(terminalReady ? "ready=true" : "ready=false")
@@ -354,6 +362,13 @@ struct TerminalKeyboardUITestHarness: View {
                         requestPaneCloseConfirmation()
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.closeAlert")
+
+                    if voicePresentation.isRecording {
+                        Button("Finish voice test") {
+                            finishVoiceTest()
+                        }
+                        .accessibilityIdentifier("vvterm.keyboardTest.voice.transcriptionSent")
+                    }
 
                 }
 
@@ -691,6 +706,156 @@ struct TerminalKeyboardUITestHarness: View {
             .accessibilityIdentifier("vvterm.keyboardTest.nonTerminalSurface")
     }
 
+    @ViewBuilder
+    private var floatingInputControl: some View {
+        switch floatingControlPresentation {
+        case .visible(let style):
+            let runtime = voiceInputRuntimeStore.runtime(for: Self.paneId)
+            TerminalFloatingInputControl(
+                style: style,
+                preferences: floatingControlPreferences,
+                hasProAccess: hasFloatingControlProAccess,
+                voiceEnabled: true,
+                terminalIsReady: terminalReady,
+                phase: floatingInputPhase,
+                audioService: runtime.audioService,
+                onVoiceToggle: toggleVoiceTest,
+                onCancelVoice: cancelVoiceTest,
+                onShowKeyboard: requestSoftwareKeyboard,
+                onSendReturn: sendReturnFromFloatingControl,
+                onSystemAction: { action in
+                    guard terminalView?.performAccessorySystemAction(action) == true else {
+                        return
+                    }
+                    presentationState.applyVoiceEvent(
+                        .systemActionSent(action),
+                        for: Self.paneId
+                    )
+                },
+                onMove: { horizontalFraction, verticalFraction in
+                    floatingControlPreferences.hiddenSide = nil
+                    floatingControlPreferences.horizontalFraction = horizontalFraction
+                    floatingControlPreferences.verticalFraction = verticalFraction
+                    floatingControlPreferences = floatingControlPreferences.normalized()
+                },
+                onHide: { side, verticalFraction in
+                    floatingControlPreferences.hiddenSide = side
+                    floatingControlPreferences.verticalFraction = verticalFraction
+                    floatingControlPreferences = floatingControlPreferences.normalized()
+                },
+                onShow: {
+                    if let hiddenSide = floatingControlPreferences.hiddenSide {
+                        floatingControlPreferences.horizontalFraction =
+                            hiddenSide.restoredHorizontalFraction
+                    }
+                    floatingControlPreferences.hiddenSide = nil
+                },
+                onResetPosition: {
+                    floatingControlPreferences.hiddenSide = nil
+                    floatingControlPreferences.horizontalFraction =
+                        TerminalFloatingControlPreferences.defaultHorizontalFraction
+                    floatingControlPreferences.verticalFraction =
+                        TerminalFloatingControlPreferences.defaultVerticalFraction
+                }
+            )
+        case .hidden:
+            EmptyView()
+        }
+    }
+
+    private static func floatingControlPreferencesForUITest()
+        -> TerminalFloatingControlPreferences {
+        let arguments = Foundation.ProcessInfo.processInfo.arguments
+        if arguments.contains("--vvterm-ui-test-floating-style-off") {
+            return TerminalFloatingControlPreferences(style: .off)
+        }
+        if arguments.contains("--vvterm-ui-test-floating-style-radial") {
+            let usesManyActions = arguments.contains(
+                "--vvterm-ui-test-floating-many-actions"
+            )
+            let usesBackspacePrimary = arguments.contains(
+                "--vvterm-ui-test-floating-primary-backspace"
+            )
+            let systemActions: [TerminalAccessorySystemActionID] =
+                usesManyActions || usesBackspacePrimary
+                    ? [.backspace, .escape, .tab, .arrowUp, .arrowDown, .arrowLeft]
+                    : [.escape, .tab]
+            let primaryAction: TerminalFloatingControlPreferences.Action =
+                usesBackspacePrimary ? .system(.backspace) : .voiceInput
+            return TerminalFloatingControlPreferences(
+                style: .radial,
+                radialActionLayout: .init(
+                    primaryAction: primaryAction,
+                    secondaryActions: ([.voiceInput, .keyboard]
+                        + systemActions.map(TerminalFloatingControlPreferences.Action.system))
+                        .filter { $0 != primaryAction }
+                ),
+                horizontalFraction: arguments.contains(
+                    "--vvterm-ui-test-floating-bottom-right"
+                ) ? 1 : TerminalFloatingControlPreferences.defaultHorizontalFraction,
+                verticalFraction: arguments.contains(
+                    "--vvterm-ui-test-floating-bottom-right"
+                ) ? 1 : TerminalFloatingControlPreferences.defaultVerticalFraction
+            )
+        }
+        if arguments.contains("--vvterm-ui-test-floating-bottom-right") {
+            return TerminalFloatingControlPreferences(
+                horizontalFraction: 1,
+                verticalFraction: 1
+            )
+        }
+        return .defaultValue
+    }
+
+    private func toggleVoiceTest() {
+        let operation = voiceInputRuntimeStore.runtime(for: Self.paneId)
+            .recordingOperation
+        if operation.isActive {
+            finishVoiceTest()
+            return
+        }
+
+        operation.startRecording(
+            operation: { _ in },
+            onStarted: {
+                presentationState.applyVoiceEvent(.recordingStarted, for: Self.paneId)
+            },
+            onFailure: { _ in
+                presentationState.applyVoiceEvent(.recordingStopped, for: Self.paneId)
+            }
+        )
+    }
+
+    private func finishVoiceTest() {
+        let operation = voiceInputRuntimeStore.runtime(for: Self.paneId)
+            .recordingOperation
+        let delaysTranscription = simulatesSlowFloatingTranscription
+        _ = operation.startProcessing(
+            operation: { _ in
+                if delaysTranscription {
+                    try await Task.sleep(for: .seconds(8))
+                }
+                return "test transcript"
+            },
+            onSuccess: { _ in
+                presentationState.applyVoiceEvent(.transcriptionSent, for: Self.paneId)
+            },
+            onFailure: { _ in
+                presentationState.applyVoiceEvent(.recordingStopped, for: Self.paneId)
+            }
+        )
+    }
+
+    private func cancelVoiceTest() {
+        voiceInputRuntimeStore.runtime(for: Self.paneId).cancel()
+        presentationState.applyVoiceEvent(.recordingStopped, for: Self.paneId)
+    }
+
+    private func sendReturnFromFloatingControl() {
+        guard terminalView?.sendReturnKey() == true else { return }
+        presentationState.applyVoiceEvent(.pendingReturnDismissed, for: Self.paneId)
+    }
+
     private func noteKeyboardFrame(_ note: Notification) {
         guard !simulatesKeyboardFrames else { return }
         guard let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else {
@@ -739,7 +904,9 @@ struct TerminalKeyboardUITestHarness: View {
         let mouseScrollReports = mouseReportCount(buttonPattern: "6[45]", terminator: "M")
         let lowercaseHInputs = inputByteCount(0x68)
         let uppercaseHInputs = inputByteCount(0x48)
-        diagnostics = terminalDiagnostics + " " + keyboardAvoidanceDiagnostics(for: terminalView)
+        let backspaceInputs = inputByteCount(0x7F)
+        diagnostics = "coordinatorKeyboardVisible=\(keyboardCoordinator.isSoftwareKeyboardVisible) "
+            + terminalDiagnostics + " " + keyboardAvoidanceDiagnostics(for: terminalView)
             + " keyboardPresentation=\(keyboardPresentationDescription)"
             + " cachedTerminalBackground=\(UserDefaults.standard.string(forKey: "terminalBackgroundColor") ?? "none")"
             + " userHidden=\(keyboardCoordinator.isUserHidden)"
@@ -759,6 +926,7 @@ struct TerminalKeyboardUITestHarness: View {
             + " paneFocusActions=\(paneFocusActionCount)"
             + " lastPaneCloseDialogAction=\(lastPaneCloseDialogAction)"
             + " lowercaseHInputs=\(lowercaseHInputs) uppercaseHInputs=\(uppercaseHInputs)"
+            + " backspaceInputs=\(backspaceInputs)"
     }
 
     private func inputByteCount(_ byte: UInt8) -> Int {

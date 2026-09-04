@@ -218,7 +218,7 @@ struct TerminalTabView: View {
                     paneFocused: tab.focusedPaneId == paneId,
                     recording: showingVoiceRecording
                 ),
-                onVoiceTrigger: { startVoiceRecording() }
+                onVoiceTrigger: { toggleVoiceRecording() }
             )
             .id("\(paneId)-\(layoutVersion)")
         )
@@ -344,6 +344,7 @@ struct TerminalTabView: View {
     private var shouldShowVoiceOverlay: Bool {
         guard isSelected, hasFocusedTerminal, showingVoiceRecording else { return false }
         #if os(iOS)
+        guard UIDevice.current.userInterfaceIdiom != .phone else { return false }
         return tabManager.sessionState
             .paneState(for: tab.focusedPaneId)?.connectionState.isConnected == true
         #else
@@ -490,7 +491,10 @@ struct TerminalTabView: View {
                 let fallback = text.isEmpty ? audioService.partialTranscription : text
                 sendTranscriptionToTerminal(fallback)
             },
-            onFailure: { _ in }
+            onFailure: { error in
+                permissionErrorMessage = error.localizedDescription
+                showingPermissionError = true
+            }
         )
     }
 
@@ -1046,6 +1050,7 @@ struct TerminalPaneView: View {
             onPaneKeyboardShortcut: onPaneKeyboardShortcut,
             onProcessExit: onProcessExit,
             onReady: { isReady = true },
+            showsVoiceAccessoryButton: showsVoiceButton,
             onVoiceTrigger: voiceTriggerHandlerForTerminal,
             onSceneActivation: reconcileAutomaticReconnect
         )
@@ -1070,7 +1075,7 @@ struct TerminalPaneView: View {
 
     private var voiceTriggerHandlerForTerminal: (() -> Void)? {
         #if os(iOS)
-        guard showsVoiceButton else { return nil }
+        guard isTabSelected, isFocused else { return nil }
         return {
             guard connectionState.isConnected, isReady else { return }
             onVoiceTrigger()

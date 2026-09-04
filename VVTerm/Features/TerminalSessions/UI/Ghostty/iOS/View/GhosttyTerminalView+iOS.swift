@@ -99,11 +99,23 @@ class GhosttyTerminalView: UIView {
     /// Callback for OSC 9;4 progress reports
     var onProgressReport: ((GhosttyProgressState, Int?) -> Void)?
 
-    /// Callback invoked when the voice input button is tapped
+    /// Callback invoked when a terminal voice input control is tapped.
     var onVoiceButtonTapped: (() -> Void)? {
         didSet {
-            keyboardToolbar?.onVoice = onVoiceButtonTapped
+            refreshVoiceAccessoryAction()
         }
+    }
+
+    /// Controls only the keyboard accessory button. Other voice entry points
+    /// keep the callback available so they can also stop active recording.
+    var showsVoiceAccessoryButton = false {
+        didSet {
+            refreshVoiceAccessoryAction()
+        }
+    }
+
+    func refreshVoiceAccessoryAction() {
+        keyboardToolbar?.onVoice = showsVoiceAccessoryButton ? onVoiceButtonTapped : nil
     }
 
     @discardableResult

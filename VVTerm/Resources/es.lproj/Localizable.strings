@@ -1930,3 +1930,44 @@
 "System not detected" = "Sistema no detectado";
 "Detected: %@" = "Detectado: %@";
 "Search Icons" = "Buscar iconos";
+
+/* Floating Input Control */
+"Floating Input Control" = "Control de entrada flotante";
+"Keyboard Hidden" = "Teclado oculto";
+"Choose the controls that appear after you hide the software keyboard." = "Elige los controles que aparecen después de ocultar el teclado en pantalla.";
+"Style" = "Estilo";
+"Compact Buttons" = "Botones compactos";
+"Radial Control" = "Control radial";
+"Compact Buttons is active until Pro is restored." = "Los botones compactos estarán activos hasta que se restaure Pro.";
+"Position" = "Posición";
+"Reset Position" = "Restablecer posición";
+"Starting voice input" = "Iniciando entrada de voz";
+"Stop and transcribe" = "Detener y transcribir";
+"Send Return" = "Enviar Retorno";
+"Show Keyboard" = "Mostrar teclado";
+"Move Up" = "Mover arriba";
+"Move Down" = "Mover abajo";
+"Move to Left" = "Mover a la izquierda";
+"Move to Right" = "Mover a la derecha";
+"Input" = "Entrada";
+
+/* Personalización del control flotante de entrada */
+"No floating control" = "Sin control flotante";
+"Control preview" = "Vista previa del control";
+"Primary Action" = "Acción principal";
+"Secondary Actions" = "Acciones secundarias";
+"Add Action" = "Añadir acción";
+"Action %lld" = "Acción %lld";
+"Listening…" = "Escuchando…";
+"Speak now…" = "Habla ahora…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "Actualiza a Pro para usar el control radial y personalizar las acciones flotantes.";
+"The primary button opens the keyboard while Voice Input is off." = "El botón principal abre el teclado cuando la entrada de voz está desactivada.";
+"The primary action uses the main button." = "La acción principal usa el botón principal.";
+"No secondary actions" = "No hay acciones secundarias";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "El control radial muestra hasta siete acciones secundarias. Usa Editar para reordenarlas o eliminarlas. Mantén pulsada una acción repetible para repetirla.";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Los botones compactos muestran hasta tres acciones secundarias. Usa Editar para reordenarlas o eliminarlas. Mantén pulsada una acción repetible para repetirla.";
+"Show Floating Controls" = "Mostrar controles flotantes";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "Arrastra cualquier botón libremente. Empújalo más allá del borde izquierdo o derecho para ocultarlo. Toca la pestaña lateral para volver a mostrarlo. Su posición se guarda en este dispositivo.";
+"Drag past the left or right edge to hide the controls." = "Arrastra los controles más allá del borde izquierdo o derecho para ocultarlos.";
+"Hide on Left" = "Ocultar a la izquierda";
+"Hide on Right" = "Ocultar a la derecha";

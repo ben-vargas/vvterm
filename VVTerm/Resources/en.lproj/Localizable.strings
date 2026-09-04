@@ -1982,3 +1982,44 @@
 "System not detected" = "System not detected";
 "Detected: %@" = "Detected: %@";
 "Search Icons" = "Search Icons";
+
+/* Floating Input Control */
+"Floating Input Control" = "Floating Input Control";
+"Keyboard Hidden" = "Keyboard Hidden";
+"Choose the controls that appear after you hide the software keyboard." = "Choose the controls that appear after you hide the software keyboard.";
+"Style" = "Style";
+"Compact Buttons" = "Compact Buttons";
+"Radial Control" = "Radial Control";
+"Compact Buttons is active until Pro is restored." = "Compact Buttons is active until Pro is restored.";
+"Position" = "Position";
+"Reset Position" = "Reset Position";
+"Starting voice input" = "Starting voice input";
+"Stop and transcribe" = "Stop and transcribe";
+"Send Return" = "Send Return";
+"Show Keyboard" = "Show Keyboard";
+"Move Up" = "Move Up";
+"Move Down" = "Move Down";
+"Move to Left" = "Move to Left";
+"Move to Right" = "Move to Right";
+"Input" = "Input";
+
+/* Floating input control customization */
+"No floating control" = "No floating control";
+"Control preview" = "Control preview";
+"Primary Action" = "Primary Action";
+"Secondary Actions" = "Secondary Actions";
+"Add Action" = "Add Action";
+"Action %lld" = "Action %lld";
+"Listening…" = "Listening…";
+"Speak now…" = "Speak now…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "Upgrade to Pro to use Radial Control and customize floating actions.";
+"The primary button opens the keyboard while Voice Input is off." = "The primary button opens the keyboard while Voice Input is off.";
+"The primary action uses the main button." = "The primary action uses the main button.";
+"No secondary actions" = "No secondary actions";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it.";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it.";
+"Show Floating Controls" = "Show Floating Controls";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device.";
+"Drag past the left or right edge to hide the controls." = "Drag past the left or right edge to hide the controls.";
+"Hide on Left" = "Hide on Left";
+"Hide on Right" = "Hide on Right";

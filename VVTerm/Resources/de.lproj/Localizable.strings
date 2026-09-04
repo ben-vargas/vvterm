@@ -1930,3 +1930,44 @@
 "System not detected" = "System nicht erkannt";
 "Detected: %@" = "Erkannt: %@";
 "Search Icons" = "Symbole suchen";
+
+/* Floating Input Control */
+"Floating Input Control" = "Schwebende Eingabesteuerung";
+"Keyboard Hidden" = "Tastatur ausgeblendet";
+"Choose the controls that appear after you hide the software keyboard." = "Wähle die Steuerelemente, die nach dem Ausblenden der Bildschirmtastatur erscheinen.";
+"Style" = "Stil";
+"Compact Buttons" = "Kompakte Tasten";
+"Radial Control" = "Radiale Steuerung";
+"Compact Buttons is active until Pro is restored." = "Kompakte Tasten bleiben aktiv, bis Pro wiederhergestellt ist.";
+"Position" = "Position";
+"Reset Position" = "Position zurücksetzen";
+"Starting voice input" = "Spracheingabe wird gestartet";
+"Stop and transcribe" = "Stoppen und transkribieren";
+"Send Return" = "Return senden";
+"Show Keyboard" = "Tastatur anzeigen";
+"Move Up" = "Nach oben bewegen";
+"Move Down" = "Nach unten bewegen";
+"Move to Left" = "Nach links bewegen";
+"Move to Right" = "Nach rechts bewegen";
+"Input" = "Eingabe";
+
+/* Anpassung der schwebenden Eingabesteuerung */
+"No floating control" = "Kein schwebendes Steuerelement";
+"Control preview" = "Steuerelementvorschau";
+"Primary Action" = "Primäraktion";
+"Secondary Actions" = "Sekundäre Aktionen";
+"Add Action" = "Aktion hinzufügen";
+"Action %lld" = "Aktion %lld";
+"Listening…" = "Hört zu…";
+"Speak now…" = "Jetzt sprechen…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "Mit Pro kannst du die radiale Steuerung verwenden und schwebende Aktionen anpassen.";
+"The primary button opens the keyboard while Voice Input is off." = "Die Haupttaste öffnet die Tastatur, wenn die Spracheingabe ausgeschaltet ist.";
+"The primary action uses the main button." = "Die primäre Aktion verwendet die Haupttaste.";
+"No secondary actions" = "Keine sekundären Aktionen";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Die radiale Steuerung zeigt bis zu sieben sekundäre Aktionen. Mit Bearbeiten kannst du sie neu anordnen oder entfernen. Halte eine wiederholbare Aktion gedrückt, um sie zu wiederholen.";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Kompakte Tasten zeigen bis zu drei sekundäre Aktionen. Mit Bearbeiten kannst du sie neu anordnen oder entfernen. Halte eine wiederholbare Aktion gedrückt, um sie zu wiederholen.";
+"Show Floating Controls" = "Schwebende Steuerung anzeigen";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "Ziehe jede Taste frei. Schiebe sie über den linken oder rechten Rand, um sie auszublenden. Tippe auf den Randgriff, um sie wieder anzuzeigen. Die Position bleibt auf diesem Gerät gespeichert.";
+"Drag past the left or right edge to hide the controls." = "Ziehe die Steuerung über den linken oder rechten Rand, um sie auszublenden.";
+"Hide on Left" = "Links ausblenden";
+"Hide on Right" = "Rechts ausblenden";

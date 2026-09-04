@@ -32,7 +32,6 @@ struct ServerTerminalRoute: View {
     let onBack: () -> Void
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
 
-    @ObservedObject private var voiceSettingsStore: VoiceSettingsStore
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @StateObject private var toolbarProjection: TerminalServerToolbarProjection
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
@@ -49,7 +48,6 @@ struct ServerTerminalRoute: View {
     @SceneStorage("vvterm.zenMode.ios") private var isZenModeEnabled = false
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
     @AppStorage(TerminalDefaults.keepScreenAwakeKey) private var keepScreenAwakeEnabled = TerminalDefaults.defaultKeepScreenAwake
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
     init(
@@ -76,9 +74,6 @@ struct ServerTerminalRoute: View {
         self.serverFormDependencies = serverFormDependencies
         self.voiceModelManagers = voiceModelManagers
         self.voiceInputRuntimeStore = voiceInputRuntimeStore
-        self._voiceSettingsStore = ObservedObject(
-            wrappedValue: voiceInputRuntimeStore.settingsStore
-        )
         self.analyticsOptOutAction = analyticsOptOutAction
         self.route = route
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
@@ -149,41 +144,8 @@ struct ServerTerminalRoute: View {
         floatingControls.state.findNavigatorIsVisible
     }
 
-    private var isFocusedTerminalVoiceRecording: Bool {
-        floatingControls.state.voicePresentation.isRecording
-    }
-
-    private var isFocusedTerminalPendingVoiceReturn: Bool {
-        floatingControls.state.voicePresentation.isPendingReturn
-    }
-
-    private var shouldShowFloatingTerminalControls: Bool {
-        return UIDevice.current.userInterfaceIdiom == .phone
-            && selectedView == .terminal
-            && focusedPaneId != nil
-            && keyboardCoordinator.isUserHidden
-            && !isFocusedTerminalFindNavigatorVisible
-            && !isFocusedTerminalVoiceRecording
-    }
-
-    private var shouldShowFloatingVoiceButton: Bool {
-        shouldShowFloatingTerminalControls
-            && voiceSettingsStore.settings.terminalVoiceButtonEnabled
-    }
-
-    private var shouldShowFloatingReturnButton: Bool {
-        shouldShowFloatingTerminalControls && isFocusedTerminalPendingVoiceReturn
-    }
-
     var body: some View {
         content
-            .overlay(alignment: .bottom) {
-                if shouldShowFloatingTerminalControls {
-                    floatingTerminalControls
-                        .padding(.bottom, 4)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
             .navigationBarBackButtonHidden(true)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { navigationToolbar }
@@ -283,8 +245,6 @@ struct ServerTerminalRoute: View {
             .onChange(of: isFocusedTerminalFindNavigatorVisible) { _ in
                 updateTerminalRouteActivation()
             }
-            .animation(.spring(response: 0.28, dampingFraction: 0.84), value: shouldShowFloatingTerminalControls)
-            .animation(.spring(response: 0.28, dampingFraction: 0.84), value: shouldShowFloatingReturnButton)
     }
 
     @ViewBuilder
@@ -665,121 +625,9 @@ struct ServerTerminalRoute: View {
         focusedTerminal?.dismissFindNavigator()
     }
 
-    private func startVoiceInputForFocusedTerminal() {
-        guard selectedView == .terminal else { return }
-        guard voiceSettingsStore.settings.terminalVoiceButtonEnabled else { return }
-        guard let focusedPaneId,
-              tabManager.sessionState.paneState(for: focusedPaneId)?.connectionState.isConnected == true else { return }
-        clearPendingVoiceReturnForFocusedPane()
-        if focusedTerminal?.triggerVoiceInput() == true {
-            tabManager.presentationState.applyVoiceEvent(.recordingStarted, for: focusedPaneId)
-        }
-    }
-
-    private func sendReturnForFocusedTerminal() {
-        guard selectedView == .terminal else { return }
-        if focusedTerminal?.sendReturnKey() == true {
-            clearPendingVoiceReturnForFocusedPane()
-        }
-    }
-
     private func clearPendingVoiceReturnForFocusedPane() {
         guard let focusedPaneId else { return }
         tabManager.presentationState.applyVoiceEvent(.pendingReturnDismissed, for: focusedPaneId)
-    }
-
-    @ViewBuilder
-    private var floatingTerminalControls: some View {
-        HStack(spacing: 10) {
-            floatingKeyboardVoiceControls(showsTitle: true)
-                .layoutPriority(1)
-            if shouldShowFloatingReturnButton {
-                Spacer(minLength: 14)
-                floatingReturnControl()
-            }
-        }
-        .padding(.horizontal, 16)
-        .frame(maxWidth: shouldShowFloatingReturnButton ? .infinity : nil)
-    }
-
-    @ViewBuilder
-    private func floatingKeyboardVoiceControls(showsTitle: Bool) -> some View {
-        HStack(spacing: 10) {
-            floatingKeyboardControl(showsTitle: showsTitle)
-            if shouldShowFloatingVoiceButton {
-                floatingVoiceControl(showsTitle: showsTitle)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func floatingKeyboardControl(showsTitle: Bool) -> some View {
-        floatingTerminalControlButton(
-            title: "Keyboard",
-            systemImage: "keyboard",
-            accessibilityLabel: "Show Keyboard",
-            accessibilityIdentifier: "vvterm.terminal.floating.keyboard",
-            showsTitle: showsTitle,
-            action: showKeyboardForFocusedTerminal
-        )
-    }
-
-    @ViewBuilder
-    private func floatingVoiceControl(showsTitle: Bool) -> some View {
-        floatingTerminalControlButton(
-            title: "Voice input",
-            systemImage: "mic.fill",
-            accessibilityLabel: "Voice input",
-            accessibilityIdentifier: "vvterm.terminal.floating.voiceInput",
-            showsTitle: showsTitle,
-            action: startVoiceInputForFocusedTerminal
-        )
-    }
-
-    @ViewBuilder
-    private func floatingReturnControl() -> some View {
-        floatingTerminalControlButton(
-            title: "Enter",
-            systemImage: "arrow.turn.down.left",
-            accessibilityLabel: "Enter",
-            accessibilityIdentifier: "vvterm.terminal.floating.return",
-            showsTitle: false,
-            isPrimary: true,
-            action: sendReturnForFocusedTerminal
-        )
-    }
-
-    @ViewBuilder
-    private func floatingTerminalControlButton(
-        title: LocalizedStringKey,
-        systemImage: String,
-        accessibilityLabel: LocalizedStringKey,
-        accessibilityIdentifier: String,
-        showsTitle: Bool,
-        isPrimary: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: showsTitle ? 6 : 0) {
-                Image(systemName: systemImage)
-                if showsTitle {
-                    Text(title)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-            }
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .foregroundStyle(isPrimary ? Color.accentColor : Color.primary)
-            .padding(.horizontal, showsTitle ? 2 : 0)
-        }
-        .accessibilityLabel(Text(accessibilityLabel))
-        .accessibilityIdentifier(accessibilityIdentifier)
-        .modifier(
-            FloatingTerminalControlButtonStyle(
-                isPrimary: isPrimary,
-                colorScheme: colorScheme
-            )
-        )
     }
 
     private func openNewTab(for server: Server) {
@@ -854,38 +702,6 @@ struct ServerTerminalRoute: View {
             .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-private struct FloatingTerminalControlButtonStyle: ViewModifier {
-    let isPrimary: Bool
-    let colorScheme: ColorScheme
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            if isPrimary {
-                content
-                    .tint(Color.accentColor)
-                    .buttonStyle(SwiftUI.GlassButtonStyle())
-                    .buttonBorderShape(.capsule)
-                    .controlSize(.large)
-            } else {
-                content
-                    .buttonStyle(SwiftUI.GlassButtonStyle())
-                    .buttonBorderShape(.capsule)
-                    .controlSize(.large)
-            }
-        } else {
-            content
-                .buttonStyle(
-                    .glass(
-                        tint: Color.accentColor.opacity(
-                            isPrimary ? 0.5 : (colorScheme == .dark ? 0.24 : 0.14)
-                        )
-                    )
-                )
-        }
     }
 }
 #endif

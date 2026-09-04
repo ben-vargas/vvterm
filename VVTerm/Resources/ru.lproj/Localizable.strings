@@ -1930,3 +1930,44 @@
 "System not detected" = "Система не обнаружена";
 "Detected: %@" = "Обнаружено: %@";
 "Search Icons" = "Поиск значков";
+
+/* Floating Input Control */
+"Floating Input Control" = "Плавающий элемент ввода";
+"Keyboard Hidden" = "Клавиатура скрыта";
+"Choose the controls that appear after you hide the software keyboard." = "Выберите элементы управления, которые появятся после скрытия экранной клавиатуры.";
+"Style" = "Стиль";
+"Compact Buttons" = "Компактные кнопки";
+"Radial Control" = "Радиальное управление";
+"Compact Buttons is active until Pro is restored." = "Компактные кнопки будут активны, пока Pro не будет восстановлен.";
+"Position" = "Положение";
+"Reset Position" = "Сбросить положение";
+"Starting voice input" = "Запуск голосового ввода";
+"Stop and transcribe" = "Остановить и распознать";
+"Send Return" = "Отправить Return";
+"Show Keyboard" = "Показать клавиатуру";
+"Move Up" = "Переместить вверх";
+"Move Down" = "Переместить вниз";
+"Move to Left" = "Переместить влево";
+"Move to Right" = "Переместить вправо";
+"Input" = "Ввод";
+
+/* Настройка плавающего элемента ввода */
+"No floating control" = "Нет плавающего элемента управления";
+"Control preview" = "Предварительный просмотр элемента управления";
+"Primary Action" = "Основное действие";
+"Secondary Actions" = "Дополнительные действия";
+"Add Action" = "Добавить действие";
+"Action %lld" = "Действие %lld";
+"Listening…" = "Слушаю…";
+"Speak now…" = "Говорите…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "Перейдите на Pro, чтобы использовать радиальное управление и настраивать плавающие действия.";
+"The primary button opens the keyboard while Voice Input is off." = "Основная кнопка открывает клавиатуру, когда голосовой ввод выключен.";
+"The primary action uses the main button." = "Основное действие использует главную кнопку.";
+"No secondary actions" = "Нет дополнительных действий";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Радиальное управление показывает до семи дополнительных действий. Используйте «Редактировать», чтобы изменить порядок или удалить их. Нажмите и удерживайте повторяемое действие, чтобы повторять его.";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Компактные кнопки показывают до трёх дополнительных действий. Используйте «Редактировать», чтобы изменить порядок или удалить их. Нажмите и удерживайте повторяемое действие, чтобы повторять его.";
+"Show Floating Controls" = "Показать плавающие элементы управления";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "Свободно перетаскивайте любую кнопку. Сдвиньте её за левый или правый край, чтобы скрыть. Нажмите боковую вкладку, чтобы показать её снова. Позиция сохраняется на этом устройстве.";
+"Drag past the left or right edge to hide the controls." = "Перетащите элементы управления за левый или правый край, чтобы скрыть их.";
+"Hide on Left" = "Скрыть слева";
+"Hide on Right" = "Скрыть справа";

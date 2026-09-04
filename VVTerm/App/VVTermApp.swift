@@ -41,6 +41,11 @@ struct VVTermApp: App {
         _terminalAccessoryPreferencesManager = StateObject(
             wrappedValue: composition.terminalAccessoryPreferencesManager
         )
+        #if os(iOS)
+        _terminalFloatingControlPreferencesStore = StateObject(
+            wrappedValue: composition.terminalFloatingControlPreferencesStore
+        )
+        #endif
         _statsPreferencesStore = StateObject(wrappedValue: composition.statsPreferencesStore)
         _serverVolumeVisibilityStore = StateObject(
             wrappedValue: composition.serverVolumeVisibilityStore
@@ -103,6 +108,10 @@ struct VVTermApp: App {
     @StateObject private var terminalFontStore: TerminalFontStore
     @StateObject private var terminalThemeManager: TerminalThemeManager
     @StateObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
+    #if os(iOS)
+    @StateObject private var terminalFloatingControlPreferencesStore:
+        TerminalFloatingControlPreferencesStore
+    #endif
     @StateObject private var statsPreferencesStore: PreferencesStore
     @StateObject private var serverVolumeVisibilityStore: ServerVolumeVisibilityStore
     #if os(macOS)
@@ -326,7 +335,10 @@ struct VVTermApp: App {
             StatsCardsLayoutUITestHarness()
                 .modifier(AppearanceModifier())
         } else if usesTerminalZenModeUITestHarness {
-            TerminalZenModeUITestHarness(tabManager: tabManager)
+            TerminalZenModeUITestHarness(
+                tabManager: tabManager,
+                voiceInputRuntimeStore: voiceInputRuntimeStore
+            )
                 .environmentObject(ghosttyApp)
                 .modifier(AppearanceModifier())
         } else if usesStatsStorageUITestHarness {
@@ -360,7 +372,10 @@ struct VVTermApp: App {
                 .environmentObject(terminalAccessoryPreferencesManager)
                 .modifier(AppearanceModifier())
         } else if usesTerminalKeyboardUITestHarness {
-            TerminalKeyboardUITestHarness(tabManager: tabManager)
+            TerminalKeyboardUITestHarness(
+                tabManager: tabManager,
+                voiceInputRuntimeStore: voiceInputRuntimeStore
+            )
                 .environmentObject(ghosttyApp)
                 .environmentObject(terminalThemeManager)
                 .environmentObject(terminalAccessoryPreferencesManager)
@@ -418,6 +433,7 @@ struct VVTermApp: App {
                         #if os(iOS)
                         iOSRootContent
                             .environmentObject(screenAwakeCoordinator)
+                            .environmentObject(terminalFloatingControlPreferencesStore)
                         #else
                         macOSRootContent
                         #endif

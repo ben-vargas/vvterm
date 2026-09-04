@@ -139,7 +139,11 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
                 "cursor", "blink", "light theme", "dark theme", "custom theme",
             ]
         case .keyboardAndInput:
-            ["keyboard", "input", "option", "alt", "terminal size", "dismiss", "accessory bar", "custom actions"]
+            [
+                "keyboard", "input", "option", "alt", "terminal size", "dismiss",
+                "accessory bar", "custom actions", "floating control", "radial",
+                "system actions", "position",
+            ]
         case .sessionsAndConnections:
             [
                 "remote session", "session persistence", "herdr", "tmux", "zellij", "zmx", "backend", "connect",
@@ -207,6 +211,9 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
                 "Show dismiss button",
                 "Customize Accessory Bar",
                 "Custom Actions",
+                "Floating Input Control",
+                "Keyboard Hidden",
+                "Radial Control",
             ]
         case .sessionsAndConnections:
             [

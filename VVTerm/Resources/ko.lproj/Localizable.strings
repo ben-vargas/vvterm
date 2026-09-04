@@ -1929,3 +1929,44 @@
 "System not detected" = "시스템이 감지되지 않음";
 "Detected: %@" = "감지됨: %@";
 "Search Icons" = "아이콘 검색";
+
+/* Floating Input Control */
+"Floating Input Control" = "플로팅 입력 컨트롤";
+"Keyboard Hidden" = "키보드 숨김";
+"Choose the controls that appear after you hide the software keyboard." = "소프트웨어 키보드를 숨긴 후 표시할 컨트롤을 선택합니다.";
+"Style" = "스타일";
+"Compact Buttons" = "컴팩트 버튼";
+"Radial Control" = "방사형 컨트롤";
+"Compact Buttons is active until Pro is restored." = "Pro가 복원될 때까지 컴팩트 버튼이 활성화됩니다.";
+"Position" = "위치";
+"Reset Position" = "위치 재설정";
+"Starting voice input" = "음성 입력 시작 중";
+"Stop and transcribe" = "중지하고 텍스트로 변환";
+"Send Return" = "Return 보내기";
+"Show Keyboard" = "키보드 표시";
+"Move Up" = "위로 이동";
+"Move Down" = "아래로 이동";
+"Move to Left" = "왼쪽으로 이동";
+"Move to Right" = "오른쪽으로 이동";
+"Input" = "입력";
+
+/* 플로팅 입력 컨트롤 사용자 설정 */
+"No floating control" = "플로팅 컨트롤 없음";
+"Control preview" = "컨트롤 미리보기";
+"Primary Action" = "기본 동작";
+"Secondary Actions" = "보조 동작";
+"Add Action" = "동작 추가";
+"Action %lld" = "동작 %lld";
+"Listening…" = "듣는 중…";
+"Speak now…" = "말씀하세요…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "Pro로 업그레이드하여 방사형 컨트롤을 사용하고 플로팅 동작을 사용자화하세요.";
+"The primary button opens the keyboard while Voice Input is off." = "음성 입력이 꺼져 있으면 기본 버튼이 키보드를 엽니다.";
+"The primary action uses the main button." = "기본 동작은 기본 버튼을 사용합니다.";
+"No secondary actions" = "보조 동작 없음";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "방사형 컨트롤은 최대 7개의 보조 동작을 표시합니다. 편집을 사용하여 순서를 바꾸거나 제거하세요. 반복 가능한 동작을 길게 누르면 반복됩니다.";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "컴팩트 버튼은 최대 3개의 보조 동작을 표시합니다. 편집을 사용하여 순서를 바꾸거나 제거하세요. 반복 가능한 동작을 길게 누르면 반복됩니다.";
+"Show Floating Controls" = "플로팅 컨트롤 표시";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "아무 버튼이나 자유롭게 드래그하세요. 왼쪽 또는 오른쪽 가장자리 너머로 밀어 숨기세요. 가장자리 탭을 눌러 다시 표시하세요. 위치는 이 기기에 저장됩니다.";
+"Drag past the left or right edge to hide the controls." = "왼쪽 또는 오른쪽 가장자리 너머로 드래그하여 컨트롤을 숨기세요.";
+"Hide on Left" = "왼쪽에 숨기기";
+"Hide on Right" = "오른쪽에 숨기기";

@@ -1975,3 +1975,44 @@
 "System not detected" = "Không phát hiện được hệ thống";
 "Detected: %@" = "Đã phát hiện: %@";
 "Search Icons" = "Tìm biểu tượng";
+
+/* Floating Input Control */
+"Floating Input Control" = "Điều khiển nhập liệu nổi";
+"Keyboard Hidden" = "Bàn phím đã ẩn";
+"Choose the controls that appear after you hide the software keyboard." = "Chọn các nút điều khiển xuất hiện sau khi bạn ẩn bàn phím ảo.";
+"Style" = "Kiểu";
+"Compact Buttons" = "Nút thu gọn";
+"Radial Control" = "Điều khiển hướng tâm";
+"Compact Buttons is active until Pro is restored." = "Nút thu gọn sẽ hoạt động cho đến khi Pro được khôi phục.";
+"Position" = "Vị trí";
+"Reset Position" = "Đặt lại vị trí";
+"Starting voice input" = "Đang bắt đầu nhập liệu bằng giọng nói";
+"Stop and transcribe" = "Dừng và phiên âm";
+"Send Return" = "Gửi Return";
+"Show Keyboard" = "Hiện bàn phím";
+"Move Up" = "Di chuyển lên";
+"Move Down" = "Di chuyển xuống";
+"Move to Left" = "Di chuyển sang trái";
+"Move to Right" = "Di chuyển sang phải";
+"Input" = "Nhập liệu";
+
+/* Tùy chỉnh điều khiển nhập nổi */
+"No floating control" = "Không có điều khiển nổi";
+"Control preview" = "Bản xem trước điều khiển";
+"Primary Action" = "Hành động chính";
+"Secondary Actions" = "Hành động phụ";
+"Add Action" = "Thêm hành động";
+"Action %lld" = "Hành động %lld";
+"Listening…" = "Đang nghe…";
+"Speak now…" = "Hãy nói…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "Nâng cấp lên Pro để dùng Điều khiển vòng tròn và tùy chỉnh các thao tác nổi.";
+"The primary button opens the keyboard while Voice Input is off." = "Nút chính mở bàn phím khi Tính năng nhập bằng giọng nói tắt.";
+"The primary action uses the main button." = "Thao tác chính dùng nút chính.";
+"No secondary actions" = "Không có thao tác phụ";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Điều khiển vòng tròn hiển thị tối đa bảy hành động phụ. Dùng Sửa để sắp xếp lại hoặc xóa. Nhấn giữ một thao tác có thể lặp lại để lặp thao tác đó.";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Nút thu gọn hiển thị tối đa ba thao tác phụ. Dùng Sửa để sắp xếp lại hoặc xóa. Nhấn giữ một thao tác có thể lặp lại để lặp thao tác đó.";
+"Show Floating Controls" = "Hiển thị điều khiển nổi";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "Kéo bất kỳ nút nào một cách tự do. Đẩy nút qua cạnh trái hoặc phải để ẩn. Chạm vào thẻ ở cạnh để hiển thị lại. Vị trí được lưu trên thiết bị này.";
+"Drag past the left or right edge to hide the controls." = "Kéo qua cạnh trái hoặc phải để ẩn các điều khiển.";
+"Hide on Left" = "Ẩn bên trái";
+"Hide on Right" = "Ẩn bên phải";

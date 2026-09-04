@@ -115,7 +115,8 @@ class TerminalKeyboardUITestCase: XCTestCase {
         simulatesStaleLightAccessoryCacheOnResume: Bool = false,
         splitPaneFocus: Bool = false,
         testsAppShortcutInputs: Bool = false,
-        simulatesTerminalMetadataChurn: Bool = false
+        simulatesTerminalMetadataChurn: Bool = false,
+        floatingControlArguments: [String] = []
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -167,6 +168,7 @@ class TerminalKeyboardUITestCase: XCTestCase {
                 "--vvterm-ui-test-stale-light-accessory-cache-on-resume"
             )
         }
+        app.launchArguments.append(contentsOf: floatingControlArguments)
         app.launch()
 
         let ready = app.staticTexts["vvterm.keyboardTest.ready"]
@@ -646,4 +648,3 @@ class TerminalKeyboardUITestCase: XCTestCase {
     }
 }
 #endif
-

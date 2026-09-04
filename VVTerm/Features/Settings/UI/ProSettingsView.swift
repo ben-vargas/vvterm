@@ -128,14 +128,14 @@ struct ProSettingsView: View {
                 value: "Unlimited"
             )
             ProSettingsFeatureRow(
-                title: "Custom Fonts",
-                systemImage: "textformat",
+                title: "Radial Control",
+                systemImage: "circle.grid.2x2",
                 value: "Included"
             )
             ProSettingsFeatureRow(
-                title: "CJK Font",
-                systemImage: "character.book.closed",
-                value: "Custom"
+                title: "Custom Fonts",
+                systemImage: "textformat",
+                value: "Included"
             )
             ProSettingsFeatureRow(
                 title: "Split panes",
@@ -146,6 +146,11 @@ struct ProSettingsView: View {
                 title: "Docker monitoring",
                 systemImage: "shippingbox",
                 value: "Included"
+            )
+            ProSettingsFeatureRow(
+                title: "CJK Font",
+                systemImage: "character.book.closed",
+                value: "Custom"
             )
             ProSettingsFeatureRow(
                 title: "Environments",

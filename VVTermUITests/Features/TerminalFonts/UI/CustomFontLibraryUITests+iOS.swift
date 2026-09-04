@@ -46,14 +46,20 @@ final class CustomFontLibraryUITests: XCTestCase {
         let comparisonTexts = app.staticTexts.matching(
             identifier: "vvterm.pro.comparison"
         )
+        let customActionsBenefit = comparisonTexts.matching(
+            NSPredicate(format: "label == %@", "Custom actions")
+        ).firstMatch
         let customFontsBenefit = comparisonTexts.matching(
             NSPredicate(format: "label == %@", "Custom Fonts")
         ).firstMatch
         let cjkBenefit = comparisonTexts.matching(
             NSPredicate(format: "label == %@", "CJK Font")
         ).firstMatch
-        XCTAssertTrue(customFontsBenefit.waitForExistence(timeout: 5))
+        XCTAssertTrue(customActionsBenefit.waitForExistence(timeout: 5))
+        XCTAssertTrue(customFontsBenefit.exists)
         XCTAssertTrue(cjkBenefit.exists)
+        XCTAssertLessThan(customActionsBenefit.frame.minY, customFontsBenefit.frame.minY)
+        XCTAssertLessThan(customFontsBenefit.frame.minY, cjkBenefit.frame.minY)
     }
 
     @MainActor

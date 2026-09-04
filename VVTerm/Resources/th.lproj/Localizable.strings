@@ -1930,3 +1930,44 @@
 "System not detected" = "ตรวจไม่พบระบบ";
 "Detected: %@" = "ตรวจพบ: %@";
 "Search Icons" = "ค้นหาไอคอน";
+
+/* Floating Input Control */
+"Floating Input Control" = "ตัวควบคุมการป้อนข้อมูลแบบลอย";
+"Keyboard Hidden" = "ซ่อนแป้นพิมพ์แล้ว";
+"Choose the controls that appear after you hide the software keyboard." = "เลือกตัวควบคุมที่จะแสดงหลังจากซ่อนแป้นพิมพ์บนหน้าจอ";
+"Style" = "รูปแบบ";
+"Compact Buttons" = "ปุ่มแบบกะทัดรัด";
+"Radial Control" = "ตัวควบคุมแบบรัศมี";
+"Compact Buttons is active until Pro is restored." = "ปุ่มแบบกะทัดรัดจะทำงานจนกว่าจะกู้คืน Pro";
+"Position" = "ตำแหน่ง";
+"Reset Position" = "รีเซ็ตตำแหน่ง";
+"Starting voice input" = "กำลังเริ่มการป้อนข้อมูลด้วยเสียง";
+"Stop and transcribe" = "หยุดและถอดเสียง";
+"Send Return" = "ส่ง Return";
+"Show Keyboard" = "แสดงแป้นพิมพ์";
+"Move Up" = "เลื่อนขึ้น";
+"Move Down" = "เลื่อนลง";
+"Move to Left" = "เลื่อนไปทางซ้าย";
+"Move to Right" = "เลื่อนไปทางขวา";
+"Input" = "การป้อนข้อมูล";
+
+/* การปรับแต่งตัวควบคุมการป้อนข้อมูลแบบลอย */
+"No floating control" = "ไม่มีตัวควบคุมแบบลอย";
+"Control preview" = "ตัวอย่างตัวควบคุม";
+"Primary Action" = "การทำงานหลัก";
+"Secondary Actions" = "การทำงานรอง";
+"Add Action" = "เพิ่มการทำงาน";
+"Action %lld" = "การทำงาน %lld";
+"Listening…" = "กำลังฟัง…";
+"Speak now…" = "พูดได้เลย…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "อัปเกรดเป็น Pro เพื่อใช้ตัวควบคุมแบบรัศมีและปรับแต่งการทำงานแบบลอย";
+"The primary button opens the keyboard while Voice Input is off." = "ปุ่มหลักจะเปิดแป้นพิมพ์เมื่อปิดการป้อนข้อมูลด้วยเสียง";
+"The primary action uses the main button." = "การทำงานหลักใช้ปุ่มหลัก";
+"No secondary actions" = "ไม่มีการทำงานรอง";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "ตัวควบคุมแบบรัศมีแสดงการทำงานรองได้สูงสุดเจ็ดรายการ ใช้ แก้ไข เพื่อจัดลำดับใหม่หรือลบ กดการทำงานที่ทำซ้ำได้ค้างไว้เพื่อทำซ้ำ";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "ปุ่มแบบกะทัดรัดแสดงการทำงานรองได้สูงสุดสามรายการ ใช้ แก้ไข เพื่อจัดลำดับใหม่หรือลบ กดการทำงานที่ทำซ้ำได้ค้างไว้เพื่อทำซ้ำ";
+"Show Floating Controls" = "แสดงตัวควบคุมแบบลอย";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "ลากปุ่มใดก็ได้อย่างอิสระ ดันเลยขอบซ้ายหรือขวาเพื่อซ่อน แตะแถบที่ขอบเพื่อแสดงอีกครั้ง ตำแหน่งจะถูกบันทึกไว้ในอุปกรณ์นี้";
+"Drag past the left or right edge to hide the controls." = "ลากเลยขอบซ้ายหรือขวาเพื่อซ่อนตัวควบคุม";
+"Hide on Left" = "ซ่อนทางซ้าย";
+"Hide on Right" = "ซ่อนทางขวา";

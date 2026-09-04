@@ -1937,3 +1937,44 @@
 "System not detected" = "Систему не виявлено";
 "Detected: %@" = "Виявлено: %@";
 "Search Icons" = "Пошук іконок";
+
+/* Floating Input Control */
+"Floating Input Control" = "Плаваючий елемент введення";
+"Keyboard Hidden" = "Клавіатуру приховано";
+"Choose the controls that appear after you hide the software keyboard." = "Виберіть елементи керування, які з’являться після приховування екранної клавіатури.";
+"Style" = "Стиль";
+"Compact Buttons" = "Компактні кнопки";
+"Radial Control" = "Радіальне керування";
+"Compact Buttons is active until Pro is restored." = "Компактні кнопки будуть активні, доки Pro не буде відновлено.";
+"Position" = "Позиція";
+"Reset Position" = "Скинути позицію";
+"Starting voice input" = "Запуск голосового введення";
+"Stop and transcribe" = "Зупинити й розпізнати";
+"Send Return" = "Надіслати Return";
+"Show Keyboard" = "Показати клавіатуру";
+"Move Up" = "Перемістити вгору";
+"Move Down" = "Перемістити вниз";
+"Move to Left" = "Перемістити вліво";
+"Move to Right" = "Перемістити вправо";
+"Input" = "Введення";
+
+/* Налаштування плаваючого елемента введення */
+"No floating control" = "Немає плаваючого елемента керування";
+"Control preview" = "Попередній перегляд елемента керування";
+"Primary Action" = "Основна дія";
+"Secondary Actions" = "Додаткові дії";
+"Add Action" = "Додати дію";
+"Action %lld" = "Дія %lld";
+"Listening…" = "Слухаю…";
+"Speak now…" = "Говоріть…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "Перейдіть на Pro, щоб використовувати радіальне керування та налаштовувати плаваючі дії.";
+"The primary button opens the keyboard while Voice Input is off." = "Основна кнопка відкриває клавіатуру, коли голосове введення вимкнено.";
+"The primary action uses the main button." = "Основна дія використовує головну кнопку.";
+"No secondary actions" = "Немає додаткових дій";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Радіальне керування показує до семи додаткових дій. Використовуйте «Редагувати», щоб змінити порядок або видалити їх. Натисніть і утримуйте повторювану дію, щоб повторювати її.";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Компактні кнопки показують до трьох додаткових дій. Використовуйте «Редагувати», щоб змінити порядок або видалити їх. Натисніть і утримуйте повторювану дію, щоб повторювати її.";
+"Show Floating Controls" = "Показати плаваючі елементи керування";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "Вільно перетягуйте будь-яку кнопку. Посуньте її за лівий або правий край, щоб сховати. Натисніть бічну вкладку, щоб показати її знову. Позиція зберігається на цьому пристрої.";
+"Drag past the left or right edge to hide the controls." = "Перетягніть елементи керування за лівий або правий край, щоб сховати їх.";
+"Hide on Left" = "Сховати ліворуч";
+"Hide on Right" = "Сховати праворуч";

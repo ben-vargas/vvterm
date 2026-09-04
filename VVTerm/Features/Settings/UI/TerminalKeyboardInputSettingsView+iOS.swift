@@ -2,6 +2,8 @@
 import SwiftUI
 
 struct TerminalKeyboardInputPlatformSettingsView: View {
+    @ObservedObject var voiceSettingsStore: VoiceSettingsStore
+
     @AppStorage(TerminalDefaults.optionAsAltModeKey) private var optionAsAltModeRaw = TerminalOptionAsAltMode.none.rawValue
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) private var preserveTerminalSizeForKeyboard = false
     @AppStorage("terminalKeyboardDismissButtonEnabled") private var keyboardDismissButtonEnabled = true
@@ -55,6 +57,22 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
                 }
             } header: {
                 Text("Accessory Bar")
+            }
+
+            Section {
+                NavigationLink {
+                    TerminalFloatingControlSettingsView(
+                        voiceSettingsStore: voiceSettingsStore
+                    )
+                } label: {
+                    Label("Floating Input Control", systemImage: "circle.grid.cross")
+                }
+            } header: {
+                Text("Keyboard Hidden")
+            } footer: {
+                Text("Choose the controls that appear after you hide the software keyboard.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

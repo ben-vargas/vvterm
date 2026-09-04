@@ -1932,3 +1932,44 @@
 "System not detected" = "Système non détecté";
 "Detected: %@" = "Détecté : %@";
 "Search Icons" = "Rechercher des icônes";
+
+/* Floating Input Control */
+"Floating Input Control" = "Commande de saisie flottante";
+"Keyboard Hidden" = "Clavier masqué";
+"Choose the controls that appear after you hide the software keyboard." = "Choisissez les commandes qui apparaissent après avoir masqué le clavier à l’écran.";
+"Style" = "Style";
+"Compact Buttons" = "Boutons compacts";
+"Radial Control" = "Commande radiale";
+"Compact Buttons is active until Pro is restored." = "Les boutons compacts restent actifs jusqu’à la restauration de Pro.";
+"Position" = "Position";
+"Reset Position" = "Réinitialiser la position";
+"Starting voice input" = "Démarrage de la saisie vocale";
+"Stop and transcribe" = "Arrêter et transcrire";
+"Send Return" = "Envoyer Retour";
+"Show Keyboard" = "Afficher le clavier";
+"Move Up" = "Déplacer vers le haut";
+"Move Down" = "Déplacer vers le bas";
+"Move to Left" = "Déplacer vers la gauche";
+"Move to Right" = "Déplacer vers la droite";
+"Input" = "Saisie";
+
+/* Personnalisation du contrôle flottant de saisie */
+"No floating control" = "Aucun contrôle flottant";
+"Control preview" = "Aperçu du contrôle";
+"Primary Action" = "Action principale";
+"Secondary Actions" = "Actions secondaires";
+"Add Action" = "Ajouter une action";
+"Action %lld" = "Action %lld";
+"Listening…" = "Écoute…";
+"Speak now…" = "Parlez maintenant…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "Passez à Pro pour utiliser le contrôle radial et personnaliser les actions flottantes.";
+"The primary button opens the keyboard while Voice Input is off." = "Le bouton principal ouvre le clavier lorsque la saisie vocale est désactivée.";
+"The primary action uses the main button." = "L’action principale utilise le bouton principal.";
+"No secondary actions" = "Aucune action secondaire";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Le contrôle radial affiche jusqu’à sept actions secondaires. Utilisez Modifier pour les réorganiser ou les supprimer. Maintenez une action répétable pour la répéter.";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Les boutons compacts affichent jusqu’à trois actions secondaires. Utilisez Modifier pour les réorganiser ou les supprimer. Maintenez une action répétable pour la répéter.";
+"Show Floating Controls" = "Afficher les contrôles flottants";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "Faites glisser librement n’importe quel bouton. Poussez-le au-delà du bord gauche ou droit pour le masquer. Touchez l’onglet latéral pour l’afficher à nouveau. Sa position reste enregistrée sur cet appareil.";
+"Drag past the left or right edge to hide the controls." = "Faites glisser les contrôles au-delà du bord gauche ou droit pour les masquer.";
+"Hide on Left" = "Masquer à gauche";
+"Hide on Right" = "Masquer à droite";

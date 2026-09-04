@@ -54,7 +54,13 @@ struct SettingsView: View {
         case .terminalAppearance:
             TerminalAppearanceSettingsView(fontSize: $terminalFontSize)
         case .keyboardAndInput:
+            #if os(iOS)
+            TerminalKeyboardInputSettingsView(
+                voiceSettingsStore: voiceModelManagers.settingsStore
+            )
+            #else
             TerminalKeyboardInputSettingsView()
+            #endif
         case .sessionsAndConnections:
             TerminalSessionsConnectionsSettingsView(backends: remoteSessionBackends)
         case .clipboardAndPaste:

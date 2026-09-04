@@ -400,16 +400,26 @@ struct ProUpgradeSheet: View {
                 pro: .unlimited(accessibilityLabel: String(localized: "Multiple file tabs"))
             ),
             ComparisonFeature(
+                icon: "command",
+                title: String(localized: "Custom actions"),
+                free: .number(String(FreeTierLimits.maxCustomActions)),
+                pro: .unlimited(accessibilityLabel: String(localized: "Unlimited custom actions"))
+            ),
+            ComparisonFeature(
                 icon: "rectangle.split.2x1",
                 title: String(localized: "Split panes"),
                 free: .notIncluded(accessibilityLabel: String(localized: "Split panes not included on Free")),
                 pro: .included(accessibilityLabel: String(localized: "Split panes included on Pro"))
             ),
             ComparisonFeature(
-                icon: "command",
-                title: String(localized: "Custom actions"),
-                free: .number(String(FreeTierLimits.maxCustomActions)),
-                pro: .unlimited(accessibilityLabel: String(localized: "Unlimited custom actions"))
+                icon: "circle.grid.2x2",
+                title: String(localized: "Radial Control"),
+                free: .notIncluded(
+                    accessibilityLabel: String(
+                        localized: "Upgrade to Pro to use Radial Control and customize floating actions."
+                    )
+                ),
+                pro: .included(accessibilityLabel: String(localized: "Included"))
             ),
             ComparisonFeature(
                 icon: "textformat",
@@ -418,12 +428,6 @@ struct ProUpgradeSheet: View {
                     accessibilityLabel: String(localized: "Custom and CJK fonts require Pro.")
                 ),
                 pro: .included(accessibilityLabel: String(localized: "Included"))
-            ),
-            ComparisonFeature(
-                icon: "character.book.closed",
-                title: String(localized: "CJK Font"),
-                free: .text(String(localized: "Automatic"), emphasized: false),
-                pro: .text(String(localized: "Custom"), emphasized: true)
             ),
             ComparisonFeature(
                 icon: "terminal",
@@ -454,6 +458,12 @@ struct ProUpgradeSheet: View {
                 title: String(localized: "Docker monitoring"),
                 free: .notIncluded(accessibilityLabel: String(localized: "Docker monitoring not included on Free")),
                 pro: .included(accessibilityLabel: String(localized: "Docker monitoring included on Pro"))
+            ),
+            ComparisonFeature(
+                icon: "character.book.closed",
+                title: String(localized: "CJK Font"),
+                free: .text(String(localized: "Automatic"), emphasized: false),
+                pro: .text(String(localized: "Custom"), emphasized: true)
             ),
             ComparisonFeature(
                 icon: "paintbrush",

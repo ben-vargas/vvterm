@@ -16,6 +16,9 @@ struct AppComposition {
     let terminalFontStore: TerminalFontStore
     let terminalThemeManager: TerminalThemeManager
     let terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
+    #if os(iOS)
+    let terminalFloatingControlPreferencesStore: TerminalFloatingControlPreferencesStore
+    #endif
     let statsPreferencesStore: PreferencesStore
     let serverVolumeVisibilityStore: ServerVolumeVisibilityStore
     #if os(macOS)
@@ -269,6 +272,13 @@ struct AppComposition {
                 }
             )
         )
+        #if os(iOS)
+        let terminalFloatingControlPreferencesStore = TerminalFloatingControlPreferencesStore(
+            repository: UserDefaultsTerminalFloatingControlPreferencesRepository(
+                defaults: defaults
+            )
+        )
+        #endif
         let statsPreferencesStore = PreferencesStore(
             dependencies: .live(
                 defaults: defaults,
@@ -417,6 +427,9 @@ struct AppComposition {
         self.terminalFontStore = terminalFontStore
         self.terminalThemeManager = terminalThemeManager
         self.terminalAccessoryPreferencesManager = terminalAccessoryPreferencesManager
+        #if os(iOS)
+        self.terminalFloatingControlPreferencesStore = terminalFloatingControlPreferencesStore
+        #endif
         self.statsPreferencesStore = statsPreferencesStore
         self.serverVolumeVisibilityStore = serverVolumeVisibilityStore
         #if os(macOS)

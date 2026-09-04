@@ -17,6 +17,8 @@ struct IOSZenModePanel: View {
     let fileTabTitle: (RemoteFileTab) -> String
     let onSelectFileTab: (RemoteFileTab) -> Void
     let onCloseFileTab: (RemoteFileTab) -> Void
+    let floatingControlCanBeShown: Bool
+    @Binding var floatingControlIsShown: Bool
     let onNewTerminalTab: () -> Void
     let onNewFileTab: () -> Void
     let onOpenSettings: () -> Void
@@ -33,6 +35,12 @@ struct IOSZenModePanel: View {
                 subtitle: statusText,
                 indicatorColor: indicatorColor
             )
+
+            if hasSelectedTerminal, floatingControlCanBeShown {
+                ZenModeSection("Input") {
+                    floatingControlToggle
+                }
+            }
 
             ZenModeSection("View") {
                 HStack(spacing: 8) {
@@ -100,6 +108,30 @@ struct IOSZenModePanel: View {
             }
         }
         .accessibilityIdentifier("vvterm.terminal.zenPanel")
+    }
+
+    private var hasSelectedTerminal: Bool {
+        guard selectedView == .terminal,
+              let selectedID = selectedTerminalTabId.wrappedValue else { return false }
+        return terminalTabs.contains { $0.id == selectedID }
+    }
+
+    private var floatingControlToggle: some View {
+        Toggle(isOn: $floatingControlIsShown) {
+            HStack(spacing: 10) {
+                Image(systemName: "circle.grid.2x2")
+                    .frame(width: 16)
+                Text("Floating Input Control")
+            }
+        }
+        .tint(.accentColor)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(0.07))
+        )
+        .accessibilityIdentifier("vvterm.terminal.zen.floatingInputControl")
     }
 
     @ViewBuilder

@@ -56,6 +56,10 @@ struct ConnectionTerminalContainer: View {
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
+    #if os(iOS)
+    @EnvironmentObject var floatingControlPreferencesStore:
+        TerminalFloatingControlPreferencesStore
+    #endif
 
     /// Disconnect confirmation
     @State var showingDisconnectConfirmation = false
@@ -69,6 +73,9 @@ struct ConnectionTerminalContainer: View {
     @State var showingFileTabLimitAlert = false
     @State var showingSplitPaneUpgradeAlert = false
     @State var showingZenPanel = false
+    #if os(iOS)
+    @State var isFloatingControlShownInZen = true
+    #endif
 
     init(
         tabManager: TerminalTabManager,
@@ -267,6 +274,11 @@ struct ConnectionTerminalContainer: View {
                 if !newValue {
                     showingZenPanel = false
                 }
+                #if os(iOS)
+                if newValue {
+                    isFloatingControlShownInZen = true
+                }
+                #endif
             }
             .onDisappear {
                 statsDependencies.runtimeStore.releaseCollector(for: server.id)

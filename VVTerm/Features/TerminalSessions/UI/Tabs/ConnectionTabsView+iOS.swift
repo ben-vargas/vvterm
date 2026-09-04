@@ -74,12 +74,9 @@ extension ConnectionTerminalContainer {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(backgroundColor)
             }
-            .overlay(alignment: .topTrailing) {
-                if isZenModeEnabled {
-                    zenModeOverlay
-                        .transition(.opacity)
-                        .zIndex(10)
-                }
+            .overlay {
+                platformFloatingInputOverlay
+                    .zIndex(10)
             }
             .background(backgroundColor.ignoresSafeArea(.all))
         }
@@ -198,6 +195,39 @@ extension ConnectionTerminalContainer {
         tabManager.keyboardCoordinator.deactivateInputImmediately(reason: .routeModal)
     }
 
+    @ViewBuilder
+    private var platformFloatingInputOverlay: some View {
+        ZStack {
+            if let tab = selectedTab {
+                let runtime = voiceInputRuntimeStore.runtime(for: tab.id)
+                TerminalFloatingInputOverlay(
+                    selectedView: selectedView,
+                    isZenModeEnabled: isZenModeEnabled,
+                    isFloatingControlShownInZen: isFloatingControlShownInZen,
+                    hasProAccess: storeManager.allowsProFeatures,
+                    terminalIsReady: focusedTerminalCanAcceptInput,
+                    floatingControls: terminalToolbarProjection.floatingControls,
+                    keyboardCoordinator: tabManager.keyboardCoordinator,
+                    preferencesStore: floatingControlPreferencesStore,
+                    voiceSettingsStore: voiceInputRuntimeStore.settingsStore,
+                    audioService: runtime.audioService,
+                    voiceRecordingOperation: runtime.recordingOperation,
+                    onVoiceToggle: triggerVoiceInput,
+                    onCancelVoice: runtime.cancel,
+                    onShowKeyboard: showKeyboardForFocusedTerminal,
+                    onSendReturn: sendReturnForFocusedTerminal,
+                    onSystemAction: performSystemAction
+                )
+            }
+
+            if isZenModeEnabled {
+                zenModeOverlay
+                    .zIndex(1)
+            }
+        }
+        .transition(.opacity)
+    }
+
     private var zenModeOverlay: some View {
         ZenModeFloatingOverlay(isPanelPresented: $showingZenPanel) { panelWidth in
             IOSZenModePanel(
@@ -220,6 +250,8 @@ extension ConnectionTerminalContainer {
                         fileBrowser.removeState(for: removedTab.id)
                     }
                 },
+                floatingControlCanBeShown: canShowConfiguredFloatingControl,
+                floatingControlIsShown: $isFloatingControlShownInZen,
                 onNewTerminalTab: {
                     showingZenPanel = false
                     openNewTab(selectTerminalViewOnSuccess: true)
@@ -256,6 +288,67 @@ extension ConnectionTerminalContainer {
                 onExitZen: exitZenMode
             )
         }
+    }
+
+    private var focusedTerminal: GhosttyTerminalView? {
+        guard let paneID = terminalToolbarProjection.floatingControls.state.focusedPaneId else {
+            return nil
+        }
+        return tabManager.terminalSurfaceStore.ghosttySurface(for: paneID)
+    }
+
+    private var canShowConfiguredFloatingControl: Bool {
+        floatingControlPreferencesStore.preferences.activeStyle(
+            hasProAccess: storeManager.allowsProFeatures
+        ) != nil
+    }
+
+    private var focusedTerminalCanAcceptInput: Bool {
+        guard let paneID = terminalToolbarProjection.floatingControls.state.focusedPaneId,
+              tabManager.sessionState.paneState(for: paneID)?.connectionState.isConnected == true else {
+            return false
+        }
+        return focusedTerminal?.canRouteTerminalInput == true
+    }
+
+    private func triggerVoiceInput() {
+        guard let tab = selectedTab else { return }
+        let voiceIsActive = voiceInputRuntimeStore.runtime(for: tab.id)
+            .recordingOperation.isActive
+        guard voiceIsActive
+                || (voiceInputRuntimeStore.settingsStore.settings.terminalVoiceButtonEnabled
+                    && focusedTerminalCanAcceptInput) else { return }
+        _ = focusedTerminal?.triggerVoiceInput()
+    }
+
+    private func showKeyboardForFocusedTerminal() {
+        guard selectedView == .terminal,
+              terminalToolbarProjection.floatingControls.state.focusedPaneId != nil else {
+            return
+        }
+        clearPendingVoiceReturn()
+        tabManager.keyboardCoordinator.userRequestedShow()
+        focusedTerminal?.dismissFindNavigator()
+    }
+
+    private func sendReturnForFocusedTerminal() {
+        guard focusedTerminal?.sendReturnKey() == true else { return }
+        clearPendingVoiceReturn()
+    }
+
+    private func performSystemAction(_ action: TerminalAccessorySystemActionID) {
+        guard focusedTerminal?.performAccessorySystemAction(action) == true else { return }
+        guard let paneID = terminalToolbarProjection.floatingControls.state.focusedPaneId else {
+            return
+        }
+        tabManager.presentationState.applyVoiceEvent(.systemActionSent(action), for: paneID)
+    }
+
+    private func clearPendingVoiceReturn() {
+        guard let paneID = terminalToolbarProjection.floatingControls.state.focusedPaneId else {
+            return
+        }
+        tabManager.presentationState.applyVoiceEvent(.pendingReturnDismissed, for: paneID)
     }
 
     private func exitZenMode() {

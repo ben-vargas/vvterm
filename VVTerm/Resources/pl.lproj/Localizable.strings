@@ -1932,3 +1932,44 @@
 "System not detected" = "Nie wykryto systemu";
 "Detected: %@" = "Wykryto: %@";
 "Search Icons" = "Szukaj ikon";
+
+/* Floating Input Control */
+"Floating Input Control" = "Pływające sterowanie wprowadzaniem";
+"Keyboard Hidden" = "Klawiatura ukryta";
+"Choose the controls that appear after you hide the software keyboard." = "Wybierz elementy sterujące, które pojawią się po ukryciu klawiatury ekranowej.";
+"Style" = "Styl";
+"Compact Buttons" = "Kompaktowe przyciski";
+"Radial Control" = "Sterowanie radialne";
+"Compact Buttons is active until Pro is restored." = "Kompaktowe przyciski pozostaną aktywne do czasu przywrócenia Pro.";
+"Position" = "Pozycja";
+"Reset Position" = "Resetuj pozycję";
+"Starting voice input" = "Uruchamianie wprowadzania głosowego";
+"Stop and transcribe" = "Zatrzymaj i transkrybuj";
+"Send Return" = "Wyślij Return";
+"Show Keyboard" = "Pokaż klawiaturę";
+"Move Up" = "Przesuń w górę";
+"Move Down" = "Przesuń w dół";
+"Move to Left" = "Przesuń w lewo";
+"Move to Right" = "Przesuń w prawo";
+"Input" = "Wprowadzanie";
+
+/* Dostosowanie pływającego sterowania wprowadzaniem */
+"No floating control" = "Brak pływającego elementu sterującego";
+"Control preview" = "Podgląd elementu sterującego";
+"Primary Action" = "Główna czynność";
+"Secondary Actions" = "Czynności dodatkowe";
+"Add Action" = "Dodaj czynność";
+"Action %lld" = "Czynność %lld";
+"Listening…" = "Słucham…";
+"Speak now…" = "Mów teraz…";
+"Upgrade to Pro to use Radial Control and customize floating actions." = "Przejdź na Pro, aby używać sterowania radialnego i dostosować pływające czynności.";
+"The primary button opens the keyboard while Voice Input is off." = "Główny przycisk otwiera klawiaturę, gdy wprowadzanie głosowe jest wyłączone.";
+"The primary action uses the main button." = "Główna czynność używa głównego przycisku.";
+"No secondary actions" = "Brak czynności dodatkowych";
+"Radial Control shows up to seven secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Sterowanie radialne pokazuje do siedmiu dodatkowych czynności. Użyj opcji Edytuj, aby zmienić ich kolejność lub je usunąć. Naciśnij i przytrzymaj czynność powtarzalną, aby ją powtarzać.";
+"Compact Buttons shows up to three secondary actions. Use Edit to reorder or remove them. Press and hold a repeatable action to repeat it." = "Przyciski kompaktowe pokazują do trzech czynności dodatkowych. Użyj opcji Edytuj, aby zmienić ich kolejność lub je usunąć. Naciśnij i przytrzymaj czynność powtarzalną, aby ją powtarzać.";
+"Show Floating Controls" = "Pokaż pływające elementy sterujące";
+"Drag any button freely. Push it past the left or right edge to hide it. Tap the edge tab to show it again. Its position stays on this device." = "Przeciągaj dowolny przycisk swobodnie. Przesuń go poza lewą lub prawą krawędź, aby go ukryć. Stuknij kartę przy krawędzi, aby pokazać go ponownie. Pozycja pozostaje zapisana na tym urządzeniu.";
+"Drag past the left or right edge to hide the controls." = "Przeciągnij elementy sterujące poza lewą lub prawą krawędź, aby je ukryć.";
+"Hide on Left" = "Ukryj po lewej";
+"Hide on Right" = "Ukryj po prawej";

@@ -29,14 +29,14 @@ extension GhosttyTerminalView {
                 onCustomAction: { [weak self] action in
                     self?.handleToolbarCustomAction(action)
                 },
-                onVoice: onVoiceButtonTapped,
+                onVoice: showsVoiceAccessoryButton ? onVoiceButtonTapped : nil,
                 onDismissKeyboard: { [weak self] in
                     self?.dismissKeyboardFromToolbar()
                 }
             )
             keyboardToolbar = toolbar
         } else {
-            keyboardToolbar?.onVoice = onVoiceButtonTapped
+            refreshVoiceAccessoryAction()
         }
         return keyboardToolbar
     }

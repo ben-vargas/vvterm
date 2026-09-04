@@ -394,7 +394,7 @@ final class TerminalInputAccessoryView: UIInputView {
             return button
         }
 
-        guard let terminalKey = terminalKey(for: actionID) else { return nil }
+        guard let terminalKey = actionID.terminalKey else { return nil }
 
         let button: UIButton
         if let iconName = actionID.iconName {
@@ -427,48 +427,6 @@ final class TerminalInputAccessoryView: UIInputView {
         button.accessibilityLabel = action.title
         button.accessibilityIdentifier = "vvterm.keyboard.accessory.custom.\(action.id.uuidString)"
         return button
-    }
-
-    private func terminalKey(for actionID: TerminalAccessorySystemActionID) -> TerminalKey? {
-        switch actionID {
-        case .commandModifier: return nil
-        case .escape: return .escape
-        case .tab: return .tab
-        case .shiftTab: return .tab.withShift()
-        case .enter: return .enter
-        case .backspace: return .backspace
-        case .delete: return .delete
-        case .insert: return .insert
-        case .home: return .home
-        case .end: return .end
-        case .pageUp: return .pageUp
-        case .pageDown: return .pageDown
-        case .arrowUp: return .arrowUp
-        case .arrowDown: return .arrowDown
-        case .arrowLeft: return .arrowLeft
-        case .arrowRight: return .arrowRight
-        case .f1: return .f1
-        case .f2: return .f2
-        case .f3: return .f3
-        case .f4: return .f4
-        case .f5: return .f5
-        case .f6: return .f6
-        case .f7: return .f7
-        case .f8: return .f8
-        case .f9: return .f9
-        case .f10: return .f10
-        case .f11: return .f11
-        case .f12: return .f12
-        case .ctrlC: return .ctrlC
-        case .ctrlD: return .ctrlD
-        case .ctrlZ: return .ctrlZ
-        case .ctrlL: return .ctrlL
-        case .ctrlA: return .ctrlA
-        case .ctrlE: return .ctrlE
-        case .ctrlK: return .ctrlK
-        case .ctrlU: return .ctrlU
-        case .unknown: return nil
-        }
     }
 
     private var resolvedInterfaceStyle: UIUserInterfaceStyle {
