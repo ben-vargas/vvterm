@@ -412,6 +412,14 @@ struct TerminalKeyboardUITestHarness: View {
                         terminalView?.keyboardUITestBeginUnexpectedSoftwareKeyboardLoss()
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.keyboard.unexpectedLoss")
+
+                    Button("Input Mode") {
+                        NotificationCenter.default.post(
+                            name: UITextInputMode.currentInputModeDidChangeNotification,
+                            object: nil
+                        )
+                    }
+                    .accessibilityIdentifier("vvterm.keyboardTest.inputMode.changed")
                 }
 
                 HStack(spacing: 8) {
