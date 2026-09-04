@@ -219,6 +219,52 @@ nonisolated extension TerminalAccessorySystemActionID {
     }
 }
 
+nonisolated extension TerminalFloatingControlPreferences.Style {
+    var displayTitle: String {
+        switch self {
+        case .off:
+            String(localized: "Off")
+        case .compact:
+            String(localized: "Compact Buttons")
+        case .radial:
+            String(localized: "Radial Control")
+        }
+    }
+}
+
+nonisolated extension TerminalFloatingControlPreferences.Action {
+    var displayTitle: String {
+        switch self {
+        case .voiceInput:
+            String(localized: "Voice input")
+        case .keyboard:
+            String(localized: "Show Keyboard")
+        case .system(let action):
+            action.listTitle
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .voiceInput, .keyboard:
+            ""
+        case .system(let action):
+            action.toolbarTitle
+        }
+    }
+
+    var iconName: String? {
+        switch self {
+        case .voiceInput:
+            "mic.fill"
+        case .keyboard:
+            "keyboard"
+        case .system(let action):
+            action.iconName
+        }
+    }
+}
+
 nonisolated extension TerminalAccessoryCustomAction {
     var detailText: String {
         switch kind {

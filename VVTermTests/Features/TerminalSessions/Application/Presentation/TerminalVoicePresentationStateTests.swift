@@ -36,4 +36,29 @@ struct TerminalVoicePresentationStateTests {
 
         #expect(state == .idle)
     }
+
+    @Test
+    func editingActionsClearPendingReturnOnlyAfterTranscription() {
+        let clearingActions: [TerminalAccessorySystemActionID] = [
+            .enter,
+            .escape,
+            .backspace,
+        ]
+
+        for action in clearingActions {
+            #expect(
+                TerminalVoicePresentationState.pendingReturn
+                    .applying(.systemActionSent(action)) == .idle
+            )
+            #expect(
+                TerminalVoicePresentationState.recording
+                    .applying(.systemActionSent(action)) == .recording
+            )
+        }
+
+        #expect(
+            TerminalVoicePresentationState.pendingReturn
+                .applying(.systemActionSent(.tab)) == .pendingReturn
+        )
+    }
 }
