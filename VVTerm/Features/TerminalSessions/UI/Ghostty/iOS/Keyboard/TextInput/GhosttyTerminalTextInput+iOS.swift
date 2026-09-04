@@ -129,24 +129,23 @@ extension GhosttyTerminalView {
     private func handleCurrentInputModeDidChange() {
         guard !isShuttingDown else { return }
         TerminalIMEProxyTextView.dictationLogger.log("inputModeDidChange primary=\(self.currentIMEPrimaryLanguage ?? "nil", privacy: .public) terminalFirstResponder=\(self.isTerminalTextInputActive) session=\(self.imeProxyTextView.isDictationSessionActive)")
-        if isDictationInputModeActive {
+        switch TerminalInputModeChangePolicy.action(
+            isDictationInputModeActive: isDictationInputModeActive,
+            isDictationSessionActive: imeProxyTextView.isDictationSessionActive
+        ) {
+        case .activateDictation:
             // Entering dictation. Invalidating the session or reloading input views here
             // would terminate dictation immediately after it starts.
             if imeProxyTextView.isFirstResponder {
                 imeProxyTextView.beginDictationSession()
             }
-            return
-        }
-        if imeProxyTextView.isDictationSessionActive {
+        case .commitDictation:
             // Leaving dictation: commit what was dictated to the terminal.
             imeProxyTextView.endDictationSession(commit: true)
-            return
-        }
-        invalidateLocalTextInputSession()
-        guard isTerminalTextInputActive, isTextInputSessionEligible else { return }
-        Task { @MainActor [weak self] in
-            guard let self, !self.isShuttingDown else { return }
-            self.reloadTerminalInputViewsIfActive()
+        case .invalidateLocalTextInput:
+            // UIKit has already installed the selected keyboard. Reloading input views
+            // here can replace the Emoji keyboard with the prior keyboard.
+            invalidateLocalTextInputSession()
         }
     }
 
