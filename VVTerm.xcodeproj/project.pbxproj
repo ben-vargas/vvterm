@@ -83,9 +83,36 @@
 		CC8312A42F0CD84E006804BF /* Exceptions for "VVTerm" folder in "VVTerm" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				App/AGENTS.md,
+				Core/AGENTS.md,
+				Core/SSH/AGENTS.md,
+				Core/Security/AGENTS.md,
+				Core/Sync/AGENTS.md,
+				Core/Terminal/AGENTS.md,
+				Core/UI/AGENTS.md,
+				Features/AGENTS.md,
+				Features/RemoteFiles/AGENTS.md,
+				Features/Servers/AGENTS.md,
+				Features/Stats/AGENTS.md,
+				Features/Store/AGENTS.md,
+				Features/TerminalSessions/AGENTS.md,
 				Info.plist,
 			);
 			target = CC83127D2F0CD84D006804BF /* VVTerm */;
+		};
+		A60100000000000000000001 /* Exceptions for "VVTermTests" folder in "VVTermTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AGENTS.md,
+			);
+			target = CC8312912F0CD84E006804BF /* VVTermTests */;
+		};
+		A60100000000000000000002 /* Exceptions for "VVTermUITests" folder in "VVTermUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AGENTS.md,
+			);
+			target = CC83129B2F0CD84E006804BF /* VVTermUITests */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -113,11 +140,17 @@
 		};
 		CC8312952F0CD84E006804BF /* VVTermTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A60100000000000000000001 /* Exceptions for "VVTermTests" folder in "VVTermTests" target */,
+			);
 			path = VVTermTests;
 			sourceTree = "<group>";
 		};
 		CC83129F2F0CD84E006804BF /* VVTermUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A60100000000000000000002 /* Exceptions for "VVTermUITests" folder in "VVTermUITests" target */,
+			);
 			path = VVTermUITests;
 			sourceTree = "<group>";
 		};
