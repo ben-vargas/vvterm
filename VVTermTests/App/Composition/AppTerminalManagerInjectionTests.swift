@@ -12,9 +12,7 @@ struct AppTerminalManagerInjectionTests {
         let identifiers = controller.toolbarDefaultItemIdentifiers(controller.toolbar)
 
         #expect(identifiers == [
-            .flexibleSpace,
             .toggleSidebar,
-            .sidebarTrackingSeparator,
         ])
     }
 }

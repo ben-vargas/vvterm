@@ -53,6 +53,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     let toolbar: NSToolbar
     private let bridge = MacToolbarBridge.shared
     private weak var tabManager: TerminalTabManager?
+    private weak var sidebarSplitViewController: NSSplitViewController?
     private var cancellable: AnyCancellable?
     private var currentPicker: ToolbarViewPickerData?
     private var zenPopover: NSPopover?
@@ -86,18 +87,34 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
         reconcile()
     }
 
+    func configureSidebar(splitViewController: NSSplitViewController) {
+        guard sidebarSplitViewController !== splitViewController else { return }
+        sidebarSplitViewController = splitViewController
+        // Items can already exist before the shell enters its window.
+        if let separator = toolbar.items.first(where: {
+            $0.itemIdentifier == .sidebarTrackingSeparator
+        }) as? NSTrackingSeparatorToolbarItem {
+            separator.splitView = splitViewController.splitView
+        }
+        reconcile()
+    }
+
     private var desiredIdentifiers: [NSToolbarItem.Identifier] {
         let snapshot = bridge.snapshot
-        // Leading flexible space puts the sidebar toggle at the right edge of
-        // the sidebar region (next to the divider), the standard macOS spot.
-        var ids: [NSToolbarItem.Identifier] = [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator]
+        // Keep the standard separator identifier so AppKit preserves the
+        // sidebar button when collapsed, without rebuilding during animation.
+        // Leading flexible space aligns the button with the visible divider.
+        var ids: [NSToolbarItem.Identifier] = [.toggleSidebar]
+        if sidebarSplitViewController != nil {
+            ids = [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator]
+        }
         guard tabManager != nil else { return ids }
         guard snapshot.isActive else { return ids }
         if snapshot.isZenMode {
             // Keep the sidebar toggle at the right edge of the sidebar section,
             // then let AppKit render the native window title/subtitle in the
             // content-side titlebar area.
-            return [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .vvZenControls]
+            return ids + [.flexibleSpace, .vvZenControls]
         }
         if snapshot.showsViewPicker { ids.append(.vvViewPicker) }
         if snapshot.showsTabStrip {
@@ -120,7 +137,6 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     }
 
     private func reconcile() {
-        guard tabManager != nil else { return }
         let desired = desiredIdentifiers
         let current = toolbar.items.map { $0.itemIdentifier }
         guard desired != current else {
@@ -169,6 +185,11 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
         switch itemIdentifier {
+        case .sidebarTrackingSeparator:
+            guard let splitView = sidebarSplitViewController?.splitView else { return nil }
+            return NSTrackingSeparatorToolbarItem(
+                identifier: itemIdentifier, splitView: splitView, dividerIndex: 0
+            )
         case .vvViewPicker:
             return makeViewPickerItem()
         case .vvTabStrip:

@@ -179,7 +179,9 @@ final class ShellSplitViewController: NSSplitViewController {
 
     private func installToolbarIfNeeded() {
         guard let window = view.window else { return }
-        let toolbar = MacConnectionToolbarController.shared.toolbar
+        let controller = MacConnectionToolbarController.shared
+        controller.configureSidebar(splitViewController: self)
+        let toolbar = controller.toolbar
         if window.toolbar !== toolbar {
             window.toolbar = toolbar
             window.toolbarStyle = .unified
