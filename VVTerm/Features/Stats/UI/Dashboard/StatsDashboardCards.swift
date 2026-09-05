@@ -145,7 +145,7 @@ struct CPUCard: View {
         let count = max(stats.cpuCoreSamples.count, stats.cpuCores)
         if count <= 0 { return "" }
         if count == 1 { return String(localized: "1 core") }
-        return String(format: String(localized: "%lld cores"), Int64(count))
+        return LocalizedFormat.string("%lld cores", Int64(count))
     }
 
     private var footer: String {
@@ -309,7 +309,7 @@ struct GPUCard: View {
         if devices.count == 1 {
             return String(localized: "1 device")
         }
-        return String(format: String(localized: "%lld devices"), Int64(devices.count))
+        return LocalizedFormat.string("%lld devices", Int64(devices.count))
     }
 
     private func utilizationLabel(_ sample: GPUSample?) -> String {
@@ -545,7 +545,7 @@ struct StorageCard: View {
     private var volumeCountTitle: String {
         if volumes.isEmpty { return "" }
         if visibleVolumes.count == 1 { return String(localized: "1 volume") }
-        return String(format: String(localized: "%lld volumes"), Int64(visibleVolumes.count))
+        return LocalizedFormat.string("%lld volumes", Int64(visibleVolumes.count))
     }
 }
 

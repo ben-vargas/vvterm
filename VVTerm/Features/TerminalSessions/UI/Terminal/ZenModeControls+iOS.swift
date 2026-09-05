@@ -184,7 +184,7 @@ struct IOSZenModePanel: View {
                             .lineLimit(1)
 
                         if tab.paneCount > 1 {
-                            Text(String(format: String(localized: "%lld panes"), Int64(tab.paneCount)))
+                            Text(LocalizedFormat.string("%lld panes", Int64(tab.paneCount)))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -263,12 +263,12 @@ struct IOSZenModePanel: View {
         if selectedView == .files {
             return fileTabs.isEmpty
                 ? String(localized: "No open file tabs")
-                : String(format: String(localized: "%lld open file tabs"), Int64(fileTabs.count))
+                : LocalizedFormat.string("%lld open file tabs", Int64(fileTabs.count))
         }
 
         return terminalTabs.isEmpty
             ? String(localized: "No open terminals")
-            : String(format: String(localized: "%lld open tabs"), Int64(terminalTabs.count))
+            : LocalizedFormat.string("%lld open tabs", Int64(terminalTabs.count))
     }
 
     private var indicatorColor: Color {

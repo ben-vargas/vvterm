@@ -232,7 +232,7 @@ struct ZenModePanel: View {
                             .lineLimit(1)
 
                         if tab.paneCount > 1 {
-                            Text(String(format: String(localized: "%lld panes"), Int64(tab.paneCount)))
+                            Text(LocalizedFormat.string("%lld panes", Int64(tab.paneCount)))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

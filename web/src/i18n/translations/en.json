@@ -18,7 +18,7 @@
     "subtitle": "Connect to servers, keep them organized, browse remote files, and stay in sync with Keychain-secured credentials across your iPhone, iPad, and Mac.",
     "primaryCta": "Try VVTerm free",
     "secondaryCta": "View on GitHub",
-    "meta": "Requires iOS 16+ or macOS 13+ (Apple Silicon). Free forever, or <span class=\"text-orange-500 font-medium\">buy lifetime</span>."
+    "meta": "Requires iOS 16.1+ or macOS 13.3+ (Apple Silicon). Free forever, or <span class=\"text-orange-500 font-medium\">buy lifetime</span>."
   },
   "why": {
     "title": "Why choose VVTerm",
@@ -182,7 +182,7 @@
     },
     "q9": {
       "question": "What are the system requirements?",
-      "answer": "iOS 16+ on iPhone and iPad, or macOS 13+ Ventura on Apple Silicon Macs. Intel Macs are not supported."
+      "answer": "iOS 16.1+ on iPhone and iPad, or macOS 13.3+ Ventura on Apple Silicon Macs. Intel Macs are not supported."
     },
     "q10": {
       "question": "Does VVTerm include remote file browsing?",

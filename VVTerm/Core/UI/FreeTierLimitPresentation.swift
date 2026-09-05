@@ -5,6 +5,6 @@ nonisolated enum FreeTierLimitPresentation {
         if limit == 1 {
             return String(localized: "1 server")
         }
-        return String(format: String(localized: "%lld servers"), Int64(limit))
+        return LocalizedFormat.string("%lld servers", Int64(limit))
     }
 }

@@ -1085,8 +1085,8 @@ struct RemoteFileBrowserScreen: View {
 
     func itemCountLabel(for count: Int) -> String {
         count == 1
-            ? String(format: String(localized: "%lld item"), Int64(count))
-            : String(format: String(localized: "%lld items"), Int64(count))
+            ? LocalizedFormat.string("%lld item", Int64(count))
+            : LocalizedFormat.string("%lld items", Int64(count))
     }
 
     func modifiedLabel(for entry: RemoteFileEntry) -> String {

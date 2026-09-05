@@ -519,7 +519,7 @@ private struct ClassicVolumesCard: View {
 
     private var volumeCountTitle: String {
         if visibleVolumes.count == 1 { return String(localized: "1 volume") }
-        return String(format: String(localized: "%lld volumes"), Int64(visibleVolumes.count))
+        return LocalizedFormat.string("%lld volumes", Int64(visibleVolumes.count))
     }
 }
 

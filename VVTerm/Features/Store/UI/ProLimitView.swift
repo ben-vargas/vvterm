@@ -373,14 +373,14 @@ struct DowngradeBanner: View {
         var parts: [String] = []
         if lockedServers > 0 {
             let serverText = lockedServers == 1
-                ? String(format: String(localized: "%lld server"), lockedServers)
-                : String(format: String(localized: "%lld servers"), lockedServers)
+                ? LocalizedFormat.string("%lld server", lockedServers)
+                : LocalizedFormat.string("%lld servers", lockedServers)
             parts.append(serverText)
         }
         if lockedWorkspaces > 0 {
             let workspaceText = lockedWorkspaces == 1
-                ? String(format: String(localized: "%lld workspace"), lockedWorkspaces)
-                : String(format: String(localized: "%lld workspaces"), lockedWorkspaces)
+                ? LocalizedFormat.string("%lld workspace", lockedWorkspaces)
+                : LocalizedFormat.string("%lld workspaces", lockedWorkspaces)
             parts.append(workspaceText)
         }
         let conjunction = String(localized: " and ")

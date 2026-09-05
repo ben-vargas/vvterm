@@ -217,8 +217,8 @@ extension CustomFontLibraryView {
             var parts = [font.originalFilename]
             if font.familyNames.count > 1 {
                 parts.append(
-                    String(
-                        format: String(localized: "%lld families"),
+                    LocalizedFormat.string(
+                        "%lld families",
                         Int64(font.familyNames.count)
                     )
                 )

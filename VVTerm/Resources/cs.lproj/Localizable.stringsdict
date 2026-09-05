@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%lld active sessions</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld aktivní relace</string>
+			<key>one</key>
+			<string>%lld aktivní relace</string>
+			<key>other</key>
+			<string>%lld aktivních relací</string>
+		</dict>
+	</dict>
+	<key>%lld clients</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld klienti</string>
+			<key>one</key>
+			<string>%lld klient</string>
+			<key>other</key>
+			<string>%lld klientů</string>
+		</dict>
+	</dict>
+	<key>%lld cores</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld jádra</string>
+			<key>one</key>
+			<string>%lld jádro</string>
+			<key>other</key>
+			<string>%lld jader</string>
+		</dict>
+	</dict>
+	<key>%lld custom theme</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld vlastní motivy</string>
+			<key>one</key>
+			<string>%lld vlastní motiv</string>
+			<key>other</key>
+			<string>%lld vlastních motivů</string>
+		</dict>
+	</dict>
+	<key>%lld custom themes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld vlastní motivy</string>
+			<key>one</key>
+			<string>%lld vlastní motiv</string>
+			<key>other</key>
+			<string>%lld vlastních motivů</string>
+		</dict>
+	</dict>
+	<key>%lld devices</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld zařízení</string>
+			<key>one</key>
+			<string>%lld zařízení</string>
+			<key>other</key>
+			<string>%lld zařízení</string>
+		</dict>
+	</dict>
+	<key>%lld families</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld rodiny písem</string>
+			<key>one</key>
+			<string>%lld rodina písem</string>
+			<key>other</key>
+			<string>%lld rodin písem</string>
+		</dict>
+	</dict>
+	<key>%lld file tabs</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld karty souborů</string>
+			<key>one</key>
+			<string>%lld karta souboru</string>
+			<key>other</key>
+			<string>%lld karet souborů</string>
+		</dict>
+	</dict>
+	<key>%lld item</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld položky</string>
+			<key>one</key>
+			<string>%lld položka</string>
+			<key>other</key>
+			<string>%lld položek</string>
+		</dict>
+	</dict>
+	<key>%lld items</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld položky</string>
+			<key>one</key>
+			<string>%lld položka</string>
+			<key>other</key>
+			<string>%lld položek</string>
+		</dict>
+	</dict>
+	<key>%lld open file tabs</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld otevřené karty souborů</string>
+			<key>one</key>
+			<string>%lld otevřená karta souboru</string>
+			<key>other</key>
+			<string>%lld otevřených karet souborů</string>
+		</dict>
+	</dict>
+	<key>%lld open tabs</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld otevřené karty</string>
+			<key>one</key>
+			<string>%lld otevřená karta</string>
+			<key>other</key>
+			<string>%lld otevřených karet</string>
+		</dict>
+	</dict>
+	<key>%lld panes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld panely</string>
+			<key>one</key>
+			<string>%lld panel</string>
+			<key>other</key>
+			<string>%lld panelů</string>
+		</dict>
+	</dict>
+	<key>%lld seconds</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld sekundy</string>
+			<key>one</key>
+			<string>%lld sekunda</string>
+			<key>other</key>
+			<string>%lld sekund</string>
+		</dict>
+	</dict>
+	<key>%lld server</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld servery</string>
+			<key>one</key>
+			<string>%lld server</string>
+			<key>other</key>
+			<string>%lld serverů</string>
+		</dict>
+	</dict>
+	<key>%lld servers</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld servery</string>
+			<key>one</key>
+			<string>%lld server</string>
+			<key>other</key>
+			<string>%lld serverů</string>
+		</dict>
+	</dict>
+	<key>%lld symbols</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld symboly</string>
+			<key>one</key>
+			<string>%lld symbol</string>
+			<key>other</key>
+			<string>%lld symbolů</string>
+		</dict>
+	</dict>
+	<key>%lld tab</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld karty</string>
+			<key>one</key>
+			<string>%lld karta</string>
+			<key>other</key>
+			<string>%lld karet</string>
+		</dict>
+	</dict>
+	<key>%lld tabs</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld karty</string>
+			<key>one</key>
+			<string>%lld karta</string>
+			<key>other</key>
+			<string>%lld karet</string>
+		</dict>
+	</dict>
+	<key>%lld volumes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld svazky</string>
+			<key>one</key>
+			<string>%lld svazek</string>
+			<key>other</key>
+			<string>%lld svazků</string>
+		</dict>
+	</dict>
+	<key>%lld windows</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld okna</string>
+			<key>one</key>
+			<string>%lld okno</string>
+			<key>other</key>
+			<string>%lld oken</string>
+		</dict>
+	</dict>
+	<key>%lld workspace</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld pracovní prostory</string>
+			<key>one</key>
+			<string>%lld pracovní prostor</string>
+			<key>other</key>
+			<string>%lld pracovních prostorů</string>
+		</dict>
+	</dict>
+	<key>%lld workspaces</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld pracovní prostory</string>
+			<key>one</key>
+			<string>%lld pracovní prostor</string>
+			<key>other</key>
+			<string>%lld pracovních prostorů</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

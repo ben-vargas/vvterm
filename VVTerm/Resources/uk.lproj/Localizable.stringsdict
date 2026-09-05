@@ -1,0 +1,466 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%lld active sessions</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld активні сеанси</string>
+			<key>many</key>
+			<string>%lld активних сеансів</string>
+			<key>one</key>
+			<string>%lld активний сеанс</string>
+			<key>other</key>
+			<string>%lld активних сеансів</string>
+		</dict>
+	</dict>
+	<key>%lld clients</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld клієнти</string>
+			<key>many</key>
+			<string>%lld клієнтів</string>
+			<key>one</key>
+			<string>%lld клієнт</string>
+			<key>other</key>
+			<string>%lld клієнтів</string>
+		</dict>
+	</dict>
+	<key>%lld cores</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld ядра</string>
+			<key>many</key>
+			<string>%lld ядер</string>
+			<key>one</key>
+			<string>%lld ядро</string>
+			<key>other</key>
+			<string>%lld ядер</string>
+		</dict>
+	</dict>
+	<key>%lld custom theme</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld користувацькі теми</string>
+			<key>many</key>
+			<string>%lld користувацьких тем</string>
+			<key>one</key>
+			<string>%lld користувацька тема</string>
+			<key>other</key>
+			<string>%lld користувацьких тем</string>
+		</dict>
+	</dict>
+	<key>%lld custom themes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld користувацькі теми</string>
+			<key>many</key>
+			<string>%lld користувацьких тем</string>
+			<key>one</key>
+			<string>%lld користувацька тема</string>
+			<key>other</key>
+			<string>%lld користувацьких тем</string>
+		</dict>
+	</dict>
+	<key>%lld devices</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld пристрої</string>
+			<key>many</key>
+			<string>%lld пристроїв</string>
+			<key>one</key>
+			<string>%lld пристрій</string>
+			<key>other</key>
+			<string>%lld пристроїв</string>
+		</dict>
+	</dict>
+	<key>%lld families</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld сімейства шрифтів</string>
+			<key>many</key>
+			<string>%lld сімейств шрифтів</string>
+			<key>one</key>
+			<string>%lld сімейство шрифтів</string>
+			<key>other</key>
+			<string>%lld сімейств шрифтів</string>
+		</dict>
+	</dict>
+	<key>%lld file tabs</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld вкладки файлів</string>
+			<key>many</key>
+			<string>%lld вкладок файлів</string>
+			<key>one</key>
+			<string>%lld вкладка файлу</string>
+			<key>other</key>
+			<string>%lld вкладок файлів</string>
+		</dict>
+	</dict>
+	<key>%lld item</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld елементи</string>
+			<key>many</key>
+			<string>%lld елементів</string>
+			<key>one</key>
+			<string>%lld елемент</string>
+			<key>other</key>
+			<string>%lld елементів</string>
+		</dict>
+	</dict>
+	<key>%lld items</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld елементи</string>
+			<key>many</key>
+			<string>%lld елементів</string>
+			<key>one</key>
+			<string>%lld елемент</string>
+			<key>other</key>
+			<string>%lld елементів</string>
+		</dict>
+	</dict>
+	<key>%lld open file tabs</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld відкриті вкладки файлів</string>
+			<key>many</key>
+			<string>%lld відкритих вкладок файлів</string>
+			<key>one</key>
+			<string>%lld відкрита вкладка файлу</string>
+			<key>other</key>
+			<string>%lld відкритих вкладок файлів</string>
+		</dict>
+	</dict>
+	<key>%lld open tabs</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld відкриті вкладки</string>
+			<key>many</key>
+			<string>%lld відкритих вкладок</string>
+			<key>one</key>
+			<string>%lld відкрита вкладка</string>
+			<key>other</key>
+			<string>%lld відкритих вкладок</string>
+		</dict>
+	</dict>
+	<key>%lld panes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld панелі</string>
+			<key>many</key>
+			<string>%lld панелей</string>
+			<key>one</key>
+			<string>%lld панель</string>
+			<key>other</key>
+			<string>%lld панелей</string>
+		</dict>
+	</dict>
+	<key>%lld seconds</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld секунди</string>
+			<key>many</key>
+			<string>%lld секунд</string>
+			<key>one</key>
+			<string>%lld секунда</string>
+			<key>other</key>
+			<string>%lld секунд</string>
+		</dict>
+	</dict>
+	<key>%lld server</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld сервери</string>
+			<key>many</key>
+			<string>%lld серверів</string>
+			<key>one</key>
+			<string>%lld сервер</string>
+			<key>other</key>
+			<string>%lld серверів</string>
+		</dict>
+	</dict>
+	<key>%lld servers</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld сервери</string>
+			<key>many</key>
+			<string>%lld серверів</string>
+			<key>one</key>
+			<string>%lld сервер</string>
+			<key>other</key>
+			<string>%lld серверів</string>
+		</dict>
+	</dict>
+	<key>%lld symbols</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld символи</string>
+			<key>many</key>
+			<string>%lld символів</string>
+			<key>one</key>
+			<string>%lld символ</string>
+			<key>other</key>
+			<string>%lld символів</string>
+		</dict>
+	</dict>
+	<key>%lld tab</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld вкладки</string>
+			<key>many</key>
+			<string>%lld вкладок</string>
+			<key>one</key>
+			<string>%lld вкладка</string>
+			<key>other</key>
+			<string>%lld вкладок</string>
+		</dict>
+	</dict>
+	<key>%lld tabs</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld вкладки</string>
+			<key>many</key>
+			<string>%lld вкладок</string>
+			<key>one</key>
+			<string>%lld вкладка</string>
+			<key>other</key>
+			<string>%lld вкладок</string>
+		</dict>
+	</dict>
+	<key>%lld volumes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld томи</string>
+			<key>many</key>
+			<string>%lld томів</string>
+			<key>one</key>
+			<string>%lld том</string>
+			<key>other</key>
+			<string>%lld томів</string>
+		</dict>
+	</dict>
+	<key>%lld windows</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld вікна</string>
+			<key>many</key>
+			<string>%lld вікон</string>
+			<key>one</key>
+			<string>%lld вікно</string>
+			<key>other</key>
+			<string>%lld вікон</string>
+		</dict>
+	</dict>
+	<key>%lld workspace</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld робочі простори</string>
+			<key>many</key>
+			<string>%lld робочих просторів</string>
+			<key>one</key>
+			<string>%lld робочий простір</string>
+			<key>other</key>
+			<string>%lld робочих просторів</string>
+		</dict>
+	</dict>
+	<key>%lld workspaces</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld робочі простори</string>
+			<key>many</key>
+			<string>%lld робочих просторів</string>
+			<key>one</key>
+			<string>%lld робочий простір</string>
+			<key>other</key>
+			<string>%lld робочих просторів</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

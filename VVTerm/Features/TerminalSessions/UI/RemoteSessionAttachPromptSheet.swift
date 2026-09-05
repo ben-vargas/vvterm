@@ -148,8 +148,8 @@ struct RemoteSessionAttachPromptSheet: View {
             if attachedClientCount == 1 {
                 details.append(String(localized: "1 client"))
             } else {
-                details.append(String(
-                    format: String(localized: "%lld clients"),
+                details.append(LocalizedFormat.string(
+                    "%lld clients",
                     Int64(attachedClientCount)
                 ))
             }
@@ -159,8 +159,8 @@ struct RemoteSessionAttachPromptSheet: View {
             if containerCount == 1 {
                 details.append(String(localized: "1 window"))
             } else {
-                details.append(String(
-                    format: String(localized: "%lld windows"),
+                details.append(LocalizedFormat.string(
+                    "%lld windows",
                     Int64(containerCount)
                 ))
             }

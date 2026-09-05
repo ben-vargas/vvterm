@@ -66,7 +66,7 @@ struct PrivacyAppLockSettingsView: View {
                             if seconds == 0 {
                                 Text("Always").tag(seconds)
                             } else {
-                                Text(String(format: String(localized: "%lld seconds"), Int64(seconds)))
+                                Text(LocalizedFormat.string("%lld seconds", Int64(seconds)))
                                     .tag(seconds)
                             }
                         }

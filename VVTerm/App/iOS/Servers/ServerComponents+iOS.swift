@@ -245,8 +245,8 @@ struct ActiveConnectionListRow: View {
     private var tabCountText: String {
         let count = tabCount
         return count == 1
-            ? String(format: String(localized: "%lld tab"), count)
-            : String(format: String(localized: "%lld tabs"), count)
+            ? LocalizedFormat.string("%lld tab", count)
+            : LocalizedFormat.string("%lld tabs", count)
     }
 }
 

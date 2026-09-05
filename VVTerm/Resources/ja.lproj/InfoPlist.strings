@@ -1,2 +1,4 @@
 "NSFaceIDUsageDescription" = "VVTermは、アプリと保護されたサーバーのロック解除にFace IDを使用します。";
 "NSLocalNetworkUsageDescription" = "VVTermはローカルネットワークを使用してSSHサーバーを検索、起動、接続します。";
+"NSMicrophoneUsageDescription" = "VVTerm は、音声コマンドをターミナル入力に変換するためにマイクを使用します。";
+"NSSpeechRecognitionUsageDescription" = "VVTerm は音声認識を使用して、音声をターミナルコマンドに変換します。";

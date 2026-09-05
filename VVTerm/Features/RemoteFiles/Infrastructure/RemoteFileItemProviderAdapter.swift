@@ -178,7 +178,7 @@ enum RemoteFileItemProviderAdapter {
             guard let name = entries.first?.name, !name.isEmpty else { return nil }
             return name
         }
-        return String(format: String(localized: "%lld items"), Int64(entries.count))
+        return LocalizedFormat.string("%lld items", Int64(entries.count))
     }
 }
 

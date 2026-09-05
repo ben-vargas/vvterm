@@ -18,7 +18,7 @@
     "subtitle": "连接服务器、浏览远程文件、保持有序，并通过 Keychain 保护的凭据在你的 iPhone、iPad 和 Mac 之间保持同步。",
     "primaryCta": "免费试用 VVTerm",
     "secondaryCta": "查看 GitHub",
-    "meta": "需要 iOS 16+ 或 macOS 13+（Apple Silicon）。永久免费，也可<span class=\"text-orange-500 font-medium\">购买终身版</span>。"
+    "meta": "需要 iOS 16.1+ 或 macOS 13.3+（Apple Silicon）。永久免费，也可<span class=\"text-orange-500 font-medium\">购买终身版</span>。"
   },
   "why": {
     "title": "为什么选择 VVTerm",
@@ -28,7 +28,7 @@
       "desc": "专门围绕 Apple 平台打造，无论在哪台设备上使用都更自然顺手。"
     },
     "modern": {
-      "title": "现代 SSH 方式直接可用",
+      "title": "多种 SSH 连接方式，开箱即用",
       "desc": "标准 SSH、Mosh、Tailscale SSH、Cloudflare Tunnel SSH 都能直接使用，不必拼装多个工具。"
     },
     "sync": {
@@ -37,7 +37,7 @@
     },
     "pricing": {
       "title": "价格合理，提供终身版",
-      "desc": "免费版足够好用，Pro 用于解锁规模，若你不喜欢订阅，也可以直接买终身版。"
+      "desc": "免费版足够好用，Pro 可提高服务器、工作区和连接数量上限，若你不喜欢订阅，也可以直接买终身版。"
     }
   },
   "features": {
@@ -99,7 +99,7 @@
       "features": [
         "1 个工作区",
         "1 台服务器",
-        "1 个连接标签",
+        "1 个连接标签页",
         "支持 SSH、Mosh、Tailscale SSH 和 Cloudflare Tunnel SSH",
         "基于 Ghostty 的终端渲染",
         "iCloud 同步",
@@ -123,7 +123,7 @@
       "features": [
         "无限工作区",
         "无限服务器",
-        "无限连接标签",
+        "无限连接标签页",
         "自定义环境",
         "优先支持",
         "所有未来功能"
@@ -170,7 +170,7 @@
     },
     "q6": {
       "question": "免费版和专业版有什么区别？",
-      "answer": "免费版包含 1 个工作区、1 台服务器和 1 个连接标签。专业版解锁无限工作区、无限服务器、无限连接和自定义环境。"
+      "answer": "免费版包含 1 个工作区、1 台服务器和 1 个连接标签页。Pro 解锁无限工作区、无限服务器、无限连接和自定义环境。"
     },
     "q7": {
       "question": "一次购买能在多台设备上使用吗？",
@@ -182,7 +182,7 @@
     },
     "q9": {
       "question": "系统要求是什么？",
-      "answer": "需要 iPhone 或 iPad 上的 iOS 16+，或 Apple Silicon Mac 上的 macOS 13+ Ventura。不支持 Intel Mac。"
+      "answer": "需要 iPhone 或 iPad 上的 iOS 16.1+，或 Apple Silicon Mac 上的 macOS 13.3+ Ventura。不支持 Intel Mac。"
     },
     "q10": {
       "question": "VVTerm 支持远程文件浏览吗？",

@@ -67,10 +67,7 @@ private struct VVTermLiveActivityLockScreenView: View {
     }
 
     private var sessionCountLabel: String {
-        if context.state.activeCount == 1 {
-            return String(localized: "1 active session")
-        }
-        return String(format: String(localized: "%lld active sessions"), Int64(context.state.activeCount))
+        return LocalizedFormat.string("%lld active sessions", Int64(context.state.activeCount))
     }
 }
 

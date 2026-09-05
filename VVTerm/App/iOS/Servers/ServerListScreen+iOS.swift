@@ -299,9 +299,9 @@ struct ServerListScreen: View {
     private var filteredServerCountText: String {
         let serverCount = filteredServers.count
         if serverCount == 1 {
-            return String(format: String(localized: "%lld server"), Int64(serverCount))
+            return LocalizedFormat.string("%lld server", Int64(serverCount))
         }
-        return String(format: String(localized: "%lld servers"), Int64(serverCount))
+        return LocalizedFormat.string("%lld servers", Int64(serverCount))
     }
 
     private var workspaceToolbarButton: some View {

@@ -709,7 +709,7 @@ extension ConnectionTerminalContainer {
 
             return count == 1
                 ? String(localized: "1 file tab")
-                : String(format: String(localized: "%lld file tabs"), Int64(count))
+                : LocalizedFormat.string("%lld file tabs", Int64(count))
         }
 
         if count == 0 {
@@ -718,7 +718,7 @@ extension ConnectionTerminalContainer {
 
         return count == 1
             ? String(localized: "1 tab")
-            : String(format: String(localized: "%lld tabs"), Int64(count))
+            : LocalizedFormat.string("%lld tabs", Int64(count))
     }
 
     private var compactTabsStatusText: String {
@@ -727,12 +727,12 @@ extension ConnectionTerminalContainer {
         if selectedView == .files {
             return count == 1
                 ? String(localized: "1 file tab")
-                : String(format: String(localized: "%lld file tabs"), Int64(count))
+                : LocalizedFormat.string("%lld file tabs", Int64(count))
         }
 
         return count == 1
             ? String(localized: "1 tab")
-            : String(format: String(localized: "%lld tabs"), Int64(count))
+            : LocalizedFormat.string("%lld tabs", Int64(count))
     }
 
     private var disconnectAlertTitle: String {
