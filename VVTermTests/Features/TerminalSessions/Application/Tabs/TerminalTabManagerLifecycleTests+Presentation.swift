@@ -68,14 +68,14 @@ extension TerminalTabManagerLifecycleTests {
                 #expect(routeUpdates == 0)
     
                 #if os(iOS)
-                manager.presentationState.applyVoiceEvent(.recordingStarted, for: otherTab.rootPaneId)
+                manager.presentationState.applyVoiceEvent(.recordingStarted(.floatingControl), for: otherTab.rootPaneId)
                 #expect(floatingControlUpdates == 0)
                 #expect(routeUpdates == 0)
     
-                manager.presentationState.applyVoiceEvent(.recordingStarted, for: observedTab.rootPaneId)
+                manager.presentationState.applyVoiceEvent(.recordingStarted(.floatingControl), for: observedTab.rootPaneId)
                 #expect(floatingControlUpdates == 1)
                 #expect(routeUpdates == 1)
-                #expect(manager.presentationState.voicePresentation(for: observedTab.rootPaneId) == .recording)
+                #expect(manager.presentationState.voicePresentation(for: observedTab.rootPaneId) == .recording(.floatingControl))
     
                 manager.presentationState.applyVoiceEvent(.transcriptionSent, for: observedTab.rootPaneId)
                 #expect(floatingControlUpdates == 2)

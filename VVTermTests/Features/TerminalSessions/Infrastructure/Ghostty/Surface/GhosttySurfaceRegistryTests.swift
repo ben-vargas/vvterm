@@ -49,7 +49,7 @@ struct GhosttySurfaceRegistryTests {
         terminal.onZoomAction = { _ in nil }
         #if os(iOS)
         terminal.onKeyboardAvoidanceAccessoryFrameChange = { }
-        terminal.onVoiceButtonTapped = { }
+        terminal.onVoiceButtonTapped = { _ in }
         terminal.onKeyboardBrowseModeChange = { _ in }
         let nativeTextInteraction = try #require(terminal.nativeTextInteraction)
         let nativeFindInteraction = try #require(terminal.nativeFindInteraction)

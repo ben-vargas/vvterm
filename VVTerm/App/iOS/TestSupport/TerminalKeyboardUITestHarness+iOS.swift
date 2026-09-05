@@ -196,7 +196,8 @@ struct TerminalKeyboardUITestHarness: View {
 
     private var floatingControlPresentation:
         TerminalFloatingControlPresentationPolicy.Presentation {
-        TerminalFloatingControlPresentationPolicy.presentation(
+        guard !voicePresentation.showsRecordingPanel else { return .hidden }
+        return TerminalFloatingControlPresentationPolicy.presentation(
             for: TerminalFloatingControlPresentationPolicy.Facts(
                 isPhone: true,
                 isTerminalSelected: showsTerminal,
@@ -299,6 +300,16 @@ struct TerminalKeyboardUITestHarness: View {
             }
 
             floatingInputControl
+
+            if voicePresentation.showsRecordingPanel {
+                VoiceRecordingView(
+                    audioService: voiceInputRuntimeStore.runtime(for: Self.paneId).audioService,
+                    onStop: finishVoiceTest,
+                    onCancel: cancelVoiceTest,
+                    isProcessing: floatingVoiceOperation.isProcessing
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(terminalReady ? "ready=true" : "ready=false")
@@ -664,6 +675,8 @@ struct TerminalKeyboardUITestHarness: View {
         }
         .task(id: terminalReady) {
             guard terminalReady else { return }
+            terminalView?.onVoiceButtonTapped = { style in toggleVoiceTest(style: style) }
+            terminalView?.showsVoiceAccessoryButton = true
             await configureLifecycleHarness()
         }
         .task(id: outputBurstRequestID) {
@@ -746,7 +759,7 @@ struct TerminalKeyboardUITestHarness: View {
                 terminalIsReady: terminalReady,
                 phase: floatingInputPhase,
                 audioService: runtime.audioService,
-                onVoiceToggle: toggleVoiceTest,
+                onVoiceToggle: { _ = terminalView?.triggerVoiceInput() },
                 onCancelVoice: cancelVoiceTest,
                 onShowKeyboard: requestSoftwareKeyboard,
                 onSendReturn: sendReturnFromFloatingControl,
@@ -834,7 +847,7 @@ struct TerminalKeyboardUITestHarness: View {
         return .defaultValue
     }
 
-    private func toggleVoiceTest() {
+    private func toggleVoiceTest(style: TerminalVoicePresentationState.RecordingStyle) {
         let operation = voiceInputRuntimeStore.runtime(for: Self.paneId)
             .recordingOperation
         if operation.isActive {
@@ -842,11 +855,9 @@ struct TerminalKeyboardUITestHarness: View {
             return
         }
 
+        presentationState.applyVoiceEvent(.recordingStarted(style), for: Self.paneId)
         operation.startRecording(
             operation: { _ in },
-            onStarted: {
-                presentationState.applyVoiceEvent(.recordingStarted, for: Self.paneId)
-            },
             onFailure: { _ in
                 presentationState.applyVoiceEvent(.recordingStopped, for: Self.paneId)
             }
@@ -865,7 +876,10 @@ struct TerminalKeyboardUITestHarness: View {
                 return "test transcript"
             },
             onSuccess: { _ in
-                presentationState.applyVoiceEvent(.transcriptionSent, for: Self.paneId)
+                presentationState.applyVoiceEvent(
+                    keyboardCoordinator.isUserHidden ? .transcriptionSent : .recordingStopped,
+                    for: Self.paneId
+                )
             },
             onFailure: { _ in
                 presentationState.applyVoiceEvent(.recordingStopped, for: Self.paneId)

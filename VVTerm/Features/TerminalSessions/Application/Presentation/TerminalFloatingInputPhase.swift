@@ -12,6 +12,10 @@ nonisolated enum TerminalFloatingInputPhase: Equatable, Sendable {
         voiceOperationPhase: VoiceRecordingOperationCoordinator.Phase,
         voicePresentation: TerminalVoicePresentationState
     ) {
+        guard !voicePresentation.showsRecordingPanel else {
+            self = .idle
+            return
+        }
         switch voiceOperationPhase {
         case .starting:
             self = .starting

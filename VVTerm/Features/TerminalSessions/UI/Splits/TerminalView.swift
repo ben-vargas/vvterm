@@ -218,7 +218,7 @@ struct TerminalTabView: View {
                     paneFocused: tab.focusedPaneId == paneId,
                     recording: showingVoiceRecording
                 ),
-                onVoiceTrigger: { toggleVoiceRecording() }
+                onVoiceTrigger: { toggleVoiceRecording(style: $0) }
             )
             .id("\(paneId)-\(layoutVersion)")
         )
@@ -344,7 +344,9 @@ struct TerminalTabView: View {
     private var shouldShowVoiceOverlay: Bool {
         guard isSelected, hasFocusedTerminal, showingVoiceRecording else { return false }
         #if os(iOS)
-        guard UIDevice.current.userInterfaceIdiom != .phone else { return false }
+        guard UIDevice.current.userInterfaceIdiom != .phone
+                || tabManager.presentationState.voicePresentation(for: tab.focusedPaneId).showsRecordingPanel
+        else { return false }
         return tabManager.sessionState
             .paneState(for: tab.focusedPaneId)?.connectionState.isConnected == true
         #else
@@ -422,16 +424,18 @@ struct TerminalTabView: View {
     private func cleanupKeyMonitor() {}
     #endif
 
-    private func toggleVoiceRecording() {
+    private func toggleVoiceRecording(style: TerminalVoicePresentationState.RecordingStyle = .panel) {
         if showingVoiceRecording {
             finishVoiceRecording()
         } else {
-            startVoiceRecording()
+            startVoiceRecording(style: style)
         }
     }
 
-    private func startVoiceRecording() {
-        clearPendingVoiceReturnForFocusedPane()
+    private func startVoiceRecording(style: TerminalVoicePresentationState.RecordingStyle) {
+        #if os(iOS)
+        tabManager.presentationState.applyVoiceEvent(.recordingStarted(style), for: tab.focusedPaneId)
+        #endif
         audioService.cancelRecording()
         #if os(iOS)
         let terminal = focusedTerminal
@@ -466,6 +470,7 @@ struct TerminalTabView: View {
             },
             onStarted: {},
             onFailure: { error in
+                publishVoiceRecordingState(false)
                 if let recordingError = error as? AudioService.RecordingError {
                     permissionErrorMessage = recordingError.localizedDescription
                 } else {
@@ -479,6 +484,7 @@ struct TerminalTabView: View {
     private func cancelVoiceRecording() {
         voiceRecordingOperation.cancel()
         audioService.cancelRecording()
+        publishVoiceRecordingState(false)
     }
 
     private func finishVoiceRecording() {
@@ -490,8 +496,10 @@ struct TerminalTabView: View {
             onSuccess: { text in
                 let fallback = text.isEmpty ? audioService.partialTranscription : text
                 sendTranscriptionToTerminal(fallback)
+                publishVoiceRecordingState(false)
             },
             onFailure: { error in
+                publishVoiceRecordingState(false)
                 permissionErrorMessage = error.localizedDescription
                 showingPermissionError = true
             }
@@ -519,15 +527,6 @@ struct TerminalTabView: View {
         for paneId in tab.allPaneIds where !isRecording || paneId != tab.focusedPaneId {
             tabManager.presentationState.applyVoiceEvent(.recordingStopped, for: paneId)
         }
-        if isRecording {
-            tabManager.presentationState.applyVoiceEvent(.recordingStarted, for: tab.focusedPaneId)
-        }
-        #endif
-    }
-
-    private func clearPendingVoiceReturnForFocusedPane() {
-        #if os(iOS)
-        tabManager.presentationState.applyVoiceEvent(.pendingReturnDismissed, for: tab.focusedPaneId)
         #endif
     }
 }
@@ -551,7 +550,7 @@ struct TerminalPaneView: View {
     let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
     let appearance: TerminalAppearanceSnapshot
     let showsVoiceButton: Bool
-    let onVoiceTrigger: () -> Void
+    let onVoiceTrigger: (TerminalVoicePresentationState.RecordingStyle) -> Void
 
     @EnvironmentObject var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var appLockManager: AppLockManager
@@ -585,7 +584,7 @@ struct TerminalPaneView: View {
         onPaneKeyboardShortcut: @escaping (TerminalSplitCommand) -> Void,
         appearance: TerminalAppearanceSnapshot,
         showsVoiceButton: Bool,
-        onVoiceTrigger: @escaping () -> Void
+        onVoiceTrigger: @escaping (TerminalVoicePresentationState.RecordingStyle) -> Void
     ) {
         self.paneId = paneId
         self.server = server
@@ -1073,12 +1072,12 @@ struct TerminalPaneView: View {
         #endif
     }
 
-    private var voiceTriggerHandlerForTerminal: (() -> Void)? {
+    private var voiceTriggerHandlerForTerminal: ((TerminalVoicePresentationState.RecordingStyle) -> Void)? {
         #if os(iOS)
         guard isTabSelected, isFocused else { return nil }
-        return {
+        return { style in
             guard connectionState.isConnected, isReady else { return }
-            onVoiceTrigger()
+            onVoiceTrigger(style)
         }
         #else
         guard showsVoiceButton, connectionState.isConnected, isReady else { return nil }
@@ -1251,7 +1250,7 @@ struct TerminalPaneView: View {
 
     private var voiceTriggerButton: some View {
         Button {
-            onVoiceTrigger()
+            onVoiceTrigger(.panel)
         } label: {
             Image(systemName: "mic.fill")
                 .font(.system(size: 16, weight: .semibold))

@@ -29,7 +29,9 @@ extension GhosttyTerminalView {
                 onCustomAction: { [weak self] action in
                     self?.handleToolbarCustomAction(action)
                 },
-                onVoice: showsVoiceAccessoryButton ? onVoiceButtonTapped : nil,
+                onVoice: showsVoiceAccessoryButton ? { [weak self] in
+                    self?.onVoiceButtonTapped?(.panel)
+                } : nil,
                 onDismissKeyboard: { [weak self] in
                     self?.dismissKeyboardFromToolbar()
                 }

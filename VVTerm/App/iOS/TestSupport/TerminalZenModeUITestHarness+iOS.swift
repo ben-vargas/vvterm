@@ -292,7 +292,7 @@ struct TerminalZenModeUITestHarness: View {
         operation.startRecording(
             operation: { _ in },
             onStarted: {
-                voicePresentation = .recording
+                voicePresentation = .recording(.floatingControl)
             },
             onFailure: { _ in
                 voicePresentation = .idle

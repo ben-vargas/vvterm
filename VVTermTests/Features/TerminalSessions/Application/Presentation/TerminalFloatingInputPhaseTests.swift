@@ -5,6 +5,17 @@ import XCTest
 final class TerminalFloatingInputPhaseTests: XCTestCase {
     private let operationID = UUID()
 
+    func testPanelRecordingNeverUsesFloatingVoiceStatus() {
+        for operationPhase in [
+            VoiceRecordingOperationCoordinator.Phase.starting(operationID: operationID),
+            .recording(operationID: operationID),
+            .processing(operationID: operationID),
+            .idle,
+        ] {
+            XCTAssertEqual(phase(operationPhase, presentation: .recording(.panel)), .idle)
+        }
+    }
+
     func testVoiceOperationPhaseTakesPriorityOverTerminalPresentation() {
         XCTAssertEqual(
             phase(.starting(operationID: operationID), presentation: .pendingReturn),
@@ -15,14 +26,14 @@ final class TerminalFloatingInputPhaseTests: XCTestCase {
             .recording
         )
         XCTAssertEqual(
-            phase(.processing(operationID: operationID), presentation: .recording),
+            phase(.processing(operationID: operationID), presentation: .recording(.floatingControl)),
             .processing
         )
     }
 
     func testIdleOperationUsesTerminalPresentation() {
         XCTAssertEqual(phase(.idle, presentation: .idle), .idle)
-        XCTAssertEqual(phase(.idle, presentation: .recording), .recording)
+        XCTAssertEqual(phase(.idle, presentation: .recording(.floatingControl)), .recording)
         XCTAssertEqual(phase(.idle, presentation: .pendingReturn), .pendingReturn)
     }
 

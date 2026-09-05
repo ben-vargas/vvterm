@@ -3,8 +3,19 @@ import Testing
 
 struct TerminalVoicePresentationStateTests {
     @Test
+    func keyboardRecordingKeepsItsPanelUntilStopped() {
+        let state = TerminalVoicePresentationState.idle.applying(.recordingStarted(.panel))
+        #expect(state.isRecording)
+        #expect(state.showsRecordingPanel)
+        #expect(state.applying(.pendingReturnDismissed) == state)
+        #expect(state.applying(.recordingStopped) == .idle)
+        #expect(state.applying(.transcriptionSent) == .pendingReturn)
+        #expect(!TerminalVoicePresentationState.recording(.floatingControl).showsRecordingPanel)
+    }
+
+    @Test
     func recordingAndPendingReturnAreMutuallyExclusive() {
-        let state = TerminalVoicePresentationState.recording
+        let state = TerminalVoicePresentationState.recording(.floatingControl)
             .applying(.transcriptionSent)
 
         #expect(state == .pendingReturn)
@@ -14,7 +25,7 @@ struct TerminalVoicePresentationStateTests {
 
     @Test
     func lateRecordingStopDoesNotClearPendingReturn() {
-        let state = TerminalVoicePresentationState.recording
+        let state = TerminalVoicePresentationState.recording(.floatingControl)
             .applying(.transcriptionSent)
             .applying(.recordingStopped)
 
@@ -23,15 +34,15 @@ struct TerminalVoicePresentationStateTests {
 
     @Test
     func pendingReturnDismissalDoesNotStopRecording() {
-        let state = TerminalVoicePresentationState.recording
+        let state = TerminalVoicePresentationState.recording(.floatingControl)
             .applying(.pendingReturnDismissed)
 
-        #expect(state == .recording)
+        #expect(state == .recording(.floatingControl))
     }
 
     @Test
     func recordingStopReturnsRecordingStateToIdle() {
-        let state = TerminalVoicePresentationState.recording
+        let state = TerminalVoicePresentationState.recording(.floatingControl)
             .applying(.recordingStopped)
 
         #expect(state == .idle)
@@ -51,8 +62,8 @@ struct TerminalVoicePresentationStateTests {
                     .applying(.systemActionSent(action)) == .idle
             )
             #expect(
-                TerminalVoicePresentationState.recording
-                    .applying(.systemActionSent(action)) == .recording
+                TerminalVoicePresentationState.recording(.floatingControl)
+                    .applying(.systemActionSent(action)) == .recording(.floatingControl)
             )
         }
 

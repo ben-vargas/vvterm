@@ -1,6 +1,11 @@
 nonisolated enum TerminalVoicePresentationState: Equatable, Sendable {
+    nonisolated enum RecordingStyle: Equatable, Sendable {
+        case panel
+        case floatingControl
+    }
+
     nonisolated enum Event: Equatable, Sendable {
-        case recordingStarted
+        case recordingStarted(RecordingStyle)
         case recordingStopped
         case transcriptionSent
         case pendingReturnDismissed
@@ -8,18 +13,22 @@ nonisolated enum TerminalVoicePresentationState: Equatable, Sendable {
     }
 
     case idle
-    case recording
+    case recording(RecordingStyle)
     case pendingReturn
 
-    var isRecording: Bool { self == .recording }
+    var isRecording: Bool {
+        if case .recording = self { return true }
+        return false
+    }
+    var showsRecordingPanel: Bool { self == .recording(.panel) }
     var isPendingReturn: Bool { self == .pendingReturn }
 
     func applying(_ event: Event) -> Self {
         switch event {
-        case .recordingStarted:
-            return .recording
+        case .recordingStarted(let style):
+            return .recording(style)
         case .recordingStopped:
-            return self == .recording ? .idle : self
+            return isRecording ? .idle : self
         case .transcriptionSent:
             return .pendingReturn
         case .pendingReturnDismissed:

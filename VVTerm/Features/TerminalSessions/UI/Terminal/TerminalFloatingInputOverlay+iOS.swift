@@ -64,7 +64,8 @@ struct TerminalFloatingInputOverlay: View {
     }
 
     private var presentation: TerminalFloatingControlPresentationPolicy.Presentation {
-        TerminalFloatingControlPresentationPolicy.presentation(
+        guard !floatingControls.state.voicePresentation.showsRecordingPanel else { return .hidden }
+        return TerminalFloatingControlPresentationPolicy.presentation(
             for: .init(
                 isPhone: UIDevice.current.userInterfaceIdiom == .phone,
                 isTerminalSelected: selectedView == .terminal,

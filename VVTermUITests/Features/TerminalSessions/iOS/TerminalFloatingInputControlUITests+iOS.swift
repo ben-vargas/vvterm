@@ -3,6 +3,36 @@ import XCTest
 
 final class TerminalFloatingInputControlUITests: TerminalKeyboardUITestCase {
     @MainActor
+    func testKeyboardAccessoryVoiceUsesPanelAndFloatingVoiceStaysSeparate() {
+        let app = launchFloatingControlHarness()
+        app.buttons["vvterm.terminal.floating.keyboard"].tap()
+        app.buttons["vvterm.keyboardTest.geometry.docked"].tap()
+        let voice = app.buttons["vvterm.keyboard.accessory.voice"]
+        XCTAssertTrue(voice.waitForExistence(timeout: 5))
+        voice.tap()
+        let cancel = app.buttons["Cancel voice input"]
+        let send = app.buttons["Send voice input"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        XCTAssertTrue(send.exists)
+        XCTAssertFalse(app.buttons["vvterm.terminal.floating.stopVoice"].exists)
+        cancel.tap()
+        XCTAssertTrue(cancel.waitForNonExistence(timeout: 5))
+
+        voice.tap()
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        send.tap()
+        XCTAssertTrue(send.waitForNonExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["vvterm.terminal.floating.return"].exists)
+
+        app.buttons["vvterm.keyboardTest.hideViaToolbar"].tap()
+        let floatingVoice = app.buttons["vvterm.terminal.floating.voiceInput"]
+        XCTAssertTrue(floatingVoice.waitForExistence(timeout: 5))
+        floatingVoice.tap()
+        XCTAssertTrue(app.buttons["vvterm.terminal.floating.stopVoice"].waitForExistence(timeout: 5))
+        XCTAssertFalse(send.exists)
+    }
+
+    @MainActor
     func testCompactControlMovesFreelyWithoutStartingVoiceAndRestoresKeyboard() {
         let app = launchFloatingControlHarness()
         let control = app.descendants(matching: .any)[

@@ -27,7 +27,7 @@ struct TerminalPresentationStateStoreTests {
         #if os(iOS)
         let paneId = UUID()
         store.setTerminalFindNavigatorVisible(true, for: paneId)
-        store.applyVoiceEvent(.recordingStarted, for: paneId)
+        store.applyVoiceEvent(.recordingStarted(.floatingControl), for: paneId)
         #endif
 
         store.reset()
@@ -46,9 +46,9 @@ struct TerminalPresentationStateStoreTests {
         let paneId = UUID()
 
         store.setTerminalFindNavigatorVisible(true, for: paneId)
-        store.applyVoiceEvent(.recordingStarted, for: paneId)
+        store.applyVoiceEvent(.recordingStarted(.floatingControl), for: paneId)
         #expect(store.terminalFindNavigatorVisibleByPane[paneId] == true)
-        #expect(store.voicePresentation(for: paneId) == .recording)
+        #expect(store.voicePresentation(for: paneId) == .recording(.floatingControl))
 
         store.removePane(paneId)
         #expect(store.terminalFindNavigatorVisibleByPane[paneId] == nil)
@@ -61,7 +61,7 @@ struct TerminalPresentationStateStoreTests {
         let store = TerminalPresentationStateStore()
         let paneId = UUID()
 
-        store.applyVoiceEvent(.recordingStarted, for: paneId)
+        store.applyVoiceEvent(.recordingStarted(.floatingControl), for: paneId)
         store.applyVoiceEvent(.recordingStopped, for: paneId)
 
         #expect(store.terminalVoicePresentationByPane[paneId] == nil)

@@ -101,7 +101,7 @@ class GhosttyTerminalView: UIView {
     var onProgressReport: ((GhosttyProgressState, Int?) -> Void)?
 
     /// Callback invoked when a terminal voice input control is tapped.
-    var onVoiceButtonTapped: (() -> Void)? {
+    var onVoiceButtonTapped: ((TerminalVoicePresentationState.RecordingStyle) -> Void)? {
         didSet {
             refreshVoiceAccessoryAction()
         }
@@ -116,13 +116,15 @@ class GhosttyTerminalView: UIView {
     }
 
     func refreshVoiceAccessoryAction() {
-        keyboardToolbar?.onVoice = showsVoiceAccessoryButton ? onVoiceButtonTapped : nil
+        keyboardToolbar?.onVoice = showsVoiceAccessoryButton ? { [weak self] in
+            self?.onVoiceButtonTapped?(.panel)
+        } : nil
     }
 
     @discardableResult
-    func triggerVoiceInput() -> Bool {
+    func triggerVoiceInput(style: TerminalVoicePresentationState.RecordingStyle = .floatingControl) -> Bool {
         guard let onVoiceButtonTapped else { return false }
-        onVoiceButtonTapped()
+        onVoiceButtonTapped(style)
         return true
     }
 

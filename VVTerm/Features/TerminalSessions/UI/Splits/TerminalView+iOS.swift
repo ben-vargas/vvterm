@@ -313,7 +313,7 @@ struct RemoteTerminalPaneWrapper: View {
     let onProcessExit: () -> Void
     let onReady: () -> Void
     let showsVoiceAccessoryButton: Bool
-    let onVoiceTrigger: (() -> Void)?
+    let onVoiceTrigger: ((TerminalVoicePresentationState.RecordingStyle) -> Void)?
     let onSceneActivation: () -> Void
 
     @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
@@ -431,7 +431,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     let onReady: () -> Void
     let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
     let showsVoiceAccessoryButton: Bool
-    let onVoiceTrigger: (() -> Void)?
+    let onVoiceTrigger: ((TerminalVoicePresentationState.RecordingStyle) -> Void)?
 
     @EnvironmentObject var ghosttyApp: GhosttyRuntime
     @Environment(\.scenePhase) private var scenePhase
