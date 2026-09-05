@@ -48,6 +48,9 @@ struct TerminalFontSettingsSection: View {
                     Text(verbatim: "A")
                         .font(.title3)
                 }
+                #if os(macOS)
+                .labelsHidden()
+                #endif
                 .accessibilityIdentifier("vvterm.settings.appearance.fontSize")
                 .accessibilityValue(fontSizeLabel)
             }
@@ -149,6 +152,12 @@ struct TerminalFontSettingsSection: View {
             Spacer(minLength: 8)
             Text(fontStore.customFonts.count, format: .number)
                 .foregroundStyle(.secondary)
+            #if os(macOS)
+            Image(systemName: "chevron.forward")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+            #endif
         }
         .contentShape(Rectangle())
     }

@@ -69,6 +69,9 @@ struct TerminalContentPaddingSettingsSection: View {
             ) {
                 Text(title)
             }
+            #if os(macOS)
+            .labelsHidden()
+            #endif
             .accessibilityValue(pointLabel(for: value.wrappedValue))
             .accessibilityIdentifier(identifier)
         }

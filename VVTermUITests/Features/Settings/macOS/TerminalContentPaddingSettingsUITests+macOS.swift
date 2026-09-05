@@ -43,6 +43,20 @@ final class TerminalContentPaddingSettingsUITests: XCTestCase {
     }
 
     @MainActor
+    func testAppearanceSlidersShowOneLabelAndKeepAccessibleNames() {
+        let app = launchApp()
+        defer { app.terminate() }
+        let controls = openPaddingControls(in: app)
+        let fontSize = app.sliders["vvterm.settings.appearance.fontSize"]
+        for (slider, title) in [(fontSize, "Size"), (controls.horizontal, "Horizontal"),
+                                (controls.vertical, "Vertical")] {
+            XCTAssertTrue(scrollToHittable(slider, in: app))
+            XCTAssertEqual(slider.label, title)
+            XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", title)).count, 1)
+        }
+    }
+
+    @MainActor
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [

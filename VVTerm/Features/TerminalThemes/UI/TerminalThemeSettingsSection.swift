@@ -152,6 +152,12 @@ struct TerminalThemeSettingsSection: View {
 
             Text(customThemes.count, format: .number)
                 .foregroundStyle(.secondary)
+            #if os(macOS)
+            Image(systemName: "chevron.forward")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+            #endif
         }
         .contentShape(Rectangle())
     }
