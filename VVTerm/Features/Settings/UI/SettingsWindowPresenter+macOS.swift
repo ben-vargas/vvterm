@@ -74,14 +74,13 @@ final class SettingsWindowPresenter {
         settingsWindow = window
     }
 
-    private static func makeSettingsWindow<Content: View>(
+    static func makeSettingsWindow<Content: View>(
         rootView: Content
     ) -> NSWindow {
         let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Settings"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
-        window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
 
         let toolbar = NSToolbar(identifier: "SettingsToolbar")

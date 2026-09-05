@@ -1,5 +1,6 @@
 #if os(macOS)
 import Testing
+import SwiftUI
 @testable import VVTerm
 
 @MainActor
@@ -16,6 +17,13 @@ private final class SettingsWindowTestHandle: SettingsWindowHandling {
 @Suite
 @MainActor
 struct SettingsWindowPresenterTests {
+    @Test
+    func windowPreservesNativeTitlebarBackground() {
+        let window = SettingsWindowPresenter.makeSettingsWindow(rootView: Text("Settings"))
+        #expect(!window.titlebarAppearsTransparent)
+        #expect(window.toolbarStyle == .unified)
+    }
+
     @Test
     func visibleWindowIsReused() {
         var createdWindows: [SettingsWindowTestHandle] = []
