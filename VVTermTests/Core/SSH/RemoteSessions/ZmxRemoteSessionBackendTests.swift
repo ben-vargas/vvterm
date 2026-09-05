@@ -26,11 +26,11 @@ struct ZmxRemoteSessionBackendTests {
         #expect(ZmxRemoteSessionParser.parseProbe(output) == nil)
     }
 
-    @Test
-    func discoveryPreservesBackendAndAttachedClientMetadata() throws {
+    @Test(arguments: ["", "  "])
+    func discoveryPreservesBackendAndAttachedClientMetadata(_ prefix: String) throws {
         let sessions = try ZmxRemoteSessionParser.parseSessionList("""
-        name=alpha\tpid=10\tclients=0\tcreated=1\tstart_dir=/tmp
-        name=team session\tpid=11\tclients=2\tcreated=2\tstart_dir=/srv/team
+        \(prefix)name=alpha\tpid=10\tclients=0\tcreated=1\tstart_dir=/tmp
+        \(prefix)name=team session\tpid=11\tclients=2\tcreated=2\tstart_dir=/srv/team
         """)
 
         #expect(sessions.map(\.id.backendIdentifier) == [.zmx, .zmx])
@@ -52,11 +52,21 @@ struct ZmxRemoteSessionBackendTests {
     }
 
     @Test
-    func fullListMetadataProvidesTheSessionStartDirectory() throws {
+    func indentedMetadataPreservesFieldSpacesAndOwnership() throws {
+        let output = "  name= team session \tclients=0\tvvterm_owner=managed\tstart_dir=/srv/team "
+        let session = try #require(ZmxRemoteSessionParser.parseSessionList(output).first)
+
+        #expect(session.id.rawValue == " team session ")
+        #expect(session.attachment.ownership == .managed)
+        #expect(ZmxRemoteSessionParser.parseWorkingDirectory(for: session.id, in: output) == "/srv/team ")
+    }
+
+    @Test(arguments: ["", "  "])
+    func fullListMetadataProvidesTheSessionStartDirectory(_ prefix: String) throws {
         let identifier = try identifier("team session")
         let output = """
-        name=other\tpid=10\tclients=0\tcreated=1\tstart_dir=/tmp
-        name=team session\tpid=11\tclients=1\tcreated=2\tstart_dir=/srv/team project\trole=dev
+        \(prefix)name=other\tpid=10\tclients=0\tcreated=1\tstart_dir=/tmp
+        \(prefix)name=team session\tpid=11\tclients=1\tcreated=2\tstart_dir=/srv/team project\trole=dev
         """
 
         #expect(
@@ -119,6 +129,7 @@ struct ZmxRemoteSessionBackendTests {
             """)
         }
         for malformed in [
+            "  unexpected\tclients=0",
             "name=missing-clients\tpid=1",
             "name=negative\tclients=-1",
             "name=invalid\tclients=unknown"

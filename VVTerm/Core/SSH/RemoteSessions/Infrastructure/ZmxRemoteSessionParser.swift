@@ -73,7 +73,7 @@ nonisolated enum ZmxRemoteSessionParser {
         attachedClientCount: Int,
         ownership: RemoteSessionOwnership
     ) {
-        let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
+        let fields = sessionFields(line)
         guard let nameField = fields.first,
               nameField.hasPrefix("name=") else {
             throw SSHError.unknown("zmx returned invalid session metadata")
@@ -104,12 +104,12 @@ nonisolated enum ZmxRemoteSessionParser {
         }
         let nameField = "name=\(identifier.rawValue)"
         guard let line = output.split(whereSeparator: \.isNewline).first(where: { line in
-            line.split(separator: "\t", omittingEmptySubsequences: false).first
+            sessionFields(line).first
                 == Substring(nameField)
         }) else {
             return nil
         }
-        guard let field = line.split(separator: "\t", omittingEmptySubsequences: false)
+        guard let field = sessionFields(line)
             .first(where: { $0.hasPrefix("start_dir=") }) else {
             return nil
         }
@@ -119,5 +119,11 @@ nonisolated enum ZmxRemoteSessionParser {
             return nil
         }
         return path
+    }
+
+    private static func sessionFields(_ line: Substring) -> [Substring] {
+        // zmx indents list rows when ZMX_SESSION is unset. Preserve all field values.
+        line.drop(while: { $0 == " " })
+            .split(separator: "\t", omittingEmptySubsequences: false)
     }
 }
