@@ -97,7 +97,7 @@ extension TerminalDisconnectReason {
             return nil
         case .remoteSessionDetached:
             return String(localized: "The remote session is still running on the server.")
-        case .externalRemoteSessionTerminated:
+        case .sessionEnded, .externalRemoteSessionTerminated:
             return String(localized: "The remote session has ended.")
         }
     }

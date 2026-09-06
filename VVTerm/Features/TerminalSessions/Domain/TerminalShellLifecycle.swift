@@ -98,6 +98,7 @@ nonisolated struct TerminalShellStartupPlan: Sendable {
 
 nonisolated enum TerminalShellEndReason: Hashable, Sendable {
     case transportInterrupted
+    case sessionEnded
     case standaloneStartupActionCompleted
     case remoteSessionDetached(RemoteSessionOwnership)
     case remoteSessionTerminated(RemoteSessionOwnership)
@@ -143,6 +144,7 @@ nonisolated enum TerminalShellEndReason: Hashable, Sendable {
 nonisolated enum TerminalDisconnectReason: String, Codable, Hashable, Sendable {
     // Keep raw values stable for local snapshot migration.
     case transportInterrupted = "transportEnded"
+    case sessionEnded
     case startupActionCompleted
     case remoteSessionDetached = "tmuxDetached"
     case externalRemoteSessionTerminated = "externalTmuxEnded"

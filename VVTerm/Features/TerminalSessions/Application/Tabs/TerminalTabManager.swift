@@ -1092,6 +1092,10 @@ final class TerminalTabManager {
             sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = .externalRemoteSessionTerminated }
             updatePaneState(paneId, connectionState: .disconnected)
 
+        case .sessionEnded:
+            sessionState.updatePane(paneId, persist: true) { $0.disconnectReason = .sessionEnded }
+            updatePaneState(paneId, connectionState: .disconnected)
+
         case .standaloneStartupActionCompleted:
             sessionState.markStartupActionCompleted(for: paneId)
             updatePaneState(paneId, connectionState: .disconnected)

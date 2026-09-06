@@ -24,7 +24,7 @@ nonisolated enum EternalTerminalStatePolicy {
                 host: host,
                 port: port
             ))
-        case .closed:
+        case .sessionEnded, .closed:
             return .disconnected
         }
     }
@@ -458,6 +458,9 @@ final class EternalTerminalRuntime {
 
         stateTask = Task { [weak self] in
             for await state in session.stateChanges {
+                if state == .sessionEnded {
+                    await self?.outputTask?.value
+                }
                 guard !Task.isCancelled else { return }
                 guard let work = self?.beginHandling(
                     state,
@@ -497,6 +500,19 @@ final class EternalTerminalRuntime {
         port: Int
     ) -> ConnectedStateWork? {
         guard isCurrentOwner else {
+            return nil
+        }
+        if state == .sessionEnded {
+            do {
+                try dependencies.sessionPreparer.discardResumeState(for: paneId)
+            } catch {
+                publishFailure(error, host: host, port: port)
+                return nil
+            }
+            let reason: TerminalShellEndReason = standaloneStartupActionAwaitingExit
+                ? .standaloneStartupActionCompleted : .sessionEnded
+            standaloneStartupActionAwaitingExit = false
+            ownerAccess.handleShellEnd(paneId, identityToken, reason)
             return nil
         }
         if state == .closed, standaloneStartupActionAwaitingExit {

@@ -245,6 +245,8 @@ nonisolated enum EternalTerminalVendorErrorMapper {
             .reconnecting
         case .failed(let error):
             .failed(failure(for: error))
+        case .sessionEnded:
+            .sessionEnded
         case .closed:
             .closed
         }

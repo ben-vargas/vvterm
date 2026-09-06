@@ -103,7 +103,8 @@ private actor EternalTerminalSendGate {
 }
 
 private actor TestEternalTerminalSession: EternalTerminalSession {
-    nonisolated let output = AsyncStream<Data> { _ in }
+    nonisolated let output: AsyncStream<Data>
+    private let outputContinuation: AsyncStream<Data>.Continuation
     nonisolated let stateChanges: AsyncStream<EternalTerminalSessionState>
 
     private let stateContinuation: AsyncStream<EternalTerminalSessionState>.Continuation
@@ -123,6 +124,9 @@ private actor TestEternalTerminalSession: EternalTerminalSession {
         stateBeforeSendReturns: EternalTerminalSessionState? = nil,
         startupPlan: TerminalShellStartupPlan = .plainShell
     ) {
+        let outputStream = AsyncStream.makeStream(of: Data.self)
+        output = outputStream.stream
+        outputContinuation = outputStream.continuation
         let stream = AsyncStream.makeStream(of: EternalTerminalSessionState.self)
         stateChanges = stream.stream
         stateContinuation = stream.continuation
@@ -206,6 +210,7 @@ private actor TestEternalTerminalSession: EternalTerminalSession {
     func sendAttemptCount() -> Int { sendAttempts }
 
     func emit(_ state: EternalTerminalSessionState) {
+        if state == .sessionEnded { outputContinuation.finish() }
         stateContinuation.yield(state)
     }
 
@@ -219,6 +224,7 @@ private final class SequencedEternalTerminalSessionPreparer: EternalTerminalSess
     private let sessions: [TestEternalTerminalSession]
     private let origin: EternalTerminalSessionOrigin
     private var nextIndex = 0
+    private(set) var discardedPaneIDs: [UUID] = []
 
     init(
         sessions: [TestEternalTerminalSession],
@@ -239,14 +245,42 @@ private final class SequencedEternalTerminalSessionPreparer: EternalTerminalSess
         return PreparedEternalTerminalSession(session: session, origin: origin)
     }
 
-    func discardResumeState(for paneId: UUID) throws {}
+    func discardResumeState(for paneId: UUID) throws { discardedPaneIDs.append(paneId) }
 }
 
 @Suite(.serialized)
 @MainActor
 struct EternalTerminalRuntimeDependencyIsolationTests {
-    @Test
-    func closedStandaloneActionPublishesItsTerminalEndReason() async {
+    @Test(arguments: [true, false])
+    func endedSessionClearsResumeStateOnlyForCurrentOwner(isCurrent: Bool) async {
+        let ownerState = EternalTerminalOwnerState()
+        ownerState.isCurrent = isCurrent
+        let session = TestEternalTerminalSession()
+        let preparer = SequencedEternalTerminalSessionPreparer(sessions: [session])
+        var endReasons: [TerminalShellEndReason] = []
+        let runtime = makeRuntime(
+            dependencies: EternalTerminalRuntimeDependencies(
+                recordEvent: { _ in },
+                remoteSessionKiller: EternalTerminalRemoteSessionKillRecorder(),
+                sessionPreparer: preparer
+            ),
+            ownerState: ownerState,
+            handleShellEnd: { _, _, reason in endReasons.append(reason) }
+        )
+        runtime.resize(cols: 80, rows: 24, pixelSize: nil)
+        runtime.startIfNeeded()
+        await session.emit(.sessionEnded)
+        for _ in 0..<2_000 {
+            if !endReasons.isEmpty { break }
+            await Task.yield()
+        }
+        #expect(endReasons == (isCurrent ? [.sessionEnded] : []))
+        #expect(preparer.discardedPaneIDs.count == (isCurrent ? 1 : 0))
+        await runtime.close()
+    }
+
+    @Test(arguments: [EternalTerminalSessionState.closed, .sessionEnded])
+    func closedStandaloneActionPublishesItsTerminalEndReason(state: EternalTerminalSessionState) async {
         let session = TestEternalTerminalSession(
             startupPlan: TerminalShellStartupPlan(
                 command: "exec /bin/sh -lc 'printf done'",
@@ -273,7 +307,7 @@ struct EternalTerminalRuntimeDependencyIsolationTests {
         runtime.startIfNeeded()
         #expect(await session.waitUntilCommandIsSent())
 
-        await session.finish()
+        await session.emit(state)
 
         for _ in 0..<2_000 {
             if !endReasons.isEmpty { break }

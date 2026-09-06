@@ -17,6 +17,7 @@ private final class RecordingTerminalOutputSink: TerminalOutputSink {
 struct EternalTerminalSessionAdapterTests {
     @Test
     func vendorLifecycleMapsToApplicationOwnedState() {
+        #expect(EternalTerminalVendorErrorMapper.state(for: .sessionEnded) == .sessionEnded)
         #expect(
             EternalTerminalVendorErrorMapper.state(for: .bootstrapping)
                 == .bootstrapping

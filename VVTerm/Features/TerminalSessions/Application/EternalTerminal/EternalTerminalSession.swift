@@ -8,6 +8,7 @@ nonisolated enum EternalTerminalSessionState: Equatable, Sendable {
     case disconnected
     case reconnecting
     case failed(EternalTerminalSessionFailure)
+    case sessionEnded
     case closed
 }
 
