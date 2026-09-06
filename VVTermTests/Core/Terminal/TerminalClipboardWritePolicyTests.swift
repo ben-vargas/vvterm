@@ -21,14 +21,24 @@ struct TerminalClipboardWritePolicyTests {
     }
 
     @Test
-    func remoteClipboardReadDefaultsToAsk() {
+    func remoteClipboardReadDefaultsToAllow() {
         let suiteName = "TerminalClipboardWritePolicyTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        #expect(TerminalRemoteClipboardReadPolicy.resolved(defaults: defaults) == .ask)
+        #expect(TerminalRemoteClipboardReadPolicy.resolved(defaults: defaults) == .allow)
         defaults.set("invalid", forKey: TerminalRemoteClipboardReadPolicy.userDefaultsKey)
-        #expect(TerminalRemoteClipboardReadPolicy.resolved(defaults: defaults) == .ask)
+        #expect(TerminalRemoteClipboardReadPolicy.resolved(defaults: defaults) == .allow)
+    }
+
+    @Test(arguments: TerminalRemoteClipboardReadPolicy.allCases)
+    func remoteClipboardReadPreservesSavedChoice(policy: TerminalRemoteClipboardReadPolicy) {
+        let suiteName = "TerminalClipboardWritePolicyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set(policy.rawValue, forKey: TerminalRemoteClipboardReadPolicy.userDefaultsKey)
+        #expect(TerminalRemoteClipboardReadPolicy.resolved(defaults: defaults) == policy)
     }
 
     @Test

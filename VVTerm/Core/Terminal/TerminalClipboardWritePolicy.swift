@@ -6,7 +6,7 @@ nonisolated enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identi
     case allow
 
     static let userDefaultsKey = "terminalRemoteClipboardReadPolicy"
-    static let defaultValue: TerminalRemoteClipboardReadPolicy = .ask
+    static let defaultValue: TerminalRemoteClipboardReadPolicy = .allow
 
     var id: String { rawValue }
 

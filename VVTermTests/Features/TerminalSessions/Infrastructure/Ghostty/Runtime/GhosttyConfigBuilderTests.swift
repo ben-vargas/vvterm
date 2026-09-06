@@ -148,7 +148,7 @@ struct GhosttyConfigBuilderTests {
         #expect(content.contains("cursor-style = block"))
         #expect(content.contains("cursor-style-blink = true"))
         #expect(content.contains("keybind = shift+enter=text:\\n"))
-        #expect(content.contains("clipboard-read = ask"))
+        #expect(content.contains("clipboard-read = allow"))
         #expect(content.contains("clipboard-write = ask"))
         #expect(content.contains("font-codepoint-map ="))
     }
