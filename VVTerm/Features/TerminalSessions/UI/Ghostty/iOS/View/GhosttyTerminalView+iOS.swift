@@ -116,7 +116,8 @@ class GhosttyTerminalView: UIView {
     }
 
     func refreshVoiceAccessoryAction() {
-        keyboardToolbar?.onVoice = showsVoiceAccessoryButton ? { [weak self] in
+        // Cleanup can run from deinit, when creating a weak reference to self is invalid.
+        keyboardToolbar?.onVoice = !isShuttingDown && showsVoiceAccessoryButton ? { [weak self] in
             self?.onVoiceButtonTapped?(.panel)
         } : nil
     }

@@ -51,6 +51,11 @@ struct GhosttySurfaceRegistryTests {
         terminal.onKeyboardAvoidanceAccessoryFrameChange = { }
         terminal.onVoiceButtonTapped = { _ in }
         terminal.onKeyboardBrowseModeChange = { _ in }
+        terminal.keyboardUITestSetHardwareKeyboardAttached(false)
+        terminal.showsVoiceAccessoryButton = true
+        _ = terminal.resolvedInputAccessoryView()
+        let toolbar = try #require(terminal.keyboardToolbar)
+        #expect(toolbar.onVoice != nil)
         let nativeTextInteraction = try #require(terminal.nativeTextInteraction)
         let nativeFindInteraction = try #require(terminal.nativeFindInteraction)
         #endif
@@ -70,6 +75,7 @@ struct GhosttySurfaceRegistryTests {
         #if os(iOS)
         #expect(terminal.onKeyboardAvoidanceAccessoryFrameChange == nil)
         #expect(terminal.onVoiceButtonTapped == nil)
+        #expect(toolbar.onVoice == nil)
         #expect(terminal.onKeyboardBrowseModeChange == nil)
         #expect(terminal.nativeTextInteraction == nil)
         #expect(terminal.nativeFindInteraction == nil)
@@ -125,6 +131,12 @@ struct GhosttySurfaceRegistryTests {
             ),
             useCustomIO: true
         )
+        // Deinit must also be safe with the voice accessory still installed.
+        terminal.keyboardUITestSetHardwareKeyboardAttached(false)
+        terminal.showsVoiceAccessoryButton = true
+        terminal.onVoiceButtonTapped = { _ in }
+        _ = terminal.resolvedInputAccessoryView()
+        #expect(terminal.keyboardToolbar?.onVoice != nil)
         #else
         terminal = GhosttyTerminalView(
             frame: CGRect(x: 0, y: 0, width: 800, height: 600),
