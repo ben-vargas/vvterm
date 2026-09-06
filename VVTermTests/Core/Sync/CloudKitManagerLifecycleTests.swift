@@ -83,8 +83,8 @@ struct CloudKitManagerLifecycleTests {
         #expect(CloudKitErrorClassifier.isMissingItem(error))
     }
 
-    @Test
-    func staleReadyZoneRecoversAndRetriesAfterTopLevelMissingZone() async throws {
+    @Test(arguments: [CKError.Code.zoneNotFound, .userDeletedZone])
+    func staleReadyZoneRecoversAndRetriesAfterTopLevelMissingZone(code: CKError.Code) async throws {
         var fetchCount = 0
         var saveCount = 0
         let manager = makeManager(
@@ -102,7 +102,7 @@ struct CloudKitManagerLifecycleTests {
         let value = try await manager.withZoneRetry {
             operationCount += 1
             if operationCount == 1 {
-                throw CKError(.zoneNotFound)
+                throw CKError(code)
             }
             return 42
         }
@@ -114,8 +114,8 @@ struct CloudKitManagerLifecycleTests {
         #expect(manager.zoneReady)
     }
 
-    @Test
-    func partialMissingZoneRecoversAndRetries() async throws {
+    @Test(arguments: [CKError.Code.zoneNotFound, .userDeletedZone])
+    func partialMissingZoneRecoversAndRetries(code: CKError.Code) async throws {
         var saveCount = 0
         let manager = makeManager(
             zoneClient: CloudKitZoneClient(
@@ -129,7 +129,7 @@ struct CloudKitManagerLifecycleTests {
         _ = try await manager.withZoneRetry {
             operationCount += 1
             if operationCount == 1 {
-                throw self.partialMissingZoneError(for: manager.recordZoneID)
+                throw self.partialMissingZoneError(for: manager.recordZoneID, code: code)
             }
             return true
         }
@@ -139,8 +139,8 @@ struct CloudKitManagerLifecycleTests {
         #expect(manager.zoneReady)
     }
 
-    @Test
-    func zoneLookupPartialFailureRecreatesZone() async throws {
+    @Test(arguments: [CKError.Code.zoneNotFound, .userDeletedZone])
+    func zoneLookupPartialFailureRecreatesZone(code: CKError.Code) async throws {
         var fetchCount = 0
         var saveCount = 0
         let zoneID = CKRecordZone.ID(zoneName: CloudKitSyncConstants.recordZoneName)
@@ -148,7 +148,7 @@ struct CloudKitManagerLifecycleTests {
             zoneClient: CloudKitZoneClient(
                 fetchZone: { _ in
                     fetchCount += 1
-                    throw self.partialMissingZoneError(for: zoneID)
+                    throw self.partialMissingZoneError(for: zoneID, code: code)
                 },
                 saveZone: { _ in saveCount += 1 }
             ),
@@ -220,6 +220,43 @@ struct CloudKitManagerLifecycleTests {
 
         #expect(operationCount == 2)
         #expect(saveCount == 1)
+    }
+
+    @Test
+    func deletedZoneIsNotAnAbsentRecord() {
+        let error = CKError(.userDeletedZone)
+        #expect(!CloudKitErrorClassifier.isMissingItem(error))
+    }
+
+    @Test(arguments: [true, false])
+    func zoneCreationClearsOldTokenOnlyAfterSuccess(succeeds: Bool) async {
+        let manager = makeManager(
+            zoneClient: CloudKitZoneClient(
+                fetchZone: { _ in throw CKError(.userDeletedZone) },
+                saveZone: { _ in
+                    if !succeeds { throw CKError(.networkFailure) }
+                }
+            ),
+            initialZoneReady: false
+        )
+        let defaults = UserDefaults.standard
+        let oldValue = defaults.object(forKey: manager.changeTokenKey)
+        let oldReady = defaults.object(forKey: manager.zoneReadyKey)
+        defer {
+            defaults.set(oldValue, forKey: manager.changeTokenKey)
+            defaults.set(oldReady, forKey: manager.zoneReadyKey)
+        }
+        let oldToken = Data([1, 2, 3])
+        defaults.set(oldToken, forKey: manager.changeTokenKey)
+        do {
+            try await manager.ensureCustomZone()
+            #expect(succeeds)
+        } catch {
+            #expect(!succeeds)
+            #expect((error as? CKError)?.code == .networkFailure)
+        }
+        #expect(manager.zoneReady == succeeds)
+        #expect(defaults.data(forKey: manager.changeTokenKey) == (succeeds ? nil : oldToken))
     }
 
     @Test
@@ -330,11 +367,14 @@ struct CloudKitManagerLifecycleTests {
         )
     }
 
-    private func partialMissingZoneError(for zoneID: CKRecordZone.ID) -> CKError {
+    private func partialMissingZoneError(
+        for zoneID: CKRecordZone.ID,
+        code: CKError.Code = .zoneNotFound
+    ) -> CKError {
         CKError(
             .partialFailure,
             userInfo: [
-                CKPartialErrorsByItemIDKey: [zoneID: CKError(.zoneNotFound)]
+                CKPartialErrorsByItemIDKey: [zoneID: CKError(code)]
             ]
         )
     }

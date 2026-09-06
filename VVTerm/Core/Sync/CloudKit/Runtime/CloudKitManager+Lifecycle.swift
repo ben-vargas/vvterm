@@ -75,23 +75,25 @@ extension CloudKitManager {
             }
             logger.warning("CloudKit custom zone was not returned; starting recreation")
         } catch {
-            guard CloudKitErrorClassifier.isMissingItem(error) else { throw error }
+            logger.warning(
+                "CloudKit zone lookup failed with CKError codes \(CloudKitErrorClassifier.diagnosticCodes(error), privacy: .public)"
+            )
+            guard CloudKitErrorClassifier.isMissingZone(error) else { throw error }
             logger.warning("CloudKit custom zone is missing; starting recreation")
         }
 
         do {
             try await zoneClient.save(recordZone)
+            // A restored zone cannot use the previous zone's change token.
+            clearChangeToken()
+            pendingRecordChanges = nil
             setZoneReady(true)
             logger.info("CloudKit custom zone recreation succeeded")
         } catch {
             setZoneReady(false)
-            if let cloudKitError = error as? CKError {
-                logger.error(
-                    "CloudKit custom zone recreation failed with CKError code \(cloudKitError.code.rawValue, privacy: .public)"
-                )
-            } else {
-                logger.error("CloudKit custom zone recreation failed with a non-CloudKit error")
-            }
+            logger.error(
+                "CloudKit custom zone recreation failed with CKError codes \(CloudKitErrorClassifier.diagnosticCodes(error), privacy: .public)"
+            )
             throw error
         }
     }
@@ -105,7 +107,7 @@ extension CloudKitManager {
         do {
             return try await operation()
         } catch {
-            guard CloudKitErrorClassifier.isMissingItem(error) else {
+            guard CloudKitErrorClassifier.isMissingZone(error) else {
                 throw error
             }
 
