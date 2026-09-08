@@ -292,7 +292,10 @@ extension TerminalTabManagerLifecycleTests {
                 )
                 appDelegate.configure(
                     tabManager: manager,
-                    serverManager: serverManager,
+                    cloudDataSync: AppCloudDataSyncCoordinator(
+                        isEnabled: { false },
+                        steps: [{ await serverManager.loadData() }]
+                    ),
                     appLockManager: appLockManager,
                     lifecycleDependencies: AppLifecycleDependencies(
                         subscribeToRemoteChanges: {},

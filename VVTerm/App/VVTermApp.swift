@@ -70,7 +70,7 @@ struct VVTermApp: App {
 
         appDelegate.configure(
             tabManager: composition.tabManager,
-            serverManager: composition.serverManager,
+            cloudDataSync: composition.cloudDataSyncCoordinator,
             appLockManager: composition.appLockManager,
             lifecycleDependencies: composition.appLifecycleDependencies
         )

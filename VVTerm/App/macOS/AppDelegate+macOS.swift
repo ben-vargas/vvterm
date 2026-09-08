@@ -6,7 +6,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastForegroundSyncAt: Date = .distantPast
     private let foregroundSyncMinimumInterval: TimeInterval = 20
     private weak var tabManager: TerminalTabManager?
-    private weak var serverManager: ServerManager?
+    private weak var cloudDataSync: AppCloudDataSyncCoordinator?
     private weak var appLockManager: AppLockManager?
     private var lifecycleDependencies: AppLifecycleDependencies?
     private let logger = Logger(
@@ -16,21 +16,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func configure(
         tabManager: TerminalTabManager,
-        serverManager: ServerManager,
+        cloudDataSync: AppCloudDataSyncCoordinator,
         appLockManager: AppLockManager,
         lifecycleDependencies: AppLifecycleDependencies
     ) {
         if let currentManager = self.tabManager {
             precondition(currentManager === tabManager, "AppDelegate received a different terminal manager")
         }
-        if let currentManager = self.serverManager {
-            precondition(currentManager === serverManager, "AppDelegate received a different server manager")
+        if let currentManager = self.cloudDataSync {
+            precondition(currentManager === cloudDataSync, "AppDelegate received a different cloud sync coordinator")
         }
         if let currentManager = self.appLockManager {
             precondition(currentManager === appLockManager, "AppDelegate received a different app lock manager")
         }
         self.tabManager = tabManager
-        self.serverManager = serverManager
+        self.cloudDataSync = cloudDataSync
         self.appLockManager = appLockManager
         self.lifecycleDependencies = lifecycleDependencies
     }
@@ -42,11 +42,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return tabManager
     }
 
-    private var configuredServerManager: ServerManager {
-        guard let serverManager else {
-            preconditionFailure("AppDelegate must be configured with a server manager")
+    private var configuredCloudDataSync: AppCloudDataSyncCoordinator {
+        guard let cloudDataSync else {
+            preconditionFailure("AppDelegate must be configured with a cloud sync coordinator")
         }
-        return serverManager
+        return cloudDataSync
     }
 
     private var configuredAppLockManager: AppLockManager {
@@ -110,7 +110,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         lastForegroundSyncAt = now
 
         Task {
-            await configuredServerManager.loadData()
+            do {
+                try await configuredCloudDataSync.refresh()
+            } catch is CancellationError {
+                return
+            } catch {
+                logger.error("Automatic cloud refresh failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -119,6 +125,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             configuredAppLockManager.lockIfNeededForBackground()
         }
+    }
+
+    func application(_ application: NSApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        logger.info("Cloud push registration succeeded")
+    }
+
+    func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        logger.error("Cloud push registration failed: \(error.localizedDescription)")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -137,9 +151,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
+        logger.info("Cloud change notification received")
         guard SyncSettings.isEnabled else { return }
         Task {
-            await configuredServerManager.loadData()
+            do {
+                try await configuredCloudDataSync.refresh()
+            } catch is CancellationError {
+                return
+            } catch {
+                logger.error("Automatic cloud refresh failed: \(error.localizedDescription)")
+            }
         }
     }
 

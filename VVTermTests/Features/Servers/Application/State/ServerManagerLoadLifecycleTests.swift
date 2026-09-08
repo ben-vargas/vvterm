@@ -44,6 +44,37 @@ struct ServerManagerLoadLifecycleTests {
     }
 
     @Test
+    func notificationRefreshReadsAgainAfterAnOlderLoadCompletes() async {
+        let gate = ServerCancellationIgnoringGate<ServerRemoteChanges>()
+        let remote = ServerRemoteRepositoryFake()
+        let firstChanges = makeRemoteChanges(workspaceName: "Before notification")
+        let latestChanges = makeRemoteChanges(
+            workspaceName: "After notification",
+            workspaceID: firstChanges.workspaces[0].id
+        )
+        remote.fetchHandler = { _, call in
+            if call == 1 { return await gate.wait() }
+            return latestChanges
+        }
+        let manager = makeManager(remote: remote, sync: ServerSyncRepositoryFake(), isSyncEnabled: { true })
+        let load = Task { await manager.loadData() }
+        #expect(await gate.waitUntilStarted())
+        var refreshStarted = false
+        let refresh = Task {
+            refreshStarted = true
+            await manager.refreshCloudData()
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while !refreshStarted, ContinuousClock.now < deadline { await Task.yield() }
+        #expect(refreshStarted)
+        gate.resolve(firstChanges)
+        await load.value
+        await refresh.value
+        #expect(remote.fetchCount == 2)
+        #expect(manager.workspaces.map(\.name) == ["After notification"])
+    }
+
+    @Test
     func restartAcceptsCheckpointOnlyAfterRemoteBatchPersists() async {
         let local = ServerLocalRepositoryFake(servers: [], workspaces: [])
         local.persistError = TestTransactionError.persistence
@@ -1050,6 +1081,7 @@ struct ServerManagerLoadLifecycleTests {
 
     private func makeRemoteChanges(
         workspaceName: String,
+        workspaceID: UUID = UUID(),
         checkpoint: ServerRemoteChangeCheckpoint = ServerRemoteChangeCheckpoint(
             id: UUID(uuidString: "80000000-0000-0000-0000-000000000004")!
         )
@@ -1058,6 +1090,7 @@ struct ServerManagerLoadLifecycleTests {
             servers: [],
             workspaces: [
                 Workspace(
+                    id: workspaceID,
                     name: workspaceName,
                     order: 0,
                     createdAt: .distantPast,

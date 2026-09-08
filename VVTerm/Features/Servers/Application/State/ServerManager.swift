@@ -59,6 +59,10 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         await remoteSyncCoordinator.loadData()
     }
 
+    func refreshCloudData() async {
+        await remoteSyncCoordinator.refreshCloudData()
+    }
+
     func handleSyncDisabled() {
         remoteSyncCoordinator.handleSyncDisabled()
     }

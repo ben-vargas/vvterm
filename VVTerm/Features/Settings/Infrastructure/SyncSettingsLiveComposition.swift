@@ -118,26 +118,17 @@ private final class KeychainSyncSettingsAdapter: SyncSettingsCredentialSyncing {
 @MainActor
 private final class AppSyncSettingsDataAdapter: SyncSettingsDataRefreshing {
     private let serverManager: ServerManager
-    private let terminalTheme: TerminalThemeManager
-    private let terminalFont: TerminalFontStore
-    private let terminalAccessory: TerminalAccessoryPreferencesManager
-    private let statsPreferences: PreferencesStore
-    private let pendingSync: CloudKitSyncCoordinator
+    private let refreshCloudData: @MainActor () async throws -> Void
+    private let cancelCloudDataRefresh: @MainActor () -> Void
 
     init(
         serverManager: ServerManager,
-        terminalTheme: TerminalThemeManager,
-        terminalFont: TerminalFontStore,
-        terminalAccessory: TerminalAccessoryPreferencesManager,
-        statsPreferences: PreferencesStore,
-        pendingSync: CloudKitSyncCoordinator
+        refreshCloudData: @escaping @MainActor () async throws -> Void,
+        cancelCloudDataRefresh: @escaping @MainActor () -> Void
     ) {
         self.serverManager = serverManager
-        self.terminalTheme = terminalTheme
-        self.terminalFont = terminalFont
-        self.terminalAccessory = terminalAccessory
-        self.statsPreferences = statsPreferences
-        self.pendingSync = pendingSync
+        self.refreshCloudData = refreshCloudData
+        self.cancelCloudDataRefresh = cancelCloudDataRefresh
     }
 
     var needsCloudRecovery: Bool {
@@ -156,26 +147,13 @@ private final class AppSyncSettingsDataAdapter: SyncSettingsDataRefreshing {
     }
 
     func handleSyncDisabled() {
+        cancelCloudDataRefresh()
         serverManager.handleSyncDisabled()
     }
 
     func syncNow() async throws {
-        await pendingSync.drainPendingMutations()
-        await serverManager.loadData()
-        guard serverManager.stateStore.ambiguousCloudRecovery == nil,
-              serverManager.stateStore.error == nil else {
-            throw SyncSettingsDataRefreshError.serverData
-        }
-        try await terminalTheme.refreshFromCloud()
-        try await terminalFont.refreshFromCloud()
-        try await terminalAccessory.refreshFromCloud()
-        try await statsPreferences.refreshFromCloud()
-        await pendingSync.drainPendingMutations()
+        try await refreshCloudData()
     }
-}
-
-private enum SyncSettingsDataRefreshError: Error {
-    case serverData
 }
 
 @MainActor
@@ -246,13 +224,13 @@ private enum SyncSettingsHistoryError: Error {
 @MainActor
 enum SyncSettingsLiveComposition {
     static func makeCoordinator(
+        refreshCloudData: @escaping @MainActor () async throws -> Void,
+        cancelCloudDataRefresh: @escaping @MainActor () -> Void,
         cloudKit: CloudKitManager,
         keychain: KeychainManager,
         serverManager: ServerManager,
         terminalTheme: TerminalThemeManager,
         terminalFont: TerminalFontStore,
-        terminalAccessory: TerminalAccessoryPreferencesManager,
-        statsPreferences: PreferencesStore,
         pendingSync: CloudKitSyncCoordinator,
         defaults: UserDefaults
     ) -> SyncSettingsCoordinator {
@@ -264,11 +242,8 @@ enum SyncSettingsLiveComposition {
             credentials: KeychainSyncSettingsAdapter(keychain: keychain),
             data: AppSyncSettingsDataAdapter(
                 serverManager: serverManager,
-                terminalTheme: terminalTheme,
-                terminalFont: terminalFont,
-                terminalAccessory: terminalAccessory,
-                statsPreferences: statsPreferences,
-                pendingSync: pendingSync
+                refreshCloudData: refreshCloudData,
+                cancelCloudDataRefresh: cancelCloudDataRefresh
             ),
             content: AppSyncSettingsContentSummaryAdapter(
                 serverManager: serverManager,

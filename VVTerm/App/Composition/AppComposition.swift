@@ -26,6 +26,7 @@ struct AppComposition {
     #endif
     let voiceInputRuntimeStore: VoiceInputRuntimeStore
     let viewTabConfigurationManager: ViewTabConfigurationManager
+    let cloudDataSyncCoordinator: AppCloudDataSyncCoordinator
     let syncSettingsCoordinator: SyncSettingsCoordinator
     let sshKeySettingsCoordinator: SSHKeySettingsCoordinator
     let knownHostSettingsCoordinator: KnownHostSettingsCoordinator
@@ -335,14 +336,32 @@ struct AppComposition {
         let onWelcomeCompleted: @MainActor () -> Void = {
             analyticsTracker.trackWelcomeCompleted()
         }
+        let cloudDataSyncCoordinator = AppCloudDataSyncCoordinator(
+            isEnabled: { SyncSettings.isEnabled(in: defaults) },
+            steps: [
+                { await cloudKitSyncCoordinator.drainPendingMutations() },
+                {
+                    await serverManager.refreshCloudData()
+                    guard serverManager.stateStore.ambiguousCloudRecovery == nil,
+                          serverManager.stateStore.error == nil else {
+                        throw AppCloudDataSyncError.serverData
+                    }
+                },
+                { try await terminalThemeManager.refreshFromCloud() },
+                { try await terminalFontStore.refreshFromCloud() },
+                { try await terminalAccessoryPreferencesManager.refreshFromCloud() },
+                { try await statsPreferencesStore.refreshFromCloud() },
+                { await cloudKitSyncCoordinator.drainPendingMutations() }
+            ]
+        )
         let syncSettingsCoordinator = SyncSettingsLiveComposition.makeCoordinator(
+            refreshCloudData: cloudDataSyncCoordinator.refresh,
+            cancelCloudDataRefresh: cloudDataSyncCoordinator.cancel,
             cloudKit: cloudKitManager,
             keychain: keychainManager,
             serverManager: serverManager,
             terminalTheme: terminalThemeManager,
             terminalFont: terminalFontStore,
-            terminalAccessory: terminalAccessoryPreferencesManager,
-            statsPreferences: statsPreferencesStore,
             pendingSync: cloudKitSyncCoordinator,
             defaults: defaults
         )
@@ -433,6 +452,7 @@ struct AppComposition {
         #endif
         self.voiceInputRuntimeStore = voiceInputRuntimeStore
         self.viewTabConfigurationManager = viewTabConfigurationManager
+        self.cloudDataSyncCoordinator = cloudDataSyncCoordinator
         self.syncSettingsCoordinator = syncSettingsCoordinator
         self.sshKeySettingsCoordinator = sshKeySettingsCoordinator
         self.knownHostSettingsCoordinator = knownHostSettingsCoordinator

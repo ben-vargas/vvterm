@@ -74,6 +74,13 @@ final class ServerRemoteSyncCoordinator {
         await task.value
     }
 
+    /// A notification must not be satisfied by a read that started before it arrived.
+    func refreshCloudData() async {
+        if let activeLoad { await activeLoad.task.value }
+        guard !Task.isCancelled else { return }
+        await loadData()
+    }
+
     func handleSyncDisabled() {
         startupTask?.cancel()
         startupTask = nil

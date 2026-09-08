@@ -1,5 +1,6 @@
 #if os(iOS)
 import UIKit
+import os.log
 
 nonisolated enum AppSceneLifecyclePolicy {
     static func shouldHandleBackgroundTransition(
@@ -19,31 +20,32 @@ nonisolated enum AppSceneLifecyclePolicy {
 }
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+    private let logger = Logger(subsystem: "app.vivy.VivyTerm", category: "Lifecycle")
     private var lastForegroundSyncAt: Date = .distantPast
     private let foregroundSyncMinimumInterval: TimeInterval = 20
     private var resumableTerminalLifecycleTask: Task<Void, Never>?
     private weak var tabManager: TerminalTabManager?
-    private weak var serverManager: ServerManager?
+    private weak var cloudDataSync: AppCloudDataSyncCoordinator?
     private weak var appLockManager: AppLockManager?
     private var lifecycleDependencies: AppLifecycleDependencies?
 
     func configure(
         tabManager: TerminalTabManager,
-        serverManager: ServerManager,
+        cloudDataSync: AppCloudDataSyncCoordinator,
         appLockManager: AppLockManager,
         lifecycleDependencies: AppLifecycleDependencies
     ) {
         if let currentManager = self.tabManager {
             precondition(currentManager === tabManager, "AppDelegate received a different terminal manager")
         }
-        if let currentManager = self.serverManager {
-            precondition(currentManager === serverManager, "AppDelegate received a different server manager")
+        if let currentManager = self.cloudDataSync {
+            precondition(currentManager === cloudDataSync, "AppDelegate received a different cloud sync coordinator")
         }
         if let currentManager = self.appLockManager {
             precondition(currentManager === appLockManager, "AppDelegate received a different app lock manager")
         }
         self.tabManager = tabManager
-        self.serverManager = serverManager
+        self.cloudDataSync = cloudDataSync
         self.appLockManager = appLockManager
         self.lifecycleDependencies = lifecycleDependencies
     }
@@ -55,11 +57,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         return tabManager
     }
 
-    private var configuredServerManager: ServerManager {
-        guard let serverManager else {
-            preconditionFailure("AppDelegate must be configured with a server manager")
+    private var configuredCloudDataSync: AppCloudDataSyncCoordinator {
+        guard let cloudDataSync else {
+            preconditionFailure("AppDelegate must be configured with a cloud sync coordinator")
         }
-        return serverManager
+        return cloudDataSync
     }
 
     private var configuredAppLockManager: AppLockManager {
@@ -123,7 +125,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         lastForegroundSyncAt = now
 
         Task {
-            await configuredServerManager.loadData()
+            do {
+                try await configuredCloudDataSync.refresh()
+            } catch is CancellationError {
+                return
+            } catch {
+                logger.error("Automatic cloud refresh failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -145,10 +153,26 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        logger.info("Cloud change notification received")
         Task {
-            await configuredServerManager.loadData()
-            completionHandler(.newData)
+            do {
+                try await configuredCloudDataSync.refresh()
+                completionHandler(.newData)
+            } catch is CancellationError {
+                completionHandler(.noData)
+            } catch {
+                logger.error("Push cloud refresh failed: \(error.localizedDescription)")
+                completionHandler(.failed)
+            }
         }
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        logger.info("Cloud push registration succeeded")
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        logger.error("Cloud push registration failed: \(error.localizedDescription)")
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
