@@ -91,6 +91,26 @@ struct CloudKitRecordChangeFetchIdentityTests {
     }
 
     @Test
+    func recoveryReusesFullResultFromAnIncrementalRequest() throws {
+        let original = CloudKitRecordChangeFetchIdentity(forceFullFetch: false, desiredKeys: ["name"])
+        let recovery = CloudKitRecordChangeFetchIdentity(forceFullFetch: true, desiredKeys: ["name"])
+        #expect(try CloudKitRecordChangeRequestPolicy.decision(
+            for: recovery, pendingKeys: original.desiredKeys, isFullFetch: true
+        ) == .coalesce)
+        #expect(throws: CloudKitRecordChangeStreamError.incompatibleRequestInFlight) {
+            try CloudKitRecordChangeRequestPolicy.decision(
+                for: recovery, pendingKeys: original.desiredKeys, isFullFetch: false
+            )
+        }
+        let differentKeys = CloudKitRecordChangeFetchIdentity(forceFullFetch: true, desiredKeys: ["host"])
+        #expect(throws: CloudKitRecordChangeStreamError.incompatibleRequestInFlight) {
+            try CloudKitRecordChangeRequestPolicy.decision(
+                for: differentKeys, pendingKeys: original.desiredKeys, isFullFetch: true
+            )
+        }
+    }
+
+    @Test
     func checkpointPolicyAcceptsOnlyTheCurrentPendingCheckpoint() throws {
         let pending = CloudKitRecordChangeCheckpoint(
             id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!

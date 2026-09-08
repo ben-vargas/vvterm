@@ -2197,3 +2197,5 @@
 "session" = "session";
 "test" = "test";
 "⌘%@" = "⌘%@";
+
+"iCloud sync could not finish. Try again." = "iCloud sync could not finish. Try again.";

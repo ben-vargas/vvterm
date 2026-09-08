@@ -47,7 +47,7 @@ final class CloudKitManager {
     }
 
     struct PendingRecordChanges {
-        let identity: CloudKitRecordChangeFetchIdentity
+        let desiredKeys: Set<String>
         let changes: CloudKitRawRecordChanges
         let token: CKServerChangeToken?
     }

@@ -27,7 +27,8 @@ extension CloudKitManager {
         if let pendingRecordChanges {
             _ = try CloudKitRecordChangeRequestPolicy.decision(
                 for: fetchIdentity,
-                inFlight: pendingRecordChanges.identity
+                pendingKeys: pendingRecordChanges.desiredKeys,
+                isFullFetch: pendingRecordChanges.changes.isFullFetch
             )
             try Task.checkCancellation()
             return pendingRecordChanges.changes
@@ -292,7 +293,7 @@ extension CloudKitManager {
             checkpoint: CloudKitRecordChangeCheckpoint(id: UUID())
         )
         pendingRecordChanges = PendingRecordChanges(
-            identity: identity,
+            desiredKeys: identity.desiredKeys,
             changes: changes,
             token: fetched.token
         )

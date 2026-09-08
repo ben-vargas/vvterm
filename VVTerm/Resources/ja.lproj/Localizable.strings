@@ -2198,3 +2198,5 @@
 "session" = "セッション";
 "test" = "テスト";
 "⌘%@" = "⌘%@";
+
+"iCloud sync could not finish. Try again." = "iCloudの同期を完了できませんでした。もう一度お試しください。";

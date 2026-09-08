@@ -2198,3 +2198,5 @@
 "session" = "Sitzung";
 "test" = "Testen";
 "⌘%@" = "⌘%@";
+
+"iCloud sync could not finish. Try again." = "Die iCloud-Synchronisierung konnte nicht abgeschlossen werden. Versuche es erneut.";

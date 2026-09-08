@@ -10,10 +10,14 @@ nonisolated struct CloudKitRecordChangeFetchIdentity: Equatable, Sendable {
     }
 }
 
-nonisolated enum CloudKitRecordChangeStreamError: Error, Equatable, Sendable {
+nonisolated enum CloudKitRecordChangeStreamError: LocalizedError, Equatable, Sendable {
     case incompatibleRequestInFlight
     case invalidCheckpoint
     case checkpointPersistenceFailed
+
+    var errorDescription: String? {
+        String(localized: "iCloud sync could not finish. Try again.")
+    }
 }
 
 nonisolated struct CloudKitRecordChangeCheckpoint: Equatable, Sendable {
@@ -32,6 +36,20 @@ nonisolated enum CloudKitRecordChangeRequestPolicy {
     ) throws -> CloudKitRecordChangeRequestDecision {
         guard let inFlight else { return .start }
         guard request == inFlight else {
+            throw CloudKitRecordChangeStreamError.incompatibleRequestInFlight
+        }
+        return .coalesce
+    }
+
+    /// Completed results are checked by their contents, not the mode that requested them.
+    /// Token expiry can turn an incremental request into a complete snapshot.
+    static func decision(
+        for request: CloudKitRecordChangeFetchIdentity,
+        pendingKeys: Set<String>,
+        isFullFetch: Bool
+    ) throws -> CloudKitRecordChangeRequestDecision {
+        guard request.desiredKeys == pendingKeys,
+              !request.forceFullFetch || isFullFetch else {
             throw CloudKitRecordChangeStreamError.incompatibleRequestInFlight
         }
         return .coalesce

@@ -2199,3 +2199,5 @@
 "session" = "relace";
 "test" = "Otestovat";
 "⌘%@" = "⌘%@";
+
+"iCloud sync could not finish. Try again." = "Synchronizaci s iCloudem se nepodařilo dokončit. Zkuste to znovu.";

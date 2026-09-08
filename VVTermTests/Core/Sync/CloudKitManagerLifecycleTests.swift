@@ -346,6 +346,43 @@ struct CloudKitManagerLifecycleTests {
         #expect(manager.lastSyncDate == nil)
     }
 
+    @Test
+    func fullRecoveryReusesPendingSnapshotAfterIncrementalRequest() async throws {
+        let manager = CloudKitManager(
+            container: CKContainer(identifier: CloudKitSyncConstants.cloudKitContainerIdentifier),
+            syncEnabled: { true },
+            accountStatus: { .available },
+            zoneClient: unusedZoneClient(),
+            initialZoneReady: true
+        )
+        let pending = manager.makePendingRecordChanges(
+            from: .init(changes: [], isFullFetch: true, token: nil),
+            identity: .init(forceFullFetch: false, desiredKeys: ["name"])
+        )
+        let recovered = try await manager.fetchCloudKitRecordChanges(
+            forceFullFetch: true, desiredKeys: ["name"]
+        )
+        #expect(recovered.isFullFetch)
+        #expect(recovered.checkpoint == pending.checkpoint)
+        #expect(manager.pendingRecordChanges != nil)
+        try manager.commitCloudKitRecordChanges(recovered.checkpoint)
+        #expect(manager.pendingRecordChanges == nil)
+    }
+
+    @Test
+    func syncResetRejectsPendingRecoveryCheckpoint() throws {
+        let manager = makeManager(zoneClient: unusedZoneClient(), initialZoneReady: true)
+        let pending = manager.makePendingRecordChanges(
+            from: .init(changes: [], isFullFetch: true, token: nil),
+            identity: .init(forceFullFetch: false, desiredKeys: ["name"])
+        )
+        manager.advanceSyncGeneration()
+        #expect(manager.pendingRecordChanges == nil)
+        #expect(throws: CloudKitRecordChangeStreamError.invalidCheckpoint) {
+            try manager.commitCloudKitRecordChanges(pending.checkpoint)
+        }
+    }
+
     private func settleMainActor() async {
         for _ in 0..<10 {
             await Task.yield()

@@ -2195,3 +2195,5 @@
 "session" = "会话";
 "test" = "测试";
 "⌘%@" = "⌘%@";
+
+"iCloud sync could not finish. Try again." = "无法完成 iCloud 同步。请重试。";
