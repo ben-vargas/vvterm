@@ -140,6 +140,21 @@ private final class AppSyncSettingsDataAdapter: SyncSettingsDataRefreshing {
         self.pendingSync = pendingSync
     }
 
+    var needsCloudRecovery: Bool {
+        serverManager.stateStore.ambiguousCloudRecovery != nil
+    }
+
+    var cloudRecoveryUpdates: AnyPublisher<Bool, Never> {
+        serverManager.stateStore.$snapshot
+            .map { $0.ambiguousCloudRecovery != nil }
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
+    func resolveCloudRecovery(_ choice: AmbiguousCloudRecoveryChoice) async throws {
+        try await serverManager.resolveAmbiguousCloudRecovery(choice)
+    }
+
     func handleSyncDisabled() {
         serverManager.handleSyncDisabled()
     }

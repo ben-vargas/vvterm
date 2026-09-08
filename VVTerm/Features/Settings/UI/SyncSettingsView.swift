@@ -5,11 +5,23 @@ struct SyncSettingsView: View {
     @State private var syncEnabled = SyncSettings.isEnabled
     @State private var ignoresNextSyncToggleChange = false
     @State private var isConfirmingCredentialRemoval = false
+    @State private var isShowingCloudRecovery = false
 
     var body: some View {
         Form {
             statusHeroSection
             syncToggleSection
+            if coordinator.needsCloudRecovery {
+                Section {
+                    Button("Review") { isShowingCloudRecovery = true }
+                        .accessibilityIdentifier("vvterm.settings.sync.review")
+                        .disabled(!syncEnabled || !coordinator.cloudState.isAvailable)
+                } header: {
+                    Text("Cloud data needs review")
+                } footer: {
+                    Text("Your local data is safe. Choose how to continue.")
+                }
+            }
             if let attentionMessage {
                 troubleshootingSection(message: attentionMessage)
             }
@@ -26,6 +38,10 @@ struct SyncSettingsView: View {
                 }
             )
         }
+        .modifier(ServerCloudRecoveryPresentation(
+            isPresented: $isShowingCloudRecovery,
+            resolve: coordinator.resolveCloudRecovery
+        ))
         .formStyle(.grouped)
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("vvterm.settings.page.iCloudSync")
@@ -90,6 +106,7 @@ struct SyncSettingsView: View {
 
     private var primaryAction: SyncSettingsPrimaryAction? {
         guard syncEnabled else { return nil }
+        if coordinator.needsCloudRecovery, coordinator.cloudState.isAvailable { return nil }
         if coordinator.manualSyncState == .running {
             return .syncing
         }
@@ -100,7 +117,9 @@ struct SyncSettingsView: View {
     }
 
     private var attentionMessage: String? {
-        credentialFailureText ?? coordinator.userState.recoveryGuidance
+        credentialFailureText
+            ?? (coordinator.needsCloudRecovery && coordinator.cloudState.isAvailable
+                ? nil : coordinator.userState.recoveryGuidance)
     }
 
     private var credentialFailureText: String? {

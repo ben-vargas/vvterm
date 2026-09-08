@@ -75,6 +75,28 @@ final class SyncSettingsUITests: XCTestCase {
     }
 
     @MainActor
+    func testCloudRecoveryReviewShowsChoicesAndClearsAfterResolution() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--vvterm-ui-test-sync-settings-harness",
+            "--vvterm-ui-test-sync-settings-recovery",
+            "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+        ]
+        app.launch()
+        defer { app.terminate() }
+        let review = app.buttons["vvterm.settings.sync.review"]
+        XCTAssertTrue(review.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["vvterm.settings.sync.action.primary"].exists)
+        review.click()
+        XCTAssertTrue(app.sheets.buttons["Keep Local Data"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.sheets.buttons["Upload Local Data"].exists)
+        XCTAssertTrue(app.sheets.buttons["Replace with Cloud Data"].exists)
+        app.sheets.buttons["Keep Local Data"].click()
+        XCTAssertTrue(app.buttons["vvterm.settings.sync.action.primary"].waitForExistence(timeout: 5))
+        XCTAssertFalse(review.exists)
+    }
+
+    @MainActor
     private func launchHarness(syncEnabled: Bool) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [

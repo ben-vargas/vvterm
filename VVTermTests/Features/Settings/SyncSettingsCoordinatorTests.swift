@@ -68,6 +68,15 @@ private final class SyncSettingsCredentialSpy: SyncSettingsCredentialSyncing {
 @MainActor
 private final class SyncSettingsDataSpy: SyncSettingsDataRefreshing {
     let actionLog: SyncSettingsActionLog
+    let recovery = CurrentValueSubject<Bool, Never>(false)
+    var needsCloudRecovery: Bool { recovery.value }
+    var cloudRecoveryUpdates: AnyPublisher<Bool, Never> { recovery.eraseToAnyPublisher() }
+    var recoveryChoices: [AmbiguousCloudRecoveryChoice] = []
+    func resolveCloudRecovery(_ choice: AmbiguousCloudRecoveryChoice) async throws {
+        recoveryChoices.append(choice)
+        if let syncError { throw syncError }
+        recovery.send(false)
+    }
     var disabledCount = 0
     var syncCount = 0
     var syncError: Error?
@@ -481,6 +490,32 @@ struct SyncSettingsCoordinatorTests {
         #expect(!diagnostics.localizedCaseInsensitiveContains("private key"))
         #expect(!diagnostics.localizedCaseInsensitiveContains("example.com"))
         #expect(!diagnostics.localizedCaseInsensitiveContains("oauth token"))
+    }
+
+    @Test
+    func recoveryStateFollowsServerDataAndSuccessfulResolution() async throws {
+        let data = SyncSettingsDataSpy()
+        let coordinator = makeCoordinator(data: data)
+        #expect(!coordinator.needsCloudRecovery)
+        data.recovery.send(true)
+        #expect(coordinator.needsCloudRecovery)
+        #expect(coordinator.userState == .needsAttention)
+        try await coordinator.resolveCloudRecovery(.keepLocal)
+        #expect(data.recoveryChoices == [.keepLocal])
+        #expect(!coordinator.needsCloudRecovery)
+    }
+
+    @Test
+    func failedRecoveryKeepsReviewAvailable() async {
+        let data = SyncSettingsDataSpy()
+        data.recovery.send(true)
+        data.syncError = NSError(domain: "test", code: 1)
+        let coordinator = makeCoordinator(data: data)
+        do {
+            try await coordinator.resolveCloudRecovery(.uploadLocal)
+            Issue.record("Expected recovery failure")
+        } catch {}
+        #expect(coordinator.needsCloudRecovery)
     }
 
     private func makeCoordinator(

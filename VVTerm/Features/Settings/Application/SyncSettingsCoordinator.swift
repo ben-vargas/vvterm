@@ -206,6 +206,9 @@ protocol SyncSettingsCredentialSyncing: AnyObject {
 
 @MainActor
 protocol SyncSettingsDataRefreshing: AnyObject {
+    var needsCloudRecovery: Bool { get }
+    var cloudRecoveryUpdates: AnyPublisher<Bool, Never> { get }
+    func resolveCloudRecovery(_ choice: AmbiguousCloudRecoveryChoice) async throws
     func handleSyncDisabled()
     func syncNow() async throws
 }
@@ -236,6 +239,7 @@ final class SyncSettingsCoordinator: ObservableObject {
     @Published private(set) var lastSuccessfulSyncDate: Date?
     @Published private(set) var lastError: SyncSettingsErrorRecord?
     @Published private(set) var contentSummary: SyncSettingsContentSummary
+    @Published private(set) var needsCloudRecovery: Bool
 
     private let cloud: any SyncSettingsCloudSyncing
     private let credentials: any SyncSettingsCredentialSyncing
@@ -245,6 +249,7 @@ final class SyncSettingsCoordinator: ObservableObject {
     private let runtime: SyncSettingsRuntimeInfo
     private let now: () -> Date
     private var cloudStateObservation: AnyCancellable?
+    private var cloudRecoveryObservation: AnyCancellable?
     private var manualSyncOperationID = UUID()
 
     init(
@@ -263,6 +268,7 @@ final class SyncSettingsCoordinator: ObservableObject {
         self.history = history
         self.runtime = runtime
         self.now = now
+        needsCloudRecovery = data.needsCloudRecovery
         cloudState = cloud.currentState
         credentialState = credentials.currentState
         contentSummary = content.currentSummary
@@ -272,6 +278,9 @@ final class SyncSettingsCoordinator: ObservableObject {
         ]
         .compactMap { $0 }
         .max()
+        cloudRecoveryObservation = data.cloudRecoveryUpdates
+            .removeDuplicates()
+            .sink { [weak self] in self?.needsCloudRecovery = $0 }
         cloudStateObservation = cloud.stateUpdates
             .removeDuplicates()
             .sink { [weak self] state in
@@ -287,7 +296,7 @@ final class SyncSettingsCoordinator: ObservableObject {
         if manualSyncState == .running || cloudState.status == .syncing {
             return .syncing
         }
-        if credentialState == .needsAttention {
+        if needsCloudRecovery || credentialState == .needsAttention {
             return .needsAttention
         }
 
@@ -336,6 +345,12 @@ final class SyncSettingsCoordinator: ObservableObject {
             return cloudState.hasPendingFailure ? .needsAttention : .waitingForNetwork
         }
         return lastSuccessfulSyncDate == nil ? .readyToSync : .upToDate
+    }
+
+    func resolveCloudRecovery(_ choice: AmbiguousCloudRecoveryChoice) async throws {
+        try await data.resolveCloudRecovery(choice)
+        refreshSnapshots()
+        manualSyncState = .idle
     }
 
     var canSyncNow: Bool {

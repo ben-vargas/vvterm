@@ -59,6 +59,14 @@ private final class SyncSettingsUITestCredentials: SyncSettingsCredentialSyncing
 
 @MainActor
 private final class SyncSettingsUITestData: SyncSettingsDataRefreshing {
+    private let recovery = CurrentValueSubject<Bool, Never>(
+        Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-sync-settings-recovery")
+    )
+    var needsCloudRecovery: Bool { recovery.value }
+    var cloudRecoveryUpdates: AnyPublisher<Bool, Never> { recovery.eraseToAnyPublisher() }
+    func resolveCloudRecovery(_ choice: AmbiguousCloudRecoveryChoice) async throws {
+        recovery.send(false)
+    }
     func handleSyncDisabled() {}
     func syncNow() async throws {}
 }
@@ -91,19 +99,22 @@ struct SyncSettingsUITestHarness: View {
         let isEnabled = !Foundation.ProcessInfo.processInfo.arguments.contains(
             "--vvterm-ui-test-sync-settings-disabled"
         )
+        _coordinator = StateObject(wrappedValue: Self.makeCoordinator(isEnabled: isEnabled))
+    }
+
+    private static func makeCoordinator(isEnabled: Bool) -> SyncSettingsCoordinator {
+        // Run once for the StateObject, not on each SwiftUI view initialization.
         try? SyncSettings.persistEnabled(isEnabled)
-        _coordinator = StateObject(
-            wrappedValue: SyncSettingsCoordinator(
-                cloud: SyncSettingsUITestCloud(isEnabled: isEnabled),
-                credentials: SyncSettingsUITestCredentials(isEnabled: isEnabled),
-                data: SyncSettingsUITestData(),
-                content: SyncSettingsUITestContent(),
-                history: SyncSettingsUITestHistory(),
-                runtime: SyncSettingsRuntimeInfo(
-                    appVersion: "UI Test",
-                    buildVersion: "1",
-                    platform: "UI Test"
-                )
+        return SyncSettingsCoordinator(
+            cloud: SyncSettingsUITestCloud(isEnabled: isEnabled),
+            credentials: SyncSettingsUITestCredentials(isEnabled: isEnabled),
+            data: SyncSettingsUITestData(),
+            content: SyncSettingsUITestContent(),
+            history: SyncSettingsUITestHistory(),
+            runtime: SyncSettingsRuntimeInfo(
+                appVersion: "UI Test",
+                buildVersion: "1",
+                platform: "UI Test"
             )
         )
     }

@@ -4,7 +4,6 @@ struct ServerLocalStorageNotice: View {
     let serverManager: ServerManager
     @ObservedObject var stateStore: ServerStateStore
     @State private var isShowingCloudRecovery = false
-    @State private var recoveryFailure: String?
 
     init(serverManager: ServerManager) {
         self.serverManager = serverManager
@@ -47,49 +46,10 @@ struct ServerLocalStorageNotice: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .confirmationDialog(
-                String(localized: "Cloud data needs review"),
+            .modifier(ServerCloudRecoveryPresentation(
                 isPresented: $isShowingCloudRecovery,
-                titleVisibility: .visible
-            ) {
-                Button(String(localized: "Keep Local Data")) {
-                    resolve(.keepLocal)
-                }
-                Button(String(localized: "Upload Local Data")) {
-                    resolve(.uploadLocal)
-                }
-                Button(String(localized: "Replace with Cloud Data"), role: .destructive) {
-                    resolve(.replaceWithCloud)
-                }
-                Button(String(localized: "Cancel"), role: .cancel) {}
-            } message: {
-                Text(
-                    String(
-                        localized: "VVTerm could not confirm that missing local items were intentionally removed."
-                    )
-                )
-            }
-            .alert(
-                String(localized: "Recovery Failed"),
-                isPresented: Binding(
-                    get: { recoveryFailure != nil },
-                    set: { if !$0 { recoveryFailure = nil } }
-                )
-            ) {
-                Button(String(localized: "OK"), role: .cancel) {}
-            } message: {
-                Text(recoveryFailure ?? "")
-            }
-        }
-    }
-
-    private func resolve(_ choice: AmbiguousCloudRecoveryChoice) {
-        Task {
-            do {
-                try await serverManager.resolveAmbiguousCloudRecovery(choice)
-            } catch {
-                recoveryFailure = error.localizedDescription
-            }
+                resolve: serverManager.resolveAmbiguousCloudRecovery
+            ))
         }
     }
 }
