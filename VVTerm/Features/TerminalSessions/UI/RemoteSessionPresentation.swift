@@ -31,7 +31,6 @@ extension RemoteSessionStatus {
         case .background: return backendName
         case .off: return "off"
         case .missing: return "\(backendName) missing"
-        case .installing: return "\(backendName) install"
         case .unknown: return backendName
         }
     }
@@ -42,7 +41,6 @@ extension RemoteSessionStatus {
         case .background: return "Background"
         case .off: return "Off"
         case .missing: return "Unavailable"
-        case .installing: return "Installing"
         case .unknown: return "Unknown"
         }
     }

@@ -122,68 +122,6 @@ nonisolated extension RemoteTmuxCommandBuilder {
         """
     }
 
-    static func windowsInstallAndAttachScript(
-        sessionName: String,
-        workingDirectory: String,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        backend: RemoteTmuxBackend,
-        attachAfterInstall: Bool
-    ) -> String {
-        let configWrite = windowsConfigWritePowerShell(
-            terminalType: terminalType,
-            themeStyle: themeStyle,
-            backend: backend
-        )
-        let attach = windowsEnsureManagedPowerShell(
-            sessionName: sessionName,
-            workingDirectory: workingDirectory,
-            backend: backend,
-            themeStyle: themeStyle,
-            commandExpression: "$vvtermPsmuxCommand.Source"
-        )
-        let afterInstall = attachAfterInstall ? attach : "Write-Output 'psmux installation completed.'"
-        let script = """
-        \(configWrite)
-        function Get-VVTermPsmuxCommand {
-          $cmd = Get-Command psmux -ErrorAction SilentlyContinue
-          if (-not $cmd) {
-            $cmd = Get-Command pmux -ErrorAction SilentlyContinue
-          }
-          return $cmd
-        }
-        $vvtermPsmuxCommand = Get-VVTermPsmuxCommand
-        $vvtermPsmuxInstalled = $null -ne $vvtermPsmuxCommand
-        if (-not $vvtermPsmuxInstalled -and (Get-Command winget -ErrorAction SilentlyContinue)) {
-          winget install --id marlocarlo.psmux --accept-package-agreements --accept-source-agreements
-          $vvtermPsmuxCommand = Get-VVTermPsmuxCommand
-          $vvtermPsmuxInstalled = $null -ne $vvtermPsmuxCommand
-        }
-        if (-not $vvtermPsmuxInstalled -and (Get-Command scoop -ErrorAction SilentlyContinue)) {
-          scoop bucket add psmux https://github.com/psmux/scoop-psmux
-          scoop install psmux
-          $vvtermPsmuxCommand = Get-VVTermPsmuxCommand
-          $vvtermPsmuxInstalled = $null -ne $vvtermPsmuxCommand
-        }
-        if (-not $vvtermPsmuxInstalled -and (Get-Command choco -ErrorAction SilentlyContinue)) {
-          choco install psmux -y
-          $vvtermPsmuxCommand = Get-VVTermPsmuxCommand
-          $vvtermPsmuxInstalled = $null -ne $vvtermPsmuxCommand
-        }
-        if (-not $vvtermPsmuxInstalled -and (Get-Command cargo -ErrorAction SilentlyContinue)) {
-          cargo install psmux
-          $vvtermPsmuxCommand = Get-VVTermPsmuxCommand
-          $vvtermPsmuxInstalled = $null -ne $vvtermPsmuxCommand
-        }
-        if ($vvtermPsmuxInstalled) {
-        \(indentPowerShell(afterInstall, spaces: 2))
-        } else {
-          Write-Output 'psmux installation failed or no supported package manager was found.'
-        }
-        """
-        return windowsShellCommand(powerShellScript: script, backend: backend)
-    }
-
     static func windowsConfigPathPowerShellExpression() -> String {
         "$HOME + \(powerShellQuoted("\\.vvterm\\psmux.conf"))"
     }

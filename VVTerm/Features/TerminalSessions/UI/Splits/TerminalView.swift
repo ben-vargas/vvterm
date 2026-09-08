@@ -753,15 +753,6 @@ struct TerminalPaneView: View {
         )
     }
 
-    private var remoteSessionInstallActionTitle: String {
-        switch remoteSessionBackendMetadata?.installation {
-        case .documentation:
-            String(localized: "Open Installation Guide")
-        case .automatic, nil:
-            String(localized: "Install")
-        }
-    }
-
     private var noticeSurfaceStyle: NoticeSurfaceStyle {
         .terminal(
             backgroundColor: Color.fromHex(appearance.activeTheme.palette.backgroundHex),
@@ -849,20 +840,6 @@ struct TerminalPaneView: View {
     }
 
     private var bottomOperationNotice: NoticeItem? {
-        if paneState?.remoteSessionStatus == .installing {
-            return NoticeItem(
-                id: "pane-remote-session-install-\(paneId.uuidString)",
-                lane: .bottomOperation,
-                level: .info,
-                leading: .activity,
-                title: String(
-                    format: String(localized: "Installing %@"),
-                    remoteSessionBackendName
-                ),
-                message: String(localized: "Preparing persistent shell support.")
-            )
-        }
-
         if isInstallingMosh {
             return NoticeItem(
                 id: "pane-mosh-install-\(paneId.uuidString)",
@@ -928,7 +905,7 @@ struct TerminalPaneView: View {
 
             showingRemoteSessionInstallPrompt = RemoteSessionInstallPromptPolicy.shouldPresent(
                 for: paneState?.remoteSessionStatus,
-                installation: remoteSessionBackendMetadata?.installation
+                installationGuideURL: remoteSessionBackendMetadata?.installationGuideURL
             )
             startConnectWatchdog()
             reconcileAutomaticReconnect()
@@ -964,7 +941,7 @@ struct TerminalPaneView: View {
         .onChange(of: paneState?.remoteSessionStatus) { status in
             showingRemoteSessionInstallPrompt = RemoteSessionInstallPromptPolicy.shouldPresent(
                 for: status,
-                installation: remoteSessionBackendMetadata?.installation
+                installationGuideURL: remoteSessionBackendMetadata?.installationGuideURL
             )
         }
         .onChange(of: isAwaitingRemoteSessionSelection) { isAwaitingSelection in
@@ -1000,7 +977,7 @@ struct TerminalPaneView: View {
             connectWatchdog.cancel()
         }
         .alert(remoteSessionInstallTitle, isPresented: $showingRemoteSessionInstallPrompt) {
-            Button(remoteSessionInstallActionTitle) {
+            Button("Open Installation Guide") {
                 handleRemoteSessionInstallation()
             }
             Button("Continue without persistence", role: .cancel) {
@@ -1090,18 +1067,8 @@ struct TerminalPaneView: View {
     }
 
     private func handleRemoteSessionInstallation() {
-        switch remoteSessionBackendMetadata?.installation {
-        case .automatic:
-            Task {
-                await remoteSessionCoordinator.startInstall(for: paneId) {
-                    retryConnection()
-                }
-            }
-        case .documentation(let url):
-            openURL(url)
-        case nil:
-            break
-        }
+        guard let url = remoteSessionBackendMetadata?.installationGuideURL else { return }
+        openURL(url)
     }
 
     private func presentHostKeyTrustConfirmation() {

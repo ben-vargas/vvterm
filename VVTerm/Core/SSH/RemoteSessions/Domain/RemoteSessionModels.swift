@@ -14,14 +14,9 @@ nonisolated struct RemoteSessionBackendIdentifier: RawRepresentable, Codable, Ha
 }
 
 nonisolated struct RemoteSessionBackendMetadata: Hashable, Sendable {
-    enum Installation: Hashable, Sendable {
-        case automatic
-        case documentation(URL)
-    }
-
     let identifier: RemoteSessionBackendIdentifier
     let displayName: String
-    let installation: Installation
+    let installationGuideURL: URL
     let managedStartupCommandSupport: ManagedStartupCommandSupport
 }
 

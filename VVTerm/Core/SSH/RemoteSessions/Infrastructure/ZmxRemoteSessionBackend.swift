@@ -10,7 +10,7 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
     let metadata = RemoteSessionBackendMetadata(
         identifier: .zmx,
         displayName: "zmx",
-        installation: .documentation(URL(string: "https://zmx.sh")!),
+        installationGuideURL: URL(string: "https://zmx.sh")!,
         managedStartupCommandSupport: .supported
     )
 
@@ -92,17 +92,6 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
                 runtime: runtime
             )
         )
-    }
-
-    func installScript(
-        attachment: RemoteSessionAttachment,
-        workingDirectory: String,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        using client: SSHClient,
-        attachAfterInstall: Bool
-    ) async -> String? {
-        nil
     }
 
     func killSession(

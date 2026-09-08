@@ -15,6 +15,5 @@ final class TmuxDomainTests: XCTestCase {
         XCTAssertTrue(RemoteSessionStatus.unknown.indicatesPersistentSession)
         XCTAssertFalse(RemoteSessionStatus.off.indicatesPersistentSession)
         XCTAssertFalse(RemoteSessionStatus.missing.indicatesPersistentSession)
-        XCTAssertFalse(RemoteSessionStatus.installing.indicatesPersistentSession)
     }
 }

@@ -4,7 +4,7 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
     let metadata = RemoteSessionBackendMetadata(
         identifier: .tmux,
         displayName: "tmux",
-        installation: .automatic,
+        installationGuideURL: URL(string: "https://github.com/tmux/tmux/wiki/Installing")!,
         managedStartupCommandSupport: .supported
     )
 
@@ -117,28 +117,6 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
                 ) : nil,
             shellProfile: backend.isWindows
                 ? .powershell(executableName: backend.powerShellExecutable ?? "powershell.exe") : nil
-        )
-    }
-
-    func installScript(
-        attachment: RemoteSessionAttachment,
-        workingDirectory: String,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        using client: SSHClient,
-        attachAfterInstall: Bool
-    ) async -> String? {
-        guard attachment.identifier.backendIdentifier == .tmux,
-              let backend = await tmux.tmuxInstallBackend(using: client) else {
-            return nil
-        }
-        return RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: themeStyle,
-            sessionName: attachment.identifier.rawValue,
-            workingDirectory: workingDirectory,
-            terminalType: terminalType,
-            backend: backend,
-            attachAfterInstall: attachAfterInstall
         )
     }
 

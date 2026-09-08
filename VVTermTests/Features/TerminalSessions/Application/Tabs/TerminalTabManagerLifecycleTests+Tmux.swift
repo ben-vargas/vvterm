@@ -457,28 +457,6 @@ extension TerminalTabManagerLifecycleTests {
             }
         }
     
-        @Test
-        func successfulTmuxInstallTriggersExplicitReconnect() async {
-            await withCleanManager { manager in
-                let tab = TerminalTab(serverId: UUID(), title: "Installed tmux")
-                installTab(tab, in: manager, connectionState: .connected)
-                manager.sessionState.updatePane(tab.rootPaneId) { $0.disconnectReason = .remoteSessionDetached }
-                var reconnectRequested = false
-    
-                manager.remoteSessionCoordinator.completeInstall(
-                    for: tab.rootPaneId,
-                    attachment: remoteSessionAttachmentState(
-                        "vvterm_installed",
-                        ownership: .managed
-                    ),
-                    onInstalled: { reconnectRequested = true }
-                )
-    
-                #expect(reconnectRequested)
-                #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId)?.attachment.identifier.rawValue == "vvterm_installed")
-                #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId)?.attachment.ownership == .managed)
-            }
-        }
     
         @Test
         func transportEndPreservesPaneAndAllowsAutomaticReconnect() async {

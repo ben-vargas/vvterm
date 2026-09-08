@@ -102,7 +102,7 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
     nonisolated let backendMetadata = [RemoteSessionBackendMetadata(
         identifier: .tmux,
         displayName: "tmux",
-        installation: .automatic,
+        installationGuideURL: URL(string: "https://github.com/tmux/tmux/wiki/Installing")!,
         managedStartupCommandSupport: .supported
     )]
     private var killedSessions: [RemoteSessionIdentifier] = []
@@ -172,21 +172,6 @@ private actor RecordingTerminalRemoteTmuxService: TerminalRemoteSessionServicing
             )
         )
     }
-
-    func installScript(
-        attachment: RemoteSessionAttachment,
-        workingDirectory: String,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        using client: SSHClient,
-        attachAfterInstall: Bool
-    ) async -> String? { nil }
-
-    func sendScript(
-        _ script: String,
-        using client: SSHClient,
-        shellId: UUID
-    ) async throws {}
 
     func killSession(
         _ identifier: RemoteSessionIdentifier,

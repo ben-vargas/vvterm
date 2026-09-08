@@ -88,27 +88,6 @@ actor RemoteTmuxManager {
         return await availableBackend(using: client)
     }
 
-    func tmuxInstallBackend(using client: SSHClient) async -> RemoteTmuxBackend? {
-        let environment = await client.remoteEnvironment()
-        guard environment.supportsTmuxRuntime else { return nil }
-
-        if environment.platform == .windows {
-            let powerShellExecutable = RemoteTmuxCommandBuilder.windowsPowerShellExecutable(
-                for: environment
-            )
-            if environment.shellProfile.family == .cmd, powerShellExecutable == nil {
-                return nil
-            }
-            return .windowsPsmux(
-                commandName: "psmux",
-                shellFamily: environment.shellProfile.family,
-                powerShellExecutable: powerShellExecutable
-            )
-        }
-
-        return .unixTmux
-    }
-
     func listSessions(
         using client: SSHClient,
         backend: RemoteTmuxBackend,
@@ -169,12 +148,6 @@ actor RemoteTmuxManager {
         }
 
         throw lastError ?? SSHError.unknown("Unable to list tmux sessions")
-    }
-
-    func sendScript(_ script: String, using client: SSHClient, shellId: UUID) async throws {
-        let payload = script.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
-        guard let data = payload.data(using: .utf8) else { return }
-        try await client.write(data, to: shellId)
     }
 
     func killSession(

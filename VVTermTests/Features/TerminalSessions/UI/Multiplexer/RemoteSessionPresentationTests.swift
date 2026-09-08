@@ -73,7 +73,6 @@ final class RemoteSessionPresentationTests: XCTestCase {
             (.background, "tmux", "Background"),
             (.off, "off", "Off"),
             (.missing, "tmux missing", "Unavailable"),
-            (.installing, "tmux install", "Installing"),
             (.unknown, "tmux", "Unknown")
         ]
 

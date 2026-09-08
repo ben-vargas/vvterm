@@ -9,9 +9,7 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
     let metadata = RemoteSessionBackendMetadata(
         identifier: .zellij,
         displayName: "Zellij",
-        installation: .documentation(
-            URL(string: "https://zellij.dev/documentation/installation")!
-        ),
+        installationGuideURL: URL(string: "https://zellij.dev/documentation/installation")!,
         managedStartupCommandSupport: .supported
     )
 
@@ -117,17 +115,6 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
                 runtime: runtime
             )
         )
-    }
-
-    func installScript(
-        attachment: RemoteSessionAttachment,
-        workingDirectory: String,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        using client: SSHClient,
-        attachAfterInstall: Bool
-    ) async -> String? {
-        nil
     }
 
     func killSession(

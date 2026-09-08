@@ -7,7 +7,7 @@ struct RemoteSessionClientCleanupTests {
 
     private actor Backend: RemoteSessionBackend {
         nonisolated let metadata = RemoteSessionBackendMetadata(
-            identifier: .tmux, displayName: "tmux", installation: .automatic,
+            identifier: .tmux, displayName: "tmux", installationGuideURL: URL(string: "https://github.com/tmux/tmux/wiki/Installing")!,
             managedStartupCommandSupport: .supported
         )
         let sessions: [RemoteSessionDescriptor]
@@ -29,9 +29,6 @@ struct RemoteSessionClientCleanupTests {
                                     runtime: RemoteSessionRuntime) throws -> RemoteSessionBackendLaunchPlan {
             throw SSHError.notConnected
         }
-        func installScript(attachment: RemoteSessionAttachment, workingDirectory: String,
-                           terminalType: RemoteTerminalType, themeStyle: RemoteSessionThemeStyle,
-                           using client: SSHClient, attachAfterInstall: Bool) async -> String? { nil }
         func killSession(_ identifier: RemoteSessionIdentifier, using client: SSHClient,
                          runtime: RemoteSessionRuntime) async throws {
             if failure == .delete { throw Failure.delete }

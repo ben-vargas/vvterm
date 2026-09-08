@@ -263,14 +263,8 @@ enum TerminalSceneActivityPolicy {
 enum RemoteSessionInstallPromptPolicy {
     static func shouldPresent(
         for status: RemoteSessionStatus?,
-        installation: RemoteSessionBackendMetadata.Installation?
+        installationGuideURL: URL?
     ) -> Bool {
-        guard status == .missing else { return false }
-        switch installation {
-        case .automatic, .documentation:
-            return true
-        case nil:
-            return false
-        }
+        status == .missing && installationGuideURL != nil
     }
 }

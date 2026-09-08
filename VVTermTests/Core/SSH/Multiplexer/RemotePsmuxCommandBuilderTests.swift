@@ -299,41 +299,6 @@ struct RemotePsmuxCommandBuilderTests {
         #expect(probe.contains("__VVTERM_TMUX_NO__:tmux"))
     }
 
-    @Test
-    func windowsPsmuxInstallScriptUsesWindowsPackageManagersAndConfig() {
-        let backend = RemoteTmuxBackend.windowsPsmux(
-            commandName: "psmux",
-            shellFamily: .powershell,
-            powerShellExecutable: "pwsh"
-        )
-
-        let script = RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: deterministicRemoteSessionThemeStyle,
-            sessionName: "vvterm_demo",
-            workingDirectory: "C:/work",
-            terminalType: .xtermGhostty,
-            backend: backend
-        )
-
-        #expect(script.contains("Set-Content -Encoding UTF8 -NoNewline -Path $vvtermConfigPath"))
-        #expect(script.contains("$HOME + '\\.vvterm\\psmux.conf'"))
-        #expect(script.contains("winget install --id marlocarlo.psmux"))
-        #expect(script.contains("scoop bucket add psmux https://github.com/psmux/scoop-psmux"))
-        #expect(script.contains("choco install psmux -y"))
-        #expect(script.contains("cargo install psmux"))
-        #expect(script.contains("function Get-VVTermPsmuxCommand"))
-        #expect(script.contains("Get-Command pmux -ErrorAction SilentlyContinue"))
-        #expect(script.contains("$vvtermPsmux = $vvtermPsmuxCommand.Source"))
-        #expect(script.contains("set -g allow-set-title on"))
-        #expect(!script.contains("%if"))
-        #expect(script.contains("set -g terminal-features[0] \"*:hyperlinks\""))
-        #expect(!script.contains("irm "))
-        #expect(!script.contains("WheelUpPane"))
-        #expect(!script.contains("WheelDownPane"))
-        #expect(!script.contains("scroll-on-clear"))
-        #expect(!script.contains("sh -lc"))
-    }
-
     private func decodedPowerShellScript(from command: String) -> String? {
         guard let encodedCommand = command
             .trimmingCharacters(in: .whitespacesAndNewlines)

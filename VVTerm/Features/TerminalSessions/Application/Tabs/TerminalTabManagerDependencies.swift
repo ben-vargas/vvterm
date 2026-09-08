@@ -36,19 +36,6 @@ nonisolated protocol TerminalRemoteSessionServicing: Sendable {
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) async throws -> RemoteSessionBackendLaunchPlan
-    func installScript(
-        attachment: RemoteSessionAttachment,
-        workingDirectory: String,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        using client: SSHClient,
-        attachAfterInstall: Bool
-    ) async -> String?
-    func sendScript(
-        _ script: String,
-        using client: SSHClient,
-        shellId: UUID
-    ) async throws
     func killSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,

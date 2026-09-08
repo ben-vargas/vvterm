@@ -15,7 +15,7 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
     let metadata = RemoteSessionBackendMetadata(
         identifier: .herdr,
         displayName: "Herdr",
-        installation: .documentation(URL(string: "https://herdr.dev/docs/install/")!),
+        installationGuideURL: URL(string: "https://herdr.dev/docs/install/")!,
         managedStartupCommandSupport: .unsupported
     )
 
@@ -107,17 +107,6 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
                 runtime: runtime
             )
         )
-    }
-
-    func installScript(
-        attachment: RemoteSessionAttachment,
-        workingDirectory: String,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        using client: SSHClient,
-        attachAfterInstall: Bool
-    ) async -> String? {
-        nil
     }
 
     func killSession(

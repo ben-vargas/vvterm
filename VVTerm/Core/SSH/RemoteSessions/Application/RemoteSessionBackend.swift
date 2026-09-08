@@ -18,14 +18,6 @@ nonisolated protocol RemoteSessionBackend: Sendable {
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) throws -> RemoteSessionBackendLaunchPlan
-    func installScript(
-        attachment: RemoteSessionAttachment,
-        workingDirectory: String,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        using client: SSHClient,
-        attachAfterInstall: Bool
-    ) async -> String?
     func killSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,

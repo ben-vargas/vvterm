@@ -287,13 +287,6 @@ final class EternalTerminalRuntime {
         }
     }
 
-    func sendInteractiveScript(_ script: String) async throws {
-        let payload = script.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
-        guard let data = payload.data(using: .utf8) else { return }
-        guard let session else { throw EternalTerminalSessionFailure.connectionClosed }
-        try await session.send(data)
-    }
-
     func withBootstrapSSHClient<Result: Sendable>(
         _ operation: @Sendable (SSHClient) async throws -> Result
     ) async throws -> Result {

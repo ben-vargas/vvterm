@@ -72,33 +72,6 @@ actor RemoteSessionClient {
         return try backend.launchPlan(for: request, runtime: runtime)
     }
 
-    func installScript(
-        attachment: RemoteSessionAttachment,
-        workingDirectory: String,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        using client: SSHClient,
-        attachAfterInstall: Bool
-    ) async -> String? {
-        guard let backend = registry.backend(for: attachment.identifier.backendIdentifier) else {
-            return nil
-        }
-        return await backend.installScript(
-            attachment: attachment,
-            workingDirectory: workingDirectory,
-            terminalType: terminalType,
-            themeStyle: themeStyle,
-            using: client,
-            attachAfterInstall: attachAfterInstall
-        )
-    }
-
-    func sendScript(_ script: String, using client: SSHClient, shellId: UUID) async throws {
-        let payload = script.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
-        guard let data = payload.data(using: .utf8) else { return }
-        try await client.write(data, to: shellId)
-    }
-
     func killSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,

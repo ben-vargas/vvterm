@@ -265,20 +265,41 @@ struct TerminalConnectionStatusPresentationTests {
     }
 
     @Test
+    func allSessionBackendsOfferTheirInstallationGuide() {
+        let registry = RemoteSessionBackendRegistry(backends: [
+            TmuxRemoteSessionBackend(tmux: RemoteTmuxManager()),
+            ZellijRemoteSessionBackend(),
+            ZmxRemoteSessionBackend(),
+            HerdrRemoteSessionBackend()
+        ])
+        let expected: [RemoteSessionBackendIdentifier: String] = [
+            .tmux: "https://github.com/tmux/tmux/wiki/Installing",
+            .zellij: "https://zellij.dev/documentation/installation",
+            .zmx: "https://zmx.sh",
+            .herdr: "https://herdr.dev/docs/install/"
+        ]
+
+        #expect(registry.metadata.count == expected.count)
+        for metadata in registry.metadata {
+            #expect(metadata.installationGuideURL.absoluteString == expected[metadata.identifier])
+            #expect(RemoteSessionInstallPromptPolicy.shouldPresent(
+                for: .missing,
+                installationGuideURL: metadata.installationGuideURL
+            ))
+        }
+    }
+
+    @Test
     func remoteSessionInstallPromptRequiresConfirmedMissingStatus() {
         #expect(RemoteSessionInstallPromptPolicy.shouldPresent(
             for: .missing,
-            installation: .automatic
+            installationGuideURL: URL(string: "https://example.com")!
         ))
-        #expect(RemoteSessionInstallPromptPolicy.shouldPresent(
-            for: .missing,
-            installation: .documentation(URL(string: "https://example.com")!)
-        ))
-        #expect(!RemoteSessionInstallPromptPolicy.shouldPresent(for: .missing, installation: nil))
-        for status in [RemoteSessionStatus.unknown, .background, .foreground, .off, .installing, nil] {
+        #expect(!RemoteSessionInstallPromptPolicy.shouldPresent(for: .missing, installationGuideURL: nil))
+        for status in [RemoteSessionStatus.unknown, .background, .foreground, .off, nil] {
             #expect(!RemoteSessionInstallPromptPolicy.shouldPresent(
                 for: status,
-                installation: .automatic
+                installationGuideURL: URL(string: "https://github.com/tmux/tmux/wiki/Installing")!
             ))
         }
     }

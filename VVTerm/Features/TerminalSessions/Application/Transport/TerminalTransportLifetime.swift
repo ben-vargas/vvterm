@@ -73,40 +73,6 @@ final class TerminalTransportLifetime {
         lastSSHResizeByPane.removeValue(forKey: paneId)
     }
 
-    func unregisterShell(
-        for paneId: UUID,
-        ifOwnedBy registration: TerminalRemoteSessionShellRegistration
-    ) async {
-        guard registry.ownsShell(
-            client: registration.client,
-            shellId: registration.shellID,
-            for: paneId
-        ) else { return }
-
-        registry.cancelConnectionTask(for: paneId)
-        cancelQueuedIO(for: paneId)
-        let ownership = registry.unregisterShell(for: paneId)
-        guard let removed = ownership.registration else { return }
-
-        await registry.performTrackedCleanup(for: removed.client) {
-            if !self.registry.hasClientReferences(removed.client) {
-                await removed.client.disconnect()
-            } else {
-                await removed.client.closeShell(removed.shellId)
-            }
-        }
-    }
-
-    @discardableResult
-    func unregisterRuntime(
-        for paneId: UUID,
-        ifOwnedBy runtime: EternalTerminalRuntime
-    ) async -> Bool {
-        guard registry.detachRuntime(runtime, for: paneId) else { return false }
-        await runtime.close()
-        return true
-    }
-
     func drain() -> TerminalTransportRegistry<EternalTerminalRuntime>.DrainResult {
         let drainedTransports = registry.drain()
         let queues = Array(writeQueuesByPane.values)

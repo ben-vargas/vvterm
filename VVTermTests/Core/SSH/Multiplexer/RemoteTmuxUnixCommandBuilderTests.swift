@@ -123,41 +123,6 @@ struct RemoteTmuxUnixCommandBuilderTests {
     }
 
     @Test
-    func installAndAttachScriptIncludesScopedManagedConfiguration() {
-        let script = RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: deterministicRemoteSessionThemeStyle,
-            sessionName: "vvterm_demo",
-            workingDirectory: "/tmp/work dir",
-            terminalType: .xtermGhostty
-        )
-        #expect(script.contains("new-session -d -s"))
-        #expect(script.contains("vvterm_demo"))
-        #expect(script.contains("/tmp/work dir"))
-        #expect(script.contains("set-option -q -t"))
-        #expect(script.contains("status off"))
-        #expect(script.contains("RGB,hyperlinks"))
-        #expect(!script.contains("~/.vvterm/tmux.conf"))
-        #expect(!script.contains("set -g"))
-    }
-
-    @Test
-    func installOnlyScriptDoesNotEnterUntrackedTmuxSession() {
-        let script = RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: deterministicRemoteSessionThemeStyle,
-            sessionName: "vvterm_demo",
-            workingDirectory: "/tmp/work",
-            terminalType: .xtermGhostty,
-            attachAfterInstall: false
-        )
-
-        #expect(script.contains("apt-get install -y tmux"))
-        #expect(!script.contains("new-session"))
-        #expect(!script.contains("attach-session"))
-        #expect(!script.contains("exec tmux"))
-        #expect(!script.contains("~/.vvterm/tmux.conf"))
-    }
-
-    @Test
     func managedSessionClearBehaviorIsWindowScoped() {
         let create = RemoteTmuxCommandBuilder.attachCommand(
             themeStyle: deterministicRemoteSessionThemeStyle,

@@ -34,32 +34,6 @@ struct RemoteTmuxCommandBuilderTests {
     }
 
     @Test
-    func identicalWindowsInstallInputsProduceIdenticalCommands() {
-        let backend = RemoteTmuxBackend.windowsPsmux(
-            commandName: "psmux",
-            shellFamily: .powershell,
-            powerShellExecutable: "pwsh"
-        )
-        let first = RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: deterministicRemoteSessionThemeStyle,
-            sessionName: "prod",
-            workingDirectory: #"C:\work\app"#,
-            terminalType: .xtermGhostty,
-            backend: backend
-        )
-        let second = RemoteTmuxCommandBuilder.installAndAttachScript(
-            themeStyle: deterministicRemoteSessionThemeStyle,
-            sessionName: "prod",
-            workingDirectory: #"C:\work\app"#,
-            terminalType: .xtermGhostty,
-            backend: backend
-        )
-
-        #expect(first == second)
-        #expect(first.contains("set -g mode-style \"fg=#d0d6f0,bg=#333333\""))
-    }
-
-    @Test
     func parserOutputDependsOnlyOnSuppliedTextAndLegacyMode() {
         let output = "prod 2 3\ndev 0 1\n"
 

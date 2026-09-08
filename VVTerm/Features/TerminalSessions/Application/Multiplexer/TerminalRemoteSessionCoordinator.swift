@@ -2,13 +2,6 @@ import Combine
 import Foundation
 import os.log
 
-@MainActor
-struct TerminalRemoteSessionShellRegistration {
-    let client: SSHClient
-    let shellID: UUID
-    let serverID: UUID
-}
-
 /// Owns persistent remote-session selection, launch, cleanup, and termination.
 @MainActor
 final class TerminalRemoteSessionCoordinator: ObservableObject {
@@ -288,7 +281,7 @@ actor UnavailableTerminalRemoteSessionService: TerminalRemoteSessionServicing {
     nonisolated let backendMetadata = [RemoteSessionBackendMetadata(
         identifier: .tmux,
         displayName: "tmux",
-        installation: .automatic,
+        installationGuideURL: URL(string: "https://github.com/tmux/tmux/wiki/Installing")!,
         managedStartupCommandSupport: .supported
     )]
 
@@ -307,21 +300,6 @@ actor UnavailableTerminalRemoteSessionService: TerminalRemoteSessionServicing {
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) async throws -> RemoteSessionBackendLaunchPlan { throw SSHError.notConnected }
-
-    func installScript(
-        attachment: RemoteSessionAttachment,
-        workingDirectory: String,
-        terminalType: RemoteTerminalType,
-        themeStyle: RemoteSessionThemeStyle,
-        using client: SSHClient,
-        attachAfterInstall: Bool
-    ) async -> String? { nil }
-
-    func sendScript(
-        _ script: String,
-        using client: SSHClient,
-        shellId: UUID
-    ) async throws { throw SSHError.notConnected }
 
     func killSession(
         _ identifier: RemoteSessionIdentifier,
