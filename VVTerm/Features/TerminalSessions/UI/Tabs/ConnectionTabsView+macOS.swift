@@ -763,13 +763,14 @@ extension ConnectionTerminalContainer {
     }
 
     func platformChrome(backgroundColor: Color) -> some View {
-        TerminalZenChromeHost(
+        let surfaceBackground = selectedView.backgroundColor(terminalBackground: backgroundColor)
+        return TerminalZenChromeHost(
             isZenModeEnabled: isZenModeEnabled,
             appliesTerminalInsets: isZenModeEnabled && selectedView == .terminal,
-            backgroundColor: backgroundColor
+            backgroundColor: surfaceBackground
         ) { terminalContentInsets in
             ZStack {
-                statsLayer(backgroundColor: backgroundColor)
+                statsLayer(backgroundColor: surfaceBackground)
 
                 if selectedView == .files {
                     filesLayer

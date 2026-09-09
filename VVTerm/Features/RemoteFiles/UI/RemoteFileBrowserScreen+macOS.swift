@@ -42,7 +42,6 @@ extension RemoteFileBrowserScreen {
 final class RemoteFileBrowserPlatformState: ObservableObject {
     @Published var inlineEditor: RemoteFileBrowserScreen.InlineEditor?
     @Published var selectedPaths: Set<String> = []
-    @Published var titlebarHeight: CGFloat = 0
 }
 
 extension RemoteFileBrowserScreen {
@@ -221,11 +220,6 @@ extension RemoteFileBrowserScreen {
             )
 
             VStack(spacing: 0) {
-                if platformState.titlebarHeight > 0 {
-                    Color.clear
-                        .frame(height: platformState.titlebarHeight)
-                }
-
                 if splitMetrics.showsPreview {
                     HSplitView {
                         fileTable(snapshot)
@@ -249,11 +243,6 @@ extension RemoteFileBrowserScreen {
                 pathBar(snapshot)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .ignoresSafeArea(.container, edges: .top)
-            .background {
-                MacOSWindowTopInsetBridge(topInset: $platformState.titlebarHeight)
-                    .frame(width: 0, height: 0)
-            }
             .background(canvasColor)
             .contextMenu {
                 browserActionMenu(currentPath: snapshot.currentPath)
@@ -940,7 +929,7 @@ extension RemoteFileBrowserScreen {
     }
 
     var canvasColor: Color {
-        terminalThemeBackgroundColor
+        Color(nsColor: .windowBackgroundColor)
     }
 
     var minimumPreviewWidth: CGFloat {
@@ -977,21 +966,11 @@ extension RemoteFileBrowserScreen {
     }
 
     var chromeSurfaceColor: Color {
-        surfaceColor(blendFraction: colorScheme == .dark ? 0.05 : 0.035)
-    }
-
-    var panelColor: Color {
-        surfaceColor(blendFraction: colorScheme == .dark ? 0.09 : 0.06)
+        Color(nsColor: .windowBackgroundColor)
     }
 
     var raisedSurfaceColor: Color {
-        surfaceColor(blendFraction: colorScheme == .dark ? 0.14 : 0.10)
-    }
-
-    func surfaceColor(blendFraction: CGFloat) -> Color {
-        let baseColor = NSColor(terminalThemeBackgroundColor)
-        let targetColor: NSColor = baseColor.brightnessComponent > 0.5 ? .black : .white
-        return Color(baseColor.blended(withFraction: blendFraction, of: targetColor) ?? baseColor)
+        Color(nsColor: .controlBackgroundColor)
     }
 }
 #endif

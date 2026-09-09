@@ -6,7 +6,6 @@ struct RemoteFileBrowserScreen: View {
     @ObservedObject var operationCoordinator: RemoteFileOperationCoordinator
     let server: Server
     let fileTab: RemoteFileTab
-    let appearance: TerminalAppearanceSnapshot
     let initialPath: String?
     let onCurrentPathChange: @MainActor (String?) -> Void
 
@@ -46,14 +45,12 @@ struct RemoteFileBrowserScreen: View {
         browser: RemoteFileBrowserStore,
         server: Server,
         fileTab: RemoteFileTab,
-        appearance: TerminalAppearanceSnapshot,
         initialPath: String? = nil,
         onCurrentPathChange: @escaping @MainActor (String?) -> Void = { _ in }
     ) {
         self.browser = browser
         self.server = server
         self.fileTab = fileTab
-        self.appearance = appearance
         self.initialPath = initialPath
         self.onCurrentPathChange = onCurrentPathChange
         _operationCoordinator = ObservedObject(
@@ -92,10 +89,6 @@ struct RemoteFileBrowserScreen: View {
 
     var remoteRowDropTypeIdentifiers: [String] {
         RemoteFileItemProviderAdapter.acceptedTypeIdentifiers
-    }
-
-    var terminalThemeBackgroundColor: Color {
-        Color.fromHex(appearance.activeTheme.palette.backgroundHex)
     }
 
     @ViewBuilder

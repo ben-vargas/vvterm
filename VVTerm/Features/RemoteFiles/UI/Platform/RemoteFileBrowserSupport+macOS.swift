@@ -92,96 +92,6 @@ final class MacOSMenuActionTarget: NSObject {
     }
 }
 
-struct MacOSWindowTopInsetBridge: NSViewRepresentable {
-    @Binding var topInset: CGFloat
-
-    func makeNSView(context: Context) -> WindowObserverView {
-        WindowObserverView()
-    }
-
-    func updateNSView(_ nsView: WindowObserverView, context: Context) {
-        nsView.onWindowUpdate = { [topInset = _topInset] window in
-            let safeArea = window.contentView?.safeAreaInsets
-                ?? NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-            let measuredTopInset = max(
-                window.frame.height - window.contentLayoutRect.height,
-                safeArea.top
-            )
-
-            if abs(topInset.wrappedValue - measuredTopInset) > 0.5 {
-                topInset.wrappedValue = measuredTopInset
-            }
-        }
-        nsView.triggerUpdate()
-    }
-
-    static func dismantleNSView(_ nsView: WindowObserverView, coordinator: ()) {
-        nsView.removeObservers()
-    }
-
-    final class WindowObserverView: NSView {
-        var onWindowUpdate: ((NSWindow) -> Void)?
-        private var observers: [NSObjectProtocol] = []
-
-        override var intrinsicContentSize: NSSize {
-            .zero
-        }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            installObservers()
-            triggerUpdate()
-        }
-
-        override func viewDidMoveToSuperview() {
-            super.viewDidMoveToSuperview()
-            triggerUpdate()
-        }
-
-        override func layout() {
-            super.layout()
-            triggerUpdate()
-        }
-
-        func triggerUpdate() {
-            guard let window else { return }
-            DispatchQueue.main.async { [weak self, weak window] in
-                guard let self, let window else { return }
-                self.onWindowUpdate?(window)
-            }
-        }
-
-        func removeObservers() {
-            let center = NotificationCenter.default
-            observers.forEach(center.removeObserver)
-            observers.removeAll()
-        }
-
-        private func installObservers() {
-            removeObservers()
-            guard let window else { return }
-
-            let center = NotificationCenter.default
-            observers = [
-                NSWindow.didResizeNotification,
-                NSWindow.didEndLiveResizeNotification,
-                NSWindow.didMoveNotification,
-                NSWindow.didBecomeKeyNotification
-            ].map { name in
-                center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    Task { @MainActor [weak self] in
-                        self?.triggerUpdate()
-                    }
-                }
-            }
-        }
-
-        isolated deinit {
-            removeObservers()
-        }
-    }
-}
-
 struct MacOSRemoteFileTableView: NSViewRepresentable {
     let entries: [RemoteFileEntry]
     let currentPath: String
@@ -274,7 +184,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             scrollView.documentView = tableView
 
             tableView.headerView = NSTableHeaderView()
-            tableView.usesAlternatingRowBackgroundColors = true
+            tableView.usesAlternatingRowBackgroundColors = false
             tableView.allowsMultipleSelection = true
             tableView.allowsColumnReordering = false
             tableView.allowsColumnResizing = true

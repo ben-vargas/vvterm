@@ -372,7 +372,6 @@ struct ContentView: View {
                     withShellEnvironment(
                         detailContent
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(macOSWindowBackgroundColor)
                     )
                 }
             )
@@ -413,8 +412,7 @@ struct ContentView: View {
             .focusedSceneValue(\.openLocalSSHDiscovery, commandBridge.openLocalDiscovery)
             .background(
                 MainWindowChromeBridge(
-                    windowTitle: zenWindowTitle,
-                    backgroundColor: macOSWindowBackgroundColor
+                    windowTitle: zenWindowTitle
                 )
                     .frame(width: 0, height: 0)
             )
@@ -440,9 +438,8 @@ struct ContentView: View {
 }
 
 #if os(macOS)
-private struct MainWindowChromeBridge: NSViewRepresentable {
+struct MainWindowChromeBridge: NSViewRepresentable {
     let windowTitle: String
-    let backgroundColor: Color
 
     func makeNSView(context: Context) -> NSView {
         WindowObserverView()
@@ -451,16 +448,14 @@ private struct MainWindowChromeBridge: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let view = nsView as? WindowObserverView else { return }
         view.windowTitle = windowTitle
-        view.backgroundColor = backgroundColor
         view.applyIfPossible()
     }
 
-    private static func configure(_ window: NSWindow, title: String, backgroundColor: Color) {
-        let nsBackgroundColor = NSColor(backgroundColor)
+    private static func configure(_ window: NSWindow, title: String) {
         if window.title != title {
             window.title = title
         }
-        window.backgroundColor = nsBackgroundColor
+        window.backgroundColor = .windowBackgroundColor
         window.titleVisibility = title.isEmpty ? .hidden : .visible
         if title.isEmpty {
             window.subtitle = ""
@@ -472,15 +467,10 @@ private struct MainWindowChromeBridge: NSViewRepresentable {
         window.styleMask.insert(.fullSizeContentView)
         window.toolbarStyle = .unified
         window.toolbar?.showsBaselineSeparator = false
-        window.contentView?.wantsLayer = true
-        window.contentView?.layer?.backgroundColor = nsBackgroundColor.cgColor
-        window.contentView?.superview?.wantsLayer = true
-        window.contentView?.superview?.layer?.backgroundColor = nsBackgroundColor.cgColor
     }
 
     final class WindowObserverView: NSView {
         var windowTitle = ""
-        var backgroundColor: Color = .clear
 
         override var intrinsicContentSize: NSSize { .zero }
 
@@ -498,8 +488,7 @@ private struct MainWindowChromeBridge: NSViewRepresentable {
             guard let window else { return }
             MainWindowChromeBridge.configure(
                 window,
-                title: windowTitle,
-                backgroundColor: backgroundColor
+                title: windowTitle
             )
         }
     }
