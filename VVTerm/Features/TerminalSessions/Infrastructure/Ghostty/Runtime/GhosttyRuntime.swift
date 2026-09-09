@@ -377,7 +377,7 @@ final class GhosttyRuntime: ObservableObject {
                 cursorStyle: configuration.cursorStyle,
                 cursorBlink: configuration.cursorBlink,
                 optionAsAltMode: configuration.optionAsAltMode,
-                remoteClipboardReadPolicy: configuration.remoteClipboardReadPolicy
+                remoteClipboardPolicy: configuration.remoteClipboardPolicy
             )
 
             Ghostty.logger.info("Loading Ghostty theme: \(self.appearanceSnapshot.activeTheme.name)")

@@ -1,12 +1,13 @@
 import Foundation
 
-nonisolated enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum TerminalRemoteClipboardPolicy: String, CaseIterable, Identifiable, Sendable {
     case deny
     case ask
     case allow
 
+    // Keep the stored key so existing clipboard choices apply to both directions.
     static let userDefaultsKey = "terminalRemoteClipboardReadPolicy"
-    static let defaultValue: TerminalRemoteClipboardReadPolicy = .allow
+    static let defaultValue: TerminalRemoteClipboardPolicy = .allow
 
     var id: String { rawValue }
 
@@ -21,17 +22,17 @@ nonisolated enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identi
     var settingsDescription: String {
         switch self {
         case .deny:
-            return String(localized: "Remote programs cannot read your clipboard.")
+            return String(localized: "Remote programs cannot read or change your clipboard.")
         case .ask:
-            return String(localized: "VVTerm asks before a remote program reads your clipboard.")
+            return String(localized: "VVTerm asks before a remote program reads or changes your clipboard.")
         case .allow:
-            return String(localized: "Warning: Remote programs can read your clipboard without asking.")
+            return String(localized: "Warning: Remote programs can read or change your clipboard without asking.")
         }
     }
 
-    static func resolved(defaults: UserDefaults = .standard) -> TerminalRemoteClipboardReadPolicy {
+    static func resolved(defaults: UserDefaults = .standard) -> TerminalRemoteClipboardPolicy {
         guard let rawValue = defaults.string(forKey: userDefaultsKey),
-              let policy = TerminalRemoteClipboardReadPolicy(rawValue: rawValue) else {
+              let policy = TerminalRemoteClipboardPolicy(rawValue: rawValue) else {
             return defaultValue
         }
         return policy

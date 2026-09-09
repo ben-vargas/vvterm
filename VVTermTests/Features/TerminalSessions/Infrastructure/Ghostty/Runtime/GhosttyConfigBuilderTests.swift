@@ -149,7 +149,7 @@ struct GhosttyConfigBuilderTests {
         #expect(content.contains("cursor-style-blink = true"))
         #expect(content.contains("keybind = shift+enter=text:\\n"))
         #expect(content.contains("clipboard-read = allow"))
-        #expect(content.contains("clipboard-write = ask"))
+        #expect(content.contains("clipboard-write = allow"))
         #expect(content.contains("font-codepoint-map ="))
     }
 
@@ -184,17 +184,18 @@ struct GhosttyConfigBuilderTests {
     }
 
     @Test
-    func configContentUsesEachRemoteClipboardReadPolicy() {
-        for policy in TerminalRemoteClipboardReadPolicy.allCases {
+    func configContentUsesEachRemoteClipboardPolicy() {
+        for policy in TerminalRemoteClipboardPolicy.allCases {
             let content = Ghostty.ConfigBuilder.configContent(
                 fontSelection: selection("Menlo"),
                 fontSize: 13,
                 shellName: "fish",
                 theme: "Aizen Light",
-                remoteClipboardReadPolicy: policy
+                remoteClipboardPolicy: policy
             )
 
             #expect(content.contains("clipboard-read = \(policy.rawValue)"))
+            #expect(content.contains("clipboard-write = \(policy.rawValue)"))
         }
     }
 

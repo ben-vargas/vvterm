@@ -387,9 +387,9 @@ struct AppComposition {
             cursorBlink: defaults.object(forKey: TerminalDefaults.cursorBlinkKey) as? Bool
                 ?? TerminalDefaults.defaultCursorBlink,
             optionAsAltModeRawValue: terminalOptionAsAltMode,
-            remoteClipboardReadPolicyRawValue: defaults.string(
-                forKey: TerminalRemoteClipboardReadPolicy.userDefaultsKey
-            ) ?? TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
+            remoteClipboardPolicyRawValue: defaults.string(
+                forKey: TerminalRemoteClipboardPolicy.userDefaultsKey
+            ) ?? TerminalRemoteClipboardPolicy.defaultValue.rawValue
         )
         let ghosttyApp = GhosttyRuntime(
             configuration: ghosttyRuntimeConfiguration,

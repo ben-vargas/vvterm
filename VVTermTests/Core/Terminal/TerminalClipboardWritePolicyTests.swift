@@ -21,24 +21,24 @@ struct TerminalClipboardWritePolicyTests {
     }
 
     @Test
-    func remoteClipboardReadDefaultsToAllow() {
+    func remoteClipboardDefaultsToAllow() {
         let suiteName = "TerminalClipboardWritePolicyTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        #expect(TerminalRemoteClipboardReadPolicy.resolved(defaults: defaults) == .allow)
-        defaults.set("invalid", forKey: TerminalRemoteClipboardReadPolicy.userDefaultsKey)
-        #expect(TerminalRemoteClipboardReadPolicy.resolved(defaults: defaults) == .allow)
+        #expect(TerminalRemoteClipboardPolicy.resolved(defaults: defaults) == .allow)
+        defaults.set("invalid", forKey: TerminalRemoteClipboardPolicy.userDefaultsKey)
+        #expect(TerminalRemoteClipboardPolicy.resolved(defaults: defaults) == .allow)
     }
 
-    @Test(arguments: TerminalRemoteClipboardReadPolicy.allCases)
-    func remoteClipboardReadPreservesSavedChoice(policy: TerminalRemoteClipboardReadPolicy) {
+    @Test(arguments: TerminalRemoteClipboardPolicy.allCases)
+    func remoteClipboardPreservesSavedChoice(policy: TerminalRemoteClipboardPolicy) {
         let suiteName = "TerminalClipboardWritePolicyTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        defaults.set(policy.rawValue, forKey: TerminalRemoteClipboardReadPolicy.userDefaultsKey)
-        #expect(TerminalRemoteClipboardReadPolicy.resolved(defaults: defaults) == policy)
+        defaults.set(policy.rawValue, forKey: "terminalRemoteClipboardReadPolicy")
+        #expect(TerminalRemoteClipboardPolicy.resolved(defaults: defaults) == policy)
     }
 
     @Test

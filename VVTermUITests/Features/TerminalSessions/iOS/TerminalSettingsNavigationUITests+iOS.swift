@@ -237,7 +237,7 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
         clipboardRoute.tap()
 
         XCTAssertTrue(
-            app.staticTexts["Warning: Remote programs can read your clipboard without asking."]
+            app.staticTexts["Warning: Remote programs can read or change your clipboard without asking."]
                 .waitForExistence(timeout: 5)
         )
         XCTAssertFalse(

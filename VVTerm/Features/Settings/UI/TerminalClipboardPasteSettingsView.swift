@@ -8,8 +8,8 @@ struct TerminalClipboardPasteSettingsView: View {
     @AppStorage("terminalCopyRemoveBoxDrawing") private var copyRemoveBoxDrawing = false
     @AppStorage("terminalCopyStripAnsiCodes") private var copyStripAnsiCodes = true
     @AppStorage("terminalImagePasteBehavior") private var imagePasteBehaviorRaw = ImagePasteBehavior.askOnce.rawValue
-    @AppStorage(TerminalRemoteClipboardReadPolicy.userDefaultsKey)
-    private var remoteClipboardReadPolicyRaw = TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
+    @AppStorage(TerminalRemoteClipboardPolicy.userDefaultsKey)
+    private var remoteClipboardPolicyRaw = TerminalRemoteClipboardPolicy.defaultValue.rawValue
 
     private var imagePasteBehavior: ImagePasteBehavior {
         ImagePasteBehavior(rawValue: imagePasteBehaviorRaw) ?? .askOnce
@@ -22,14 +22,14 @@ struct TerminalClipboardPasteSettingsView: View {
         )
     }
 
-    private var remoteClipboardReadPolicy: TerminalRemoteClipboardReadPolicy {
-        TerminalRemoteClipboardReadPolicy(rawValue: remoteClipboardReadPolicyRaw) ?? .defaultValue
+    private var remoteClipboardPolicy: TerminalRemoteClipboardPolicy {
+        TerminalRemoteClipboardPolicy(rawValue: remoteClipboardPolicyRaw) ?? .defaultValue
     }
 
-    private var remoteClipboardReadPolicyBinding: Binding<TerminalRemoteClipboardReadPolicy> {
+    private var remoteClipboardPolicyBinding: Binding<TerminalRemoteClipboardPolicy> {
         Binding(
-            get: { remoteClipboardReadPolicy },
-            set: { remoteClipboardReadPolicyRaw = $0.rawValue }
+            get: { remoteClipboardPolicy },
+            set: { remoteClipboardPolicyRaw = $0.rawValue }
         )
     }
 
@@ -66,8 +66,8 @@ struct TerminalClipboardPasteSettingsView: View {
             }
 
             Section {
-                Picker("Remote Clipboard Reads", selection: remoteClipboardReadPolicyBinding) {
-                    ForEach(TerminalRemoteClipboardReadPolicy.allCases) { policy in
+                Picker("Access", selection: remoteClipboardPolicyBinding) {
+                    ForEach(TerminalRemoteClipboardPolicy.allCases) { policy in
                         Text(policy.settingsTitle).tag(policy)
                     }
                 }
@@ -75,7 +75,7 @@ struct TerminalClipboardPasteSettingsView: View {
             } header: {
                 Text("Remote Clipboard")
             } footer: {
-                Text(remoteClipboardReadPolicy.settingsDescription)
+                Text(remoteClipboardPolicy.settingsDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

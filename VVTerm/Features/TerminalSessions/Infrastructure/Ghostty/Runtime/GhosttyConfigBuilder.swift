@@ -74,7 +74,7 @@ extension Ghostty {
             cursorStyle: TerminalCursorStyle = TerminalDefaults.defaultCursorStyle,
             cursorBlink: Bool = TerminalDefaults.defaultCursorBlink,
             optionAsAltMode: TerminalOptionAsAltMode = .none,
-            remoteClipboardReadPolicy: TerminalRemoteClipboardReadPolicy = .defaultValue
+            remoteClipboardPolicy: TerminalRemoteClipboardPolicy = .defaultValue
         ) -> String {
             #if os(macOS)
             let platformInputConfig = "macos-option-as-alt = \(optionAsAltConfigValue(optionAsAltMode))"
@@ -106,8 +106,8 @@ extension Ghostty {
             audible-bell = false
 
             # Remote clipboard access uses Ghostty's supported consent policy.
-            clipboard-read = \(remoteClipboardReadPolicy.rawValue)
-            clipboard-write = ask
+            clipboard-read = \(remoteClipboardPolicy.rawValue)
+            clipboard-write = \(remoteClipboardPolicy.rawValue)
 
             # Limit scrollback to prevent unbounded memory growth
             # 10000 lines is plenty for most use cases (~5-10MB)

@@ -16,7 +16,7 @@ struct GhosttyRuntimeConfigurationTests {
             cursorStyleRawValue: "invalid-cursor",
             cursorBlink: false,
             optionAsAltModeRawValue: TerminalOptionAsAltMode.right.rawValue,
-            remoteClipboardReadPolicyRawValue: "invalid-clipboard-policy"
+            remoteClipboardPolicyRawValue: "invalid-clipboard-policy"
         )
 
         #expect(configuration.fontSelection == fontSelection)
@@ -25,7 +25,7 @@ struct GhosttyRuntimeConfigurationTests {
         #expect(configuration.cursorStyle == TerminalDefaults.defaultCursorStyle)
         #expect(configuration.cursorBlink == false)
         #expect(configuration.optionAsAltMode == .right)
-        #expect(configuration.remoteClipboardReadPolicy == .defaultValue)
+        #expect(configuration.remoteClipboardPolicy == .defaultValue)
     }
 
     @Test
@@ -37,7 +37,7 @@ struct GhosttyRuntimeConfigurationTests {
             cursorStyleRawValue: TerminalCursorStyle.bar.rawValue,
             cursorBlink: false,
             optionAsAltModeRawValue: TerminalOptionAsAltMode.left.rawValue,
-            remoteClipboardReadPolicyRawValue: TerminalRemoteClipboardReadPolicy.deny.rawValue
+            remoteClipboardPolicyRawValue: TerminalRemoteClipboardPolicy.deny.rawValue
         )
         let app = GhosttyRuntime(autoStart: false)
 
@@ -67,7 +67,7 @@ struct GhosttyRuntimeConfigurationTests {
             cursorStyleRawValue: TerminalCursorStyle.block.rawValue,
             cursorBlink: true,
             optionAsAltModeRawValue: TerminalOptionAsAltMode.none.rawValue,
-            remoteClipboardReadPolicyRawValue: TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
+            remoteClipboardPolicyRawValue: TerminalRemoteClipboardPolicy.defaultValue.rawValue
         )
     }
 }

@@ -152,8 +152,8 @@ struct VVTermApp: App {
     #if os(macOS)
     @AppStorage(TerminalDefaults.optionAsAltModeKey) private var terminalOptionAsAltMode = TerminalOptionAsAltMode.none.rawValue
     #endif
-    @AppStorage(TerminalRemoteClipboardReadPolicy.userDefaultsKey)
-    private var remoteClipboardReadPolicy = TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
+    @AppStorage(TerminalRemoteClipboardPolicy.userDefaultsKey)
+    private var remoteClipboardPolicy = TerminalRemoteClipboardPolicy.defaultValue.rawValue
 
     private var terminalOptionAsAltModeRawValue: String {
         #if os(macOS)
@@ -179,7 +179,7 @@ struct VVTermApp: App {
             cursorStyleRawValue: terminalCursorStyle,
             cursorBlink: terminalCursorBlink,
             optionAsAltModeRawValue: terminalOptionAsAltModeRawValue,
-            remoteClipboardReadPolicyRawValue: remoteClipboardReadPolicy
+            remoteClipboardPolicyRawValue: remoteClipboardPolicy
         )
     }
 

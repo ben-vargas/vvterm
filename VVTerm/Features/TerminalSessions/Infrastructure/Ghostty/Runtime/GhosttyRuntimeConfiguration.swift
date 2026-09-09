@@ -8,7 +8,7 @@ extension Ghostty {
         let cursorStyle: TerminalCursorStyle
         let cursorBlink: Bool
         let optionAsAltMode: TerminalOptionAsAltMode
-        let remoteClipboardReadPolicy: TerminalRemoteClipboardReadPolicy
+        let remoteClipboardPolicy: TerminalRemoteClipboardPolicy
 
         init(
             fontSelection: TerminalFontRuntimeSelection,
@@ -17,7 +17,7 @@ extension Ghostty {
             cursorStyleRawValue: String,
             cursorBlink: Bool,
             optionAsAltModeRawValue: String,
-            remoteClipboardReadPolicyRawValue: String
+            remoteClipboardPolicyRawValue: String
         ) {
             self.fontSelection = fontSelection
             self.fontSize = TerminalDefaults.clampedFontSize(fontSize)
@@ -27,8 +27,8 @@ extension Ghostty {
             self.cursorBlink = cursorBlink
             self.optionAsAltMode = TerminalOptionAsAltMode(rawValue: optionAsAltModeRawValue)
                 ?? .none
-            self.remoteClipboardReadPolicy = TerminalRemoteClipboardReadPolicy(
-                rawValue: remoteClipboardReadPolicyRawValue
+            self.remoteClipboardPolicy = TerminalRemoteClipboardPolicy(
+                rawValue: remoteClipboardPolicyRawValue
             ) ?? .defaultValue
         }
 
@@ -40,7 +40,7 @@ extension Ghostty {
                 cursorStyleRawValue: TerminalDefaults.defaultCursorStyle.rawValue,
                 cursorBlink: TerminalDefaults.defaultCursorBlink,
                 optionAsAltModeRawValue: TerminalOptionAsAltMode.none.rawValue,
-                remoteClipboardReadPolicyRawValue: TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
+                remoteClipboardPolicyRawValue: TerminalRemoteClipboardPolicy.defaultValue.rawValue
             )
         }
     }

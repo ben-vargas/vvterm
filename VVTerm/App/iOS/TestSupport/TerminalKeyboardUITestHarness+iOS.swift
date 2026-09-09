@@ -1529,7 +1529,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
             cursorStyleRawValue: configuration.cursorStyle.rawValue,
             cursorBlink: configuration.cursorBlink,
             optionAsAltModeRawValue: configuration.optionAsAltMode.rawValue,
-            remoteClipboardReadPolicyRawValue: configuration.remoteClipboardReadPolicy.rawValue
+            remoteClipboardPolicyRawValue: configuration.remoteClipboardPolicy.rawValue
         ))
     }
 }
