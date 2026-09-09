@@ -21,14 +21,8 @@ private actor HerdrProbeExecutor {
 }
 
 struct HerdrRemoteSessionBackendTests {
-    @Test(arguments: [
-        ("0.7.5", "herdr-0.7"),
-        ("0.8.2", "herdr-0.8")
-    ])
-    func supportedSeriesProbeAndBuildLifecycleCommands(
-        version: String,
-        expectedVariant: String
-    ) async throws {
+    @Test(arguments: ["0.7.5", "0.8.2", "0.9.0"])
+    func supportedVersionsProbeAndBuildLifecycleCommands(version: String) async throws {
         let backend = HerdrRemoteSessionBackend()
         let availability = await availability(
             backend: backend,
@@ -38,9 +32,9 @@ struct HerdrRemoteSessionBackendTests {
             Issue.record("Herdr \(version) must be available")
             return
         }
-        #expect(probe.implementationVariant == expectedVariant)
+        #expect(probe.implementationVariant == "herdr")
 
-        let runtime = try runtime(version: version, variant: expectedVariant)
+        let runtime = RemoteSessionRuntime(probe: probe)
         let request = RemoteSessionLaunchRequest(
             intent: .ensureManaged(
                 identifier: try identifier("vvterm-managed"),
@@ -60,7 +54,7 @@ struct HerdrRemoteSessionBackendTests {
     }
 
     @Test
-    func availabilityDistinguishesMissingOldAndUnsupportedSeries() async {
+    func availabilityDistinguishesMissingAndOldVersions() async {
         let backend = HerdrRemoteSessionBackend()
         let missing = await availability(
             backend: backend,
@@ -74,19 +68,35 @@ struct HerdrRemoteSessionBackendTests {
             backend: backend,
             output: .success(probeOutput(version: "0.8.1"))
         )
-        let unsupportedMinor = await availability(
-            backend: backend,
-            output: .success(probeOutput(version: "0.9.0"))
-        )
 
         #expect(missing == .confirmedMissing)
         #expect({ if case .incompatible = old07 { true } else { false } }())
         #expect({ if case .incompatible(let probe) = old08 {
-            probe.implementationVariant == "herdr-0.8"
+            probe.rawVersion == "herdr 0.8.1"
         } else { false } }())
-        #expect({ if case .incompatible(let probe) = unsupportedMinor {
-            probe.implementationVariant == "herdr-unsupported"
-        } else { false } }())
+    }
+
+    @Test(arguments: ["0.10.0", "1.0.0"])
+    func futureSeriesCanBuildLifecycleCommands(version: String) async throws {
+        let result = await availability(
+            backend: HerdrRemoteSessionBackend(),
+            output: .success(probeOutput(version: version))
+        )
+        guard case .available(let probe) = result else {
+            Issue.record("New Herdr versions must be tried")
+            return
+        }
+        #expect(probe.rawVersion == "herdr \(version)")
+        let request = RemoteSessionLaunchRequest(
+            intent: .ensureManaged(identifier: try identifier("vvterm-managed"), initialCommand: nil),
+            workingDirectory: "/srv/project",
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
+            transport: .ssh,
+            themeStyle: deterministicRemoteSessionThemeStyle
+        )
+        _ = try HerdrRemoteSessionBackend().launchPlan(
+            for: request, runtime: RemoteSessionRuntime(probe: probe)
+        )
     }
 
     @Test
@@ -360,6 +370,11 @@ struct HerdrRemoteSessionBackendTests {
     @Test(arguments: [
         ("printf '%s\\n' 'status: running'", "running"),
         ("printf '%s\\n' 'status: not running'", "stopped"),
+        ("printf '%s\\n' 'status: running' 'version: 0.9.0' 'endpoint_compatible: yes' 'private_protocol: 17' 'private_protocol_compatible: yes' 'socket: /tmp/herdr.sock'", "running"),
+        ("printf '%s\\n' 'status: not running' 'socket: /tmp/herdr.sock'", "stopped"),
+        ("(printf '%s\\n' 'status: running' 'version: 0.9.0'; exit 1)", "unknown"),
+        ("printf 'status: running\\n%0600d\\n' 0", "unknown"),
+        ("printf '%s\\n' 'status: running elsewhere'", "unknown"),
         ("printf '%s\\n' 'unexpected'", "unknown")
     ])
     func statusClassificationIsStrict(command: String, expected: String) throws {
@@ -407,13 +422,12 @@ struct HerdrRemoteSessionBackendTests {
     }
 
     private func runtime(
-        version: String = "0.7.5",
-        variant: String = "herdr-0.7"
+        version: String = "0.7.5"
     ) throws -> RemoteSessionRuntime {
         RemoteSessionRuntime(probe: RemoteSessionProbe(
             backendIdentifier: .herdr,
             executable: try RemoteSessionExecutable(validating: "/opt/tools/herdr"),
-            implementationVariant: variant,
+            implementationVariant: "herdr",
             rawVersion: "herdr \(version)",
             semanticVersion: RemoteSessionSemanticVersion(version),
             shellFamily: .posix,

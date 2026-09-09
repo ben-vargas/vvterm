@@ -1,10 +1,7 @@
 import Foundation
 
 nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
-    static let supportedVersions: Set<RemoteSessionSemanticVersion> = [
-        RemoteSessionSemanticVersion(major: 0, minor: 44, patch: 3),
-        RemoteSessionSemanticVersion(major: 0, minor: 45, patch: 0)
-    ]
+    static let minimumVersion = RemoteSessionSemanticVersion(major: 0, minor: 44, patch: 3)
 
     let metadata = RemoteSessionBackendMetadata(
         identifier: .zellij,
@@ -49,15 +46,13 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
                 let probe = RemoteSessionProbe(
                     backendIdentifier: .zellij,
                     executable: result.executable,
-                    implementationVariant: Self.implementationVariant(
-                        for: result.semanticVersion
-                    ),
+                    implementationVariant: "zellij",
                     rawVersion: result.rawVersion,
                     semanticVersion: result.semanticVersion,
                     shellFamily: .posix,
                     shellExecutable: environment.shellProfile.executableName
                 )
-                return Self.supportedVersions.contains(result.semanticVersion)
+                return result.semanticVersion >= Self.minimumVersion
                     ? .available(probe)
                     : .incompatible(probe)
             case (nil, false), (.some, true):
@@ -159,19 +154,13 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    private static func implementationVariant(
-        for version: RemoteSessionSemanticVersion
-    ) -> String {
-        "zellij-\(version.major).\(version.minor)"
-    }
-
     private func requireSupported(_ runtime: RemoteSessionRuntime) throws {
         let probe = runtime.probe
         guard probe.backendIdentifier == .zellij,
               probe.shellFamily == .posix,
               let version = probe.semanticVersion,
-              Self.supportedVersions.contains(version),
-              probe.implementationVariant == Self.implementationVariant(for: version) else {
+              version >= Self.minimumVersion,
+              probe.implementationVariant == "zellij" else {
             throw SSHError.unknown("Unsupported Zellij runtime")
         }
     }

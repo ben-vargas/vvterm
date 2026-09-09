@@ -238,7 +238,9 @@ nonisolated enum HerdrRemoteSessionCommandBuilder {
     }
 
     static func sessionStatusClassificationScript(statusCommand: String) -> String {
-        """
+        // Herdr 0.9 adds metadata after the status line. Require the exact first
+        // line and a successful exit; truncated or failed responses stay unknown.
+        return """
         vvtermHerdrRuntimeState=unknown
         vvtermHerdrStatusPayload="$(
           (\(statusCommand) 2>/dev/null
@@ -246,9 +248,9 @@ nonisolated enum HerdrRemoteSessionCommandBuilder {
         )"
         case "$vvtermHerdrStatusPayload" in
           'status: running
-        __VVTERM_HERDR_STATUS__0') vvtermHerdrRuntimeState=running ;;
+        '*__VVTERM_HERDR_STATUS__0) vvtermHerdrRuntimeState=running ;;
           'status: not running
-        __VVTERM_HERDR_STATUS__0') vvtermHerdrRuntimeState=stopped ;;
+        '*__VVTERM_HERDR_STATUS__0) vvtermHerdrRuntimeState=stopped ;;
         esac
         """
     }

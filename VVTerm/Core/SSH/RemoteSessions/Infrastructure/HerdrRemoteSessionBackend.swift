@@ -55,17 +55,15 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
                 let probe = RemoteSessionProbe(
                     backendIdentifier: .herdr,
                     executable: result.executable,
-                    implementationVariant: Self.implementationVariant(
-                        for: result.semanticVersion
-                    ),
+                    implementationVariant: "herdr",
                     rawVersion: result.rawVersion,
                     semanticVersion: result.semanticVersion,
                     shellFamily: .posix,
                     shellExecutable: environment.shellProfile.executableName
                 )
-                return Self.supportedSeries(for: result.semanticVersion) == nil
-                    ? .incompatible(probe)
-                    : .available(probe)
+                return Self.meetsMinimumVersion(result.semanticVersion)
+                    ? .available(probe)
+                    : .incompatible(probe)
             case (nil, false), (.some, true):
                 return .indeterminate(.invalidResponse)
             }
@@ -167,33 +165,12 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    private enum CLISeries: String {
-        case version07 = "herdr-0.7"
-        case version08 = "herdr-0.8"
-    }
-
-    private static func supportedSeries(
-        for version: RemoteSessionSemanticVersion
-    ) -> CLISeries? {
-        guard version.major == 0 else { return nil }
-        switch version.minor {
-        case 7 where version.patch >= minimumVersion07.patch:
-            return .version07
-        case 8 where version.patch >= minimumVersion08.patch:
-            return .version08
-        default:
-            return nil
+    private static func meetsMinimumVersion(_ version: RemoteSessionSemanticVersion) -> Bool {
+        // Keep the older supported branch without rejecting newer releases.
+        if version.major == 0, version.minor == 7 {
+            return version >= minimumVersion07
         }
-    }
-
-    private static func implementationVariant(
-        for version: RemoteSessionSemanticVersion
-    ) -> String {
-        switch (version.major, version.minor) {
-        case (0, 7): CLISeries.version07.rawValue
-        case (0, 8): CLISeries.version08.rawValue
-        default: "herdr-unsupported"
-        }
+        return version >= minimumVersion08
     }
 
     private func requireSupported(_ runtime: RemoteSessionRuntime) throws {
@@ -201,8 +178,8 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         guard probe.backendIdentifier == .herdr,
               probe.shellFamily == .posix,
               let version = probe.semanticVersion,
-              let series = Self.supportedSeries(for: version),
-              probe.implementationVariant == series.rawValue else {
+              Self.meetsMinimumVersion(version),
+              probe.implementationVariant == "herdr" else {
             throw SSHError.unknown("Unsupported Herdr runtime")
         }
     }

@@ -24,7 +24,7 @@ private final class ZellijFixtureBundleToken {}
 
 struct ZellijRemoteSessionBackendTests {
     @Test(arguments: ["0.44.3", "0.45.0"])
-    func probePinsSupportedCLIVersions(_ version: String) throws {
+    func probeReadsCLIVersions(_ version: String) throws {
         let result = try #require(ZellijRemoteSessionParser.parseProbe("""
         noise
         __VVTERM_ZELLIJ_OK__
@@ -35,7 +35,7 @@ struct ZellijRemoteSessionBackendTests {
         #expect(result.executable.path == "/usr/local/bin/zellij")
         #expect(result.rawVersion == "zellij \(version)")
         #expect(result.semanticVersion == RemoteSessionSemanticVersion(version))
-        #expect(ZellijRemoteSessionBackend.supportedVersions.contains(result.semanticVersion))
+        #expect(result.semanticVersion >= ZellijRemoteSessionBackend.minimumVersion)
     }
 
     @Test
@@ -44,19 +44,26 @@ struct ZellijRemoteSessionBackendTests {
             output: .success(ZellijRemoteSessionCommandBuilder.missingMarker)
         )
         let oldPatch = await availability(output: .success(probeOutput(version: "0.44.2")))
-        let unpinnedPatch = await availability(
-            output: .success(probeOutput(version: "0.45.1"))
-        )
-        let futureMinor = await availability(
-            output: .success(probeOutput(version: "0.46.0"))
-        )
         let invalid = await availability(output: .success("unexpected"))
 
         #expect(missing == .confirmedMissing)
         #expect({ if case .incompatible = oldPatch { true } else { false } }())
-        #expect({ if case .incompatible = unpinnedPatch { true } else { false } }())
-        #expect({ if case .incompatible = futureMinor { true } else { false } }())
         #expect(invalid == .indeterminate(.invalidResponse))
+    }
+
+    @Test(arguments: ["0.44.4", "0.45.1", "0.46.0", "1.0.0"])
+    func newerVersionsCanBuildLifecycleCommands(_ version: String) async throws {
+        let result = await availability(output: .success(probeOutput(version: version)))
+        guard case .available(let probe) = result else {
+            Issue.record("New Zellij versions must be tried")
+            return
+        }
+        _ = try ZellijRemoteSessionBackend().launchPlan(
+            for: launchRequest(intent: .ensureManaged(
+                identifier: try identifier("managed"), initialCommand: nil
+            )),
+            runtime: RemoteSessionRuntime(probe: probe)
+        )
     }
 
     @Test
@@ -329,7 +336,7 @@ struct ZellijRemoteSessionBackendTests {
     }
 
     @Test
-    func runtimeRejectsUnpinnedVersionsAndDeclaresStartupSupport() throws {
+    func runtimeRejectsOldVersionsAndDeclaresStartupSupport() throws {
         #expect(ZellijRemoteSessionBackend().metadata.managedStartupCommandSupport == .supported)
         #expect(throws: SSHError.self) {
             try ZellijRemoteSessionBackend().launchPlan(
@@ -339,7 +346,7 @@ struct ZellijRemoteSessionBackendTests {
                         initialCommand: nil
                     )
                 ),
-                runtime: self.runtime(version: "0.45.1")
+                runtime: self.runtime(version: "0.44.2")
             )
         }
     }
@@ -567,7 +574,7 @@ struct ZellijRemoteSessionBackendTests {
         return RemoteSessionRuntime(probe: RemoteSessionProbe(
             backendIdentifier: .zellij,
             executable: try RemoteSessionExecutable(validating: executablePath),
-            implementationVariant: "zellij-\(parsedVersion.major).\(parsedVersion.minor)",
+            implementationVariant: "zellij",
             rawVersion: "zellij \(version)",
             semanticVersion: parsedVersion,
             shellFamily: .posix,
