@@ -97,8 +97,14 @@ struct StatsVisualStyle {
                 cardStroke = Color.white.opacity(0.06)
             } else {
                 if colorScheme == .light {
+                    #if os(macOS)
+                    // Native window and control fills can both be white.
+                    cardFill = Color.primary.opacity(0.045)
+                    cardStroke = Color.primary.opacity(0.10)
+                    #else
                     cardFill = Self.nativeGroupedCardFill
                     cardStroke = Self.nativeGroupedCardStroke
+                    #endif
                 } else {
                     #if os(macOS)
                     cardFill = Color.white.opacity(0.045)
