@@ -31,6 +31,8 @@ extension RemoteSessionStatus {
         case .background: return backendName
         case .off: return "off"
         case .missing: return "\(backendName) missing"
+        case .unsupportedVersion:
+            return String(format: String(localized: "%@ unsupported"), backendName)
         case .unknown: return backendName
         }
     }
@@ -41,7 +43,34 @@ extension RemoteSessionStatus {
         case .background: return "Background"
         case .off: return "Off"
         case .missing: return "Unavailable"
+        case .unsupportedVersion: return String(localized: "Unsupported version")
         case .unknown: return "Unknown"
+        }
+    }
+
+    func setupPromptTitle(backendName: String) -> String? {
+        switch self {
+        case .missing:
+            String(format: String(localized: "Install %@?"), backendName)
+        case .unsupportedVersion:
+            String(format: String(localized: "Unsupported %@ version"), backendName)
+        case .foreground, .background, .off, .unknown:
+            nil
+        }
+    }
+
+    func setupPromptMessage(backendName: String) -> String? {
+        switch self {
+        case .missing:
+            String(localized: "The selected option keeps the terminal alive across app restarts and disconnects.")
+        case .unsupportedVersion(let version):
+            String(
+                format: String(localized: "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence."),
+                version,
+                backendName
+            )
+        case .foreground, .background, .off, .unknown:
+            nil
         }
     }
 }

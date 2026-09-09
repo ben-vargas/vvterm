@@ -560,7 +560,7 @@ struct TerminalPaneView: View {
     @State private var isReady = false
     @State private var credentials: ServerCredentials?
     @State private var credentialLoadErrorMessage: String?
-    @State private var showingRemoteSessionInstallPrompt = false
+    @State private var showingRemoteSessionSetupPrompt = false
     @State private var moshServerMaintenancePrompt: MoshServerMaintenanceAction?
     @State private var isInstallingMosh = false
     @State private var operationNotice: NoticeItem?
@@ -746,11 +746,12 @@ struct TerminalPaneView: View {
         return remoteSessionBackendMetadata?.displayName ?? identifier.rawValue
     }
 
-    private var remoteSessionInstallTitle: String {
-        String(
-            format: String(localized: "Install %@?"),
-            remoteSessionBackendName
-        )
+    private var remoteSessionSetupTitle: String {
+        paneState?.remoteSessionStatus.setupPromptTitle(backendName: remoteSessionBackendName) ?? ""
+    }
+
+    private var remoteSessionSetupMessage: String {
+        paneState?.remoteSessionStatus.setupPromptMessage(backendName: remoteSessionBackendName) ?? ""
     }
 
     private var noticeSurfaceStyle: NoticeSurfaceStyle {
@@ -903,7 +904,7 @@ struct TerminalPaneView: View {
             }
             loadCredentials()
 
-            showingRemoteSessionInstallPrompt = RemoteSessionInstallPromptPolicy.shouldPresent(
+            showingRemoteSessionSetupPrompt = RemoteSessionSetupPromptPolicy.shouldPresent(
                 for: paneState?.remoteSessionStatus,
                 installationGuideURL: remoteSessionBackendMetadata?.installationGuideURL
             )
@@ -939,7 +940,7 @@ struct TerminalPaneView: View {
             loadCredentials()
         }
         .onChange(of: paneState?.remoteSessionStatus) { status in
-            showingRemoteSessionInstallPrompt = RemoteSessionInstallPromptPolicy.shouldPresent(
+            showingRemoteSessionSetupPrompt = RemoteSessionSetupPromptPolicy.shouldPresent(
                 for: status,
                 installationGuideURL: remoteSessionBackendMetadata?.installationGuideURL
             )
@@ -976,7 +977,7 @@ struct TerminalPaneView: View {
             reconnectCoordinator.removeAutomaticReconnectContext(for: paneId)
             connectWatchdog.cancel()
         }
-        .alert(remoteSessionInstallTitle, isPresented: $showingRemoteSessionInstallPrompt) {
+        .alert(remoteSessionSetupTitle, isPresented: $showingRemoteSessionSetupPrompt) {
             Button("Open Installation Guide") {
                 handleRemoteSessionInstallation()
             }
@@ -984,7 +985,7 @@ struct TerminalPaneView: View {
                 continueWithoutRemoteSession()
             }
         } message: {
-            Text("The selected option keeps the terminal alive across app restarts and disconnects.")
+            Text(remoteSessionSetupMessage)
         }
         .alert(moshServerPromptTitle, isPresented: showingMoshServerMaintenancePrompt) {
             Button(moshServerPromptAction) {

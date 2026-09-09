@@ -2197,3 +2197,8 @@
 "⌘%@" = "⌘%@";
 
 "iCloud sync could not finish. Try again." = "无法完成 iCloud 同步。请重试。";
+
+"%@ unsupported" = "不支持 %@";
+"Unsupported version" = "不支持的版本";
+"Unsupported %@ version" = "不支持的 %@ 版本";
+"VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm 不支持 %@。请更新 VVTerm 或使用受支持的 %@ 版本。您可以在不保留会话的情况下继续。";

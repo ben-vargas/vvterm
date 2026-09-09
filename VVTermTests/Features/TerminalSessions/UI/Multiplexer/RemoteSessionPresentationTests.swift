@@ -15,6 +15,10 @@ final class RemoteSessionPresentationTests: XCTestCase {
             "Start a normal shell without remote session persistence.",
             "Installing %@",
             "Install %@?",
+            "%@ unsupported",
+            "Unsupported version",
+            "Unsupported %@ version",
+            "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence.",
             "The remote session is still running on the server."
         ]
 
@@ -73,6 +77,7 @@ final class RemoteSessionPresentationTests: XCTestCase {
             (.background, "tmux", "Background"),
             (.off, "off", "Off"),
             (.missing, "tmux missing", "Unavailable"),
+            (.unsupportedVersion("tmux 99.0"), String(format: String(localized: "%@ unsupported"), "tmux"), String(localized: "Unsupported version")),
             (.unknown, "tmux", "Unknown")
         ]
 
@@ -81,4 +86,28 @@ final class RemoteSessionPresentationTests: XCTestCase {
             XCTAssertEqual(status.displayName, displayName)
         }
     }
+    func testUnsupportedVersionPromptShowsDetectedVersionInsteadOfInstallCopy() {
+        let status = RemoteSessionStatus.unsupportedVersion("herdr 0.10.0")
+        XCTAssertEqual(
+            status.setupPromptTitle(backendName: "Herdr"),
+            String(format: String(localized: "Unsupported %@ version"), "Herdr")
+        )
+        XCTAssertEqual(
+            status.setupPromptMessage(backendName: "Herdr"),
+            String(
+                format: String(localized: "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence."),
+                "herdr 0.10.0", "Herdr"
+            )
+        )
+        XCTAssertFalse(status.indicatesPersistentSession)
+        XCTAssertEqual(
+            RemoteSessionStatus.missing.setupPromptTitle(backendName: "Herdr"),
+            String(format: String(localized: "Install %@?"), "Herdr")
+        )
+        for status in [RemoteSessionStatus.foreground, .background, .off, .unknown] {
+            XCTAssertNil(status.setupPromptTitle(backendName: "Herdr"))
+            XCTAssertNil(status.setupPromptMessage(backendName: "Herdr"))
+        }
+    }
+
 }

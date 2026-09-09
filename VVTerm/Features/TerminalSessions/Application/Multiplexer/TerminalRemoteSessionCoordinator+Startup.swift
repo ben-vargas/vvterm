@@ -138,8 +138,14 @@ extension TerminalRemoteSessionCoordinator {
         case .unsupportedEnvironment:
             disableAttachment(for: paneID, status: .off)
             return .plainShell
-        case .confirmedMissing, .incompatible:
+        case .confirmedMissing:
             disableAttachment(for: paneID, status: .missing)
+            return .plainShell
+        case .incompatible(let probe):
+            guard probe.backendIdentifier == backendIdentifier else {
+                throw SSHError.unknown("Remote session backend mismatch")
+            }
+            disableAttachment(for: paneID, status: .unsupportedVersion(probe.rawVersion))
             return .plainShell
         case .indeterminate(let failure):
             logger.warning(

@@ -2199,3 +2199,8 @@
 "⌘%@" = "⌘%@";
 
 "iCloud sync could not finish. Try again." = "iCloud 동기화를 완료하지 못했습니다. 다시 시도하세요.";
+
+"%@ unsupported" = "%@ 지원 안 됨";
+"Unsupported version" = "지원하지 않는 버전";
+"Unsupported %@ version" = "지원하지 않는 %@ 버전";
+"VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm은 %@을(를) 지원하지 않습니다. VVTerm을 업데이트하거나 지원되는 %@ 버전을 사용하세요. 세션을 유지하지 않고 계속할 수 있습니다.";

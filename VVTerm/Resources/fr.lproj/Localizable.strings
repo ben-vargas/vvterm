@@ -2202,3 +2202,8 @@
 "⌘%@" = "⌘%@";
 
 "iCloud sync could not finish. Try again." = "La synchronisation iCloud n’a pas pu se terminer. Réessayez.";
+
+"%@ unsupported" = "%@ non pris en charge";
+"Unsupported version" = "Version non prise en charge";
+"Unsupported %@ version" = "Version de %@ non prise en charge";
+"VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm ne prend pas en charge %@. Mettez à jour VVTerm ou utilisez une version prise en charge de %@. Vous pouvez continuer sans conserver les sessions.";

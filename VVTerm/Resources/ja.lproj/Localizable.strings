@@ -2200,3 +2200,8 @@
 "⌘%@" = "⌘%@";
 
 "iCloud sync could not finish. Try again." = "iCloudの同期を完了できませんでした。もう一度お試しください。";
+
+"%@ unsupported" = "%@ は非対応です";
+"Unsupported version" = "非対応のバージョン";
+"Unsupported %@ version" = "%@ の非対応バージョン";
+"VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm は %@ に対応していません。VVTerm を更新するか、対応するバージョンの %@ を使用してください。セッションを保持せずに続行できます。";

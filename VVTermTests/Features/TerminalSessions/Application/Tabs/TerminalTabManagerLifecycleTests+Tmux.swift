@@ -184,6 +184,61 @@ extension TerminalTabManagerLifecycleTests {
         }
     
         @Test
+        func unsupportedVersionProbeNeverReportsMissing() async {
+            await withTmuxEnabled {
+                await withCleanManager { manager in
+                    let tab = TerminalTab(serverId: UUID(), title: "Confirmed missing tmux")
+                    installTab(tab, in: manager, connectionState: .disconnected)
+                    manager.remoteSessionCoordinator.setAttachment(
+                        for: tab.rootPaneId,
+                        identifier: remoteSessionIdentifier("vvterm_existing"),
+                        ownership: .managed,
+                        managedSessionConfirmed: true
+                    )
+                    manager.remoteSessionCoordinator.updateStatus(.background, for: tab.rootPaneId)
+
+                    let client = SSHClient.testing()
+                    guard let startToken = manager.transportCoordinator.beginShellStart(
+                        for: tab.rootPaneId,
+                        client: client
+                    ) else {
+                        Issue.record("Expected shell start")
+                        return
+                    }
+                    let plan = try? await manager.remoteSessionCoordinator.startupPlan(
+                        for: tab.rootPaneId,
+                        serverID: tab.serverId,
+                        client: client,
+                        startToken: startToken,
+                        availabilityResolver: {
+                            .incompatible(RemoteSessionProbe(
+                                backendIdentifier: .tmux,
+                                executable: try! RemoteSessionExecutable(validating: "/usr/bin/tmux"),
+                                implementationVariant: "unsupported",
+                                rawVersion: "tmux 99.0",
+                                semanticVersion: RemoteSessionSemanticVersion("99.0"),
+                                shellFamily: .posix,
+                                shellExecutable: "/bin/sh"
+                            ))
+                        }
+                    )
+
+                    #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.remoteSessionStatus == .unsupportedVersion("tmux 99.0"))
+                    #expect(plan != nil)
+                    #expect(plan?.command == nil)
+                    #expect(manager.remoteSessionCoordinator.shouldApplyWorkingDirectory(for: tab.rootPaneId))
+                    #expect(manager.remoteSessionCoordinator.attachment(for: tab.rootPaneId) == nil)
+
+                    manager.transportCoordinator.finishShellStart(
+                        for: tab.rootPaneId,
+                        client: client,
+                        startToken: startToken
+                    )
+                }
+            }
+        }
+
+        @Test
         func staleMissingTmuxProbeCannotOverwriteReplacementOwner() async {
             await withTmuxEnabled {
                 await withCleanManager { manager in

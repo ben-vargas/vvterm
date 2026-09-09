@@ -2199,3 +2199,8 @@
 "⌘%@" = "⌘%@";
 
 "iCloud sync could not finish. Try again." = "iCloud sync could not finish. Try again.";
+
+"%@ unsupported" = "%@ unsupported";
+"Unsupported version" = "Unsupported version";
+"Unsupported %@ version" = "Unsupported %@ version";
+"VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence.";

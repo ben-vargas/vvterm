@@ -169,13 +169,16 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
         }
         sessionState.updatePane(paneID) { $0.remoteSessionStatus = status }
         logger.info(
-            "Remote session status for pane \(paneID.uuidString, privacy: .public) changed from \(previous.rawValue, privacy: .public) to \(status.rawValue, privacy: .public)"
+            "Remote session status for pane \(paneID.uuidString, privacy: .public) changed from \(String(describing: previous), privacy: .public) to \(String(describing: status), privacy: .public)"
         )
     }
 
     func shouldApplyWorkingDirectory(for paneID: UUID) -> Bool {
         guard let status = status(for: paneID) else { return false }
-        return status == .off || status == .missing
+        return switch status {
+        case .off, .missing, .unsupportedVersion: true
+        case .foreground, .background, .unknown: false
+        }
     }
 
     func updateSelectionStatuses(selectedTabs: [UUID: UUID]) {

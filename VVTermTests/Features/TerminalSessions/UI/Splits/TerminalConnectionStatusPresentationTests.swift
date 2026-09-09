@@ -282,7 +282,7 @@ struct TerminalConnectionStatusPresentationTests {
         #expect(registry.metadata.count == expected.count)
         for metadata in registry.metadata {
             #expect(metadata.installationGuideURL.absoluteString == expected[metadata.identifier])
-            #expect(RemoteSessionInstallPromptPolicy.shouldPresent(
+            #expect(RemoteSessionSetupPromptPolicy.shouldPresent(
                 for: .missing,
                 installationGuideURL: metadata.installationGuideURL
             ))
@@ -290,14 +290,22 @@ struct TerminalConnectionStatusPresentationTests {
     }
 
     @Test
-    func remoteSessionInstallPromptRequiresConfirmedMissingStatus() {
-        #expect(RemoteSessionInstallPromptPolicy.shouldPresent(
+    func remoteSessionSetupPromptRequiresMissingOrUnsupportedVersion() {
+        #expect(RemoteSessionSetupPromptPolicy.shouldPresent(
             for: .missing,
             installationGuideURL: URL(string: "https://example.com")!
         ))
-        #expect(!RemoteSessionInstallPromptPolicy.shouldPresent(for: .missing, installationGuideURL: nil))
+        #expect(RemoteSessionSetupPromptPolicy.shouldPresent(
+            for: .unsupportedVersion("herdr 0.10.0"),
+            installationGuideURL: URL(string: "https://herdr.dev/docs/install/")!
+        ))
+        #expect(!RemoteSessionSetupPromptPolicy.shouldPresent(
+            for: .unsupportedVersion("herdr 0.10.0"),
+            installationGuideURL: nil
+        ))
+        #expect(!RemoteSessionSetupPromptPolicy.shouldPresent(for: .missing, installationGuideURL: nil))
         for status in [RemoteSessionStatus.unknown, .background, .foreground, .off, nil] {
-            #expect(!RemoteSessionInstallPromptPolicy.shouldPresent(
+            #expect(!RemoteSessionSetupPromptPolicy.shouldPresent(
                 for: status,
                 installationGuideURL: URL(string: "https://github.com/tmux/tmux/wiki/Installing")!
             ))
