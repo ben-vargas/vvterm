@@ -1,9 +1,45 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import VVTerm
 
 @MainActor
 struct LocalDeviceDiscoveryPresentationTests {
+    @Test
+    func privacyModePreservesDiscoveryRowText() throws {
+        let host = DiscoveredSSHHost(
+            displayName: "Office Mac",
+            host: "192.0.2.10",
+            port: 2222,
+            sources: [.bonjour]
+        )
+        try expectSameRenderingWithPrivacyMode(DiscoveryHostRow(host: host))
+        #if os(macOS)
+        try expectSameRenderingWithPrivacyMode(DiscoveryHostSwitcherRow(
+            host: host,
+            isSelected: false,
+            isHovered: false,
+            onSelect: {},
+            onUse: {}
+        ))
+        #endif
+    }
+
+    private func expectSameRenderingWithPrivacyMode(_ row: some View) throws {
+        func pixels(privacyModeEnabled: Bool) throws -> Data {
+            let renderer = ImageRenderer(content: row
+                .environment(\.privacyModeEnabled, privacyModeEnabled)
+                .environment(\.colorScheme, .light)
+                .frame(width: 480, height: 60))
+            let image = try #require(renderer.cgImage)
+            let data = try #require(image.dataProvider?.data)
+            return data as Data
+        }
+        let visible = try pixels(privacyModeEnabled: false)
+        #expect(!visible.isEmpty)
+        #expect(try pixels(privacyModeEnabled: true) == visible)
+    }
+
     @Test
     func factoryCreatesOneStableManagerForEachPresentation() {
         var creationCount = 0

@@ -304,9 +304,8 @@ struct LocalDeviceDiscoverySheet: View {
     }
 }
 
-private struct DiscoveryHostRow: View {
+struct DiscoveryHostRow: View {
     let host: DiscoveredSSHHost
-    @Environment(\.privacyModeEnabled) private var privacyModeEnabled
 
     var body: some View {
         HStack(spacing: 12) {
@@ -316,12 +315,12 @@ private struct DiscoveryHostRow: View {
                 .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(host.visibleDisplayName(privacyModeEnabled: privacyModeEnabled))
+                Text(host.displayName)
                     .font(.body)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(host.visibleEndpoint(privacyModeEnabled: privacyModeEnabled))
+                Text(host.displayEndpoint)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -351,7 +350,7 @@ private struct DiscoveryHostRow: View {
 }
 
 #if os(macOS)
-private struct DiscoveryHostSwitcherRow: View {
+struct DiscoveryHostSwitcherRow: View {
     let host: DiscoveredSSHHost
     let isSelected: Bool
     let isHovered: Bool
@@ -359,7 +358,6 @@ private struct DiscoveryHostSwitcherRow: View {
     let onUse: () -> Void
 
     @Environment(\.controlActiveState) private var controlActiveState
-    @Environment(\.privacyModeEnabled) private var privacyModeEnabled
 
     private var selectionFillColor: Color {
         let base = NSColor.unemphasizedSelectedContentBackgroundColor
@@ -379,13 +377,13 @@ private struct DiscoveryHostSwitcherRow: View {
                 .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(host.visibleDisplayName(privacyModeEnabled: privacyModeEnabled))
+                Text(host.displayName)
                     .font(.body)
                     .fontWeight(.semibold)
                     .foregroundStyle(isSelected ? selectedTextColor : .primary)
                     .lineLimit(1)
 
-                Text(host.visibleEndpoint(privacyModeEnabled: privacyModeEnabled))
+                Text(host.displayEndpoint)
                     .font(.caption)
                     .foregroundStyle(isSelected ? selectedTextColor.opacity(0.85) : .secondary)
                     .lineLimit(1)

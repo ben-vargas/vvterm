@@ -17,6 +17,10 @@ nonisolated struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {
         "\(host):\(port)"
     }
 
+    var displayEndpoint: String {
+        "\(host):\(port)"
+    }
+
     init(
         displayName: String,
         host: String,

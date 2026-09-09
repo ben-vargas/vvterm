@@ -61,17 +61,3 @@ nonisolated extension Server {
         privacyModeEnabled ? SensitiveContentMask.placeholder : displayAddressWithPort
     }
 }
-
-nonisolated extension DiscoveredSSHHost {
-    var displayEndpoint: String {
-        "\(host):\(port)"
-    }
-
-    func visibleDisplayName(privacyModeEnabled: Bool) -> String {
-        SensitiveContentMask.value(displayName, privacyModeEnabled: privacyModeEnabled)
-    }
-
-    func visibleEndpoint(privacyModeEnabled: Bool) -> String {
-        SensitiveContentMask.value(displayEndpoint, privacyModeEnabled: privacyModeEnabled)
-    }
-}
