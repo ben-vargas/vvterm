@@ -11,11 +11,13 @@ import OSLog
 import AppKit
 #else
 import UIKit
+import os
 #endif
 
 private nonisolated enum GhosttyRuntimeAction: Sendable {
     case title(String)
     case workingDirectory(String)
+    case openLink(URL)
     case promptTitle
     case progress(stateRawValue: UInt32, value: Int?)
     #if os(iOS)
@@ -110,6 +112,16 @@ extension GhosttyRuntime {
         action: ghostty_action_s
     ) -> Bool {
         let actionTarget = makeActionTarget(app: app, target: target)
+        #if os(iOS)
+        if action.tag == GHOSTTY_ACTION_MOUSE_OVER_LINK {
+            // The tap router reads this immediately after sending a mouse position.
+            // Only this lock-protected value crosses the native callback thread.
+            let link = action.action.mouse_over_link
+            let isOverLink = link.url != nil && link.len > 0
+            actionTarget.fallbackTerminalView?.linkHoverState.withLock { $0 = isOverLink }
+            return true
+        }
+        #endif
         switch decode(action) {
         case .deliver(let runtimeAction):
             DispatchQueue.main.async {
@@ -167,6 +179,16 @@ extension GhosttyRuntime {
         case GHOSTTY_ACTION_SET_TITLE:
             guard let title = action.action.set_title.title else { return .handled }
             return .deliver(.title(String(cString: title)))
+
+        case GHOSTTY_ACTION_OPEN_URL:
+            let request = action.action.open_url
+            // Keep Ghostty's explicit local screen-export actions unchanged.
+            if request.kind == GHOSTTY_ACTION_OPEN_URL_KIND_TEXT
+                || request.kind == GHOSTTY_ACTION_OPEN_URL_KIND_HTML {
+                return .unhandled
+            }
+            guard let url = linkDestination(request) else { return .handled }
+            return .deliver(.openLink(url))
 
         case GHOSTTY_ACTION_PWD:
             guard let pwd = action.action.pwd.pwd else { return .handled }
@@ -235,6 +257,17 @@ extension GhosttyRuntime {
         default:
             return .unhandled
         }
+    }
+
+    nonisolated static func linkDestination(_ request: ghostty_action_open_url_s) -> URL? {
+        guard let pointer = request.url,
+              let count = Int(exactly: request.len),
+              count > 0, count <= TerminalLinkPolicy.maximumURLByteCount,
+              let text = String(
+                  bytes: UnsafeBufferPointer(start: UnsafeRawPointer(pointer).assumingMemoryBound(to: UInt8.self), count: count),
+                  encoding: .utf8
+              ) else { return nil }
+        return TerminalLinkPolicy.destination(text)
     }
 
     nonisolated private static func readClipboard(
@@ -528,6 +561,10 @@ extension GhosttyRuntime {
                 return
             }
             terminalView.onTitleChange?(title)
+
+        case .openLink(let url):
+            guard let terminalView, !terminalView.isShuttingDown else { return }
+            terminalView.onOpenLink?(url)
 
         case .workingDirectory(let path):
             Ghostty.logger.info("PWD changed: \(path)")

@@ -89,6 +89,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     let workingDirectoryProvider: WorkingDirectoryProvider
 
     var persistedStates: [String: RemoteFileBrowserPersistedState] = [:]
+    var linkedPathTasks: [UUID: Task<Void, Never>] = [:]
     private var operationCoordinatorsByTabID: [UUID: RemoteFileOperationCoordinator] = [:]
     private var temporaryTransferURLsByTabID: [UUID: Set<URL>] = [:]
     private(set) var activeDragPayload: RemoteFileDragPayload?
@@ -120,6 +121,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     }
 
     isolated deinit {
+        linkedPathTasks.values.forEach { $0.cancel() }
         operationCoordinatorsByTabID.values.forEach { $0.cancelAll() }
         temporaryTransferURLsByTabID.values
             .flatMap(Array.init)
@@ -245,8 +247,8 @@ final class RemoteFileBrowserStore: ObservableObject {
         guard tab.serverId == server.id else { return }
 
         let currentState = state(for: tab)
-        guard !currentState.isLoadingDirectory else { return }
-        guard !currentState.hasLoadedDirectory else { return }
+        // A failed explicit path must stay visible until the user chooses to retry.
+        guard currentState.directoryPhase == .notLoaded else { return }
 
         let requestID = UUID()
 
@@ -265,6 +267,10 @@ final class RemoteFileBrowserStore: ObservableObject {
 
     func refresh(server: Server, tab: RemoteFileTab) async {
         guard tab.serverId == server.id else { return }
+        if case .failedLink(let path, _) = state(for: tab).directoryPhase {
+            openLinkedPath(path, in: tab, server: server)
+            return
+        }
         let targetPath = lastVisitedPath(for: tab)
             ?? bestWorkingDirectory(for: server.id)
             ?? "/"
@@ -339,6 +345,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     }
 
     func removeRuntimeState(for tabId: UUID) {
+        linkedPathTasks.removeValue(forKey: tabId)?.cancel()
         operationCoordinatorsByTabID.removeValue(forKey: tabId)?.cancelAll()
         temporaryTransferURLsByTabID.removeValue(forKey: tabId)?
             .forEach(temporaryStorage.removeItem)
@@ -415,6 +422,7 @@ final class RemoteFileBrowserStore: ObservableObject {
     func loadDirectory(path: String, in tab: RemoteFileTab, server: Server) async {
         guard tab.serverId == server.id else { return }
 
+        linkedPathTasks.removeValue(forKey: tab.id)?.cancel()
         let normalizedPath = RemoteFilePath.normalize(path)
         let requestID = UUID()
         cleanupPreviewArtifact(for: state(for: tab).viewerPayload)

@@ -2201,3 +2201,9 @@
 "Unsupported version" = "不支持的版本";
 "Unsupported %@ version" = "不支持的 %@ 版本";
 "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm 不支持 %@。请更新 VVTerm 或使用受支持的 %@ 版本。您可以在不保留会话的情况下继续。";
+
+"Open Link" = "打开链接";
+"Unable to Open Link" = "无法打开链接";
+"The link could not be opened." = "无法打开此链接。";
+
+"Open in Files on the current server?" = "在当前服务器的文件中打开？";

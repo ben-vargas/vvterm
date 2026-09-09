@@ -312,6 +312,7 @@ struct RemoteTerminalPaneWrapper: View {
     let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
     let onProcessExit: () -> Void
     let onReady: () -> Void
+    let onOpenLink: (URL) -> Void
     let showsVoiceAccessoryButton: Bool
     let onVoiceTrigger: ((TerminalVoicePresentationState.RecordingStyle) -> Void)?
     let onSceneActivation: () -> Void
@@ -339,6 +340,7 @@ struct RemoteTerminalPaneWrapper: View {
                 onPaneKeyboardShortcut: onPaneKeyboardShortcut,
                 onProcessExit: onProcessExit,
                 onReady: onReady,
+                onOpenLink: onOpenLink,
                 terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
                 showsVoiceAccessoryButton: showsVoiceAccessoryButton,
                 onVoiceTrigger: onVoiceTrigger
@@ -429,6 +431,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
     let onProcessExit: () -> Void
     let onReady: () -> Void
+    let onOpenLink: (URL) -> Void
     let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
     let showsVoiceAccessoryButton: Bool
     let onVoiceTrigger: ((TerminalVoicePresentationState.RecordingStyle) -> Void)?
@@ -523,6 +526,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         }
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminalView.terminalContextMenuActions = terminalContextMenuActions
+        terminalView.onOpenLink = isActive ? onOpenLink : nil
         terminalView.applyPresentationOverrides(
             tabManager.sessionState.presentationOverrides(for: paneId)
         )
@@ -560,6 +564,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             terminalView.writeCallback = nil
             terminalView.onReady = nil
             terminalView.onProcessExit = nil
+            terminalView.onOpenLink = nil
             terminalView.showsVoiceAccessoryButton = false
             terminalView.onVoiceButtonTapped = nil
             terminalView.onPaneKeyboardShortcut = nil
@@ -590,6 +595,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         terminalView.applyTerminalAccessoryInputSnapshot(terminalAccessoryInputSnapshot)
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminalView.terminalContextMenuActions = terminalContextMenuActions
+        terminalView.onOpenLink = isActive ? onOpenLink : nil
         if size.width > 0, size.height > 0, size != context.coordinator.lastReportedSize {
             context.coordinator.lastReportedSize = size
             terminalView.sizeDidChange(size)
@@ -622,6 +628,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
 
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
         guard let terminalView = uiView as? GhosttyTerminalView else { return }
+        terminalView.onOpenLink = nil
 
         let paneStillExists = coordinator.tabManager.sessionState
             .paneState(for: coordinator.paneId) != nil
@@ -658,6 +665,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         }
         terminal.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminal.terminalContextMenuActions = terminalContextMenuActions
+        terminal.onOpenLink = isActive ? onOpenLink : nil
         terminal.applyPresentationOverrides(
             tabManager.sessionState.presentationOverrides(for: paneId)
         )

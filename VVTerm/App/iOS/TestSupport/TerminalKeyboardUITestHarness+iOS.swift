@@ -14,6 +14,9 @@ struct TerminalKeyboardUITestHarness: View {
         }
     }
 
+    @StateObject private var linkCoordinator = TerminalLinkCoordinator()
+    @State private var openedLink: URL?
+
     private static let paneId = UUID(uuidString: "B54F29D8-7C3E-4DB8-B3D7-9D9F1604B755")!
     private static let clearTerminalBackgroundCacheForUITest: Void = {
         guard Foundation.ProcessInfo.processInfo.arguments.contains(
@@ -635,6 +638,11 @@ struct TerminalKeyboardUITestHarness: View {
             .padding(8)
         }
         .background(Color.black)
+        .modifier(TerminalLinkConfirmationModifier(coordinator: linkCoordinator, isActive: showsTerminal))
+        .environment(\.openURL, OpenURLAction { url in
+            openedLink = url
+            return .handled
+        })
         .terminalCloseConfirmationAlert(
             isPresented: $showingPaneCloseConfirmation,
             message: String(localized: "The SSH connection will be terminated."),
@@ -958,9 +966,12 @@ struct TerminalKeyboardUITestHarness: View {
             + " reconnect=\(lifecycleStatus.rawValue) inputHex=\(receivedInputHex)"
             + " returnInputs=\(returnInputCount) codexResponses=\(codexResponseCount)"
             + " outputBursts=\(completedOutputBurstCount)"
+            + " linkCellHeight=\(terminalView.cellSize.height)"
+            + " openedLink=\(openedLink?.absoluteString ?? "none")"
             + " findPresented=\(terminalView.isFindNavigatorVisible)"
             + " mouseCaptured=\(terminalView.surface?.mouseCaptured == true)"
             + " primaryMousePresses=\(primaryMousePresses) primaryMouseReleases=\(primaryMouseReleases)"
+            + " mouseMotionReports=\(mouseReportCount(buttonPattern: "35", terminator: "M"))"
             + " mouseScrollReports=\(mouseScrollReports) zoomActions=\(zoomActionCount)"
             + " lastZoomAction=\(lastZoomAction)"
             + " paneShortcutActions=\(paneShortcutActionCount)"
@@ -1028,6 +1039,14 @@ struct TerminalKeyboardUITestHarness: View {
         }
         if simulatesTerminalMouseCapture {
             _ = await terminalView.receiveTerminalOutput(Self.mouseCaptureSequence)
+            if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-mouse-motion") {
+                _ = await terminalView.receiveTerminalOutput(Data("\u{1B}[?1003h".utf8))
+            }
+        }
+        terminalView.onOpenLink = linkCoordinator.request
+        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-link-fixture") {
+            let fixture = "\u{1B}[2J\u{1B}[25;1Hhttps://example.com/visible\r\n\u{1B}]8;;https://example.com/actual\u{07}Hidden target\u{1B}]8;;\u{07}\r\n\u{1B}]8;;file://remote/tmp/example.txt\u{07}Remote file\u{1B}]8;;\u{07}\r\n"
+            _ = await terminalView.receiveTerminalOutput(Data(fixture.utf8))
         }
         if seedsTerminalPasteboard {
             UIPasteboard.general.string = "touch-paste"

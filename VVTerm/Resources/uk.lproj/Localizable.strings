@@ -2211,3 +2211,9 @@
 "Unsupported version" = "Непідтримувана версія";
 "Unsupported %@ version" = "Непідтримувана версія %@";
 "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm не підтримує %@. Оновіть VVTerm або використовуйте підтримувану версію %@. Ви можете продовжити без збереження сеансів.";
+
+"Open Link" = "Відкрити посилання";
+"Unable to Open Link" = "Не вдалося відкрити посилання";
+"The link could not be opened." = "Не вдалося відкрити посилання.";
+
+"Open in Files on the current server?" = "Відкрити у файлах на поточному сервері?";

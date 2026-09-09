@@ -66,6 +66,7 @@ extension GhosttyTerminalView {
 
         // Clear all callbacks first to prevent any further interactions
         onReady = nil
+        onOpenLink = nil
         onProcessExit = nil
         onTitleChange = nil
         onPwdChange = nil

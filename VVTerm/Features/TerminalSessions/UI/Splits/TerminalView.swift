@@ -557,6 +557,7 @@ struct TerminalPaneView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
 
+    @StateObject private var linkCoordinator = TerminalLinkCoordinator()
     @State private var isReady = false
     @State private var credentials: ServerCredentials?
     @State private var credentialLoadErrorMessage: String?
@@ -1004,6 +1005,7 @@ struct TerminalPaneView: View {
             onApprove: approveHostKeyChallengeAndRetry
         )
         .terminalRichPastePrompt(using: richPasteUI)
+        .modifier(TerminalLinkConfirmationModifier(coordinator: linkCoordinator, isActive: shouldFocus))
     }
 
     private var shouldShowFloatingVoiceButton: Bool {
@@ -1027,6 +1029,7 @@ struct TerminalPaneView: View {
             onPaneKeyboardShortcut: onPaneKeyboardShortcut,
             onProcessExit: onProcessExit,
             onReady: { isReady = true },
+            onOpenLink: linkCoordinator.request,
             showsVoiceAccessoryButton: showsVoiceButton,
             onVoiceTrigger: voiceTriggerHandlerForTerminal,
             onSceneActivation: reconcileAutomaticReconnect
@@ -1042,7 +1045,8 @@ struct TerminalPaneView: View {
             isActive: shouldFocus,
             terminalContextMenuActions: terminalContextMenuActions,
             onProcessExit: onProcessExit,
-            onReady: { isReady = true }
+            onReady: { isReady = true },
+            onOpenLink: linkCoordinator.request
         )
         .id(connectionGeneration)
         .contentShape(Rectangle())

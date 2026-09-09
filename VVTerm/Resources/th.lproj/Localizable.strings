@@ -2204,3 +2204,9 @@
 "Unsupported version" = "เวอร์ชันที่ไม่รองรับ";
 "Unsupported %@ version" = "เวอร์ชัน %@ ที่ไม่รองรับ";
 "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm ไม่รองรับ %@ โปรดอัปเดต VVTerm หรือใช้ %@ เวอร์ชันที่รองรับ คุณสามารถดำเนินการต่อโดยไม่เก็บเซสชันไว้ได้";
+
+"Open Link" = "เปิดลิงก์";
+"Unable to Open Link" = "ไม่สามารถเปิดลิงก์ได้";
+"The link could not be opened." = "ไม่สามารถเปิดลิงก์นี้ได้";
+
+"Open in Files on the current server?" = "เปิดในไฟล์บนเซิร์ฟเวอร์ปัจจุบันหรือไม่";

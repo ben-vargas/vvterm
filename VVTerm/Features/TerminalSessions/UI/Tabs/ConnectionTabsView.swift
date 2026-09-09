@@ -311,6 +311,7 @@ struct ConnectionTerminalContainer: View {
 
     var body: some View {
         platformBody
+            .environment(\.openRemoteTerminalFile, openRemoteFileLink)
             .sheet(item: remoteSessionAttachPromptBinding) { prompt in
                 RemoteSessionAttachPromptSheet(
                     prompt: prompt,
@@ -379,6 +380,23 @@ struct ConnectionTerminalContainer: View {
                 // No-op: user cancelled biometric auth or open failed.
             }
         }
+    }
+
+    private func openRemoteFileLink(_ url: URL) -> Bool {
+        guard let url = TerminalLinkPolicy.destination(url.absoluteString), url.isFileURL else { return false }
+        guard let tab = fileTabManager.openTab(
+            for: server,
+            seedPath: nil,
+            hasProAccess: storeManager.allowsProFeatures
+        ) else {
+            showingFileTabLimitAlert = true
+            return true
+        }
+        fileBrowser.prepareNewTab(tab, duplicating: nil)
+        fileBrowser.openLinkedPath(url.path, in: tab, server: server)
+        viewTabConfig.setVisibility(for: .files, isVisible: true)
+        tabManager.sessionState.selectView(.files, for: server.id)
+        return true
     }
 
     func openNewFileTab(selectFilesViewOnSuccess: Bool = false) {

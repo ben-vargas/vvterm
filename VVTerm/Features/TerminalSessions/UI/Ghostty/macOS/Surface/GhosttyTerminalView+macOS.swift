@@ -42,6 +42,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
 
     /// Callback when the surface has produced its first layout/draw (used to hide loading UI)
     var onReady: (() -> Void)?
+    var onOpenLink: ((URL) -> Void)?
 
     /// Callback for OSC 9;4 progress reports
     var onProgressReport: ((GhosttyProgressState, Int?) -> Void)?

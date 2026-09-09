@@ -2204,3 +2204,9 @@
 "Unsupported version" = "非対応のバージョン";
 "Unsupported %@ version" = "%@ の非対応バージョン";
 "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm は %@ に対応していません。VVTerm を更新するか、対応するバージョンの %@ を使用してください。セッションを保持せずに続行できます。";
+
+"Open Link" = "リンクを開く";
+"Unable to Open Link" = "リンクを開けません";
+"The link could not be opened." = "リンクを開けませんでした。";
+
+"Open in Files on the current server?" = "現在のサーバーのファイルで開きますか？";

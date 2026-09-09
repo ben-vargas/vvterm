@@ -34,6 +34,7 @@ nonisolated enum RemoteFileDirectoryPhase: Equatable, Sendable {
     case loading(requestID: UUID, hasLoadedDirectory: Bool)
     case loaded
     case failed(RemoteFileBrowserError, hasLoadedDirectory: Bool)
+    case failedLink(path: String, error: RemoteFileBrowserError)
 
     var isLoading: Bool {
         if case .loading = self { return true }
@@ -42,7 +43,7 @@ nonisolated enum RemoteFileDirectoryPhase: Equatable, Sendable {
 
     var hasLoadedDirectory: Bool {
         switch self {
-        case .notLoaded:
+        case .notLoaded, .failedLink:
             return false
         case .loading(_, let hasLoadedDirectory), .failed(_, let hasLoadedDirectory):
             return hasLoadedDirectory
@@ -52,8 +53,10 @@ nonisolated enum RemoteFileDirectoryPhase: Equatable, Sendable {
     }
 
     var error: RemoteFileBrowserError? {
-        guard case .failed(let error, _) = self else { return nil }
-        return error
+        switch self {
+        case .failed(let error, _), .failedLink(_, let error): return error
+        case .notLoaded, .loading, .loaded: return nil
+        }
     }
 
     mutating func begin(requestID: UUID) {
@@ -75,6 +78,14 @@ nonisolated enum RemoteFileDirectoryPhase: Equatable, Sendable {
         self = .failed(error, hasLoadedDirectory: hasLoadedDirectory)
         return true
     }
+
+    @discardableResult
+    mutating func failLink(requestID: UUID, path: String, error: RemoteFileBrowserError) -> Bool {
+        guard fail(requestID: requestID, error: error) else { return false }
+        self = .failedLink(path: path, error: error)
+        return true
+    }
+
 }
 
 nonisolated enum RemoteFileViewerPhase: Equatable, Sendable {

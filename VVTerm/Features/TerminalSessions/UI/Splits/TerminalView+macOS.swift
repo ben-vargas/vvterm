@@ -37,6 +37,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     let terminalContextMenuActions: TerminalContextMenuActions
     let onProcessExit: () -> Void
     let onReady: () -> Void
+    let onOpenLink: (URL) -> Void
 
     @EnvironmentObject var ghosttyApp: GhosttyRuntime
 
@@ -68,6 +69,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
                 tabManager.handleTerminalZoom(action, for: paneId)
             }
             existingTerminal.terminalContextMenuActions = terminalContextMenuActions
+            existingTerminal.onOpenLink = isActive ? onOpenLink : nil
             existingTerminal.applyPresentationOverrides(
                 tabManager.sessionState.presentationOverrides(for: paneId)
             )
@@ -119,6 +121,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
             tabManager.handleTerminalZoom(action, for: paneId)
         }
         terminalView.terminalContextMenuActions = terminalContextMenuActions
+        terminalView.onOpenLink = isActive ? onOpenLink : nil
         terminalView.applyPresentationOverrides(
             tabManager.sessionState.presentationOverrides(for: paneId)
         )
@@ -164,6 +167,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
             scrollView.shouldOwnFirstResponder = isActive
             let terminalView = scrollView.surfaceView
             terminalView.terminalContextMenuActions = terminalContextMenuActions
+            terminalView.onOpenLink = isActive ? onOpenLink : nil
             let presentationOverrides = tabManager.sessionState.presentationOverrides(for: paneId)
             if terminalView.surfacePresentationOverrides != presentationOverrides {
                 terminalView.applyPresentationOverrides(presentationOverrides)
@@ -174,6 +178,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     static func dismantleNSView(_ nsView: NSView, coordinator: TerminalPaneConnectionCoordinator) {
         guard let scrollView = nsView as? TerminalScrollView else { return }
         let terminal = scrollView.surfaceView
+        terminal.onOpenLink = nil
         let paneStillExists = coordinator.tabManager.sessionState
             .paneState(for: coordinator.paneId) != nil
         if paneStillExists {

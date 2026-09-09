@@ -2206,3 +2206,9 @@
 "Unsupported version" = "Version non prise en charge";
 "Unsupported %@ version" = "Version de %@ non prise en charge";
 "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm ne prend pas en charge %@. Mettez à jour VVTerm ou utilisez une version prise en charge de %@. Vous pouvez continuer sans conserver les sessions.";
+
+"Open Link" = "Ouvrir le lien";
+"Unable to Open Link" = "Impossible d’ouvrir le lien";
+"The link could not be opened." = "Le lien n’a pas pu être ouvert.";
+
+"Open in Files on the current server?" = "Ouvrir dans Fichiers sur le serveur actuel ?";

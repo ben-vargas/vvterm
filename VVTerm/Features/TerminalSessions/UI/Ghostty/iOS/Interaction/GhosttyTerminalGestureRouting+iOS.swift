@@ -7,6 +7,7 @@
 
 #if os(iOS)
 import UIKit
+import os
 
 // MARK: - Gesture Recognizer Delegate
 
@@ -116,7 +117,8 @@ extension GhosttyTerminalView {
             notifyDirectTouchOnTerminal(isFocusTap: true)
             return
         }
-        // Tap just focuses keyboard - no mouse events (avoids accidental selection).
+        if let location, routeLink(at: location, activate: false) { return }
+        // Non-link taps focus the keyboard without selecting terminal text.
         notifyDirectTouchOnTerminal(isFocusTap: true)
         requestKeyboardFocus(for: .directTouch)
     }
@@ -153,6 +155,10 @@ extension GhosttyTerminalView {
             _ = requestKeyboardFocus(for: .directTouch)
         }
 
+        if !selectionWasActive, routeLink(at: recognizer.location(in: self), activate: true) {
+            return
+        }
+
         guard let surface,
               TerminalPointerInputRoutingPolicy.shouldSendDirectTouchClick(
                   terminalMouseCaptured: surface.mouseCaptured,
@@ -168,6 +174,27 @@ extension GhosttyTerminalView {
         surface.sendMouseButton(.init(action: .press, button: .left, mods: []))
         surface.sendMouseButton(.init(action: .release, button: .left, mods: []))
         requestRender()
+    }
+
+    private func routeLink(at location: CGPoint, activate: Bool) -> Bool {
+        // Probing during mouse capture would send unwanted motion to the remote app.
+        guard canRouteTerminalInput, !isPaused, !isShuttingDown,
+              !hasActiveSelectionInteraction, let surface,
+              !surface.mouseCaptured else { return false }
+        let point = ghosttyPoint(location)
+        // Ghostty uses Command for link hit testing on Apple platforms.
+        surface.sendMousePos(.init(x: point.x, y: point.y, mods: .super))
+        defer {
+            surface.sendMousePos(.init(x: point.x, y: point.y, mods: []))
+        }
+        guard linkHoverState.withLock({ $0 }) else { return false }
+        if activate {
+            stopMomentumScrolling()
+            surface.sendMouseButton(.init(action: .press, button: .left, mods: .super))
+            surface.sendMouseButton(.init(action: .release, button: .left, mods: .super))
+            requestRender()
+        }
+        return true
     }
 
     func ghosttyPoint(_ location: CGPoint) -> CGPoint {

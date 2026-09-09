@@ -2203,3 +2203,9 @@
 "Unsupported version" = "Unsupported version";
 "Unsupported %@ version" = "Unsupported %@ version";
 "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence." = "VVTerm does not support %@. Update VVTerm or use a supported version of %@. You can continue without session persistence.";
+
+"Open Link" = "Open Link";
+"Unable to Open Link" = "Unable to Open Link";
+"The link could not be opened." = "The link could not be opened.";
+
+"Open in Files on the current server?" = "Open in Files on the current server?";

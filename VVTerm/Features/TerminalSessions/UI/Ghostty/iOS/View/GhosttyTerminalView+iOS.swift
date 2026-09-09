@@ -9,6 +9,7 @@
 import UIKit
 import Metal
 import OSLog
+import os
 import SwiftUI
 import IOSurface
 import CoreImage
@@ -71,6 +72,7 @@ class GhosttyTerminalView: UIView {
 
     /// Callback when the surface has produced its first layout/draw (used to hide loading UI)
     var onReady: (() -> Void)?
+    var onOpenLink: ((URL) -> Void)?
 
     /// Callback invoked when the terminal grid changes (cols, rows).
     /// In custom I/O mode (SSH), the embedder should send a window-change.
@@ -147,6 +149,7 @@ class GhosttyTerminalView: UIView {
 
     var didSignalReady = false
     var readonly = false
+    nonisolated let linkHoverState = OSAllocatedUnfairLock(initialState: false)
     let clipboardConfirmationQueue = TerminalClipboardConfirmationQueue()
     var presentedClipboardConfirmation: UIAlertController?
     var clipboardConfirmationRetryWorkItem: DispatchWorkItem?
