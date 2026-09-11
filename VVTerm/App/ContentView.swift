@@ -274,6 +274,10 @@ struct ContentView: View {
     /// the iOS NavigationSplitView and the macOS AppKit shell host.
     private func withSplitLifecycle<Content: View>(_ content: Content) -> some View {
         content
+            .modifier(TerminalNotificationNavigationModifier { server in
+                selectedWorkspace = serverManager.workspaces.first { $0.id == server.workspaceId }
+                selectedServer = server
+            })
             .onAppear {
                 selectedWorkspace = WorkspaceSelectionPolicy.workspace(
                     current: selectedWorkspace,
@@ -449,6 +453,18 @@ struct MainWindowChromeBridge: NSViewRepresentable {
         guard let view = nsView as? WindowObserverView else { return }
         view.windowTitle = windowTitle
         view.applyIfPossible()
+    }
+
+    static func bringMainWindowForward(in windows: [NSWindow]) -> Bool {
+        guard let window = windows.first(where: { containsMarker($0.contentView) }) else { return false }
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
+        return true
+    }
+
+    private static func containsMarker(_ view: NSView?) -> Bool {
+        guard let view else { return false }
+        return view is WindowObserverView || view.subviews.contains { containsMarker($0) }
     }
 
     private static func configure(_ window: NSWindow, title: String) {

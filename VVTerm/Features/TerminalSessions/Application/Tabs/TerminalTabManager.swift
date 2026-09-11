@@ -852,7 +852,22 @@ final class TerminalTabManager {
             }
         ))
         #endif
+        if !terminalSurfaceStore.isRegistered(terminal, for: paneId) {
+            terminalSurfaceStore.surface(for: paneId)?.setProgressHandler(nil)
+            terminalSurfaceStore.surface(for: paneId)?.terminalNotificationContext = nil
+            presentationState.progress.clear(paneId)
+        }
         let replacesRegisteredTerminal = terminalSurfaceStore.register(terminal, for: paneId)
+        if let pane = sessionState.paneState(for: paneId) {
+            terminal.terminalNotificationContext = TerminalNotificationContext(
+                paneId: paneId, tabId: pane.tabId, serverId: pane.serverId
+            )
+        }
+        terminal.setProgressHandler { [weak self, weak terminal] progress in
+            guard let self, let terminal,
+                  self.terminalSurfaceStore.isRegistered(terminal, for: paneId) else { return }
+            self.presentationState.progress.apply(progress, for: paneId)
+        }
         #if os(iOS)
         terminal.acceptsTerminalInput = sessionState.paneState(for: paneId)?.connectionState.isConnected == true
         // A replacement is commonly registered before UIKit attaches it.
@@ -909,6 +924,9 @@ final class TerminalTabManager {
         _ terminal: any TerminalSurface,
         for paneId: UUID
     ) {
+        terminal.setProgressHandler(nil)
+        terminal.terminalNotificationContext = nil
+        presentationState.progress.clear(paneId)
         #if os(iOS)
         terminal.setLifecycleCallbacks(nil)
         presentationState.removePane(paneId)

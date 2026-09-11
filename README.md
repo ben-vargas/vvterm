@@ -39,6 +39,69 @@ VVTerm is a cross-platform SSH terminal app for Apple platforms. The current cod
 
 Eternal Terminal connections use the configured SSH authentication and SSH port to run `etterminal`, then connect to `etserver` on TCP port `2022` by default. Install Eternal Terminal on the host and allow inbound traffic to the configured ET port. VVTerm's working-directory and optional tmux startup, attach, installation, and cleanup behavior also applies to ET sessions.
 
+### Terminal notifications and progress tests
+
+VVTerm uses libghostty for OSC 9 and OSC 777 notifications and OSC 9;4 progress.
+Each pane shows Ghostty's two-point progress bar at its top edge. Paused progress
+is orange, errors are red, and unknown progress moves. A remove report clears the
+bar immediately; a quiet bar expires after 15 seconds. Progress is not saved.
+Enable notification permission under **Settings → Sessions & Connections →
+Terminal Notifications**. Denied permission does not affect terminal output.
+Clicking a notification opens its existing terminal tab and focuses its source
+pane, after any required unlock. Notifications for closed panes do not start a
+new connection.
+
+Run this script in a VVTerm terminal, or copy it to the remote host first:
+
+```sh
+./scripts/test_terminal_events.sh
+./scripts/test_terminal_events.sh progress --delay 5
+./scripts/test_terminal_events.sh notify
+./scripts/test_terminal_events.sh clear
+./scripts/test_terminal_events.sh environment
+```
+
+Repeat the progress test in separate panes, switch tabs while it runs, and replace
+or close a pane. The bar must remain local to its pane and must not resize terminal
+rows or move the keyboard. For tmux, use `--tmux-depth 1` (or `2` for two nested
+layers). Each layer must permit passthrough. The script does not change tmux
+settings. It prints help with `--help`.
+
+SSH and Eternal Terminal carry these events. Mosh currently does not; VVTerm
+uses conservative terminal identity over Mosh. Local notifications require the
+app to receive terminal output. They do not provide remote push delivery while
+iOS has suspended VVTerm. Existing processes inside tmux keep their inherited
+environment; the current transport policy applies to newly started processes in
+VVTerm-managed sessions. External sessions are not reconfigured.
+
+Automated checks:
+
+```sh
+python3 scripts/tests/terminal_events_test.py
+python3 scripts/tests/terminal_tmux_test.py
+python3 scripts/tests/terminal_mosh_test.py
+xcodebuild test -project VVTerm.xcodeproj -scheme VVTerm \
+  -destination 'platform=macOS,arch=arm64' -parallel-testing-enabled NO \
+  -only-testing:VVTermTests/TerminalProgressStoreTests \
+  -only-testing:VVTermTests/GhosttyTerminalEventsTests \
+  -only-testing:VVTermTests/TerminalNotificationNavigationStoreTests \
+  -only-testing:VVTermTests/RemoteTerminalBootstrapTests \
+  -only-testing:VVTermTests/RemoteTmuxUnixCommandBuilderTests \
+  -only-testing:VVTermUITests/TerminalEventsUITests
+```
+
+For iOS, use the same command with `-destination 'platform=iOS Simulator,id=UUID'`.
+Also add `-only-testing:VVTermTests/TerminalPanePresentationTests` to check that
+old view cleanup cannot pause a pane after it moves to a new view.
+Get available IDs with `xcrun simctl list devices available`. Run once on an iPhone
+and once on an iPad. The UI suite hosts real libghostty panes, sends actual OSC
+bytes, and saves screenshots. Notification assertions use a test client; they do
+not prove that system notification banners are permitted. Use the manual `notify`
+command to check native banners. The tmux suite creates and removes isolated
+local servers, and skips if tmux is absent. The Mosh check uses a temporary local
+server and client to verify that unsupported OSC messages do not become visible
+text; it skips if either Mosh command is absent.
+
 ### Servers and organization
 
 - Workspaces with ordering, colors, and environment grouping

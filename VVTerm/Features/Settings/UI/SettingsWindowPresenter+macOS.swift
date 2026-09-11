@@ -36,7 +36,8 @@ final class SettingsWindowPresenter {
         knownHostSettingsCoordinator: KnownHostSettingsCoordinator,
         voiceModelManagers: VoiceSettingsModelManagerOwner,
         analyticsOptOutAction: AnalyticsOptOutAction,
-        remoteSessionBackends: [RemoteSessionBackendMetadata]
+        remoteSessionBackends: [RemoteSessionBackendMetadata],
+        ghosttyApp: GhosttyRuntime
     ) {
         makeWindow = {
             let settingsView = LocalizedSettingsView(
@@ -55,7 +56,7 @@ final class SettingsWindowPresenter {
                 analyticsOptOutAction: analyticsOptOutAction,
                 remoteSessionBackends: remoteSessionBackends
             )
-            return Self.makeSettingsWindow(rootView: settingsView)
+            return Self.makeSettingsWindow(rootView: settingsView.environmentObject(ghosttyApp))
         }
     }
 

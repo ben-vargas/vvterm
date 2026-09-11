@@ -44,7 +44,9 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     var onReady: (() -> Void)?
     var onOpenLink: ((URL) -> Void)?
 
-    /// Callback for OSC 9;4 progress reports
+    var terminalNotificationContext: TerminalNotificationContext?
+
+    /// Callback for OSC 9;4 progress reports.
     var onProgressReport: ((GhosttyProgressState, Int?) -> Void)?
 
     /// Callback when terminal size changes (cols, rows) - used for SSH PTY resize

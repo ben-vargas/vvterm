@@ -2212,3 +2212,18 @@
 "The link could not be opened." = "Nie udało się otworzyć linku.";
 
 "Open in Files on the current server?" = "Otworzyć w Plikach na bieżącym serwerze?";
+
+// Terminal notifications and progress
+"Terminal progress - Error" = "Postęp terminala — błąd";
+"Terminal progress - Paused" = "Postęp terminala — wstrzymano";
+"Terminal progress" = "Postęp terminala";
+"%lld percent complete" = "Ukończono %lld procent";
+"Operation failed" = "Operacja nie powiodła się";
+"Operation paused" = "Operacja wstrzymana";
+"Operation in progress" = "Operacja w toku";
+"Allow Terminal Notifications" = "Zezwól na powiadomienia terminala";
+"Terminal notifications are allowed" = "Powiadomienia terminala są dozwolone";
+"Allow notifications for VVTerm in system settings." = "Zezwól na powiadomienia VVTerm w ustawieniach systemowych.";
+"Notifications are unavailable." = "Powiadomienia są niedostępne.";
+"Terminal Notifications" = "Powiadomienia terminala";
+"Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages." = "Programy zdalne mogą wysyłać powiadomienia, gdy VVTerm odbiera dane terminala. Mosh nie obsługuje tych wiadomości.";

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TerminalSessionsConnectionsSettingsView: View {
+    @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     let backends: [RemoteSessionBackendMetadata]
 
     @AppStorage(TerminalRemoteSessionDefaults.enabledKey) private var remoteSessionEnabledDefault = true
@@ -42,6 +43,7 @@ struct TerminalSessionsConnectionsSettingsView: View {
     var body: some View {
         Form {
             TerminalSessionPlatformSettingsSection()
+            TerminalNotificationSettingsSection(client: ghosttyApp.notificationClient)
 
             Section {
                 Toggle("Use persistent sessions by default", isOn: $remoteSessionEnabledDefault)

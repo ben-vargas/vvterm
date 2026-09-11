@@ -2255,3 +2255,18 @@
 "The link could not be opened." = "Không thể mở liên kết này.";
 
 "Open in Files on the current server?" = "Mở trong Tệp trên máy chủ hiện tại?";
+
+// Terminal notifications and progress
+"Terminal progress - Error" = "Tiến độ thiết bị đầu cuối - Lỗi";
+"Terminal progress - Paused" = "Tiến độ thiết bị đầu cuối - Đã tạm dừng";
+"Terminal progress" = "Tiến độ thiết bị đầu cuối";
+"%lld percent complete" = "Đã hoàn thành %lld phần trăm";
+"Operation failed" = "Thao tác thất bại";
+"Operation paused" = "Thao tác đã tạm dừng";
+"Operation in progress" = "Thao tác đang diễn ra";
+"Allow Terminal Notifications" = "Cho phép thông báo thiết bị đầu cuối";
+"Terminal notifications are allowed" = "Thông báo thiết bị đầu cuối đã được cho phép";
+"Allow notifications for VVTerm in system settings." = "Cho phép thông báo cho VVTerm trong cài đặt hệ thống.";
+"Notifications are unavailable." = "Thông báo không khả dụng.";
+"Terminal Notifications" = "Thông báo thiết bị đầu cuối";
+"Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages." = "Chương trình từ xa có thể gửi thông báo khi VVTerm nhận đầu ra thiết bị đầu cuối. Mosh không hỗ trợ các tin nhắn này.";

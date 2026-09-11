@@ -2207,3 +2207,18 @@
 "The link could not be opened." = "无法打开此链接。";
 
 "Open in Files on the current server?" = "在当前服务器的文件中打开？";
+
+// Terminal notifications and progress
+"Terminal progress - Error" = "终端进度 — 错误";
+"Terminal progress - Paused" = "终端进度 — 已暂停";
+"Terminal progress" = "终端进度";
+"%lld percent complete" = "已完成百分之 %lld";
+"Operation failed" = "操作失败";
+"Operation paused" = "操作已暂停";
+"Operation in progress" = "操作进行中";
+"Allow Terminal Notifications" = "允许终端通知";
+"Terminal notifications are allowed" = "已允许终端通知";
+"Allow notifications for VVTerm in system settings." = "请在系统设置中允许 VVTerm 发送通知。";
+"Notifications are unavailable." = "通知不可用。";
+"Terminal Notifications" = "终端通知";
+"Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages." = "VVTerm 接收终端输出时，远程程序可以发送通知。Mosh 不支持这些消息。";

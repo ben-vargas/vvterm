@@ -896,6 +896,9 @@ struct TerminalPaneView: View {
                 }
             }
         }
+        .overlay(alignment: .top) {
+            TerminalProgressOverlay(store: tabManager.presentationState.progress, paneId: paneId)
+        }
         .opacity(isFocused ? 1.0 : 0.7)
         .clipped()
         .task {

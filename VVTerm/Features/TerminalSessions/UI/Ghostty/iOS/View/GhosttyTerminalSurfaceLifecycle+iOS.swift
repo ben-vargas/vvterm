@@ -45,6 +45,7 @@ extension GhosttyTerminalView {
     func cleanup() {
         guard !isShuttingDown else { return }
         isShuttingDown = true
+        panePresentationOwner = nil
         cancelClipboardConfirmations()
         cancelTrackedHardwareInput()
         isPaused = true
@@ -71,6 +72,7 @@ extension GhosttyTerminalView {
         onTitleChange = nil
         onPwdChange = nil
         onProgressReport = nil
+        terminalNotificationContext = nil
         onResize = nil
         onKeyboardAvoidanceCursorRectChange = nil
         onKeyboardAvoidanceAccessoryFrameChange = nil

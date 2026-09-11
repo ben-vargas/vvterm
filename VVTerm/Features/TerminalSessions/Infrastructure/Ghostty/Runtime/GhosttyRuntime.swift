@@ -62,6 +62,7 @@ final class GhosttyRuntime: ObservableObject {
 
     /// Terminal settings supplied by the app composition root.
     private(set) var configuration: Ghostty.RuntimeConfiguration
+    let notificationClient: (any TerminalNotificationSending)?
 
     /// Track active surfaces for config propagation
     private var activeSurfaces: [Ghostty.SurfaceReference] = []
@@ -82,10 +83,12 @@ final class GhosttyRuntime: ObservableObject {
 
     init(
         configuration: Ghostty.RuntimeConfiguration,
+        notificationClient: (any TerminalNotificationSending)? = nil,
         appearance: TerminalAppearanceSnapshot = .fallback,
         autoStart: Bool = true
     ) {
         self.configuration = configuration
+        self.notificationClient = notificationClient
         appearanceSnapshot = appearance
         if autoStart {
             startIfNeeded()

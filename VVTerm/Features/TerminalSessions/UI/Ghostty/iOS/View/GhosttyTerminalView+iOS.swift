@@ -99,7 +99,12 @@ class GhosttyTerminalView: UIView {
     /// Per-surface presentation overrides used to preserve pane zoom across global config reloads.
     var surfacePresentationOverrides: TerminalPresentationOverrides = .empty
 
-    /// Callback for OSC 9;4 progress reports
+    var terminalNotificationContext: TerminalNotificationContext?
+
+    /// The SwiftUI coordinator that currently presents this retained terminal.
+    weak var panePresentationOwner: TerminalPaneConnectionCoordinator?
+
+    /// Callback for OSC 9;4 progress reports.
     var onProgressReport: ((GhosttyProgressState, Int?) -> Void)?
 
     /// Callback invoked when a terminal voice input control is tapped.

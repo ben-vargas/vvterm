@@ -46,6 +46,7 @@ extension GhosttyTerminalView {
         onTitleChange = nil
         onPwdChange = nil
         onProgressReport = nil
+        terminalNotificationContext = nil
         onResize = nil
         onZoomAction = nil
         richPasteInterceptor = nil

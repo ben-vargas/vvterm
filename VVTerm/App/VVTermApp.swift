@@ -26,6 +26,7 @@ struct VVTermApp: App {
         terminalSecurityActions = composition.terminalSecurityActions
         onWelcomeCompleted = composition.onWelcomeCompleted
         _ghosttyApp = StateObject(wrappedValue: composition.ghosttyApp)
+        _terminalNotificationNavigation = StateObject(wrappedValue: composition.terminalNotificationNavigation)
         _storeManager = StateObject(wrappedValue: composition.storeManager)
         _appLockManager = StateObject(wrappedValue: composition.appLockManager)
         _serverManager = StateObject(wrappedValue: composition.serverManager)
@@ -91,7 +92,11 @@ struct VVTermApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
 
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
     @StateObject private var ghosttyApp: GhosttyRuntime
+    @StateObject private var terminalNotificationNavigation: TerminalNotificationNavigationStore
     #if os(iOS)
     @StateObject private var screenAwakeCoordinator = TerminalScreenAwakeCoordinator()
     private let analyticsOptOutAction: AnalyticsOptOutAction
@@ -252,7 +257,9 @@ struct VVTermApp: App {
     @ViewBuilder
     private var macOSRootContent: some View {
         #if DEBUG
-        if usesSyncSettingsUITestHarness {
+        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-events") {
+            TerminalEventsUITestHarness(tabManager: tabManager)
+        } else if usesSyncSettingsUITestHarness {
             SyncSettingsUITestHarness()
         } else if usesTrustedHostsSettingsUITestHarness {
             TrustedHostsSettingsUITestHarness()
@@ -318,7 +325,9 @@ struct VVTermApp: App {
     @ViewBuilder
     private var iOSRootContent: some View {
         #if DEBUG
-        if usesSyncSettingsUITestHarness {
+        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-events") {
+            TerminalEventsUITestHarness(tabManager: tabManager)
+        } else if usesSyncSettingsUITestHarness {
             SyncSettingsUITestHarness()
         } else if usesTrustedHostsSettingsUITestHarness {
             TrustedHostsSettingsUITestHarness()
@@ -449,6 +458,7 @@ struct VVTermApp: App {
                     }
                 }
             }
+            .environmentObject(terminalNotificationNavigation)
             .environmentObject(appLockManager)
             .environmentObject(serverManager)
             .environmentObject(storeManager)
@@ -459,6 +469,13 @@ struct VVTermApp: App {
             .environmentObject(knownHostSettingsCoordinator)
         }
         #if os(macOS)
+        .onChange(of: terminalNotificationNavigation.pending) { destination in
+            guard destination != nil else { return }
+            if !MainWindowChromeBridge.bringMainWindowForward(in: NSApp.orderedWindows + NSApp.windows) {
+                openWindow(id: "main")
+            }
+            NSApp.activate(ignoringOtherApps: true)
+        }
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1100, height: 700)
         .commands {

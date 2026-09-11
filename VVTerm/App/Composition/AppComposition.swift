@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 /// The single production dependency graph for the application.
 @MainActor
@@ -6,6 +7,7 @@ struct AppComposition {
     let networkMonitor: NetworkMonitor
     let analyticsTracker: AnalyticsTracker
     let ghosttyApp: GhosttyRuntime
+    let terminalNotificationNavigation: TerminalNotificationNavigationStore
     let storeManager: StoreManager
     let appLockManager: AppLockManager
     let serverManager: ServerManager
@@ -391,8 +393,16 @@ struct AppComposition {
                 forKey: TerminalRemoteClipboardPolicy.userDefaultsKey
             ) ?? TerminalRemoteClipboardPolicy.defaultValue.rawValue
         )
+        let terminalNotificationNavigation = TerminalNotificationNavigationStore(
+            tabManager: tabManager,
+            serverProvider: { id in serverManager.servers.first { $0.id == id } },
+            unlockServer: { server in await appLockManager.ensureServerUnlocked(server) }
+        )
         let ghosttyApp = GhosttyRuntime(
             configuration: ghosttyRuntimeConfiguration,
+            notificationClient: NativeTerminalNotificationClient(
+                center: .current(), onOpen: terminalNotificationNavigation.request
+            ),
             autoStart: false
         )
         let statsSecurityApprovalActions = Self.makeStatsSecurityApprovalActions(
@@ -425,13 +435,15 @@ struct AppComposition {
             knownHostSettingsCoordinator: knownHostSettingsCoordinator,
             voiceModelManagers: voiceModelManagers,
             analyticsOptOutAction: analyticsOptOutAction,
-            remoteSessionBackends: remoteSessions.backendMetadata
+            remoteSessionBackends: remoteSessions.backendMetadata,
+            ghosttyApp: ghosttyApp
         )
         #endif
 
         self.networkMonitor = networkMonitor
         self.analyticsTracker = analyticsTracker
         self.ghosttyApp = ghosttyApp
+        self.terminalNotificationNavigation = terminalNotificationNavigation
         self.storeManager = storeManager
         self.appLockManager = appLockManager
         self.serverManager = serverManager

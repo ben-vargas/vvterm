@@ -142,7 +142,7 @@ private final class TerminalSceneActivationView: UIView {
     }
 }
 
-private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
+struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     let paneId: UUID
     let server: Server
     let credentials: ServerCredentials
@@ -181,6 +181,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         let coordinator = context.coordinator
 
         if let existingTerminal = tabManager.terminalSurfaceStore.ghosttySurface(for: paneId) {
+            existingTerminal.panePresentationOwner = coordinator
             coordinator.terminal = existingTerminal
             coordinator.isTerminalReady = true
             coordinator.preservePane = true
@@ -197,6 +198,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             }
 
             DispatchQueue.main.async {
+                guard existingTerminal.panePresentationOwner === coordinator else { return }
                 onReady()
                 startConnectionIfNeeded(
                     terminal: existingTerminal,
@@ -218,18 +220,18 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             useCustomIO: true
         )
 
+        terminalView.panePresentationOwner = coordinator
         terminalView.onReady = { [weak coordinator, weak terminalView] in
             guard let coordinator else { return }
             DispatchQueue.main.async {
+                guard let terminalView, terminalView.panePresentationOwner === coordinator else { return }
                 coordinator.isTerminalReady = true
                 onReady()
-                if let terminalView {
-                    startConnectionIfNeeded(
-                        terminal: terminalView,
-                        coordinator: coordinator,
-                        state: tabManager.sessionState.paneState(for: paneId)?.connectionState ?? .idle
-                    )
-                }
+                startConnectionIfNeeded(
+                    terminal: terminalView,
+                    coordinator: coordinator,
+                    state: tabManager.sessionState.paneState(for: paneId)?.connectionState ?? .idle
+                )
             }
         }
         terminalView.onProcessExit = processExitHandler(for: terminalView)
@@ -277,9 +279,8 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        guard let terminalView = uiView as? GhosttyTerminalView else {
-            return
-        }
+        guard let terminalView = uiView as? GhosttyTerminalView,
+              terminalView.panePresentationOwner === context.coordinator else { return }
 
         guard tabManager.sessionState.paneState(for: paneId) != nil else {
             terminalView.acceptsTerminalInput = false
@@ -350,6 +351,13 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
 
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
         guard let terminalView = uiView as? GhosttyTerminalView else { return }
+        // A retained UIView may already belong to the incoming SwiftUI host.
+        // Late teardown from the outgoing host must not pause that live pane.
+        guard terminalView.panePresentationOwner === coordinator else {
+            coordinator.terminal = nil
+            return
+        }
+        terminalView.panePresentationOwner = nil
         terminalView.onOpenLink = nil
 
         let paneStillExists = coordinator.tabManager.sessionState

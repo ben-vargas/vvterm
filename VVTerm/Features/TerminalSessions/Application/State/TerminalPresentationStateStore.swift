@@ -5,6 +5,8 @@ import Foundation
 /// This state is local to the current process and is not persisted.
 @MainActor
 final class TerminalPresentationStateStore: ObservableObject {
+    let progress = TerminalProgressStore()
+
     @Published private(set) var splitZoomedTabIds: Set<UUID> = []
 
     #if os(iOS)
@@ -57,6 +59,7 @@ final class TerminalPresentationStateStore: ObservableObject {
 
     #if DEBUG
     func reset() {
+        progress.reset()
         splitZoomedTabIds.removeAll()
         #if os(iOS)
         terminalFindNavigatorVisibleByPane.removeAll()

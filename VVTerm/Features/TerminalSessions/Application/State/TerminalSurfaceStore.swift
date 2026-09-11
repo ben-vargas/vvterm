@@ -26,10 +26,12 @@ struct TerminalSurfaceLifecycleCallbacks {
 
 @MainActor
 protocol TerminalSurface: AnyObject, TerminalOutputSink, Sendable {
+    var terminalNotificationContext: TerminalNotificationContext? { get set }
     var terminalGeometry: TerminalSurfaceGeometry? { get }
     var isHostingSceneActive: Bool? { get }
 
     func applyPresentationOverrides(_ overrides: TerminalPresentationOverrides)
+    func setProgressHandler(_ handler: ((TerminalProgress) -> Void)?)
     func cleanup()
     func installRichPasteInterceptor(_ interceptor: @escaping () -> Bool)
     func pasteTextFromClipboard()

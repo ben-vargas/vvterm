@@ -19,6 +19,7 @@ private nonisolated enum GhosttyRuntimeAction: Sendable {
     case workingDirectory(String)
     case openLink(URL)
     case promptTitle
+    case notification(TerminalNotificationContent)
     case progress(stateRawValue: UInt32, value: Int?)
     #if os(iOS)
     case startSearch(String)
@@ -172,6 +173,22 @@ extension GhosttyRuntime {
         )
     }
 
+    /// Copy bounded C data before returning from libghostty's callback.
+    nonisolated static func notificationContent(
+        _ notification: ghostty_action_desktop_notification_s
+    ) -> TerminalNotificationContent {
+        func copy(_ pointer: UnsafePointer<CChar>?, limit: Int) -> String {
+            guard let pointer else { return "" }
+            var count = 0
+            while count < limit, pointer[count] != 0 { count += 1 }
+            return String(decoding: UnsafeRawBufferPointer(start: pointer, count: count), as: UTF8.self)
+        }
+        return TerminalNotificationContent(
+            title: copy(notification.title, limit: TerminalNotificationContent.titleByteLimit),
+            body: copy(notification.body, limit: TerminalNotificationContent.bodyByteLimit)
+        )
+    }
+
     nonisolated private static func decode(
         _ action: ghostty_action_s
     ) -> GhosttyRuntimeActionDisposition {
@@ -196,6 +213,9 @@ extension GhosttyRuntime {
 
         case GHOSTTY_ACTION_PROMPT_TITLE:
             return .deliver(.promptTitle)
+
+        case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
+            return .deliver(.notification(notificationContent(action.action.desktop_notification)))
 
         case GHOSTTY_ACTION_PROGRESS_REPORT:
             let report = action.action.progress_report
@@ -573,9 +593,21 @@ extension GhosttyRuntime {
         case .promptTitle:
             Ghostty.logger.debug("Prompt title action received")
 
+        case .notification(let content):
+            guard let terminalView, !terminalView.isShuttingDown,
+                  terminalView === target.fallbackTerminalView,
+                  let surface = terminalView.surface?.unsafeCValue,
+                  UInt(bitPattern: surface) == target.surfaceAddress,
+                  let context = terminalView.terminalNotificationContext else { return }
+            target.app?.notificationClient?.post(content, context: context)
+
         case .progress(let stateRawValue, let value):
+            guard let terminalView, !terminalView.isShuttingDown,
+                  terminalView === target.fallbackTerminalView,
+                  let surface = terminalView.surface?.unsafeCValue,
+                  UInt(bitPattern: surface) == target.surfaceAddress else { return }
             let cState = ghostty_action_progress_report_state_e(rawValue: stateRawValue)
-            terminalView?.onProgressReport?(GhosttyProgressState(cState: cState), value)
+            terminalView.onProgressReport?(GhosttyProgressState(cState: cState), value)
 
         #if os(iOS)
         case .startSearch(let needle):

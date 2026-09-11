@@ -126,6 +126,11 @@ struct iOSContentView: View {
                 }
             }
         }
+        .modifier(TerminalNotificationNavigationModifier { server in
+            selectedWorkspace = serverManager.workspaces.first { $0.id == server.workspaceId }
+            selectedEnvironment = server.environment
+            terminalRoute = .active(serverId: server.id)
+        })
         .navigationBarAppearance(backgroundColor: .clear, isTranslucent: true, shadowColor: .clear)
         .adaptiveSoftScrollEdges()
         .onAppear {

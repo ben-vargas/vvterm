@@ -111,6 +111,17 @@ extension TerminalSurfaceStoring {
 }
 
 extension GhosttyTerminalView: TerminalSurface {
+    func setProgressHandler(_ handler: ((TerminalProgress) -> Void)?) {
+        guard let handler else {
+            onProgressReport = nil
+            return
+        }
+        onProgressReport = { state, value in
+            guard let progress = state.progress(value: value) else { return }
+            handler(progress)
+        }
+    }
+
     var terminalGeometry: TerminalSurfaceGeometry? {
         guard let size = terminalSize() else { return nil }
         let columns = Int(size.columns)

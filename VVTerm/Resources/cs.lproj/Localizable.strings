@@ -2211,3 +2211,18 @@
 "The link could not be opened." = "Odkaz se nepodařilo otevřít.";
 
 "Open in Files on the current server?" = "Otevřít v Souborech na aktuálním serveru?";
+
+// Terminal notifications and progress
+"Terminal progress - Error" = "Průběh terminálu — chyba";
+"Terminal progress - Paused" = "Průběh terminálu — pozastaveno";
+"Terminal progress" = "Průběh terminálu";
+"%lld percent complete" = "Dokončeno %lld procent";
+"Operation failed" = "Operace selhala";
+"Operation paused" = "Operace pozastavena";
+"Operation in progress" = "Operace probíhá";
+"Allow Terminal Notifications" = "Povolit oznámení terminálu";
+"Terminal notifications are allowed" = "Oznámení terminálu jsou povolena";
+"Allow notifications for VVTerm in system settings." = "Povolte oznámení pro VVTerm v nastavení systému.";
+"Notifications are unavailable." = "Oznámení nejsou k dispozici.";
+"Terminal Notifications" = "Oznámení terminálu";
+"Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages." = "Vzdálené programy mohou odesílat oznámení, když VVTerm přijímá výstup terminálu. Mosh tyto zprávy nepodporuje.";

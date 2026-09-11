@@ -31,6 +31,7 @@ struct GhosttyTerminalSurfaceStoreTests {
         private let inputSession = InputSession()
         #endif
 
+        var terminalNotificationContext: TerminalNotificationContext?
         var terminalGeometry: TerminalSurfaceGeometry?
         var isHostingSceneActive: Bool?
         private(set) var receivedOutput: [Data] = []
@@ -40,6 +41,7 @@ struct GhosttyTerminalSurfaceStoreTests {
             return true
         }
         func applyPresentationOverrides(_ overrides: TerminalPresentationOverrides) {}
+        func setProgressHandler(_ handler: ((TerminalProgress) -> Void)?) {}
         func cleanup() {}
         func installRichPasteInterceptor(_ interceptor: @escaping () -> Bool) {}
         func pasteTextFromClipboard() {}

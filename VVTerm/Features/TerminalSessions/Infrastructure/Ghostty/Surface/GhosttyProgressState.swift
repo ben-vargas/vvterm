@@ -24,3 +24,18 @@ enum GhosttyProgressState {
         }
     }
 }
+
+extension GhosttyProgressState {
+    /// Validate at the native boundary before values enter product state.
+    func progress(value: Int?) -> TerminalProgress? {
+        let percent = value.map { min(100, max(0, $0)) }
+        switch self {
+        case .remove: return .inactive
+        case .set: return percent.map(TerminalProgress.determinate) ?? .indeterminate
+        case .error: return .error(percent)
+        case .indeterminate: return .indeterminate
+        case .pause: return .paused(percent)
+        case .unknown: return nil
+        }
+    }
+}
