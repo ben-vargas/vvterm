@@ -76,9 +76,9 @@ extension GhosttyTerminalView {
         onKeyboardAvoidanceAccessoryFrameChange = nil
         onZoomAction = nil
         onPaneKeyboardShortcut = nil
-        keyboardAvoidancePreservedSurfaceSize = nil
-        keyboardAvoidanceReferenceSurfaceSize = nil
-        tracksKeyboardAvoidanceReferenceSize = false
+        #if DEBUG
+        keyboardAvoidancePreservesTerminalSize = false
+        #endif
         onWindowAttachmentChange = nil
         onTerminalDirectTouch = nil
         onKeyboardBrowseModeChange = nil
@@ -280,7 +280,7 @@ extension GhosttyTerminalView {
         }
         preservesForegroundKeyboardGrid = false
         guard let surface = surface?.unsafeCValue else { return }
-        let surfaceSize = keyboardAvoidancePreservedSurfaceSize ?? size
+        let surfaceSize = size
         updateContentScaleIfNeeded()
         let scale = self.contentScaleFactor
         guard let ghosttySize = TerminalGeometryConversion.ghosttySurfaceSize(
@@ -296,10 +296,6 @@ extension GhosttyTerminalView {
             width: CGFloat(ghosttySize.width),
             height: CGFloat(ghosttySize.height)
         )
-
-        if tracksKeyboardAvoidanceReferenceSize {
-            updateKeyboardAvoidanceReferenceSize(surfaceSize)
-        }
 
         let sizeChanged = pixelSize != lastPixelSize || scale != lastContentScale
         if sizeChanged {
@@ -343,11 +339,12 @@ extension GhosttyTerminalView {
         guard let size = terminalSize() else { return }
         let cols = Int(size.columns)
         let rows = Int(size.rows)
-        guard cols > 0, rows > 0 else { return }
+        guard cols > 0, rows > 0, lastReportedGrid != (cols, rows) else { return }
         lastReportedGrid = (cols, rows)
         #if DEBUG
         keyboardUITestGridResizeCount += 1
         #endif
+        logKeyboardLifecycle("surface.resize", detail: "pixels=\(lastPixelSize) cols=\(cols) rows=\(rows)")
         onResize?(cols, rows)
     }
 

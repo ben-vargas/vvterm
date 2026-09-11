@@ -1,7 +1,88 @@
 #if os(iOS)
 import XCTest
+import UIKit
 
 final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
+    @MainActor
+    func testProductionSettingsReleasesDockedInputWithPreservationOn() throws {
+        try assertProductionSettingsInput(preserves: true, floating: false)
+    }
+
+    @MainActor
+    func testProductionSettingsReleasesDockedInputWithPreservationOff() throws {
+        try assertProductionSettingsInput(preserves: false, floating: false)
+    }
+
+    @MainActor
+    func testProductionSettingsReleasesFloatingInputWithPreservationOn() throws {
+        try assertProductionSettingsInput(preserves: true, floating: true)
+    }
+
+    @MainActor
+    func testProductionSettingsReleasesFloatingInputWithPreservationOff() throws {
+        try assertProductionSettingsInput(preserves: false, floating: true)
+    }
+
+    @MainActor
+    private func assertProductionSettingsInput(preserves: Bool, floating: Bool) throws {
+        let (app, diagnostics) = launchProductionSSHTestHarness(preservesTerminalSize: preserves)
+        defer { app.terminate() }
+        let terminal = productionTerminal(in: app)
+        terminal.tap()
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.waitForExistence(timeout: 8) else {
+            throw XCTSkip("Simulator suppressed the software keyboard. \(diagnosticText(in: app))")
+        }
+        if floating {
+            guard UIDevice.current.userInterfaceIdiom == .pad else {
+                throw XCTSkip("Floating keyboard needs iPadOS.")
+            }
+            keyboard.pinch(withScale: 0.35, velocity: -2)
+            let floatingFrame = NSPredicate { _, _ in
+                keyboard.exists && keyboard.frame.width < app.frame.width * 0.5
+            }
+            guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: floatingFrame, object: nil)], timeout: 5) == .completed else {
+                throw XCTSkip("The native floating keyboard gesture was unavailable.")
+            }
+        }
+        var preservedPTYTitle: String?
+        if preserves {
+            let rows = try XCTUnwrap(diagnosticIntegerValue("gridRows", in: diagnostics))
+            let columns = try XCTUnwrap(diagnosticIntegerValue("gridCols", in: diagnostics))
+            // The real SSH PTY reports its size and counts every window-change
+            // signal, including transient resizes that later return to baseline.
+            let command = #"report_size() { set -- $(stty size); printf '\033]0;PTY_%s_%s_%s\007' "$1" "$2" "$resize_count"; }; resize_count=0; trap 'resize_count=$((resize_count+1)); report_size' WINCH; report_size"#
+            terminal.typeText(command + "\n")
+            let title = "title=PTY_\(rows)_\(columns)_0"
+            wait(for: diagnostics, containing: title, timeout: 8, app: app)
+            preservedPTYTitle = title
+        }
+        for _ in 0..<3 {
+            openProductionTerminalMenu(in: app)
+            app.buttons["vvterm.terminal.settings"].tap()
+            let settings = app.descendants(matching: .any)["vvterm.settings.root"]
+            XCTAssertTrue(settings.waitForExistence(timeout: 8), diagnosticText(in: app))
+            wait(for: diagnostics, containing: "imeProxyFirstResponder=false", timeout: 5, app: app)
+            XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5), diagnosticText(in: app))
+            wait(for: diagnostics, containing: "accessoryAttached=false", timeout: 5, app: app)
+
+            let search = app.searchFields["Search Settings"]
+            if !search.waitForExistence(timeout: 2) { settings.swipeDown() }
+            XCTAssertTrue(search.waitForExistence(timeout: 5))
+            search.tap()
+            search.typeText("terminal")
+            XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+            wait(for: diagnostics, containing: "imeProxyFirstResponder=false", timeout: 5, app: app)
+            XCTAssertEqual(search.value as? String, "terminal")
+            app.buttons["vvterm.settings.close"].tap()
+            XCTAssertTrue(settings.waitForNonExistence(timeout: 5))
+            wait(for: diagnostics, containing: "imeProxyFirstResponder=true", timeout: 5, app: app)
+            if let preservedPTYTitle {
+                wait(for: diagnostics, containing: preservedPTYTitle, timeout: 5, app: app)
+            }
+        }
+    }
+
     @MainActor
     func testServerListCanOpenSettingsFromItsToolbar() throws {
         let app = XCUIApplication()

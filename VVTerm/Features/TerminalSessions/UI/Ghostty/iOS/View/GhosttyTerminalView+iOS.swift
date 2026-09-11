@@ -86,9 +86,9 @@ class GhosttyTerminalView: UIView {
     /// bottom of the screen.
     var onKeyboardAvoidanceAccessoryFrameChange: (() -> Void)?
     var lastKeyboardAvoidanceAccessoryFrame: CGRect?
-    var keyboardAvoidancePreservedSurfaceSize: CGSize?
-    var keyboardAvoidanceReferenceSurfaceSize: CGSize?
-    var tracksKeyboardAvoidanceReferenceSize = false
+    #if DEBUG
+    var keyboardAvoidancePreservesTerminalSize = false
+    #endif
 
     /// Callback invoked when a pinch gesture requests terminal pane zoom.
     var onZoomAction: ((TerminalZoomAction) -> TerminalZoomResult?)?
@@ -431,6 +431,9 @@ class GhosttyTerminalView: UIView {
 
 
     // MARK: - UIView Overrides
+
+    // Set by the keyboard coordinator; view selection alone does not grant input.
+    var terminalInputAcquisitionAllowed = false
 
     var acceptsTerminalInput = true {
         didSet {

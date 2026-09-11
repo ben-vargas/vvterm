@@ -88,7 +88,8 @@ struct TerminalTabView: View {
             paneIds: tab.allPaneIds,
             terminalSurfaceChange: tabManager.terminalSurfaceStore.latestChange,
             terminalProvider: { tabManager.terminalSurfaceStore.ghosttySurface(for: $0) },
-            keyboardCoordinator: tabManager.keyboardCoordinator
+            keyboardCoordinator: tabManager.keyboardCoordinator,
+            scope: .container
         )
         #else
         content.terminalKeyboardAvoidance(
@@ -1033,6 +1034,13 @@ struct TerminalPaneView: View {
             showsVoiceAccessoryButton: showsVoiceButton,
             onVoiceTrigger: voiceTriggerHandlerForTerminal,
             onSceneActivation: reconcileAutomaticReconnect
+        )
+        .terminalKeyboardAvoidance(
+            focusedPaneId: shouldFocus ? paneId : nil,
+            paneIds: [paneId],
+            terminalSurfaceChange: tabManager.terminalSurfaceStore.latestChange,
+            terminalProvider: { tabManager.terminalSurfaceStore.ghosttySurface(for: $0) },
+            keyboardCoordinator: tabManager.keyboardCoordinator
         )
         .id(connectionGeneration)
         .allowsHitTesting(connectionState.isConnected)

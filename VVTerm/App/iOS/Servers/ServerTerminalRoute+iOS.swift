@@ -614,8 +614,10 @@ struct ServerTerminalRoute: View {
     }
 
     private func presentRouteSheet(_ sheet: PresentedRouteSheet) {
-        keyboardCoordinator.deactivateInputImmediately(reason: .routeModal)
+        // Publish ownership first: resigning input can synchronously deliver
+        // window/focus callbacks which also evaluate route activation.
         presentedRouteSheet = sheet
+        keyboardCoordinator.deactivateInputImmediately(reason: .routeModal)
     }
 
     private func showKeyboardForFocusedTerminal() {

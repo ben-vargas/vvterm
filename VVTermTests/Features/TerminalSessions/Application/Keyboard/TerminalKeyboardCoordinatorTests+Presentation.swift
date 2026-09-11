@@ -16,7 +16,7 @@ extension TerminalKeyboardCoordinatorTests {
             let session = TerminalKeyboardInputSessionSpy()
             session.snapshot.isFirstResponder = false
             session.snapshot.isSoftwareInputActive = false
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -34,7 +34,13 @@ extension TerminalKeyboardCoordinatorTests {
         @Test
         @MainActor
         func losingViewOwnershipClearsObservedKeyboardGeometry() {
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
+            let paneId = UUID()
+            let session = TerminalKeyboardInputSessionSpy()
+            coordinator.terminalProvider = { $0 == paneId ? session : nil }
+            coordinator.setActivePane(paneId)
+            coordinator.setPaneInputEligible(true, for: paneId)
+            coordinator.setWindowAttached(true, for: paneId)
             coordinator.setViewActive(true)
             coordinator.keyboardUITestSetSoftwareKeyboardEndFrame(
                 CGRect(x: 0, y: 700, width: 1_024, height: 300)
@@ -53,7 +59,7 @@ extension TerminalKeyboardCoordinatorTests {
         func routeNavigationRelinquishesOwnershipWithoutSynchronousInputTeardown() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -225,7 +231,7 @@ extension TerminalKeyboardCoordinatorTests {
         func directTouchInNonKeyWindowDoesNotStartReacquisition() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }

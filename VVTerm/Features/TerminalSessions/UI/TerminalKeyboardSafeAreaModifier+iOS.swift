@@ -7,7 +7,10 @@ struct TerminalKeyboardSafeAreaModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if isEnabled {
-            content.ignoresSafeArea(.keyboard, edges: .bottom)
+            // UIKit reports the physical bottom chrome separately to the
+            // terminal layout. SwiftUI must not add/remove that inset as the
+            // keyboard changes mode.
+            content.ignoresSafeArea(.all, edges: .bottom)
         } else {
             content
         }

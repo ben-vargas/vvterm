@@ -2,9 +2,6 @@
 import SwiftUI
 
 private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
-    @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey)
-    private var preservesTerminalSizeForKeyboard = false
-
     let isTerminalSelected: Bool
     let content: Content
 
@@ -19,7 +16,7 @@ private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
     var body: some View {
         content.modifier(
             TerminalKeyboardSafeAreaModifier(
-                isEnabled: preservesTerminalSizeForKeyboard && isTerminalSelected
+                isEnabled: isTerminalSelected
             )
         )
     }

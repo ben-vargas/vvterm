@@ -3,6 +3,67 @@ import XCTest
 
 final class TerminalKeyboardGeometryUITests: TerminalKeyboardUITestCase {
     @MainActor
+    func testReturningFromFullScreenCoverStillResizesForDockedKeyboard() throws {
+        let app = launchKeyboardHarness(
+            preservesTerminalSize: false, simulatesKeyboardFrames: true
+        )
+        waitForTerminal(in: app).tap()
+        app.buttons["vvterm.keyboardTest.menu"].tap()
+        app.buttons["vvterm.keyboardTest.menu.cover"].tap()
+        let close = app.buttons["vvterm.keyboardTest.cover.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 5))
+        close.tap()
+        XCTAssertTrue(close.waitForNonExistence(timeout: 5))
+
+        app.buttons["vvterm.keyboardTest.geometry.floating"].tap()
+        wait(for: app.staticTexts["vvterm.keyboardTest.diagnostics"],
+             labelContaining: "keyboardPresentation=floating", timeout: 5,
+             diagnostics: diagnosticsText(in: app))
+        let fullRows = try requiredDiagnosticMetric("gridRows", in: app)
+        app.buttons["vvterm.keyboardTest.geometry.docked"].tap()
+        waitForDiagnosticMetrics(in: app) { metrics in
+            guard let rows = metrics["gridRows"] else { return false }
+            return rows < fullRows
+        }
+        app.buttons["vvterm.keyboardTest.geometry.floating"].tap()
+        waitForDiagnosticMetrics(in: app) { $0["gridRows"] == fullRows }
+        assertTerminalViewportValid(in: app)
+    }
+
+    @MainActor
+    func testFloatingRedrawDoesNotMoveOrResizeWithPreservationOn() throws {
+        try assertFloatingRedrawStable(preserves: true)
+    }
+
+    @MainActor
+    func testFloatingRedrawDoesNotMoveOrResizeWithPreservationOff() throws {
+        try assertFloatingRedrawStable(preserves: false)
+    }
+
+    @MainActor
+    private func assertFloatingRedrawStable(preserves: Bool) throws {
+        let app = launchKeyboardHarness(
+            preservesTerminalSize: preserves, simulatesKeyboardFrames: true
+        )
+        waitForTerminal(in: app).tap()
+        app.buttons["vvterm.keyboardTest.geometry.floating"].tap()
+        wait(for: app.staticTexts["vvterm.keyboardTest.diagnostics"],
+             labelContaining: "keyboardPresentation=floating", timeout: 5,
+             diagnostics: diagnosticsText(in: app))
+        let rows = try requiredDiagnosticMetric("gridRows", in: app)
+        let resizes = try requiredDiagnosticMetric("gridResizes", in: app)
+        let top = try requiredDiagnosticMetric("terminalTop", in: app)
+        for _ in 0..<3 {
+            app.buttons["vvterm.keyboardTest.cursor.bottom"].tap()
+            app.buttons["vvterm.keyboardTest.geometry.floating"].tap()
+            XCTAssertEqual(try requiredDiagnosticMetric("gridRows", in: app), rows)
+            XCTAssertEqual(try requiredDiagnosticMetric("gridResizes", in: app), resizes)
+            XCTAssertEqual(try requiredDiagnosticMetric("terminalTop", in: app), top)
+            assertTerminalViewportValid(in: app)
+        }
+    }
+
+    @MainActor
     func testDockedFloatingDockedGeometryKeepsSurfaceAndViewportValid() throws {
         let app = launchKeyboardHarness(
             preservesTerminalSize: true,
@@ -54,7 +115,7 @@ final class TerminalKeyboardGeometryUITests: TerminalKeyboardUITestCase {
         hiddenButton.tap()
         wait(
             for: diagnostics,
-            labelContaining: "sizePreserved=false",
+            labelContaining: "sizePreserved=true",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
@@ -167,10 +228,18 @@ final class TerminalKeyboardGeometryUITests: TerminalKeyboardUITestCase {
         terminal.tap()
         let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
 
-        app.buttons["vvterm.keyboardTest.geometry.hidden"].tap()
+        // Keep the bottom accessory in the same state for the baseline and
+        // each return. Its separate inset can differ from a hidden keyboard.
+        app.buttons["vvterm.keyboardTest.geometry.floating"].tap()
         wait(
             for: diagnostics,
-            labelContaining: "keyboardVisible=false",
+            labelContaining: "keyboardPresentation=floating",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "accessoryAttached=true",
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
@@ -431,4 +500,3 @@ final class TerminalKeyboardGeometryUITests: TerminalKeyboardUITestCase {
     }
 }
 #endif
-

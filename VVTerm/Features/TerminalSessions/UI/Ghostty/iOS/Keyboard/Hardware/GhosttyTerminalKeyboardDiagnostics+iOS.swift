@@ -40,7 +40,8 @@ extension GhosttyTerminalView {
             screenFrame: screenFrame,
             screenIdentifier: window.map { ObjectIdentifier($0.screen) },
             isSoftwareKeyboardSuppressed: shouldSuppressSoftwareKeyboard,
-            isKeyboardInBrowseMode: isKeyboardInBrowseMode
+            isKeyboardInBrowseMode: isKeyboardInBrowseMode,
+            hasHardwareKeyboardAttached: hasHardwareKeyboardAttached
         )
     }
 

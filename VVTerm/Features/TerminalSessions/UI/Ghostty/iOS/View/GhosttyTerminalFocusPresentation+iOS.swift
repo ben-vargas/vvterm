@@ -55,7 +55,7 @@ extension GhosttyTerminalView {
     }
 
     var canRouteTerminalInput: Bool {
-        acceptsTerminalInput && !isFindNavigatorActive
+        terminalInputAcquisitionAllowed && acceptsTerminalInput && !isFindNavigatorActive
     }
 
     var canRouteProxyDeleteBackward: Bool {
@@ -134,6 +134,7 @@ extension GhosttyTerminalView {
     }
 
     private func prepareKeyboardFocus(for reason: TerminalKeyboardFocusReason) -> Bool {
+        guard terminalInputAcquisitionAllowed else { return false }
         guard !isFindNavigatorActive else { return false }
         if reason != .hardwareKeyboard {
             refreshHardwareKeyboardAttachmentFromSystem()
@@ -207,6 +208,10 @@ extension GhosttyTerminalView {
         if hadSelection {
             imeProxyTextView.inputDelegate?.selectionDidChange(imeProxyTextView)
         }
+    }
+
+    func setTerminalInputAcquisitionAllowed(_ allowed: Bool) {
+        terminalInputAcquisitionAllowed = allowed
     }
 
     func releaseTerminalInput() {
@@ -288,7 +293,7 @@ extension GhosttyTerminalView {
     }
 
     override func becomeFirstResponder() -> Bool {
-        guard isTextInputSessionEligible else { return false }
+        guard terminalInputAcquisitionAllowed, isTextInputSessionEligible else { return false }
         return imeProxyTextView.becomeFirstResponder()
     }
 

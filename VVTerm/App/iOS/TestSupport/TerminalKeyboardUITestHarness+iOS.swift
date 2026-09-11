@@ -116,6 +116,7 @@ struct TerminalKeyboardUITestHarness: View {
     @State private var terminalReady = false
     @State private var showsTerminal = true
     @State private var showingSettings = false
+    @State private var showingViewportCover = false
     @State private var simulatesPrivacyShield = false
     @State private var focusRequestID = 0
     @State private var keyboardVisible = false
@@ -202,7 +203,6 @@ struct TerminalKeyboardUITestHarness: View {
         guard !voicePresentation.showsRecordingPanel else { return .hidden }
         return TerminalFloatingControlPresentationPolicy.presentation(
             for: TerminalFloatingControlPresentationPolicy.Facts(
-                isPhone: true,
                 isTerminalSelected: showsTerminal,
                 hasFocusedPane: terminalReady,
                 keyboardIsUserHidden: keyboardCoordinator.isUserHidden,
@@ -287,7 +287,23 @@ struct TerminalKeyboardUITestHarness: View {
                     },
                     terminalProvider: { _ in terminalView },
                     keyboardCoordinator: keyboardCoordinator,
-                    enabledOverride: preservesTerminalSize
+                    enabledOverride: preservesTerminalSize,
+                    usesSimulatedKeyboardGeometry: simulatesKeyboardFrames
+                )
+                .terminalKeyboardAvoidance(
+                    focusedPaneId: Self.paneId,
+                    paneIds: [Self.paneId],
+                    terminalSurfaceChange: terminalView.map {
+                        .registered(
+                            paneId: Self.paneId,
+                            surfaceIdentity: ObjectIdentifier($0)
+                        )
+                    },
+                    terminalProvider: { _ in terminalView },
+                    keyboardCoordinator: keyboardCoordinator,
+                    scope: .container,
+                    enabledOverride: preservesTerminalSize,
+                    usesSimulatedKeyboardGeometry: simulatesKeyboardFrames
                 )
                 .ignoresSafeArea(.container)
                 .accessibilityIdentifier("vvterm.keyboardTest.container")
@@ -363,6 +379,13 @@ struct TerminalKeyboardUITestHarness: View {
                             presentSettings()
                         }
                         .accessibilityIdentifier("vvterm.keyboardTest.menu.settings")
+
+                        if simulatesKeyboardFrames {
+                            Button("Cover Terminal") {
+                                showingViewportCover = true
+                            }
+                            .accessibilityIdentifier("vvterm.keyboardTest.menu.cover")
+                        }
 
                         Button("Find") {
                             showFindInput()
@@ -568,6 +591,15 @@ struct TerminalKeyboardUITestHarness: View {
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.geometry.hidden")
 
+                    if simulatesKeyboardFrames {
+                        Button("System Hide") {
+                            keyboardCoordinator.keyboardUITestReceiveSoftwareKeyboardHidden()
+                            applySimulatedKeyboardGeometry(.hidden)
+                            keyboardCoordinator.keyboardUITestReceiveSoftwareKeyboardHidden()
+                        }
+                        .accessibilityIdentifier("vvterm.keyboardTest.geometry.systemHide")
+                    }
+
                     Button("Foreign KB") {
                         simulateSameScreenForeignKeyboardFrame()
                     }
@@ -655,6 +687,12 @@ struct TerminalKeyboardUITestHarness: View {
         )
         .onChange(of: showingPaneCloseConfirmation) { _ in
             applyRouteActivation(.foregroundActive)
+        }
+        .fullScreenCover(isPresented: $showingViewportCover) {
+            Button("Return to Terminal") {
+                showingViewportCover = false
+            }
+            .accessibilityIdentifier("vvterm.keyboardTest.cover.close")
         }
         .sheet(isPresented: $showingSettings, onDismiss: {
             applyRouteActivation(.foregroundActive)
@@ -1306,13 +1344,11 @@ struct TerminalSplitKeyboardUITestHarness: View {
                 focusedPaneId: focusedPaneId,
                 paneIds: [Self.firstPaneId, Self.secondPaneId],
                 terminalSurfaceChange: terminal(for: focusedPaneId).map {
-                    .registered(
-                        paneId: focusedPaneId,
-                        surfaceIdentity: ObjectIdentifier($0)
-                    )
+                    .registered(paneId: focusedPaneId, surfaceIdentity: ObjectIdentifier($0))
                 },
                 terminalProvider: terminal(for:),
                 keyboardCoordinator: keyboardCoordinator,
+                scope: .container,
                 enabledOverride: false
             )
 
@@ -1448,6 +1484,16 @@ struct TerminalSplitKeyboardUITestHarness: View {
             onPaneFocus: {
                 focus(paneId)
             }
+        )
+        .terminalKeyboardAvoidance(
+            focusedPaneId: focusedPaneId == paneId ? paneId : nil,
+            paneIds: [paneId],
+            terminalSurfaceChange: terminal.wrappedValue.map {
+                .registered(paneId: paneId, surfaceIdentity: ObjectIdentifier($0))
+            },
+            terminalProvider: { _ in terminal.wrappedValue },
+            keyboardCoordinator: keyboardCoordinator,
+            enabledOverride: false
         )
     }
 

@@ -15,7 +15,7 @@ extension TerminalKeyboardCoordinatorTests {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             session.completesRebuildImmediately = false
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -55,7 +55,7 @@ extension TerminalKeyboardCoordinatorTests {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             session.completesRebuildImmediately = false
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -108,7 +108,7 @@ extension TerminalKeyboardCoordinatorTests {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             session.completesRebuildImmediately = false
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -147,7 +147,7 @@ extension TerminalKeyboardCoordinatorTests {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             session.completesRebuildImmediately = false
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -178,7 +178,7 @@ extension TerminalKeyboardCoordinatorTests {
         func observedKeyboardHideKeepsAccessoryAttachedUntilPresentationSettles() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -210,7 +210,7 @@ extension TerminalKeyboardCoordinatorTests {
         func missingInitialKeyboardSuppressesAccessoryAfterPresentationSettles() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }

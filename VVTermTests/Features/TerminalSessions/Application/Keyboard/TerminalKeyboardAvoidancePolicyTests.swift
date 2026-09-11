@@ -6,6 +6,62 @@ import Testing
 struct TerminalKeyboardAvoidancePolicyTests {
     private let terminalFrame = CGRect(x: 0, y: 0, width: 390, height: 800)
 
+    @Test(arguments: [false, true])
+    func floatingKeyboardNeverMovesOrResizesForCursor(preserves: Bool) {
+        for cursor in [
+            CGRect(x: 220, y: 300, width: 8, height: 18),
+            CGRect(x: 220, y: 610, width: 8, height: 18),
+            CGRect(x: 220, y: 750, width: 8, height: 18),
+            CGRect(x: 8, y: 610, width: 8, height: 18),
+        ] {
+            let layout = TerminalKeyboardAvoidancePolicy.layout(
+                preservesTerminalSize: preserves,
+                geometry: .floating(frame: CGRect(x: 160, y: 480, width: 210, height: 220)),
+                terminalFrame: terminalFrame,
+                cursorFrame: cursor
+            )
+            #expect(layout.bottomInset == 0)
+            #expect(layout.verticalOffset == 0)
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func invalidAndTinyPanesHaveBoundedLayout(preserves: Bool) {
+        for frame in [CGRect.zero, CGRect.null, CGRect.infinite,
+                      CGRect(x: CGFloat.nan, y: 0, width: 30, height: 30)] {
+            #expect(TerminalKeyboardAvoidancePolicy.layout(
+                preservesTerminalSize: preserves,
+                geometry: .docked(frame: terminalFrame),
+                terminalFrame: frame,
+                cursorFrame: terminalFrame
+            ) == .unobstructed)
+        }
+        let tiny = TerminalKeyboardAvoidancePolicy.layout(
+            preservesTerminalSize: preserves,
+            geometry: .docked(frame: terminalFrame),
+            terminalFrame: CGRect(x: 0, y: 0, width: 2, height: 0.5),
+            cursorFrame: CGRect(x: 0, y: 0, width: 1, height: 0.5)
+        )
+        #expect(tiny.bottomInset == 0)
+        #expect(tiny.verticalOffset == 0)
+    }
+
+    @Test
+    func emptyKeyboardGeometryDoesNotDisableSizePreservation() {
+        for keyboard in [nil, CGRect.zero, CGRect.null] {
+            let geometry = TerminalKeyboardAvoidancePolicy.resolvedGeometry(
+                screenFrame: terminalFrame, terminalFrame: terminalFrame, keyboardFrame: keyboard
+            )
+            let layout = TerminalKeyboardAvoidancePolicy.layout(
+                preservesTerminalSize: true, geometry: geometry,
+                terminalFrame: terminalFrame, cursorFrame: terminalFrame
+            )
+            #expect(layout.preservesTerminalSurfaceSize)
+            #expect(layout.bottomInset == 0)
+            #expect(layout.verticalOffset == 0)
+        }
+    }
+
     @Test
     func hiddenKeyboardDoesNotMoveTerminal() {
         let offset = TerminalKeyboardAvoidancePolicy.verticalOffset(
@@ -76,19 +132,6 @@ struct TerminalKeyboardAvoidancePolicyTests {
         )
 
         #expect(offset == 0)
-    }
-
-    @Test
-    func floatingKeyboardCoveringCursorMovesTerminal() {
-        let cursor = CGRect(x: 220, y: 610, width: 8, height: 18)
-        let keyboard = CGRect(x: 160, y: 480, width: 210, height: 220)
-        let offset = TerminalKeyboardAvoidancePolicy.verticalOffset(
-            terminalFrame: terminalFrame,
-            cursorFrame: cursor,
-            keyboardFrame: keyboard
-        )
-
-        #expect(offset == -160)
     }
 
     @Test
@@ -179,11 +222,11 @@ struct TerminalKeyboardAvoidancePolicyTests {
             cursorFrame: CGRect(x: 220, y: 610, width: 8, height: 18)
         )
 
-        #expect(docked.bottomInset == 0)
+        #expect(docked.bottomInset == 300)
         #expect(docked.verticalOffset == -230)
         #expect(docked.preservesTerminalSurfaceSize)
         #expect(floating.bottomInset == 0)
-        #expect(floating.verticalOffset == -160)
+        #expect(floating.verticalOffset == 0)
         #expect(floating.preservesTerminalSurfaceSize)
     }
 

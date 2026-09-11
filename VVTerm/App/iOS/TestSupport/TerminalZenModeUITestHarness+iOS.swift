@@ -239,7 +239,6 @@ struct TerminalZenModeUITestHarness: View {
         TerminalFloatingControlPresentationPolicy.Presentation {
         TerminalFloatingControlPresentationPolicy.presentation(
             for: .init(
-                isPhone: true,
                 isTerminalSelected: selectedView == .terminal,
                 hasFocusedPane: terminalReady,
                 keyboardIsUserHidden: keyboardCoordinator.isUserHidden,

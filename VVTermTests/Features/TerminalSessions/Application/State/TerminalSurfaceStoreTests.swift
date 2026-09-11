@@ -19,6 +19,7 @@ struct GhosttyTerminalSurfaceStoreTests {
             func acquireTerminalInput() -> Bool { false }
             func forceSoftwareKeyboardInput() -> Bool { false }
             func focusTerminalInputWithoutShowingSoftwareKeyboard() -> Bool { false }
+            func setTerminalInputAcquisitionAllowed(_ allowed: Bool) {}
             func releaseTerminalInput() {}
             func releaseTerminalInputForReacquisition(completion: @escaping () -> Void) {
                 completion()

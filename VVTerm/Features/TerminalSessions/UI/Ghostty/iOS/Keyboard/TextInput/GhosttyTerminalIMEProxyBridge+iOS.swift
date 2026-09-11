@@ -42,7 +42,7 @@ extension GhosttyTerminalView {
     }
 
     var imeProxyCanBecomeFirstResponder: Bool {
-        isTextInputSessionEligible && !isFindNavigatorActive
+        terminalInputAcquisitionAllowed && isTextInputSessionEligible && !isFindNavigatorActive
     }
 
     var currentTextInputContextIdentifier: String? {

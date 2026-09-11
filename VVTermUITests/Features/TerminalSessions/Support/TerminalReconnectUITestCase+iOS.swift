@@ -15,6 +15,7 @@ class TerminalReconnectUITestCase: XCTestCase {
     @MainActor
     func launchProductionSSHTestHarness(
         exposesKeyboardLossControl: Bool = false,
+        preservesTerminalSize: Bool = false,
         themeName: String? = nil
     ) -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
@@ -28,6 +29,7 @@ class TerminalReconnectUITestCase: XCTestCase {
             "-iCloudSyncEnabled", "NO",
             "-sshAutoReconnect", "YES",
             "-terminalTmuxEnabledDefault", "NO",
+            "-terminalPreserveSizeForKeyboard", preservesTerminalSize ? "YES" : "NO",
             "-terminalVoiceButtonEnabled", "YES",
             "-security.privacyModeEnabled", "NO",
             "-security.fullAppLockEnabled", "NO",

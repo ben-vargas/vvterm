@@ -44,6 +44,7 @@ struct GhosttyTerminalInteractionOwnershipTests {
         }
         presenter.view.addSubview(terminal)
         terminal.acceptsTerminalInput = true
+        terminal.setTerminalInputAcquisitionAllowed(true)
 
         #expect(terminal.becomeFirstResponder())
         #expect(terminal.imeProxyTextView.isFirstResponder)
@@ -187,6 +188,7 @@ struct GhosttyTerminalInteractionOwnershipTests {
             )
         )
 
+        terminal.setTerminalInputAcquisitionAllowed(true)
         terminal.keyboardUITestSetHardwareKeyboardAttached(false)
 
         terminal.nativeSelectionSnapshot = TerminalNativeTextSnapshot(

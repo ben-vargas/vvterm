@@ -67,6 +67,7 @@ protocol TerminalKeyboardInputSession: AnyObject {
     func forceSoftwareKeyboardInput() -> Bool
     @discardableResult
     func focusTerminalInputWithoutShowingSoftwareKeyboard() -> Bool
+    func setTerminalInputAcquisitionAllowed(_ allowed: Bool)
     func releaseTerminalInput()
     func releaseTerminalInputForReacquisition(completion: @escaping () -> Void)
     func setTerminalInputAccessorySuppressed(_ suppressed: Bool)
@@ -77,8 +78,8 @@ protocol TerminalKeyboardInputSession: AnyObject {
 /// does with it. The design rule that keeps this correct: the app CONTROLS
 /// only the session (first responder) from app state; whether a software
 /// keyboard is on screen is OBSERVED from keyboard frame notifications and
-/// never predicted. There is deliberately no hardware-keyboard detection:
-/// iOS decides whether to present the software keyboard for an active
+/// never predicted. Hardware attachment only excludes native-dismissal
+/// inference; iOS decides whether to present the software keyboard for an active
 /// session (it knows about attached keyboards and iPhone Mirroring
 /// authoritatively). When UIKit accepts the responder but reports no real
 /// software-keyboard frame, the terminal hides its input accessory so the
@@ -110,9 +111,10 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         }
     }
 
-    private enum PresentationVerificationLayoutSource {
+    private enum PresentationVerificationLayoutSource: Equatable {
         case currentLayoutFrame
         case observedEventsOnly
+        case observedDismissal(hardwareKeyboardWasAttached: Bool)
 
         var reconcilesLayoutFrameAtDeadline: Bool {
             self == .currentLayoutFrame
@@ -256,6 +258,8 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     private var presentationVerifyTask: Task<Void, Never>?
     private var activeTerminalSceneIsForeground = true
     private var inputOwnership = InputOwnership.available(generation: UUID())
+    // Historical attachment state cannot be derived after a keyboard hide.
+    private var hardwareKeyboardAttachedWhenShown: Bool?
     /// Rebuilding a session UIKit refuses to present cannot succeed by
     /// repetition; cap attempts until a keyboard actually shows (which
     /// resets the count).
@@ -651,20 +655,27 @@ final class TerminalKeyboardCoordinator: ObservableObject {
            let paneId = activePaneId ?? lastManagedPaneId {
             contentProtectionRecoveryState = .pending(paneId: paneId)
         }
-        detachAccessoryAndClearSoftwareKeyboardObservation()
+        // Capture both identities before clearing route ownership. A native
+        // responder can exist before the first scheduled reconciliation.
+        let paneIds = Set([activePaneId, lastManagedPaneId].compactMap { $0 })
         pendingPresentationRequest = .none
         explicitPresentationRecovery = nil
-        makeLocalInputOwnershipAvailable()
-        guard activePaneId != nil
-                || viewActive
-                || findNavigatorState != .inactive
-                || lastManagedPaneId != nil else {
-            return
-        }
         activePaneId = nil
         viewActive = false
         findNavigatorState = .inactive
+        lastManagedPaneId = nil
         cancelPresentationVerify()
+        makeLocalInputOwnershipAvailable()
+        for paneId in paneIds {
+            guard let terminal = terminalProvider?(paneId) else { continue }
+            terminal.setTerminalInputAcquisitionAllowed(false)
+            let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
+            if snapshot.isFirstResponder || snapshot.isSoftwareInputActive {
+                terminal.releaseTerminalInput()
+            }
+            terminal.setTerminalInputAccessorySuppressed(true)
+        }
+        clearSoftwareKeyboardObservation()
         syncImmediately(reason: reason.rawValue)
     }
 
@@ -801,7 +812,15 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             in: snapshot.screenFrame,
             minimumHeight: softwareKeyboardMinimumHeight
         )
-        setSoftwareKeyboardPresentation(presentation, terminal: terminal)
+        if !presentation.isVisible {
+            handleLocalSoftwareKeyboardHidden(
+                sourceScreenIdentifier: sourceScreenIdentifier,
+                animationDuration: animationDuration,
+                animationCurve: animationCurve
+            )
+        } else {
+            setSoftwareKeyboardPresentation(presentation, terminal: terminal)
+        }
     }
 
     private func noteSoftwareKeyboardHidden(
@@ -845,6 +864,11 @@ final class TerminalKeyboardCoordinator: ObservableObject {
                 return
             }
         }
+        // A frame change can precede will-hide and did-hide. Keep the first
+        // verification so duplicate notifications do not erase visible history.
+        let wasVisible = isSoftwareKeyboardVisible
+        let hardwareKeyboardWasAttached = hardwareKeyboardAttachedWhenShown
+        if !wasVisible, presentationVerifyTask != nil { return }
         clearSoftwareKeyboardObservation()
         guard let paneId = activePaneId,
               let terminal = activeTerminal else { return }
@@ -857,7 +881,9 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         schedulePresentationVerify(
             for: paneId,
             terminal: terminal,
-            layoutSource: .observedEventsOnly
+            layoutSource: hardwareKeyboardWasAttached.map {
+                .observedDismissal(hardwareKeyboardWasAttached: $0)
+            } ?? .observedEventsOnly
         )
     }
 
@@ -903,6 +929,9 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         terminal: (any TerminalKeyboardInputSession)? = nil
     ) {
         let terminal = terminal ?? activeTerminal
+        hardwareKeyboardAttachedWhenShown = presentation.isVisible
+            ? terminal?.keyboardCoordinatorDiagnosticSnapshot().hasHardwareKeyboardAttached
+            : nil
         if presentation.isVisible {
             cancelPresentationVerify()
             presentationRefreshAttemptCount = 0
@@ -1023,6 +1052,10 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             }
         }
 
+        // Keyboard geometry can queue a sync while its scene is becoming
+        // inactive. Preserve that responder until activation or explicit
+        // route deactivation; geometry alone must not release it.
+        guard activeTerminalSceneIsForeground else { return }
         let inputs = currentInputs
         let inputSessionDesired = Self.desiredInputSessionActive(inputs: inputs)
         let keyboardPresentationDesired = Self.desiredKeyboardVisible(inputs: inputs)
@@ -1033,6 +1066,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         if let previousPaneId = lastManagedPaneId,
            previousPaneId != activePaneId,
            let previousTerminal = terminalProvider?(previousPaneId) {
+            previousTerminal.setTerminalInputAcquisitionAllowed(false)
             let before = previousTerminal.keyboardCoordinatorDiagnosticSnapshot()
             let transfersDirectlyToActivePane = inputSessionDesired
                 && activePaneId.flatMap { terminalProvider?($0) } != nil
@@ -1060,6 +1094,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             return
         }
         lastManagedPaneId = activePaneId
+        terminal.setTerminalInputAcquisitionAllowed(inputSessionDesired)
 
         if let recovery = explicitPresentationRecovery,
            recovery.paneId == activePaneId {
@@ -1568,6 +1603,14 @@ final class TerminalKeyboardCoordinator: ObservableObject {
                self.presentationRefreshAttemptCount < self.presentationRefreshAttemptLimit {
                 self.pendingPresentationRequest = retryRequest
                 self.markDirty(reason: "presentationUnverified")
+                return
+            }
+            if case let .observedDismissal(hardwareKeyboardWasAttached) = layoutSource,
+               snapshot.hasHardwareKeyboardAttached == hardwareKeyboardWasAttached {
+                // UIKit does not supply a dismissal reason. A previously
+                // visible keyboard that stays hidden in the same active input
+                // session uses the same browse state as the accessory action.
+                self.userRequestedHide()
                 return
             }
             // Settled with an active session and no keyboard: hardware mode

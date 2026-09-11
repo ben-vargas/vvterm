@@ -67,7 +67,6 @@ struct TerminalFloatingInputOverlay: View {
         guard !floatingControls.state.voicePresentation.showsRecordingPanel else { return .hidden }
         return TerminalFloatingControlPresentationPolicy.presentation(
             for: .init(
-                isPhone: UIDevice.current.userInterfaceIdiom == .phone,
                 isTerminalSelected: selectedView == .terminal,
                 hasFocusedPane: floatingControls.state.focusedPaneId != nil,
                 keyboardIsUserHidden: keyboardCoordinator.isUserHidden,

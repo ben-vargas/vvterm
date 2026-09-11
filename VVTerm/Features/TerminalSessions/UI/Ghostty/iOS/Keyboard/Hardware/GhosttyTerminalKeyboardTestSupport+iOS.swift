@@ -56,7 +56,7 @@ extension GhosttyTerminalView {
             "gridResizes=\(keyboardUITestGridResizeCount)",
             "renderingPaused=\(isRenderingPaused)",
             "surfaceFocused=\(keyboardUITestSurfaceFocused)",
-            "sizePreserved=\(keyboardAvoidancePreservedSurfaceSize != nil)",
+            "sizePreserved=\(keyboardAvoidancePreservesTerminalSize)",
             "accessoryAttached=\(accessoryAttached)",
             "accessoryAppearance=\(accessoryAppearance)",
             "accessoryOwnerStyle=\(accessoryOwnerStyle)",

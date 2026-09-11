@@ -302,6 +302,16 @@ struct TerminalReconnectUITestHarness: View {
                 await tabManager.resetForTesting()
             }
             KnownHostsManager.shared.remove(host: Self.sshHost, port: Self.sshPort)
+            if let fingerprint = Self.fixtureDefaults.string(forKey: "sshHostFingerprint") {
+                KnownHostsManager.shared.save(entry: .init(
+                    host: Self.sshHost,
+                    port: Self.sshPort,
+                    fingerprint: fingerprint,
+                    keyType: Self.fixtureDefaults.integer(forKey: "sshHostKeyType"),
+                    addedAt: Date(),
+                    lastSeenAt: Date()
+                ))
+            }
             if !usesColdRelaunchHarness || seedsColdRelaunchHarness {
                 try KeychainManager.shared.deleteCredentials(for: server.id)
             }

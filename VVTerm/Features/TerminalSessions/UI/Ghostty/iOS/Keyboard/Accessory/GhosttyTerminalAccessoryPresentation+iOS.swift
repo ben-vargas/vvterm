@@ -16,6 +16,7 @@ extension GhosttyTerminalView {
     }
 
     func resolvedInputAccessoryView() -> UIView? {
+        guard terminalInputAcquisitionAllowed else { return nil }
         guard !shouldHideKeyboardAccessoryBar else {
             return nil
         }

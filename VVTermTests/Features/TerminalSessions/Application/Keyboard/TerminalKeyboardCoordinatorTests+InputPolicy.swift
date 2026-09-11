@@ -167,7 +167,7 @@ extension TerminalKeyboardCoordinatorTests {
         @Test
         @MainActor
         func directTouchDoesNotRestoreKeyboardAfterUserHide() {
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
     
             coordinator.userRequestedHide()
             #expect(coordinator.isUserHidden)
@@ -182,7 +182,7 @@ extension TerminalKeyboardCoordinatorTests {
         @Test
         @MainActor
         func repeatedAccessoryDismissRepublishesHiddenState() {
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.userRequestedHide()
     
             var publicationCount = 0
@@ -202,7 +202,7 @@ extension TerminalKeyboardCoordinatorTests {
         func userHiddenModeRejectsVisibleKeyboardFrames() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -231,7 +231,7 @@ extension TerminalKeyboardCoordinatorTests {
         func userHiddenModeMovesAnActiveReplacementSessionIntoBrowseMode() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -252,7 +252,7 @@ extension TerminalKeyboardCoordinatorTests {
         @Test
         @MainActor
         func explicitShowRestoresKeyboardAfterUserHide() {
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
     
             coordinator.userRequestedHide()
             #expect(coordinator.isUserHidden)

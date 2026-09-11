@@ -7,7 +7,6 @@ nonisolated enum TerminalFloatingControlPresentationPolicy {
     }
 
     nonisolated struct Facts: Equatable, Sendable {
-        let isPhone: Bool
         let isTerminalSelected: Bool
         let hasFocusedPane: Bool
         let keyboardIsUserHidden: Bool
@@ -21,8 +20,7 @@ nonisolated enum TerminalFloatingControlPresentationPolicy {
     }
 
     static func presentation(for facts: Facts) -> Presentation {
-        guard facts.isPhone,
-              facts.isTerminalSelected,
+        guard facts.isTerminalSelected,
               facts.hasFocusedPane else {
             return .hidden
         }

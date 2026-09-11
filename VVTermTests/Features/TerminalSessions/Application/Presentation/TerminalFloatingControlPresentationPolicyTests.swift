@@ -153,7 +153,6 @@ final class TerminalFloatingControlPresentationPolicyTests: XCTestCase {
     }
 
     private func presentation(
-        isPhone: Bool = true,
         isTerminalSelected: Bool = true,
         hasFocusedPane: Bool = true,
         keyboardIsUserHidden: Bool = false,
@@ -167,7 +166,6 @@ final class TerminalFloatingControlPresentationPolicyTests: XCTestCase {
     ) -> TerminalFloatingControlPresentationPolicy.Presentation {
         TerminalFloatingControlPresentationPolicy.presentation(
             for: .init(
-                isPhone: isPhone,
                 isTerminalSelected: isTerminalSelected,
                 hasFocusedPane: hasFocusedPane,
                 keyboardIsUserHidden: keyboardIsUserHidden,

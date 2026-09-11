@@ -60,6 +60,7 @@ final class TerminalKeyboardInputSessionSpy: TerminalKeyboardInputSession {
         snapshot.isSoftwareInputActive = observed
         if observed {
             snapshot.isKeyboardInBrowseMode = false
+            snapshot.isSoftwareKeyboardSuppressed = false
         }
         return result
     }
@@ -71,6 +72,12 @@ final class TerminalKeyboardInputSessionSpy: TerminalKeyboardInputSession {
         snapshot.isSoftwareKeyboardSuppressed = true
         snapshot.isKeyboardInBrowseMode = true
         return true
+    }
+
+    private(set) var inputAcquisitionAllowed = true
+
+    func setTerminalInputAcquisitionAllowed(_ allowed: Bool) {
+        inputAcquisitionAllowed = allowed
     }
 
     func releaseTerminalInput() {
@@ -153,6 +160,14 @@ final class TerminalKeyboardCoordinatorEventSourceSpy: TerminalKeyboardEventSour
         )
     }
 }
+@MainActor
+func makeTerminalKeyboardCoordinator() -> TerminalKeyboardCoordinator {
+    TerminalKeyboardCoordinator(
+        keyboardEventSource: TerminalKeyboardCoordinatorEventSourceSpy(),
+        lifecycleLoggingEnabled: false
+    )
+}
+
 @MainActor
 func drainMainQueue() async {
     await withCheckedContinuation { continuation in

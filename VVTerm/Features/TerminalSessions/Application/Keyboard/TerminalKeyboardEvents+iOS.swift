@@ -13,6 +13,7 @@ nonisolated struct TerminalKeyboardCoordinatorDiagnosticSnapshot: Equatable, Sen
     var screenIdentifier: ObjectIdentifier? = nil
     var isSoftwareKeyboardSuppressed = false
     var isKeyboardInBrowseMode = false
+    var hasHardwareKeyboardAttached = false
 
     var lifecycleDescription: String {
         [

@@ -3,6 +3,41 @@ import XCTest
 
 final class TerminalKeyboardOwnershipUITests: TerminalKeyboardUITestCase {
     @MainActor
+    func testNativeDockedHideShowsFloatingControls() throws {
+        try assertNativeHideShowsFloatingControls(floating: false)
+    }
+
+    @MainActor
+    func testNativeFloatingHideShowsFloatingControls() throws {
+        try assertNativeHideShowsFloatingControls(floating: true)
+    }
+
+    @MainActor
+    private func assertNativeHideShowsFloatingControls(floating: Bool) throws {
+        let app = launchKeyboardHarness(simulatesKeyboardFrames: true)
+        let terminal = waitForTerminal(in: app)
+        terminal.tap()
+        app.buttons[floating ? "vvterm.keyboardTest.geometry.floating"
+                    : "vvterm.keyboardTest.geometry.docked"].tap()
+        app.buttons["vvterm.keyboardTest.geometry.systemHide"].tap()
+        let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
+        wait(for: diagnostics, labelContaining: "userHidden=true", timeout: 5,
+             diagnostics: diagnosticsText(in: app))
+        wait(for: diagnostics, labelContaining: "browse=true", timeout: 5,
+             diagnostics: diagnosticsText(in: app))
+        XCTAssertTrue(diagnostics.label.contains("hideRequests=0"))
+        let keyboardButton = app.buttons["vvterm.terminal.floating.keyboard"]
+        XCTAssertTrue(keyboardButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["vvterm.terminal.floating.voiceInput"].exists)
+        terminal.tap()
+        XCTAssertTrue(keyboardButton.exists)
+        XCTAssertTrue(diagnostics.label.contains("userHidden=true"))
+        keyboardButton.tap()
+        wait(for: diagnostics, labelContaining: "userHidden=false", timeout: 5,
+             diagnostics: diagnosticsText(in: app))
+    }
+
+    @MainActor
     func testRepeatedSplitPaneFocusKeepsOneInputUISessionWithoutReloadLoop() throws {
         let app = launchKeyboardHarness(splitPaneFocus: true)
         let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]

@@ -8,6 +8,7 @@ enum TerminalKeyboardAvoidancePolicy {
     }
 
     nonisolated struct Layout: Equatable {
+        var bottomChromeInset: CGFloat = 0
         var bottomInset: CGFloat
         var verticalOffset: CGFloat
         var preservesTerminalSurfaceSize: Bool
@@ -28,15 +29,9 @@ enum TerminalKeyboardAvoidancePolicy {
         keyboardFrame: CGRect?
     ) -> KeyboardGeometry {
         guard let keyboardFrame,
-              !screenFrame.isNull,
-              !screenFrame.isEmpty,
-              !screenFrame.isInfinite,
-              !terminalFrame.isNull,
-              !terminalFrame.isEmpty,
-              !terminalFrame.isInfinite,
-              !keyboardFrame.isNull,
-              !keyboardFrame.isEmpty,
-              !keyboardFrame.isInfinite,
+              isValid(screenFrame),
+              isValid(terminalFrame),
+              isValid(keyboardFrame),
               terminalFrame.intersects(keyboardFrame)
         else {
             return .hidden
@@ -56,14 +51,10 @@ enum TerminalKeyboardAvoidancePolicy {
         cursorClearance: CGFloat = defaultCursorClearance
     ) -> CGFloat {
         guard let keyboardFrame,
-              !keyboardFrame.isNull,
-              !keyboardFrame.isEmpty,
-              !keyboardFrame.isInfinite,
-              !terminalFrame.isNull,
-              !terminalFrame.isEmpty,
-              !terminalFrame.isInfinite,
-              !cursorFrame.isNull,
-              !cursorFrame.isInfinite,
+              isValid(keyboardFrame),
+              isValid(terminalFrame),
+              isValid(cursorFrame),
+              cursorClearance.isFinite,
               terminalFrame.intersects(keyboardFrame)
         else {
             return 0
@@ -89,65 +80,45 @@ enum TerminalKeyboardAvoidancePolicy {
         cursorFrame: CGRect,
         accessoryFrame: CGRect? = nil
     ) -> Layout {
+        guard isValid(terminalFrame) else { return .unobstructed }
+        let maximumInset = max(terminalFrame.height - minimumVisibleHeight, 0)
         let accessoryInset = bottomAccessoryInset(
             terminalFrame: terminalFrame,
             accessoryFrame: accessoryFrame
         )
-
-        switch geometry {
-        case .hidden:
-            guard accessoryInset > 0 else { return .unobstructed }
-            return Layout(
-                bottomInset: accessoryInset,
-                verticalOffset: 0,
-                preservesTerminalSurfaceSize: false
-            )
-        case let .docked(frame):
+        var inset = accessoryInset
+        var offset: CGFloat = 0
+        if case let .docked(frame) = geometry, isValid(frame) {
+            inset = max(inset, terminalFrame.maxY - max(frame.minY, terminalFrame.minY))
             if preservesTerminalSize {
-                return Layout(
-                    bottomInset: 0,
-                    verticalOffset: verticalOffset(
-                        terminalFrame: terminalFrame,
-                        cursorFrame: cursorFrame,
-                        keyboardFrame: frame
-                    ),
-                    preservesTerminalSurfaceSize: true
+                // Only docked obstruction moves content. A floating keyboard
+                // remains user-positioned, even when it covers the cursor.
+                let obstruction = CGRect(
+                    x: terminalFrame.minX,
+                    y: terminalFrame.maxY - min(max(inset, 0), maximumInset),
+                    width: terminalFrame.width,
+                    height: min(max(inset, 0), maximumInset)
+                )
+                offset = verticalOffset(
+                    terminalFrame: terminalFrame,
+                    cursorFrame: cursorFrame,
+                    keyboardFrame: obstruction
                 )
             }
-            let overlap = min(
-                max(terminalFrame.maxY - max(frame.minY, terminalFrame.minY), 0),
-                max(terminalFrame.height, 0)
-            )
-            return Layout(
-                bottomInset: max(overlap, accessoryInset),
-                verticalOffset: 0,
-                preservesTerminalSurfaceSize: false
-            )
-        case let .floating(frame):
-            guard preservesTerminalSize else {
-                guard accessoryInset > 0 else { return .unobstructed }
-                return Layout(
-                    bottomInset: accessoryInset,
-                    verticalOffset: 0,
-                    preservesTerminalSurfaceSize: false
-                )
-            }
-            let keyboardOffset = verticalOffset(
-                terminalFrame: terminalFrame,
-                cursorFrame: cursorFrame,
-                keyboardFrame: frame
-            )
-            let accessoryOffset = verticalOffset(
-                terminalFrame: terminalFrame,
-                cursorFrame: cursorFrame,
-                keyboardFrame: accessoryFrame
-            )
-            return Layout(
-                bottomInset: 0,
-                verticalOffset: min(keyboardOffset, accessoryOffset),
-                preservesTerminalSurfaceSize: true
-            )
         }
+        return Layout(
+            bottomInset: min(max(inset, 0), maximumInset),
+            verticalOffset: offset,
+            preservesTerminalSurfaceSize: preservesTerminalSize
+        )
+    }
+
+    nonisolated static func isValid(_ frame: CGRect) -> Bool {
+        !frame.isNull && !frame.isInfinite
+            && frame.origin.x.isFinite && frame.origin.y.isFinite
+            && frame.width.isFinite && frame.height.isFinite
+            && frame.width > 0 && frame.height > 0
+            && frame.maxX.isFinite && frame.maxY.isFinite
     }
 
     private nonisolated static func bottomAccessoryInset(
@@ -155,12 +126,8 @@ enum TerminalKeyboardAvoidancePolicy {
         accessoryFrame: CGRect?
     ) -> CGFloat {
         guard let accessoryFrame,
-              !terminalFrame.isNull,
-              !terminalFrame.isEmpty,
-              !terminalFrame.isInfinite,
-              !accessoryFrame.isNull,
-              !accessoryFrame.isEmpty,
-              !accessoryFrame.isInfinite,
+              isValid(terminalFrame),
+              isValid(accessoryFrame),
               accessoryFrame.maxY >= terminalFrame.maxY - 1 else {
             return 0
         }
