@@ -173,8 +173,8 @@ struct RemoteMoshManagerTests {
         )
 
         #expect(script.contains("VVTERM_UTF8_LOCALE"))
-        #expect(script.contains("TERM='xterm-ghostty'"))
-        #expect(!script.contains("TERM_PROGRAM"))
+        #expect(script.contains("TERM='xterm-256color'"))
+        #expect(!script.contains("TERM_PROGRAM="))
         #expect(script.contains("echo hi"))
     }
 
@@ -234,12 +234,12 @@ struct RemoteMoshManagerTests {
     }
 
     @Test
-    func moshStartupScriptUsesResolvedTerminalTypeWhenProvided() {
+    func moshStartupScriptUsesConservativeTerminalTypeEvenWhenGhosttyIsInstalled() {
         let script = RemoteTerminalBootstrap.moshStartupScript(
             startCommand: "echo hi",
             terminalType: .xtermGhostty
         )
-        #expect(script.contains("TERM='xterm-ghostty'"))
+        #expect(script.contains("TERM='xterm-256color'"))
         #expect(script.contains("echo hi"))
     }
 

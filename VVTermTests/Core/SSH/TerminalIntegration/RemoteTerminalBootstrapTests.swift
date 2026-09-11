@@ -321,7 +321,7 @@ struct RemoteTerminalBootstrapTests {
     }
 
     @Test
-    func kittyGraphicsPolicyUsesOnlyTheETSpecificSnacksHint() {
+    func transportCapabilitiesUseOnlyTheETSpecificSnacksHint() {
         let ssh = RemoteTerminalBootstrap.terminalEnvironmentDictionary(
             terminalType: .xtermGhostty,
             transport: .ssh
@@ -339,10 +339,13 @@ struct RemoteTerminalBootstrapTests {
             transport: .mosh
         )
 
-        #expect(RemoteKittyGraphicsPolicy(transport: .ssh) == .genuineSSH)
-        #expect(RemoteKittyGraphicsPolicy(transport: .sshFallback) == .genuineSSH)
-        #expect(RemoteKittyGraphicsPolicy(transport: .eternalTerminal) == .eternalTerminal)
-        #expect(RemoteKittyGraphicsPolicy(transport: .mosh) == .unsupported)
+        for transport in [ShellTransport.ssh, .sshFallback, .eternalTerminal, .mosh] {
+            let capabilities = RemoteTerminalCapabilities(transport: transport, resolvedTerminalType: .xtermGhostty)
+            #expect(capabilities.supportsTrueColor)
+            #expect(capabilities.supportsKittyGraphics == (transport != .mosh))
+            #expect(capabilities.supportsDesktopNotifications == (transport != .mosh))
+            #expect(capabilities.supportsProgress == (transport != .mosh))
+        }
         #expect(ssh["SNACKS_SSH"] == nil)
         #expect(fallback["SNACKS_SSH"] == nil)
         #expect(mosh["SNACKS_SSH"] == nil)
@@ -357,6 +360,29 @@ struct RemoteTerminalBootstrapTests {
             #expect(environment["SSH_CLIENT"] == nil)
             #expect(environment["SSH_TTY"] == nil)
         }
+    }
+
+    @Test
+    func moshCannotUseGhosttyTerminfoOrInheritedApplicationIdentity() {
+        let environment = RemoteTerminalBootstrap.terminalEnvironmentDictionary(
+            terminalType: .xtermGhostty, transport: .mosh
+        )
+        #expect(environment["TERM"] == "xterm-256color")
+        let script = RemoteTerminalBootstrap.moshStartupScript(
+            startCommand: "exec sh", terminalType: .xtermGhostty
+        )
+        #expect(script.contains("unset TERM_PROGRAM TERM_PROGRAM_VERSION SNACKS_SSH;"))
+        #expect(script.contains("TERM='xterm-256color'"))
+    }
+
+    @Test
+    func tmuxGlobalEnvironmentRemovesUnsupportedValues() {
+        let commands = RemoteTerminalBootstrap.tmuxEnvironmentCommands(transport: .mosh)
+        #expect(commands.contains("set-environment -gu TERM_PROGRAM"))
+        #expect(commands.contains("set-environment -gu TERM_PROGRAM_VERSION"))
+        #expect(commands.contains("set-environment -gu SNACKS_SSH"))
+        #expect(!commands.contains { $0.contains("ghostty") })
+        #expect(RemoteTerminalBootstrap.tmuxUpdateEnvironmentVariables().contains("SNACKS_SSH"))
     }
 
     private func decodedPowerShellScript(from command: String) -> String? {

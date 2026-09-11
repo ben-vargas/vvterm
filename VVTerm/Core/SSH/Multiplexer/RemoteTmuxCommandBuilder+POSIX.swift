@@ -230,18 +230,14 @@ nonisolated extension RemoteTmuxCommandBuilder {
             let value = RemoteTerminalBootstrap.shellQuoted(variable.value)
             return "\(tmux) set-environment -t \(sessionEnvironmentTarget) \(variable.name) \(value)"
         })
-        if !terminalEnvironment.contains(where: {
-            $0.name == RemoteKittyGraphicsPolicy.compatibilityEnvironmentName
-        }) {
-            commands.append(
-                "\(tmux) set-environment -u -t \(sessionEnvironmentTarget) \(RemoteKittyGraphicsPolicy.compatibilityEnvironmentName)"
-            )
-        }
-        if !RemoteKittyGraphicsPolicy(transport: transport).supportsKittyGraphics {
-            commands.append(contentsOf: RemoteTerminalBootstrap.terminalProgramEnvironment().map { variable in
-                "\(tmux) set-environment -u -t \(sessionEnvironmentTarget) \(variable.name)"
-            })
-        }
+        let capabilities = RemoteTerminalCapabilities(
+            transport: transport, resolvedTerminalType: RemoteTerminalBootstrap.defaultTerminalType
+        )
+        // A session removal marker also blocks inherited global values. Unsetting
+        // the session entry alone exposes the global value to new processes.
+        commands.append(contentsOf: capabilities.removedEnvironmentNames.map { name in
+            "\(tmux) set-environment -r -t \(sessionEnvironmentTarget) \(name)"
+        })
         return commands.joined(separator: " && ")
     }
 

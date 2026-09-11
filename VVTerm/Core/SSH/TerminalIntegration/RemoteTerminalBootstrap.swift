@@ -5,42 +5,6 @@ nonisolated struct RemoteTerminalEnvironmentVariable: Hashable, Sendable {
     let value: String
 }
 
-/// Derives Kitty image-protocol availability from the active remote transport.
-/// SSH already exposes genuine `SSH_*` variables. ET is SSH-compatible from the
-/// application's perspective but needs Snacks' documented opt-in because its PTY
-/// is not created by sshd. Mosh does not preserve Kitty graphics sequences.
-nonisolated enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
-    nonisolated static let compatibilityEnvironmentName = "SNACKS_SSH"
-
-    case genuineSSH
-    case eternalTerminal
-    case unsupported
-
-    nonisolated init(transport: ShellTransport) {
-        switch transport {
-        case .ssh, .sshFallback:
-            self = .genuineSSH
-        case .eternalTerminal:
-            self = .eternalTerminal
-        case .mosh:
-            self = .unsupported
-        }
-    }
-
-    nonisolated var environment: [RemoteTerminalEnvironmentVariable] {
-        switch self {
-        case .genuineSSH, .unsupported:
-            []
-        case .eternalTerminal:
-            [RemoteTerminalEnvironmentVariable(name: Self.compatibilityEnvironmentName, value: "1")]
-        }
-    }
-
-    nonisolated var supportsKittyGraphics: Bool {
-        self != .unsupported
-    }
-}
-
 nonisolated enum RemoteTerminalType: String, Hashable, Sendable {
     case xterm256Color = "xterm-256color"
     case xtermGhostty = "xterm-ghostty"
@@ -130,14 +94,17 @@ nonisolated enum RemoteTerminalBootstrap {
         bundle: Bundle = .main,
         transport: ShellTransport = .ssh
     ) -> [RemoteTerminalEnvironmentVariable] {
-        let graphicsPolicy = RemoteKittyGraphicsPolicy(transport: transport)
-        var environment = [
-            RemoteTerminalEnvironmentVariable(name: "COLORTERM", value: "truecolor")
-        ]
-        if graphicsPolicy.supportsKittyGraphics {
+        let capabilities = RemoteTerminalCapabilities(transport: transport, resolvedTerminalType: defaultTerminalType)
+        var environment: [RemoteTerminalEnvironmentVariable] = []
+        if capabilities.supportsTrueColor {
+            environment.append(RemoteTerminalEnvironmentVariable(name: "COLORTERM", value: "truecolor"))
+        }
+        if capabilities.terminalProgram != nil {
             environment.append(contentsOf: terminalProgramEnvironment(bundle: bundle))
         }
-        environment.append(contentsOf: graphicsPolicy.environment)
+        if capabilities.needsSnacksSSHCompatibility {
+            environment.append(RemoteTerminalEnvironmentVariable(name: "SNACKS_SSH", value: "1"))
+        }
         return environment
     }
 
@@ -150,10 +117,6 @@ nonisolated enum RemoteTerminalBootstrap {
         ]
     }
 
-    nonisolated static func terminalEnvironmentNames(bundle: Bundle = .main) -> [String] {
-        terminalEnvironment(bundle: bundle).map(\.name)
-    }
-
     nonisolated static func terminalEnvironmentDictionary(
         bundle: Bundle = .main,
         terminalType: RemoteTerminalType,
@@ -163,7 +126,9 @@ nonisolated enum RemoteTerminalBootstrap {
             uniqueKeysWithValues: terminalEnvironment(bundle: bundle, transport: transport)
                 .map { ($0.name, $0.value) }
         )
-        environment["TERM"] = terminalType.rawValue
+        environment["TERM"] = RemoteTerminalCapabilities(
+            transport: transport, resolvedTerminalType: terminalType
+        ).terminalType.rawValue
         return environment
     }
 
@@ -174,11 +139,16 @@ nonisolated enum RemoteTerminalBootstrap {
     ) -> String {
         var assignments = terminalEnvironment(bundle: bundle, transport: transport)
             .map { "\($0.name)=\(shellQuoted($0.value))" }
-        if let terminalType {
-            assignments.insert("TERM=\(shellQuoted(terminalType.rawValue))", at: 0)
+        let capabilities = RemoteTerminalCapabilities(
+            transport: transport, resolvedTerminalType: terminalType ?? defaultTerminalType
+        )
+        if terminalType != nil {
+            assignments.insert("TERM=\(shellQuoted(capabilities.terminalType.rawValue))", at: 0)
         }
         let command = assignments.joined(separator: " ")
-        return "export \(command);"
+        let removed = capabilities.removedEnvironmentNames
+        let unset = removed.isEmpty ? "" : "unset \(removed.joined(separator: " ")); "
+        return "\(unset)export \(command);"
     }
 
     nonisolated static func defaultLoginShellCommand() -> String {
@@ -319,8 +289,8 @@ nonisolated enum RemoteTerminalBootstrap {
         "export PATH=\"\(shellPathValue())\""
     }
 
-    nonisolated static func tmuxUpdateEnvironmentVariables(bundle: Bundle = .main) -> [String] {
-        ["LANG", "LC_ALL", "LC_CTYPE"] + terminalEnvironmentNames(bundle: bundle)
+    nonisolated static func tmuxUpdateEnvironmentVariables() -> [String] {
+        ["LANG", "LC_ALL", "LC_CTYPE"] + RemoteTerminalCapabilities.managedEnvironmentNames
     }
 
     nonisolated static func tmuxArrayOptionCommands(option: String, values: [String]) -> [String] {
@@ -331,10 +301,14 @@ nonisolated enum RemoteTerminalBootstrap {
         return [reset] + assignments
     }
 
-    nonisolated static func tmuxEnvironmentCommands(bundle: Bundle = .main) -> [String] {
-        terminalEnvironment(bundle: bundle).map { variable in
+    nonisolated static func tmuxEnvironmentCommands(
+        bundle: Bundle = .main,
+        transport: ShellTransport = .ssh
+    ) -> [String] {
+        let capabilities = RemoteTerminalCapabilities(transport: transport, resolvedTerminalType: defaultTerminalType)
+        return terminalEnvironment(bundle: bundle, transport: transport).map { variable in
             "set-environment -g \(variable.name) \"\(variable.value)\""
-        }
+        } + capabilities.removedEnvironmentNames.map { "set-environment -gu \($0)" }
     }
 
     nonisolated static func prefixedPOSIXScript(

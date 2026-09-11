@@ -238,12 +238,12 @@ struct RemoteTmuxUnixCommandBuilderTests {
                 workingDirectory: "/tmp",
                 transport: transport
             )
-            #expect(command.contains("set-environment -u -t '=vvterm_transport' SNACKS_SSH"))
+            #expect(command.contains("set-environment -r -t '=vvterm_transport' SNACKS_SSH"))
             #expect(!command.contains("SNACKS_SSH '1'"))
             #expect(!command.contains("SSH_CONNECTION"))
             if transport == .mosh {
-                #expect(command.contains("set-environment -u -t '=vvterm_transport' TERM_PROGRAM"))
-                #expect(command.contains("set-environment -u -t '=vvterm_transport' TERM_PROGRAM_VERSION"))
+                #expect(command.contains("set-environment -r -t '=vvterm_transport' TERM_PROGRAM"))
+                #expect(command.contains("set-environment -r -t '=vvterm_transport' TERM_PROGRAM_VERSION"))
                 #expect(!command.contains("TERM_PROGRAM 'ghostty'"))
             }
         }
