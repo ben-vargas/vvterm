@@ -258,7 +258,8 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     private var presentationVerifyTask: Task<Void, Never>?
     private var activeTerminalSceneIsForeground = true
     private var inputOwnership = InputOwnership.available(generation: UUID())
-    // Historical attachment state cannot be derived after a keyboard hide.
+    // Only a native visible-frame event establishes dismissal history.
+    // A layout guide can retain geometry from an earlier input session.
     private var hardwareKeyboardAttachedWhenShown: Bool?
     /// Rebuilding a session UIKit refuses to present cannot succeed by
     /// repetition; cap attempts until a keyboard actually shows (which
@@ -446,6 +447,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
 
     func setActivePane(_ paneId: UUID?) {
         guard activePaneId != paneId else { return }
+        hardwareKeyboardAttachedWhenShown = nil
         invalidateInputOwnershipGeneration()
         cancelPresentationVerify()
         // Presentation requests belong to the pane that was active when the
@@ -471,6 +473,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             explicitPresentationRecovery = nil
         }
         guard activePaneId == paneId else { return }
+        hardwareKeyboardAttachedWhenShown = nil
         invalidateInputOwnershipGeneration()
         cancelPresentationVerify()
         pendingPresentationRequest = .none
@@ -819,6 +822,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
                 animationCurve: animationCurve
             )
         } else {
+            hardwareKeyboardAttachedWhenShown = snapshot.hasHardwareKeyboardAttached
             setSoftwareKeyboardPresentation(presentation, terminal: terminal)
         }
     }
@@ -916,10 +920,10 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         duration: TimeInterval?,
         curve: TerminalKeyboardAnimationCurve?
     ) {
-        if let duration, duration > 0 {
+        if let duration, duration > 0, keyboardAnimationDuration != duration {
             keyboardAnimationDuration = duration
         }
-        if let curve {
+        if let curve, keyboardAnimationCurve != curve {
             keyboardAnimationCurve = curve
         }
     }
@@ -929,9 +933,9 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         terminal: (any TerminalKeyboardInputSession)? = nil
     ) {
         let terminal = terminal ?? activeTerminal
-        hardwareKeyboardAttachedWhenShown = presentation.isVisible
-            ? terminal?.keyboardCoordinatorDiagnosticSnapshot().hasHardwareKeyboardAttached
-            : nil
+        if !presentation.isVisible {
+            hardwareKeyboardAttachedWhenShown = nil
+        }
         if presentation.isVisible {
             cancelPresentationVerify()
             presentationRefreshAttemptCount = 0
@@ -954,6 +958,10 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             setSoftwareKeyboardPresentation(.hidden, terminal: terminal)
             return
         }
+        // The guide belongs to the terminal that keyboard avoidance moves and
+        // resizes. Do not feed that derived geometry back into a visible frame;
+        // native notifications own changes after presentation is established.
+        guard !isSoftwareKeyboardVisible else { return }
         guard activeTerminalSceneIsForeground,
               Self.desiredKeyboardVisible(inputs: currentInputs),
               snapshot.windowAttached,
@@ -1753,6 +1761,9 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             )
         } else {
             presentation = .hidden
+        }
+        if presentation.isVisible {
+            hardwareKeyboardAttachedWhenShown = snapshot?.hasHardwareKeyboardAttached
         }
         setSoftwareKeyboardPresentation(presentation)
     }

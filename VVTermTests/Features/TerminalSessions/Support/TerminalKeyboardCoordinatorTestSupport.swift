@@ -147,14 +147,18 @@ final class TerminalKeyboardCoordinatorEventSourceSpy: TerminalKeyboardEventSour
         handler = nil
     }
 
-    func send(_ kind: TerminalKeyboardEvent.Kind) {
+    func send(
+        _ kind: TerminalKeyboardEvent.Kind,
+        animationDuration: TimeInterval? = nil,
+        animationCurve: TerminalKeyboardAnimationCurve? = nil
+    ) {
         handler?(
             TerminalKeyboardEvent(
                 kind: kind,
                 isLocal: true,
                 sourceScreenIdentifier: nil,
-                animationDuration: nil,
-                animationCurve: nil,
+                animationDuration: animationDuration,
+                animationCurve: animationCurve,
                 diagnostics: nil
             )
         )

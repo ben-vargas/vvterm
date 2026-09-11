@@ -3,6 +3,32 @@ import XCTest
 
 final class TerminalKeyboardOwnershipUITests: TerminalKeyboardUITestCase {
     @MainActor
+    func testInitialKeyboardAndOpenMenuStayStable() throws {
+        let app = launchKeyboardHarness()
+        _ = waitForTerminal(in: app)
+        let diagnostics = app.staticTexts["vvterm.keyboardTest.diagnostics"]
+        wait(for: diagnostics, labelContaining: "coordinatorKeyboardVisible=true",
+             timeout: 10, diagnostics: diagnosticsText(in: app))
+        XCTAssertTrue(app.keyboards.firstMatch.exists, diagnosticsText(in: app))
+        XCTAssertTrue(diagnostics.label.contains("userHidden=false"), diagnosticsText(in: app))
+        let baselineRebuilds = try requiredDiagnosticMetric("inputRebuilds", in: app)
+        let baselineReloads = try requiredDiagnosticMetric("inputReloads", in: app)
+
+        let menu = app.buttons["vvterm.keyboardTest.menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        menu.tap()
+        let settingsItem = app.descendants(matching: .any)["vvterm.keyboardTest.menu.settings"]
+        XCTAssertTrue(settingsItem.waitForExistence(timeout: 5))
+        for _ in 0..<5 {
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+            XCTAssertTrue(settingsItem.exists && settingsItem.isHittable, diagnosticsText(in: app))
+            XCTAssertTrue(app.keyboards.firstMatch.exists, diagnosticsText(in: app))
+        }
+        XCTAssertEqual(try requiredDiagnosticMetric("inputRebuilds", in: app), baselineRebuilds)
+        XCTAssertEqual(try requiredDiagnosticMetric("inputReloads", in: app), baselineReloads)
+    }
+
+    @MainActor
     func testNativeDockedHideShowsFloatingControls() throws {
         try assertNativeHideShowsFloatingControls(floating: false)
     }
