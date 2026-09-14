@@ -2218,9 +2218,7 @@
 "Operation failed" = "Operation failed";
 "Operation paused" = "Operation paused";
 "Operation in progress" = "Operation in progress";
-"Allow Terminal Notifications" = "Allow Terminal Notifications";
-"Terminal notifications are allowed" = "Terminal notifications are allowed";
 "Allow notifications for VVTerm in system settings." = "Allow notifications for VVTerm in system settings.";
 "Notifications are unavailable." = "Notifications are unavailable.";
-"Terminal Notifications" = "Terminal Notifications";
-"Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages." = "Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages.";
+
+"Notifications" = "Notifications";

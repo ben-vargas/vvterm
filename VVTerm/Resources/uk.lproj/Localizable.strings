@@ -2226,9 +2226,7 @@
 "Operation failed" = "Операція не вдалася";
 "Operation paused" = "Операцію призупинено";
 "Operation in progress" = "Операція виконується";
-"Allow Terminal Notifications" = "Дозволити сповіщення термінала";
-"Terminal notifications are allowed" = "Сповіщення термінала дозволено";
 "Allow notifications for VVTerm in system settings." = "Дозвольте сповіщення для VVTerm у системних налаштуваннях.";
 "Notifications are unavailable." = "Сповіщення недоступні.";
-"Terminal Notifications" = "Сповіщення термінала";
-"Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages." = "Віддалені програми можуть надсилати сповіщення, поки VVTerm отримує вивід термінала. Mosh не підтримує ці повідомлення.";
+
+"Notifications" = "Сповіщення";

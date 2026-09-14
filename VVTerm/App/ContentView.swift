@@ -275,6 +275,7 @@ struct ContentView: View {
     private func withSplitLifecycle<Content: View>(_ content: Content) -> some View {
         content
             .modifier(TerminalNotificationNavigationModifier { server in
+                guard let server else { return }
                 selectedWorkspace = serverManager.workspaces.first { $0.id == server.workspaceId }
                 selectedServer = server
             })

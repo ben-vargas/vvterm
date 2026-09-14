@@ -46,10 +46,11 @@ Each pane shows Ghostty's two-point progress bar at its top edge. Paused progres
 is orange, errors are red, and unknown progress moves. A remove report clears the
 bar immediately; a quiet bar expires after 15 seconds. Progress is not saved.
 Enable notification permission under **Settings → Sessions & Connections →
-Terminal Notifications**. Denied permission does not affect terminal output.
+Notifications**. Turning the switch off stops new terminal notifications in VVTerm. System permission
+is also required. Denied permission does not affect terminal output.
 Clicking a notification opens its existing terminal tab and focuses its source
-pane, after any required unlock. Notifications for closed panes do not start a
-new connection.
+pane, after any required unlock. Notifications for closed panes open the app without starting a new connection;
+on iPhone, they return to the server list.
 
 Run this script in a VVTerm terminal, or copy it to the remote host first:
 

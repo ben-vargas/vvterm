@@ -2219,9 +2219,7 @@
 "Operation failed" = "การดำเนินการล้มเหลว";
 "Operation paused" = "การดำเนินการหยุดชั่วคราว";
 "Operation in progress" = "กำลังดำเนินการ";
-"Allow Terminal Notifications" = "อนุญาตการแจ้งเตือนของเทอร์มินัล";
-"Terminal notifications are allowed" = "อนุญาตการแจ้งเตือนของเทอร์มินัลแล้ว";
 "Allow notifications for VVTerm in system settings." = "อนุญาตการแจ้งเตือนสำหรับ VVTerm ในการตั้งค่าระบบ";
 "Notifications are unavailable." = "ไม่สามารถใช้การแจ้งเตือนได้";
-"Terminal Notifications" = "การแจ้งเตือนของเทอร์มินัล";
-"Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages." = "โปรแกรมระยะไกลสามารถส่งการแจ้งเตือนขณะที่ VVTerm รับเอาต์พุตของเทอร์มินัล Mosh ไม่รองรับข้อความเหล่านี้";
+
+"Notifications" = "การแจ้งเตือน";

@@ -3,6 +3,12 @@ import XCTest
 
 final class TerminalEventsUITests: TerminalEventsUITestCase {
     @MainActor
+    func testNotificationSettingsSwitch() { verifyNotificationSettingsSwitch() }
+
+    @MainActor
+    func testClosedNotificationOpensApp() throws { try verifyNotificationOpensSourcePane(sourceClosed: true) }
+
+    @MainActor
     func testNotificationOpensSourceTabAndPane() throws { try verifyNotificationOpensSourcePane() }
 
     @MainActor

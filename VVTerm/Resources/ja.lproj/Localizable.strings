@@ -2219,9 +2219,7 @@
 "Operation failed" = "操作に失敗しました";
 "Operation paused" = "操作は一時停止中です";
 "Operation in progress" = "操作は進行中です";
-"Allow Terminal Notifications" = "ターミナル通知を許可";
-"Terminal notifications are allowed" = "ターミナル通知は許可されています";
 "Allow notifications for VVTerm in system settings." = "システム設定で VVTerm の通知を許可してください。";
 "Notifications are unavailable." = "通知を利用できません。";
-"Terminal Notifications" = "ターミナル通知";
-"Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages." = "VVTerm がターミナル出力を受信している間、リモートプログラムは通知を送信できます。Mosh はこれらのメッセージに対応していません。";
+
+"Notifications" = "通知";

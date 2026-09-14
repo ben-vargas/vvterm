@@ -52,6 +52,10 @@ final class TerminalEventsUITestHarnessModel: ObservableObject {
         tabManager.sessionState.selectView(.files, for: server.id)
     }
 
+    func closeSourceTab() {
+        _ = tabManager.sessionState.removeTab(sourceTab)
+    }
+
     func openLastNotification() {
         guard let context = lastNotificationContext else { return }
         let request = NativeTerminalNotificationClient.request(.init(title: "Test", body: "Ready"), context: context)
@@ -164,7 +168,7 @@ final class TerminalEventsUITestHarnessModel: ObservableObject {
 struct TerminalEventsUITestHarness: View {
     @StateObject private var model: TerminalEventsUITestHarnessModel
     @State private var selectedPane = 0
-    @State private var openedNotification = false
+    @State private var openedDestination: String?
     @ObservedObject private var sessions: TerminalSessionStateStore
 
     init(tabManager: TerminalTabManager) {
@@ -195,13 +199,15 @@ struct TerminalEventsUITestHarness: View {
                 .accessibilityIdentifier("events.diagnostics")
                 .font(.caption)
             HStack {
-                Button("Other tab") { model.selectOtherTab(); openedNotification = false }
+                Button("Other tab") { model.selectOtherTab(); openedDestination = nil }
                     .accessibilityIdentifier("events.other-tab")
+                Button("Close source") { model.closeSourceTab() }
+                    .accessibilityIdentifier("events.close-source")
                 Button("Open notification") { model.openLastNotification() }
                     .accessibilityIdentifier("events.open-notification")
             }
-            if openedNotification {
-                Text("Source tab, pane \(selectedPane == 0 ? "A" : "B")")
+            if let openedDestination {
+                Text(openedDestination)
                     .accessibilityIdentifier("events.notification-destination")
             }
             Group {
@@ -233,9 +239,13 @@ struct TerminalEventsUITestHarness: View {
             #endif
         }
         .padding(8)
-        .modifier(TerminalNotificationNavigationModifier { _ in
-            selectedPane = model.focusedPaneIndex ?? 0
-            openedNotification = true
+        .modifier(TerminalNotificationNavigationModifier { server in
+            if server != nil {
+                selectedPane = model.focusedPaneIndex ?? 0
+                openedDestination = "Source tab, pane \(selectedPane == 0 ? "A" : "B")"
+            } else {
+                openedDestination = "App"
+            }
         })
         .environmentObject(model.notificationNavigation)
         .task { model.start() }

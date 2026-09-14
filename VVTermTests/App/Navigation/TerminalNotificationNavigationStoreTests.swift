@@ -22,7 +22,7 @@ struct TerminalNotificationNavigationStoreTests: TerminalTabManagerTestSupport {
         )
         let context = TerminalNotificationContext(paneId: pane, tabId: source.id, serverId: server.id)
         navigation.request(context)
-        #expect(await navigation.resolve(context) == server)
+        #expect(await navigation.resolve(context) == .terminal(server))
         #expect(manager.sessionState.selectedTabId(for: server.id) == source.id)
         #expect(manager.sessionState.tab(id: source.id, for: server.id)?.focusedPaneId == pane)
         #expect(manager.connectionViewSelections.selection(for: server.id) == .terminal)
@@ -30,7 +30,7 @@ struct TerminalNotificationNavigationStoreTests: TerminalTabManagerTestSupport {
         #expect(navigation.pending == nil)
         // A later tap on the same notification can route again.
         navigation.request(context)
-        #expect(await navigation.resolve(context) == server)
+        #expect(await navigation.resolve(context) == .terminal(server))
         await manager.resetForTesting()
     }
 
@@ -51,7 +51,8 @@ struct TerminalNotificationNavigationStoreTests: TerminalTabManagerTestSupport {
             .init(paneId: tab.rootPaneId, tabId: tab.id, serverId: UUID())
         ] {
             navigation.request(context)
-            #expect(await navigation.resolve(context) == nil)
+            #expect(await navigation.resolve(context) == .app)
+            navigation.consume(context)
             #expect(navigation.pending == nil)
         }
         #expect(unlocks == 0)
@@ -103,7 +104,8 @@ struct TerminalNotificationNavigationStoreTests: TerminalTabManagerTestSupport {
         case .edit: server.requiresBiometricUnlock = true
         }
         continuation?.resume(returning: true)
-        #expect(await task.value == nil)
+        let destination = await task.value
+        #expect(destination == (change == .close || change == .edit ? .app : nil))
         if change == .replace { #expect(navigation.pending == replacement) }
         if change == .cancel { #expect(navigation.pending == context) }
         await manager.resetForTesting()

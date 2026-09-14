@@ -11,24 +11,31 @@ struct TerminalNotificationSettingsSection: View {
         case ready(TerminalNotificationAuthorization)
     }
 
+    @AppStorage(TerminalNotificationPreferences.enabledKey)
+    private var enabled = TerminalNotificationPreferences.defaultEnabled
+
+    private var isOn: Binding<Bool> {
+        Binding(
+            get: { enabled && state == .ready(.authorized) },
+            set: { value in
+                enabled = value
+                if value, state != .ready(.authorized) { state = .requesting }
+            }
+        )
+    }
+
     var body: some View {
         Section {
-            switch state {
-            case .loading, .requesting:
-                ProgressView()
-            case .ready(.notDetermined):
-                Button("Allow Terminal Notifications") { state = .requesting }
-            case .ready(.authorized):
-                Label("Terminal notifications are allowed", systemImage: "checkmark")
-            case .ready(.denied):
+            Toggle("Notifications", isOn: isOn)
+                .toggleStyle(.switch)
+                .disabled(state == .loading || state == .requesting || client == nil)
+                .accessibilityIdentifier("vvterm.settings.notifications")
+        } footer: {
+            if state == .ready(.denied) {
                 Text("Allow notifications for VVTerm in system settings.")
-            case .ready(.unavailable):
+            } else if state == .ready(.unavailable) {
                 Text("Notifications are unavailable.")
             }
-        } header: {
-            Text("Terminal Notifications")
-        } footer: {
-            Text("Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages.")
         }
         .task(id: state) {
             switch state {

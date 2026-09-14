@@ -127,6 +127,10 @@ struct iOSContentView: View {
             }
         }
         .modifier(TerminalNotificationNavigationModifier { server in
+            guard let server else {
+                terminalRoute = nil
+                return
+            }
             selectedWorkspace = serverManager.workspaces.first { $0.id == server.workspaceId }
             selectedEnvironment = server.environment
             terminalRoute = .active(serverId: server.id)

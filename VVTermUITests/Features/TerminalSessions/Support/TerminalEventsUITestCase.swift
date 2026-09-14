@@ -4,6 +4,38 @@ import ImageIO
 
 @MainActor
 class TerminalEventsUITestCase: XCTestCase {
+    func verifyNotificationSettingsSwitch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--vvterm-ui-test-notification-settings", "--vvterm-ui-testing",
+                               "-hasSeenWelcome", "YES", "-iCloudSyncEnabled", "NO"]
+        app.launch()
+        defer { app.terminate() }
+        let toggle = app.switches["vvterm.settings.notifications"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 15))
+        // macOS returns NSNumber; iOS returns String for the native switch value.
+        expectation(for: NSPredicate { _, _ in
+            String(describing: toggle.value ?? "") == "1"
+        }, evaluatedWith: toggle)
+        waitForExpectations(timeout: 5)
+        #if os(iOS)
+        // Accessibility includes the whole row; tap the trailing native control.
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5))
+            .withOffset(CGVector(dx: -35, dy: 0)).tap()
+        #else
+        toggle.click()
+        #endif
+        XCTAssertEqual(String(describing: toggle.value ?? ""), "0")
+        #if os(iOS)
+        // Accessibility includes the whole row; tap the trailing native control.
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5))
+            .withOffset(CGVector(dx: -35, dy: 0)).tap()
+        #else
+        toggle.click()
+        #endif
+        XCTAssertEqual(String(describing: toggle.value ?? ""), "1")
+        attach(app, name: "notification-settings-switch")
+    }
+
     func verifyPaneProgress() throws {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -113,7 +145,7 @@ class TerminalEventsUITestCase: XCTestCase {
         try verifyBusyMovement(in: pane)
     }
 
-    func verifyNotificationOpensSourcePane() throws {
+    func verifyNotificationOpensSourcePane(sourceClosed: Bool = false) throws {
         let app = XCUIApplication()
         app.launchArguments = [
             "--vvterm-ui-test-terminal-events", "--vvterm-ui-testing",
@@ -134,9 +166,15 @@ class TerminalEventsUITestCase: XCTestCase {
         selectPane("A", app: app)
         press(app.buttons["events.other-tab"])
         XCTAssertTrue(app.staticTexts["events.other-tab-content"].waitForExistence(timeout: 5))
+        if sourceClosed { press(app.buttons["events.close-source"]) }
         press(app.buttons["events.open-notification"])
         let destination = app.staticTexts["events.notification-destination"]
         XCTAssertTrue(destination.waitForExistence(timeout: 5))
+        if sourceClosed {
+            XCTAssertEqual(diagnosticText(destination), "App")
+            XCTAssertTrue(app.staticTexts["events.other-tab-content"].exists)
+            return
+        }
         XCTAssertEqual(diagnosticText(destination), "Source tab, pane B")
         XCTAssertTrue(app.descendants(matching: .any)["events.pane.1"].exists)
         XCTAssertFalse(app.staticTexts["events.other-tab-content"].exists)

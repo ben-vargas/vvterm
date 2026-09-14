@@ -4,6 +4,11 @@ import Foundation
 /// Keeps a notification destination until an active app window can handle it.
 @MainActor
 final class TerminalNotificationNavigationStore: ObservableObject {
+    enum Destination: Equatable {
+        case app
+        case terminal(Server)
+    }
+
     @Published private(set) var pending: TerminalNotificationContext?
     private let tabManager: TerminalTabManager
     private let serverProvider: (UUID) -> Server?
@@ -28,24 +33,24 @@ final class TerminalNotificationNavigationStore: ObservableObject {
     }
 
     /// The presenting view owns cancellation of this work through its SwiftUI task.
-    func resolve(_ context: TerminalNotificationContext) async -> Server? {
+    func resolve(_ context: TerminalNotificationContext) async -> Destination? {
         guard pending == context else { return nil }
         guard let server = serverProvider(context.serverId), validTab(for: context) != nil else {
-            consume(context)
-            return nil
+            return .app
         }
         let allowed = await unlockServer(server)
         guard !Task.isCancelled, pending == context else { return nil }
         // Authentication may outlive a closed pane or an edited/deleted server.
-        guard allowed, serverProvider(context.serverId) == server,
-              let tab = validTab(for: context) else {
+        guard allowed else {
             consume(context)
             return nil
         }
+        guard serverProvider(context.serverId) == server,
+              let tab = validTab(for: context) else { return .app }
         tabManager.sessionState.selectView(.terminal, for: server.id)
         tabManager.sessionState.selectTab(tab.id, for: server.id)
         tabManager.focusPane(in: tab, paneId: context.paneId)
-        return server
+        return .terminal(server)
     }
 
     private func validTab(for context: TerminalNotificationContext) -> TerminalTab? {

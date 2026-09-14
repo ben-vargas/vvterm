@@ -401,7 +401,7 @@ struct AppComposition {
         let ghosttyApp = GhosttyRuntime(
             configuration: ghosttyRuntimeConfiguration,
             notificationClient: NativeTerminalNotificationClient(
-                center: .current(), onOpen: terminalNotificationNavigation.request
+                center: .current(), defaults: defaults, onOpen: terminalNotificationNavigation.request
             ),
             autoStart: false
         )

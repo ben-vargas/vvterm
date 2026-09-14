@@ -257,7 +257,9 @@ struct VVTermApp: App {
     @ViewBuilder
     private var macOSRootContent: some View {
         #if DEBUG
-        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-events") {
+        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-notification-settings") {
+            TerminalNotificationSettingsUITestHarness()
+        } else if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-events") {
             TerminalEventsUITestHarness(tabManager: tabManager)
         } else if usesSyncSettingsUITestHarness {
             SyncSettingsUITestHarness()
@@ -325,7 +327,9 @@ struct VVTermApp: App {
     @ViewBuilder
     private var iOSRootContent: some View {
         #if DEBUG
-        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-events") {
+        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-notification-settings") {
+            TerminalNotificationSettingsUITestHarness()
+        } else if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-terminal-events") {
             TerminalEventsUITestHarness(tabManager: tabManager)
         } else if usesSyncSettingsUITestHarness {
             SyncSettingsUITestHarness()

@@ -5,11 +5,13 @@ import OSLog
 /// One app-owned Apple notification boundary. Incoming OSC never requests permission.
 final class NativeTerminalNotificationClient: NSObject, TerminalNotificationSending, UNUserNotificationCenterDelegate {
     private let center: UNUserNotificationCenter
+    private let defaults: UserDefaults
     private let onOpen: @MainActor (TerminalNotificationContext) -> Void
     nonisolated private static let logger = Logger(subsystem: "app.vivy.VVTerm", category: "TerminalNotifications")
 
-    init(center: UNUserNotificationCenter, onOpen: @escaping @MainActor (TerminalNotificationContext) -> Void) {
+    init(center: UNUserNotificationCenter, defaults: UserDefaults, onOpen: @escaping @MainActor (TerminalNotificationContext) -> Void) {
         self.center = center
+        self.defaults = defaults
         self.onOpen = onOpen
         super.init()
         center.delegate = self
@@ -35,6 +37,7 @@ final class NativeTerminalNotificationClient: NSObject, TerminalNotificationSend
     }
 
     func post(_ content: TerminalNotificationContent, context: TerminalNotificationContext) {
+        guard TerminalNotificationPreferences.isEnabled(in: defaults) else { return }
         center.add(Self.request(content, context: context)) { error in
             if let error {
                 Self.logger.error("Terminal notification delivery failed: \(error.localizedDescription, privacy: .public)")

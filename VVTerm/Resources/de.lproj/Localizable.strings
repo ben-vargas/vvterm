@@ -2219,9 +2219,7 @@
 "Operation failed" = "Vorgang fehlgeschlagen";
 "Operation paused" = "Vorgang pausiert";
 "Operation in progress" = "Vorgang läuft";
-"Allow Terminal Notifications" = "Terminalmitteilungen erlauben";
-"Terminal notifications are allowed" = "Terminalmitteilungen sind erlaubt";
 "Allow notifications for VVTerm in system settings." = "Erlaube Mitteilungen für VVTerm in den Systemeinstellungen.";
 "Notifications are unavailable." = "Mitteilungen sind nicht verfügbar.";
-"Terminal Notifications" = "Terminalmitteilungen";
-"Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages." = "Entfernte Programme können Mitteilungen senden, während VVTerm Terminalausgaben empfängt. Mosh unterstützt diese Nachrichten nicht.";
+
+"Notifications" = "Mitteilungen";

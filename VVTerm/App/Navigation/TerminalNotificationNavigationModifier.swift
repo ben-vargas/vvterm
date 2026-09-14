@@ -4,7 +4,7 @@ struct TerminalNotificationNavigationModifier: ViewModifier {
     @EnvironmentObject private var navigation: TerminalNotificationNavigationStore
     @EnvironmentObject private var appLock: AppLockManager
     @Environment(\.scenePhase) private var scenePhase
-    let onOpen: (Server) -> Void
+    let onOpen: (Server?) -> Void
 
     private var availableDestination: TerminalNotificationContext? {
         scenePhase == .active && !appLock.isAppLocked ? navigation.pending : nil
@@ -13,9 +13,12 @@ struct TerminalNotificationNavigationModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.task(id: availableDestination) {
             guard let context = availableDestination,
-                  let server = await navigation.resolve(context),
+                  let destination = await navigation.resolve(context),
                   !Task.isCancelled, navigation.pending == context else { return }
-            onOpen(server)
+            switch destination {
+            case .app: onOpen(nil)
+            case .terminal(let server): onOpen(server)
+            }
             navigation.consume(context)
         }
     }

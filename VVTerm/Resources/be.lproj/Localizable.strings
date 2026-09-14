@@ -2220,9 +2220,7 @@
 "Operation failed" = "Аперацыя не ўдалася";
 "Operation paused" = "Аперацыя прыпыненая";
 "Operation in progress" = "Аперацыя выконваецца";
-"Allow Terminal Notifications" = "Дазволіць апавяшчэнні тэрмінала";
-"Terminal notifications are allowed" = "Апавяшчэнні тэрмінала дазволеныя";
 "Allow notifications for VVTerm in system settings." = "Дазвольце апавяшчэнні для VVTerm у сістэмных наладах.";
 "Notifications are unavailable." = "Апавяшчэнні недаступныя.";
-"Terminal Notifications" = "Апавяшчэнні тэрмінала";
-"Remote programs can send notifications while VVTerm receives terminal output. Mosh does not support these messages." = "Аддаленыя праграмы могуць дасылаць апавяшчэнні, пакуль VVTerm атрымлівае вывад тэрмінала. Mosh не падтрымлівае гэтыя паведамленні.";
+
+"Notifications" = "Апавяшчэнні";
