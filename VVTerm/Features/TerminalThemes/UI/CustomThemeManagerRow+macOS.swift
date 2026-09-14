@@ -87,10 +87,8 @@ struct CustomThemeManagerRow: View {
             Button("Edit") {
                 onEdit()
             }
-            Button {
+            Button("Duplicate") {
                 onDuplicate()
-            } label: {
-                Label("Duplicate", systemImage: "doc.on.doc")
             }
             Button("Delete", role: .destructive) {
                 onDeleteRequest()

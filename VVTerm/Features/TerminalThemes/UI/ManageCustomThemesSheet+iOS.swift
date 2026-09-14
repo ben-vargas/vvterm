@@ -63,10 +63,8 @@ extension ManageCustomThemesSheet {
                     themePendingEdit = theme
                 }
 
-                Button {
+                Button("Duplicate") {
                     duplicateTheme(theme)
-                } label: {
-                    Label("Duplicate", systemImage: "doc.on.doc")
                 }
 
                 Button("Delete", role: .destructive) {
