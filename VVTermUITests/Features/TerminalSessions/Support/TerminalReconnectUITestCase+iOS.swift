@@ -32,6 +32,7 @@ class TerminalReconnectUITestCase: XCTestCase {
             "-terminalTmuxEnabledDefault", "NO",
             "-terminalPreserveSizeForKeyboard", preservesTerminalSize ? "YES" : "NO",
             "-terminalVoiceButtonEnabled", "YES",
+            "-terminalInputMode", "direct",
             "-security.privacyModeEnabled", privacyModeEnabled ? "YES" : "NO",
             "-security.fullAppLockEnabled", "NO",
             "-security.lockOnBackground", "NO",

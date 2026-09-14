@@ -3,6 +3,38 @@ import XCTest
 
 final class TerminalProductionSSHUITests: TerminalReconnectUITestCase {
     @MainActor
+    func testChatPrivacyTransitionsAndSettingsKeepRouteResponsive() throws {
+        let (app, diagnostics) = launchProductionSSHTestHarness(privacyModeEnabled: true)
+        defer { app.terminate() }
+        let session = try terminalSnapshot(in: diagnostics, app: app)
+        openProductionTerminalMenu(in: app)
+        app.buttons["vvterm.composer.toggle"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("keep draft")
+
+        for _ in 0..<3 {
+            openProductionTerminalMenu(in: app)
+            app.buttons["vvterm.terminal.settings"].tap()
+            XCTAssertTrue(app.descendants(matching: .any)["vvterm.settings.root"].waitForExistence(timeout: 8))
+            XCTAssertFalse(app.keyboards.firstMatch.exists)
+            app.buttons["vvterm.settings.close"].tap()
+            XCTAssertTrue(editor.waitForExistence(timeout: 8))
+            XCTAssertEqual(editor.value as? String, "keep draft")
+
+            XCUIDevice.shared.press(.home)
+            XCTAssertTrue(app.wait(for: .runningBackground, timeout: 8))
+            app.activate()
+            XCTAssertTrue(app.wait(for: .runningForeground, timeout: 8))
+            XCTAssertTrue(editor.waitForExistence(timeout: 8))
+            XCTAssertEqual(editor.value as? String, "keep draft")
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+            assertSameSession(terminalId: session.terminalId, shellId: session.shellId,
+                              diagnostics: diagnostics, app: app)
+        }
+    }
+
+    @MainActor
     func testProductionSSHBackgroundPreservesSessionKeyboardAndTyping() throws {
         let app = XCUIApplication()
         app.terminate()

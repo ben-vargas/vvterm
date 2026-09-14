@@ -11,11 +11,10 @@ final class GhosttyTerminalSurfaceStore: TerminalSurfaceStoring {
 
     private var surfacesByPane: [UUID: any TerminalSurface] = [:]
 
-    var changes: AnyPublisher<TerminalSurfaceStoreChange, Never> {
-        $latestChange
-            .compactMap { $0 }
-            .eraseToAnyPublisher()
-    }
+    // A route reads the current surface when it appears. Resubscribing during
+    // a view update must not replay an old event and trigger another update.
+    private(set) lazy var changes: AnyPublisher<TerminalSurfaceStoreChange, Never> =
+        $latestChange.dropFirst().compactMap { $0 }.eraseToAnyPublisher()
 
     func surface(for paneId: UUID) -> (any TerminalSurface)? {
         surfacesByPane[paneId]

@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Testing
 @testable import VVTerm
 
@@ -56,6 +57,29 @@ struct GhosttyTerminalSurfaceStoreTests {
 
         func setLifecycleCallbacks(_ callbacks: TerminalSurfaceLifecycleCallbacks?) {}
         #endif
+    }
+
+    @Test
+    func subscribingToChangesDoesNotReplayOldSurfaceEvents() {
+        let store = GhosttyTerminalSurfaceStore()
+        let pane = UUID()
+        let first = Surface()
+        let replacement = Surface()
+        store.register(first, for: pane)
+
+        var received: [TerminalSurfaceStoreChange] = []
+        let subscription = store.changes.sink { received.append($0) }
+        #expect(received.isEmpty)
+        store.register(replacement, for: pane)
+        #expect(received == [.replaced(paneId: pane, surfaceIdentity: ObjectIdentifier(replacement))])
+        subscription.cancel()
+
+        let resubscription = store.changes.sink { received.append($0) }
+        #expect(received.count == 1)
+        store.remove(for: pane, prepareForRemoval: { _ in })
+        #expect(received.last == .removed(paneId: pane, surfaceIdentity: ObjectIdentifier(replacement)))
+        #expect(received.count == 2)
+        resubscription.cancel()
     }
 
     @Test
