@@ -2,17 +2,17 @@
 import SwiftUI
 import UIKit
 
-/// Native touch handling keeps a hold alive while the recording view appears.
+/// Native gestures distinguish a tap from the hold that starts recording.
 struct TerminalComposerVoiceControl: UIViewRepresentable {
     enum Style { case waveform, prompt }
     var style = Style.waveform
     let onTap: () -> Void
-    let onHoldChanged: (Bool) -> Void
+    let onHold: () -> Void
 
     func makeUIView(context: Context) -> UIButton {
         let button = UIButton(type: .system)
         if style == .waveform {
-            button.setImage(UIImage(systemName: "waveform", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16)), for: .normal)
+            button.setImage(UIImage(systemName: "waveform", withConfiguration: UIImage.SymbolConfiguration(pointSize: 14)), for: .normal)
         }
         button.tintColor = .secondaryLabel
         button.accessibilityLabel = style == .waveform ? String(localized: "Voice input") : String(localized: "Touch and hold to record")
@@ -36,11 +36,7 @@ struct TerminalComposerVoiceControl: UIViewRepresentable {
         init(_ parent: TerminalComposerVoiceControl) { self.parent = parent }
         @objc func tapped() { parent.onTap() }
         @objc func held(_ gesture: UILongPressGestureRecognizer) {
-            switch gesture.state {
-            case .began: parent.onHoldChanged(true)
-            case .ended, .cancelled, .failed: parent.onHoldChanged(false)
-            default: break
-            }
+            if gesture.state == .began { parent.onHold() }
         }
     }
 }

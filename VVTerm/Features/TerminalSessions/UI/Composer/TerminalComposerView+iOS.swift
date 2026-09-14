@@ -11,7 +11,7 @@ struct TerminalComposerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var voiceInteraction = VoiceInteraction.text
 
-    private enum VoiceInteraction { case text, ready, holding }
+    private enum VoiceInteraction { case text, ready }
 
     var body: some View {
         Group {
@@ -25,9 +25,6 @@ struct TerminalComposerView: View {
         } message: { Text(composer.cleanupError ?? "") }
         .onAppear(perform: stopUnavailableInput)
         .onChange(of: acceptsInput) { _ in stopUnavailableInput() }
-        .onChange(of: voice?.phase) { phase in
-            if phase == .idle, voiceInteraction == .holding { voiceInteraction = .text }
-        }
     }
 
     private func stopUnavailableInput() {
@@ -97,7 +94,7 @@ struct TerminalComposerView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
-        .padding(.bottom, 16)
+        .padding(.bottom, 8)
         .buttonStyle(.plain)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.86), value: voice?.phase)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.86), value: composer.attachments.map(\.id))
@@ -116,26 +113,16 @@ struct TerminalComposerView: View {
         }
         .overlay {
             // A sibling control keeps UITextView selection gestures out of voice holds.
-            TerminalComposerVoiceControl(style: .prompt, onTap: { voiceInteraction = .text }, onHoldChanged: handleHold)
+            TerminalComposerVoiceControl(style: .prompt, onTap: { voiceInteraction = .text }, onHold: startRecording)
                 .allowsHitTesting(voiceInteraction != .text)
                 .accessibilityHidden(voiceInteraction == .text)
         }
     }
 
-    private func handleHold(_ held: Bool) {
-        guard let voice else { return }
-        if held {
-            guard isActive, !composer.isBusy, !voice.phase.isActive else { return }
-            voiceInteraction = .holding
-            voice.toggle()
-        } else if voiceInteraction == .holding {
-            voiceInteraction = .text
-            switch voice.phase {
-            case .starting: voice.cancel()
-            case .recording: voice.toggle()
-            case .idle, .processing: break
-            }
-        }
+    private func startRecording() {
+        guard let voice, isActive, !composer.isBusy, !voice.phase.isActive else { return }
+        voiceInteraction = .text
+        voice.toggle()
     }
 
     private var attachmentButton: some View {
@@ -148,14 +135,14 @@ struct TerminalComposerView: View {
         if composer.draft.isEmpty, composer.attachments.isEmpty, !composer.isBusy, voice != nil {
             TerminalComposerVoiceControl(
                 onTap: { voiceInteraction = voiceInteraction == .ready ? .text : .ready },
-                onHoldChanged: handleHold
+                onHold: startRecording
             )
             .frame(width: 40, height: 40)
             .disabled(!isActive)
         } else {
             Button { composer.send() } label: {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 30))
+                    .font(.system(size: 26))
                     .foregroundStyle(composer.canSend && isActive ? Color.accentColor : Color.secondary)
                     .frame(width: 40, height: 40)
             }

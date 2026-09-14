@@ -200,6 +200,10 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["composer.test.recording-focus"].label, "Recording kept editor")
         XCTAssertTrue(app.keyboards.firstMatch.exists)
         XCTAssertEqual(app.keyboards.firstMatch.frame.minY, keyboardTop, accuracy: 1)
+        let stop = app.buttons["vvterm.composer.stop-recording"]
+        XCTAssertTrue(stop.waitForExistence(timeout: 5), "Lifting the finger must keep recording active")
+        XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "")
+        stop.tap()
         XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "Voice draft")
         XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
         XCTAssertTrue(app.buttons["vvterm.composer.send"].exists)
@@ -259,6 +263,10 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertTrue(editor.isHittable)
         XCTAssertLessThanOrEqual(editor.frame.maxY, app.keyboards.firstMatch.frame.minY)
         XCTAssertEqual(editor.value as? String, "keep after app switch")
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Chat input bottom spacing"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 
     @MainActor
@@ -305,7 +313,7 @@ final class TerminalComposerUITests: XCTestCase {
     }
 
     @MainActor
-    func testHoldOnWaveformRecordsWithoutClosingKeyboard() {
+    func testHoldOnWaveformRecordsUntilStopWithoutClosingKeyboard() {
         let app = launch()
         app.buttons["vvterm.composer.toggle"].tap()
         let record = app.buttons["vvterm.composer.record"]
@@ -316,7 +324,14 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["composer.test.recording-focus"].label, "Recording kept editor")
         XCTAssertTrue(app.keyboards.firstMatch.exists)
         XCTAssertEqual(app.keyboards.firstMatch.frame.minY, top, accuracy: 1)
+        let stop = app.buttons["vvterm.composer.stop-recording"]
+        XCTAssertTrue(stop.waitForExistence(timeout: 5), "Lifting the finger must keep recording active")
+        XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "")
+        stop.tap()
         XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "Voice draft")
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        XCTAssertEqual(app.keyboards.firstMatch.frame.minY, top, accuracy: 1)
+        XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
     }
 
     @MainActor
