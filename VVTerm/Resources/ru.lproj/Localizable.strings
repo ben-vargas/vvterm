@@ -2254,3 +2254,5 @@
 "Message" = "Сообщение";
 
 "Touch and hold to record" = "Нажмите и удерживайте для записи";
+
+"Could not remove remote attachments." = "Не удалось удалить вложения на удалённом сервере.";

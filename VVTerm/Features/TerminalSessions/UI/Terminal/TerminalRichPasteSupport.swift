@@ -219,6 +219,8 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
 
     let composer: TerminalComposerStore
 
+    private var composerNoticeSubscription: AnyCancellable?
+    private var cleanupNoticeSubscription: AnyCancellable?
     private let resolveConnectedSSHClientHandler: @MainActor () async -> SSHClient?
     private let pasteTextFromClipboardHandler: @MainActor () -> Void
     private let sendTextHandler: @MainActor (String) -> Void
@@ -241,6 +243,26 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
         self.resolveConnectedSSHClientHandler = resolveConnectedSSHClient
         self.pasteTextFromClipboardHandler = pasteTextFromClipboard
         self.sendTextHandler = sendText
+        cleanupNoticeSubscription = composer.$cleanupError.compactMap { $0 }
+            .sink { [weak uiModel, weak composer] message in
+                guard composer?.mode == .direct else { return }
+                uiModel?.showBanner(kind: .error, message: String(localized: "Could not remove remote attachments.") + " " + message)
+            }
+        composerNoticeSubscription = composer.$operation.combineLatest(composer.$mode)
+            .sink { [weak uiModel] operation, mode in
+                guard mode == .direct else { uiModel?.setProgress(nil); return }
+                switch operation {
+                case .loading:
+                    uiModel?.setProgress(String(localized: "Loading Files"))
+                case .uploading(let filename):
+                    uiModel?.setProgress(String(format: String(localized: "Uploading %@"), filename))
+                case .idle:
+                    uiModel?.setProgress(nil)
+                case .failed(let message):
+                    uiModel?.setProgress(nil)
+                    uiModel?.showBanner(kind: .error, message: message)
+                }
+            }
     }
 
     static func terminalPane(

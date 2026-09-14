@@ -2253,3 +2253,5 @@
 "Message" = "메시지";
 
 "Touch and hold to record" = "길게 눌러 녹음";
+
+"Could not remove remote attachments." = "원격 첨부 파일을 삭제할 수 없습니다.";

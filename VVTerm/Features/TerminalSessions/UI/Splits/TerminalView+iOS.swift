@@ -82,7 +82,7 @@ struct RemoteTerminalPaneWrapper: View {
                     .allowsHitTesting(false)
                 }
             }
-            if composer.mode == .chat || composer.isBusy || !composer.attachments.isEmpty || isComposerFailed {
+            if composer.mode == .chat {
                 TerminalPaneComposerView(presentationState: tabManager.presentationState, composer: composer, paneID: paneId, isActive: isActive, acceptsInput: acceptsInput, voice: composerVoice)
             }
         }
@@ -91,15 +91,16 @@ struct RemoteTerminalPaneWrapper: View {
             if composerVoice?.phase.isActive == true { composerVoice?.cancel() }
             composer.setMode(mode)
         }
-        .background { TerminalAttachmentPicker(composer: composer) }
+        .background {
+            TerminalAttachmentPicker(composer: composer) {
+                guard composer.mode == .direct,
+                      tabManager.keyboardCoordinator.canSubmitComposedInput(for: paneId) else { return }
+                tabManager.keyboardCoordinator.userRequestedShow()
+            }
+        }
         .onChange(of: isActive) { active in
             if !active { composer.attachmentSource = nil }
         }
-    }
-
-    private var isComposerFailed: Bool {
-        if case .failed = composer.operation { return true }
-        return false
     }
 
     private func handleSceneActivation(_ activatedScene: UIScene) {

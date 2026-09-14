@@ -2256,3 +2256,5 @@
 "Message" = "Message";
 
 "Touch and hold to record" = "Maintenez appuyé pour enregistrer";
+
+"Could not remove remote attachments." = "Impossible de supprimer les pièces jointes distantes.";

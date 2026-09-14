@@ -2255,3 +2255,5 @@
 "Message" = "Zpráva";
 
 "Touch and hold to record" = "Nahrávání spustíte podržením";
+
+"Could not remove remote attachments." = "Vzdálené přílohy se nepodařilo odstranit.";

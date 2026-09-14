@@ -2261,3 +2261,5 @@
 "Message" = "Повідомлення";
 
 "Touch and hold to record" = "Натисніть і утримуйте для запису";
+
+"Could not remove remote attachments." = "Не вдалося видалити вкладення на віддаленому сервері.";

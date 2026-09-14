@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct TerminalAttachmentPicker: View {
     @ObservedObject var composer: TerminalComposerStore
+    var onDismiss: () -> Void = {}
     @State private var photos: [PhotosPickerItem] = []
 
     var body: some View {
@@ -35,6 +36,7 @@ struct TerminalAttachmentPicker: View {
                 }
             }
             .onChange(of: composer.attachmentSource) { source in
+                if source == nil { onDismiss(); return }
                 guard source == .paste else { return }
                 composer.attachmentSource = nil
                 let images = Clipboard.attachmentPayloads()
@@ -54,13 +56,7 @@ struct TerminalAttachmentPicker: View {
         })
     }
 
-    static func menu(onSelect: @escaping (TerminalComposerStore.AttachmentSource) -> Void) -> UIMenu {
-        UIMenu(children: TerminalComposerStore.AttachmentSource.allCases.map { source in
-            let action = UIAction(title: source.title, image: UIImage(systemName: source.symbol)) { _ in onSelect(source) }
-            action.accessibilityIdentifier = source.accessibilityIdentifier
-            return action
-        })
-    }
+
 }
 
 extension TerminalComposerStore.AttachmentSource {

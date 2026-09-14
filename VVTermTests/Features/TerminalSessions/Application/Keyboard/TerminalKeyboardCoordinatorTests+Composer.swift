@@ -94,6 +94,30 @@ extension TerminalKeyboardCoordinatorTests {
             #expect(!coordinator.isSoftwareKeyboardVisible)
         }
 
+        @Test @MainActor
+        func explicitSendDoesNotRequireTerminalKeyboardOwnership() async {
+            let pane = UUID()
+            let session = TerminalKeyboardInputSessionSpy()
+            let coordinator = makeTerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { _ in session }
+            coordinator.inputModeProvider = { _ in .chat }
+            coordinator.setActivePane(pane)
+            coordinator.setPaneInputEligible(true, for: pane)
+            coordinator.setWindowAttached(true, for: pane)
+            coordinator.setViewActive(true)
+            await drainMainQueue()
+            // A picker or another keyboard can report external ownership while
+            // the connected, selected pane remains a valid explicit send target.
+            coordinator.keyboardUITestReceiveKeyboardEndFrame(
+                CGRect(x: 0, y: 700, width: 400, height: 300), isLocal: false
+            )
+            await drainMainQueue()
+            #expect(coordinator.canSubmitComposedInput(for: pane))
+            #expect(!coordinator.canSubmitComposedInput(for: UUID()))
+            coordinator.activeTerminalSceneWillDeactivate(for: pane)
+            #expect(!coordinator.canSubmitComposedInput(for: pane))
+        }
+
         @Test
         func chatNeverAcquiresTerminalForEitherKeyboardPreference() {
             for hidden in [true, false] {

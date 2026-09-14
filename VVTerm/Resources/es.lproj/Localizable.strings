@@ -2254,3 +2254,5 @@
 "Message" = "Mensaje";
 
 "Touch and hold to record" = "Mantén pulsado para grabar";
+
+"Could not remove remote attachments." = "No se pudieron eliminar los archivos adjuntos remotos.";

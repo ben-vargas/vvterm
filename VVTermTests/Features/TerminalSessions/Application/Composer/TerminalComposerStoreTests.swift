@@ -145,6 +145,7 @@ final class TerminalComposerStoreTests: XCTestCase {
         store.setMode(.chat)
         store.draft = "review\nthese"
         try store.add([payload("one.png"), payload("two.pdf")])
+        await finish(store)
         await finish(store) { store.send() }
         XCTAssertEqual(fixture.uploaded, ["one.png", "two.pdf"])
         XCTAssertEqual(fixture.sent, ["review\nthese /tmp/one.png /tmp/two.pdf"])
@@ -161,7 +162,7 @@ final class TerminalComposerStoreTests: XCTestCase {
         store.setMode(.chat)
         store.draft = "review"
         try store.add([payload("one.png"), payload("two.pdf")])
-        await finish(store) { store.send() }
+        await finish(store)
         XCTAssertTrue(fixture.sent.isEmpty)
         XCTAssertEqual(fixture.removed, ["/tmp/one.png"])
         XCTAssertEqual(store.draft, "review")
@@ -169,19 +170,21 @@ final class TerminalComposerStoreTests: XCTestCase {
         guard case .failed(let message) = store.operation else { return XCTFail("Expected failure") }
         XCTAssertTrue(message.contains("two.pdf"))
         fixture.failingName = nil
+        await finish(store)
         await finish(store) { store.send() }
         XCTAssertEqual(fixture.sent, ["review /tmp/one.png /tmp/two.pdf"])
     }
 
-    func testChatLoadKeepsAttachmentsLocalUntilSend() async {
+    func testChatLoadUploadsBeforeSendButKeepsPathsInDraft() async {
         let fixture = Fixture()
         let store = fixture.store()
         store.setMode(.chat)
         let file = payload("file.txt")
         await finish(store) { store.load { [file] } }
-        XCTAssertTrue(fixture.uploaded.isEmpty)
+        XCTAssertEqual(fixture.uploaded, ["file.txt"])
         XCTAssertTrue(fixture.sent.isEmpty)
         XCTAssertEqual(store.attachments.map(\.id), [file.id])
+        await finish(store)
         await finish(store) { store.send() }
         XCTAssertEqual(fixture.uploaded, ["file.txt"])
         XCTAssertEqual(fixture.sent, ["/tmp/file.txt"])
@@ -231,6 +234,7 @@ final class TerminalComposerStoreTests: XCTestCase {
         store.setMode(.chat)
         store.draft = "keep"
         try store.add([payload("file")])
+        await finish(store)
         await finish(store) { store.send() }
         XCTAssertEqual(store.attachments.count, 1)
         XCTAssertEqual(fixture.removed, ["/tmp/file"])
@@ -251,26 +255,124 @@ final class TerminalComposerStoreTests: XCTestCase {
         XCTAssertEqual(store.attachments.first?.suggestedFilename, "1")
         store.discardAttachments()
         store.draft = "hello"
+        await finish(store)
         await finish(store) { store.send() }
         XCTAssertEqual(fixture.sent, ["hello"])
         XCTAssertTrue(fixture.uploaded.isEmpty)
     }
 
-    private func finish(_ store: TerminalComposerStore, action: () -> Void) async {
-        let done = expectation(description: "operation finished")
-        var started = false
-        var finished = false
-        let subscription = store.$operation.sink { operation in
-            switch operation {
-            case .loading, .uploading: started = true
-            case .idle, .failed:
-                if started && !finished { finished = true; done.fulfill() }
-            }
+    func testRemovingPreparedAttachmentDeletesOnlyItsRemoteCopy() async throws {
+        let fixture = Fixture()
+        let store = fixture.store()
+        store.setMode(.chat)
+        let first = payload("one"), second = payload("two")
+        try store.add([first, second])
+        await finish(store)
+        XCTAssertEqual(fixture.uploaded, ["one", "two"])
+        store.removeAttachment(first.id)
+        await finish(store) { store.send() }
+        XCTAssertEqual(fixture.removed, ["/tmp/one"])
+        XCTAssertEqual(fixture.uploaded, ["one", "two"])
+        XCTAssertEqual(fixture.sent, ["/tmp/two"])
+    }
+
+    func testDiscardAndModeChangeDeletePreparedFilesWithoutSubmitting() async throws {
+        for changeMode in [false, true] {
+            let fixture = Fixture()
+            let store = fixture.store()
+            store.setMode(.chat)
+            try store.add([payload("one")])
+            await finish(store)
+            if changeMode { store.setMode(.direct) } else { store.discardAttachments() }
+            for _ in 0..<10 where fixture.removed.isEmpty { await Task.yield() }
+            XCTAssertEqual(fixture.removed, ["/tmp/one"])
+            XCTAssertTrue(fixture.sent.isEmpty)
+            XCTAssertTrue(store.attachments.isEmpty)
         }
+    }
+
+    func testRemovedInFlightAttachmentIsDeletedAndNeverSubmitted() async throws {
+        let began = expectation(description: "upload started")
+        let cleaned = expectation(description: "removed upload deleted")
+        var continuation: CheckedContinuation<RemoteClipboardUpload, Never>?
+        var sent = false
+        let store = TerminalComposerStore(resolveRoute: {
+            TerminalAttachmentRoute(upload: { _ in
+                await withCheckedContinuation { continuation = $0; began.fulfill() }
+            }, remove: { _ in cleaned.fulfill() }, submit: { _, _ in sent = true })
+        })
+        store.setMode(.chat)
+        let file = payload("one")
+        try store.add([file])
+        await fulfillment(of: [began], timeout: 2)
+        store.removeAttachment(file.id)
+        continuation?.resume(returning: upload("one"))
+        await fulfillment(of: [cleaned], timeout: 2)
+        await finish(store)
+        XCTAssertFalse(sent)
+        XCTAssertTrue(store.attachments.isEmpty)
+    }
+
+    func testReconnectReplacesPreparedRouteBeforeSending() async throws {
+        var connection = 1
+        var uploads: [Int] = []
+        var removed: [Int] = []
+        var sent: [Int] = []
+        let store = TerminalComposerStore(resolveRoute: {
+            let selected = connection
+            return TerminalAttachmentRoute(isCurrent: { connection == selected }, upload: { _ in
+                uploads.append(selected)
+                return RemoteClipboardUpload(remotePath: "/tmp/file", pastedPathToken: "/tmp/file", mimeType: "text/plain", sizeBytes: 1)
+            }, remove: { _ in removed.append(selected) }, submit: { _, _ in sent.append(selected) })
+        })
+        store.setMode(.chat)
+        try store.add([payload("one")])
+        await finish(store)
+        connection = 2
+        await finish(store) { store.send() }
+        XCTAssertEqual(uploads, [1, 2])
+        XCTAssertEqual(removed, [1])
+        XCTAssertEqual(sent, [2])
+    }
+
+    func testRemoteRemovalFailureIsReported() async throws {
+        let store = TerminalComposerStore(resolveRoute: {
+            TerminalAttachmentRoute(upload: { _ in
+                RemoteClipboardUpload(remotePath: "/tmp/file", pastedPathToken: "/tmp/file", mimeType: "text/plain", sizeBytes: 1)
+            }, remove: { _ in throw TerminalAttachmentError.unavailable }, submit: { _, _ in })
+        })
+        store.setMode(.chat)
+        let file = payload("one")
+        try store.add([file])
+        await finish(store)
+        store.removeAttachment(file.id)
+        for _ in 0..<100 where store.cleanupError == nil { await Task.yield() }
+        XCTAssertNotNil(store.cleanupError)
+        store.dismissCleanupError()
+        XCTAssertNil(store.cleanupError)
+    }
+
+    func testNormalModeFailureCannotResendHiddenFilesWithNextSelection() async {
+        let fixture = Fixture()
+        fixture.failingName = "failed.txt"
+        let store = fixture.store()
+        let failed = payload("failed.txt")
+        await finish(store) { store.load { [failed] } }
+        guard case .failed = store.operation else { return XCTFail("Expected error notice") }
+        XCTAssertTrue(store.attachments.isEmpty)
+        fixture.failingName = nil
+        let next = payload("next.txt")
+        await finish(store) { store.load { [next] } }
+        XCTAssertEqual(fixture.sent, ["/tmp/next.txt"])
+    }
+
+    private func finish(_ store: TerminalComposerStore, action: () -> Void = {}) async {
         action()
-        await fulfillment(of: [done], timeout: 3)
-        subscription.cancel()
-        if store.isBusy { await finish(store, action: {}) }
+        let deadline = ContinuousClock.now + .seconds(3)
+        while store.isBusy && ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(store.isBusy, "Operation did not finish")
     }
 
     private func payload(_ name: String) -> TerminalAttachmentPayload {

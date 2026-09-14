@@ -2254,3 +2254,5 @@
 "Message" = "Nachricht";
 
 "Touch and hold to record" = "Zum Aufnehmen gedrückt halten";
+
+"Could not remove remote attachments." = "Die Anhänge auf dem Remotehost konnten nicht entfernt werden.";

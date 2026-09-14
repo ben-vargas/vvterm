@@ -2254,3 +2254,5 @@
 "Message" = "ข้อความ";
 
 "Touch and hold to record" = "แตะค้างไว้เพื่อบันทึก";
+
+"Could not remove remote attachments." = "ไม่สามารถลบไฟล์แนบระยะไกลได้";

@@ -19,6 +19,8 @@ final class TerminalComposerUITests: XCTestCase {
         let remove = app.buttons["vvterm.attachment.remove.one.png"]
         XCTAssertTrue(remove.waitForExistence(timeout: 5))
         XCTAssertTrue(app.images["vvterm.attachment.preview.one.png"].waitForExistence(timeout: 5))
+        let plus = app.buttons["vvterm.composer.attach"]
+        XCTAssertLessThan(plus.frame.maxX, app.images["vvterm.attachment.preview.one.png"].frame.minX)
         XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
         let previews = XCTAttachment(screenshot: app.screenshot())
         previews.name = "Attachments stay in draft"
@@ -92,6 +94,7 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertEqual(visibility.value as? String, "0")
         XCTAssertFalse(attachment.exists)
         app.buttons["composer.test.add"].tap()
+        XCTAssertFalse(app.textViews["vvterm.composer.text"].exists)
         expectation(for: NSPredicate(format: "label == %@", "/tmp/one.png /tmp/two.pdf"), evaluatedWith: app.staticTexts["composer.test.sent"])
         waitForExpectations(timeout: 8)
         XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "/tmp/one.png /tmp/two.pdf")
@@ -132,8 +135,17 @@ final class TerminalComposerUITests: XCTestCase {
         promptScreenshot.name = "Hold to record prompt"
         promptScreenshot.lifetime = .keepAlways
         add(promptScreenshot)
-        app.textViews["vvterm.composer.text"].press(forDuration: 1)
+        // A tap exits the hold prompt and restores normal editing.
+        app.textViews["vvterm.composer.text"].tap()
+        app.textViews["vvterm.composer.text"].typeText("typed")
+        XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "typed")
+        app.textViews["vvterm.composer.text"].typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 5))
+        record.tap()
+        let keyboardTop = app.keyboards.firstMatch.frame.minY
+        app.textViews["vvterm.composer.text"].press(forDuration: 1.5)
+        XCTAssertEqual(app.staticTexts["composer.test.recording-focus"].label, "Recording kept editor")
         XCTAssertTrue(app.keyboards.firstMatch.exists)
+        XCTAssertEqual(app.keyboards.firstMatch.frame.minY, keyboardTop, accuracy: 1)
         XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "Voice draft")
         XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
         XCTAssertTrue(app.buttons["vvterm.composer.send"].exists)
@@ -147,6 +159,9 @@ final class TerminalComposerUITests: XCTestCase {
         let files = app.buttons["vvterm.attachments.files"]
         XCTAssertTrue(files.waitForExistence(timeout: 5))
         XCTAssertTrue(app.keyboards.firstMatch.exists)
+        let paste = app.buttons["vvterm.attachments.paste"]
+        XCTAssertTrue(paste.isHittable)
+        XCTAssertLessThanOrEqual(paste.frame.maxY, app.buttons["vvterm.composer.record"].frame.maxY + 20)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Native attachment menu"
         screenshot.lifetime = .keepAlways
@@ -190,6 +205,30 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertTrue(editor.isHittable)
         XCTAssertLessThanOrEqual(editor.frame.maxY, app.keyboards.firstMatch.frame.minY)
         XCTAssertEqual(editor.value as? String, "keep after app switch")
+    }
+
+    @MainActor
+    func testRecordingAndProcessingKeepKeyboardPosition() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+        let top = keyboard.frame.minY
+        app.buttons["composer.test.voice-state"].tap()
+        XCTAssertTrue(app.buttons["vvterm.composer.stop-recording"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboard.exists)
+        XCTAssertEqual(keyboard.frame.minY, top, accuracy: 1)
+        let recording = XCTAttachment(screenshot: app.screenshot())
+        recording.name = "Recording keeps keyboard in place"
+        recording.lifetime = .keepAlways
+        add(recording)
+        app.buttons["composer.test.voice-state"].tap()
+        XCTAssertTrue(app.staticTexts["Transcribing audio"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboard.exists)
+        XCTAssertEqual(keyboard.frame.minY, top, accuracy: 1)
+        app.buttons["composer.test.voice-state"].tap()
+        app.textViews["vvterm.composer.text"].typeText("editable again")
+        XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "editable again")
     }
 
     @MainActor

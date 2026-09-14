@@ -8,6 +8,8 @@ struct TerminalComposerEditor: UIViewRepresentable {
     let isActive: Bool
     var acceptsEdits = true
     var placeholder = String(localized: "Message")
+    var showsContent = true
+    var onPromptTap: (() -> Void)?
     let onPasteAttachments: ([TerminalAttachmentPayload], [URL]) -> Void
 
     func makeUIView(context: Context) -> ComposerTextView {
@@ -18,10 +20,16 @@ struct TerminalComposerEditor: UIViewRepresentable {
         view.textContainerInset = UIEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.delegate = context.coordinator
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.promptTapped))
+        tap.cancelsTouchesInView = false
+        tap.delegate = context.coordinator
+        view.addGestureRecognizer(tap)
         view.accessibilityLabel = String(localized: "Prompt")
         view.accessibilityIdentifier = "vvterm.composer.text"
         view.placeholderText = placeholder
-        view.tintColor = acceptsEdits ? nil : .clear
+        view.showsContent = showsContent
+        view.textColor = showsContent ? .label : .clear
+        view.tintColor = acceptsEdits && showsContent ? nil : .clear
         view.acceptsEdits = acceptsEdits
         view.onPasteAttachments = onPasteAttachments
         return view
@@ -29,13 +37,16 @@ struct TerminalComposerEditor: UIViewRepresentable {
 
     func updateUIView(_ view: ComposerTextView, context: Context) {
         context.coordinator.parent = self
+        let returnsToEditing = showsContent && !view.showsContent
         view.placeholderText = placeholder
-        view.tintColor = acceptsEdits ? nil : .clear
+        view.showsContent = showsContent
+        view.textColor = showsContent ? .label : .clear
+        view.tintColor = acceptsEdits && showsContent ? nil : .clear
         view.acceptsEdits = acceptsEdits
         view.onPasteAttachments = onPasteAttachments
         if view.text != text, view.markedTextRange == nil { view.text = text }
         view.setNeedsLayout()
-        let shouldAcquire = isActive && !view.isEditable
+        let shouldAcquire = isActive && (!view.isEditable || returnsToEditing)
         view.isEditable = isActive
         if shouldAcquire { view.becomeFirstResponder() }
         if !isActive { view.resignFirstResponder() }
@@ -50,9 +61,14 @@ struct TerminalComposerEditor: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    final class Coordinator: NSObject, UITextViewDelegate {
+    final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
         var parent: TerminalComposerEditor
         init(_ parent: TerminalComposerEditor) { self.parent = parent }
+        @objc func promptTapped() { parent.onPromptTap?() }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            parent.onPromptTap != nil
+        }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
             parent.acceptsEdits
         }
@@ -64,8 +80,15 @@ final class ComposerTextView: UITextView {
     var onPasteAttachments: (([TerminalAttachmentPayload], [URL]) -> Void)?
     var acceptsEdits = true
     var placeholderText = String(localized: "Message") {
-        didSet { placeholder.text = placeholderText }
+        didSet {
+            guard oldValue != placeholderText else { return }
+            UIView.transition(with: placeholder, duration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.18,
+                              options: [.transitionCrossDissolve, .beginFromCurrentState]) {
+                self.placeholder.text = self.placeholderText
+            }
+        }
     }
+    var showsContent = true
     private let placeholder = UILabel()
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {
@@ -88,7 +111,7 @@ final class ComposerTextView: UITextView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        placeholder.isHidden = !text.isEmpty
+        placeholder.isHidden = !showsContent || !text.isEmpty
         placeholder.font = font
         let height = font?.lineHeight ?? 0
         let left = textContainerInset.left + textContainer.lineFragmentPadding

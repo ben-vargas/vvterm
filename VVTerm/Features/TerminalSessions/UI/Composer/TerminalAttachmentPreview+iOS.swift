@@ -5,7 +5,6 @@ import UniformTypeIdentifiers
 
 struct TerminalAttachmentPreview: View {
     let attachment: TerminalAttachmentPayload
-    let isBusy: Bool
     let remove: () -> Void
     @State private var thumbnail: UIImage?
 
@@ -40,7 +39,6 @@ struct TerminalAttachmentPreview: View {
             }
             .accessibilityLabel(Text("Remove attachment") + Text(": \(attachment.suggestedFilename)"))
             .accessibilityIdentifier("vvterm.attachment.remove.\(attachment.suggestedFilename)")
-            .disabled(isBusy)
         }
         .task(id: attachment.id) {
             guard attachment.contentType.conforms(to: .image),

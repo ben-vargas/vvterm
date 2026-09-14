@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import OSLog
 
 @MainActor
 final class TerminalComposerStore: ObservableObject {
@@ -10,18 +11,24 @@ final class TerminalComposerStore: ObservableObject {
         case failed(String)
     }
 
+    enum AttachmentSource: CaseIterable { case photos, files, paste }
+
     @Published private(set) var mode = TerminalInputMode.direct
     @Published var draft = ""
     @Published private(set) var attachments: [TerminalAttachmentPayload] = []
     @Published private(set) var operation = Operation.idle
-    enum AttachmentSource: CaseIterable { case photos, files, paste }
-
+    @Published private(set) var cleanupError: String?
     @Published var attachmentSource: AttachmentSource?
 
     private let resolveRoute: @MainActor () async throws -> TerminalAttachmentRoute
     private let modeChanged: @MainActor (TerminalInputMode) -> Void
     private var task: Task<Void, Never>?
     private var taskID: UUID?
+    private struct PreparedAttachments {
+        let route: TerminalAttachmentRoute
+        var uploads: [UUID: RemoteClipboardUpload] = [:]
+    }
+    private var prepared: PreparedAttachments?
 
     init(resolveRoute: @escaping @MainActor () async throws -> TerminalAttachmentRoute,
          modeChanged: @escaping @MainActor (TerminalInputMode) -> Void = { _ in }) {
@@ -48,7 +55,7 @@ final class TerminalComposerStore: ObservableObject {
     }
 
     func appendTranscription(_ text: String) {
-        guard mode == .chat, !isBusy else { return }
+        guard mode == .chat else { return }
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         if !draft.isEmpty, draft.last?.isWhitespace == false { draft += " " }
@@ -56,16 +63,19 @@ final class TerminalComposerStore: ObservableObject {
     }
 
     func removeAttachment(_ id: UUID) {
-        guard !isBusy else { return }
         attachments.removeAll { $0.id == id }
-        operation = .idle
+        if let upload = prepared?.uploads.removeValue(forKey: id), let route = prepared?.route {
+            removeRemote([upload], using: route)
+        }
+        if !isBusy { operation = .idle }
     }
 
     func add(_ payloads: [TerminalAttachmentPayload]) throws {
-        guard !isBusy else { return }
         try TerminalAttachmentLimits.validate(attachments + payloads)
+        guard !isBusy else { return }
         attachments.append(contentsOf: payloads)
         operation = .idle
+        if mode == .chat { prepare(submit: false) }
     }
 
     func load(_ loader: @escaping @Sendable () async throws -> [TerminalAttachmentPayload]) {
@@ -78,11 +88,11 @@ final class TerminalComposerStore: ObservableObject {
                 let payloads = try await loader()
                 try Task.checkCancellation()
                 guard let self, self.taskID == id else { return }
-                self.operation = .idle
-                try self.add(payloads)
+                try TerminalAttachmentLimits.validate(self.attachments + payloads)
+                self.attachments.append(contentsOf: payloads)
                 self.task = nil
                 self.taskID = nil
-                if self.mode == .direct { self.send() }
+                self.prepare(submit: self.mode == .direct)
             } catch {
                 guard let self, self.taskID == id else { return }
                 self.operation = .failed(error.localizedDescription)
@@ -94,55 +104,16 @@ final class TerminalComposerStore: ObservableObject {
 
     func send() {
         guard canSend else { return }
-        let inputMode = mode
-        let text = inputMode == .chat ? draft : ""
-        let payloads = attachments
-        let id = UUID()
-        taskID = id
-        operation = .uploading(payloads.first?.suggestedFilename ?? "")
-        let resolveRoute = resolveRoute
-        task = Task { [weak self] in
-            var route: TerminalAttachmentRoute?
-            var uploads: [RemoteClipboardUpload] = []
-            var filename: String?
-            do {
-                let resolved = try await resolveRoute()
-                route = resolved
-                try Task.checkCancellation()
-                for payload in payloads {
-                    try Task.checkCancellation()
-                    filename = payload.suggestedFilename
-                    if self?.taskID == id { self?.operation = .uploading(payload.suggestedFilename) }
-                    uploads.append(try await resolved.upload(payload))
-                }
-                try Task.checkCancellation()
-                guard let self, self.taskID == id else { throw CancellationError() }
-                try resolved.submit(Self.compose(text: text, pathTokens: uploads.map(\.pastedPathToken)), inputMode)
-                if self.mode == .chat, self.draft == text { self.draft = "" }
-                let sentIDs = Set(payloads.map(\.id))
-                self.attachments.removeAll { sentIDs.contains($0.id) }
-                self.operation = .idle
-                self.task = nil
-                self.taskID = nil
-            } catch {
-                if let route, !uploads.isEmpty {
-                    // Cleanup must run even when the sending task was cancelled.
-                    await Task { await route.remove(uploads) }.value
-                }
-                guard let self, self.taskID == id else { return }
-                self.operation = error is CancellationError ? .idle : .failed(
-                    filename.map { "\($0): \(error.localizedDescription)" } ?? error.localizedDescription
-                )
-                self.task = nil
-                self.taskID = nil
-            }
-        }
+        prepare(submit: true)
     }
+
+    func dismissCleanupError() { cleanupError = nil }
 
     func cancel() {
         task?.cancel()
         task = nil
         taskID = nil
+        discardPrepared()
         operation = .idle
     }
 
@@ -161,5 +132,112 @@ final class TerminalComposerStore: ObservableObject {
         ([text].filter { !$0.isEmpty } + pathTokens).joined(separator: " ")
     }
 
-    deinit { task?.cancel() }
+    private func prepare(submit: Bool) {
+        let inputMode = mode
+        let text = inputMode == .chat ? draft : ""
+        let payloads = attachments
+        let id = UUID()
+        taskID = id
+        operation = .uploading(payloads.first?.suggestedFilename ?? "")
+        let resolveRoute = resolveRoute
+        task = Task { [weak self] in
+            var filename: String?
+            do {
+                if self?.prepared?.route.isCurrent() == false { self?.discardPrepared() }
+                let route: TerminalAttachmentRoute
+                if let existing = self?.prepared?.route { route = existing }
+                else { route = try await resolveRoute() }
+                try Task.checkCancellation()
+                guard self?.taskID == id else { return }
+                if self?.prepared == nil { self?.prepared = PreparedAttachments(route: route) }
+                for payload in payloads {
+                    try Task.checkCancellation()
+                    guard self?.attachments.contains(where: { $0.id == payload.id }) == true,
+                          self?.prepared?.uploads[payload.id] == nil else { continue }
+                    filename = payload.suggestedFilename
+                    self?.operation = .uploading(payload.suggestedFilename)
+                    let upload = try await route.upload(payload)
+                    // The picker may be dismissed or a file removed while an
+                    // uncancellable transport operation is finishing.
+                    guard !Task.isCancelled, self?.taskID == id,
+                          self?.attachments.contains(where: { $0.id == payload.id }) == true else {
+                        let removal = Self.removeRemote([upload], using: route) { [weak self] message in
+                            self?.cleanupError = message
+                        }
+                        await removal.value
+                        try Task.checkCancellation()
+                        continue
+                    }
+                    self?.prepared?.uploads[payload.id] = upload
+                }
+                try Task.checkCancellation()
+                guard let self, self.taskID == id else { return }
+                guard route.isCurrent() else { throw TerminalAttachmentError.unavailable }
+                if submit {
+                    let sentPayloads = payloads.filter { payload in self.attachments.contains { $0.id == payload.id } }
+                    let paths = try sentPayloads.map { payload in
+                        guard let upload = self.prepared?.uploads[payload.id] else { throw TerminalAttachmentError.unavailable }
+                        return upload.pastedPathToken
+                    }
+                    let composed = Self.compose(text: text, pathTokens: paths)
+                    if !composed.isEmpty { try route.submit(composed, inputMode) }
+                    if self.mode == .chat, self.draft == text { self.draft = "" }
+                    let sentIDs = Set(sentPayloads.map(\.id))
+                    self.attachments.removeAll { sentIDs.contains($0.id) }
+                    // Submitted files now belong to the terminal command.
+                    self.prepared = nil
+                }
+                self.operation = .idle
+                self.task = nil
+                self.taskID = nil
+            } catch {
+                guard let self, self.taskID == id else { return }
+                let cleanup = self.discardPrepared()
+                await cleanup?.value
+                guard self.taskID == id else { return }
+                // Normal Mode has no draft to retry. A later selection starts
+                // a new batch and must not resend hidden, failed attachments.
+                if inputMode == .direct { self.attachments.removeAll() }
+                self.operation = error is CancellationError ? .idle : .failed(
+                    filename.map { "\($0): \(error.localizedDescription)" } ?? error.localizedDescription
+                )
+                self.task = nil
+                self.taskID = nil
+            }
+        }
+    }
+
+    @discardableResult
+    private func discardPrepared() -> Task<Void, Never>? {
+        guard let prepared else { return nil }
+        self.prepared = nil
+        let uploads = Array(prepared.uploads.values)
+        guard !uploads.isEmpty else { return nil }
+        // Remote cleanup must finish even after the draft owner is torn down.
+        return removeRemote(uploads, using: prepared.route)
+    }
+
+    @discardableResult
+    private func removeRemote(_ uploads: [RemoteClipboardUpload], using route: TerminalAttachmentRoute) -> Task<Void, Never> {
+        Self.removeRemote(uploads, using: route) { [weak self] message in self?.cleanupError = message }
+    }
+
+    private static func removeRemote(
+        _ uploads: [RemoteClipboardUpload], using route: TerminalAttachmentRoute,
+        onFailure: @escaping @MainActor (String) -> Void
+    ) -> Task<Void, Never> {
+        Task {
+            do { try await route.remove(uploads) }
+            catch {
+                Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "TerminalComposer")
+                    .error("Remote attachment cleanup failed: \(LogPrivacy.errorClass(error), privacy: .public)")
+                onFailure(error.localizedDescription)
+            }
+        }
+    }
+
+    isolated deinit {
+        task?.cancel()
+        discardPrepared()
+    }
 }

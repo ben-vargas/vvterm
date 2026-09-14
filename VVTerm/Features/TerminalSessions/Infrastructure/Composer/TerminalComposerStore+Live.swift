@@ -12,17 +12,26 @@ extension TerminalComposerStore {
                     throw TerminalAttachmentError.unavailable
                 }
                 let client = sshRoute.client
+                let isCurrent: @MainActor () -> Bool = { [weak tabManager, weak terminal] in
+                    guard let tabManager, let terminal else { return false }
+                    return tabManager.transportCoordinator.activeSSHRoute(for: paneId)?.client === client
+                        && tabManager.transportCoordinator.activeSSHRoute(for: paneId)?.shellId == sshRoute.shellId
+                        && tabManager.sessionState.paneState(for: paneId)?.connectionState.isConnected == true
+                        && tabManager.terminalSurfaceStore.surface(for: paneId) === terminal
+                }
                 return TerminalAttachmentRoute(
+                    isCurrent: isCurrent,
                     upload: { try await transfer.upload($0, using: client) },
                     remove: { uploads in
-                        for upload in uploads { await transfer.delete(upload, using: client) }
+                        var failure: Error?
+                        for upload in uploads {
+                            do { try await transfer.delete(upload, using: client) }
+                            catch { failure = error }
+                        }
+                        if let failure { throw failure }
                     },
                     submit: { [weak tabManager, weak terminal] text, mode in
-                        guard let tabManager, let terminal,
-                              tabManager.transportCoordinator.activeSSHRoute(for: paneId)?.client === client,
-                              tabManager.transportCoordinator.activeSSHRoute(for: paneId)?.shellId == sshRoute.shellId,
-                              tabManager.sessionState.paneState(for: paneId)?.connectionState.isConnected == true,
-                              tabManager.terminalSurfaceStore.surface(for: paneId) === terminal else {
+                        guard let tabManager, let terminal, isCurrent() else {
                             throw TerminalAttachmentError.unavailable
                         }
                         #if os(iOS)

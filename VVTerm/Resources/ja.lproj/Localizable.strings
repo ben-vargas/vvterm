@@ -2254,3 +2254,5 @@
 "Message" = "メッセージ";
 
 "Touch and hold to record" = "長押しして録音";
+
+"Could not remove remote attachments." = "リモートの添付ファイルを削除できませんでした。";

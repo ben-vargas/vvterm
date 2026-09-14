@@ -93,9 +93,9 @@ actor RemoteClipboardTransferService {
         }
     }
 
-    func delete(_ upload: RemoteClipboardUpload, using sshClient: SSHClient) async {
-        guard let plan = try? RemoteClipboardTransferPlan.resolve(for: await sshClient.remoteEnvironment()) else { return }
-        await deleteRemoteFileIfNeeded(at: upload.remotePath, plan: plan, using: sshClient)
+    func delete(_ upload: RemoteClipboardUpload, using sshClient: SSHClient) async throws {
+        let plan = try RemoteClipboardTransferPlan.resolve(for: await sshClient.remoteEnvironment())
+        _ = try await sshClient.executeChecked(plan.deleteCommand(for: upload.remotePath))
     }
 
     private func createRemoteTemporaryPath(

@@ -652,9 +652,14 @@ final class TerminalKeyboardCoordinator: ObservableObject {
 
     func canSubmitComposedInput(for paneId: UUID) -> Bool {
         guard activePaneId == paneId else { return false }
-        var inputs = currentInputs
-        inputs.inputMode = .direct
-        return Self.desiredInputSessionActive(inputs: inputs)
+        let inputs = currentInputs
+        // Explicit submission does not acquire the terminal's keyboard. The
+        // composer or a recently dismissed picker can own that keyboard.
+        return activeTerminalSceneIsForeground
+            && inputs.viewActive
+            && inputs.activePaneInputEligible
+            && inputs.activePaneWindowAttached
+            && !inputs.findNavigatorActive
     }
 
     func setFindNavigatorActive(_ active: Bool, for paneId: UUID) {

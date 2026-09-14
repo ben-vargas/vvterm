@@ -27,13 +27,11 @@ final class TerminalInputAccessoryView: UIInputView {
     }
     var onAttachment: ((TerminalComposerStore.AttachmentSource) -> Void)? {
         didSet {
-            if onAttachment == nil { attachmentButton?.menu = nil }
-            else if attachmentButton?.menu == nil {
-                attachmentButton?.menu = TerminalAttachmentPicker.menu { [weak self] in self?.onAttachment?($0) }
-            }
+            if onAttachment == nil { attachmentMenu.dismiss() }
             updateLeadingButtonsState()
         }
     }
+    private let attachmentMenu = TerminalAttachmentMenuPresentation()
     private weak var attachmentButton: UIButton?
     private var ctrlActive = false
     private var altActive = false
@@ -197,10 +195,10 @@ final class TerminalInputAccessoryView: UIInputView {
         voiceButton = voice
         leadingStack.addArrangedSubview(voice)
 
-        let attachment = makeIconButton(icon: "paperclip") {}
-        attachment.showsMenuAsPrimaryAction = true
-        attachment.preferredMenuElementOrder = .fixed
-        attachment.menu = TerminalAttachmentPicker.menu { [weak self] in self?.onAttachment?($0) }
+        let attachment = makeIconButton(icon: "paperclip") { [weak self] in
+            guard let self, let button = self.attachmentButton else { return }
+            self.attachmentMenu.present(from: button) { [weak self] in self?.onAttachment?($0) }
+        }
         attachment.accessibilityLabel = String(localized: "Attachments")
         attachment.accessibilityIdentifier = "vvterm.keyboard.accessory.attachments"
         attachmentButton = attachment
@@ -300,6 +298,7 @@ final class TerminalInputAccessoryView: UIInputView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        if window == nil { attachmentMenu.dismiss() }
         updateBackgroundEffect()
         terminalOwner?.notifyKeyboardAvoidanceAccessoryFrameChange()
     }
@@ -838,6 +837,7 @@ final class TerminalInputAccessoryView: UIInputView {
         let voiceEnabled = onVoice != nil
         let dismissEnabled = inputSnapshot.showsDismissKeyboardButton
         let attachmentEnabled = inputSnapshot.showsAttachmentButton && onAttachment != nil
+        if !attachmentEnabled { attachmentMenu.dismiss() }
         attachmentButton?.isHidden = !attachmentEnabled
         attachmentButton?.isEnabled = attachmentEnabled
         let hasVisibleLeadingButton = voiceEnabled || dismissEnabled || attachmentEnabled

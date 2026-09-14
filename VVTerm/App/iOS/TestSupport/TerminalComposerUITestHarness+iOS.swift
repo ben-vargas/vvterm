@@ -14,6 +14,7 @@ final class TerminalComposerUITestModel: ObservableObject {
     @Published var failUpload = false
     @Published var attachmentButtonEnabled = true
     @Published var connected = true
+    @Published var recordingKeptEditor = false
     @Published var voicePhase = VoiceRecordingOperationCoordinator.Phase.idle
 
     lazy var composer: TerminalComposerStore = makeComposer()
@@ -70,6 +71,16 @@ final class TerminalComposerUITestModel: ObservableObject {
         keyboard.setViewActive(true)
     }
 
+    func sampleRecordingEditor() async {
+        try? await Task.sleep(for: .milliseconds(500))
+        guard !Task.isCancelled, voicePhase.isActive, let window = terminal?.window else { return }
+        func findEditor(_ view: UIView) -> ComposerTextView? {
+            if let editor = view as? ComposerTextView { return editor }
+            return view.subviews.lazy.compactMap { findEditor($0) }.first
+        }
+        recordingKeptEditor = findEditor(window)?.isFirstResponder == true
+    }
+
     func addFixtures() {
         let imageData = UIGraphicsImageRenderer(size: CGSize(width: 104, height: 104)).image { context in
             UIColor.systemBlue.setFill()
@@ -121,11 +132,20 @@ private struct TerminalComposerUITestContent: View {
                     model.connected = false
                     model.keyboard.setPaneInputEligible(false, for: model.paneID)
                 }
+                Button("Voice state") {
+                    switch model.voicePhase {
+                    case .idle: model.voicePhase = .recording(operationID: UUID())
+                    case .recording(let id): model.voicePhase = .processing(operationID: id)
+                    case .starting, .processing: model.voicePhase = .idle
+                    }
+                }.accessibilityIdentifier("composer.test.voice-state")
                 Button("Reconnect") {
                     model.connected = true
                     model.keyboard.setPaneInputEligible(true, for: model.paneID)
                 }
             }
+            Text(model.recordingKeptEditor ? "Recording kept editor" : "No recording sample")
+                .accessibilityIdentifier("composer.test.recording-focus").font(.caption)
             Text(model.sent.isEmpty ? "No input sent" : model.sent)
                 .accessibilityIdentifier("composer.test.sent")
                 .font(.caption)
@@ -136,7 +156,7 @@ private struct TerminalComposerUITestContent: View {
                 ComposerTestSurface(model: model, runtime: runtime)
                     .frame(minHeight: 70, maxHeight: .infinity)
             }
-            if composer.mode == .chat || composer.isBusy || !composer.attachments.isEmpty {
+            if composer.mode == .chat {
                 TerminalComposerView(composer: composer, isActive: true, acceptsInput: model.connected, voice: .init(
                     phase: model.voicePhase, audioLevel: 0.4, duration: 2,
                     toggle: {
@@ -157,6 +177,7 @@ private struct TerminalComposerUITestContent: View {
             keyboardCoordinator: model.keyboard,
             scope: .container
         )
+        .task(id: model.voicePhase) { await model.sampleRecordingEditor() }
         .onAppear { inputMode = .direct; composer.setMode(.direct) }
         .onChange(of: inputMode) { composer.setMode($0) }
         .sheet(isPresented: $showsSettings) {
@@ -165,7 +186,11 @@ private struct TerminalComposerUITestContent: View {
                     .toolbar { Button("Done") { showsSettings = false } }
             }
         }
-        .background { TerminalAttachmentPicker(composer: composer) }
+        .background {
+            TerminalAttachmentPicker(composer: composer) {
+                if composer.mode == .direct { model.keyboard.userRequestedShow() }
+            }
+        }
     }
 }
 
