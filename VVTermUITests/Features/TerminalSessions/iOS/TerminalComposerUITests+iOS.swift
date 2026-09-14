@@ -3,6 +3,55 @@ import XCTest
 
 final class TerminalComposerUITests: XCTestCase {
     @MainActor
+    func testChatLinksWorkWithoutTakingTerminalKeyboardOwnership() throws {
+        let app = launch(arguments: ["--composer-content-fixture"])
+        app.buttons["vvterm.composer.toggle"].tap()
+        let terminal = app.otherElements["composer.test.terminal"]
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.8)).tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 5)
+        let point = try contentPoint(in: app, row: 2.5)
+        point.tap()
+        let alert = app.alerts["Open Link"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts["https://example.com/chat"].exists)
+        alert.buttons["Cancel"].tap()
+        XCTAssertEqual(app.staticTexts["composer.test.sent"].label, "No input sent")
+        point.tap()
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.buttons["Open"].tap()
+        XCTAssertEqual(app.staticTexts["composer.test.sent"].label, "https://example.com/chat")
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        app.buttons["Read selection"].tap()
+        XCTAssertTrue(app.staticTexts["composer.test.content"].label.contains("terminalInput=false"))
+    }
+
+    @MainActor
+    func testChatAndNormalWordAndLineSelection() throws {
+        let app = launch(arguments: ["--composer-content-fixture"])
+        for chat in [false, true] {
+            if chat { app.buttons["vvterm.composer.toggle"].tap() }
+            let point = try contentPoint(in: app, row: 1.5)
+            point.doubleTap()
+            app.buttons["Read selection"].tap()
+            XCTAssertEqual(selectedText(in: app), "two")
+            // Tap away before starting a fresh three-tap gesture.
+            app.otherElements["composer.test.terminal"].coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.8)).tap()
+            app.buttons["Read selection"].tap()
+            app.otherElements["composer.test.terminal"].tap(withNumberOfTaps: 3, numberOfTouches: 1)
+            app.buttons["Read selection"].tap()
+            XCTAssertEqual(selectedText(in: app), "one two three")
+            if chat {
+                XCTAssertTrue(app.staticTexts["composer.test.content"].label.contains("terminalInput=false"))
+            }
+            app.otherElements["composer.test.terminal"].coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.8)).tap()
+            try contentPoint(in: app, row: 1.5).press(forDuration: 0.6)
+            app.buttons["Read selection"].tap()
+            XCTAssertEqual(selectedText(in: app), "two")
+        }
+    }
+
+    @MainActor
     func testKeyboardMenuTogglesChatFocus() {
         let app = launch()
         app.buttons["vvterm.composer.toggle"].tap()
@@ -389,11 +438,42 @@ final class TerminalComposerUITests: XCTestCase {
     }
 
     @MainActor
+    private func selectedText(in app: XCUIApplication) -> String {
+        let diagnostic = app.staticTexts["composer.test.content"].label
+        return diagnostic.components(separatedBy: "selection=").last?
+            .components(separatedBy: " terminalInput=").first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    @MainActor
+    private func contentPoint(in app: XCUIApplication, row: Double) throws -> XCUICoordinate {
+        app.buttons["Read selection"].tap()
+        let diagnostic = app.staticTexts["composer.test.content"].label
+        func metric(_ name: String) throws -> Double {
+            let token = diagnostic.split(separator: " ").first { $0.hasPrefix(name + "=") }
+            return try XCTUnwrap(token?.split(separator: "=").last.flatMap { Double($0) })
+        }
+        let height = try metric("cellHeight")
+        let width = try metric("cellWidth")
+        XCTAssertGreaterThan(height, 0)
+        return app.otherElements["composer.test.terminal"].coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: width * 5.5, dy: height * row))
+    }
+
+    @MainActor
     private func launch(arguments: [String] = []) -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
+        app.terminate()
         app.launchArguments = ["--vvterm-ui-test-composer", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-AppleInterfaceStyle", "Dark"] + arguments
         app.launch()
+        // Installation can start the regular app before XCUITest supplies its arguments.
+        // Restart only when the server list mounted instead of the test harness.
+        if !app.buttons["vvterm.composer.toggle"].waitForExistence(timeout: 5),
+           app.buttons["vvterm.serverList.settings"].exists {
+            app.terminate()
+            app.launch()
+        }
         XCTAssertTrue(app.buttons["vvterm.composer.toggle"].waitForExistence(timeout: 10))
         return app
     }

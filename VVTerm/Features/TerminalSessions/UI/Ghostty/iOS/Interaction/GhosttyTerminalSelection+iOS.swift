@@ -12,7 +12,7 @@ import UIKit
 
 extension GhosttyTerminalView: UITextInteractionDelegate {
     func interactionShouldBegin(_ interaction: UITextInteraction, at point: CGPoint) -> Bool {
-        guard hasActiveSelectionInteraction else { return false }
+        guard canInteractWithTerminalContent, hasActiveSelectionInteraction else { return false }
         nativeSelectionLifecycle.prepare(restoreTerminalInput: isTerminalTextInputActive)
         refreshNativeSelectionSnapshot()
         guard nativeSelectionSnapshot.length > 0 else {
@@ -67,9 +67,7 @@ extension GhosttyTerminalView {
 
     @objc private func handleNativeSelectionMultiTap(_ recognizer: UITapGestureRecognizer) {
         guard recognizer.state == .ended,
-              canRouteTerminalInput,
-              !isPaused,
-              !isShuttingDown else {
+              canInteractWithTerminalContent else {
             return
         }
         let granularity: UITextGranularity = recognizer.numberOfTapsRequired >= 3

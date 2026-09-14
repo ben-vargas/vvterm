@@ -14,11 +14,11 @@ import os
 extension GhosttyTerminalView: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         if gestureRecognizer == nativeSelectionLongPressRecognizer {
-            guard canRouteTerminalInput, !isPaused, !isShuttingDown else { return false }
+            guard canInteractWithTerminalContent else { return false }
             return !isPointOnNativeSelectionHandleHitArea(touch.location(in: self))
         }
         if gestureRecognizer == directTouchTapRecognizer {
-            guard acceptsTerminalInput, !isFindNavigatorActive, !isPaused, !isShuttingDown else { return false }
+            guard canInteractWithTerminalContent else { return false }
             let location = touch.location(in: self)
             return !isPointOnNativeSelectionHandleHitArea(location)
         }
@@ -143,16 +143,7 @@ extension GhosttyTerminalView {
 
     @objc func handleDirectTouchTap(_ recognizer: UITapGestureRecognizer) {
         guard recognizer.state == .ended,
-              acceptsTerminalInput,
-              !isFindNavigatorActive,
-              !isPaused,
-              !isShuttingDown else {
-            return
-        }
-
-        // Chat owns text input, but terminal taps must still reach the focus owner.
-        guard terminalInputAcquisitionAllowed else {
-            notifyDirectTouchOnTerminal(isFocusTap: true)
+              canInteractWithTerminalContent else {
             return
         }
 
@@ -163,6 +154,12 @@ extension GhosttyTerminalView {
         }
 
         if !selectionWasActive, routeLink(at: recognizer.location(in: self), activate: true) {
+            return
+        }
+
+        // Local selection and links remain available while Chat owns text input.
+        guard terminalInputAcquisitionAllowed else {
+            notifyDirectTouchOnTerminal(isFocusTap: true)
             return
         }
 
@@ -185,7 +182,7 @@ extension GhosttyTerminalView {
 
     private func routeLink(at location: CGPoint, activate: Bool) -> Bool {
         // Probing during mouse capture would send unwanted motion to the remote app.
-        guard canRouteTerminalInput, !isPaused, !isShuttingDown,
+        guard canInteractWithTerminalContent,
               !hasActiveSelectionInteraction, let surface,
               !surface.mouseCaptured else { return false }
         let point = ghosttyPoint(location)

@@ -96,6 +96,10 @@ struct GhosttyTerminalInteractionOwnershipTests {
         )
         defer { terminal.cleanup() }
         let interaction = try #require(terminal.nativeTextInteraction)
+        terminal.acceptsTerminalInput = true
+        terminal.setTerminalInputAcquisitionAllowed(false)
+        #expect(!terminal.canRouteTerminalInput)
+        #expect(terminal.canInteractWithTerminalContent)
 
         #expect(!terminal.interactionShouldBegin(interaction, at: .zero))
 
@@ -113,6 +117,17 @@ struct GhosttyTerminalInteractionOwnershipTests {
             terminal.nativeSelectedRange == NSRange(location: 0, length: selectionLength)
         )
 
+        #expect(terminal.interactionShouldBegin(interaction, at: .zero))
+        #expect(!terminal.isTerminalTextInputActive)
+        terminal.acceptsTerminalInput = false
+        #expect(!terminal.interactionShouldBegin(interaction, at: .zero))
+        terminal.acceptsTerminalInput = true
+        terminal.isPaused = true
+        #expect(!terminal.interactionShouldBegin(interaction, at: .zero))
+        terminal.isPaused = false
+        terminal.findNavigatorLifecycle.begin(restoreTerminalFocus: false)
+        #expect(!terminal.interactionShouldBegin(interaction, at: .zero))
+        _ = terminal.findNavigatorLifecycle.end()
         #expect(terminal.interactionShouldBegin(interaction, at: .zero))
         terminal.nativeSelectionLifecycle.cancel()
         #expect(terminal.nativeSelectionLifecycle.phase == .inactive)

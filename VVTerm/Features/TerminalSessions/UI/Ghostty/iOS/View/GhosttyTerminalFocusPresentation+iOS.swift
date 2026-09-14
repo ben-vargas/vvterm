@@ -58,6 +58,10 @@ extension GhosttyTerminalView {
         terminalInputAcquisitionAllowed && acceptsTerminalInput && !isFindNavigatorActive
     }
 
+    var canInteractWithTerminalContent: Bool {
+        acceptsTerminalInput && !isFindNavigatorActive && !isPaused && !isShuttingDown
+    }
+
     var canRouteProxyDeleteBackward: Bool {
         canRouteTerminalInput
     }

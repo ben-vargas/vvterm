@@ -24,6 +24,9 @@ final class TerminalComposerUITestModel: ObservableObject {
     @Published var connected = true
     @Published var recordingKeptEditor = false
     @Published var terminalTouchDiagnostic = "No terminal tap"
+    @Published var contentDiagnostic = ""
+    let links = TerminalLinkCoordinator()
+
     @Published var voicePhase = VoiceRecordingOperationCoordinator.Phase.idle
 
     lazy var composer: TerminalComposerStore = makeComposer()
@@ -87,6 +90,7 @@ final class TerminalComposerUITestModel: ObservableObject {
             DispatchQueue.main.async { self?.received += String(decoding: data, as: UTF8.self) }
         }
         terminal.setupWriteCallback()
+        terminal.onOpenLink = links.request
         terminal.showsVoiceAccessoryButton = true
         terminal.onVoiceButtonTapped = { _ in }
         terminal.onAttachmentButtonTapped = { [weak self] source in self?.composer.attachmentSource = source }
@@ -94,6 +98,23 @@ final class TerminalComposerUITestModel: ObservableObject {
         keyboard.setActivePane(paneID)
         keyboard.setPaneInputEligible(true, for: paneID)
         keyboard.setViewActive(true)
+    }
+
+    func seedContent() async {
+        guard Foundation.ProcessInfo.processInfo.arguments.contains("--composer-content-fixture"),
+              let terminal else { return }
+        _ = await terminal.receiveTerminalOutput(Data("\u{1B}[2J\u{1B}[2;1Hone two three\r\nhttps://example.com/chat\r\n".utf8))
+        guard !Task.isCancelled else { return }
+        sampleContent()
+    }
+
+    func sampleContent() {
+        guard let terminal else { return }
+        // XCUITest's three-tap API uses an element's activation point.
+        terminal.accessibilityActivationPoint = terminal.convert(
+            CGPoint(x: terminal.cellSize.width * 5.5, y: terminal.cellSize.height * 1.5), to: nil
+        )
+        contentDiagnostic = "cellHeight=\(terminal.cellSize.height) cellWidth=\(terminal.cellSize.width) selection=\(terminal.currentSelectionText() ?? "none") terminalInput=\(terminal.isTerminalTextInputActive)"
     }
 
     func sampleRecordingEditor() async {
@@ -180,6 +201,11 @@ private struct TerminalComposerUITestContent: View {
             Text(model.recordingKeptEditor ? "Recording kept editor" : "No recording sample")
                 .accessibilityIdentifier("composer.test.recording-focus").font(.caption)
             Text(model.terminalTouchDiagnostic).accessibilityIdentifier("composer.test.terminal-touch").font(.caption)
+            if Foundation.ProcessInfo.processInfo.arguments.contains("--composer-content-fixture") {
+                Button("Read selection") { model.sampleContent() }
+                Text(model.contentDiagnostic).font(.caption)
+                    .accessibilityIdentifier("composer.test.content")
+            }
             Text(model.sent.isEmpty ? "No input sent" : model.sent)
                 .accessibilityIdentifier("composer.test.sent")
                 .font(.caption)
@@ -211,7 +237,13 @@ private struct TerminalComposerUITestContent: View {
             keyboardCoordinator: model.keyboard,
             scope: .container
         )
+        .task(id: model.terminal.map(ObjectIdentifier.init)) { await model.seedContent() }
         .task(id: model.voicePhase) { await model.sampleRecordingEditor() }
+        .modifier(TerminalLinkConfirmationModifier(coordinator: model.links, isActive: model.connected))
+        .environment(\.openURL, OpenURLAction { url in
+            model.sent = url.absoluteString
+            return .handled
+        })
         .onAppear { inputMode = .direct; composer.setMode(.direct) }
         .onChange(of: inputMode) { composer.setMode($0) }
         .sheet(isPresented: $showsSettings) {

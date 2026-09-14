@@ -41,10 +41,12 @@ final class TerminalLinkOpeningUITests: TerminalKeyboardUITestCase {
     func testCapturedLongPressDoesNotSendLinkProbeMotion() throws {
         let app = launchKeyboardHarness(
             simulatesTerminalMouseCapture: true,
-            floatingControlArguments: ["--vvterm-ui-test-terminal-mouse-motion"]
+            floatingControlArguments: ["--vvterm-ui-test-terminal-mouse-motion", "--vvterm-ui-test-terminal-link-fixture"]
         )
         let terminal = waitForTerminal(in: app)
-        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)).press(forDuration: 0.4)
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: (diagnosticMetrics(in: app)["linkCellHeight"] ?? 16) * 24.5))
+            .press(forDuration: 0.6)
         waitForDiagnosticMetrics(in: app) { ($0["nativeSelectionLength"] ?? 0) > 0 }
         XCTAssertEqual(diagnosticMetrics(in: app)["mouseMotionReports"], 0, diagnosticsText(in: app))
         assertMouseClickCountsRemain(presses: 0, releases: 0, in: app)
