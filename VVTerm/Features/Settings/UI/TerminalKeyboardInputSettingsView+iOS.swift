@@ -20,7 +20,12 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
     var body: some View {
         Form {
             Section("Input Mode") {
-                TerminalInputModePicker()
+                NavigationLink {
+                    TerminalInputModeSettingsView()
+                } label: {
+                    Label("Input Mode", systemImage: "keyboard")
+                }
+                .accessibilityIdentifier("vvterm.settings.inputMode")
             }
             Section {
                 Picker("Option as Alt", selection: optionAsAltModeBinding) {

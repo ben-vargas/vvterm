@@ -2262,3 +2262,7 @@
 "Allow camera access in Settings to take a photo." = "Permite el acceso a la cámara en Ajustes para tomar una foto.";
 
 "Camera is not available on this device." = "La cámara no está disponible en este dispositivo.";
+
+// Input mode preview
+"Type directly in the terminal. Attachments are sent immediately." = "Escribe directamente en el terminal. Los archivos adjuntos se envían de inmediato.";
+"Review text and attachments before sending. Send also presses Enter." = "Revisa el texto y los archivos adjuntos antes de enviarlos. Enviar también pulsa Intro.";

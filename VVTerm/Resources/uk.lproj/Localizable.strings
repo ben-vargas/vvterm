@@ -2269,3 +2269,7 @@
 "Allow camera access in Settings to take a photo." = "Дозвольте доступ до камери в налаштуваннях, щоб зробити фото.";
 
 "Camera is not available on this device." = "Камера недоступна на цьому пристрої.";
+
+// Input mode preview
+"Type directly in the terminal. Attachments are sent immediately." = "Вводьте текст безпосередньо в терміналі. Вкладення надсилаються відразу.";
+"Review text and attachments before sending. Send also presses Enter." = "Перевіряйте текст і вкладення перед надсиланням. Кнопка надсилання також натискає Enter.";

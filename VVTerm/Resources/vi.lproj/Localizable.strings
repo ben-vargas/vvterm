@@ -2307,3 +2307,7 @@
 "Allow camera access in Settings to take a photo." = "Cho phép truy cập camera trong Cài đặt để chụp ảnh.";
 
 "Camera is not available on this device." = "Camera không khả dụng trên thiết bị này.";
+
+// Input mode preview
+"Type directly in the terminal. Attachments are sent immediately." = "Nhập trực tiếp trong terminal. Tệp đính kèm được gửi ngay lập tức.";
+"Review text and attachments before sending. Send also presses Enter." = "Kiểm tra văn bản và tệp đính kèm trước khi gửi. Gửi cũng nhấn phím Enter.";

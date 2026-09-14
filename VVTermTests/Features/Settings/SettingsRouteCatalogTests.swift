@@ -45,6 +45,8 @@ struct SettingsRouteCatalogTests {
         ("analytics", SettingsRoute.privacyAndAppLock),
         ("fingerprint", SettingsRoute.trustedHosts),
         ("keyboard", SettingsRoute.keyboardAndInput),
+        ("Chat Mode", SettingsRoute.keyboardAndInput),
+        ("Input Mode", SettingsRoute.keyboardAndInput),
         ("floating control", SettingsRoute.keyboardAndInput),
         ("radial", SettingsRoute.keyboardAndInput),
         ("system actions", SettingsRoute.keyboardAndInput),

@@ -2262,3 +2262,7 @@
 "Allow camera access in Settings to take a photo." = "写真を撮るには、設定でカメラへのアクセスを許可してください。";
 
 "Camera is not available on this device." = "このデバイスではカメラを利用できません。";
+
+// Input mode preview
+"Type directly in the terminal. Attachments are sent immediately." = "ターミナルに直接入力します。添付ファイルはすぐに送信されます。";
+"Review text and attachments before sending. Send also presses Enter." = "送信前にテキストと添付ファイルを確認できます。送信するとEnterキーも押されます。";

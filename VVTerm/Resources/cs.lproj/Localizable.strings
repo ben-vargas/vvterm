@@ -2263,3 +2263,7 @@
 "Allow camera access in Settings to take a photo." = "Chcete-li pořídit fotku, povolte v Nastavení přístup k fotoaparátu.";
 
 "Camera is not available on this device." = "Fotoaparát není na tomto zařízení k dispozici.";
+
+// Input mode preview
+"Type directly in the terminal. Attachments are sent immediately." = "Pište přímo do terminálu. Přílohy se odesílají okamžitě.";
+"Review text and attachments before sending. Send also presses Enter." = "Před odesláním zkontrolujte text a přílohy. Odeslání také stiskne Enter.";

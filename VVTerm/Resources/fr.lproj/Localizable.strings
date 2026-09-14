@@ -2264,3 +2264,7 @@
 "Allow camera access in Settings to take a photo." = "Autorisez l’accès à l’appareil photo dans Réglages pour prendre une photo.";
 
 "Camera is not available on this device." = "L’appareil photo n’est pas disponible sur cet appareil.";
+
+// Input mode preview
+"Type directly in the terminal. Attachments are sent immediately." = "Saisissez le texte directement dans le terminal. Les pièces jointes sont envoyées immédiatement.";
+"Review text and attachments before sending. Send also presses Enter." = "Vérifiez le texte et les pièces jointes avant l’envoi. Envoyer appuie aussi sur Entrée.";

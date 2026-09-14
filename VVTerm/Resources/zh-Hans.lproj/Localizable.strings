@@ -2259,3 +2259,7 @@
 "Allow camera access in Settings to take a photo." = "请在“设置”中允许访问相机以拍摄照片。";
 
 "Camera is not available on this device." = "此设备无法使用相机。";
+
+// Input mode preview
+"Type directly in the terminal. Attachments are sent immediately." = "直接在终端中输入。附件会立即发送。";
+"Review text and attachments before sending. Send also presses Enter." = "发送前检查文本和附件。发送时也会按下回车键。";

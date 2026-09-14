@@ -2261,3 +2261,7 @@
 "Allow camera access in Settings to take a photo." = "Allow camera access in Settings to take a photo.";
 
 "Camera is not available on this device." = "Camera is not available on this device.";
+
+// Input mode preview
+"Type directly in the terminal. Attachments are sent immediately." = "Type directly in the terminal. Attachments are sent immediately.";
+"Review text and attachments before sending. Send also presses Enter." = "Review text and attachments before sending. Send also presses Enter.";

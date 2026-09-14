@@ -402,6 +402,9 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
         XCTAssertTrue(app.buttons["Custom Actions"].exists)
         XCTAssertFalse(app.switches["Keep terminal size when keyboard opens"].exists)
         XCTAssertFalse(app.switches["Show keyboard dismiss button"].exists)
+        app.buttons["vvterm.settings.inputMode"].tap()
+        XCTAssertTrue(app.segmentedControls["vvterm.input-mode"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["vvterm.settings.inputMode.preview"].exists)
     }
 
     @MainActor

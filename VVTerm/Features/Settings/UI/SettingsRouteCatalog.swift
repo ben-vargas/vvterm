@@ -203,6 +203,7 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         case .keyboardAndInput:
             [
                 "Keyboard & Input",
+                "Input Mode", "Normal Mode", "Chat Mode",
                 "Hardware Keyboard",
                 "Option as Alt",
                 "Software Keyboard",

@@ -2261,3 +2261,7 @@
 "Allow camera access in Settings to take a photo." = "사진을 찍으려면 설정에서 카메라 접근을 허용하세요.";
 
 "Camera is not available on this device." = "이 기기에서는 카메라를 사용할 수 없습니다.";
+
+// Input mode preview
+"Type directly in the terminal. Attachments are sent immediately." = "터미널에 직접 입력합니다. 첨부 파일은 즉시 전송됩니다.";
+"Review text and attachments before sending. Send also presses Enter." = "전송 전에 텍스트와 첨부 파일을 확인합니다. 전송하면 Enter 키도 입력됩니다.";

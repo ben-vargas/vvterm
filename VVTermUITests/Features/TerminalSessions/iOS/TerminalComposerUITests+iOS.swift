@@ -209,11 +209,27 @@ final class TerminalComposerUITests: XCTestCase {
     func testSavedInputModeSettingControlsComposer() {
         let app = launch()
         app.buttons["composer.test.settings"].tap()
+        app.buttons["Input Mode"].tap()
         app.segmentedControls["vvterm.input-mode"].buttons["Chat Mode"].tap()
+        XCTAssertEqual(app.otherElements["vvterm.settings.inputMode.preview"].value as? String, "Chat Mode")
+        XCTAssertTrue(app.staticTexts["Review text and attachments before sending. Send also presses Enter."].exists)
+        let chatPreview = XCTAttachment(screenshot: app.screenshot())
+        chatPreview.name = "Chat Mode settings preview"
+        chatPreview.lifetime = .keepAlways
+        add(chatPreview)
+        app.buttons["BackButton"].tap()
         app.buttons["Done"].tap()
         XCTAssertTrue(app.textViews["vvterm.composer.text"].waitForExistence(timeout: 5))
         app.buttons["composer.test.settings"].tap()
+        app.buttons["Input Mode"].tap()
         app.segmentedControls["vvterm.input-mode"].buttons["Normal Mode"].tap()
+        XCTAssertEqual(app.otherElements["vvterm.settings.inputMode.preview"].value as? String, "Normal Mode")
+        XCTAssertTrue(app.staticTexts["Type directly in the terminal. Attachments are sent immediately."].exists)
+        let normalPreview = XCTAttachment(screenshot: app.screenshot())
+        normalPreview.name = "Normal Mode settings preview"
+        normalPreview.lifetime = .keepAlways
+        add(normalPreview)
+        app.buttons["BackButton"].tap()
         app.buttons["Done"].tap()
         XCTAssertFalse(app.textViews["vvterm.composer.text"].exists)
         XCTAssertTrue(app.buttons["vvterm.keyboard.accessory.attachments"].waitForExistence(timeout: 5))

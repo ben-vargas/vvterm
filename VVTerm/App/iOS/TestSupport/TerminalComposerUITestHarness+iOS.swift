@@ -165,7 +165,10 @@ private struct TerminalComposerUITestContent: View {
             HStack {
                 TerminalComposerMenuButton(composer: composer)
                 Button("Add fixtures") { model.addFixtures() }.accessibilityIdentifier("composer.test.add")
-                Button("Settings") { showsSettings = true }.accessibilityIdentifier("composer.test.settings")
+                Button("Settings") {
+                    model.keyboard.deactivateInputImmediately(reason: .routeModal)
+                    showsSettings = true
+                }.accessibilityIdentifier("composer.test.settings")
                 Button("Find") { model.terminal?.showFindNavigator() }
                 Menu {
                     Button("Keyboard") { model.keyboard.userRequestedKeyboardCommand() }
@@ -217,7 +220,7 @@ private struct TerminalComposerUITestContent: View {
                     .frame(minHeight: 70, maxHeight: .infinity)
             }
             if composer.mode == .chat {
-                TerminalPaneComposerView(keyboard: model.keyboard, composer: composer, paneID: model.paneID, isActive: true, acceptsInput: model.connected, voice: .init(
+                TerminalPaneComposerView(keyboard: model.keyboard, composer: composer, paneID: model.paneID, isActive: !showsSettings, acceptsInput: model.connected, voice: .init(
                     phase: model.voicePhase, audioLevel: 0.4, duration: 2,
                     toggle: {
                         if model.voicePhase.isActive {
@@ -246,10 +249,15 @@ private struct TerminalComposerUITestContent: View {
         })
         .onAppear { inputMode = .direct; composer.setMode(.direct) }
         .onChange(of: inputMode) { composer.setMode($0) }
-        .sheet(isPresented: $showsSettings) {
+        .sheet(isPresented: $showsSettings, onDismiss: {
+            model.keyboard.setActivePane(model.paneID)
+            model.keyboard.setViewActive(true)
+        }) {
             NavigationStack {
-                Form { TerminalInputModePicker() }
-                    .toolbar { Button("Done") { showsSettings = false } }
+                Form {
+                    NavigationLink("Input Mode") { TerminalInputModeSettingsView() }
+                }
+                .toolbar { Button("Done") { showsSettings = false } }
             }
         }
         .background {
