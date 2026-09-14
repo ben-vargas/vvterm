@@ -39,6 +39,7 @@ struct RemoteTerminalPaneWrapper: View {
     let onVoiceTrigger: ((TerminalVoicePresentationState.RecordingStyle) -> Void)?
     let onSceneActivation: () -> Void
 
+    let composerVoice: TerminalComposerVoiceInput?
     @ObservedObject var composer: TerminalComposerStore
     @AppStorage(TerminalInputMode.preferenceKey) private var inputMode = TerminalInputMode.direct
     @AppStorage("terminalAttachmentButtonEnabled") private var attachmentButtonEnabled = true
@@ -81,11 +82,14 @@ struct RemoteTerminalPaneWrapper: View {
                 }
             }
             if composer.mode == .chat || composer.isBusy || !composer.attachments.isEmpty || isComposerFailed {
-                TerminalPaneComposerView(presentationState: tabManager.presentationState, composer: composer, paneID: paneId, isActive: isActive)
+                TerminalPaneComposerView(presentationState: tabManager.presentationState, composer: composer, paneID: paneId, isActive: isActive, voice: composerVoice)
             }
         }
         .onAppear { composer.setMode(inputMode) }
-        .onChange(of: inputMode) { composer.setMode($0) }
+        .onChange(of: inputMode) { mode in
+            if composerVoice?.phase.isActive == true { composerVoice?.cancel() }
+            composer.setMode(mode)
+        }
         .sheet(isPresented: $composer.pickerPresented) {
             TerminalAttachmentPicker(composer: composer)
         }

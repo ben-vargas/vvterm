@@ -101,10 +101,38 @@ final class TerminalComposerUITests: XCTestCase {
     }
 
     @MainActor
+    func testVoiceButtonRecordsIntoEditableDraftWithoutSending() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let record = app.buttons["vvterm.composer.record"]
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["vvterm.composer.send"].exists)
+        let emptyScreenshot = XCTAttachment(screenshot: app.screenshot())
+        emptyScreenshot.name = "Centered placeholder and record control"
+        emptyScreenshot.lifetime = .keepAlways
+        add(emptyScreenshot)
+        record.tap()
+        XCTAssertTrue(app.buttons["vvterm.composer.stop-recording"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Compact voice recording"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["vvterm.composer.attach"].tap()
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "")
+        record.tap()
+        app.buttons["vvterm.composer.stop-recording"].tap()
+        XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "Voice draft")
+        XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
+        XCTAssertTrue(app.buttons["vvterm.composer.send"].exists)
+    }
+
+    @MainActor
     private func launch() -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["--vvterm-ui-test-composer", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchArguments = ["--vvterm-ui-test-composer", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-AppleInterfaceStyle", "Dark"]
         app.launch()
         XCTAssertTrue(app.buttons["vvterm.composer.toggle"].waitForExistence(timeout: 10))
         return app

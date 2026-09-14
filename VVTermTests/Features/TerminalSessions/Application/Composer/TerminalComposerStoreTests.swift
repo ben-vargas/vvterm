@@ -8,6 +8,20 @@ import UIKit
 
 @MainActor
 final class TerminalComposerStoreTests: XCTestCase {
+    func testTranscriptionStaysInChatDraftAndNeverSubmits() {
+        let store = TerminalComposerStore(resolveRoute: { throw TerminalAttachmentError.unavailable })
+        store.setMode(.chat)
+        store.draft = "Review"
+        store.appendTranscription("  these files  ")
+        XCTAssertEqual(store.draft, "Review these files")
+        store.appendTranscription("   ")
+        XCTAssertEqual(store.draft, "Review these files")
+        XCTAssertEqual(store.operation, .idle)
+        store.setMode(.direct)
+        store.appendTranscription("late result")
+        XCTAssertEqual(store.draft, "Review these files")
+    }
+
     func testPayloadPreservesTypeFilenameAndUsesSafeExtension() {
         let image = ClipboardImagePayload(data: Data([1, 2]), mimeType: "image/png", utType: UTType.png.identifier, suggestedExtension: "png")
         let attachment = TerminalAttachmentPayload(image: image)
@@ -39,6 +53,23 @@ final class TerminalComposerStoreTests: XCTestCase {
     }
 
     #if os(iOS)
+    func testPlaceholderUsesEditorFontAndStaysVerticallyCentered() {
+        let editor = ComposerTextView(frame: CGRect(x: 0, y: 0, width: 280, height: 44))
+        for size: CGFloat in [17, 23, 31] {
+            editor.font = .systemFont(ofSize: size)
+            editor.setNeedsLayout()
+            editor.layoutIfNeeded()
+            let placeholder = editor.subviews.compactMap { $0 as? UILabel }.first
+            XCTAssertNotNil(placeholder)
+            XCTAssertEqual(placeholder?.font, editor.font)
+            XCTAssertEqual(placeholder?.frame.midY ?? -1, editor.bounds.midY, accuracy: 0.5)
+        }
+        editor.text = "Draft"
+        editor.setNeedsLayout()
+        editor.layoutIfNeeded()
+        XCTAssertTrue(editor.subviews.compactMap { $0 as? UILabel }.first?.isHidden == true)
+    }
+
     func testNativeEditorAcceptsFilePasteWithoutInsertingLocalPath() {
         let previous = UIPasteboard.general.items
         defer { UIPasteboard.general.items = previous }

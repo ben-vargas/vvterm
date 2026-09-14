@@ -14,6 +14,7 @@ final class TerminalComposerUITestModel: ObservableObject {
     @Published var failUpload = false
     @Published var attachmentButtonEnabled = true
     @Published var connected = true
+    @Published var voicePhase = VoiceRecordingOperationCoordinator.Phase.idle
 
     lazy var composer: TerminalComposerStore = makeComposer()
 
@@ -132,7 +133,16 @@ private struct TerminalComposerUITestContent: View {
                     .frame(minHeight: 70, maxHeight: .infinity)
             }
             if composer.mode == .chat || composer.isBusy || !composer.attachments.isEmpty {
-                TerminalComposerView(composer: composer, isActive: true)
+                TerminalComposerView(composer: composer, isActive: true, voice: .init(
+                    phase: model.voicePhase, audioLevel: 0.4, duration: 2,
+                    toggle: {
+                        if model.voicePhase.isActive {
+                            model.voicePhase = .idle
+                            composer.appendTranscription("Voice draft")
+                        } else { model.voicePhase = .recording(operationID: UUID()) }
+                    },
+                    cancel: { model.voicePhase = .idle }
+                ))
             }
         }
         .terminalKeyboardAvoidance(

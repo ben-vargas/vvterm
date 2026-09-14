@@ -6,6 +6,7 @@ import UIKit
 struct TerminalComposerEditor: UIViewRepresentable {
     @Binding var text: String
     let isActive: Bool
+    var acceptsEdits = true
     let onPasteAttachments: ([TerminalAttachmentPayload], [URL]) -> Void
 
     func makeUIView(context: Context) -> ComposerTextView {
@@ -18,14 +19,17 @@ struct TerminalComposerEditor: UIViewRepresentable {
         view.delegate = context.coordinator
         view.accessibilityLabel = String(localized: "Prompt")
         view.accessibilityIdentifier = "vvterm.composer.text"
+        view.acceptsEdits = acceptsEdits
         view.onPasteAttachments = onPasteAttachments
         return view
     }
 
     func updateUIView(_ view: ComposerTextView, context: Context) {
         context.coordinator.parent = self
+        view.acceptsEdits = acceptsEdits
         view.onPasteAttachments = onPasteAttachments
         if view.text != text, view.markedTextRange == nil { view.text = text }
+        view.setNeedsLayout()
         let shouldAcquire = isActive && !view.isEditable
         view.isEditable = isActive
         if shouldAcquire { view.becomeFirstResponder() }
@@ -44,12 +48,45 @@ struct TerminalComposerEditor: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: TerminalComposerEditor
         init(_ parent: TerminalComposerEditor) { self.parent = parent }
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            parent.acceptsEdits
+        }
         func textViewDidChange(_ textView: UITextView) { parent.text = textView.text }
     }
 }
 
 final class ComposerTextView: UITextView {
     var onPasteAttachments: (([TerminalAttachmentPayload], [URL]) -> Void)?
+    var acceptsEdits = true
+    private let placeholder = UILabel()
+
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        configurePlaceholder()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configurePlaceholder()
+    }
+
+    private func configurePlaceholder() {
+        placeholder.text = String(localized: "Message")
+        placeholder.textColor = .placeholderText
+        placeholder.isAccessibilityElement = false
+        placeholder.isUserInteractionEnabled = false
+        addSubview(placeholder)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        placeholder.isHidden = !text.isEmpty
+        placeholder.font = font
+        let height = font?.lineHeight ?? 0
+        let left = textContainerInset.left + textContainer.lineFragmentPadding
+        placeholder.frame = CGRect(x: left, y: (bounds.height - height) / 2,
+                                   width: max(0, bounds.width - left - textContainerInset.right), height: height)
+    }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
@@ -57,6 +94,7 @@ final class ComposerTextView: UITextView {
     }
 
     override func paste(_ sender: Any?) {
+        guard acceptsEdits else { return }
         let pasteboard = UIPasteboard.general
         if pasteboard.hasImages || (pasteboard.urls ?? []).contains(where: \.isFileURL) {
             let images = Clipboard.attachmentPayloads()

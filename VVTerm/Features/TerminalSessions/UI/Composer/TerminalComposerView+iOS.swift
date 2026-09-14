@@ -4,6 +4,7 @@ import SwiftUI
 struct TerminalComposerView: View {
     @ObservedObject var composer: TerminalComposerStore
     let isActive: Bool
+    var voice: TerminalComposerVoiceInput? = nil
 
     var body: some View {
         VStack(spacing: 8) {
@@ -32,31 +33,31 @@ struct TerminalComposerView: View {
             }
             if composer.mode == .chat {
                 HStack(alignment: .bottom, spacing: 10) {
-                    Button { composer.pickerPresented = true } label: {
-                        Image(systemName: "plus")
+                    Button {
+                        if voice?.phase.isActive == true { voice?.cancel() }
+                        else { composer.pickerPresented = true }
+                    } label: {
+                        Image(systemName: voice?.phase.isActive == true ? "xmark" : "plus")
                             .font(.system(size: 24, weight: .regular))
                             .frame(width: 44, height: 44)
                     }
-                    .accessibilityLabel("Attachments")
+                    .accessibilityLabel(voice?.phase.isActive == true ? String(localized: "Cancel voice input") : String(localized: "Attachments"))
                     .accessibilityIdentifier("vvterm.composer.attach")
                     .adaptiveGlassCircle()
                     .disabled(composer.isBusy || !isActive)
 
                     HStack(alignment: .bottom, spacing: 4) {
-                        TerminalComposerEditor(text: $composer.draft, isActive: isActive && !composer.isBusy) { images, urls in
+                        TerminalComposerEditor(text: $composer.draft, isActive: isActive && !composer.isBusy,
+                                               acceptsEdits: voice?.phase.isActive != true) { images, urls in
                             composer.load { images + (try await TerminalAttachmentLoader.files(urls)) }
                         }
-                        .overlay(alignment: .topLeading) {
-                            if composer.draft.isEmpty {
-                                Text("Message")
-                                    .foregroundStyle(.secondary)
-                                    .padding(.top, 11)
-                                    .padding(.leading, 5)
-                                    .allowsHitTesting(false)
-                                    .accessibilityHidden(true)
-                            }
-                        }
                         sendControl
+                    }
+                    .opacity(voice?.phase.isActive == true ? 0 : 1)
+                    .allowsHitTesting(voice?.phase.isActive != true)
+                    .accessibilityHidden(voice?.phase.isActive == true)
+                    .overlay {
+                        if let voice, voice.phase.isActive { recordingBar(voice) }
                     }
                     .padding(.leading, 12)
                     .padding(.trailing, 4)
@@ -82,19 +83,56 @@ struct TerminalComposerView: View {
     private var sendControl: some View {
         if composer.isBusy {
             Button { composer.cancel() } label: {
-                ProgressView().frame(width: 36, height: 44)
+                ProgressView().frame(width: 44, height: 44)
             }
             .accessibilityLabel("Cancel")
+        } else if composer.mode == .chat, !composer.canSend, let voice {
+            Button(action: voice.toggle) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Voice input")
+            .accessibilityIdentifier("vvterm.composer.record")
+            .disabled(!isActive)
         } else {
             Button { composer.send() } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 30))
                     .foregroundStyle(composer.canSend && isActive ? Color.accentColor : Color.secondary)
-                    .frame(width: 36, height: 44)
+                    .frame(width: 44, height: 44)
             }
             .accessibilityLabel("Send")
             .accessibilityIdentifier("vvterm.composer.send")
             .disabled(!composer.canSend || !isActive)
+        }
+    }
+
+    private func recordingBar(_ voice: TerminalComposerVoiceInput) -> some View {
+        HStack(spacing: 10) {
+            if case .recording = voice.phase {
+                AnimatedWaveformView(audioLevel: voice.audioLevel, isRecording: true,
+                                     width: 120, height: 22)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityHidden(true)
+                Text(Duration.seconds(max(0, voice.duration)).formatted(.time(pattern: .minuteSecond)))
+                    .monospacedDigit()
+                    .foregroundStyle(.red)
+                Button(action: voice.toggle) {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.red)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Stop and transcribe")
+                .accessibilityIdentifier("vvterm.composer.stop-recording")
+            } else {
+                ProgressView()
+                Text(voice.phase.isProcessing ? String(localized: "Transcribing audio") : String(localized: "Starting voice input"))
+                    .font(.callout)
+                Spacer()
+            }
         }
     }
 
@@ -105,9 +143,10 @@ struct TerminalPaneComposerView: View {
     let composer: TerminalComposerStore
     let paneID: UUID
     let isActive: Bool
+    let voice: TerminalComposerVoiceInput?
 
     var body: some View {
-        TerminalComposerView(composer: composer, isActive: isActive && presentationState.terminalFindNavigatorVisibleByPane[paneID] != true)
+        TerminalComposerView(composer: composer, isActive: isActive && presentationState.terminalFindNavigatorVisibleByPane[paneID] != true, voice: voice)
     }
 }
 

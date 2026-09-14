@@ -45,6 +45,14 @@ final class TerminalComposerStore: ObservableObject {
         modeChanged(mode)
     }
 
+    func appendTranscription(_ text: String) {
+        guard mode == .chat, !isBusy else { return }
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        if !draft.isEmpty, draft.last?.isWhitespace == false { draft += " " }
+        draft += text
+    }
+
     func removeAttachment(_ id: UUID) {
         guard !isBusy else { return }
         attachments.removeAll { $0.id == id }

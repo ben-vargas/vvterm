@@ -38,6 +38,7 @@ struct TerminalTabView: View {
     @EnvironmentObject private var storeManager: StoreManager
     @Environment(\.scenePhase) private var scenePhase
 
+    @State private var voiceDraftTarget: TerminalComposerStore?
     @State private var showingPermissionError = false
     @State private var permissionErrorMessage = ""
     #if os(macOS)
@@ -152,6 +153,7 @@ struct TerminalTabView: View {
             publishVoiceRecordingState(isRecording)
         }
         .onChange(of: tab.focusedPaneId) { _ in
+            if voiceDraftTarget != nil { cancelVoiceRecording() }
             if showingVoiceRecording {
                 publishVoiceRecordingState(true)
             }
@@ -219,7 +221,14 @@ struct TerminalTabView: View {
                     paneFocused: tab.focusedPaneId == paneId,
                     recording: showingVoiceRecording
                 ),
-                onVoiceTrigger: { toggleVoiceRecording(style: $0) }
+                onVoiceTrigger: { toggleVoiceRecording(style: $0) },
+                composerVoice: TerminalComposerVoiceInput(
+                    phase: tab.focusedPaneId == paneId ? voiceRecordingOperation.phase : .idle,
+                    audioLevel: audioService.audioLevel,
+                    duration: audioService.recordingDuration,
+                    toggle: { toggleVoiceRecording(style: .panel) },
+                    cancel: cancelVoiceRecording
+                )
             )
             .id("\(paneId)-\(layoutVersion)")
         )
@@ -343,7 +352,7 @@ struct TerminalTabView: View {
     }
 
     private var shouldShowVoiceOverlay: Bool {
-        guard isSelected, hasFocusedTerminal, showingVoiceRecording else { return false }
+        guard isSelected, hasFocusedTerminal, showingVoiceRecording, voiceDraftTarget == nil else { return false }
         #if os(iOS)
         guard UIDevice.current.userInterfaceIdiom != .phone
                 || tabManager.presentationState.voicePresentation(for: tab.focusedPaneId).showsRecordingPanel
@@ -434,6 +443,8 @@ struct TerminalTabView: View {
     }
 
     private func startVoiceRecording(style: TerminalVoicePresentationState.RecordingStyle) {
+        let composer = tabManager.richPasteRuntimeStore.runtime(for: tab.focusedPaneId, tabManager: tabManager).composer
+        voiceDraftTarget = composer.mode == .chat ? composer : nil
         #if os(iOS)
         tabManager.presentationState.applyVoiceEvent(.recordingStarted(style), for: tab.focusedPaneId)
         #endif
@@ -471,6 +482,7 @@ struct TerminalTabView: View {
             },
             onStarted: {},
             onFailure: { error in
+                voiceDraftTarget = nil
                 publishVoiceRecordingState(false)
                 if let recordingError = error as? AudioService.RecordingError {
                     permissionErrorMessage = recordingError.localizedDescription
@@ -483,6 +495,7 @@ struct TerminalTabView: View {
     }
 
     private func cancelVoiceRecording() {
+        voiceDraftTarget = nil
         voiceRecordingOperation.cancel()
         audioService.cancelRecording()
         publishVoiceRecordingState(false)
@@ -490,16 +503,23 @@ struct TerminalTabView: View {
 
     private func finishVoiceRecording() {
         guard !voiceProcessing else { return }
+        let draftTarget = voiceDraftTarget
         voiceRecordingOperation.startProcessing(
             operation: { [audioService] operationID in
                 await audioService.stopRecording(operationID: operationID)
             },
             onSuccess: { text in
                 let fallback = text.isEmpty ? audioService.partialTranscription : text
-                sendTranscriptionToTerminal(fallback)
+                if let draftTarget {
+                    draftTarget.appendTranscription(fallback)
+                } else {
+                    sendTranscriptionToTerminal(fallback)
+                }
+                voiceDraftTarget = nil
                 publishVoiceRecordingState(false)
             },
             onFailure: { error in
+                voiceDraftTarget = nil
                 publishVoiceRecordingState(false)
                 permissionErrorMessage = error.localizedDescription
                 showingPermissionError = true
@@ -552,6 +572,7 @@ struct TerminalPaneView: View {
     let appearance: TerminalAppearanceSnapshot
     let showsVoiceButton: Bool
     let onVoiceTrigger: (TerminalVoicePresentationState.RecordingStyle) -> Void
+    let composerVoice: TerminalComposerVoiceInput?
 
     @EnvironmentObject var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var appLockManager: AppLockManager
@@ -586,7 +607,8 @@ struct TerminalPaneView: View {
         onPaneKeyboardShortcut: @escaping (TerminalSplitCommand) -> Void,
         appearance: TerminalAppearanceSnapshot,
         showsVoiceButton: Bool,
-        onVoiceTrigger: @escaping (TerminalVoicePresentationState.RecordingStyle) -> Void
+        onVoiceTrigger: @escaping (TerminalVoicePresentationState.RecordingStyle) -> Void,
+        composerVoice: TerminalComposerVoiceInput? = nil
     ) {
         self.paneId = paneId
         self.server = server
@@ -609,6 +631,7 @@ struct TerminalPaneView: View {
         self.appearance = appearance
         self.showsVoiceButton = showsVoiceButton
         self.onVoiceTrigger = onVoiceTrigger
+        self.composerVoice = composerVoice
         _richPasteUI = ObservedObject(
             wrappedValue: tabManager.richPasteRuntimeStore.runtime(
                 for: paneId,
@@ -1037,6 +1060,7 @@ struct TerminalPaneView: View {
             showsVoiceAccessoryButton: showsVoiceButton,
             onVoiceTrigger: voiceTriggerHandlerForTerminal,
             onSceneActivation: reconcileAutomaticReconnect,
+            composerVoice: composerVoice,
             composer: tabManager.richPasteRuntimeStore.runtime(for: paneId, tabManager: tabManager).composer
         )
         .terminalKeyboardAvoidance(
