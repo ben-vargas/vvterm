@@ -18,6 +18,12 @@ final class TerminalComposerUITests: XCTestCase {
         app.buttons["composer.test.add"].tap()
         let remove = app.buttons["vvterm.attachment.remove.one.png"]
         XCTAssertTrue(remove.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.images["vvterm.attachment.preview.one.png"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
+        let previews = XCTAttachment(screenshot: app.screenshot())
+        previews.name = "Attachments stay in draft"
+        previews.lifetime = .keepAlways
+        add(previews)
         remove.tap()
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Native composer with attachment"
@@ -64,7 +70,7 @@ final class TerminalComposerUITests: XCTestCase {
     }
 
     @MainActor
-    func testDirectAttachmentsOrderVisibilityAndPickerCancel() {
+    func testDirectAttachmentsOrderVisibilityAndMenuDismissal() {
         let app = launch()
         let attachment = app.buttons["vvterm.keyboard.accessory.attachments"]
         XCTAssertTrue(attachment.waitForExistence(timeout: 8))
@@ -72,7 +78,14 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertLessThan(voice.frame.midX, attachment.frame.midX)
         attachment.tap()
         XCTAssertTrue(app.buttons["vvterm.attachments.files"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Cancel"].exists)
+        app.buttons["vvterm.attachments.files"].tap()
+        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 5))
         app.buttons["Cancel"].tap()
+        XCTAssertTrue(attachment.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["vvterm.composer.error"].exists)
+        attachment.tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.35)).tap()
         XCTAssertEqual(app.staticTexts["composer.test.sent"].label, "No input sent")
         let visibility = app.switches["composer.test.visibility"]
         visibility.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
@@ -112,26 +125,22 @@ final class TerminalComposerUITests: XCTestCase {
         emptyScreenshot.lifetime = .keepAlways
         add(emptyScreenshot)
         record.tap()
-        XCTAssertTrue(app.buttons["vvterm.composer.stop-recording"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["vvterm.composer.stop-recording"].exists)
         XCTAssertTrue(app.keyboards.firstMatch.exists)
-        XCTAssertFalse(app.buttons["vvterm.composer.attach"].isHittable)
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "Compact voice recording"
-        screenshot.lifetime = .keepAlways
-        add(screenshot)
-        app.buttons["vvterm.composer.stop-recording"].press(forDuration: 1)
-        app.buttons["Cancel voice input"].tap()
-        XCTAssertTrue(record.waitForExistence(timeout: 5))
         XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "")
-        record.tap()
-        app.buttons["vvterm.composer.stop-recording"].tap()
+        let promptScreenshot = XCTAttachment(screenshot: app.screenshot())
+        promptScreenshot.name = "Hold to record prompt"
+        promptScreenshot.lifetime = .keepAlways
+        add(promptScreenshot)
+        app.textViews["vvterm.composer.text"].press(forDuration: 1)
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
         XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "Voice draft")
         XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
         XCTAssertTrue(app.buttons["vvterm.composer.send"].exists)
     }
 
     @MainActor
-    func testAttachmentMenuFloatsAboveKeyboardAndDismissesWithoutChangingDraft() {
+    func testNativeAttachmentMenuKeepsKeyboardAndDismissesWithoutChangingDraft() {
         let app = launch()
         app.buttons["vvterm.composer.toggle"].tap()
         app.buttons["vvterm.composer.attach"].tap()
@@ -139,7 +148,7 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertTrue(files.waitForExistence(timeout: 5))
         XCTAssertTrue(app.keyboards.firstMatch.exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "Floating attachment menu"
+        screenshot.name = "Native attachment menu"
         screenshot.lifetime = .keepAlways
         add(screenshot)
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.35)).tap()
@@ -164,6 +173,23 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         XCTAssertEqual(editor.value as? String, "keep this draft")
         XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
+    }
+
+    @MainActor
+    func testChatDraftStaysAboveKeyboardAfterAppSwitch() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.tap()
+        editor.typeText("keep after app switch")
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(editor.isHittable)
+        XCTAssertLessThanOrEqual(editor.frame.maxY, app.keyboards.firstMatch.frame.minY)
+        XCTAssertEqual(editor.value as? String, "keep after app switch")
     }
 
     @MainActor

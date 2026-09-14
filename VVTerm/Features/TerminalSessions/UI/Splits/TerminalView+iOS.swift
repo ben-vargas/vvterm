@@ -91,14 +91,9 @@ struct RemoteTerminalPaneWrapper: View {
             if composerVoice?.phase.isActive == true { composerVoice?.cancel() }
             composer.setMode(mode)
         }
-        .sheet(isPresented: Binding(
-            get: { composer.mode == .direct && composer.pickerPresented },
-            set: { composer.pickerPresented = $0 }
-        )) {
-            TerminalAttachmentPicker(composer: composer)
-        }
+        .background { TerminalAttachmentPicker(composer: composer) }
         .onChange(of: isActive) { active in
-            if !active { composer.pickerPresented = false }
+            if !active { composer.attachmentSource = nil }
         }
     }
 
@@ -443,12 +438,12 @@ struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         }
     }
 
-    private var attachmentAction: () -> Void {
-        { [weak tabManager] in
+    private var attachmentAction: (TerminalComposerStore.AttachmentSource) -> Void {
+        { [weak tabManager] source in
             guard let tabManager else { return }
             let composer = tabManager.richPasteRuntimeStore.runtime(for: paneId, tabManager: tabManager).composer
             guard !composer.isBusy else { return }
-            composer.pickerPresented = true
+            composer.attachmentSource = source
         }
     }
 

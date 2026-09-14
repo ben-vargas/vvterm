@@ -173,6 +173,20 @@ final class TerminalComposerStoreTests: XCTestCase {
         XCTAssertEqual(fixture.sent, ["review /tmp/one.png /tmp/two.pdf"])
     }
 
+    func testChatLoadKeepsAttachmentsLocalUntilSend() async {
+        let fixture = Fixture()
+        let store = fixture.store()
+        store.setMode(.chat)
+        let file = payload("file.txt")
+        await finish(store) { store.load { [file] } }
+        XCTAssertTrue(fixture.uploaded.isEmpty)
+        XCTAssertTrue(fixture.sent.isEmpty)
+        XCTAssertEqual(store.attachments.map(\.id), [file.id])
+        await finish(store) { store.send() }
+        XCTAssertEqual(fixture.uploaded, ["file.txt"])
+        XCTAssertEqual(fixture.sent, ["/tmp/file.txt"])
+    }
+
     func testDirectLoadSendsOnlyAttachmentsAndDoesNotEnter() async {
         let fixture = Fixture()
         let store = fixture.store()
@@ -256,7 +270,6 @@ final class TerminalComposerStoreTests: XCTestCase {
         action()
         await fulfillment(of: [done], timeout: 3)
         subscription.cancel()
-        // Direct import moves through idle before starting the upload.
         if store.isBusy { await finish(store, action: {}) }
     }
 

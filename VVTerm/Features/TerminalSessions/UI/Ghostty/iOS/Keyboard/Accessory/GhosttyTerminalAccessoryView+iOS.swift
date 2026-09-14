@@ -25,7 +25,15 @@ final class TerminalInputAccessoryView: UIInputView {
             updateLeadingButtonsState()
         }
     }
-    var onAttachment: (() -> Void)? { didSet { updateLeadingButtonsState() } }
+    var onAttachment: ((TerminalComposerStore.AttachmentSource) -> Void)? {
+        didSet {
+            if onAttachment == nil { attachmentButton?.menu = nil }
+            else if attachmentButton?.menu == nil {
+                attachmentButton?.menu = TerminalAttachmentPicker.menu { [weak self] in self?.onAttachment?($0) }
+            }
+            updateLeadingButtonsState()
+        }
+    }
     private weak var attachmentButton: UIButton?
     private var ctrlActive = false
     private var altActive = false
@@ -189,7 +197,10 @@ final class TerminalInputAccessoryView: UIInputView {
         voiceButton = voice
         leadingStack.addArrangedSubview(voice)
 
-        let attachment = makeIconButton(icon: "paperclip") { [weak self] in self?.onAttachment?() }
+        let attachment = makeIconButton(icon: "paperclip") {}
+        attachment.showsMenuAsPrimaryAction = true
+        attachment.preferredMenuElementOrder = .fixed
+        attachment.menu = TerminalAttachmentPicker.menu { [weak self] in self?.onAttachment?($0) }
         attachment.accessibilityLabel = String(localized: "Attachments")
         attachment.accessibilityIdentifier = "vvterm.keyboard.accessory.attachments"
         attachmentButton = attachment

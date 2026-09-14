@@ -5,50 +5,20 @@ import UniformTypeIdentifiers
 
 struct TerminalAttachmentPicker: View {
     @ObservedObject var composer: TerminalComposerStore
-    @Environment(\.dismiss) private var dismiss
     @State private var photos: [PhotosPickerItem] = []
-    @State private var showsFiles = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-                PhotosPicker(selection: $photos, maxSelectionCount: TerminalAttachmentLimits.maximumCount,
-                             selectionBehavior: .ordered, matching: .images) {
-                    Label("Photos", systemImage: "photo.on.rectangle")
-                }
-                .accessibilityIdentifier("vvterm.attachments.photos")
-                Button { showsFiles = true } label: {
-                    Label("Files", systemImage: "folder")
-                }
-                .accessibilityIdentifier("vvterm.attachments.files")
-                Button {
-                    let images = Clipboard.attachmentPayloads()
-                    let urls = (UIPasteboard.general.urls ?? []).filter(\.isFileURL)
-                    composer.load {
-                        let files = try await TerminalAttachmentLoader.files(urls)
-                        guard !images.isEmpty || !files.isEmpty else { throw TerminalAttachmentError.unreadable }
-                        return images + files
-                    }
-                    dismiss()
-                } label: {
-                    Label("Paste", systemImage: "doc.on.clipboard")
-                }
-                .accessibilityIdentifier("vvterm.attachments.paste")
-                if composer.mode == .direct {
-                    Button("Cancel") { dismiss() }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 8)
-                }
-        }
-        .padding(20)
-        .frame(width: 320)
-        .buttonStyle(.plain)
-        .labelStyle(AttachmentSourceLabelStyle())
-        .fileImporter(isPresented: $showsFiles, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+        Color.clear
+            .photosPicker(isPresented: isPresented(.photos), selection: $photos,
+                          maxSelectionCount: TerminalAttachmentLimits.maximumCount,
+                          selectionBehavior: .ordered, matching: .images)
+            .fileImporter(isPresented: isPresented(.files), allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+                if case .failure(let error) = result, (error as? CocoaError)?.code == .userCancelled { return }
                 composer.load { try await TerminalAttachmentLoader.files(result.get()) }
-                dismiss()
             }
             .onChange(of: photos) { selection in
                 guard !selection.isEmpty else { return }
+                photos = []
                 composer.load {
                     var payloads: [TerminalAttachmentPayload] = []
                     for (index, item) in selection.enumerated() {
@@ -63,36 +33,51 @@ struct TerminalAttachmentPicker: View {
                     }
                     return payloads
                 }
-                dismiss()
+            }
+            .onChange(of: composer.attachmentSource) { source in
+                guard source == .paste else { return }
+                composer.attachmentSource = nil
+                let images = Clipboard.attachmentPayloads()
+                let urls = (UIPasteboard.general.urls ?? []).filter(\.isFileURL)
+                composer.load {
+                    let files = try await TerminalAttachmentLoader.files(urls)
+                    guard !images.isEmpty || !files.isEmpty else { throw TerminalAttachmentError.unreadable }
+                    return images + files
+                }
             }
     }
-}
 
-private struct AttachmentSourceLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 24) {
-            configuration.icon
-                .font(.system(size: 22))
-                .foregroundStyle(.tint)
-                .frame(width: 40, height: 40)
-                .background(.quaternary, in: Circle())
-            configuration.title.font(.title3)
-            Spacer()
-        }
-        .padding(.vertical, 14)
-        .padding(.horizontal, 14)
-        .contentShape(Rectangle())
+    private func isPresented(_ source: TerminalComposerStore.AttachmentSource) -> Binding<Bool> {
+        Binding(get: { composer.attachmentSource == source }, set: { presented in
+            if presented { composer.attachmentSource = source }
+            else if composer.attachmentSource == source { composer.attachmentSource = nil }
+        })
+    }
+
+    static func menu(onSelect: @escaping (TerminalComposerStore.AttachmentSource) -> Void) -> UIMenu {
+        UIMenu(children: TerminalComposerStore.AttachmentSource.allCases.map { source in
+            let action = UIAction(title: source.title, image: UIImage(systemName: source.symbol)) { _ in onSelect(source) }
+            action.accessibilityIdentifier = source.accessibilityIdentifier
+            return action
+        })
     }
 }
 
-extension View {
-    @ViewBuilder
-    func attachmentPopoverAdaptation() -> some View {
-        if #available(iOS 16.4, *) {
-            self.presentationCompactAdaptation(.popover)
-        } else {
-            self.presentationDetents([.height(220)])
+extension TerminalComposerStore.AttachmentSource {
+    var title: String {
+        switch self {
+        case .photos: String(localized: "Photos")
+        case .files: String(localized: "Files")
+        case .paste: String(localized: "Paste")
         }
     }
+    var symbol: String {
+        switch self {
+        case .photos: "photo.on.rectangle"
+        case .files: "folder"
+        case .paste: "doc.on.clipboard"
+        }
+    }
+    var accessibilityIdentifier: String { "vvterm.attachments.\(self)" }
 }
 #endif

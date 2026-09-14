@@ -12,6 +12,7 @@ final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
     private var preservesTerminalSize = false
     private var keyboardFrame: CGRect?
     private var usesSimulatedKeyboardGeometry = false
+    private var inputMode = TerminalInputMode.direct
 
     func update(
         terminal newTerminal: GhosttyTerminalView?,
@@ -19,7 +20,8 @@ final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
         isFocused: Bool,
         preservesTerminalSize: Bool,
         keyboardFrame: CGRect?,
-        usesSimulatedKeyboardGeometry: Bool
+        usesSimulatedKeyboardGeometry: Bool,
+        inputMode: TerminalInputMode = .direct
     ) {
         if terminal !== newTerminal || self.scope != scope {
             detachTerminal()
@@ -36,6 +38,7 @@ final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
                 }
             }
         }
+        self.inputMode = inputMode
         self.isFocused = isFocused
         self.preservesTerminalSize = preservesTerminalSize
         self.keyboardFrame = keyboardFrame
@@ -99,9 +102,13 @@ final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
             keyboardFrame: keyboardInWindow
         )
         let geometry: TerminalKeyboardAvoidancePolicy.KeyboardGeometry
-        if case .docked = observedGeometry, !usesSimulatedKeyboardGeometry {
+        let useNativeGuide: Bool
+        if case .docked = observedGeometry { useNativeGuide = true }
+        else { useNativeGuide = inputMode == .chat }
+        if useNativeGuide, !usesSimulatedKeyboardGeometry {
             // The default native guide tracks docked obstruction only. Hidden
-            // safe-area height is not a keyboard; notifications identify mode.
+            // safe-area height is not a keyboard. Chat also reads this guide after
+            // app activation, when UIKit can restore the keyboard without a frame notification.
             let guide = viewport.keyboardLayoutGuide.layoutFrame
             let dockedFrame = viewport.convert(guide, to: window)
             let safeAreaBottom = window.bounds.maxY - window.safeAreaInsets.bottom

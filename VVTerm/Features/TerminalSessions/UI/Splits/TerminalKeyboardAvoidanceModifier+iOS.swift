@@ -82,6 +82,7 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
         .animation(nil, value: model.layout)
         .onAppear(perform: refresh)
         .onDisappear { model.detach() }
+        .onChange(of: keyboardCoordinator.activeInputMode) { _ in refresh() }
         .onChange(of: preservesTerminalSize) { _ in refresh() }
         .onChange(of: focusedPaneId) { _ in refresh() }
         .onChange(of: terminalSurfaceChange) { _ in refresh() }
@@ -95,7 +96,8 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
             isFocused: focusedPaneId != nil,
             preservesTerminalSize: preservesTerminalSize,
             keyboardFrame: keyboardCoordinator.softwareKeyboardEndFrame,
-            usesSimulatedKeyboardGeometry: usesSimulatedKeyboardGeometry
+            usesSimulatedKeyboardGeometry: usesSimulatedKeyboardGeometry,
+            inputMode: keyboardCoordinator.activeInputMode
         )
     }
 }

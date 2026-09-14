@@ -7,6 +7,7 @@ struct TerminalComposerEditor: UIViewRepresentable {
     @Binding var text: String
     let isActive: Bool
     var acceptsEdits = true
+    var placeholder = String(localized: "Message")
     let onPasteAttachments: ([TerminalAttachmentPayload], [URL]) -> Void
 
     func makeUIView(context: Context) -> ComposerTextView {
@@ -19,6 +20,8 @@ struct TerminalComposerEditor: UIViewRepresentable {
         view.delegate = context.coordinator
         view.accessibilityLabel = String(localized: "Prompt")
         view.accessibilityIdentifier = "vvterm.composer.text"
+        view.placeholderText = placeholder
+        view.tintColor = acceptsEdits ? nil : .clear
         view.acceptsEdits = acceptsEdits
         view.onPasteAttachments = onPasteAttachments
         return view
@@ -26,6 +29,8 @@ struct TerminalComposerEditor: UIViewRepresentable {
 
     func updateUIView(_ view: ComposerTextView, context: Context) {
         context.coordinator.parent = self
+        view.placeholderText = placeholder
+        view.tintColor = acceptsEdits ? nil : .clear
         view.acceptsEdits = acceptsEdits
         view.onPasteAttachments = onPasteAttachments
         if view.text != text, view.markedTextRange == nil { view.text = text }
@@ -58,6 +63,9 @@ struct TerminalComposerEditor: UIViewRepresentable {
 final class ComposerTextView: UITextView {
     var onPasteAttachments: (([TerminalAttachmentPayload], [URL]) -> Void)?
     var acceptsEdits = true
+    var placeholderText = String(localized: "Message") {
+        didSet { placeholder.text = placeholderText }
+    }
     private let placeholder = UILabel()
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {

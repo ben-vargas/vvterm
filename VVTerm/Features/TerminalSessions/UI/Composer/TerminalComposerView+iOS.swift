@@ -6,6 +6,9 @@ struct TerminalComposerView: View {
     let isActive: Bool
     var acceptsInput = true
     var voice: TerminalComposerVoiceInput? = nil
+    @State private var voiceInteraction = VoiceInteraction.text
+
+    private enum VoiceInteraction { case text, ready, holding }
 
     var body: some View {
         Group {
@@ -13,11 +16,15 @@ struct TerminalComposerView: View {
         }
         .onAppear(perform: stopUnavailableInput)
         .onChange(of: acceptsInput) { _ in stopUnavailableInput() }
+        .onChange(of: voice?.phase) { phase in
+            if phase == .idle, voiceInteraction == .holding { voiceInteraction = .text }
+        }
     }
 
     private func stopUnavailableInput() {
         guard !acceptsInput else { return }
-        composer.pickerPresented = false
+        voiceInteraction = .text
+        composer.attachmentSource = nil
         composer.cancel()
         if voice?.phase.isActive == true { voice?.cancel() }
     }
@@ -28,17 +35,9 @@ struct TerminalComposerView: View {
                 ScrollView(.horizontal) {
                     HStack {
                         ForEach(composer.attachments) { attachment in
-                            HStack {
-                                Text(attachment.suggestedFilename).lineLimit(1)
-                                Button { composer.removeAttachment(attachment.id) } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                }
-                                .accessibilityLabel(Text("Remove attachment") + Text(": \(attachment.suggestedFilename)"))
-                                .accessibilityIdentifier("vvterm.attachment.remove.\(attachment.suggestedFilename)")
-                                .disabled(composer.isBusy)
+                            TerminalAttachmentPreview(attachment: attachment, isBusy: composer.isBusy) {
+                                composer.removeAttachment(attachment.id)
                             }
-                            .padding(8)
-                            .background(Color(uiColor: .secondarySystemBackground), in: Capsule())
                         }
                     }
                 }
@@ -50,32 +49,42 @@ struct TerminalComposerView: View {
             if composer.mode == .chat {
                 ZStack {
                     HStack(alignment: .bottom, spacing: 12) {
-                        Button { composer.pickerPresented = true } label: {
+                        Menu {
+                            ForEach(TerminalComposerStore.AttachmentSource.allCases, id: \.self) { source in
+                                Button { composer.attachmentSource = source } label: {
+                                    Label(source.title, systemImage: source.symbol)
+                                }
+                                .accessibilityIdentifier(source.accessibilityIdentifier)
+                            }
+                        } label: {
                             Image(systemName: "plus")
                                 .font(.system(size: 24, weight: .regular))
                                 .frame(width: 40, height: 40)
                         }
+                        .menuOrder(.fixed)
                         .accessibilityLabel("Attachments")
                         .accessibilityIdentifier("vvterm.composer.attach")
-                        .adaptiveGlassCircle()
-                        .disabled(composer.isBusy || !isActive)
-                        .popover(isPresented: $composer.pickerPresented, arrowEdge: .bottom) {
-                            TerminalAttachmentPicker(composer: composer)
-                                .attachmentPopoverAdaptation()
+                        .background {
+                            if composer.attachments.isEmpty { Color.clear.adaptiveGlassCircle() }
                         }
+                        .disabled(composer.isBusy || !isActive)
 
                         HStack(alignment: .bottom, spacing: 4) {
                             TerminalComposerEditor(text: $composer.draft, isActive: isActive && !composer.isBusy,
-                                                   acceptsEdits: voice?.phase.isActive != true) { images, urls in
+                                                   acceptsEdits: voiceInteraction == .text && voice?.phase.isActive != true,
+                                                   placeholder: voiceInteraction == .ready ? String(localized: "Touch and hold to record") : String(localized: "Message")) { images, urls in
                                 composer.load { images + (try await TerminalAttachmentLoader.files(urls)) }
                             }
                             sendControl
                         }
                         .padding(.leading, 12)
                         .padding(.trailing, 2)
-                        .adaptiveGlassRect(cornerRadius: 20)
+                        .background {
+                            if composer.attachments.isEmpty { Color.clear.adaptiveGlassRect(cornerRadius: 20) }
+                        }
                     }
-                    .opacity(voice?.phase.isActive == true ? 0 : 1)
+                    // A mask keeps the native editor mounted and visible to the responder system.
+                    .mask { Rectangle().fill(voice?.phase.isActive == true ? Color.clear : Color.black) }
                     .allowsHitTesting(voice?.phase.isActive != true)
                     .accessibilityHidden(voice?.phase.isActive == true)
 
@@ -91,6 +100,27 @@ struct TerminalComposerView: View {
                             .accessibilityAction(named: Text("Cancel voice input"), voice.cancel)
                     }
                 }
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.25)
+                        .sequenced(before: DragGesture(minimumDistance: 0))
+                        .onChanged { value in
+                            guard voiceInteraction == .ready, isActive, !composer.isBusy,
+                                  let voice, !voice.phase.isActive else { return }
+                            if case .second(true, _) = value {
+                                voiceInteraction = .holding
+                                voice.toggle()
+                            }
+                        }
+                        .onEnded { _ in
+                            guard voiceInteraction == .holding, let voice else { return }
+                            voiceInteraction = .text
+                            switch voice.phase {
+                            case .starting: voice.cancel()
+                            case .recording: voice.toggle()
+                            case .idle, .processing: break
+                            }
+                        }
+                )
             } else {
                 HStack {
                     Spacer()
@@ -102,7 +132,11 @@ struct TerminalComposerView: View {
                 Text(filename).font(.caption).lineLimit(1)
             }
         }
-        .padding(.horizontal, 20)
+        .padding(composer.attachments.isEmpty ? 0 : 12)
+        .background {
+            if !composer.attachments.isEmpty { Color.clear.adaptiveGlassRect(cornerRadius: 28) }
+        }
+        .padding(.horizontal, composer.attachments.isEmpty ? 20 : 12)
         .padding(.top, 8)
         .padding(.bottom, 16)
         .buttonStyle(.plain)
@@ -115,8 +149,8 @@ struct TerminalComposerView: View {
                 ProgressView().frame(width: 40, height: 40)
             }
             .accessibilityLabel("Cancel")
-        } else if composer.mode == .chat, !composer.canSend, let voice {
-            Button(action: voice.toggle) {
+        } else if composer.mode == .chat, !composer.canSend, voice != nil {
+            Button { voiceInteraction = voiceInteraction == .ready ? .text : .ready } label: {
                 Image(systemName: "waveform")
                     .font(.system(size: 20))
                     .foregroundStyle(.secondary)

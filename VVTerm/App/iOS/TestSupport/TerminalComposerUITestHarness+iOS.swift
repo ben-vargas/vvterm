@@ -63,7 +63,7 @@ final class TerminalComposerUITestModel: ObservableObject {
         terminal.setupWriteCallback()
         terminal.showsVoiceAccessoryButton = true
         terminal.onVoiceButtonTapped = { _ in }
-        terminal.onAttachmentButtonTapped = { [weak self] in self?.composer.pickerPresented = true }
+        terminal.onAttachmentButtonTapped = { [weak self] source in self?.composer.attachmentSource = source }
         keyboard.setWindowAttached(terminal.window != nil, for: paneID)
         keyboard.setActivePane(paneID)
         keyboard.setPaneInputEligible(true, for: paneID)
@@ -71,8 +71,12 @@ final class TerminalComposerUITestModel: ObservableObject {
     }
 
     func addFixtures() {
+        let imageData = UIGraphicsImageRenderer(size: CGSize(width: 104, height: 104)).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 104, height: 104))
+        }.pngData()!
         composer.load {
-            [TerminalAttachmentPayload(data: Data([1]), contentType: .png, suggestedFilename: "one.png"),
+            [TerminalAttachmentPayload(data: imageData, contentType: .png, suggestedFilename: "one.png"),
              TerminalAttachmentPayload(data: Data([2]), contentType: .pdf, suggestedFilename: "two.pdf")]
         }
     }
@@ -161,10 +165,7 @@ private struct TerminalComposerUITestContent: View {
                     .toolbar { Button("Done") { showsSettings = false } }
             }
         }
-        .sheet(isPresented: Binding(
-            get: { composer.mode == .direct && composer.pickerPresented },
-            set: { composer.pickerPresented = $0 }
-        )) { TerminalAttachmentPicker(composer: composer) }
+        .background { TerminalAttachmentPicker(composer: composer) }
     }
 }
 

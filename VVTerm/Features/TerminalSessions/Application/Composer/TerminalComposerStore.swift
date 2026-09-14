@@ -14,7 +14,9 @@ final class TerminalComposerStore: ObservableObject {
     @Published var draft = ""
     @Published private(set) var attachments: [TerminalAttachmentPayload] = []
     @Published private(set) var operation = Operation.idle
-    @Published var pickerPresented = false
+    enum AttachmentSource: CaseIterable { case photos, files, paste }
+
+    @Published var attachmentSource: AttachmentSource?
 
     private let resolveRoute: @MainActor () async throws -> TerminalAttachmentRoute
     private let modeChanged: @MainActor (TerminalInputMode) -> Void
@@ -40,7 +42,7 @@ final class TerminalComposerStore: ObservableObject {
         guard self.mode != mode else { return }
         cancel()
         if mode == .direct { attachments.removeAll() }
-        pickerPresented = false
+        attachmentSource = nil
         self.mode = mode
         modeChanged(mode)
     }
@@ -152,7 +154,7 @@ final class TerminalComposerStore: ObservableObject {
     func tearDown() {
         discardAttachments()
         draft = ""
-        pickerPresented = false
+        attachmentSource = nil
     }
 
     nonisolated static func compose(text: String, pathTokens: [String]) -> String {

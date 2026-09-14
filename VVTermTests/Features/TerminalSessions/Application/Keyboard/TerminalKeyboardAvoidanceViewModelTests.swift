@@ -5,6 +5,27 @@ import UIKit
 
 @MainActor
 struct TerminalKeyboardAvoidanceViewModelTests {
+    @Test
+    func chatRestoresNativeKeyboardGeometryWithoutFrameNotification() throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 600, height: 700)
+        let viewport = ComposerKeyboardViewport(frame: window.bounds)
+        window.addSubview(viewport)
+        viewport.guide.frameForTest = CGRect(x: 0, y: 500, width: 600, height: 200)
+        let model = TerminalKeyboardAvoidanceViewModel()
+        model.attachViewport(viewport)
+        model.update(terminal: nil, scope: .container, isFocused: true,
+                     preservesTerminalSize: false, keyboardFrame: nil,
+                     usesSimulatedKeyboardGeometry: false, inputMode: .chat)
+        #expect(model.layout.bottomInset > 0)
+        model.update(terminal: nil, scope: .container, isFocused: true,
+                     preservesTerminalSize: false, keyboardFrame: nil,
+                     usesSimulatedKeyboardGeometry: false, inputMode: .direct)
+        #expect(model.layout.bottomInset == 0)
+        model.detach()
+    }
+
     @Test(arguments: [false, true])
     func returningToRetainedViewportRestoresKeyboardLayout(preserves: Bool) async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
@@ -88,5 +109,14 @@ struct TerminalKeyboardAvoidanceViewModelTests {
         #expect(model.layout.bottomInset == 60)
         model.detach()
     }
+}
+private final class ComposerKeyboardGuide: UIKeyboardLayoutGuide {
+    var frameForTest = CGRect.zero
+    override var layoutFrame: CGRect { frameForTest }
+}
+
+private final class ComposerKeyboardViewport: UIView {
+    let guide = ComposerKeyboardGuide()
+    override var keyboardLayoutGuide: UIKeyboardLayoutGuide { guide }
 }
 #endif
