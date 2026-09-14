@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct TerminalAttachmentPreview: View {
     let attachment: TerminalAttachmentPayload
+    let isUploading: Bool
     let remove: () -> Void
     @State private var thumbnail: UIImage?
 
@@ -28,6 +29,16 @@ struct TerminalAttachmentPreview: View {
         .frame(width: 104, height: 104)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityLabel(attachment.suggestedFilename)
+        .overlay {
+            if isUploading {
+                ProgressView()
+                    .tint(.white)
+                    .padding(10)
+                    .background(.black.opacity(0.65), in: Circle())
+                    .accessibilityLabel(String(format: String(localized: "Uploading %@"), attachment.suggestedFilename))
+                    .accessibilityIdentifier("vvterm.attachment.upload.\(attachment.suggestedFilename)")
+            }
+        }
         .overlay(alignment: .topTrailing) {
             Button(action: remove) {
                 Image(systemName: "xmark")

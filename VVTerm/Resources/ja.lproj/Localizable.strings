@@ -2256,3 +2256,9 @@
 "Touch and hold to record" = "長押しして録音";
 
 "Could not remove remote attachments." = "リモートの添付ファイルを削除できませんでした。";
+
+"Camera" = "カメラ";
+
+"Allow camera access in Settings to take a photo." = "写真を撮るには、設定でカメラへのアクセスを許可してください。";
+
+"Camera is not available on this device." = "このデバイスではカメラを利用できません。";

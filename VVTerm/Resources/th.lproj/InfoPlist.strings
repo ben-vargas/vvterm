@@ -2,3 +2,4 @@
 "NSLocalNetworkUsageDescription" = "VVTerm ใช้เครือข่ายภายในเพื่อค้นหา ปลุก และเชื่อมต่อเซิร์ฟเวอร์ SSH";
 "NSMicrophoneUsageDescription" = "VVTerm ต้องใช้ไมโครโฟนเพื่อแปลงคำสั่งเสียงเป็นข้อความป้อนเข้าเทอร์มินัล";
 "NSSpeechRecognitionUsageDescription" = "VVTerm ใช้การรู้จำเสียงเพื่อแปลงเสียงเป็นคำสั่งเทอร์มินัล";
+"NSCameraUsageDescription" = "VVTerm ใช้กล้องเพื่อถ่ายภาพสำหรับส่งไปยังเซิร์ฟเวอร์ของคุณ";

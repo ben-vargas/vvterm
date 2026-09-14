@@ -83,7 +83,7 @@ struct RemoteTerminalPaneWrapper: View {
                 }
             }
             if composer.mode == .chat {
-                TerminalPaneComposerView(presentationState: tabManager.presentationState, composer: composer, paneID: paneId, isActive: isActive, acceptsInput: acceptsInput, voice: composerVoice)
+                TerminalPaneComposerView(keyboard: tabManager.keyboardCoordinator, composer: composer, paneID: paneId, isActive: isActive, acceptsInput: acceptsInput, voice: composerVoice)
             }
         }
         .onAppear { composer.setMode(inputMode) }
@@ -93,8 +93,7 @@ struct RemoteTerminalPaneWrapper: View {
         }
         .background {
             TerminalAttachmentPicker(composer: composer) {
-                guard composer.mode == .direct,
-                      tabManager.keyboardCoordinator.canSubmitComposedInput(for: paneId) else { return }
+                guard tabManager.keyboardCoordinator.canSubmitComposedInput(for: paneId) else { return }
                 tabManager.keyboardCoordinator.userRequestedShow()
             }
         }

@@ -87,7 +87,7 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertTrue(attachment.waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["vvterm.composer.error"].exists)
         attachment.tap()
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.35)).tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.35)).tap()
         XCTAssertEqual(app.staticTexts["composer.test.sent"].label, "No input sent")
         let visibility = app.switches["composer.test.visibility"]
         visibility.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
@@ -166,7 +166,7 @@ final class TerminalComposerUITests: XCTestCase {
         screenshot.name = "Native attachment menu"
         screenshot.lifetime = .keepAlways
         add(screenshot)
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.35)).tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.35)).tap()
         XCTAssertFalse(files.exists)
         XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
     }
@@ -232,10 +232,98 @@ final class TerminalComposerUITests: XCTestCase {
     }
 
     @MainActor
-    private func launch() -> XCUIApplication {
+    func testFindHidesComposerAndDisconnectDismissesKeyboard() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("saved draft")
+        app.buttons["Find"].tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: editor)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertEqual(editor.value as? String, "saved draft")
+        app.buttons["Disconnect"].tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 5)
+    }
+
+    @MainActor
+    func testHoldOnWaveformRecordsWithoutClosingKeyboard() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let record = app.buttons["vvterm.composer.record"]
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
+        record.tap()
+        let top = app.keyboards.firstMatch.frame.minY
+        record.press(forDuration: 1.5)
+        XCTAssertEqual(app.staticTexts["composer.test.recording-focus"].label, "Recording kept editor")
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        XCTAssertEqual(app.keyboards.firstMatch.frame.minY, top, accuracy: 1)
+        XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "Voice draft")
+    }
+
+    @MainActor
+    func testUploadProgressStaysOnAttachmentWithStableSendButton() {
+        let app = launch(arguments: ["--composer-slow-upload"])
+        app.buttons["vvterm.composer.toggle"].tap()
+        app.buttons["composer.test.add"].tap()
+        let progress = app.activityIndicators["vvterm.attachment.upload.one.png"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 5))
+        let preview = app.images["vvterm.attachment.preview.one.png"]
+        XCTAssertTrue(preview.frame.contains(progress.frame))
+        let send = app.buttons["vvterm.composer.send"]
+        XCTAssertTrue(send.exists)
+        XCTAssertFalse(send.isEnabled)
+        XCTAssertFalse(send.frame.intersects(progress.frame))
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Upload progress on attachment"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["Finish uploads"].tap()
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: send)
+        waitForExpectations(timeout: 8)
+        XCTAssertFalse(progress.exists)
+        XCTAssertEqual(app.staticTexts["composer.test.sent"].label, "No input sent")
+    }
+
+    @MainActor
+    func testCameraReturnsToChatAndNormalInput() {
+        let app = launch()
+        for chat in [false, true] {
+            if chat { app.buttons["vvterm.composer.toggle"].tap() }
+            let attach = app.buttons[chat ? "vvterm.composer.attach" : "vvterm.keyboard.accessory.attachments"]
+            XCTAssertTrue(attach.waitForExistence(timeout: 5))
+            attach.tap()
+            let camera = app.buttons["vvterm.attachments.camera"]
+            XCTAssertTrue(camera.waitForExistence(timeout: 5))
+            camera.tap()
+            XCTAssertTrue(app.buttons["PhotoCapture"].waitForExistence(timeout: 5))
+            app.buttons["DismissImagePickerButton"].tap()
+            XCTAssertTrue(attach.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+            XCTAssertEqual(app.staticTexts["composer.test.sent"].label, "No input sent")
+        }
+    }
+
+    @MainActor
+    func testClosingServerReleasesComposerKeyboard() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 5)
+        XCTAssertFalse(app.textViews["vvterm.composer.text"].exists)
+    }
+
+    @MainActor
+    private func launch(arguments: [String] = []) -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["--vvterm-ui-test-composer", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-AppleInterfaceStyle", "Dark"]
+        app.launchArguments = ["--vvterm-ui-test-composer", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-AppleInterfaceStyle", "Dark"] + arguments
         app.launch()
         XCTAssertTrue(app.buttons["vvterm.composer.toggle"].waitForExistence(timeout: 10))
         return app

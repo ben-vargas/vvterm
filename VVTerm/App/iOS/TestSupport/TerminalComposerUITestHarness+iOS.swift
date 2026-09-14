@@ -12,6 +12,14 @@ final class TerminalComposerUITestModel: ObservableObject {
     @Published var sent = ""
     @Published var received = ""
     @Published var failUpload = false
+    @Published var pausesUploads = Foundation.ProcessInfo.processInfo.arguments.contains("--composer-slow-upload")
+    private var resumeUpload: CheckedContinuation<Void, Never>?
+
+    func finishUploads() {
+        pausesUploads = false
+        resumeUpload?.resume()
+        resumeUpload = nil
+    }
     @Published var attachmentButtonEnabled = true
     @Published var connected = true
     @Published var recordingKeptEditor = false
@@ -23,7 +31,9 @@ final class TerminalComposerUITestModel: ObservableObject {
         TerminalComposerStore(resolveRoute: { [weak self] in
         guard let self, self.connected else { throw TerminalAttachmentError.unavailable }
         return TerminalAttachmentRoute(upload: { [weak self] attachment in
-            try await Task.sleep(for: .milliseconds(100))
+            if let self, self.pausesUploads {
+                await withCheckedContinuation { self.resumeUpload = $0 }
+            } else { try await Task.sleep(for: .milliseconds(100)) }
             if self?.failUpload == true { throw TerminalAttachmentError.unreadable }
             return RemoteClipboardUpload(remotePath: "/tmp/\(attachment.suggestedFilename)",
                                          pastedPathToken: "/tmp/\(attachment.suggestedFilename)",
@@ -127,6 +137,9 @@ private struct TerminalComposerUITestContent: View {
                     .accessibilityIdentifier("composer.test.fail")
                 Toggle("Attachment button", isOn: $model.attachmentButtonEnabled).accessibilityIdentifier("composer.test.visibility")
             }
+            if model.pausesUploads {
+                Button("Finish uploads") { model.finishUploads() }
+            }
             HStack {
                 Button("Disconnect") {
                     model.connected = false
@@ -139,6 +152,7 @@ private struct TerminalComposerUITestContent: View {
                     case .starting, .processing: model.voicePhase = .idle
                     }
                 }.accessibilityIdentifier("composer.test.voice-state")
+                Button("Close") { model.keyboard.relinquishRouteOwnershipForNavigation() }
                 Button("Reconnect") {
                     model.connected = true
                     model.keyboard.setPaneInputEligible(true, for: model.paneID)
@@ -157,7 +171,7 @@ private struct TerminalComposerUITestContent: View {
                     .frame(minHeight: 70, maxHeight: .infinity)
             }
             if composer.mode == .chat {
-                TerminalComposerView(composer: composer, isActive: true, acceptsInput: model.connected, voice: .init(
+                TerminalPaneComposerView(keyboard: model.keyboard, composer: composer, paneID: model.paneID, isActive: true, acceptsInput: model.connected, voice: .init(
                     phase: model.voicePhase, audioLevel: 0.4, duration: 2,
                     toggle: {
                         if model.voicePhase.isActive {
@@ -188,7 +202,7 @@ private struct TerminalComposerUITestContent: View {
         }
         .background {
             TerminalAttachmentPicker(composer: composer) {
-                if composer.mode == .direct { model.keyboard.userRequestedShow() }
+                model.keyboard.userRequestedShow()
             }
         }
     }

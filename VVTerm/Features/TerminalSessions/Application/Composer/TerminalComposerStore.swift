@@ -7,11 +7,11 @@ final class TerminalComposerStore: ObservableObject {
     enum Operation: Equatable {
         case idle
         case loading
-        case uploading(String)
+        case uploading(id: UUID?, filename: String)
         case failed(String)
     }
 
-    enum AttachmentSource: CaseIterable { case photos, files, paste }
+    enum AttachmentSource: CaseIterable { case camera, photos, files, paste }
 
     @Published private(set) var mode = TerminalInputMode.direct
     @Published var draft = ""
@@ -44,6 +44,11 @@ final class TerminalComposerStore: ObservableObject {
     }
 
     var canSend: Bool { !isBusy && ((mode == .chat && !draft.isEmpty) || !attachments.isEmpty) }
+
+    func isUploading(_ attachment: TerminalAttachmentPayload) -> Bool {
+        if case .uploading(let id, _) = operation { return id == attachment.id }
+        return false
+    }
 
     func setMode(_ mode: TerminalInputMode) {
         guard self.mode != mode else { return }
@@ -138,7 +143,7 @@ final class TerminalComposerStore: ObservableObject {
         let payloads = attachments
         let id = UUID()
         taskID = id
-        operation = .uploading(payloads.first?.suggestedFilename ?? "")
+        operation = .uploading(id: payloads.first?.id, filename: payloads.first?.suggestedFilename ?? "")
         let resolveRoute = resolveRoute
         task = Task { [weak self] in
             var filename: String?
@@ -155,7 +160,7 @@ final class TerminalComposerStore: ObservableObject {
                     guard self?.attachments.contains(where: { $0.id == payload.id }) == true,
                           self?.prepared?.uploads[payload.id] == nil else { continue }
                     filename = payload.suggestedFilename
-                    self?.operation = .uploading(payload.suggestedFilename)
+                    self?.operation = .uploading(id: payload.id, filename: payload.suggestedFilename)
                     let upload = try await route.upload(payload)
                     // The picker may be dismissed or a file removed while an
                     // uncancellable transport operation is finishing.

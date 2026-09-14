@@ -2,3 +2,4 @@
 "NSLocalNetworkUsageDescription" = "VVTerm uses your local network to find, wake, and connect to SSH servers.";
 "NSMicrophoneUsageDescription" = "VVTerm needs microphone access to transcribe voice commands to terminal input.";
 "NSSpeechRecognitionUsageDescription" = "VVTerm uses speech recognition to convert voice to terminal commands.";
+"NSCameraUsageDescription" = "VVTerm uses the camera to take photos to send to your server.";

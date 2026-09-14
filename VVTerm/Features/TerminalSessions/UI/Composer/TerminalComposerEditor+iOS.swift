@@ -6,10 +6,11 @@ import UIKit
 struct TerminalComposerEditor: UIViewRepresentable {
     @Binding var text: String
     let isActive: Bool
+    let keyboard: TerminalKeyboardCoordinator
+    let paneID: UUID
     var acceptsEdits = true
     var placeholder = String(localized: "Message")
     var showsContent = true
-    var onPromptTap: (() -> Void)?
     let onPasteAttachments: ([TerminalAttachmentPayload], [URL]) -> Void
 
     func makeUIView(context: Context) -> ComposerTextView {
@@ -20,10 +21,8 @@ struct TerminalComposerEditor: UIViewRepresentable {
         view.textContainerInset = UIEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.delegate = context.coordinator
-        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.promptTapped))
-        tap.cancelsTouchesInView = false
-        tap.delegate = context.coordinator
-        view.addGestureRecognizer(tap)
+        view.keyboard = keyboard
+        view.paneID = paneID
         view.accessibilityLabel = String(localized: "Prompt")
         view.accessibilityIdentifier = "vvterm.composer.text"
         view.placeholderText = placeholder
@@ -46,10 +45,16 @@ struct TerminalComposerEditor: UIViewRepresentable {
         view.onPasteAttachments = onPasteAttachments
         if view.text != text, view.markedTextRange == nil { view.text = text }
         view.setNeedsLayout()
-        let shouldAcquire = isActive && (!view.isEditable || returnsToEditing)
-        view.isEditable = isActive
-        if shouldAcquire { view.becomeFirstResponder() }
-        if !isActive { view.resignFirstResponder() }
+        let availabilityChanged = view.allowsComposerFocus != isActive
+        view.allowsComposerFocus = isActive
+        keyboard.registerComposerInput(view, for: paneID)
+        if availabilityChanged || returnsToEditing { keyboard.composerInputAvailabilityDidChange() }
+    }
+
+    static func dismantleUIView(_ view: ComposerTextView, coordinator: Coordinator) {
+        if let paneID = view.paneID { view.keyboard?.unregisterComposerInput(view, for: paneID) }
+        view.resignFirstResponder()
+        view.keyboard = nil
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: ComposerTextView, context: Context) -> CGSize? {
@@ -61,14 +66,9 @@ struct TerminalComposerEditor: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
+    final class Coordinator: NSObject, UITextViewDelegate {
         var parent: TerminalComposerEditor
         init(_ parent: TerminalComposerEditor) { self.parent = parent }
-        @objc func promptTapped() { parent.onPromptTap?() }
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            parent.onPromptTap != nil
-        }
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
             parent.acceptsEdits
         }
@@ -76,7 +76,32 @@ struct TerminalComposerEditor: UIViewRepresentable {
     }
 }
 
-final class ComposerTextView: UITextView {
+final class ComposerTextView: UITextView, TerminalComposerInputSession {
+    weak var keyboard: TerminalKeyboardCoordinator?
+    var paneID: UUID?
+    var allowsComposerFocus = false
+    private var coordinatorAllowsFocus = false
+    var isComposerFirstResponder: Bool { isFirstResponder }
+
+    override var canBecomeFirstResponder: Bool { coordinatorAllowsFocus && allowsComposerFocus && super.canBecomeFirstResponder }
+
+    func preventComposerInputAcquisition() {
+        // Navigation removes the view and releases UIKit input during dismantling.
+        coordinatorAllowsFocus = false
+    }
+
+    func setComposerInput(active: Bool, softwareKeyboardHidden: Bool) {
+        coordinatorAllowsFocus = active
+        let enabled = active && allowsComposerFocus
+        if isEditable != enabled { isEditable = enabled }
+        guard enabled else { resignFirstResponder(); return }
+        if (inputView != nil) != softwareKeyboardHidden {
+            inputView = softwareKeyboardHidden ? UIView(frame: .zero) : nil
+            if isFirstResponder { reloadInputViews() }
+        }
+        if window?.isKeyWindow == true, !isFirstResponder { becomeFirstResponder() }
+    }
+
     var onPasteAttachments: (([TerminalAttachmentPayload], [URL]) -> Void)?
     var acceptsEdits = true
     var placeholderText = String(localized: "Message") {
@@ -121,7 +146,8 @@ final class ComposerTextView: UITextView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if window != nil, isEditable { becomeFirstResponder() }
+        if window == nil { resignFirstResponder() }
+        keyboard?.composerInputAvailabilityDidChange()
     }
 
     override func paste(_ sender: Any?) {

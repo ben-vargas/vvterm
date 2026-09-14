@@ -2256,3 +2256,9 @@
 "Touch and hold to record" = "แตะค้างไว้เพื่อบันทึก";
 
 "Could not remove remote attachments." = "ไม่สามารถลบไฟล์แนบระยะไกลได้";
+
+"Camera" = "กล้อง";
+
+"Allow camera access in Settings to take a photo." = "อนุญาตการเข้าถึงกล้องในการตั้งค่าเพื่อถ่ายภาพ";
+
+"Camera is not available on this device." = "ไม่มีกล้องให้ใช้งานบนอุปกรณ์นี้";

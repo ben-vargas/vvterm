@@ -210,6 +210,7 @@ private extension TerminalComposerStore.AttachmentSource {
     var appIcon: UIImage? {
         let assetName: String?
         switch self {
+        case .camera: assetName = "AttachmentCamera"
         case .photos: assetName = "AttachmentPhotos"
         case .files: assetName = "AttachmentFiles"
         case .paste: assetName = nil
@@ -217,14 +218,14 @@ private extension TerminalComposerStore.AttachmentSource {
         if let assetName, let image = UIImage(named: assetName) {
             let size = CGSize(width: 44, height: 44)
             return UIGraphicsImageRenderer(size: size).image { _ in
-                UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 12).addClip()
+                UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).addClip()
                 image.draw(in: CGRect(origin: .zero, size: size))
             }.withRenderingMode(.alwaysOriginal)
         }
         guard let image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 28)) else { return nil }
         return UIGraphicsImageRenderer(size: CGSize(width: 44, height: 44)).image { _ in
             UIColor.secondarySystemFill.setFill()
-            UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 44, height: 44), cornerRadius: 12).fill()
+            UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: 44, height: 44)).fill()
             let scale = min(28 / image.size.width, 28 / image.size.height)
             let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
             image.withTintColor(.label).draw(in: CGRect(x: (44 - size.width) / 2, y: (44 - size.height) / 2,

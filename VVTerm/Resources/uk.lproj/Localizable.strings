@@ -2263,3 +2263,9 @@
 "Touch and hold to record" = "Натисніть і утримуйте для запису";
 
 "Could not remove remote attachments." = "Не вдалося видалити вкладення на віддаленому сервері.";
+
+"Camera" = "Камера";
+
+"Allow camera access in Settings to take a photo." = "Дозвольте доступ до камери в налаштуваннях, щоб зробити фото.";
+
+"Camera is not available on this device." = "Камера недоступна на цьому пристрої.";

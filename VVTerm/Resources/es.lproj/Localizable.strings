@@ -2256,3 +2256,9 @@
 "Touch and hold to record" = "Mantén pulsado para grabar";
 
 "Could not remove remote attachments." = "No se pudieron eliminar los archivos adjuntos remotos.";
+
+"Camera" = "Cámara";
+
+"Allow camera access in Settings to take a photo." = "Permite el acceso a la cámara en Ajustes para tomar una foto.";
+
+"Camera is not available on this device." = "La cámara no está disponible en este dispositivo.";

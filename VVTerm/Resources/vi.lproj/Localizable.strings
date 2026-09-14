@@ -2301,3 +2301,9 @@
 "Touch and hold to record" = "Chạm và giữ để ghi âm";
 
 "Could not remove remote attachments." = "Không thể xóa tệp đính kèm từ xa.";
+
+"Camera" = "Camera";
+
+"Allow camera access in Settings to take a photo." = "Cho phép truy cập camera trong Cài đặt để chụp ảnh.";
+
+"Camera is not available on this device." = "Camera không khả dụng trên thiết bị này.";

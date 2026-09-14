@@ -10,6 +10,12 @@ struct TerminalAttachmentPicker: View {
 
     var body: some View {
         Color.clear
+            .fullScreenCover(isPresented: isPresented(.camera), onDismiss: onDismiss) {
+                TerminalCameraCapture { result in
+                    composer.attachmentSource = nil
+                    if let result { composer.load { [try result.get()] } }
+                }
+            }
             .photosPicker(isPresented: isPresented(.photos), selection: $photos,
                           maxSelectionCount: TerminalAttachmentLimits.maximumCount,
                           selectionBehavior: .ordered, matching: .images)
@@ -62,6 +68,7 @@ struct TerminalAttachmentPicker: View {
 extension TerminalComposerStore.AttachmentSource {
     var title: String {
         switch self {
+        case .camera: String(localized: "Camera")
         case .photos: String(localized: "Photos")
         case .files: String(localized: "Files")
         case .paste: String(localized: "Paste")
@@ -69,6 +76,7 @@ extension TerminalComposerStore.AttachmentSource {
     }
     var symbol: String {
         switch self {
+        case .camera: "camera"
         case .photos: "photo.on.rectangle"
         case .files: "folder"
         case .paste: "doc.on.clipboard"

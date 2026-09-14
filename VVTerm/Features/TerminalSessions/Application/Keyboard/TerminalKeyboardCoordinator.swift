@@ -248,6 +248,11 @@ final class TerminalKeyboardCoordinator: ObservableObject {
 
     var terminalProvider: ((UUID) -> (any TerminalKeyboardInputSession)?)?
 
+    private struct ComposerInput {
+        weak var session: (any TerminalComposerInputSession)?
+    }
+    private var composerInputs: [UUID: ComposerInput] = [:]
+
     private var activePaneId: UUID?
     private var viewActive = false
     private var paneInputEligibleById: [UUID: Bool] = [:]
@@ -339,12 +344,15 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     /// either way, and UIKit decides on its own whether the session also
     /// presents a software keyboard.
     nonisolated static func desiredInputSessionActive(inputs: StateInputs) -> Bool {
+        inputs.inputMode == .direct && desiredPaneInputActive(inputs: inputs)
+    }
+
+    nonisolated private static func desiredPaneInputActive(inputs: StateInputs) -> Bool {
         inputs.viewActive
             && inputs.activePaneInputEligible
             && inputs.activePaneWindowAttached
             && inputs.allowsLocalInputOwnership
             && !inputs.findNavigatorActive
-            && inputs.inputMode == .direct
     }
 
     /// A reconnecting pane may retain the existing input session only when
@@ -507,6 +515,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     }
 
     func removePane(_ paneId: UUID) {
+        composerInputs.removeValue(forKey: paneId)?.session?.setComposerInput(active: false, softwareKeyboardHidden: false)
         if explicitPresentationRecovery?.paneId == paneId {
             explicitPresentationRecovery = nil
         }
@@ -633,6 +642,45 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         markDirty(reason: "windowAttached")
     }
 
+    func registerComposerInput(_ session: any TerminalComposerInputSession, for paneId: UUID) {
+        guard composerInputs[paneId]?.session !== session else { return }
+        composerInputs[paneId]?.session?.setComposerInput(active: false, softwareKeyboardHidden: false)
+        composerInputs[paneId] = ComposerInput(session: session)
+        markDirty(reason: "composerAttached")
+    }
+
+    func unregisterComposerInput(_ session: any TerminalComposerInputSession, for paneId: UUID) {
+        guard composerInputs[paneId]?.session === session else { return }
+        session.setComposerInput(active: false, softwareKeyboardHidden: false)
+        composerInputs.removeValue(forKey: paneId)
+    }
+
+    func composerInputAvailabilityDidChange() { markDirty(reason: "composerAvailability") }
+
+    func isComposerVisible(for paneId: UUID) -> Bool {
+        activePaneId == paneId && activeInputMode == .chat && viewActive
+            && paneInputEligibleById[paneId] == true && !findNavigatorState.isActive
+    }
+
+    nonisolated static func desiredComposerInputActive(inputs: StateInputs) -> Bool {
+        inputs.inputMode == .chat && desiredPaneInputActive(inputs: inputs)
+    }
+
+    private func syncComposerInput() {
+        for (paneId, input) in composerInputs {
+            input.session?.setComposerInput(
+                active: activePaneId == paneId && Self.desiredComposerInputActive(inputs: currentInputs),
+                softwareKeyboardHidden: isUserHidden
+            )
+        }
+    }
+
+    private func releaseComposerInputs() {
+        for input in composerInputs.values {
+            input.session?.setComposerInput(active: false, softwareKeyboardHidden: false)
+        }
+    }
+
     var activeInputMode: TerminalInputMode {
         activePaneId.flatMap { inputModeProvider?($0) } ?? .direct
     }
@@ -691,6 +739,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
            let paneId = activePaneId ?? lastManagedPaneId {
             contentProtectionRecoveryState = .pending(paneId: paneId)
         }
+        releaseComposerInputs()
         // Capture both identities before clearing route ownership. A native
         // responder can exist before the first scheduled reconciliation.
         let paneIds = Set([activePaneId, lastManagedPaneId].compactMap { $0 })
@@ -720,6 +769,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     /// of the pop; forgetting coordinator ownership first prevents any queued
     /// reconciliation from calling `resignFirstResponder()` on the Back path.
     func relinquishRouteOwnershipForNavigation() {
+        for input in composerInputs.values { input.session?.preventComposerInputAcquisition() }
         pendingPresentationRequest = .none
         contentProtectionRecoveryState = .idle
         explicitPresentationRecovery = nil
@@ -817,7 +867,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         #if DEBUG
         guard !Self.usesUITestKeyboardFrameSimulation else { return }
         #endif
-        let composerOwnsInput = activeInputMode == .chat
+        let composerOwnsInput = activePaneId.flatMap { composerInputs[$0]?.session }?.isComposerFirstResponder == true
         guard composerOwnsInput || Self.desiredKeyboardVisible(inputs: currentInputs) else {
             clearSoftwareKeyboardObservation()
             return
@@ -1031,6 +1081,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     }
 
     private func releaseTerminalInputIfOwned() {
+        releaseComposerInputs()
         guard let terminal = activeTerminal else { return }
         let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
         guard snapshot.isFirstResponder || snapshot.isSoftwareInputActive else { return }
@@ -1091,6 +1142,9 @@ final class TerminalKeyboardCoordinator: ObservableObject {
 
     private func sync() {
         guard let reason = syncScheduler.beginSync() else { return }
+        // Native view registration can happen during SwiftUI updates. Publish
+        // the resulting focus facts in the scheduled reconciliation instead.
+        objectWillChange.send()
         defer {
             if syncScheduler.finishSync() {
                 scheduleSync()
@@ -1101,6 +1155,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         // inactive. Preserve that responder until activation or explicit
         // route deactivation; geometry alone must not release it.
         guard activeTerminalSceneIsForeground else { return }
+        syncComposerInput()
         let inputs = currentInputs
         let inputSessionDesired = Self.desiredInputSessionActive(inputs: inputs)
         let keyboardPresentationDesired = Self.desiredKeyboardVisible(inputs: inputs)

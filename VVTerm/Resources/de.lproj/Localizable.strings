@@ -2256,3 +2256,9 @@
 "Touch and hold to record" = "Zum Aufnehmen gedrückt halten";
 
 "Could not remove remote attachments." = "Die Anhänge auf dem Remotehost konnten nicht entfernt werden.";
+
+"Camera" = "Kamera";
+
+"Allow camera access in Settings to take a photo." = "Erlaube den Kamerazugriff in den Einstellungen, um ein Foto aufzunehmen.";
+
+"Camera is not available on this device." = "Auf diesem Gerät ist keine Kamera verfügbar.";

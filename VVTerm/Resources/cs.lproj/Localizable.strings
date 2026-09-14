@@ -2257,3 +2257,9 @@
 "Touch and hold to record" = "Nahrávání spustíte podržením";
 
 "Could not remove remote attachments." = "Vzdálené přílohy se nepodařilo odstranit.";
+
+"Camera" = "Fotoaparát";
+
+"Allow camera access in Settings to take a photo." = "Chcete-li pořídit fotku, povolte v Nastavení přístup k fotoaparátu.";
+
+"Camera is not available on this device." = "Fotoaparát není na tomto zařízení k dispozici.";

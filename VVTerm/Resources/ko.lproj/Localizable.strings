@@ -2255,3 +2255,9 @@
 "Touch and hold to record" = "길게 눌러 녹음";
 
 "Could not remove remote attachments." = "원격 첨부 파일을 삭제할 수 없습니다.";
+
+"Camera" = "카메라";
+
+"Allow camera access in Settings to take a photo." = "사진을 찍으려면 설정에서 카메라 접근을 허용하세요.";
+
+"Camera is not available on this device." = "이 기기에서는 카메라를 사용할 수 없습니다.";

@@ -22,6 +22,34 @@ final class TerminalComposerStoreTests: XCTestCase {
         XCTAssertEqual(store.draft, "Review these files")
     }
 
+    func testUploadIndicatorUsesAttachmentIdentityAndClearsWhenFinished() async throws {
+        var finishUpload: CheckedContinuation<Void, Never>?
+        let store = TerminalComposerStore(resolveRoute: {
+            TerminalAttachmentRoute(upload: { payload in
+                await withCheckedContinuation { finishUpload = $0 }
+                return RemoteClipboardUpload(remotePath: "/tmp/file", pastedPathToken: "/tmp/file", mimeType: payload.mimeType, sizeBytes: payload.sizeBytes)
+            }, remove: { _ in }, submit: { _, _ in })
+        })
+        store.setMode(.chat)
+        let first = TerminalAttachmentPayload(data: Data([1]), contentType: .png, suggestedFilename: "same.png")
+        let second = TerminalAttachmentPayload(data: Data([2]), contentType: .png, suggestedFilename: "same.png")
+        try store.add([first, second])
+        while finishUpload == nil { await Task.yield() }
+        XCTAssertTrue(store.isUploading(first))
+        XCTAssertFalse(store.isUploading(second))
+        XCTAssertFalse(store.canSend)
+        let firstFinish = finishUpload
+        finishUpload = nil
+        firstFinish?.resume()
+        while finishUpload == nil { await Task.yield() }
+        XCTAssertFalse(store.isUploading(first))
+        XCTAssertTrue(store.isUploading(second))
+        finishUpload?.resume()
+        await finish(store)
+        XCTAssertFalse(store.isUploading(second))
+        XCTAssertTrue(store.canSend)
+    }
+
     func testPayloadPreservesTypeFilenameAndUsesSafeExtension() {
         let image = ClipboardImagePayload(data: Data([1, 2]), mimeType: "image/png", utType: UTType.png.identifier, suggestedExtension: "png")
         let attachment = TerminalAttachmentPayload(image: image)
@@ -53,6 +81,30 @@ final class TerminalComposerStoreTests: XCTestCase {
     }
 
     #if os(iOS)
+    func testCameraResultPreservesPhotoAndReportsCancelOrInvalidImage() throws {
+        var result: Result<TerminalAttachmentPayload, Error>?
+        var completions = 0
+        let delegate = TerminalCameraPicker.Coordinator { value in result = value; completions += 1 }
+        let picker = UIImagePickerController()
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 12, height: 8)).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 12, height: 8))
+        }
+        delegate.imagePickerController(picker, didFinishPickingMediaWithInfo: [.originalImage: image])
+        let payload = try XCTUnwrap(result).get()
+        XCTAssertEqual(payload.contentType, .jpeg)
+        XCTAssertEqual(UIImage(data: payload.data)?.cgImage?.width, image.cgImage?.width)
+        XCTAssertEqual(UIImage(data: payload.data)?.cgImage?.height, image.cgImage?.height)
+        XCTAssertTrue(payload.suggestedFilename.hasPrefix("camera-"))
+        XCTAssertTrue(payload.suggestedFilename.hasSuffix(".jpg"))
+        delegate.imagePickerControllerDidCancel(picker)
+        XCTAssertNil(result)
+        delegate.imagePickerController(picker, didFinishPickingMediaWithInfo: [:])
+        XCTAssertThrowsError(try XCTUnwrap(result).get())
+        XCTAssertEqual(completions, 3)
+        XCTAssertFalse((Bundle.main.infoDictionary?["NSCameraUsageDescription"] as? String ?? "").isEmpty)
+    }
+
     func testPlaceholderUsesEditorFontAndStaysVerticallyCentered() {
         let editor = ComposerTextView(frame: CGRect(x: 0, y: 0, width: 280, height: 44))
         for size: CGFloat in [17, 23, 31] {

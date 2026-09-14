@@ -65,6 +65,99 @@ extension TerminalKeyboardCoordinatorTests {
         }
 
         @Test @MainActor
+        func coordinatorOwnsComposerFocusAcrossFindDisconnectCloseAndExternalInput() async {
+            let pane = UUID(), other = UUID()
+            let terminal = TerminalKeyboardInputSessionSpy()
+            let composer = ComposerInputSpy()
+            let coordinator = makeTerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { _ in terminal }
+            coordinator.inputModeProvider = { _ in .chat }
+            coordinator.setActivePane(pane)
+            coordinator.setViewActive(true)
+            coordinator.setWindowAttached(true, for: pane)
+            coordinator.setPaneInputEligible(true, for: pane)
+            coordinator.registerComposerInput(composer, for: pane)
+            await drainMainQueue()
+            #expect(composer.active)
+            #expect(coordinator.isComposerVisible(for: pane))
+            coordinator.setFindNavigatorActive(true, for: pane)
+            await drainMainQueue()
+            #expect(!composer.active)
+            #expect(!coordinator.isComposerVisible(for: pane))
+            coordinator.setFindNavigatorActive(false, for: pane)
+            await drainMainQueue()
+            #expect(composer.active)
+            coordinator.setPaneInputEligible(false, for: pane)
+            await drainMainQueue()
+            #expect(!composer.active)
+            coordinator.setPaneInputEligible(true, for: pane)
+            await drainMainQueue()
+            #expect(composer.active)
+            coordinator.userRequestedHide()
+            await drainMainQueue()
+            #expect(composer.active && composer.keyboardHidden)
+            coordinator.userRequestedShow()
+            await drainMainQueue()
+            #expect(composer.active && !composer.keyboardHidden)
+            coordinator.activeTerminalSceneWillDeactivate(for: pane)
+            await drainMainQueue()
+            #expect(composer.active)
+            coordinator.activeTerminalSceneDidActivate(for: pane)
+            await drainMainQueue()
+            #expect(composer.active)
+            coordinator.keyboardUITestReceiveKeyboardEndFrame(nil, isLocal: false)
+            await drainMainQueue()
+            #expect(!composer.active)
+            coordinator.userRequestedShow()
+            await drainMainQueue()
+            #expect(composer.active)
+            coordinator.setActivePane(other)
+            await drainMainQueue()
+            #expect(!composer.active)
+            coordinator.setActivePane(pane)
+            await drainMainQueue()
+            #expect(composer.active)
+            coordinator.deactivateInputImmediately(reason: .routeModal)
+            #expect(!composer.active)
+            coordinator.setActivePane(pane)
+            coordinator.setViewActive(true)
+            await drainMainQueue()
+            #expect(composer.active)
+            coordinator.relinquishRouteOwnershipForNavigation()
+            #expect(!composer.allowsAcquisition)
+            #expect(composer.active) // UIKit releases it when navigation removes the view.
+            coordinator.setActivePane(pane)
+            coordinator.setViewActive(true)
+            await drainMainQueue()
+            coordinator.removePane(pane)
+            #expect(!composer.active)
+        }
+
+        @Test @MainActor
+        func replacingComposerRejectsOldViewTeardown() async {
+            let pane = UUID()
+            let terminal = TerminalKeyboardInputSessionSpy()
+            let old = ComposerInputSpy(), replacement = ComposerInputSpy()
+            let coordinator = makeTerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { _ in terminal }
+            coordinator.inputModeProvider = { _ in .chat }
+            coordinator.setActivePane(pane)
+            coordinator.setViewActive(true)
+            coordinator.setWindowAttached(true, for: pane)
+            coordinator.setPaneInputEligible(true, for: pane)
+            coordinator.registerComposerInput(old, for: pane)
+            await drainMainQueue()
+            #expect(old.active)
+            coordinator.registerComposerInput(replacement, for: pane)
+            coordinator.unregisterComposerInput(old, for: pane)
+            await drainMainQueue()
+            #expect(!old.active)
+            #expect(replacement.active)
+            coordinator.removePane(pane)
+            #expect(!replacement.active)
+        }
+
+        @Test @MainActor
         func composerKeyboardGeometryDoesNotRequireGhosttyResponder() async {
             let pane = UUID()
             let session = TerminalKeyboardInputSessionSpy()
@@ -79,6 +172,9 @@ extension TerminalKeyboardCoordinatorTests {
             coordinator.setWindowAttached(true, for: pane)
             coordinator.setViewActive(true)
             coordinator.composerModeDidChange(for: pane)
+            await drainMainQueue()
+            let composer = ComposerInputSpy()
+            coordinator.registerComposerInput(composer, for: pane)
             await drainMainQueue()
             let docked = CGRect(x: 0, y: 700, width: 1024, height: 300)
             events.send(.frameChanged(docked))
@@ -130,6 +226,19 @@ extension TerminalKeyboardCoordinatorTests {
                 #expect(!TerminalKeyboardCoordinator.desiredKeyboardVisible(inputs: inputs))
             }
         }
+    }
+}
+@MainActor
+private final class ComposerInputSpy: TerminalComposerInputSession {
+    var active = false
+    var allowsAcquisition = false
+    var keyboardHidden = false
+    var isComposerFirstResponder: Bool { active }
+    func preventComposerInputAcquisition() { allowsAcquisition = false }
+    func setComposerInput(active: Bool, softwareKeyboardHidden: Bool) {
+        self.active = active
+        allowsAcquisition = active
+        keyboardHidden = softwareKeyboardHidden
     }
 }
 #endif

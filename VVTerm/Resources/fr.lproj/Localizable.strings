@@ -2258,3 +2258,9 @@
 "Touch and hold to record" = "Maintenez appuyé pour enregistrer";
 
 "Could not remove remote attachments." = "Impossible de supprimer les pièces jointes distantes.";
+
+"Camera" = "Appareil photo";
+
+"Allow camera access in Settings to take a photo." = "Autorisez l’accès à l’appareil photo dans Réglages pour prendre une photo.";
+
+"Camera is not available on this device." = "L’appareil photo n’est pas disponible sur cet appareil.";

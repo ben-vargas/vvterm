@@ -2255,3 +2255,9 @@
 "Touch and hold to record" = "Touch and hold to record";
 
 "Could not remove remote attachments." = "Could not remove remote attachments.";
+
+"Camera" = "Camera";
+
+"Allow camera access in Settings to take a photo." = "Allow camera access in Settings to take a photo.";
+
+"Camera is not available on this device." = "Camera is not available on this device.";
