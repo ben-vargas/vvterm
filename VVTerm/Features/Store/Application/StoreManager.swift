@@ -233,10 +233,6 @@ final class StoreManager: ObservableObject {
         ))
     }
 
-    func introductoryOfferState(for product: StoreProduct) async -> ProPlanIntroductoryOfferState {
-        await client.introductoryOfferState(productId: product.id)
-    }
-
     // MARK: - Purchase
 
     func purchase(_ product: StoreProduct) async {

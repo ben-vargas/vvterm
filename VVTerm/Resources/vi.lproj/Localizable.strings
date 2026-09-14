@@ -1758,10 +1758,7 @@
 "Rotation Rate" = "Tốc độ quay";
 "Physical Disk Status" = "Tình trạng ổ đĩa vật lý";
 "Waiting for network…" = "Đang chờ mạng…";
-"7 days free" = "Miễn phí 7 ngày";
 "Then %@ per year." = "Sau đó %@ mỗi năm.";
-"Start 7-Day Free Trial" = "Bắt đầu dùng thử miễn phí 7 ngày";
-"7 days free, then %@ per year. Auto-renews until canceled." = "Miễn phí 7 ngày, sau đó %@ mỗi năm. Tự động gia hạn cho đến khi hủy.";
 "Deny" = "Từ chối";
 "Ask Every Time" = "Hỏi mỗi lần";
 "Always Allow" = "Luôn cho phép";
@@ -2268,3 +2265,15 @@
 "Notifications are unavailable." = "Thông báo không khả dụng.";
 
 "Notifications" = "Thông báo";
+
+/* Introductory offers: StoreKit supplies prices; duration labels use plural rules. */
+"Free trial: %@" = "Dùng thử miễn phí: %@";
+"Then %@ per month." = "Sau đó %@ mỗi tháng.";
+"Offer duration: %@. Then %@ per month." = "Thời hạn ưu đãi: %@. Sau đó %@ mỗi tháng.";
+"Offer duration: %@. Then %@ per year." = "Thời hạn ưu đãi: %@. Sau đó %@ mỗi năm.";
+"Start Free Trial" = "Bắt đầu dùng thử miễn phí";
+"%@. %@ Auto-renews until canceled." = "%@. %@ Tự động gia hạn cho đến khi hủy.";
+"%lld days" = "%lld ngày";
+"%lld weeks" = "%lld tuần";
+"%lld months" = "%lld tháng";
+"%lld years" = "%lld năm";

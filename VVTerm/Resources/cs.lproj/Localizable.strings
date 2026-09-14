@@ -1714,10 +1714,7 @@
 "Rotation Rate" = "Rychlost otáčení";
 "Physical Disk Status" = "Stav fyzického disku";
 "Waiting for network…" = "Čekání na síť…";
-"7 days free" = "7 dní zdarma";
 "Then %@ per year." = "Poté %@ ročně.";
-"Start 7-Day Free Trial" = "Zahájit 7denní bezplatnou zkušební verzi";
-"7 days free, then %@ per year. Auto-renews until canceled." = "7 dní zdarma, poté %@ ročně. Automaticky se obnovuje, dokud předplatné nezrušíte.";
 "Deny" = "Zamítnout";
 "Ask Every Time" = "Vždy se zeptat";
 "Always Allow" = "Vždy povolit";
@@ -2224,3 +2221,15 @@
 "Notifications are unavailable." = "Oznámení nejsou k dispozici.";
 
 "Notifications" = "Oznámení";
+
+/* Introductory offers: StoreKit supplies prices; duration labels use plural rules. */
+"Free trial: %@" = "Bezplatné zkušební období: %@";
+"Then %@ per month." = "Poté %@ měsíčně.";
+"Offer duration: %@. Then %@ per month." = "Doba nabídky: %@. Poté %@ měsíčně.";
+"Offer duration: %@. Then %@ per year." = "Doba nabídky: %@. Poté %@ ročně.";
+"Start Free Trial" = "Zahájit bezplatné zkušební období";
+"%@. %@ Auto-renews until canceled." = "%@. %@ Automaticky se obnovuje až do zrušení.";
+"%lld days" = "%lld dní";
+"%lld weeks" = "%lld týdnů";
+"%lld months" = "%lld měsíců";
+"%lld years" = "%lld let";

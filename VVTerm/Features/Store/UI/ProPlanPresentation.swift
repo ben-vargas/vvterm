@@ -32,59 +32,76 @@ struct ProPlanPresentation {
     let plan: ProPlanKind
     let displayPrice: String
     let introductoryOfferState: ProPlanIntroductoryOfferState
+    private let bundle: Bundle
 
     init(
         plan: ProPlanKind,
         displayPrice: String,
-        introductoryOfferState: ProPlanIntroductoryOfferState = .unavailable
+        introductoryOfferState: ProPlanIntroductoryOfferState = .unavailable,
+        bundle: Bundle = .main
     ) {
         self.plan = plan
         self.displayPrice = displayPrice
-        self.introductoryOfferState = plan == .yearly ? introductoryOfferState : .unavailable
+        self.introductoryOfferState = plan == .lifetime ? .unavailable : introductoryOfferState
+        self.bundle = bundle
     }
 
     var priceLine: String {
-        if advertisesFreeTrial {
-            return String(localized: "7 days free")
+        if let offer {
+            switch offer.paymentMode {
+            case .freeTrial:
+                return LocalizedFormat.string("Free trial: %@", duration(offer.totalPeriodValue, unit: offer.periodUnit), bundle: bundle)
+            case .payUpFront:
+                return LocalizedFormat.string("%@ total", offer.displayPrice, bundle: bundle)
+            case .payAsYouGo:
+                return LocalizedFormat.string("%@ / %@", offer.displayPrice, duration(offer.periodValue, unit: offer.periodUnit), bundle: bundle)
+            }
         }
-
         switch plan {
         case .monthly:
-            return String(format: String(localized: "%@ per month"), displayPrice)
+            return LocalizedFormat.string("%@ per month", displayPrice, bundle: bundle)
         case .yearly:
-            return String(format: String(localized: "%@ per year"), displayPrice)
+            return LocalizedFormat.string("%@ per year", displayPrice, bundle: bundle)
         case .lifetime:
-            return String(format: String(localized: "%@ one time"), displayPrice)
+            return LocalizedFormat.string("%@ one time", displayPrice, bundle: bundle)
         }
     }
 
     var detail: String {
-        advertisesFreeTrial
-            ? String(format: String(localized: "Then %@ per year."), displayPrice)
-            : plan.detail
+        guard let offer else { return plan.detail }
+        if offer.paymentMode == .freeTrial {
+            return LocalizedFormat.string(
+                plan == .monthly ? "Then %@ per month." : "Then %@ per year.",
+                displayPrice, bundle: bundle
+            )
+        }
+        // A label keeps duration units independent of grammatical case in each language.
+        return LocalizedFormat.string(
+            plan == .monthly
+                ? "Offer duration: %@. Then %@ per month."
+                : "Offer duration: %@. Then %@ per year.",
+            duration(offer.totalPeriodValue, unit: offer.periodUnit), displayPrice, bundle: bundle
+        )
     }
 
     var purchaseButtonTitle: String {
         if plan == .lifetime {
-            return String(format: String(localized: "Buy %@"), displayPrice)
+            return LocalizedFormat.string("Buy %@", displayPrice, bundle: bundle)
         }
-        if advertisesFreeTrial {
-            return String(localized: "Start 7-Day Free Trial")
+        if offer?.paymentMode == .freeTrial {
+            return LocalizedFormat.string("Start Free Trial", bundle: bundle)
         }
-        return String(format: String(localized: "Subscribe for %@"), displayPrice)
+        return LocalizedFormat.string("Subscribe for %@", offer?.displayPrice ?? displayPrice, bundle: bundle)
     }
 
     var renewalDisclosure: String {
         if plan == .lifetime {
-            return String(localized: "One-time purchase. No subscription renewal.")
+            return LocalizedFormat.string("One-time purchase. No subscription renewal.", bundle: bundle)
         }
-        if advertisesFreeTrial {
-            return String(
-                format: String(localized: "7 days free, then %@ per year. Auto-renews until canceled."),
-                displayPrice
-            )
+        if offer != nil {
+            return LocalizedFormat.string("%@. %@ Auto-renews until canceled.", priceLine, detail, bundle: bundle)
         }
-        return String(localized: "Auto-renews until canceled.")
+        return LocalizedFormat.string("Auto-renews until canceled.", bundle: bundle)
     }
 
     var planAccessibilityLabel: String {
@@ -92,12 +109,24 @@ struct ProPlanPresentation {
     }
 
     var purchaseButtonAccessibilityLabel: String {
-        advertisesFreeTrial
+        offer != nil
             ? [purchaseButtonTitle, renewalDisclosure].joined(separator: ". ")
             : purchaseButtonTitle
     }
 
-    private var advertisesFreeTrial: Bool {
-        introductoryOfferState == .eligibleForSevenDayFreeTrial
+    private var offer: StoreIntroductoryOffer? {
+        guard case .eligible(let offer) = introductoryOfferState else { return nil }
+        return offer
+    }
+
+    private func duration(_ value: Int, unit: StoreIntroductoryOffer.PeriodUnit) -> String {
+        let key: String
+        switch unit {
+        case .day: key = "%lld days"
+        case .week: key = "%lld weeks"
+        case .month: key = "%lld months"
+        case .year: key = "%lld years"
+        }
+        return LocalizedFormat.string(key, Int64(value), bundle: bundle)
     }
 }

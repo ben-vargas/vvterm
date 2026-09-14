@@ -462,5 +462,85 @@
 			<string>%lld рабочих пространств</string>
 		</dict>
 	</dict>
+	<key>%lld days</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld день</string>
+			<key>few</key>
+			<string>%lld дня</string>
+			<key>many</key>
+			<string>%lld дней</string>
+			<key>other</key>
+			<string>%lld дней</string>
+		</dict>
+	</dict>
+	<key>%lld weeks</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld неделя</string>
+			<key>few</key>
+			<string>%lld недели</string>
+			<key>many</key>
+			<string>%lld недель</string>
+			<key>other</key>
+			<string>%lld недель</string>
+		</dict>
+	</dict>
+	<key>%lld months</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld месяц</string>
+			<key>few</key>
+			<string>%lld месяца</string>
+			<key>many</key>
+			<string>%lld месяцев</string>
+			<key>other</key>
+			<string>%lld месяцев</string>
+		</dict>
+	</dict>
+	<key>%lld years</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld год</string>
+			<key>few</key>
+			<string>%lld года</string>
+			<key>many</key>
+			<string>%lld лет</string>
+			<key>other</key>
+			<string>%lld лет</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

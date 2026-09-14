@@ -9,9 +9,3 @@ nonisolated enum ProPlanKind: String, Identifiable, Equatable, Sendable {
 
     var id: String { rawValue }
 }
-
-nonisolated enum ProPlanIntroductoryOfferState: Equatable, Sendable {
-    case unavailable
-    case ineligible
-    case eligibleForSevenDayFreeTrial
-}

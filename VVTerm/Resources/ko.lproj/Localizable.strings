@@ -1712,10 +1712,7 @@
 "Rotation Rate" = "회전 속도";
 "Physical Disk Status" = "물리 디스크 상태";
 "Waiting for network…" = "네트워크 대기 중…";
-"7 days free" = "7일 무료";
 "Then %@ per year." = "이후 연간 %@입니다.";
-"Start 7-Day Free Trial" = "7일 무료 체험 시작";
-"7 days free, then %@ per year. Auto-renews until canceled." = "7일 무료 후 연간 %@입니다. 취소할 때까지 자동 갱신됩니다.";
 "Deny" = "거부";
 "Ask Every Time" = "매번 묻기";
 "Always Allow" = "항상 허용";
@@ -2222,3 +2219,15 @@
 "Notifications are unavailable." = "알림을 사용할 수 없습니다.";
 
 "Notifications" = "알림";
+
+/* Introductory offers: StoreKit supplies prices; duration labels use plural rules. */
+"Free trial: %@" = "무료 체험: %@";
+"Then %@ per month." = "이후 매월 %@.";
+"Offer duration: %@. Then %@ per month." = "혜택 기간: %@. 이후 매월 %@.";
+"Offer duration: %@. Then %@ per year." = "혜택 기간: %@. 이후 매년 %@.";
+"Start Free Trial" = "무료 체험 시작";
+"%@. %@ Auto-renews until canceled." = "%@. %@ 취소할 때까지 자동 갱신됩니다.";
+"%lld days" = "%lld일";
+"%lld weeks" = "%lld주";
+"%lld months" = "%lld개월";
+"%lld years" = "%lld년";

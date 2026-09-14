@@ -7,8 +7,19 @@ final class AppStoreKitClient: StoreClient {
 
     func products(for identifiers: [String]) async throws -> [StoreProduct] {
         let products = try await Product.products(for: identifiers)
+        var loadedProducts: [StoreProduct] = []
+        for product in products {
+            let offerState = await introductoryOfferState(for: product)
+            try Task.checkCancellation()
+            loadedProducts.append(StoreProduct(
+                id: product.id,
+                displayName: product.displayName,
+                displayPrice: product.displayPrice,
+                introductoryOfferState: offerState
+            ))
+        }
         productsById = Dictionary(uniqueKeysWithValues: products.map { ($0.id, $0) })
-        return products.map(StoreProduct.init)
+        return loadedProducts
     }
 
     func purchase(productId: String) async throws -> StorePurchaseResult {
@@ -65,20 +76,13 @@ final class AppStoreKitClient: StoreClient {
         )
     }
 
-    func introductoryOfferState(productId: String) async -> ProPlanIntroductoryOfferState {
-        guard productId == VVTermProducts.proYearly,
-              let product = try? await product(for: productId),
-              let subscription = product.subscription,
+    private func introductoryOfferState(for product: Product) async -> ProPlanIntroductoryOfferState {
+        guard let subscription = product.subscription,
               let offer = subscription.introductoryOffer,
-              offer.paymentMode == .freeTrial,
-              offer.periodCount == 1,
-              offer.period.isOneWeek else {
+              let terms = StoreIntroductoryOffer(offer) else {
             return .unavailable
         }
-
-        return await subscription.isEligibleForIntroOffer
-            ? .eligibleForSevenDayFreeTrial
-            : .ineligible
+        return await subscription.isEligibleForIntroOffer ? .eligible(terms) : .ineligible
     }
 
     func transactionUpdates() -> AsyncStream<StoreTransactionUpdate> {
@@ -117,16 +121,6 @@ final class AppStoreKitClient: StoreClient {
 
     private func firstCachedProduct(for productIds: [String]) -> Product? {
         return productIds.lazy.compactMap { self.productsById[$0] }.first
-    }
-}
-
-private extension StoreProduct {
-    init(product: Product) {
-        self.init(
-            id: product.id,
-            displayName: product.displayName,
-            displayPrice: product.displayPrice
-        )
     }
 }
 
@@ -181,8 +175,29 @@ private extension StoreSubscriptionStatus {
     }
 }
 
-private extension Product.SubscriptionPeriod {
-    var isOneWeek: Bool {
-        (unit == .week && value == 1) || (unit == .day && value == 7)
+extension StoreIntroductoryOffer {
+    init?(_ offer: Product.SubscriptionOffer) {
+        let mode: PaymentMode
+        switch offer.paymentMode {
+        case .freeTrial: mode = .freeTrial
+        case .payUpFront: mode = .payUpFront
+        case .payAsYouGo: mode = .payAsYouGo
+        default: return nil
+        }
+        let unit: PeriodUnit
+        switch offer.period.unit {
+        case .day: unit = .day
+        case .week: unit = .week
+        case .month: unit = .month
+        case .year: unit = .year
+        @unknown default: return nil
+        }
+        self.init(
+            paymentMode: mode,
+            displayPrice: offer.displayPrice,
+            periodUnit: unit,
+            periodValue: offer.period.value,
+            periodCount: offer.periodCount
+        )
     }
 }

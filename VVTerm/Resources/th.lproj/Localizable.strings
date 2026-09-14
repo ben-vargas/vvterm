@@ -1713,10 +1713,7 @@
 "Rotation Rate" = "ความเร็วรอบ";
 "Physical Disk Status" = "สถานะดิสก์จริง";
 "Waiting for network…" = "กำลังรอเครือข่าย…";
-"7 days free" = "ทดลองใช้ฟรี 7 วัน";
 "Then %@ per year." = "จากนั้น %@ ต่อปี";
-"Start 7-Day Free Trial" = "เริ่มทดลองใช้ฟรี 7 วัน";
-"7 days free, then %@ per year. Auto-renews until canceled." = "ทดลองใช้ฟรี 7 วัน จากนั้น %@ ต่อปี ต่ออายุอัตโนมัติจนกว่าจะยกเลิก";
 "Deny" = "ปฏิเสธ";
 "Ask Every Time" = "ถามทุกครั้ง";
 "Always Allow" = "อนุญาตเสมอ";
@@ -2223,3 +2220,15 @@
 "Notifications are unavailable." = "ไม่สามารถใช้การแจ้งเตือนได้";
 
 "Notifications" = "การแจ้งเตือน";
+
+/* Introductory offers: StoreKit supplies prices; duration labels use plural rules. */
+"Free trial: %@" = "ทดลองใช้ฟรี: %@";
+"Then %@ per month." = "จากนั้น %@ ต่อเดือน";
+"Offer duration: %@. Then %@ per month." = "ระยะเวลาโปรโมชัน: %@ จากนั้น %@ ต่อเดือน";
+"Offer duration: %@. Then %@ per year." = "ระยะเวลาโปรโมชัน: %@ จากนั้น %@ ต่อปี";
+"Start Free Trial" = "เริ่มทดลองใช้ฟรี";
+"%@. %@ Auto-renews until canceled." = "%@ %@ ต่ออายุอัตโนมัติจนกว่าจะยกเลิก";
+"%lld days" = "%lld วัน";
+"%lld weeks" = "%lld สัปดาห์";
+"%lld months" = "%lld เดือน";
+"%lld years" = "%lld ปี";

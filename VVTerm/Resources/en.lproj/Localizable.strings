@@ -1765,10 +1765,7 @@
 "Rotation Rate" = "Rotation Rate";
 "Physical Disk Status" = "Physical Disk Status";
 "Waiting for network…" = "Waiting for network…";
-"7 days free" = "7 days free";
 "Then %@ per year." = "Then %@ per year.";
-"Start 7-Day Free Trial" = "Start 7-Day Free Trial";
-"7 days free, then %@ per year. Auto-renews until canceled." = "7 days free, then %@ per year. Auto-renews until canceled.";
 "Deny" = "Deny";
 "Ask Every Time" = "Ask Every Time";
 "Always Allow" = "Always Allow";
@@ -2222,3 +2219,15 @@
 "Notifications are unavailable." = "Notifications are unavailable.";
 
 "Notifications" = "Notifications";
+
+/* Introductory offers: StoreKit supplies prices; duration labels use plural rules. */
+"Free trial: %@" = "Free trial: %@";
+"Then %@ per month." = "Then %@ per month.";
+"Offer duration: %@. Then %@ per month." = "Offer duration: %@. Then %@ per month.";
+"Offer duration: %@. Then %@ per year." = "Offer duration: %@. Then %@ per year.";
+"Start Free Trial" = "Start Free Trial";
+"%@. %@ Auto-renews until canceled." = "%@. %@ Auto-renews until canceled.";
+"%lld days" = "%lld days";
+"%lld weeks" = "%lld weeks";
+"%lld months" = "%lld months";
+"%lld years" = "%lld years";

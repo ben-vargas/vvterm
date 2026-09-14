@@ -1715,10 +1715,7 @@
 "Rotation Rate" = "Vitesse de rotation";
 "Physical Disk Status" = "État du disque physique";
 "Waiting for network…" = "En attente du réseau…";
-"7 days free" = "7 jours gratuits";
 "Then %@ per year." = "Puis %@ par an.";
-"Start 7-Day Free Trial" = "Commencer l’essai gratuit de 7 jours";
-"7 days free, then %@ per year. Auto-renews until canceled." = "7 jours gratuits, puis %@ par an. Renouvellement automatique jusqu’à résiliation.";
 "Deny" = "Refuser";
 "Ask Every Time" = "Toujours demander";
 "Always Allow" = "Toujours autoriser";
@@ -2225,3 +2222,15 @@
 "Notifications are unavailable." = "Les notifications ne sont pas disponibles.";
 
 "Notifications" = "Notifications";
+
+/* Introductory offers: StoreKit supplies prices; duration labels use plural rules. */
+"Free trial: %@" = "Essai gratuit : %@";
+"Then %@ per month." = "Puis %@ par mois.";
+"Offer duration: %@. Then %@ per month." = "Durée de l’offre : %@. Puis %@ par mois.";
+"Offer duration: %@. Then %@ per year." = "Durée de l’offre : %@. Puis %@ par an.";
+"Start Free Trial" = "Commencer l’essai gratuit";
+"%@. %@ Auto-renews until canceled." = "%@. %@ Renouvellement automatique jusqu’à résiliation.";
+"%lld days" = "%lld jours";
+"%lld weeks" = "%lld semaines";
+"%lld months" = "%lld mois";
+"%lld years" = "%lld ans";

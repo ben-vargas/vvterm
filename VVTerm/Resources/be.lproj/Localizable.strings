@@ -1714,10 +1714,7 @@
 "Rotation Rate" = "Хуткасць кручэння";
 "Physical Disk Status" = "Стан фізічнага дыска";
 "Waiting for network…" = "Чаканне сеткі…";
-"7 days free" = "7 дзён бясплатна";
 "Then %@ per year." = "Затым %@ у год.";
-"Start 7-Day Free Trial" = "Пачаць 7-дзённы бясплатны пробны перыяд";
-"7 days free, then %@ per year. Auto-renews until canceled." = "7 дзён бясплатна, затым %@ у год. Аўтаматычна падаўжаецца, пакуль не будзе скасавана.";
 "Deny" = "Забараніць";
 "Ask Every Time" = "Пытацца кожны раз";
 "Always Allow" = "Заўсёды дазваляць";
@@ -2224,3 +2221,15 @@
 "Notifications are unavailable." = "Апавяшчэнні недаступныя.";
 
 "Notifications" = "Апавяшчэнні";
+
+/* Introductory offers: StoreKit supplies prices; duration labels use plural rules. */
+"Free trial: %@" = "Бясплатны пробны перыяд: %@";
+"Then %@ per month." = "Потым %@ у месяц.";
+"Offer duration: %@. Then %@ per month." = "Тэрмін прапановы: %@. Потым %@ у месяц.";
+"Offer duration: %@. Then %@ per year." = "Тэрмін прапановы: %@. Потым %@ у год.";
+"Start Free Trial" = "Пачаць бясплатны пробны перыяд";
+"%@. %@ Auto-renews until canceled." = "%@. %@ Аўтаматычна падаўжаецца да скасавання.";
+"%lld days" = "%lld дзён";
+"%lld weeks" = "%lld тыдняў";
+"%lld months" = "%lld месяцаў";
+"%lld years" = "%lld гадоў";

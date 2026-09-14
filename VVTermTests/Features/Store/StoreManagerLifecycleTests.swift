@@ -693,7 +693,6 @@ private final class StoreClientFake: StoreClient {
     var purchaseResult: StorePurchaseResult = .pending
     var entitlementResult = StoreEntitlementResult.free
     var entitlementResults: [StoreEntitlementResult] = []
-    var introductoryOfferState: ProPlanIntroductoryOfferState = .unavailable
     var onEntitlementRequest: (() -> Void)?
     var onProductRequest: (() -> Void)?
     var onTransactionStreamTermination: (() -> Void)?
@@ -748,10 +747,6 @@ private final class StoreClientFake: StoreClient {
             return entitlementResults.removeFirst()
         }
         return entitlementResult
-    }
-
-    func introductoryOfferState(productId: String) async -> ProPlanIntroductoryOfferState {
-        introductoryOfferState
     }
 
     func transactionUpdates() -> AsyncStream<StoreTransactionUpdate> {

@@ -10,7 +10,6 @@ struct ProUpgradeSheet: View {
     private let onDismiss: (() -> Void)?
 
     @State private var selectedPlan: ProPlanKind = .yearly
-    @State private var yearlyOfferState: ProPlanIntroductoryOfferState = .unavailable
     @State private var showSuccess = false
     @State private var alertInfo: AlertInfo?
     @State private var showCancelSubscriptionAlert = false
@@ -336,23 +335,15 @@ struct ProUpgradeSheet: View {
         ProPlanPresentation(
             plan: plan,
             displayPrice: product.displayPrice,
-            introductoryOfferState: yearlyOfferState
+            introductoryOfferState: product.introductoryOfferState
         )
-    }
-
-    private func refreshYearlyOfferState() async {
-        guard let yearlyProduct = storeManager.yearlyProduct else {
-            yearlyOfferState = .unavailable
-            return
-        }
-        yearlyOfferState = await storeManager.introductoryOfferState(for: yearlyProduct)
     }
 
     private func preparePaywall() async {
         storeManager.notePaywallPresented(source: source)
         await storeManager.loadProducts()
+        guard !Task.isCancelled else { return }
         selectedPlan = defaultPlan
-        await refreshYearlyOfferState()
     }
 
     private var crossPlatformBenefitTitle: String {

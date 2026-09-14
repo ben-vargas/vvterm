@@ -1713,10 +1713,7 @@
 "Rotation Rate" = "Скорость вращения";
 "Physical Disk Status" = "Состояние физического диска";
 "Waiting for network…" = "Ожидание сети…";
-"7 days free" = "7 дней бесплатно";
 "Then %@ per year." = "Затем %@ в год.";
-"Start 7-Day Free Trial" = "Начать 7-дневный бесплатный пробный период";
-"7 days free, then %@ per year. Auto-renews until canceled." = "7 дней бесплатно, затем %@ в год. Автоматически продлевается до отмены.";
 "Deny" = "Запретить";
 "Ask Every Time" = "Спрашивать каждый раз";
 "Always Allow" = "Всегда разрешать";
@@ -2223,3 +2220,15 @@
 "Notifications are unavailable." = "Уведомления недоступны.";
 
 "Notifications" = "Уведомления";
+
+/* Introductory offers: StoreKit supplies prices; duration labels use plural rules. */
+"Free trial: %@" = "Бесплатный пробный период: %@";
+"Then %@ per month." = "Затем %@ в месяц.";
+"Offer duration: %@. Then %@ per month." = "Срок предложения: %@. Затем %@ в месяц.";
+"Offer duration: %@. Then %@ per year." = "Срок предложения: %@. Затем %@ в год.";
+"Start Free Trial" = "Начать бесплатный пробный период";
+"%@. %@ Auto-renews until canceled." = "%@. %@ Автоматически продлевается до отмены.";
+"%lld days" = "%lld дней";
+"%lld weeks" = "%lld недель";
+"%lld months" = "%lld месяцев";
+"%lld years" = "%lld лет";

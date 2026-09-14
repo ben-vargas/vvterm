@@ -18,6 +18,5 @@ protocol StoreClient: AnyObject, Sendable {
     func purchase(productId: String) async throws -> StorePurchaseResult
     func sync() async throws
     func entitlements(subscriptionProductIds: [String]) async -> StoreEntitlementResult
-    func introductoryOfferState(productId: String) async -> ProPlanIntroductoryOfferState
     func transactionUpdates() -> AsyncStream<StoreTransactionUpdate>
 }

@@ -462,5 +462,85 @@
 			<string>%lld працоўных прастор</string>
 		</dict>
 	</dict>
+	<key>%lld days</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld дзень</string>
+			<key>few</key>
+			<string>%lld дні</string>
+			<key>many</key>
+			<string>%lld дзён</string>
+			<key>other</key>
+			<string>%lld дзён</string>
+		</dict>
+	</dict>
+	<key>%lld weeks</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld тыдзень</string>
+			<key>few</key>
+			<string>%lld тыдні</string>
+			<key>many</key>
+			<string>%lld тыдняў</string>
+			<key>other</key>
+			<string>%lld тыдняў</string>
+		</dict>
+	</dict>
+	<key>%lld months</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld месяц</string>
+			<key>few</key>
+			<string>%lld месяцы</string>
+			<key>many</key>
+			<string>%lld месяцаў</string>
+			<key>other</key>
+			<string>%lld месяцаў</string>
+		</dict>
+	</dict>
+	<key>%lld years</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld год</string>
+			<key>few</key>
+			<string>%lld гады</string>
+			<key>many</key>
+			<string>%lld гадоў</string>
+			<key>other</key>
+			<string>%lld гадоў</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

@@ -4,6 +4,19 @@ nonisolated struct StoreProduct: Identifiable, Equatable, Sendable {
     let id: String
     let displayName: String
     let displayPrice: String
+    let introductoryOfferState: ProPlanIntroductoryOfferState
+
+    init(
+        id: String,
+        displayName: String,
+        displayPrice: String,
+        introductoryOfferState: ProPlanIntroductoryOfferState = .unavailable
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.displayPrice = displayPrice
+        self.introductoryOfferState = introductoryOfferState
+    }
 }
 
 nonisolated enum StorePurchaseResult: Equatable, Sendable {

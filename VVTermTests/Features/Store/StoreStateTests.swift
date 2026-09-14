@@ -5,6 +5,10 @@ import StoreKitTest
 
 @MainActor
 final class StoreStateTests: XCTestCase {
+    private var sevenDayTrial: StoreIntroductoryOffer {
+        StoreIntroductoryOffer(paymentMode: .freeTrial, displayPrice: "$0.00", periodUnit: .day, periodValue: 7, periodCount: 1)!
+    }
+
     func testEntitlementSnapshotDerivesFreeAndProAccess() {
         let free = StoreEntitlementSnapshot.free
         let paid = StoreEntitlementSnapshot(
@@ -38,18 +42,18 @@ final class StoreStateTests: XCTestCase {
         let presentation = ProPlanPresentation(
             plan: .yearly,
             displayPrice: "$24.99",
-            introductoryOfferState: .eligibleForSevenDayFreeTrial
+            introductoryOfferState: .eligible(sevenDayTrial)
         )
 
-        XCTAssertEqual(presentation.priceLine, "7 days free")
+        XCTAssertEqual(presentation.priceLine, "Free trial: 7 days")
         XCTAssertEqual(presentation.detail, "Then $24.99 per year.")
-        XCTAssertEqual(presentation.purchaseButtonTitle, "Start 7-Day Free Trial")
+        XCTAssertEqual(presentation.purchaseButtonTitle, "Start Free Trial")
         XCTAssertEqual(
             presentation.renewalDisclosure,
-            "7 days free, then $24.99 per year. Auto-renews until canceled."
+            "Free trial: 7 days. Then $24.99 per year. Auto-renews until canceled."
         )
         XCTAssertTrue(presentation.planAccessibilityLabel.contains("$24.99"))
-        XCTAssertTrue(presentation.purchaseButtonAccessibilityLabel.contains("7 days free"))
+        XCTAssertTrue(presentation.purchaseButtonAccessibilityLabel.contains("Free trial: 7 days"))
     }
 
     func testIneligibleYearlyPresentationKeepsStandardSubscriptionCopy() {
@@ -77,22 +81,23 @@ final class StoreStateTests: XCTestCase {
         XCTAssertEqual(presentation.renewalDisclosure, "Auto-renews until canceled.")
     }
 
-    func testTrialStateCannotLeakIntoOtherPlans() {
+    func testEligibleMonthlyTrialIsPresented() {
         let presentation = ProPlanPresentation(
             plan: .monthly,
             displayPrice: "$6.49",
-            introductoryOfferState: .eligibleForSevenDayFreeTrial
+            introductoryOfferState: .eligible(sevenDayTrial)
         )
 
-        XCTAssertEqual(presentation.introductoryOfferState, .unavailable)
-        XCTAssertEqual(presentation.priceLine, "$6.49 per month")
-        XCTAssertEqual(presentation.purchaseButtonTitle, "Subscribe for $6.49")
+        XCTAssertEqual(presentation.introductoryOfferState, .eligible(sevenDayTrial))
+        XCTAssertTrue(presentation.priceLine.contains("7"))
+        XCTAssertTrue(presentation.detail.contains("$6.49"))
     }
 
     func testStoreKitConfigurationProvidesEligibleSevenDayYearlyTrial() async throws {
         let session = try SKTestSession(configurationFileNamed: "VVTermStoreKit")
         session.disableDialogs = true
         session.clearTransactions()
+        defer { session.clearTransactions() }
 
         let products = try await Product.products(for: [VVTermProducts.proYearly])
         let product = try XCTUnwrap(products.first)
