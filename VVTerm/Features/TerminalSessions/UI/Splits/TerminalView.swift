@@ -1060,6 +1060,7 @@ struct TerminalPaneView: View {
             showsVoiceAccessoryButton: showsVoiceButton,
             onVoiceTrigger: voiceTriggerHandlerForTerminal,
             onSceneActivation: reconcileAutomaticReconnect,
+            acceptsInput: connectionState.isConnected,
             composerVoice: composerVoice,
             composer: tabManager.richPasteRuntimeStore.runtime(for: paneId, tabManager: tabManager).composer
         )

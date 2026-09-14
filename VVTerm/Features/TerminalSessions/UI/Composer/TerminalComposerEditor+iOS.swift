@@ -14,7 +14,7 @@ struct TerminalComposerEditor: UIViewRepresentable {
         view.font = .preferredFont(forTextStyle: .body)
         view.adjustsFontForContentSizeCategory = true
         view.backgroundColor = .clear
-        view.textContainerInset = UIEdgeInsets(top: 11, left: 0, bottom: 11, right: 0)
+        view.textContainerInset = UIEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.delegate = context.coordinator
         view.accessibilityLabel = String(localized: "Prompt")
@@ -40,7 +40,7 @@ struct TerminalComposerEditor: UIViewRepresentable {
         guard let width = proposal.width, width > 0 else { return nil }
         let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
         let lineHeight = uiView.font?.lineHeight ?? 22
-        return CGSize(width: width, height: max(44, min(fitting.height, lineHeight * 5 + 22)))
+        return CGSize(width: width, height: max(40, min(fitting.height, lineHeight * 5 + 20)))
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }

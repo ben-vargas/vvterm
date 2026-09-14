@@ -10,8 +10,7 @@ struct TerminalAttachmentPicker: View {
     @State private var showsFiles = false
 
     var body: some View {
-        NavigationStack {
-            List {
+        VStack(alignment: .leading, spacing: 0) {
                 PhotosPicker(selection: $photos, maxSelectionCount: TerminalAttachmentLimits.maximumCount,
                              selectionBehavior: .ordered, matching: .images) {
                     Label("Photos", systemImage: "photo.on.rectangle")
@@ -34,13 +33,17 @@ struct TerminalAttachmentPicker: View {
                     Label("Paste", systemImage: "doc.on.clipboard")
                 }
                 .accessibilityIdentifier("vvterm.attachments.paste")
-            }
-            .navigationTitle("Attachments")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-            }
-            .fileImporter(isPresented: $showsFiles, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+                if composer.mode == .direct {
+                    Button("Cancel") { dismiss() }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 8)
+                }
+        }
+        .padding(20)
+        .frame(width: 320)
+        .buttonStyle(.plain)
+        .labelStyle(AttachmentSourceLabelStyle())
+        .fileImporter(isPresented: $showsFiles, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
                 composer.load { try await TerminalAttachmentLoader.files(result.get()) }
                 dismiss()
             }
@@ -62,6 +65,33 @@ struct TerminalAttachmentPicker: View {
                 }
                 dismiss()
             }
+    }
+}
+
+private struct AttachmentSourceLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 24) {
+            configuration.icon
+                .font(.system(size: 22))
+                .foregroundStyle(.tint)
+                .frame(width: 40, height: 40)
+                .background(.quaternary, in: Circle())
+            configuration.title.font(.title3)
+            Spacer()
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 14)
+        .contentShape(Rectangle())
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func attachmentPopoverAdaptation() -> some View {
+        if #available(iOS 16.4, *) {
+            self.presentationCompactAdaptation(.popover)
+        } else {
+            self.presentationDetents([.height(220)])
         }
     }
 }

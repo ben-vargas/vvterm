@@ -133,7 +133,7 @@ private struct TerminalComposerUITestContent: View {
                     .frame(minHeight: 70, maxHeight: .infinity)
             }
             if composer.mode == .chat || composer.isBusy || !composer.attachments.isEmpty {
-                TerminalComposerView(composer: composer, isActive: true, voice: .init(
+                TerminalComposerView(composer: composer, isActive: true, acceptsInput: model.connected, voice: .init(
                     phase: model.voicePhase, audioLevel: 0.4, duration: 2,
                     toggle: {
                         if model.voicePhase.isActive {
@@ -161,7 +161,10 @@ private struct TerminalComposerUITestContent: View {
                     .toolbar { Button("Done") { showsSettings = false } }
             }
         }
-        .sheet(isPresented: $composer.pickerPresented) { TerminalAttachmentPicker(composer: composer) }
+        .sheet(isPresented: Binding(
+            get: { composer.mode == .direct && composer.pickerPresented },
+            set: { composer.pickerPresented = $0 }
+        )) { TerminalAttachmentPicker(composer: composer) }
     }
 }
 

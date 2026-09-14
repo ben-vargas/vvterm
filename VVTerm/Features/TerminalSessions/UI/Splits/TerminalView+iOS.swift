@@ -39,6 +39,7 @@ struct RemoteTerminalPaneWrapper: View {
     let onVoiceTrigger: ((TerminalVoicePresentationState.RecordingStyle) -> Void)?
     let onSceneActivation: () -> Void
 
+    let acceptsInput: Bool
     let composerVoice: TerminalComposerVoiceInput?
     @ObservedObject var composer: TerminalComposerStore
     @AppStorage(TerminalInputMode.preferenceKey) private var inputMode = TerminalInputMode.direct
@@ -82,7 +83,7 @@ struct RemoteTerminalPaneWrapper: View {
                 }
             }
             if composer.mode == .chat || composer.isBusy || !composer.attachments.isEmpty || isComposerFailed {
-                TerminalPaneComposerView(presentationState: tabManager.presentationState, composer: composer, paneID: paneId, isActive: isActive, voice: composerVoice)
+                TerminalPaneComposerView(presentationState: tabManager.presentationState, composer: composer, paneID: paneId, isActive: isActive, acceptsInput: acceptsInput, voice: composerVoice)
             }
         }
         .onAppear { composer.setMode(inputMode) }
@@ -90,7 +91,10 @@ struct RemoteTerminalPaneWrapper: View {
             if composerVoice?.phase.isActive == true { composerVoice?.cancel() }
             composer.setMode(mode)
         }
-        .sheet(isPresented: $composer.pickerPresented) {
+        .sheet(isPresented: Binding(
+            get: { composer.mode == .direct && composer.pickerPresented },
+            set: { composer.pickerPresented = $0 }
+        )) {
             TerminalAttachmentPicker(composer: composer)
         }
         .onChange(of: isActive) { active in
