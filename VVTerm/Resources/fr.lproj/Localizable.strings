@@ -2248,3 +2248,9 @@
 "Reconnect and select this terminal before sending attachments." = "Reconnectez-vous et sélectionnez ce terminal avant d’envoyer des pièces jointes.";
 "The attachment could not be read." = "Impossible de lire la pièce jointe.";
 "timed out while uploading file bytes" = "délai dépassé lors de l’envoi du fichier";
+
+"Input Mode" = "Mode de saisie";
+
+"Normal Mode" = "Mode normal";
+
+"Message" = "Message";

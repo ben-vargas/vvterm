@@ -7,19 +7,6 @@ struct TerminalComposerView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            if composer.mode == .chat {
-                HStack {
-                    Text("Chat Mode").font(.headline)
-                    Spacer()
-                    Button("Close") { composer.setMode(.direct) }
-                        .accessibilityIdentifier("vvterm.composer.close")
-                }
-                TerminalComposerEditor(text: $composer.draft, isActive: isActive && !composer.isBusy) { images, urls in
-                    composer.load { images + (try await TerminalAttachmentLoader.files(urls)) }
-                }
-                .frame(height: 88)
-                .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
-            }
             if !composer.attachments.isEmpty {
                 ScrollView(.horizontal) {
                     HStack {
@@ -43,34 +30,74 @@ struct TerminalComposerView: View {
                 Text(message).font(.caption).foregroundStyle(.red)
                     .accessibilityIdentifier("vvterm.composer.error")
             }
-            HStack {
-                if composer.mode == .chat {
+            if composer.mode == .chat {
+                HStack(alignment: .bottom, spacing: 10) {
                     Button { composer.pickerPresented = true } label: {
-                        Label("Attachments", systemImage: "paperclip")
+                        Image(systemName: "plus")
+                            .font(.system(size: 24, weight: .regular))
+                            .frame(width: 44, height: 44)
                     }
-                    .labelStyle(.iconOnly)
+                    .accessibilityLabel("Attachments")
                     .accessibilityIdentifier("vvterm.composer.attach")
-                    .disabled(composer.isBusy)
-                }
-                if composer.isBusy {
-                    ProgressView().accessibilityLabel("Uploading attachments")
-                    if case .uploading(let filename) = composer.operation {
-                        Text(filename).font(.caption).lineLimit(1)
+                    .adaptiveGlassCircle()
+                    .disabled(composer.isBusy || !isActive)
+
+                    HStack(alignment: .bottom, spacing: 4) {
+                        TerminalComposerEditor(text: $composer.draft, isActive: isActive && !composer.isBusy) { images, urls in
+                            composer.load { images + (try await TerminalAttachmentLoader.files(urls)) }
+                        }
+                        .overlay(alignment: .topLeading) {
+                            if composer.draft.isEmpty {
+                                Text("Message")
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, 11)
+                                    .padding(.leading, 5)
+                                    .allowsHitTesting(false)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        sendControl
                     }
+                    .padding(.leading, 12)
+                    .padding(.trailing, 4)
+                    .adaptiveGlassRect(cornerRadius: 22)
+                }
+            } else {
+                HStack {
                     Spacer()
-                    Button("Cancel") { composer.cancel() }
-                } else {
-                    Spacer()
-                    if composer.mode == .direct { Button("Cancel") { composer.discardAttachments() } }
-                    Button("Send") { composer.send() }
-                        .accessibilityIdentifier("vvterm.composer.send")
-                        .disabled(!composer.canSend || !isActive)
+                    Button("Cancel") { composer.discardAttachments() }
+                    sendControl
                 }
             }
+            if case .uploading(let filename) = composer.operation, !filename.isEmpty {
+                Text(filename).font(.caption).lineLimit(1)
+            }
         }
-        .padding(12)
-        .background(.regularMaterial)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .buttonStyle(.plain)
     }
+
+    @ViewBuilder
+    private var sendControl: some View {
+        if composer.isBusy {
+            Button { composer.cancel() } label: {
+                ProgressView().frame(width: 36, height: 44)
+            }
+            .accessibilityLabel("Cancel")
+        } else {
+            Button { composer.send() } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(composer.canSend && isActive ? Color.accentColor : Color.secondary)
+                    .frame(width: 36, height: 44)
+            }
+            .accessibilityLabel("Send")
+            .accessibilityIdentifier("vvterm.composer.send")
+            .disabled(!composer.canSend || !isActive)
+        }
+    }
+
 }
 
 struct TerminalPaneComposerView: View {
@@ -86,10 +113,14 @@ struct TerminalPaneComposerView: View {
 
 struct TerminalComposerMenuButton: View {
     @ObservedObject var composer: TerminalComposerStore
+    @AppStorage(TerminalInputMode.preferenceKey) private var inputMode = TerminalInputMode.direct
     var body: some View {
-        Button { composer.setMode(composer.mode == .direct ? .chat : .direct) } label: {
+        Button {
+            inputMode = composer.mode == .direct ? .chat : .direct
+            composer.setMode(inputMode)
+        } label: {
             Label {
-                if composer.mode == .direct { Text("Chat Mode") } else { Text("Direct Input") }
+                if composer.mode == .direct { Text("Chat Mode") } else { Text("Normal Mode") }
             } icon: { Image(systemName: "text.bubble") }
         }
         .accessibilityIdentifier("vvterm.composer.toggle")

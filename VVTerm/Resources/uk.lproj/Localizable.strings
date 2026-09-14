@@ -2253,3 +2253,9 @@
 "Reconnect and select this terminal before sending attachments." = "Підключіться знову й виберіть цей термінал перед надсиланням вкладень.";
 "The attachment could not be read." = "Не вдалося прочитати вкладення.";
 "timed out while uploading file bytes" = "вичерпано час очікування завантаження файлу";
+
+"Input Mode" = "Режим введення";
+
+"Normal Mode" = "Звичайний режим";
+
+"Message" = "Повідомлення";

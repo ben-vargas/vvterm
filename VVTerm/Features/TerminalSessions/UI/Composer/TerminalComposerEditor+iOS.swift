@@ -13,6 +13,8 @@ struct TerminalComposerEditor: UIViewRepresentable {
         view.font = .preferredFont(forTextStyle: .body)
         view.adjustsFontForContentSizeCategory = true
         view.backgroundColor = .clear
+        view.textContainerInset = UIEdgeInsets(top: 11, left: 0, bottom: 11, right: 0)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.delegate = context.coordinator
         view.accessibilityLabel = String(localized: "Prompt")
         view.accessibilityIdentifier = "vvterm.composer.text"
@@ -28,6 +30,13 @@ struct TerminalComposerEditor: UIViewRepresentable {
         view.isEditable = isActive
         if shouldAcquire { view.becomeFirstResponder() }
         if !isActive { view.resignFirstResponder() }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ComposerTextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0 else { return nil }
+        let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        let lineHeight = uiView.font?.lineHeight ?? 22
+        return CGSize(width: width, height: max(44, min(fitting.height, lineHeight * 5 + 22)))
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }

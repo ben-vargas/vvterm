@@ -95,12 +95,15 @@ private struct TerminalComposerUITestContent: View {
     @ObservedObject var model: TerminalComposerUITestModel
     @ObservedObject var composer: TerminalComposerStore
     @ObservedObject var runtime: GhosttyRuntime
+    @AppStorage(TerminalInputMode.preferenceKey) private var inputMode = TerminalInputMode.direct
+    @State private var showsSettings = false
 
     var body: some View {
         VStack(spacing: 4) {
             HStack {
                 TerminalComposerMenuButton(composer: composer)
                 Button("Add fixtures") { model.addFixtures() }.accessibilityIdentifier("composer.test.add")
+                Button("Settings") { showsSettings = true }.accessibilityIdentifier("composer.test.settings")
                 Button("Find") { model.terminal?.showFindNavigator() }
             }
             HStack {
@@ -140,6 +143,14 @@ private struct TerminalComposerUITestContent: View {
             keyboardCoordinator: model.keyboard,
             scope: .container
         )
+        .onAppear { inputMode = .direct; composer.setMode(.direct) }
+        .onChange(of: inputMode) { composer.setMode($0) }
+        .sheet(isPresented: $showsSettings) {
+            NavigationStack {
+                Form { TerminalInputModePicker() }
+                    .toolbar { Button("Done") { showsSettings = false } }
+            }
+        }
         .sheet(isPresented: $composer.pickerPresented) { TerminalAttachmentPicker(composer: composer) }
     }
 }

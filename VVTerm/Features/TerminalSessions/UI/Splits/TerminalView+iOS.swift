@@ -40,6 +40,7 @@ struct RemoteTerminalPaneWrapper: View {
     let onSceneActivation: () -> Void
 
     @ObservedObject var composer: TerminalComposerStore
+    @AppStorage(TerminalInputMode.preferenceKey) private var inputMode = TerminalInputMode.direct
     @AppStorage("terminalAttachmentButtonEnabled") private var attachmentButtonEnabled = true
 
     @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
@@ -83,6 +84,8 @@ struct RemoteTerminalPaneWrapper: View {
                 TerminalPaneComposerView(presentationState: tabManager.presentationState, composer: composer, paneID: paneId, isActive: isActive)
             }
         }
+        .onAppear { composer.setMode(inputMode) }
+        .onChange(of: inputMode) { composer.setMode($0) }
         .sheet(isPresented: $composer.pickerPresented) {
             TerminalAttachmentPicker(composer: composer)
         }

@@ -2245,3 +2245,9 @@
 "Reconnect and select this terminal before sending attachments." = "Reconnect and select this terminal before sending attachments.";
 "The attachment could not be read." = "The attachment could not be read.";
 "timed out while uploading file bytes" = "timed out while uploading file bytes";
+
+"Input Mode" = "Input Mode";
+
+"Normal Mode" = "Normal Mode";
+
+"Message" = "Message";

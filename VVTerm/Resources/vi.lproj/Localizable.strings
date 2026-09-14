@@ -2291,3 +2291,9 @@
 "Reconnect and select this terminal before sending attachments." = "Kết nối lại và chọn thiết bị đầu cuối này trước khi gửi tệp đính kèm.";
 "The attachment could not be read." = "Không thể đọc tệp đính kèm.";
 "timed out while uploading file bytes" = "đã hết thời gian chờ khi tải tệp lên";
+
+"Input Mode" = "Chế độ nhập";
+
+"Normal Mode" = "Chế độ thường";
+
+"Message" = "Tin nhắn";

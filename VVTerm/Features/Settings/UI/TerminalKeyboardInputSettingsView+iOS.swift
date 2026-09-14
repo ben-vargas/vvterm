@@ -19,6 +19,9 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
 
     var body: some View {
         Form {
+            Section("Input Mode") {
+                TerminalInputModePicker()
+            }
             Section {
                 Picker("Option as Alt", selection: optionAsAltModeBinding) {
                     ForEach(TerminalOptionAsAltMode.allCases) { mode in

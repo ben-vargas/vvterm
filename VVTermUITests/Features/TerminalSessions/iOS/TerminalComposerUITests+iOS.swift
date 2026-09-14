@@ -9,7 +9,11 @@ final class TerminalComposerUITests: XCTestCase {
         let editor = app.textViews["vvterm.composer.text"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         editor.tap()
+        XCTAssertLessThan(editor.frame.height, 65)
+        XCTAssertFalse(app.buttons["vvterm.composer.close"].exists)
+        let compactHeight = editor.frame.height
         editor.typeText("review\nthese")
+        XCTAssertGreaterThan(editor.frame.height, compactHeight)
         XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
         app.buttons["composer.test.add"].tap()
         let remove = app.buttons["vvterm.attachment.remove.one.png"]
@@ -29,7 +33,7 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertEqual(bytes.label.components(separatedBy: "/tmp/two.pdf").count, 2)
         XCTAssertFalse(app.buttons["vvterm.attachment.remove.two.pdf"].exists)
         XCTAssertEqual(editor.value as? String, "")
-        app.buttons["vvterm.composer.close"].tap()
+        app.buttons["vvterm.composer.toggle"].tap()
         XCTAssertFalse(editor.exists)
         XCTAssertTrue(app.buttons["vvterm.keyboard.accessory.attachments"].waitForExistence(timeout: 5))
     }
@@ -80,6 +84,20 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "/tmp/one.png /tmp/two.pdf")
         app.buttons["vvterm.composer.toggle"].tap()
         XCTAssertTrue(app.buttons["vvterm.composer.attach"].exists)
+    }
+
+    @MainActor
+    func testSavedInputModeSettingControlsComposer() {
+        let app = launch()
+        app.buttons["composer.test.settings"].tap()
+        app.segmentedControls["vvterm.input-mode"].buttons["Chat Mode"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.textViews["vvterm.composer.text"].waitForExistence(timeout: 5))
+        app.buttons["composer.test.settings"].tap()
+        app.segmentedControls["vvterm.input-mode"].buttons["Normal Mode"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertFalse(app.textViews["vvterm.composer.text"].exists)
+        XCTAssertTrue(app.buttons["vvterm.keyboard.accessory.attachments"].waitForExistence(timeout: 5))
     }
 
     @MainActor

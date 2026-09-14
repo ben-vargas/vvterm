@@ -2246,3 +2246,9 @@
 "Reconnect and select this terminal before sending attachments." = "Vuelve a conectarte y selecciona este terminal antes de enviar adjuntos.";
 "The attachment could not be read." = "No se pudo leer el adjunto.";
 "timed out while uploading file bytes" = "se agotó el tiempo de espera al subir el archivo";
+
+"Input Mode" = "Modo de entrada";
+
+"Normal Mode" = "Modo normal";
+
+"Message" = "Mensaje";

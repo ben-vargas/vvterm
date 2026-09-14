@@ -2243,3 +2243,9 @@
 "Reconnect and select this terminal before sending attachments." = "发送附件前，请重新连接并选择此终端。";
 "The attachment could not be read." = "无法读取附件。";
 "timed out while uploading file bytes" = "上传文件超时";
+
+"Input Mode" = "输入模式";
+
+"Normal Mode" = "普通模式";
+
+"Message" = "消息";

@@ -2247,3 +2247,9 @@
 "Reconnect and select this terminal before sending attachments." = "Před odesláním příloh se znovu připojte a vyberte tento terminál.";
 "The attachment could not be read." = "Přílohu se nepodařilo přečíst.";
 "timed out while uploading file bytes" = "vypršel časový limit pro nahrávání souboru";
+
+"Input Mode" = "Režim zadávání";
+
+"Normal Mode" = "Normální režim";
+
+"Message" = "Zpráva";
