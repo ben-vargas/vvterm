@@ -87,6 +87,7 @@ extension GhosttyTerminalView {
         onKeyboardAccessoryHideRequested = nil
         onFindNavigatorVisibilityChange = nil
         onVoiceButtonTapped = nil
+        onAttachmentButtonTapped = nil
         richPasteInterceptor = nil
         writeCallback = nil
         if let nativeTextInteraction {

@@ -4,6 +4,16 @@ import Testing
 
 struct TerminalAccessoryInputSnapshotTests {
     @Test
+    func attachmentVisibilityDefaultsOnAndUpdatesOnlyLeadingButtons() {
+        let profile = TerminalAccessoryProfile.defaultValue(lastWriterDeviceId: "test")
+        let initial = TerminalAccessoryInputSnapshot(profile: profile, showsDismissKeyboardButton: true)
+        let hidden = TerminalAccessoryInputSnapshot(profile: profile, showsDismissKeyboardButton: true, showsAttachmentButton: false)
+        #expect(initial.showsAttachmentButton)
+        #expect(hidden.change(from: initial) == .leadingButtons)
+        #expect(hidden.resolvedItems == initial.resolvedItems)
+    }
+
+    @Test
     func resolvesConfiguredItemsInOrderAndSkipsDeletedActions() {
         let activeID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         let deletedID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!

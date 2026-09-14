@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-struct RemoteClipboardUpload: Sendable {
+nonisolated struct RemoteClipboardUpload: Sendable {
     let remotePath: String
     let pastedPathToken: String
     let mimeType: String
@@ -70,7 +70,7 @@ actor TerminalRichPasteCoordinator {
             throw TerminalRichPasteError.imageTooLarge(maxBytes: settings.maximumImageBytes)
         }
 
-        let upload = try await transferService.uploadImage(image, using: sshClient)
+        let upload = try await transferService.upload(TerminalAttachmentPayload(image: image), using: sshClient)
         logger.info(
             "Attempting remote clipboard seeding [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(upload.remotePath, privacy: .private(mask: .hash))]"
         )

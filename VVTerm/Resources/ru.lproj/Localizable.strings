@@ -2232,3 +2232,17 @@
 "%lld weeks" = "%lld недель";
 "%lld months" = "%lld месяцев";
 "%lld years" = "%lld лет";
+
+// Terminal attachments and composer
+"Chat Mode" = "Режим чата";
+"Direct Input" = "Прямой ввод";
+"Attachments" = "Вложения";
+"Photos" = "Фото";
+"Prompt" = "Запрос";
+"Remove attachment" = "Удалить вложение";
+"Uploading attachments" = "Загрузка вложений";
+"Show Attachment Button" = "Показывать кнопку вложений";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "Выберите до 20 вложений общим размером не более 100 МБ.";
+"Reconnect and select this terminal before sending attachments." = "Подключитесь снова и выберите этот терминал перед отправкой вложений.";
+"The attachment could not be read." = "Не удалось прочитать вложение.";
+"timed out while uploading file bytes" = "истекло время ожидания загрузки файла";

@@ -2231,3 +2231,17 @@
 "%lld weeks" = "%lld weeks";
 "%lld months" = "%lld months";
 "%lld years" = "%lld years";
+
+// Terminal attachments and composer
+"Chat Mode" = "Chat Mode";
+"Direct Input" = "Direct Input";
+"Attachments" = "Attachments";
+"Photos" = "Photos";
+"Prompt" = "Prompt";
+"Remove attachment" = "Remove attachment";
+"Uploading attachments" = "Uploading attachments";
+"Show Attachment Button" = "Show Attachment Button";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "Choose up to 20 attachments, with a total size of 100 MB or less.";
+"Reconnect and select this terminal before sending attachments." = "Reconnect and select this terminal before sending attachments.";
+"The attachment could not be read." = "The attachment could not be read.";
+"timed out while uploading file bytes" = "timed out while uploading file bytes";

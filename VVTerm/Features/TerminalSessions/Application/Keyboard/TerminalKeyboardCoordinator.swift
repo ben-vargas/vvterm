@@ -227,6 +227,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         var allowsLocalInputOwnership: Bool
         var userHidKeyboard: Bool
         var findNavigatorActive: Bool
+        var inputMode: TerminalInputMode = .direct
     }
 
     @Published private(set) var isUserHidden = false
@@ -242,6 +243,8 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     }
     private(set) var keyboardAnimationDuration: TimeInterval = 0.25
     private(set) var keyboardAnimationCurve = TerminalKeyboardAnimationCurve.easeInOut
+
+    var inputModeProvider: ((UUID) -> TerminalInputMode)?
 
     var terminalProvider: ((UUID) -> (any TerminalKeyboardInputSession)?)?
 
@@ -341,6 +344,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             && inputs.activePaneWindowAttached
             && inputs.allowsLocalInputOwnership
             && !inputs.findNavigatorActive
+            && inputs.inputMode == .direct
     }
 
     /// A reconnecting pane may retain the existing input session only when
@@ -629,6 +633,30 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         markDirty(reason: "windowAttached")
     }
 
+    var activeInputMode: TerminalInputMode {
+        activePaneId.flatMap { inputModeProvider?($0) } ?? .direct
+    }
+
+    func composerModeDidChange(for paneId: UUID) {
+        guard activePaneId == paneId else { return }
+        objectWillChange.send()
+        cancelPresentationVerify()
+        pendingPresentationRequest = .none
+        explicitPresentationRecovery = nil
+        if inputModeProvider?(paneId) == .chat {
+            terminalProvider?(paneId)?.setTerminalInputAcquisitionAllowed(false)
+            terminalProvider?(paneId)?.releaseTerminalInput()
+        }
+        markDirty(reason: "composerMode")
+    }
+
+    func canSubmitComposedInput(for paneId: UUID) -> Bool {
+        guard activePaneId == paneId else { return false }
+        var inputs = currentInputs
+        inputs.inputMode = .direct
+        return Self.desiredInputSessionActive(inputs: inputs)
+    }
+
     func setFindNavigatorActive(_ active: Bool, for paneId: UUID) {
         guard activePaneId == paneId else { return }
         guard findNavigatorState.isActive != active else { return }
@@ -784,7 +812,8 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         #if DEBUG
         guard !Self.usesUITestKeyboardFrameSimulation else { return }
         #endif
-        guard Self.desiredKeyboardVisible(inputs: currentInputs) else {
+        let composerOwnsInput = activeInputMode == .chat
+        guard composerOwnsInput || Self.desiredKeyboardVisible(inputs: currentInputs) else {
             clearSoftwareKeyboardObservation()
             return
         }
@@ -797,13 +826,13 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         }
         updateKeyboardAnimation(duration: animationDuration, curve: animationCurve)
         let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
-        if snapshot.isSoftwareKeyboardSuppressed {
+        if snapshot.isSoftwareKeyboardSuppressed && !composerOwnsInput {
             setSoftwareKeyboardPresentation(.hidden, terminal: terminal)
             return
         }
         guard snapshot.windowAttached,
               snapshot.windowIsKey,
-              snapshot.isSoftwareInputActive,
+              (snapshot.isSoftwareInputActive || composerOwnsInput),
               Self.keyboardNotificationMatchesActiveScreen(
                   sourceScreenIdentifier: sourceScreenIdentifier,
                   activeScreenIdentifier: snapshot.screenIdentifier
@@ -950,6 +979,8 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         terminal: any TerminalKeyboardInputSession,
         snapshot: TerminalKeyboardCoordinatorDiagnosticSnapshot
     ) {
+        // Native composer notifications own its geometry; Ghostty is not its responder.
+        guard activeInputMode == .direct else { return }
         #if DEBUG
         guard !Self.usesUITestKeyboardFrameSimulation else { return }
         #endif
@@ -1032,7 +1063,8 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             allowsLocalInputOwnership: activeTerminalSceneIsForeground
                 && inputOwnership.allowsLocalAcquisition,
             userHidKeyboard: isUserHidden,
-            findNavigatorActive: findNavigatorState.isActive
+            findNavigatorActive: findNavigatorState.isActive,
+            inputMode: paneId.flatMap { inputModeProvider?($0) } ?? .direct
         )
     }
 

@@ -2233,3 +2233,17 @@
 "%lld weeks" = "%lld týdnů";
 "%lld months" = "%lld měsíců";
 "%lld years" = "%lld let";
+
+// Terminal attachments and composer
+"Chat Mode" = "Režim chatu";
+"Direct Input" = "Přímý vstup";
+"Attachments" = "Přílohy";
+"Photos" = "Fotky";
+"Prompt" = "Zadání";
+"Remove attachment" = "Odebrat přílohu";
+"Uploading attachments" = "Nahrávání příloh";
+"Show Attachment Button" = "Zobrazit tlačítko příloh";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "Vyberte nejvýše 20 příloh o celkové velikosti do 100 MB.";
+"Reconnect and select this terminal before sending attachments." = "Před odesláním příloh se znovu připojte a vyberte tento terminál.";
+"The attachment could not be read." = "Přílohu se nepodařilo přečíst.";
+"timed out while uploading file bytes" = "vypršel časový limit pro nahrávání souboru";

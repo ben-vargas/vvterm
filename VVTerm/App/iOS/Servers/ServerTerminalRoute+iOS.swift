@@ -343,6 +343,12 @@ struct ServerTerminalRoute: View {
                             Label("Keyboard", systemImage: "keyboard")
                         }
 
+                        if let focusedPaneId {
+                            TerminalComposerMenuButton(composer: tabManager.richPasteRuntimeStore.runtime(
+                                for: focusedPaneId, tabManager: tabManager
+                            ).composer)
+                        }
+
                         if canEnterZenMode {
                             Button {
                                 withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {

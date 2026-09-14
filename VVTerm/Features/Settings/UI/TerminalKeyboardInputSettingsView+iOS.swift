@@ -8,6 +8,8 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) private var preserveTerminalSizeForKeyboard = false
     @AppStorage("terminalKeyboardDismissButtonEnabled") private var keyboardDismissButtonEnabled = true
 
+    @AppStorage("terminalAttachmentButtonEnabled") private var attachmentButtonEnabled = true
+
     private var optionAsAltModeBinding: Binding<TerminalOptionAsAltMode> {
         Binding(
             get: { TerminalOptionAsAltMode(rawValue: optionAsAltModeRaw) ?? .none },
@@ -43,6 +45,7 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
 
             Section {
                 Toggle("Show dismiss button", isOn: $keyboardDismissButtonEnabled)
+                Toggle("Show Attachment Button", isOn: $attachmentButtonEnabled)
 
                 NavigationLink {
                     TerminalAccessoryCustomizationView()

@@ -108,6 +108,10 @@ class GhosttyTerminalView: UIView {
     var onProgressReport: ((GhosttyProgressState, Int?) -> Void)?
 
     /// Callback invoked when a terminal voice input control is tapped.
+    var onAttachmentButtonTapped: (() -> Void)? {
+        didSet { keyboardToolbar?.onAttachment = onAttachmentButtonTapped }
+    }
+
     var onVoiceButtonTapped: ((TerminalVoicePresentationState.RecordingStyle) -> Void)? {
         didSet {
             refreshVoiceAccessoryAction()

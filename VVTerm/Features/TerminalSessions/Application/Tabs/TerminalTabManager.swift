@@ -115,6 +115,9 @@ final class TerminalTabManager {
             }
             .store(in: &stateCancellables)
         #if os(iOS)
+        keyboardCoordinator.inputModeProvider = { [weak self] paneId in
+            self?.richPasteRuntimeStore.inputMode(for: paneId) ?? .direct
+        }
         keyboardCoordinator.terminalProvider = { [weak self] paneId in
             self?.terminalSurfaceStore.surface(for: paneId)?.keyboardInputSession
         }

@@ -2232,3 +2232,17 @@
 "%lld weeks" = "%lld週間";
 "%lld months" = "%lldか月";
 "%lld years" = "%lld年";
+
+// Terminal attachments and composer
+"Chat Mode" = "チャットモード";
+"Direct Input" = "直接入力";
+"Attachments" = "添付ファイル";
+"Photos" = "写真";
+"Prompt" = "プロンプト";
+"Remove attachment" = "添付ファイルを削除";
+"Uploading attachments" = "添付ファイルをアップロード中";
+"Show Attachment Button" = "添付ボタンを表示";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "合計100 MB以下で、最大20個の添付ファイルを選択してください。";
+"Reconnect and select this terminal before sending attachments." = "添付ファイルを送信する前に、再接続してこのターミナルを選択してください。";
+"The attachment could not be read." = "添付ファイルを読み取れませんでした。";
+"timed out while uploading file bytes" = "ファイルのアップロードがタイムアウトしました";

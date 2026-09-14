@@ -2233,3 +2233,17 @@
 "%lld weeks" = "%lld тыдняў";
 "%lld months" = "%lld месяцаў";
 "%lld years" = "%lld гадоў";
+
+// Terminal attachments and composer
+"Chat Mode" = "Рэжым чата";
+"Direct Input" = "Прамы ўвод";
+"Attachments" = "Укладанні";
+"Photos" = "Фота";
+"Prompt" = "Запыт";
+"Remove attachment" = "Выдаліць укладанне";
+"Uploading attachments" = "Загрузка ўкладанняў";
+"Show Attachment Button" = "Паказваць кнопку ўкладанняў";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "Выберыце да 20 укладанняў агульным памерам не больш за 100 МБ.";
+"Reconnect and select this terminal before sending attachments." = "Падключыцеся зноў і выберыце гэты тэрмінал перад адпраўкай укладанняў.";
+"The attachment could not be read." = "Не ўдалося прачытаць укладанне.";
+"timed out while uploading file bytes" = "скончыўся час чакання загрузкі файла";

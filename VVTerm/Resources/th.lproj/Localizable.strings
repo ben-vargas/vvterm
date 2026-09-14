@@ -2232,3 +2232,17 @@
 "%lld weeks" = "%lld สัปดาห์";
 "%lld months" = "%lld เดือน";
 "%lld years" = "%lld ปี";
+
+// Terminal attachments and composer
+"Chat Mode" = "โหมดแชต";
+"Direct Input" = "ป้อนข้อมูลโดยตรง";
+"Attachments" = "ไฟล์แนบ";
+"Photos" = "รูปภาพ";
+"Prompt" = "ข้อความ";
+"Remove attachment" = "นำไฟล์แนบออก";
+"Uploading attachments" = "กำลังอัปโหลดไฟล์แนบ";
+"Show Attachment Button" = "แสดงปุ่มแนบไฟล์";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "เลือกไฟล์แนบได้สูงสุด 20 ไฟล์ โดยมีขนาดรวมไม่เกิน 100 MB";
+"Reconnect and select this terminal before sending attachments." = "เชื่อมต่อใหม่และเลือกเทอร์มินัลนี้ก่อนส่งไฟล์แนบ";
+"The attachment could not be read." = "ไม่สามารถอ่านไฟล์แนบได้";
+"timed out while uploading file bytes" = "หมดเวลาระหว่างอัปโหลดไฟล์";

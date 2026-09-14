@@ -2229,3 +2229,17 @@
 "%lld weeks" = "%lld 周";
 "%lld months" = "%lld 个月";
 "%lld years" = "%lld 年";
+
+// Terminal attachments and composer
+"Chat Mode" = "聊天模式";
+"Direct Input" = "直接输入";
+"Attachments" = "附件";
+"Photos" = "照片";
+"Prompt" = "提示词";
+"Remove attachment" = "移除附件";
+"Uploading attachments" = "正在上传附件";
+"Show Attachment Button" = "显示附件按钮";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "最多选择20个附件，总大小不超过100 MB。";
+"Reconnect and select this terminal before sending attachments." = "发送附件前，请重新连接并选择此终端。";
+"The attachment could not be read." = "无法读取附件。";
+"timed out while uploading file bytes" = "上传文件超时";

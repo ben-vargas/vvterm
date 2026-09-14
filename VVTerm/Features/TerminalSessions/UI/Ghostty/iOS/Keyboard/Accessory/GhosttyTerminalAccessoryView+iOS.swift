@@ -25,6 +25,8 @@ final class TerminalInputAccessoryView: UIInputView {
             updateLeadingButtonsState()
         }
     }
+    var onAttachment: (() -> Void)? { didSet { updateLeadingButtonsState() } }
+    private weak var attachmentButton: UIButton?
     private var ctrlActive = false
     private var altActive = false
     private var commandActive = false
@@ -186,6 +188,12 @@ final class TerminalInputAccessoryView: UIInputView {
         voice.accessibilityIdentifier = "vvterm.keyboard.accessory.voice"
         voiceButton = voice
         leadingStack.addArrangedSubview(voice)
+
+        let attachment = makeIconButton(icon: "paperclip") { [weak self] in self?.onAttachment?() }
+        attachment.accessibilityLabel = String(localized: "Attachments")
+        attachment.accessibilityIdentifier = "vvterm.keyboard.accessory.attachments"
+        attachmentButton = attachment
+        leadingStack.addArrangedSubview(attachment)
 
         let dismissKeyboard = makeIconButton(icon: "keyboard.chevron.compact.down") { [weak self] in
             self?.onDismissKeyboard()
@@ -818,7 +826,10 @@ final class TerminalInputAccessoryView: UIInputView {
     private func updateLeadingButtonsState() {
         let voiceEnabled = onVoice != nil
         let dismissEnabled = inputSnapshot.showsDismissKeyboardButton
-        let hasVisibleLeadingButton = voiceEnabled || dismissEnabled
+        let attachmentEnabled = inputSnapshot.showsAttachmentButton && onAttachment != nil
+        attachmentButton?.isHidden = !attachmentEnabled
+        attachmentButton?.isEnabled = attachmentEnabled
+        let hasVisibleLeadingButton = voiceEnabled || dismissEnabled || attachmentEnabled
 
         voiceButton?.isHidden = !voiceEnabled
         voiceButton?.isEnabled = voiceEnabled

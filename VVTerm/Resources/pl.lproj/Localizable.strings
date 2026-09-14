@@ -2234,3 +2234,17 @@
 "%lld weeks" = "%lld tygodni";
 "%lld months" = "%lld miesięcy";
 "%lld years" = "%lld lat";
+
+// Terminal attachments and composer
+"Chat Mode" = "Tryb czatu";
+"Direct Input" = "Wprowadzanie bezpośrednie";
+"Attachments" = "Załączniki";
+"Photos" = "Zdjęcia";
+"Prompt" = "Polecenie";
+"Remove attachment" = "Usuń załącznik";
+"Uploading attachments" = "Przesyłanie załączników";
+"Show Attachment Button" = "Pokaż przycisk załączników";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "Wybierz do 20 załączników o łącznym rozmiarze do 100 MB.";
+"Reconnect and select this terminal before sending attachments." = "Połącz się ponownie i wybierz ten terminal przed wysłaniem załączników.";
+"The attachment could not be read." = "Nie można odczytać załącznika.";
+"timed out while uploading file bytes" = "upłynął limit czasu przesyłania pliku";

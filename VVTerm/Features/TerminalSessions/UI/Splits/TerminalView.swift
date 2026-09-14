@@ -1036,7 +1036,8 @@ struct TerminalPaneView: View {
             onOpenLink: linkCoordinator.request,
             showsVoiceAccessoryButton: showsVoiceButton,
             onVoiceTrigger: voiceTriggerHandlerForTerminal,
-            onSceneActivation: reconcileAutomaticReconnect
+            onSceneActivation: reconcileAutomaticReconnect,
+            composer: tabManager.richPasteRuntimeStore.runtime(for: paneId, tabManager: tabManager).composer
         )
         .terminalKeyboardAvoidance(
             focusedPaneId: shouldFocus ? paneId : nil,

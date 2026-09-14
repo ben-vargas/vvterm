@@ -329,7 +329,10 @@ struct VVTermApp: App {
     @ViewBuilder
     private var iOSRootContent: some View {
         #if DEBUG
-        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-custom-theme-duplicate") {
+        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-composer") {
+            TerminalComposerUITestHarness(keyboard: tabManager.keyboardCoordinator)
+                .environmentObject(ghosttyApp)
+        } else if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-custom-theme-duplicate") {
             CustomThemeDuplicateUITestHarness()
         } else if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-notification-settings") {
             TerminalNotificationSettingsUITestHarness()

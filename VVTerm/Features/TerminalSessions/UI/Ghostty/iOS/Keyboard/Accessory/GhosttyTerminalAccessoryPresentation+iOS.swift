@@ -41,6 +41,7 @@ extension GhosttyTerminalView {
         } else {
             refreshVoiceAccessoryAction()
         }
+        keyboardToolbar?.onAttachment = onAttachmentButtonTapped
         return keyboardToolbar
     }
 

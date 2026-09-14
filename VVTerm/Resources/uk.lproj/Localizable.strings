@@ -2239,3 +2239,17 @@
 "%lld weeks" = "%lld тижнів";
 "%lld months" = "%lld місяців";
 "%lld years" = "%lld років";
+
+// Terminal attachments and composer
+"Chat Mode" = "Режим чату";
+"Direct Input" = "Пряме введення";
+"Attachments" = "Вкладення";
+"Photos" = "Фото";
+"Prompt" = "Запит";
+"Remove attachment" = "Видалити вкладення";
+"Uploading attachments" = "Завантаження вкладень";
+"Show Attachment Button" = "Показувати кнопку вкладень";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "Виберіть до 20 вкладень загальним розміром не більше 100 МБ.";
+"Reconnect and select this terminal before sending attachments." = "Підключіться знову й виберіть цей термінал перед надсиланням вкладень.";
+"The attachment could not be read." = "Не вдалося прочитати вкладення.";
+"timed out while uploading file bytes" = "вичерпано час очікування завантаження файлу";

@@ -10,20 +10,22 @@ actor RemoteClipboardTransferService {
         self.sessionId = sessionId
     }
 
-    func uploadImage(
-        _ image: ClipboardImagePayload,
+    func upload(
+        _ attachment: TerminalAttachmentPayload,
         using sshClient: SSHClient
     ) async throws -> RemoteClipboardUpload {
+        try Task.checkCancellation()
         let environment = await sshClient.remoteEnvironment()
+        try Task.checkCancellation()
         logger.info(
-            "Preparing remote upload [session: \(self.sessionId.uuidString, privacy: .public)] [platform: \(environment.platform.rawValue, privacy: .public)] [shell: \(environment.shellProfile.family.rawValue, privacy: .public)] [bytes: \(image.sizeBytes)]"
+            "Preparing remote upload [session: \(self.sessionId.uuidString, privacy: .public)] [platform: \(environment.platform.rawValue, privacy: .public)] [shell: \(environment.shellProfile.family.rawValue, privacy: .public)] [bytes: \(attachment.sizeBytes)]"
         )
         let plan = try RemoteClipboardTransferPlan.resolve(for: environment)
 
         let remotePath: String
         do {
             remotePath = try await createRemoteTemporaryPath(
-                extension: image.suggestedExtension,
+                extension: attachment.suggestedExtension,
                 plan: plan,
                 using: sshClient
             )
@@ -47,25 +49,27 @@ actor RemoteClipboardTransferService {
             throw error
         }
         logger.info(
-            "Uploading remote clipboard image [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .private(mask: .hash))] [sftp: \(plan.usesSFTP)]"
+            "Uploading remote attachment [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .private(mask: .hash))] [sftp: \(plan.usesSFTP)]"
         )
 
         do {
+            try Task.checkCancellation()
             switch plan {
             case .posix(let uploadStrategy):
                 try await sshClient.upload(
-                    image.data,
+                    attachment.data,
                     to: transferPath,
                     permissions: Int32(0o600),
                     strategy: uploadStrategy
                 )
             case .windows:
                 try await sshClient.writeFile(
-                    image.data,
+                    attachment.data,
                     to: transferPath,
                     permissions: Int32(0o600)
                 )
             }
+            try Task.checkCancellation()
             logger.info(
                 "Remote upload completed [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .private(mask: .hash))]"
             )
@@ -73,19 +77,25 @@ actor RemoteClipboardTransferService {
             return RemoteClipboardUpload(
                 remotePath: remotePath,
                 pastedPathToken: pastedPathToken,
-                mimeType: image.mimeType,
-                sizeBytes: image.sizeBytes
+                mimeType: attachment.mimeType,
+                sizeBytes: attachment.sizeBytes
             )
         } catch {
             logger.error(
                 "Remote upload failed [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .private(mask: .hash))] [error: \(LogPrivacy.errorClass(error), privacy: .public)]"
             )
             await deleteRemoteFileIfNeeded(at: remotePath, plan: plan, using: sshClient)
+            if error is CancellationError { throw error }
             if let sshError = error as? SSHError, case .timeout = sshError {
-                throw TerminalRichPasteError.remoteUploadFailed(String(localized: "timed out while uploading image bytes"))
+                throw TerminalRichPasteError.remoteUploadFailed(String(localized: "timed out while uploading file bytes"))
             }
             throw TerminalRichPasteError.remoteUploadFailed(error.localizedDescription)
         }
+    }
+
+    func delete(_ upload: RemoteClipboardUpload, using sshClient: SSHClient) async {
+        guard let plan = try? RemoteClipboardTransferPlan.resolve(for: await sshClient.remoteEnvironment()) else { return }
+        await deleteRemoteFileIfNeeded(at: upload.remotePath, plan: plan, using: sshClient)
     }
 
     private func createRemoteTemporaryPath(
@@ -139,6 +149,6 @@ actor RemoteClipboardTransferService {
         logger.debug(
             "Deleting remote clipboard temp file [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(path, privacy: .private(mask: .hash))]"
         )
-        _ = try? await sshClient.execute(plan.deleteCommand(for: path))
+        await Task { _ = try? await sshClient.execute(plan.deleteCommand(for: path)) }.value
     }
 }

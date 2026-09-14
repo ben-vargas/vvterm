@@ -39,41 +39,61 @@ struct RemoteTerminalPaneWrapper: View {
     let onVoiceTrigger: ((TerminalVoicePresentationState.RecordingStyle) -> Void)?
     let onSceneActivation: () -> Void
 
+    @ObservedObject var composer: TerminalComposerStore
+    @AppStorage("terminalAttachmentButtonEnabled") private var attachmentButtonEnabled = true
+
     @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @AppStorage("terminalKeyboardDismissButtonEnabled") private var keyboardDismissButtonEnabled = true
 
     private var terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot {
         TerminalAccessoryInputSnapshot(
             profile: terminalAccessoryPreferencesManager.profile,
-            showsDismissKeyboardButton: keyboardDismissButtonEnabled
+            showsDismissKeyboardButton: keyboardDismissButtonEnabled,
+            showsAttachmentButton: attachmentButtonEnabled
         )
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            RemoteTerminalPaneRepresentable(
-                paneId: paneId,
-                server: server,
-                credentials: credentials,
-                tabManager: tabManager,
-                size: geometry.size,
-                isActive: isActive,
-                terminalContextMenuActions: terminalContextMenuActions,
-                onPaneKeyboardShortcut: onPaneKeyboardShortcut,
-                onProcessExit: onProcessExit,
-                onReady: onReady,
-                onOpenLink: onOpenLink,
-                terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
-                showsVoiceAccessoryButton: showsVoiceAccessoryButton,
-                onVoiceTrigger: onVoiceTrigger
-            )
-            .background {
-                TerminalSceneActivationObserver(
-                    onSceneActivation: handleSceneActivation
+        VStack(spacing: 0) {
+            GeometryReader { geometry in
+                RemoteTerminalPaneRepresentable(
+                    paneId: paneId,
+                    server: server,
+                    credentials: credentials,
+                    tabManager: tabManager,
+                    size: geometry.size,
+                    isActive: isActive,
+                    terminalContextMenuActions: terminalContextMenuActions,
+                    onPaneKeyboardShortcut: onPaneKeyboardShortcut,
+                    onProcessExit: onProcessExit,
+                    onReady: onReady,
+                    onOpenLink: onOpenLink,
+                    terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
+                    showsVoiceAccessoryButton: showsVoiceAccessoryButton,
+                    onVoiceTrigger: onVoiceTrigger
                 )
-                .allowsHitTesting(false)
+                .background {
+                    TerminalSceneActivationObserver(
+                        onSceneActivation: handleSceneActivation
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+            if composer.mode == .chat || composer.isBusy || !composer.attachments.isEmpty || isComposerFailed {
+                TerminalPaneComposerView(presentationState: tabManager.presentationState, composer: composer, paneID: paneId, isActive: isActive)
             }
         }
+        .sheet(isPresented: $composer.pickerPresented) {
+            TerminalAttachmentPicker(composer: composer)
+        }
+        .onChange(of: isActive) { active in
+            if !active { composer.pickerPresented = false }
+        }
+    }
+
+    private var isComposerFailed: Bool {
+        if case .failed = composer.operation { return true }
+        return false
     }
 
     private func handleSceneActivation(_ activatedScene: UIScene) {
@@ -237,6 +257,7 @@ struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         terminalView.onProcessExit = processExitHandler(for: terminalView)
         terminalView.showsVoiceAccessoryButton = showsVoiceAccessoryButton
         terminalView.onVoiceButtonTapped = onVoiceTrigger
+        terminalView.onAttachmentButtonTapped = attachmentAction
         terminalView.onPwdChange = { [paneId] rawDirectory in
             DispatchQueue.main.async {
                 tabManager.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
@@ -290,6 +311,7 @@ struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             terminalView.onOpenLink = nil
             terminalView.showsVoiceAccessoryButton = false
             terminalView.onVoiceButtonTapped = nil
+            terminalView.onAttachmentButtonTapped = nil
             terminalView.onPaneKeyboardShortcut = nil
             return
         }
@@ -315,6 +337,7 @@ struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         }
         terminalView.showsVoiceAccessoryButton = showsVoiceAccessoryButton
         terminalView.onVoiceButtonTapped = onVoiceTrigger
+        terminalView.onAttachmentButtonTapped = attachmentAction
         terminalView.applyTerminalAccessoryInputSnapshot(terminalAccessoryInputSnapshot)
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminalView.terminalContextMenuActions = terminalContextMenuActions
@@ -381,6 +404,7 @@ struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         terminal.onProcessExit = processExitHandler(for: terminal)
         terminal.showsVoiceAccessoryButton = showsVoiceAccessoryButton
         terminal.onVoiceButtonTapped = onVoiceTrigger
+        terminal.onAttachmentButtonTapped = attachmentAction
         terminal.applyTerminalAccessoryInputSnapshot(terminalAccessoryInputSnapshot)
         terminal.onPwdChange = { [paneId] rawDirectory in
             DispatchQueue.main.async {
@@ -405,6 +429,15 @@ struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         coordinator.installRichPasteInterception(on: terminal)
         terminal.onResize = { [weak coordinator] cols, rows in
             coordinator?.handleResize(cols: cols, rows: rows)
+        }
+    }
+
+    private var attachmentAction: () -> Void {
+        { [weak tabManager] in
+            guard let tabManager else { return }
+            let composer = tabManager.richPasteRuntimeStore.runtime(for: paneId, tabManager: tabManager).composer
+            guard !composer.isBusy else { return }
+            composer.pickerPresented = true
         }
     }
 

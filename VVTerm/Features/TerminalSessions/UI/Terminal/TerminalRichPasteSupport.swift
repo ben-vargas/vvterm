@@ -217,6 +217,8 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
     let sessionId: UUID
     let uiModel: TerminalRichPasteUIModel
 
+    let composer: TerminalComposerStore
+
     private let resolveConnectedSSHClientHandler: @MainActor () async -> SSHClient?
     private let pasteTextFromClipboardHandler: @MainActor () -> Void
     private let sendTextHandler: @MainActor (String) -> Void
@@ -228,12 +230,14 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
     init(
         sessionId: UUID,
         uiModel: TerminalRichPasteUIModel,
+        composer: TerminalComposerStore,
         resolveConnectedSSHClient: @escaping @MainActor () async -> SSHClient?,
         pasteTextFromClipboard: @escaping @MainActor () -> Void,
         sendText: @escaping @MainActor (String) -> Void
     ) {
         self.sessionId = sessionId
         self.uiModel = uiModel
+        self.composer = composer
         self.resolveConnectedSSHClientHandler = resolveConnectedSSHClient
         self.pasteTextFromClipboardHandler = pasteTextFromClipboard
         self.sendTextHandler = sendText
@@ -247,6 +251,7 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
         TerminalRichPasteRuntime(
             sessionId: paneId,
             uiModel: uiModel,
+            composer: .terminalPane(paneId: paneId, tabManager: tabManager),
             resolveConnectedSSHClient: { [weak tabManager] in
                 tabManager?.transportCoordinator.activeSSHRoute(for: paneId)?.client
             },
@@ -280,6 +285,7 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
     }
 
     func cancel() {
+        composer.tearDown()
         controller.cancel()
     }
 }
@@ -317,6 +323,10 @@ final class TerminalRichPasteRuntimeStore {
         let runtimes = Array(runtimesByPaneID.values)
         runtimesByPaneID.removeAll(keepingCapacity: false)
         runtimes.forEach { $0.cancel() }
+    }
+
+    func inputMode(for paneID: UUID) -> TerminalInputMode {
+        runtimesByPaneID[paneID]?.composer.mode ?? .direct
     }
 
     var runtimeCount: Int {

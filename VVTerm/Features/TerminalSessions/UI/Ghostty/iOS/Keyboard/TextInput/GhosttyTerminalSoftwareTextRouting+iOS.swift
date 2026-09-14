@@ -16,6 +16,19 @@ extension GhosttyTerminalView {
         requestRender()
     }
 
+    /// Explicit composer submission is authorized by the pane keyboard coordinator.
+    /// It does not acquire Ghostty's native text-input responder.
+    func sendComposedText(_ text: String, mode: TerminalInputMode) throws {
+        guard acceptsTerminalInput, isTextInputSessionEligible, !isFindNavigatorActive,
+              let surface else { throw TerminalAttachmentError.unavailable }
+        surface.sendText(text)
+        if mode == .chat {
+            surface.sendKeyEvent(.init(key: .enter, action: .press))
+            surface.sendKeyEvent(.init(key: .enter, action: .release))
+        }
+        requestRender()
+    }
+
     func pasteTextFromClipboard() {
         guard canRouteTerminalInput else { return }
         _ = surface?.perform(action: "paste_from_clipboard")

@@ -13,11 +13,13 @@ nonisolated enum TerminalAccessoryInputSnapshotChange: Equatable, Sendable {
 
 nonisolated struct TerminalAccessoryInputSnapshot: Equatable, Sendable {
     let resolvedItems: [TerminalAccessoryResolvedItem]
+    let showsAttachmentButton: Bool
     let showsDismissKeyboardButton: Bool
 
     init(
         profile: TerminalAccessoryProfile,
-        showsDismissKeyboardButton: Bool
+        showsDismissKeyboardButton: Bool,
+        showsAttachmentButton: Bool = true
     ) {
         var customActionsByID: [UUID: TerminalAccessoryCustomAction] = [:]
         for action in profile.customActions where !action.isDeleted {
@@ -32,6 +34,7 @@ nonisolated struct TerminalAccessoryInputSnapshot: Equatable, Sendable {
                 return .custom(action)
             }
         }
+        self.showsAttachmentButton = showsAttachmentButton
         self.showsDismissKeyboardButton = showsDismissKeyboardButton
     }
 
@@ -39,7 +42,7 @@ nonisolated struct TerminalAccessoryInputSnapshot: Equatable, Sendable {
         if resolvedItems != current.resolvedItems {
             return .itemsAndLeadingButtons
         }
-        if showsDismissKeyboardButton != current.showsDismissKeyboardButton {
+        if showsDismissKeyboardButton != current.showsDismissKeyboardButton || showsAttachmentButton != current.showsAttachmentButton {
             return .leadingButtons
         }
         return .none

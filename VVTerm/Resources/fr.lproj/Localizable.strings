@@ -2234,3 +2234,17 @@
 "%lld weeks" = "%lld semaines";
 "%lld months" = "%lld mois";
 "%lld years" = "%lld ans";
+
+// Terminal attachments and composer
+"Chat Mode" = "Mode discussion";
+"Direct Input" = "Saisie directe";
+"Attachments" = "Pièces jointes";
+"Photos" = "Photos";
+"Prompt" = "Message";
+"Remove attachment" = "Supprimer la pièce jointe";
+"Uploading attachments" = "Envoi des pièces jointes";
+"Show Attachment Button" = "Afficher le bouton des pièces jointes";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "Sélectionnez jusqu’à 20 pièces jointes, pour une taille totale de 100 Mo maximum.";
+"Reconnect and select this terminal before sending attachments." = "Reconnectez-vous et sélectionnez ce terminal avant d’envoyer des pièces jointes.";
+"The attachment could not be read." = "Impossible de lire la pièce jointe.";
+"timed out while uploading file bytes" = "délai dépassé lors de l’envoi du fichier";

@@ -64,7 +64,8 @@ struct TerminalFloatingInputOverlay: View {
     }
 
     private var presentation: TerminalFloatingControlPresentationPolicy.Presentation {
-        guard !floatingControls.state.voicePresentation.showsRecordingPanel else { return .hidden }
+        guard keyboardCoordinator.activeInputMode == .direct,
+              !floatingControls.state.voicePresentation.showsRecordingPanel else { return .hidden }
         return TerminalFloatingControlPresentationPolicy.presentation(
             for: .init(
                 isTerminalSelected: selectedView == .terminal,

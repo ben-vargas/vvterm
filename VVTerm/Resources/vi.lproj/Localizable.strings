@@ -2277,3 +2277,17 @@
 "%lld weeks" = "%lld tuần";
 "%lld months" = "%lld tháng";
 "%lld years" = "%lld năm";
+
+// Terminal attachments and composer
+"Chat Mode" = "Chế độ trò chuyện";
+"Direct Input" = "Nhập trực tiếp";
+"Attachments" = "Tệp đính kèm";
+"Photos" = "Ảnh";
+"Prompt" = "Lời nhắc";
+"Remove attachment" = "Xóa tệp đính kèm";
+"Uploading attachments" = "Đang tải tệp đính kèm lên";
+"Show Attachment Button" = "Hiển thị nút đính kèm";
+"Choose up to 20 attachments, with a total size of 100 MB or less." = "Chọn tối đa 20 tệp đính kèm với tổng dung lượng không quá 100 MB.";
+"Reconnect and select this terminal before sending attachments." = "Kết nối lại và chọn thiết bị đầu cuối này trước khi gửi tệp đính kèm.";
+"The attachment could not be read." = "Không thể đọc tệp đính kèm.";
+"timed out while uploading file bytes" = "đã hết thời gian chờ khi tải tệp lên";

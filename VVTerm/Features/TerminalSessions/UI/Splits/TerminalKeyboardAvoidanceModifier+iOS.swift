@@ -53,7 +53,9 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) private var storedEnabled = false
     @StateObject private var model = TerminalKeyboardAvoidanceViewModel()
 
-    private var preservesTerminalSize: Bool { enabledOverride ?? storedEnabled }
+    private var preservesTerminalSize: Bool {
+        (enabledOverride ?? storedEnabled) && keyboardCoordinator.activeInputMode == .direct
+    }
 
     func body(content: Content) -> some View {
         GeometryReader { geometry in
