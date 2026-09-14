@@ -31,6 +31,9 @@ extension ManageCustomThemesSheet {
                                 onEdit: {
                                     themePendingEdit = theme
                                 },
+                                onDuplicate: {
+                                    duplicateTheme(theme)
+                                },
                                 onDeleteRequest: {
                                     themePendingDeletion = theme
                                 }

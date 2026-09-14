@@ -63,6 +63,12 @@ extension ManageCustomThemesSheet {
                     themePendingEdit = theme
                 }
 
+                Button {
+                    duplicateTheme(theme)
+                } label: {
+                    Label("Duplicate", systemImage: "doc.on.doc")
+                }
+
                 Button("Delete", role: .destructive) {
                     themePendingDeletion = theme
                 }
@@ -70,6 +76,8 @@ extension ManageCustomThemesSheet {
                 Image(systemName: "ellipsis.circle")
                     .font(.title3)
             }
+            .accessibilityLabel(theme.name)
+            .accessibilityIdentifier("vvterm.customTheme.actions.\(theme.id.uuidString)")
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button("Edit") {

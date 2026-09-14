@@ -254,6 +254,14 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     @discardableResult
+    func duplicateCustomTheme(id: UUID) throws -> TerminalTheme {
+        guard let source = customThemes.first(where: { $0.id == id && !$0.isDeleted }) else {
+            throw TerminalThemeValidationError.themeNotFound
+        }
+        return try createCustomTheme(name: source.name, content: source.content)
+    }
+
+    @discardableResult
     func updateCustomTheme(id: UUID, name: String, content: String) throws -> TerminalTheme {
         guard let index = customThemes.firstIndex(where: { $0.id == id && !$0.isDeleted }) else {
             throw TerminalThemeValidationError.themeNotFound

@@ -299,6 +299,70 @@ final class TerminalThemePersistenceTests: XCTestCase {
         temporaryDirectory = nil
     }
 
+    func testDuplicatePreservesContentAndSelectionAndQueuesFreshCloudRecords() async throws {
+        let suite = "TerminalThemeDuplicateTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let queue = TerminalThemeMutationQueueSpy()
+        let manager = makeManager(defaults: defaults, queue: queue, isSyncEnabled: { true })
+        let selection = manager.themeSelection
+        let queued = expectation(description: "Original and two copies queued")
+        queue.onDrain = {
+            if queue.enqueuedThemes.count == 3 { queued.fulfill() }
+        }
+        let source = try manager.createCustomTheme(
+            name: "Original",
+            content: "background=#123456\nforeground=#abcdef\npalette=0=#010203\n# retained comment\n"
+        )
+        let copy = try manager.duplicateCustomTheme(id: source.id)
+        let secondCopy = try manager.duplicateCustomTheme(id: source.id)
+        XCTAssertEqual(copy.name, "Original 2")
+        XCTAssertEqual(secondCopy.name, "Original 3")
+        XCTAssertEqual(Set([source.id, copy.id, secondCopy.id]).count, 3)
+        XCTAssertEqual(copy.content, source.content)
+        XCTAssertEqual(secondCopy.content, source.content)
+        XCTAssertEqual(manager.customThemes.first { $0.id == source.id }, source)
+        XCTAssertEqual(manager.themeSelection, selection)
+        XCTAssertNil(copy.deletedAt)
+        await fulfillment(of: [queued], timeout: 3)
+        XCTAssertEqual(queue.enqueuedThemes, [source, copy, secondCopy])
+        let reloaded = makeManager(defaults: defaults)
+        XCTAssertEqual(reloaded.customThemes, manager.customThemes)
+    }
+
+    func testDuplicateRejectsMissingDeletedAndInvalidSources() throws {
+        let suite = "TerminalThemeDuplicateTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let broken = TerminalTheme(name: "Broken", content: "not a theme")
+        let deleted = TerminalTheme(name: "Deleted", content: "background = #123456\nforeground = #abcdef", deletedAt: Date())
+        let persistence = TerminalThemePersistenceSpy(themes: [broken, deleted])
+        let manager = makeManager(defaults: defaults, persistence: persistence)
+        let original = manager.customThemes
+        XCTAssertThrowsError(try manager.duplicateCustomTheme(id: broken.id))
+        XCTAssertEqual(manager.customThemes, original)
+        for id in [deleted.id, UUID()] {
+            XCTAssertThrowsError(try manager.duplicateCustomTheme(id: id)) { error in
+                guard case .themeNotFound? = error as? TerminalThemeValidationError else {
+                    return XCTFail("Expected a missing or deleted source to be rejected before content validation")
+                }
+            }
+            XCTAssertEqual(manager.customThemes, original)
+        }
+    }
+
+    func testDuplicateKeepsNamesWithinExistingLengthLimit() throws {
+        let suite = "TerminalThemeDuplicateTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let manager = makeManager(defaults: defaults)
+        let source = try manager.createCustomTheme(name: String(repeating: "a", count: 80), content: "background = #123456\nforeground = #abcdef")
+        let copy = try manager.duplicateCustomTheme(id: source.id)
+        XCTAssertEqual(copy.name.count, 80)
+        XCTAssertTrue(copy.name.hasSuffix(" 2"))
+        XCTAssertEqual(copy.content, source.content)
+    }
+
     func testLiveDependenciesRouteInjectedOwnersAndFacts() throws {
         let suiteName = "TerminalThemeLiveDependenciesTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

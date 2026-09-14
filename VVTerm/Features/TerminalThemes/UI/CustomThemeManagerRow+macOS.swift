@@ -9,6 +9,7 @@ struct CustomThemeManagerRow: View {
     let isSelected: Bool
     let onApply: (TerminalThemeSelectionTarget) -> Void
     let onEdit: () -> Void
+    let onDuplicate: () -> Void
     let onDeleteRequest: () -> Void
 
     @Environment(\.controlActiveState) private var controlActiveState
@@ -85,6 +86,11 @@ struct CustomThemeManagerRow: View {
             }
             Button("Edit") {
                 onEdit()
+            }
+            Button {
+                onDuplicate()
+            } label: {
+                Label("Duplicate", systemImage: "doc.on.doc")
             }
             Button("Delete", role: .destructive) {
                 onDeleteRequest()

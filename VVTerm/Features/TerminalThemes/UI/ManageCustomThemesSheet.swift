@@ -14,6 +14,7 @@ struct ManageCustomThemesSheet: View {
     let onSuggestThemeName: (String) -> String
     let onCreateTheme: (String, String, TerminalThemeSelectionTarget) throws -> Void
     let onApplyTheme: (String, TerminalThemeSelectionTarget) -> Void
+    let onDuplicate: (UUID) throws -> Void
     let onDelete: (UUID) -> Void
     let onSaveEdit: (UUID, String, String) throws -> Void
 
@@ -258,6 +259,14 @@ struct ManageCustomThemesSheet: View {
                 suggestedName: onSuggestThemeName(suggestedName),
                 content: normalizedContent
             )
+        } catch {
+            customThemeErrorMessage = error.localizedDescription
+        }
+    }
+
+    func duplicateTheme(_ theme: TerminalTheme) {
+        do {
+            try onDuplicate(theme.id)
         } catch {
             customThemeErrorMessage = error.localizedDescription
         }

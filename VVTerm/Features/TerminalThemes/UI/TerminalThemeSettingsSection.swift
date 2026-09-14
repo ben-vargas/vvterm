@@ -180,6 +180,9 @@ struct TerminalThemeSettingsSection: View {
             onApplyTheme: { themeName, applyTarget in
                 applyThemeSelection(themeName: themeName, applyTarget: applyTarget)
             },
+            onDuplicate: { themeID in
+                try terminalThemeManager.duplicateCustomTheme(id: themeID)
+            },
             onDelete: { themeID in
                 terminalThemeManager.deleteCustomTheme(id: themeID)
             },
