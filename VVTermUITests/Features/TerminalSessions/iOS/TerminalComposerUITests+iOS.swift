@@ -3,6 +3,52 @@ import XCTest
 
 final class TerminalComposerUITests: XCTestCase {
     @MainActor
+    func testGalleryVideoUsesChatDraftAndNormalImmediateSending() throws {
+        // Seed a short video and a photo with simctl addmedia, then enable this in the test runner.
+        guard ProcessInfo.processInfo.environment["VVTERM_UI_TEST_GALLERY"] == "1" else {
+            throw XCTSkip("Requires simulator Photos fixtures and VVTERM_UI_TEST_GALLERY=1")
+        }
+        let app = launch()
+        for chat in [true, false] {
+            app.buttons["vvterm.composer.toggle"].tap()
+            let attachID = chat ? "vvterm.composer.attach" : "vvterm.keyboard.accessory.attachments"
+            XCTAssertTrue(app.buttons[attachID].waitForExistence(timeout: 5))
+            app.buttons[attachID].tap()
+            app.buttons["vvterm.attachments.photos"].tap()
+            let video = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Video,'")).firstMatch
+            XCTAssertTrue(video.waitForExistence(timeout: 10), app.debugDescription)
+            video.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Photo,'")).firstMatch
+            XCTAssertTrue(photo.exists, app.debugDescription)
+            // Photos can report an invalid accessibility activation point for an edge tile.
+            photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            app.buttons["Add"].tap()
+            let sent = app.staticTexts["composer.test.sent"]
+            if chat {
+                let removals = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'vvterm.attachment.remove.'"))
+                expectation(for: NSPredicate(format: "count == 2"), evaluatedWith: removals)
+                waitForExpectations(timeout: 10)
+                XCTAssertEqual(sent.label, "No input sent")
+                let send = app.buttons["vvterm.composer.send"]
+                expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: send)
+                waitForExpectations(timeout: 10)
+                add(XCTAttachment(screenshot: app.screenshot()))
+                send.tap()
+            } else {
+                XCTAssertFalse(app.textViews["vvterm.composer.text"].exists)
+            }
+            let bytes = app.staticTexts["composer.test.bytes"]
+            expectation(for: NSPredicate(format: "label CONTAINS %@", chat ? "<CR>" : "<CR>/tmp/"), evaluatedWith: bytes)
+            waitForExpectations(timeout: 10)
+            let names = sent.label.components(separatedBy: " /tmp/")
+            XCTAssertEqual(names.count, 2)
+            XCTAssertTrue(names[0].lowercased().hasSuffix(".mp4"), sent.label)
+            XCTAssertTrue(names[1].lowercased().hasSuffix(".png"), sent.label)
+            XCTAssertEqual(bytes.label.filter { $0 == "<" }.count, 1, "Only Chat Send must press Enter")
+        }
+    }
+
+    @MainActor
     func testChatLinksWorkWithoutTakingTerminalKeyboardOwnership() throws {
         let app = launch(arguments: ["--composer-content-fixture"])
         app.buttons["vvterm.composer.toggle"].tap()

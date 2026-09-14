@@ -18,7 +18,8 @@ struct TerminalAttachmentPicker: View {
             }
             .photosPicker(isPresented: isPresented(.photos), selection: $photos,
                           maxSelectionCount: TerminalAttachmentLimits.maximumCount,
-                          selectionBehavior: .ordered, matching: .images)
+                          selectionBehavior: .ordered, matching: .any(of: [.images, .videos]),
+                          preferredItemEncoding: .current)
             .fileImporter(isPresented: isPresented(.files), allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
                 if case .failure(let error) = result, (error as? CocoaError)?.code == .userCancelled { return }
                 composer.load { try await TerminalAttachmentLoader.files(result.get()) }
@@ -28,14 +29,12 @@ struct TerminalAttachmentPicker: View {
                 photos = []
                 composer.load {
                     var payloads: [TerminalAttachmentPayload] = []
-                    for (index, item) in selection.enumerated() {
+                    for item in selection {
                         try Task.checkCancellation()
-                        guard let data = try await item.loadTransferable(type: Data.self) else {
+                        guard let attachment = try await item.loadTransferable(type: TerminalPhotoLibraryAttachment.self) else {
                             throw TerminalAttachmentError.unreadable
                         }
-                        let type = item.supportedContentTypes.first(where: { $0.conforms(to: .image) }) ?? .image
-                        payloads.append(TerminalAttachmentPayload(data: data, contentType: type,
-                                                                 suggestedFilename: "photo-\(index + 1).\(type.preferredFilenameExtension ?? "img")"))
+                        payloads.append(attachment.payload)
                         try TerminalAttachmentLimits.validate(payloads)
                     }
                     return payloads

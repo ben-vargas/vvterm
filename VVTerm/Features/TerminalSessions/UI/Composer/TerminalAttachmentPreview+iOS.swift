@@ -18,7 +18,8 @@ struct TerminalAttachmentPreview: View {
                     .accessibilityIdentifier("vvterm.attachment.preview.\(attachment.suggestedFilename)")
             } else {
                 VStack(spacing: 8) {
-                    Image(systemName: "doc.fill").font(.title)
+                    Image(systemName: attachment.contentType.conforms(to: .movie) ? "video.fill" : "doc.fill")
+                        .font(.title)
                     Text(attachment.suggestedFilename).font(.caption).lineLimit(2)
                 }
                 .padding(12)
