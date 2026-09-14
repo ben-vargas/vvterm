@@ -109,7 +109,7 @@ struct TerminalComposerView: View {
             isActive: isActive && composer.attachmentSource == nil,
             keyboard: keyboard, paneID: paneID,
             acceptsEdits: voiceInteraction == .text && !isRecording,
-            placeholder: voiceInteraction == .ready ? String(localized: "Touch and hold to record") : String(localized: "Message"),
+            placeholder: voiceInteraction == .ready ? String(localized: "Touch and hold to record") : String(localized: "Type anything"),
             showsContent: !isRecording
         ) { images, urls in
             composer.load { images + (try await TerminalAttachmentLoader.files(urls)) }

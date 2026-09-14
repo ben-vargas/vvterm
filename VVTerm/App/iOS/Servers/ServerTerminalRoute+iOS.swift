@@ -338,7 +338,7 @@ struct ServerTerminalRoute: View {
                         }
 
                         Button {
-                            showKeyboardForFocusedTerminal()
+                            performKeyboardCommandForFocusedTerminal()
                         } label: {
                             Label("Keyboard", systemImage: "keyboard")
                         }
@@ -626,10 +626,10 @@ struct ServerTerminalRoute: View {
         keyboardCoordinator.deactivateInputImmediately(reason: .routeModal)
     }
 
-    private func showKeyboardForFocusedTerminal() {
+    private func performKeyboardCommandForFocusedTerminal() {
         guard selectedView == .terminal else { return }
         clearPendingVoiceReturnForFocusedPane()
-        keyboardCoordinator.userRequestedShow()
+        keyboardCoordinator.userRequestedKeyboardCommand()
         focusedTerminal?.dismissFindNavigator()
     }
 

@@ -23,6 +23,7 @@ final class TerminalComposerUITestModel: ObservableObject {
     @Published var attachmentButtonEnabled = true
     @Published var connected = true
     @Published var recordingKeptEditor = false
+    @Published var terminalTouchDiagnostic = "No terminal tap"
     @Published var voicePhase = VoiceRecordingOperationCoordinator.Phase.idle
 
     lazy var composer: TerminalComposerStore = makeComposer()
@@ -64,7 +65,21 @@ final class TerminalComposerUITestModel: ObservableObject {
         terminal.setLifecycleCallbacks(.init(windowAttachmentChanged: { [weak self] attached in
             guard let self else { return }
             self.keyboard.setWindowAttached(attached, for: self.paneID)
-        }, directTouch: { _ in }, keyboardAccessoryHideRequested: {}, findNavigatorVisibilityChanged: { [weak self] active in
+        }, directTouch: { [weak self] isFocusTap in
+            guard let self else { return }
+            self.keyboard.directTouchOnTerminal(isFocusTap: isFocusTap)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                guard let self else { return }
+                func responder(in view: UIView) -> UIView? {
+                    if view.isFirstResponder { return view }
+                    return view.subviews.lazy.compactMap { responder(in: $0) }.first
+                }
+                let current = self.terminal?.window.flatMap { responder(in: $0) }
+                self.terminalTouchDiagnostic = "focusTap=\(isFocusTap) hidden=\(self.keyboard.isUserHidden) responder=\(current.map { String(describing: type(of: $0)) } ?? "none")"
+            }
+        }, keyboardAccessoryHideRequested: { [weak self] in
+            self?.keyboard.userRequestedHide()
+        }, findNavigatorVisibilityChanged: { [weak self] active in
             guard let self else { return }
             self.keyboard.setFindNavigatorActive(active, for: self.paneID)
         }))
@@ -131,6 +146,10 @@ private struct TerminalComposerUITestContent: View {
                 Button("Add fixtures") { model.addFixtures() }.accessibilityIdentifier("composer.test.add")
                 Button("Settings") { showsSettings = true }.accessibilityIdentifier("composer.test.settings")
                 Button("Find") { model.terminal?.showFindNavigator() }
+                Menu {
+                    Button("Keyboard") { model.keyboard.userRequestedKeyboardCommand() }
+                } label: { Image(systemName: "ellipsis") }
+                .accessibilityIdentifier("composer.test.menu")
             }
             HStack {
                 Button(model.failUpload ? "Uploads fail" : "Uploads succeed") { model.failUpload.toggle() }
@@ -160,6 +179,7 @@ private struct TerminalComposerUITestContent: View {
             }
             Text(model.recordingKeptEditor ? "Recording kept editor" : "No recording sample")
                 .accessibilityIdentifier("composer.test.recording-focus").font(.caption)
+            Text(model.terminalTouchDiagnostic).accessibilityIdentifier("composer.test.terminal-touch").font(.caption)
             Text(model.sent.isEmpty ? "No input sent" : model.sent)
                 .accessibilityIdentifier("composer.test.sent")
                 .font(.caption)
@@ -219,6 +239,7 @@ private struct ComposerTestSurface: UIViewRepresentable {
             terminalAccessoryInputSnapshot: snapshot, useCustomIO: true
         )
         terminal.acceptsTerminalInput = true
+        terminal.accessibilityIdentifier = "composer.test.terminal"
         terminal.keyboardUITestSetHardwareKeyboardAttached(false)
         terminal.onReady = { [weak terminal, weak model] in
             guard let terminal, let model else { return }

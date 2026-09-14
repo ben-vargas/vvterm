@@ -12,7 +12,7 @@ struct TerminalComposerVoiceControl: UIViewRepresentable {
     func makeUIView(context: Context) -> UIButton {
         let button = UIButton(type: .system)
         if style == .waveform {
-            button.setImage(UIImage(systemName: "waveform", withConfiguration: UIImage.SymbolConfiguration(pointSize: 20)), for: .normal)
+            button.setImage(UIImage(systemName: "waveform", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16)), for: .normal)
         }
         button.tintColor = .secondaryLabel
         button.accessibilityLabel = style == .waveform ? String(localized: "Voice input") : String(localized: "Touch and hold to record")

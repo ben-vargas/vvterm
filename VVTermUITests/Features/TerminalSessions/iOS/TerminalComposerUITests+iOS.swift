@@ -3,6 +3,60 @@ import XCTest
 
 final class TerminalComposerUITests: XCTestCase {
     @MainActor
+    func testKeyboardMenuTogglesChatFocus() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.buttons["composer.test.menu"].tap()
+        app.buttons["Keyboard"].tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(editor.isHittable)
+        app.buttons["composer.test.menu"].tap()
+        app.buttons["Keyboard"].tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        editor.typeText("from menu")
+        XCTAssertEqual(editor.value as? String, "from menu")
+    }
+
+    @MainActor
+    func testTerminalTapDismissesChatKeyboardAndEditorTapRestoresIt() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("keep draft")
+        let terminal = app.otherElements["composer.test.terminal"]
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let dismissed = XCTAttachment(screenshot: app.screenshot())
+        dismissed.name = "Chat after terminal tap"
+        dismissed.lifetime = .keepAlways
+        add(dismissed)
+        XCTAssertEqual(app.staticTexts["composer.test.terminal-touch"].label, "focusTap=true hidden=true responder=none", app.debugDescription)
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(editor.isHittable)
+        XCTAssertEqual(editor.value as? String, "keep draft")
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        // UITextView's default accessibility tap point is at the start of the text.
+        editor.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        editor.typeText(" again")
+        XCTAssertEqual(editor.value as? String, "keep draft again")
+        XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Chat focus restored"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    @MainActor
     func testChatDraftAttachmentsRemovalAndSend() {
         let app = launch()
         app.buttons["vvterm.composer.toggle"].tap()

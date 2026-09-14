@@ -798,6 +798,15 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         markDirty(reason: "userHide")
     }
 
+    func userRequestedKeyboardCommand() {
+        if activeInputMode == .chat, !findNavigatorState.isActive, !isUserHidden,
+           isSoftwareKeyboardVisible {
+            userRequestedHide()
+        } else {
+            userRequestedShow()
+        }
+    }
+
     func userRequestedShow() {
         claimLocalInputOwnershipForExplicitInteraction()
         logExplicitPresentationRequest()
@@ -834,6 +843,10 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             return
         }
         claimLocalInputOwnershipForExplicitInteraction()
+        if activeInputMode == .chat {
+            if isFocusTap { userRequestedHide() }
+            return
+        }
         guard !isUserHidden, !isSoftwareKeyboardVisible else { return }
         requestAutomaticPresentationRefresh()
         // See userRequestedShow: user actions get a fresh repair budget.

@@ -13,7 +13,7 @@ struct TerminalAttachmentMenu: UIViewRepresentable {
         else { config.background.visualEffect = UIBlurEffect(style: .systemMaterial) }
         config.cornerStyle = .capsule
         config.contentInsets = .zero
-        config.image = UIImage(systemName: "plus", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24))
+        config.image = UIImage(systemName: "plus", withConfiguration: UIImage.SymbolConfiguration(pointSize: 20))
         config.baseForegroundColor = .label
         button.configuration = config
         button.accessibilityLabel = String(localized: "Attachments")

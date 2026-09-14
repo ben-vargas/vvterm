@@ -8,6 +8,58 @@ extension TerminalKeyboardCoordinatorTests {
     @Suite(.serialized)
     struct Composer {
         @Test @MainActor
+        func terminalTapDismissesChatUntilExplicitFocusReturns() async {
+            let pane = UUID()
+            let terminal = TerminalKeyboardInputSessionSpy()
+            let composer = ComposerInputSpy()
+            let coordinator = makeTerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { _ in terminal }
+            coordinator.inputModeProvider = { _ in .chat }
+            coordinator.setActivePane(pane)
+            coordinator.setViewActive(true)
+            coordinator.setWindowAttached(true, for: pane)
+            coordinator.setPaneInputEligible(true, for: pane)
+            coordinator.registerComposerInput(composer, for: pane)
+            await drainMainQueue()
+
+            coordinator.directTouchOnTerminal(isFocusTap: true)
+            await drainMainQueue()
+            #expect(coordinator.isUserHidden)
+            #expect(composer.keyboardHidden)
+            #expect(coordinator.isComposerVisible(for: pane))
+            #expect(coordinator.canSubmitComposedInput(for: pane))
+
+            coordinator.composerInputAvailabilityDidChange()
+            coordinator.activeTerminalSceneWillDeactivate(for: pane)
+            coordinator.activeTerminalSceneDidActivate(for: pane)
+            coordinator.directTouchOnTerminal(isFocusTap: true)
+            await drainMainQueue()
+            #expect(coordinator.isUserHidden)
+            #expect(composer.keyboardHidden)
+
+            coordinator.userRequestedShow()
+            await drainMainQueue()
+            #expect(!coordinator.isUserHidden)
+            #expect(composer.active && !composer.keyboardHidden)
+
+            // An active editor with a hardware keyboard still needs a Show command.
+            coordinator.userRequestedKeyboardCommand()
+            #expect(!coordinator.isUserHidden)
+            terminal.snapshot.screenFrame = CGRect(x: 0, y: 0, width: 400, height: 1000)
+            coordinator.keyboardUITestReceiveKeyboardEndFrame(CGRect(x: 0, y: 700, width: 400, height: 300), isLocal: true)
+            coordinator.userRequestedKeyboardCommand()
+            await drainMainQueue()
+            #expect(coordinator.isUserHidden)
+            coordinator.userRequestedKeyboardCommand()
+            await drainMainQueue()
+            #expect(!coordinator.isUserHidden)
+            coordinator.setFindNavigatorActive(true, for: pane)
+            await drainMainQueue()
+            coordinator.userRequestedKeyboardCommand()
+            #expect(!coordinator.isUserHidden)
+        }
+
+        @Test @MainActor
         func modeTransfersInputAndSurvivesPaneReconnectFindAndSceneChanges() async {
             let pane = UUID(), other = UUID()
             let session = TerminalKeyboardInputSessionSpy()

@@ -18,7 +18,7 @@ extension GhosttyTerminalView: UIGestureRecognizerDelegate {
             return !isPointOnNativeSelectionHandleHitArea(touch.location(in: self))
         }
         if gestureRecognizer == directTouchTapRecognizer {
-            guard canRouteTerminalInput, !isPaused, !isShuttingDown else { return false }
+            guard acceptsTerminalInput, !isFindNavigatorActive, !isPaused, !isShuttingDown else { return false }
             let location = touch.location(in: self)
             return !isPointOnNativeSelectionHandleHitArea(location)
         }
@@ -143,9 +143,16 @@ extension GhosttyTerminalView {
 
     @objc func handleDirectTouchTap(_ recognizer: UITapGestureRecognizer) {
         guard recognizer.state == .ended,
-              canRouteTerminalInput,
+              acceptsTerminalInput,
+              !isFindNavigatorActive,
               !isPaused,
               !isShuttingDown else {
+            return
+        }
+
+        // Chat owns text input, but terminal taps must still reach the focus owner.
+        guard terminalInputAcquisitionAllowed else {
+            notifyDirectTouchOnTerminal(isFocusTap: true)
             return
         }
 

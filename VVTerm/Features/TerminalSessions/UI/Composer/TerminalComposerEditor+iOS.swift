@@ -9,7 +9,7 @@ struct TerminalComposerEditor: UIViewRepresentable {
     let keyboard: TerminalKeyboardCoordinator
     let paneID: UUID
     var acceptsEdits = true
-    var placeholder = String(localized: "Message")
+    var placeholder = String(localized: "Type anything")
     var showsContent = true
     let onPasteAttachments: ([TerminalAttachmentPayload], [URL]) -> Void
 
@@ -21,6 +21,10 @@ struct TerminalComposerEditor: UIViewRepresentable {
         view.textContainerInset = UIEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.delegate = context.coordinator
+        let focusTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.focus(_:)))
+        focusTap.cancelsTouchesInView = false
+        focusTap.delegate = context.coordinator
+        view.addGestureRecognizer(focusTap)
         view.keyboard = keyboard
         view.paneID = paneID
         view.accessibilityLabel = String(localized: "Prompt")
@@ -66,9 +70,19 @@ struct TerminalComposerEditor: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    final class Coordinator: NSObject, UITextViewDelegate {
+    final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
         var parent: TerminalComposerEditor
         init(_ parent: TerminalComposerEditor) { self.parent = parent }
+        @objc func focus(_ gesture: UITapGestureRecognizer) {
+            guard let view = gesture.view as? ComposerTextView else { return }
+            view.focusFromTap(at: gesture.location(in: view))
+        }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            parent.isActive && parent.keyboard.isUserHidden
+        }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            true
+        }
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
             parent.acceptsEdits
         }
@@ -81,6 +95,7 @@ final class ComposerTextView: UITextView, TerminalComposerInputSession {
     var paneID: UUID?
     var allowsComposerFocus = false
     private var coordinatorAllowsFocus = false
+    private var requestedCaretLocation: CGPoint?
     var isComposerFirstResponder: Bool { isFirstResponder }
 
     override var canBecomeFirstResponder: Bool { coordinatorAllowsFocus && allowsComposerFocus && super.canBecomeFirstResponder }
@@ -88,23 +103,37 @@ final class ComposerTextView: UITextView, TerminalComposerInputSession {
     func preventComposerInputAcquisition() {
         // Navigation removes the view and releases UIKit input during dismantling.
         coordinatorAllowsFocus = false
+        requestedCaretLocation = nil
+    }
+
+    func focusFromTap(at point: CGPoint) {
+        requestedCaretLocation = point
+        keyboard?.userRequestedShow()
     }
 
     func setComposerInput(active: Bool, softwareKeyboardHidden: Bool) {
-        coordinatorAllowsFocus = active
+        // UIKit can try to restore its prior responder; only an explicit tap may end browsing.
+        coordinatorAllowsFocus = active && !softwareKeyboardHidden
         let enabled = active && allowsComposerFocus
         if isEditable != enabled { isEditable = enabled }
-        guard enabled else { resignFirstResponder(); return }
-        if (inputView != nil) != softwareKeyboardHidden {
-            inputView = softwareKeyboardHidden ? UIView(frame: .zero) : nil
-            if isFirstResponder { reloadInputViews() }
+        // Browsing releases focus. Keep the field editable so a native tap can restore it.
+        guard enabled, !softwareKeyboardHidden else {
+            requestedCaretLocation = nil
+            resignFirstResponder()
+            return
         }
         if window?.isKeyWindow == true, !isFirstResponder { becomeFirstResponder() }
+        if isFirstResponder, let point = requestedCaretLocation {
+            requestedCaretLocation = nil
+            if let position = closestPosition(to: point) {
+                selectedTextRange = textRange(from: position, to: position)
+            }
+        }
     }
 
     var onPasteAttachments: (([TerminalAttachmentPayload], [URL]) -> Void)?
     var acceptsEdits = true
-    var placeholderText = String(localized: "Message") {
+    var placeholderText = String(localized: "Type anything") {
         didSet {
             guard oldValue != placeholderText else { return }
             UIView.transition(with: placeholder, duration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.18,
@@ -127,7 +156,7 @@ final class ComposerTextView: UITextView, TerminalComposerInputSession {
     }
 
     private func configurePlaceholder() {
-        placeholder.text = String(localized: "Message")
+        placeholder.text = String(localized: "Type anything")
         placeholder.textColor = .placeholderText
         placeholder.isAccessibilityElement = false
         placeholder.isUserInteractionEnabled = false
