@@ -4,6 +4,46 @@ import UIKit
 
 final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
     @MainActor
+    func testProductionInitialKeyboardAndMenuWithPreservationOff() throws {
+        try assertProductionInitialKeyboardAndMenu(preserves: false)
+    }
+
+    @MainActor
+    func testProductionInitialKeyboardAndMenuWithPreservationOn() throws {
+        try assertProductionInitialKeyboardAndMenu(preserves: true)
+    }
+
+    @MainActor
+    func testProductionInitialKeyboardAndMenuWithPrivacyMode() throws {
+        try assertProductionInitialKeyboardAndMenu(preserves: false, privacyModeEnabled: true)
+    }
+
+    @MainActor
+    private func assertProductionInitialKeyboardAndMenu(
+        preserves: Bool, privacyModeEnabled: Bool = false
+    ) throws {
+        let (app, diagnostics) = launchProductionSSHTestHarness(
+            preservesTerminalSize: preserves, privacyModeEnabled: privacyModeEnabled
+        )
+        defer { app.terminate() }
+        _ = productionTerminal(in: app)
+        // No tap or explicit Keyboard action may repair the initial state.
+        wait(for: diagnostics, containing: "imeProxyFirstResponder=true", timeout: 8, app: app)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), diagnosticText(in: app))
+        XCTAssertTrue(app.keyboards.keys["a"].isHittable, diagnosticText(in: app))
+        let baseline = try terminalSnapshot(in: diagnostics, app: app)
+        openProductionTerminalMenu(in: app)
+        let settings = app.buttons["vvterm.terminal.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5), diagnosticText(in: app))
+        for _ in 0..<5 {
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+            XCTAssertTrue(settings.exists && settings.isHittable, diagnosticText(in: app))
+            XCTAssertTrue(app.keyboards.firstMatch.exists, diagnosticText(in: app))
+        }
+        assertSameSession(as: baseline, diagnostics: diagnostics, app: app)
+    }
+
+    @MainActor
     func testProductionSettingsReleasesDockedInputWithPreservationOn() throws {
         try assertProductionSettingsInput(preserves: true, floating: false)
     }

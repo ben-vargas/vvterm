@@ -285,6 +285,9 @@ struct TerminalReconnectUITestHarness: View {
         do {
             let username = try fixtureUsername()
             let privateKey = try fixturePrivateKey()
+            // Finish startup loading before installing the fixture collection.
+            // Otherwise that load can remove its server after the route mounts.
+            await serverManager.loadData()
             let server = Server(
                 id: Self.serverId,
                 workspaceId: Self.workspaceId,

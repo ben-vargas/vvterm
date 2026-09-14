@@ -16,6 +16,7 @@ class TerminalReconnectUITestCase: XCTestCase {
     func launchProductionSSHTestHarness(
         exposesKeyboardLossControl: Bool = false,
         preservesTerminalSize: Bool = false,
+        privacyModeEnabled: Bool = false,
         themeName: String? = nil
     ) -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
@@ -31,7 +32,7 @@ class TerminalReconnectUITestCase: XCTestCase {
             "-terminalTmuxEnabledDefault", "NO",
             "-terminalPreserveSizeForKeyboard", preservesTerminalSize ? "YES" : "NO",
             "-terminalVoiceButtonEnabled", "YES",
-            "-security.privacyModeEnabled", "NO",
+            "-security.privacyModeEnabled", privacyModeEnabled ? "YES" : "NO",
             "-security.fullAppLockEnabled", "NO",
             "-security.lockOnBackground", "NO",
         ]

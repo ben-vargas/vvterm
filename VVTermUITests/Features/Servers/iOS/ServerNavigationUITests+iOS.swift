@@ -7,6 +7,54 @@ final class ServerNavigationUITests: XCTestCase {
     }
 
     @MainActor
+    func testServerEntryShowsKeyboardAndKeepsMenuStableWithPrivacyMode() throws {
+        let app = launchNavigationHarness(privacyModeEnabled: true)
+        defer { app.terminate() }
+        let diagnostics = app.staticTexts["vvterm.reconnectTest.diagnostics"]
+        XCTAssertTrue(diagnostics.waitForExistence(timeout: 45))
+        wait(for: diagnostics, containing: "setup=ready", app: app)
+        let serverRow = app.descendants(matching: .any)
+            .matching(identifier: "vvterm.serverList.server.D3A03FD5-453E-43AC-8BB5-838E5D5D1990")
+            .firstMatch
+        let list = app.descendants(matching: .any)
+            .matching(identifier: "vvterm.serverList.list").firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 10))
+
+        for cycle in 0..<3 {
+            scrollToVisible(serverRow, in: list, app: app)
+            tapVisible(serverRow)
+            let terminalTab = app.segmentedControls.buttons["terminal"]
+            XCTAssertTrue(terminalTab.waitForExistence(timeout: 8), diagnosticText(in: app))
+            terminalTab.tap()
+            let terminal = productionTerminal(in: app)
+            XCTAssertTrue(terminal.waitForExistence(timeout: 10), diagnosticText(in: app))
+            wait(for: diagnostics, containing: "state=connected", timeout: 45, app: app)
+            // No terminal tap or Keyboard command may repair initial focus.
+            wait(for: diagnostics, containing: "imeProxyFirstResponder=true", app: app)
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), diagnosticText(in: app))
+            XCTAssertTrue(app.keyboards.keys["a"].isHittable, diagnosticText(in: app))
+            app.buttons["vvterm.terminal.moreMenu"].tap()
+            let settings = app.buttons["vvterm.terminal.settings"]
+            XCTAssertTrue(settings.waitForExistence(timeout: 5), diagnosticText(in: app))
+            for _ in 0..<3 {
+                RunLoop.current.run(until: Date().addingTimeInterval(1))
+                XCTAssertTrue(settings.exists && settings.isHittable, diagnosticText(in: app))
+            }
+            terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)).tap()
+            popTerminal(in: app)
+            let deferReview = app.buttons["Not Now"]
+            if deferReview.waitForExistence(timeout: 3) {
+                deferReview.tap()
+            }
+            if cycle == 0 {
+                XCUIDevice.shared.press(.home)
+                XCTAssertTrue(app.wait(for: .runningBackground, timeout: 8))
+                app.activate()
+            }
+        }
+    }
+
+    @MainActor
     func testActiveTerminalPushPopPreservesListPositionAndSession() throws {
         let app = launchNavigationHarness()
         let diagnostics = app.staticTexts["vvterm.reconnectTest.diagnostics"]
@@ -174,7 +222,7 @@ final class ServerNavigationUITests: XCTestCase {
     }
 
     @MainActor
-    private func launchNavigationHarness() -> XCUIApplication {
+    private func launchNavigationHarness(privacyModeEnabled: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.terminate()
         app.launchArguments = [
@@ -187,7 +235,7 @@ final class ServerNavigationUITests: XCTestCase {
             "-iCloudSyncEnabled", "NO",
             "-sshAutoReconnect", "YES",
             "-terminalTmuxEnabledDefault", "NO",
-            "-security.privacyModeEnabled", "NO",
+            "-security.privacyModeEnabled", privacyModeEnabled ? "YES" : "NO",
             "-security.fullAppLockEnabled", "NO",
             "-security.lockOnBackground", "NO",
         ]
