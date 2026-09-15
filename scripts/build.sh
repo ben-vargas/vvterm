@@ -213,6 +213,9 @@ build_ghosttykit() {
         return 1
     fi
 
+    # Extend the pinned bridge for native UIKit selection without mouse events.
+    git -C "${workdir}/ghostty" apply "${SCRIPT_DIR}/patches/ghostty-host-selection.patch"
+
     local embedded_path="${workdir}/ghostty/src/apprt/embedded.zig"
     if [ -f "${embedded_path}" ]; then
         log_info "Disabling Ghostty window blur (App Store safe)..."

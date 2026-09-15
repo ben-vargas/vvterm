@@ -5,6 +5,23 @@ import Testing
 @MainActor
 struct TerminalNativeSelectionLifecycleTests {
     @Test
+    func temporarySmallViewportDoesNotEndBufferSelection() {
+        var lifecycle = TerminalNativeSelectionLifecycle()
+        lifecycle.beginInteraction(restoreTerminalInput: true)
+        _ = lifecycle.setSelection(NSRange(location: 80, length: 6))
+        #expect(lifecycle.setProjection(.outsideViewport) == nil)
+        #expect(lifecycle.selection == nil)
+        #expect(lifecycle.hasSelection)
+        #expect(lifecycle.endInteraction() == nil)
+        #expect(lifecycle.keepsFirstResponder)
+        #expect(lifecycle.shouldRefreshSnapshot)
+        let visible = NSRange(location: 40, length: 6)
+        #expect(lifecycle.setSelection(visible) == nil)
+        #expect(lifecycle.selection == visible)
+        #expect(lifecycle.setSelection(nil) != nil)
+    }
+
+    @Test
     func keepsSelectionAfterInteractionEnds() {
         var lifecycle = TerminalNativeSelectionLifecycle()
         let selection = NSRange(location: 4, length: 7)
@@ -14,7 +31,7 @@ struct TerminalNativeSelectionLifecycleTests {
         #expect(lifecycle.setSelection(selection) == nil)
         #expect(lifecycle.endInteraction() == nil)
 
-        #expect(lifecycle.phase == .selected(range: selection, restoreTerminalInput: true))
+        #expect(lifecycle.phase == .selected(selection: .visible(selection), restoreTerminalInput: true))
         #expect(lifecycle.keepsFirstResponder)
         #expect(!lifecycle.interactionIsActive)
     }

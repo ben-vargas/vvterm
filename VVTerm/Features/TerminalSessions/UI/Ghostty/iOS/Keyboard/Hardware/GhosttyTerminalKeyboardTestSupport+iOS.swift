@@ -19,6 +19,13 @@ extension GhosttyTerminalView {
     }
 
     func keyboardUITestDiagnostics(keyboardVisible: Bool, keyboardHeight: CGFloat) -> String {
+        let endHandleCenter: CGPoint? = {
+            guard #available(iOS 17.0, *),
+                  let display = imeProxyTextView.interactions.compactMap({ $0 as? UITextSelectionDisplayInteraction }).first,
+                  let handle = display.handleViews.last,
+                  !handle.isHidden, !handle.bounds.isEmpty else { return nil }
+            return handle.convert(CGPoint(x: handle.bounds.midX, y: handle.bounds.midY), to: self)
+        }()
         let snapshot = keyboardCoordinatorDiagnosticSnapshot()
         let accessoryAttached = keyboardToolbar?.window != nil
         let accessoryAppearance = keyboardToolbar?.diagnosticBackgroundAppearance ?? "missing"
@@ -74,7 +81,11 @@ extension GhosttyTerminalView {
             "browse=\(keyboardFocusPolicy.isBrowsing)",
             "find=\(isFindNavigatorActive)",
             "nativeSelectionActive=\(hasActiveSelectionInteraction)",
+            "nativeSelectionEndHandleX=\(endHandleCenter?.x ?? -1)",
+            "nativeSelectionEndHandleY=\(endHandleCenter?.y ?? -1)",
             "nativeSelectionLength=\(nativeSelectedRange?.length ?? 0)",
+            "nativeSelectionY=\(nativeSelectedRange.map { nativeSelectionSnapshot.caretRect(for: $0.location).minY } ?? -1)",
+            "nativeSelectionTextHex=\(currentSelectionText().map { Data($0.utf8).map { String(format: "%02x", $0) }.joined() } ?? "none")",
             "eligible=\(isTextInputSessionEligible)",
             "imeProxyCanBecome=\(imeProxyTextView.canBecomeFirstResponder)",
             "imeComposing=\(textInputModel.hasActiveIMEComposition)",

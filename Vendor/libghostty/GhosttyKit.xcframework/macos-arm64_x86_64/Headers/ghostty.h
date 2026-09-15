@@ -1240,6 +1240,38 @@ GHOSTTY_API void ghostty_surface_complete_clipboard_request(
 GHOSTTY_API void ghostty_surface_deny_clipboard_request(ghostty_surface_t,
                                                            void*);
 GHOSTTY_API bool ghostty_surface_has_selection(ghostty_surface_t);
+
+// Host selection snapshots use UTF-16 offsets and physical viewport cells.
+// Free every snapshot before freeing its surface. Do not share across surfaces.
+// A stale snapshot rejects range updates; read a new snapshot before retrying.
+typedef void* ghostty_selection_snapshot_t;
+typedef void* ghostty_selection_anchor_t;
+typedef struct {
+  uintptr_t offset;
+  uintptr_t length;
+  uint32_t x;
+  uint32_t y;
+  uint32_t width;
+} ghostty_selection_cell_s;
+typedef struct {
+  const char* text;
+  uintptr_t text_len;
+  const ghostty_selection_cell_s* cells;
+  uintptr_t cells_len;
+  uint32_t columns;
+  uint32_t rows;
+  bool has_selection;
+  bool unchanged;
+  uintptr_t selection_start;
+  uintptr_t selection_len;
+} ghostty_selection_snapshot_s;
+ghostty_selection_snapshot_t ghostty_surface_selection_snapshot_new(ghostty_surface_t, ghostty_selection_snapshot_t, ghostty_selection_snapshot_s*);
+void ghostty_surface_selection_snapshot_free(ghostty_surface_t, ghostty_selection_snapshot_t);
+bool ghostty_surface_selection_snapshot_select(ghostty_surface_t, ghostty_selection_snapshot_t, uintptr_t, uintptr_t, ghostty_selection_anchor_t);
+ghostty_selection_anchor_t ghostty_surface_selection_anchor_new(ghostty_surface_t);
+void ghostty_surface_selection_anchor_free(ghostty_surface_t, ghostty_selection_anchor_t);
+void ghostty_surface_clear_selection(ghostty_surface_t);
+
 GHOSTTY_API bool ghostty_surface_read_selection(ghostty_surface_t, ghostty_text_s*);
 GHOSTTY_API bool ghostty_surface_read_text(ghostty_surface_t,
                                               ghostty_selection_s,

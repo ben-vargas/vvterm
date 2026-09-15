@@ -1,0 +1,555 @@
+diff --git a/include/ghostty.h b/include/ghostty.h
+index 43da8551c..09c647c0b 100644
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -1240,6 +1240,38 @@ GHOSTTY_API void ghostty_surface_complete_clipboard_request(
+ GHOSTTY_API void ghostty_surface_deny_clipboard_request(ghostty_surface_t,
+                                                            void*);
+ GHOSTTY_API bool ghostty_surface_has_selection(ghostty_surface_t);
++
++// Host selection snapshots use UTF-16 offsets and physical viewport cells.
++// Free every snapshot before freeing its surface. Do not share across surfaces.
++// A stale snapshot rejects range updates; read a new snapshot before retrying.
++typedef void* ghostty_selection_snapshot_t;
++typedef void* ghostty_selection_anchor_t;
++typedef struct {
++  uintptr_t offset;
++  uintptr_t length;
++  uint32_t x;
++  uint32_t y;
++  uint32_t width;
++} ghostty_selection_cell_s;
++typedef struct {
++  const char* text;
++  uintptr_t text_len;
++  const ghostty_selection_cell_s* cells;
++  uintptr_t cells_len;
++  uint32_t columns;
++  uint32_t rows;
++  bool has_selection;
++  bool unchanged;
++  uintptr_t selection_start;
++  uintptr_t selection_len;
++} ghostty_selection_snapshot_s;
++ghostty_selection_snapshot_t ghostty_surface_selection_snapshot_new(ghostty_surface_t, ghostty_selection_snapshot_t, ghostty_selection_snapshot_s*);
++void ghostty_surface_selection_snapshot_free(ghostty_surface_t, ghostty_selection_snapshot_t);
++bool ghostty_surface_selection_snapshot_select(ghostty_surface_t, ghostty_selection_snapshot_t, uintptr_t, uintptr_t, ghostty_selection_anchor_t);
++ghostty_selection_anchor_t ghostty_surface_selection_anchor_new(ghostty_surface_t);
++void ghostty_surface_selection_anchor_free(ghostty_surface_t, ghostty_selection_anchor_t);
++void ghostty_surface_clear_selection(ghostty_surface_t);
++
+ GHOSTTY_API bool ghostty_surface_read_selection(ghostty_surface_t, ghostty_text_s*);
+ GHOSTTY_API bool ghostty_surface_read_text(ghostty_surface_t,
+                                               ghostty_selection_s,
+diff --git a/src/Surface.zig b/src/Surface.zig
+index 42ad5b8ff..10d51c63b 100644
+--- a/src/Surface.zig
++++ b/src/Surface.zig
+@@ -126,6 +126,9 @@ last_binding_trigger: u64 = 0,
+ 
+ /// The terminal IO handler.
+ io: termio.Termio,
++
++/// Original text for host-managed selection; output must not retarget Copy.
++host_selection_text: ?[:0]const u8 = null,
+ io_thread: termio.Thread,
+ io_thr: std.Thread,
+ 
+@@ -810,6 +813,7 @@ pub fn init(
+ }
+ 
+ pub fn deinit(self: *Surface) void {
++    if (self.host_selection_text) |text| self.alloc.free(text);
+     // Stop search thread
+     if (self.search) |*s| s.deinit();
+ 
+@@ -2360,7 +2364,9 @@ fn copySelectionToClipboards(
+ /// also copy per `copy_on_select`, use `setSelectionAndCopy`.
+ ///
+ /// This must be called with the renderer mutex held.
+-fn setSelection(self: *Surface, sel_: ?terminal.Selection) !void {
++pub fn setSelection(self: *Surface, sel_: ?terminal.Selection) !void {
++    if (self.host_selection_text) |text| self.alloc.free(text);
++    self.host_selection_text = null;
+     // Compute the transition before `select` below, which untracks (frees)
+     // the previous selection's tracked pins; reading them after would be a
+     // use-after-free.
+@@ -2384,6 +2390,27 @@ fn setSelection(self: *Surface, sel_: ?terminal.Selection) !void {
+     }
+ }
+ 
++/// Called under the renderer lock before projecting or copying host selection.
++pub fn validateHostSelection(self: *Surface) void {
++    const expected = self.host_selection_text orelse return;
++    const screen = self.io.terminal.screens.active;
++    const sel = screen.selection orelse {
++        self.alloc.free(expected);
++        self.host_selection_text = null;
++        return;
++    };
++    if (sel.start().garbage or sel.end().garbage) {
++        self.setSelection(null) catch unreachable;
++        return;
++    }
++    const actual = screen.selectionString(self.alloc, .{ .sel = sel, .trim = false }) catch {
++        self.setSelection(null) catch unreachable;
++        return;
++    };
++    defer self.alloc.free(actual);
++    if (!std.mem.eql(u8, expected, actual)) self.setSelection(null) catch unreachable;
++}
++
+ /// Set a selection and, per `copy_on_select`, copy it to the clipboard.
+ /// For committing selection gestures (mouse release, select-all binding).
+ ///
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index ae8473ffd..64a4076e7 100644
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1870,6 +1870,110 @@ pub const CAPI = struct {
+         return surface.core_surface.hasSelection();
+     }
+ 
++    // Immutable snapshot storage is owned by the host until explicitly freed.
++    // All access is serialized with terminal output by the renderer mutex.
++    const SelectionSnapshot = terminal.SelectionSnapshot;
++    const SelectionSnapshotView = extern struct {
++        text: [*:0]const u8,
++        text_len: usize,
++        cells: [*]const SelectionSnapshot.Cell,
++        cells_len: usize,
++        columns: u32,
++        rows: u32,
++        has_selection: bool,
++        unchanged: bool,
++        selection_start: usize,
++        selection_len: usize,
++    };
++
++    export fn ghostty_surface_selection_snapshot_new(surface: *Surface, previous: ?*const SelectionSnapshot, out: *SelectionSnapshotView) ?*SelectionSnapshot {
++        const core = &surface.core_surface;
++        core.renderer_state.mutex.lockUncancelable(global.io());
++        defer core.renderer_state.mutex.unlock(global.io());
++        core.validateHostSelection();
++        const snapshot = global.alloc().create(SelectionSnapshot) catch return null;
++        snapshot.* = SelectionSnapshot.init(global.alloc(), &core.io.terminal) catch |err| {
++            global.alloc().destroy(snapshot);
++            log.warn("error reading selection snapshot err={}", .{err});
++            return null;
++        };
++        out.* = .{
++            .text = snapshot.text.ptr,
++            .text_len = snapshot.text.len,
++            .cells = snapshot.cells.ptr,
++            .cells_len = snapshot.cells.len,
++            .columns = snapshot.cols,
++            .rows = snapshot.rows,
++            .has_selection = snapshot.has_selection,
++            .unchanged = if (previous) |old| old.matches(snapshot.*, &core.io.terminal) else false,
++            .selection_start = snapshot.selection_start,
++            .selection_len = snapshot.selection_len,
++        };
++        return snapshot;
++    }
++
++    export fn ghostty_surface_selection_snapshot_free(surface: *Surface, snapshot: *SelectionSnapshot) void {
++        const core = &surface.core_surface;
++        core.renderer_state.mutex.lockUncancelable(global.io());
++        defer core.renderer_state.mutex.unlock(global.io());
++        snapshot.deinit(global.alloc(), &core.io.terminal);
++        global.alloc().destroy(snapshot);
++    }
++
++    export fn ghostty_surface_selection_snapshot_select(surface: *Surface, snapshot: *const SelectionSnapshot, offset: usize, length: usize, anchor: ?*const SelectionSnapshot.Anchor) bool {
++        const core = &surface.core_surface;
++        core.renderer_state.mutex.lockUncancelable(global.io());
++        defer core.renderer_state.mutex.unlock(global.io());
++        const accepted = snapshot.selectAnchored(global.alloc(), &core.io.terminal, offset, length, anchor) catch |err| {
++            log.warn("error setting host selection err={}", .{err});
++            return false;
++        };
++        if (accepted) {
++            if (core.host_selection_text) |text| core.alloc.free(text);
++            core.host_selection_text = null;
++            core.host_selection_text = core.io.terminal.screens.active.selectionString(core.alloc, .{
++                .sel = core.io.terminal.screens.active.selection.?,
++                .trim = false,
++            }) catch {
++                core.setSelection(null) catch unreachable;
++                return false;
++            };
++            _ = core.rt_app.performAction(.{ .surface = core }, .selection_changed, {}) catch {};
++            surface.refresh();
++        }
++        return accepted;
++    }
++
++    export fn ghostty_surface_selection_anchor_new(surface: *Surface) ?*SelectionSnapshot.Anchor {
++        const core = &surface.core_surface;
++        core.renderer_state.mutex.lockUncancelable(global.io());
++        defer core.renderer_state.mutex.unlock(global.io());
++        core.validateHostSelection();
++        const value = (SelectionSnapshot.Anchor.init(&core.io.terminal) catch return null) orelse return null;
++        const anchor = global.alloc().create(SelectionSnapshot.Anchor) catch {
++            value.deinit(&core.io.terminal);
++            return null;
++        };
++        anchor.* = value;
++        return anchor;
++    }
++
++    export fn ghostty_surface_selection_anchor_free(surface: *Surface, anchor: *SelectionSnapshot.Anchor) void {
++        const core = &surface.core_surface;
++        core.renderer_state.mutex.lockUncancelable(global.io());
++        defer core.renderer_state.mutex.unlock(global.io());
++        anchor.deinit(&core.io.terminal);
++        global.alloc().destroy(anchor);
++    }
++
++    export fn ghostty_surface_clear_selection(surface: *Surface) void {
++        const core = &surface.core_surface;
++        core.renderer_state.mutex.lockUncancelable(global.io());
++        defer core.renderer_state.mutex.unlock(global.io());
++        core.setSelection(null) catch unreachable;
++        surface.refresh();
++    }
++
+     /// Same as ghostty_surface_read_text but reads from the user selection,
+     /// if any.
+     export fn ghostty_surface_read_selection(
+@@ -1880,6 +1984,7 @@ pub const CAPI = struct {
+         core_surface.renderer_state.mutex.lockUncancelable(global.io());
+         defer core_surface.renderer_state.mutex.unlock(global.io());
+ 
++        core_surface.validateHostSelection();
+         // If we don't have a selection, do nothing.
+         const core_sel = core_surface.io.terminal.screens.active.selection orelse return false;
+ 
+diff --git a/src/terminal/PageList.zig b/src/terminal/PageList.zig
+index d33eff00a..c9facf1b4 100644
+--- a/src/terminal/PageList.zig
++++ b/src/terminal/PageList.zig
+@@ -1297,6 +1297,9 @@ pub fn resize(self: *PageList, opts: Resize) Allocator.Error!void {
+ 
+     // Recalculate our minimum limits. This allows grow to work properly when
+     // increasing beyond the explicit limits to fit the active area.
++    const held_at_bottom = self.viewport == .pin and self.pinIsActive(self.viewport_pin.*);
++    defer if (held_at_bottom and self.viewport == .active) self.pinViewport();
++
+     const old_limits = self.limits;
+     self.limits.resize(
+         opts.cols orelse self.cols,
+@@ -1504,6 +1507,17 @@ fn resizeCols(
+         self.total_rows = reflow_cursor.total_rows;
+     }
+ 
++    // Reflow can unwrap enough rows that a history viewport pin lands in the
++    // active area before we do any growth below. Switch back
++    // to the active viewport now so intermediate grow() integrity checks stay
++    // valid.
++    switch (self.viewport) {
++        .active, .top => {},
++        .pin => if (self.total_rows < self.rows or self.pinIsActive(self.viewport_pin.*)) {
++            self.viewport = .active;
++        },
++    }
++
+     // If our total rows is less than our active rows, we need to grow.
+     // This can happen if you're growing columns such that enough active
+     // rows unwrap that we no longer have enough.
+@@ -1516,17 +1530,6 @@ fn resizeCols(
+         for (total..self.rows) |_| _ = try self.grow();
+     }
+ 
+-    // Reflow can unwrap enough rows that a history viewport pin lands in the
+-    // active area before we do any preserved-cursor growth below. Switch back
+-    // to the active viewport now so intermediate grow() integrity checks stay
+-    // valid.
+-    switch (self.viewport) {
+-        .active, .top => {},
+-        .pin => if (self.pinIsActive(self.viewport_pin.*)) {
+-            self.viewport = .active;
+-        },
+-    }
+-
+     // See preserved_cursor setup for why.
+     if (preserved_cursor) |c| cursor: {
+         const active_pt = self.pointFromPin(
+@@ -3262,6 +3265,16 @@ pub const Scroll = union(enum) {
+     pin: Pin,
+ };
+ 
++/// Hold the current reading position, including when it is at the live bottom.
++pub fn pinViewport(self: *PageList) void {
++    if (self.limits.bytes.explicit == 0) return;
++    const top = self.getTopLeft(.viewport);
++    self.viewport_pin.* = top;
++    self.viewport = .pin;
++    self.viewport_pin_row_offset = null;
++    self.assertIntegrity();
++}
++
+ /// Scroll the viewport. This will never create new scrollback, allocate
+ /// pages, etc. This can only be used to move the viewport within the
+ /// previously allocated pages.
+diff --git a/src/terminal/main.zig b/src/terminal/main.zig
+index 5d7c73871..580352273 100644
+--- a/src/terminal/main.zig
++++ b/src/terminal/main.zig
+@@ -52,6 +52,7 @@ pub const Screen = @import("Screen.zig");
+ pub const ScreenSet = @import("ScreenSet.zig");
+ pub const Scrollbar = PageList.Scrollbar;
+ pub const Selection = @import("Selection.zig");
++pub const SelectionSnapshot = @import("SelectionSnapshot.zig");
+ pub const SelectionGesture = @import("SelectionGesture.zig");
+ pub const SizeReportStyle = csi.SizeReportStyle;
+ pub const StringMap = @import("StringMap.zig");
+diff --git a/src/terminal/SelectionSnapshot.zig b/src/terminal/SelectionSnapshot.zig
+new file mode 100644
+index 000000000..1b7c858dc
+--- /dev/null
++++ b/src/terminal/SelectionSnapshot.zig
+@@ -0,0 +1,243 @@
++//! Immutable host text-input projection. The screen owns the actual selection.
++const Snapshot = @This();
++const std = @import("std");
++const Terminal = @import("Terminal.zig");
++const ScreenSet = @import("ScreenSet.zig");
++const Selection = @import("Selection.zig");
++const Pin = @import("PageList.zig").Pin;
++const Allocator = std.mem.Allocator;
++
++pub const Anchor = struct {
++    selection: Selection,
++    screen_key: ScreenSet.Key,
++    screen_id: usize,
++
++    pub fn init(t: *Terminal) !?Anchor {
++        const sel = t.screens.active.selection orelse return null;
++        if (sel.start().garbage or sel.end().garbage) return null;
++        return .{
++            .selection = try (Selection.init(sel.start(), sel.end(), false)).track(t.screens.active),
++            .screen_key = t.screens.active_key,
++            .screen_id = t.screens.generation(t.screens.active_key),
++        };
++    }
++
++    pub fn deinit(self: Anchor, t: *Terminal) void {
++        if (t.screens.generation(self.screen_key) == self.screen_id) {
++            if (t.screens.get(self.screen_key)) |screen| self.selection.deinit(screen);
++        }
++    }
++};
++
++pub const Cell = extern struct {
++    offset: usize,
++    length: usize,
++    x: u32,
++    y: u32,
++    width: u32,
++};
++
++text: [:0]const u8,
++cells: []const Cell,
++cols: u32,
++rows: u32,
++utf16_len: usize,
++has_selection: bool,
++selection_start: usize,
++selection_len: usize,
++screen_key: ScreenSet.Key,
++screen_id: usize,
++top: *Pin,
++
++pub fn init(a: Allocator, t: *Terminal) !Snapshot {
++    const screen = t.screens.active;
++    const top = try screen.pages.trackPin(screen.pages.getTopLeft(.viewport));
++    errdefer screen.pages.untrackPin(top);
++    var text: std.ArrayList(u8) = .empty;
++    defer text.deinit(a);
++    var cells: std.ArrayList(Cell) = .empty;
++    errdefer cells.deinit(a);
++    var utf16_len: usize = 0;
++    var selection_start: ?usize = null;
++    var selection_end: usize = 0;
++    const sel = screen.selection;
++    const tl = if (sel) |v| v.topLeft(screen) else null;
++    const br = if (sel) |v| v.bottomRight(screen) else null;
++    for (0..screen.pages.rows) |y| {
++        const start = screen.pages.pin(.{ .viewport = .{ .x = 0, .y = @intCast(y) } }) orelse break;
++        var end = start;
++        end.x = screen.pages.cols - 1;
++        const map = try screen.selectionStringMap(a, .{ .sel = .init(start, end, true), .trim = false });
++        defer map.deinit(a);
++        // Format each physical row separately; UIKit geometry uses grid rows.
++        const line = std.mem.trimEnd(u8, map.string, "\r\n");
++        var it = (try std.unicode.Utf8View.init(line)).iterator();
++        var byte_offset: usize = 0;
++        while (it.nextCodepoint()) |cp| {
++            const byte_len = std.unicode.utf8CodepointSequenceLength(cp) catch unreachable;
++            const pin = map.map.get(byte_offset) orelse return error.InvalidTextMap;
++            const length: usize = if (cp > 0xFFFF) 2 else 1;
++            const width: u32 = if (pin.rowAndCell().cell.wide == .wide) 2 else 1;
++            if (cells.items.len > 0 and cells.items[cells.items.len - 1].x == pin.x and
++                cells.items[cells.items.len - 1].y == y)
++            {
++                cells.items[cells.items.len - 1].length += length;
++            } else {
++                try cells.append(a, .{ .offset = utf16_len, .length = length, .x = pin.x, .y = @intCast(y), .width = width });
++            }
++            if (tl != null and !pin.before(tl.?) and !br.?.before(pin)) {
++                if (selection_start == null) selection_start = utf16_len;
++                selection_end = utf16_len + length;
++            }
++            utf16_len = try std.math.add(usize, utf16_len, length);
++            byte_offset += byte_len;
++        }
++        try text.appendSlice(a, line);
++        if (y + 1 < screen.pages.rows) {
++            try text.append(a, '\n');
++            utf16_len = try std.math.add(usize, utf16_len, 1);
++        }
++    }
++    const owned_text = try text.toOwnedSliceSentinel(a, 0);
++    errdefer a.free(owned_text);
++    return .{
++        .text = owned_text,
++        .cells = try cells.toOwnedSlice(a),
++        .cols = screen.pages.cols,
++        .rows = screen.pages.rows,
++        .utf16_len = utf16_len,
++        .has_selection = sel != null,
++        .selection_start = selection_start orelse 0,
++        .selection_len = if (selection_start) |start| selection_end - start else 0,
++        .screen_key = t.screens.active_key,
++        .screen_id = t.screens.generation(t.screens.active_key),
++        .top = top,
++    };
++}
++
++pub fn deinit(self: Snapshot, a: Allocator, t: *Terminal) void {
++    if (t.screens.generation(self.screen_key) == self.screen_id) {
++        if (t.screens.get(self.screen_key)) |screen| screen.pages.untrackPin(self.top);
++    }
++    a.free(self.text);
++    a.free(self.cells);
++}
++
++pub fn matches(self: Snapshot, other: Snapshot, t: *Terminal) bool {
++    if (self.screen_key != other.screen_key or self.screen_id != other.screen_id or
++        t.screens.generation(self.screen_key) != self.screen_id) return false;
++    if (self.top.garbage or other.top.garbage or !self.top.eql(other.top.*)) return false;
++    if (self.cols != other.cols or self.rows != other.rows or
++        !std.mem.eql(u8, self.text, other.text) or self.cells.len != other.cells.len) return false;
++    for (self.cells, other.cells) |old, new| {
++        if (!std.meta.eql(old, new)) return false;
++    }
++    return true;
++}
++
++/// Reject stale UIKit ranges instead of mapping them to unrelated new text.
++/// Call with the renderer lock held, including all snapshot lifetime operations.
++pub fn select(self: Snapshot, a: Allocator, t: *Terminal, offset: usize, length: usize) !bool {
++    return self.selectAnchored(a, t, offset, length, null);
++}
++
++pub fn selectAnchored(self: Snapshot, a: Allocator, t: *Terminal, offset: usize, length: usize, anchor: ?*const Anchor) !bool {
++    if (length == 0 or offset >= self.utf16_len or length > self.utf16_len - offset) return false;
++    if (t.screens.active_key != self.screen_key or t.screens.generation(self.screen_key) != self.screen_id) return false;
++    const screen = t.screens.active;
++    if (self.top.garbage or self.cols != screen.pages.cols or self.rows != screen.pages.rows or
++        !self.top.eql(screen.pages.getTopLeft(.viewport))) return false;
++    var current = try Snapshot.init(a, t);
++    defer current.deinit(a, t);
++    if (!self.matches(current, t)) return false;
++    var start: ?Cell = null;
++    var end: ?Cell = null;
++    for (self.cells) |cell| {
++        if (cell.offset + cell.length <= offset) continue;
++        if (cell.offset >= offset + length) break;
++        if (start == null) start = cell;
++        end = cell;
++    }
++    const first = start orelse return false;
++    const last = end orelse return false;
++    var first_pin = screen.pages.pin(.{ .viewport = .{ .x = @intCast(first.x), .y = first.y } }) orelse return false;
++    var last_pin = screen.pages.pin(.{ .viewport = .{ .x = @intCast(last.x), .y = last.y } }) orelse return false;
++    if (anchor) |v| {
++        if (v.screen_key != t.screens.active_key or v.screen_id != t.screens.generation(v.screen_key)) return false;
++        if (v.selection.start().garbage or v.selection.end().garbage) return false;
++        const anchor_start = v.selection.topLeft(screen);
++        const anchor_end = v.selection.bottomRight(screen);
++        if (anchor_start.before(first_pin)) first_pin = anchor_start;
++        if (last_pin.before(anchor_end)) last_pin = anchor_end;
++    }
++    try screen.select(.init(first_pin, last_pin, false));
++    if (screen.pages.viewport == .active) screen.pages.pinViewport();
++    return true;
++}
++
++test "SelectionSnapshot tracks selection through output and reflow" {
++    const a = std.testing.allocator;
++    var t: Terminal = try .init(std.testing.io, a, .{ .cols = 20, .rows = 3 });
++    defer t.deinit(a);
++    try t.screens.active.testWriteString("alpha selected omega");
++    var before = try Snapshot.init(a, &t);
++    defer before.deinit(a, &t);
++    try std.testing.expect(try before.select(a, &t, 6, 8));
++    try t.screens.active.testWriteString("\nsecond\nthird\nfourth\nfifth");
++    var after = try Snapshot.init(a, &t);
++    defer after.deinit(a, &t);
++    try std.testing.expectEqualStrings("selected", after.text[after.selection_start..][0..after.selection_len]);
++    try t.resize(a, .{ .cols = 12, .rows = 3 });
++    const selected = try t.screens.active.selectionString(a, .{ .sel = t.screens.active.selection.?, .trim = false });
++    defer a.free(selected);
++    try std.testing.expectEqualStrings("selected", selected);
++}
++
++test "SelectionSnapshot rejects stale text and invalid ranges" {
++    const a = std.testing.allocator;
++    var t: Terminal = try .init(std.testing.io, a, .{ .cols = 20, .rows = 3 });
++    defer t.deinit(a);
++    try t.screens.active.testWriteString("original");
++    var snapshot = try Snapshot.init(a, &t);
++    defer snapshot.deinit(a, &t);
++    try std.testing.expect(!try snapshot.select(a, &t, std.math.maxInt(usize), 2));
++    t.screens.active.cursorAbsolute(0, 0);
++    try t.screens.active.testWriteString("replaced");
++    try std.testing.expect(!try snapshot.select(a, &t, 0, 8));
++    try std.testing.expect(t.screens.active.selection == null);
++}
++
++test "SelectionSnapshot maps UTF16 to terminal cells" {
++    const a = std.testing.allocator;
++    var t: Terminal = try .init(std.testing.io, a, .{ .cols = 20, .rows = 3 });
++    defer t.deinit(a);
++    var stream = t.vtStream();
++    defer stream.deinit();
++    stream.nextSlice("A😀界e\u{301}Z");
++    var snapshot = try Snapshot.init(a, &t);
++    defer snapshot.deinit(a, &t);
++    try std.testing.expect(try snapshot.select(a, &t, 1, 3));
++    const selected = try t.screens.active.selectionString(a, .{ .sel = t.screens.active.selection.?, .trim = false });
++    defer a.free(selected);
++    try std.testing.expectEqualStrings("😀界", selected);
++}
++
++test "SelectionSnapshot drag anchor follows reflow and shrinks" {
++    const a = std.testing.allocator;
++    var t: Terminal = try .init(std.testing.io, a, .{ .cols = 20, .rows = 4 });
++    defer t.deinit(a);
++    try t.screens.active.testWriteString("alpha selected omega");
++    var snapshot = try Snapshot.init(a, &t);
++    defer snapshot.deinit(a, &t);
++    try std.testing.expect(try snapshot.select(a, &t, 6, 8));
++    var anchor = (try Anchor.init(&t)).?;
++    defer anchor.deinit(&t);
++    try t.resize(a, .{ .cols = 12, .rows = 4 });
++    var next = try Snapshot.init(a, &t);
++    defer next.deinit(a, &t);
++    try std.testing.expect(try next.selectAnchored(a, &t, 0, 1, &anchor));
++    try std.testing.expect(try next.selectAnchored(a, &t, 6, 1, &anchor));
++    const selected = try t.screens.active.selectionString(a, .{ .sel = t.screens.active.selection.?, .trim = false });
++    defer a.free(selected);
++    try std.testing.expectEqualStrings("selected", selected);
++}

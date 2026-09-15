@@ -140,6 +140,10 @@ extension GhosttyTerminalView {
     private func prepareKeyboardFocus(for reason: TerminalKeyboardFocusReason) -> Bool {
         guard terminalInputAcquisitionAllowed else { return false }
         guard !isFindNavigatorActive else { return false }
+        if nativeSelectionLifecycle.keepsFirstResponder,
+           reason == .initialActivation || reason == .reconnectRestore {
+            return false
+        }
         if reason != .hardwareKeyboard {
             refreshHardwareKeyboardAttachmentFromSystem()
         }
@@ -208,7 +212,10 @@ extension GhosttyTerminalView {
         if hadSelection {
             imeProxyTextView.inputDelegate?.selectionWillChange(imeProxyTextView)
         }
+        if let surface = surface?.unsafeCValue { ghostty_surface_clear_selection(surface) }
+        freeNativeSelectionDragAnchor()
         nativeSelectionLifecycle.cancel()
+        updateNativeSelectionDisplay()
         if hadSelection {
             imeProxyTextView.inputDelegate?.selectionDidChange(imeProxyTextView)
         }

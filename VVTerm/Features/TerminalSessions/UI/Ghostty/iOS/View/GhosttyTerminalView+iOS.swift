@@ -209,9 +209,11 @@ class GhosttyTerminalView: UIView {
     var pinchReferenceScale: CGFloat = 1
     let zoomIndicatorView = TerminalZoomIndicatorView()
     var zoomIndicatorHideWorkItem: DispatchWorkItem?
+    var isPublishingNativeSelectionSnapshot = false
+    var nativeSelectionSnapshotHandle: ghostty_selection_snapshot_t?
     var nativeSelectionSnapshot = TerminalNativeTextSnapshot.empty
     var nativeSelectionLifecycle = TerminalNativeSelectionLifecycle()
-    var nativeSelectionLongPressAnchor: NSRange?
+    var nativeSelectionLongPressAnchor: ghostty_selection_anchor_t?
     var nativeSelectedRange: NSRange? { nativeSelectionLifecycle.selection }
     var nativeSelectionInteractionActive: Bool { nativeSelectionLifecycle.interactionIsActive }
     var prefersNativeSelectionFirstResponder: Bool { nativeSelectionLifecycle.keepsFirstResponder }

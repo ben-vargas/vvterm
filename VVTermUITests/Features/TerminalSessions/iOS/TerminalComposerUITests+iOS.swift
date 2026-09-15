@@ -80,7 +80,7 @@ final class TerminalComposerUITests: XCTestCase {
             let point = try contentPoint(in: app, row: 1.5)
             point.doubleTap()
             app.buttons["Read selection"].tap()
-            XCTAssertEqual(selectedText(in: app), "two")
+            XCTAssertEqual(selectedText(in: app), "two", app.staticTexts["composer.test.content"].label)
             // Tap away before starting a fresh three-tap gesture.
             app.otherElements["composer.test.terminal"].coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.8)).tap()
             app.buttons["Read selection"].tap()
@@ -93,7 +93,7 @@ final class TerminalComposerUITests: XCTestCase {
             app.otherElements["composer.test.terminal"].coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.8)).tap()
             try contentPoint(in: app, row: 1.5).press(forDuration: 0.6)
             app.buttons["Read selection"].tap()
-            XCTAssertEqual(selectedText(in: app), "two")
+            XCTAssertEqual(selectedText(in: app), "two", app.staticTexts["composer.test.content"].label)
         }
     }
 

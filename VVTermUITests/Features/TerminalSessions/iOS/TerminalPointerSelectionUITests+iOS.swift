@@ -104,8 +104,11 @@ final class TerminalPointerSelectionUITests: TerminalKeyboardUITestCase {
         }
         assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
 
-        let selectionStart = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.5))
-        let selectionEnd = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.5))
+        let cellHeight = try requiredDiagnosticMetric("linkCellHeight", in: app)
+        let selectionStart = terminal.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: 20, dy: cellHeight * 20.5))
+        let selectionEnd = terminal.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: 150, dy: cellHeight * 20.5))
         selectionStart.press(forDuration: 1, thenDragTo: selectionEnd)
         waitForDiagnosticMetrics(in: app) { metrics in
             (metrics["nativeSelectionLength"] ?? 0) > 0

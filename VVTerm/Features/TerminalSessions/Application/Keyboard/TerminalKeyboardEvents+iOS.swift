@@ -14,6 +14,7 @@ nonisolated struct TerminalKeyboardCoordinatorDiagnosticSnapshot: Equatable, Sen
     var isSoftwareKeyboardSuppressed = false
     var isKeyboardInBrowseMode = false
     var hasHardwareKeyboardAttached = false
+    var hasNativeSelection = false
 
     var lifecycleDescription: String {
         [

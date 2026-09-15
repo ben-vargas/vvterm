@@ -1,17 +1,29 @@
 import Foundation
 
 nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
+    nonisolated enum Selection: Equatable, Sendable {
+        case visible(NSRange)
+        case outsideViewport
+    }
+
     nonisolated enum Phase: Equatable, Sendable {
         case inactive
-        case prepared(selection: NSRange?, restoreTerminalInput: Bool)
-        case interacting(selection: NSRange?, restoreTerminalInput: Bool)
-        case selected(range: NSRange, restoreTerminalInput: Bool)
+        case prepared(selection: Selection?, restoreTerminalInput: Bool)
+        case interacting(selection: Selection?, restoreTerminalInput: Bool)
+        case selected(selection: Selection, restoreTerminalInput: Bool)
         case restoringTerminalInput(id: UUID)
     }
 
     private(set) var phase: Phase = .inactive
 
     var selection: NSRange? {
+        if case .visible(let range) = retainedSelection { return range }
+        return nil
+    }
+
+    var hasSelection: Bool { retainedSelection != nil }
+
+    private var retainedSelection: Selection? {
         switch phase {
         case .prepared(let selection, _), .interacting(let selection, _):
             selection
@@ -39,27 +51,27 @@ nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
     }
 
     var shouldRefreshSnapshot: Bool {
-        interactionIsActive || selection != nil
+        interactionIsActive || hasSelection
     }
 
     mutating func prepare(restoreTerminalInput: Bool) {
         phase = .prepared(
-            selection: selection,
+            selection: retainedSelection,
             restoreTerminalInput: shouldRestoreTerminalInput || restoreTerminalInput
         )
     }
 
     mutating func beginInteraction(restoreTerminalInput: Bool) {
         phase = .interacting(
-            selection: selection,
+            selection: retainedSelection,
             restoreTerminalInput: shouldRestoreTerminalInput || restoreTerminalInput
         )
     }
 
     mutating func endInteraction(restorationID: UUID = UUID()) -> UUID? {
-        if let selection, selection.length > 0 {
+        if let selection = retainedSelection {
             phase = .selected(
-                range: selection,
+                selection: selection,
                 restoreTerminalInput: shouldRestoreTerminalInput
             )
             return nil
@@ -71,24 +83,26 @@ nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
         _ selection: NSRange?,
         restorationID: UUID = UUID()
     ) -> UUID? {
+        setProjection(selection.flatMap { $0.length > 0 ? .visible($0) : nil }, restorationID: restorationID)
+    }
+
+    mutating func setProjection(
+        _ selection: Selection?, restorationID: UUID = UUID()
+    ) -> UUID? {
         switch phase {
         case .prepared(_, let restoreTerminalInput):
             phase = .prepared(selection: selection, restoreTerminalInput: restoreTerminalInput)
         case .interacting(_, let restoreTerminalInput):
             phase = .interacting(selection: selection, restoreTerminalInput: restoreTerminalInput)
         case .selected(_, let restoreTerminalInput):
-            if let selection, selection.length > 0 {
-                phase = .selected(range: selection, restoreTerminalInput: restoreTerminalInput)
+            if let selection {
+                phase = .selected(selection: selection, restoreTerminalInput: restoreTerminalInput)
             } else {
                 return beginRestorationIfNeeded(id: restorationID)
             }
-        case .inactive:
-            if let selection, selection.length > 0 {
-                phase = .selected(range: selection, restoreTerminalInput: false)
-            }
-        case .restoringTerminalInput:
-            if let selection, selection.length > 0 {
-                phase = .selected(range: selection, restoreTerminalInput: false)
+        case .inactive, .restoringTerminalInput:
+            if let selection {
+                phase = .selected(selection: selection, restoreTerminalInput: false)
             }
         }
         return nil
@@ -133,9 +147,11 @@ import UIKit
 
 final class TerminalNativeTextPosition: UITextPosition {
     let offset: Int
+    let documentID: UUID?
 
-    init(offset: Int) {
+    init(offset: Int, documentID: UUID? = nil) {
         self.offset = offset
+        self.documentID = documentID
         super.init()
     }
 }
@@ -158,11 +174,11 @@ final class TerminalNativeTextRange: UITextRange {
         )
     }
 
-    init(start: Int, end: Int) {
+    init(start: Int, end: Int, documentID: UUID? = nil) {
         let lowerBound = min(start, end)
         let upperBound = max(start, end)
-        self.startPosition = TerminalNativeTextPosition(offset: lowerBound)
-        self.endPosition = TerminalNativeTextPosition(offset: upperBound)
+        self.startPosition = TerminalNativeTextPosition(offset: lowerBound, documentID: documentID)
+        self.endPosition = TerminalNativeTextPosition(offset: upperBound, documentID: documentID)
         super.init()
     }
 }
@@ -244,14 +260,23 @@ final class TerminalNativeFindOverlayView: UIView {
 }
 
 nonisolated struct TerminalNativeTextSnapshot: Sendable {
+    nonisolated struct Cell: Equatable, Sendable {
+        let range: NSRange
+        let row: Int
+        let column: Int
+        let width: Int
+    }
+
     nonisolated struct Line: Sendable {
         let text: String
         let startOffset: Int
         let utf16Length: Int
+        let cells: ArraySlice<Cell>?
     }
 
     static let empty = TerminalNativeTextSnapshot(lines: [], cellSize: CGSize(width: 1, height: 1), columns: 1)
 
+    let documentID: UUID
     let lines: [Line]
     let text: String
     let cellSize: CGSize
@@ -261,16 +286,25 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         text as NSString
     }
 
-    init(lines rawLines: [String], cellSize: CGSize, columns: Int) {
+    init(lines rawLines: [String], cellSize: CGSize, columns: Int, cells: [Cell]? = nil, documentID: UUID = UUID()) {
         let sanitizedCellSize = CGSize(width: max(cellSize.width, 1), height: max(cellSize.height, 1))
         self.cellSize = sanitizedCellSize
         self.columns = max(columns, 1)
+        self.documentID = documentID
 
         var runningOffset = 0
+        var cellIndex = 0
         var builtLines: [Line] = []
         for (index, line) in rawLines.enumerated() {
             let utf16Length = (line as NSString).length
-            builtLines.append(Line(text: line, startOffset: runningOffset, utf16Length: utf16Length))
+            let cellStart = cellIndex
+            if let cells {
+                while cellIndex < cells.count, cells[cellIndex].row == index { cellIndex += 1 }
+            }
+            builtLines.append(Line(
+                text: line, startOffset: runningOffset, utf16Length: utf16Length,
+                cells: cells.map { $0[cellStart..<cellIndex] }
+            ))
             runningOffset += utf16Length
             if index < rawLines.count - 1 {
                 runningOffset += 1
@@ -302,14 +336,16 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
     }
 
     @MainActor func nativeRange(from range: UITextRange?) -> NSRange? {
-        guard let range = range as? TerminalNativeTextRange else { return nil }
+        guard let range = range as? TerminalNativeTextRange,
+              range.startPosition.documentID == documentID,
+              range.endPosition.documentID == documentID else { return nil }
         return clampedRange(range.nsRange)
     }
 
     @MainActor func nativeRange(_ range: NSRange?) -> TerminalNativeTextRange? {
         guard let range else { return nil }
         let clamped = clampedRange(range)
-        return TerminalNativeTextRange(start: clamped.location, end: upperBound(of: clamped))
+        return TerminalNativeTextRange(start: clamped.location, end: upperBound(of: clamped), documentID: documentID)
     }
 
     func text(in range: NSRange) -> String? {
@@ -321,9 +357,14 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
 
     func offset(for point: CGPoint) -> Int {
         guard !lines.isEmpty else { return 0 }
-        let row = min(max(Int(floor(point.y / cellSize.height)), 0), lines.count - 1)
-        let column = min(max(Int(floor(point.x / cellSize.width)), 0), columns)
+        guard point.x.isFinite, point.y.isFinite else { return 0 }
+        let row = Int(min(max(floor(point.y / cellSize.height), 0), CGFloat(lines.count - 1)))
+        let column = Int(min(max(floor(point.x / cellSize.width), 0), CGFloat(columns)))
         let line = lines[row]
+        if let cells = line.cells {
+            return cells.first { $0.column + $0.width > column }?.range.location
+                ?? (line.startOffset + line.utf16Length)
+        }
         return clampedOffset(line.startOffset + min(column, line.utf16Length))
     }
 
@@ -332,13 +373,17 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         let offset = offset(for: point)
         let (lineIndex, column) = lineAndColumn(for: offset)
         let line = lines[lineIndex]
+        if let cells = line.cells {
+            return cells.first { NSLocationInRange(offset, $0.range) }?.range
+        }
         guard line.utf16Length > 0 else { return nil }
         let clampedColumn = min(column, max(line.utf16Length - 1, 0))
         return NSRange(location: line.startOffset + clampedColumn, length: 1)
     }
 
     func caretRect(for offset: Int) -> CGRect {
-        let (lineIndex, column) = lineAndColumn(for: offset)
+        let (lineIndex, _) = lineAndColumn(for: offset)
+        let column = gridColumn(for: offset, row: lineIndex, end: false)
         let caretWidth = max(2, cellSize.width * 0.08)
         return CGRect(
             x: CGFloat(min(column, columns)) * cellSize.width,
@@ -371,8 +416,8 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
             let selectionEnd = min(upperBound, lineEnd)
             guard selectionEnd > selectionStart else { continue }
 
-            let startColumn = min(selectionStart - lineStart, columns)
-            let endColumn = min(selectionEnd - lineStart, columns)
+            let startColumn = gridColumn(for: selectionStart, row: lineIndex, end: false)
+            let endColumn = gridColumn(for: selectionEnd, row: lineIndex, end: true)
             let width = max(CGFloat(endColumn - startColumn) * cellSize.width, cellSize.width)
             let rect = CGRect(
                 x: CGFloat(startColumn) * cellSize.width,
@@ -419,6 +464,19 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         }
 
         return results
+    }
+
+    private func gridColumn(for offset: Int, row: Int, end: Bool) -> Int {
+        guard let rowCells = lines[row].cells else {
+            return min(lineAndColumn(for: offset).column, columns)
+        }
+        if end, let cell = rowCells.last(where: { $0.range.location < offset }) {
+            return min(cell.column + cell.width, columns)
+        }
+        if let cell = rowCells.first(where: { NSMaxRange($0.range) > offset }) {
+            return cell.column
+        }
+        return rowCells.last.map { min($0.column + $0.width, columns) } ?? 0
     }
 
     func lineAndColumn(for offset: Int) -> (line: Int, column: Int) {

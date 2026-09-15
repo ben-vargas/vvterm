@@ -41,7 +41,8 @@ extension GhosttyTerminalView {
             screenIdentifier: window.map { ObjectIdentifier($0.screen) },
             isSoftwareKeyboardSuppressed: shouldSuppressSoftwareKeyboard,
             isKeyboardInBrowseMode: isKeyboardInBrowseMode,
-            hasHardwareKeyboardAttached: hasHardwareKeyboardAttached
+            hasHardwareKeyboardAttached: hasHardwareKeyboardAttached,
+            hasNativeSelection: nativeSelectionLifecycle.keepsFirstResponder
         )
     }
 

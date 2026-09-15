@@ -1209,6 +1209,15 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         lastManagedPaneId = activePaneId
         terminal.setTerminalInputAcquisitionAllowed(inputSessionDesired)
 
+        // UIKit owns the selection interaction. Automatic focus repair must
+        // not replace its text-input context, even if the keyboard is hidden.
+        if Self.desiredPaneInputActive(inputs: inputs),
+           terminal.keyboardCoordinatorDiagnosticSnapshot().hasNativeSelection,
+           !pendingPresentationRequest.isExplicitSoftwareKeyboardRequest {
+            cancelPresentationVerify()
+            return
+        }
+
         if let recovery = explicitPresentationRecovery,
            recovery.paneId == activePaneId {
             if ObjectIdentifier(terminal) != recovery.terminalIdentifier {
@@ -1502,6 +1511,9 @@ final class TerminalKeyboardCoordinator: ObservableObject {
                 return
             }
 
+            if terminal.keyboardCoordinatorDiagnosticSnapshot().hasNativeSelection,
+               !presentationRequest.isExplicitSoftwareKeyboardRequest { return }
+
             if var explicitRecovery {
                 guard self.explicitPresentationRecovery == explicitRecovery else {
                     return
@@ -1695,6 +1707,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
                   let activeTerminal = self.terminalProvider?(paneId),
                   activeTerminal === terminal else { return }
             let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
+            guard !snapshot.hasNativeSelection else { return }
             if layoutSource.reconcilesLayoutFrameAtDeadline {
                 self.reconcileSoftwareKeyboardPresentation(
                     terminal: terminal,

@@ -106,8 +106,9 @@ extension GhosttyTerminalView {
             self.nativeFindInteraction = nil
         }
         nativeFindSession = nil
-        nativeSelectionLongPressAnchor = nil
+        freeNativeSelectionDragAnchor()
         nativeSelectionLifecycle.cancel()
+        freeNativeSelectionSnapshot()
         nativeSelectionSnapshot = .empty
         if let editMenuInteraction {
             editMenuInteraction.dismissMenu()

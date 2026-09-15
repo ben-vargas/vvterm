@@ -133,6 +133,8 @@ struct TerminalKeyboardUITestHarness: View {
     @State private var returnInputCount = 0
     @State private var codexResponseCount = 0
     @State private var outputBurstRequestID = 0
+    @State private var selectionOutputRequestID = 0
+    @State private var selectionOutputRows = 0
     @State private var completedOutputBurstCount = 0
     @State private var zoomActionCount = 0
     @State private var lastZoomAction = "none"
@@ -654,6 +656,19 @@ struct TerminalKeyboardUITestHarness: View {
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.privacy.resume")
 
+                    Button("Erase Selection") {
+                        Task {
+                            guard let terminalView else { return }
+                            _ = await terminalView.receiveTerminalOutput(Data("\u{1B}[3J\u{1B}[2J\u{1B}[Hreplacement text".utf8))
+                        }
+                    }
+                    .accessibilityIdentifier("vvterm.keyboardTest.selection.erase")
+
+                    Button("Selection Output") {
+                        selectionOutputRequestID += 1
+                    }
+                    .accessibilityIdentifier("vvterm.keyboardTest.selection.output")
+
                     Button("Output Burst") {
                         outputBurstRequestID += 1
                     }
@@ -724,6 +739,17 @@ struct TerminalKeyboardUITestHarness: View {
             terminalView?.onVoiceButtonTapped = { style in toggleVoiceTest(style: style) }
             terminalView?.showsVoiceAccessoryButton = true
             await configureLifecycleHarness()
+        }
+        .task(id: selectionOutputRequestID) {
+            guard selectionOutputRequestID > 0, let terminalView else { return }
+            selectionOutputRows = 0
+            for row in 0..<80 {
+                guard !Task.isCancelled else { return }
+                let output = "live output \(row) " + String(repeating: "x", count: row % 30) + "\r\n"
+                guard await terminalView.receiveTerminalOutput(Data(output.utf8)) else { return }
+                selectionOutputRows += 1
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
         }
         .task(id: outputBurstRequestID) {
             guard outputBurstRequestID > 0, let terminalView else { return }
@@ -1004,7 +1030,9 @@ struct TerminalKeyboardUITestHarness: View {
             + " reconnect=\(lifecycleStatus.rawValue) inputHex=\(receivedInputHex)"
             + " returnInputs=\(returnInputCount) codexResponses=\(codexResponseCount)"
             + " outputBursts=\(completedOutputBurstCount)"
+            + " selectionOutputRows=\(selectionOutputRows)"
             + " linkCellHeight=\(terminalView.cellSize.height)"
+            + " selectionCellWidth=\(terminalView.cellSize.width)"
             + " openedLink=\(openedLink?.absoluteString ?? "none")"
             + " findPresented=\(terminalView.isFindNavigatorVisible)"
             + " mouseCaptured=\(terminalView.surface?.mouseCaptured == true)"
