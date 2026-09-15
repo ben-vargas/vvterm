@@ -31,17 +31,23 @@ nonisolated enum TerminalKeyboardRouteActivationPolicy {
         sceneActivation: SceneActivation,
         windowOwnership: WindowOwnership = .unknown,
         presentationOwnership: PresentationOwnership = .terminal,
-        contentObscured: Bool = false
+        contentObscured: Bool = false,
+        appLockRequired: Bool = false,
+        inputMode: TerminalInputMode = .direct
     ) -> Effect {
         guard routeVisible,
               terminalSelected,
-              presentationOwnership == .terminal,
-              !contentObscured else {
+              presentationOwnership == .terminal else {
             return .deactivate
+        }
+        if contentObscured {
+            return inputMode == .chat && sceneActivation == .foregroundInactive && !appLockRequired
+                ? .suspend : .deactivate
         }
         switch sceneActivation {
         case .foregroundActive:
-            return windowOwnership == .notKey ? .deactivate : .activate
+            if windowOwnership == .notKey { return inputMode == .chat ? .suspend : .deactivate }
+            return .activate
         case .foregroundInactive, .background:
             return .suspend
         }

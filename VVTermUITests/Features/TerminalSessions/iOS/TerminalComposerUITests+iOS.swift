@@ -277,6 +277,29 @@ final class TerminalComposerUITests: XCTestCase {
     }
 
     @MainActor
+    func testControlCenterPreservesChatDraftAndKeyboard() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("before")
+        let frame = editor.frame
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.01))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.65)))
+        XCTAssertTrue(springboard.otherElements["cc-root-folder-view"].waitForExistence(timeout: 5), springboard.debugDescription)
+        springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98))
+            .press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)))
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(editor.frame.minY, frame.minY, accuracy: 1)
+        XCTAssertEqual(editor.value as? String, "before")
+        editor.typeText(" after")
+        XCTAssertEqual(editor.value as? String, "before after")
+        XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
+    }
+
+    @MainActor
     func testKeyboardMenuTogglesChatFocus() {
         let app = launch()
         app.buttons["vvterm.composer.toggle"].tap()
@@ -311,6 +334,7 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["composer.test.terminal-touch"].label, "focusTap=true hidden=true responder=none", app.debugDescription)
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
         waitForExpectations(timeout: 5)
+        XCTAssertLessThanOrEqual(app.frame.maxY - app.buttons["vvterm.composer.send"].frame.maxY, 21)
         XCTAssertTrue(editor.isHittable)
         XCTAssertEqual(editor.value as? String, "keep draft")
         terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()

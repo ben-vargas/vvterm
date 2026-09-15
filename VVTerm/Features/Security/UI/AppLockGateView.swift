@@ -37,7 +37,8 @@ struct AppLockContainer<Content: View>: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: appLockManager.isAppLocked)
-        .animation(.easeInOut(duration: 0.15), value: scenePhase)
+        // Cover and uncover scene changes immediately; a fade exposes a blurred return frame.
+        .animation(nil, value: scenePhase)
         .onAppear {
             if scenePhase == .active {
                 handleActiveSceneAfterViewUpdate()

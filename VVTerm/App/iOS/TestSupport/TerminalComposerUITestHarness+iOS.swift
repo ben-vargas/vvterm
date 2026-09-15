@@ -266,6 +266,22 @@ private struct TerminalComposerUITestContent: View {
             model.sent = url.absoluteString
             return .handled
         })
+        .onReceive(NotificationCenter.default.publisher(for: UIScene.willDeactivateNotification)) { notification in
+            guard let scene = notification.object as? UIWindowScene,
+                  scene === model.terminal?.window?.windowScene else { return }
+            model.keyboard.activeTerminalSceneWillDeactivate(for: model.paneID)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIScene.didActivateNotification)) { notification in
+            guard let scene = notification.object as? UIWindowScene,
+                  scene === model.terminal?.window?.windowScene else { return }
+            model.keyboard.activeTerminalSceneDidActivate(for: model.paneID)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIWindow.didBecomeKeyNotification)) { notification in
+            guard let window = notification.object as? UIWindow,
+                  window === model.terminal?.window,
+                  window.windowScene?.activationState == .foregroundActive else { return }
+            model.keyboard.activeTerminalSceneDidActivate(for: model.paneID)
+        }
         .onAppear { inputMode = .direct; composer.setMode(.direct) }
         .onChange(of: inputMode) { composer.setMode($0) }
         .sheet(isPresented: $showsSettings, onDismiss: {

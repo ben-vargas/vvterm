@@ -19,6 +19,21 @@ struct TerminalKeyboardAvoidanceViewModelTests {
                      preservesTerminalSize: false, keyboardFrame: nil,
                      usesSimulatedKeyboardGeometry: false, inputMode: .chat)
         #expect(model.layout.bottomInset > 0)
+        let visibleInset = model.layout.bottomInset
+        viewport.guide.frameForTest = CGRect(x: 0, y: 700, width: 600, height: 0)
+        model.update(terminal: nil, scope: .container, isFocused: true,
+                     preservesTerminalSize: false, keyboardFrame: nil,
+                     usesSimulatedKeyboardGeometry: false, inputMode: .chat, sceneIsActive: false)
+        #expect(model.layout.bottomInset == visibleInset)
+        viewport.guide.frameForTest = CGRect(x: 0, y: 500, width: 600, height: 200)
+        model.update(terminal: nil, scope: .container, isFocused: true,
+                     preservesTerminalSize: false, keyboardFrame: nil,
+                     usesSimulatedKeyboardGeometry: false, inputMode: .chat, userHidKeyboard: true)
+        #expect(model.layout.bottomInset == 0)
+        model.update(terminal: nil, scope: .container, isFocused: true,
+                     preservesTerminalSize: false, keyboardFrame: nil,
+                     usesSimulatedKeyboardGeometry: false, inputMode: .chat)
+        #expect(model.layout.bottomInset > 0)
         model.update(terminal: nil, scope: .container, isFocused: true,
                      preservesTerminalSize: false, keyboardFrame: nil,
                      usesSimulatedKeyboardGeometry: false, inputMode: .direct)

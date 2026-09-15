@@ -264,7 +264,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     private var contentProtectionRecoveryState = ContentProtectionRecoveryState.idle
     private var explicitPresentationRecovery: ExplicitPresentationRecovery?
     private var presentationVerifyTask: Task<Void, Never>?
-    private var activeTerminalSceneIsForeground = true
+    @Published private(set) var activeTerminalSceneIsForeground = true
     private var inputOwnership = InputOwnership.available(generation: UUID())
     // Only a native visible-frame event establishes dismissal history.
     // A layout guide can retain geometry from an earlier input session.
@@ -544,6 +544,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     /// not reset the repair budget or start a responder rebuild loop.
     func activeTerminalSceneDidActivate(for paneId: UUID) {
         guard activePaneId == paneId else { return }
+        guard activeInputMode != .chat || activeTerminal?.keyboardCoordinatorDiagnosticSnapshot().windowIsKey == true else { return }
         if !activeTerminalSceneIsForeground || !inputOwnership.allowsLocalAcquisition {
             makeLocalInputOwnershipAvailable()
         }
@@ -624,7 +625,8 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             pendingPresentationRequest = .none
         }
         explicitPresentationRecovery = nil
-        clearSoftwareKeyboardObservation()
+        // System overlays suspend Chat without changing the visible input layout.
+        if activeInputMode != .chat { clearSoftwareKeyboardObservation() }
     }
 
     func activeTerminalWindowDidBecomeKey(for paneId: UUID) {

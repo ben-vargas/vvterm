@@ -13,6 +13,8 @@ final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
     private var keyboardFrame: CGRect?
     private var usesSimulatedKeyboardGeometry = false
     private var inputMode = TerminalInputMode.direct
+    private var userHidKeyboard = false
+    private var sceneIsActive = true
 
     func update(
         terminal newTerminal: GhosttyTerminalView?,
@@ -21,7 +23,9 @@ final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
         preservesTerminalSize: Bool,
         keyboardFrame: CGRect?,
         usesSimulatedKeyboardGeometry: Bool,
-        inputMode: TerminalInputMode = .direct
+        inputMode: TerminalInputMode = .direct,
+        userHidKeyboard: Bool = false,
+        sceneIsActive: Bool = true
     ) {
         if terminal !== newTerminal || self.scope != scope {
             detachTerminal()
@@ -39,6 +43,8 @@ final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
             }
         }
         self.inputMode = inputMode
+        self.userHidKeyboard = userHidKeyboard
+        self.sceneIsActive = sceneIsActive
         self.isFocused = isFocused
         self.preservesTerminalSize = preservesTerminalSize
         self.keyboardFrame = keyboardFrame
@@ -85,11 +91,14 @@ final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
     }
 
     private func recalculate() {
+        guard inputMode != .chat || sceneIsActive else { return }
         guard let viewport, let window = viewport.window else { return }
         let frame = viewport.convert(viewport.bounds, to: window)
         guard TerminalKeyboardAvoidancePolicy.isValid(frame) else { return }
+        let bottomClearance = inputMode == .chat && userHidKeyboard
+            ? min(window.safeAreaInsets.bottom, 20) : window.safeAreaInsets.bottom
         let bottomChromeInset = scope == .container
-            ? min(max(frame.maxY - (window.bounds.maxY - window.safeAreaInsets.bottom), 0), frame.height)
+            ? min(max(frame.maxY - (window.bounds.maxY - bottomClearance), 0), frame.height)
             : 0
         var contentFrame = frame
         contentFrame.size.height -= bottomChromeInset
@@ -105,7 +114,10 @@ final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
         let useNativeGuide: Bool
         if case .docked = observedGeometry { useNativeGuide = true }
         else { useNativeGuide = inputMode == .chat }
-        if useNativeGuide, !usesSimulatedKeyboardGeometry {
+        if inputMode == .chat, userHidKeyboard {
+            // A dismissed iPad keyboard can leave its native guide at the old height.
+            geometry = .hidden
+        } else if useNativeGuide, !usesSimulatedKeyboardGeometry {
             // The default native guide tracks docked obstruction only. Hidden
             // safe-area height is not a keyboard. Chat also reads this guide after
             // app activation, when UIKit can restore the keyboard without a frame notification.

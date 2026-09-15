@@ -4,6 +4,33 @@ import UIKit
 
 final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
     @MainActor
+    func testPrivacyControlCenterPreservesChatInput() throws {
+        let (app, diagnostics) = launchProductionSSHTestHarness(privacyModeEnabled: true, chatMode: true)
+        defer { app.terminate() }
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 8))
+        editor.tap()
+        editor.typeText("before")
+        let frame = editor.frame
+        let baseline = try terminalSnapshot(in: diagnostics, app: app)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for _ in 0..<2 {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.01))
+                .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.65)))
+            XCTAssertTrue(springboard.otherElements["cc-root-folder-view"].waitForExistence(timeout: 5))
+            springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98))
+                .press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)))
+            XCTAssertTrue(editor.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+            XCTAssertEqual(editor.frame.minY, frame.minY, accuracy: 1)
+            XCTAssertEqual(editor.value as? String, "before")
+            assertSameSession(as: baseline, diagnostics: diagnostics, app: app)
+        }
+        editor.typeText(" after")
+        XCTAssertEqual(editor.value as? String, "before after")
+    }
+
+    @MainActor
     func testNormalModeHonorsAutoCapitalization() {
         let (app, _) = launchProductionSSHTestHarness(keyboardOptions: 2)
         defer { app.terminate() }

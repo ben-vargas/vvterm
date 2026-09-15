@@ -17,6 +17,7 @@ class TerminalReconnectUITestCase: XCTestCase {
         exposesKeyboardLossControl: Bool = false,
         preservesTerminalSize: Bool = false,
         privacyModeEnabled: Bool = false,
+        chatMode: Bool = false,
         keyboardOptions: Int = 0,
         themeName: String? = nil
     ) -> (XCUIApplication, XCUIElement) {
@@ -33,7 +34,7 @@ class TerminalReconnectUITestCase: XCTestCase {
             "-terminalTmuxEnabledDefault", "NO",
             "-terminalPreserveSizeForKeyboard", preservesTerminalSize ? "YES" : "NO",
             "-terminalVoiceButtonEnabled", "YES",
-            "-terminalInputMode", "direct",
+            "-terminalInputMode", chatMode ? "chat" : "direct",
             "-terminalComposerKeyboardOptions", String(keyboardOptions),
             "-security.privacyModeEnabled", privacyModeEnabled ? "YES" : "NO",
             "-security.fullAppLockEnabled", "NO",

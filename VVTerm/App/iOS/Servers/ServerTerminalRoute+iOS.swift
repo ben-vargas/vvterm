@@ -504,7 +504,12 @@ struct ServerTerminalRoute: View {
             preservingForegroundKeyboardGrid: keyboardCoordinator.softwareKeyboardEndFrame != nil
         )
 
-        if AppContentProtectionPolicy.shouldPrepareForSceneDeactivation(
+        if keyboardCoordinator.activeInputMode == .chat,
+           !appLockManager.fullAppLockEnabled, !appLockManager.isAppLocked {
+            if let focusedPaneId {
+                keyboardCoordinator.activeTerminalSceneWillDeactivate(for: focusedPaneId)
+            }
+        } else if AppContentProtectionPolicy.shouldPrepareForSceneDeactivation(
             fullAppLockEnabled: appLockManager.fullAppLockEnabled,
             privacyModeEnabled: privacyModeEnabled,
             isAppLocked: appLockManager.isAppLocked
@@ -536,8 +541,10 @@ struct ServerTerminalRoute: View {
             return
         }
         updateTerminalRouteActivation()
-        if notifyingWindow.isKeyWindow, let focusedPaneId {
-            keyboardCoordinator.activeTerminalWindowDidBecomeKey(for: focusedPaneId)
+        if notifyingWindow.isKeyWindow,
+           notifyingWindow.windowScene?.activationState == .foregroundActive,
+           let focusedPaneId {
+            keyboardCoordinator.activeTerminalSceneDidActivate(for: focusedPaneId)
         }
     }
 
@@ -551,7 +558,9 @@ struct ServerTerminalRoute: View {
                 $0.isKeyWindow ? .key : .notKey
             } ?? .unknown,
             presentationOwnership: presentationOwnership,
-            contentObscured: isContentObscured
+            contentObscured: isContentObscured,
+            appLockRequired: appLockManager.fullAppLockEnabled || appLockManager.isAppLocked,
+            inputMode: keyboardCoordinator.activeInputMode
         )
 
         screenAwakeCoordinator.update(

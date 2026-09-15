@@ -8,6 +8,44 @@ extension TerminalKeyboardCoordinatorTests {
     @Suite(.serialized)
     struct Composer {
         @Test @MainActor
+        func systemOverlayPreservesChatKeyboardPresentation() async {
+            let pane = UUID()
+            let terminal = TerminalKeyboardInputSessionSpy()
+            let composer = ComposerInputSpy()
+            let coordinator = makeTerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { _ in terminal }
+            coordinator.inputModeProvider = { _ in .chat }
+            coordinator.setActivePane(pane)
+            coordinator.setViewActive(true)
+            coordinator.setWindowAttached(true, for: pane)
+            coordinator.setPaneInputEligible(true, for: pane)
+            coordinator.registerComposerInput(composer, for: pane)
+            await drainMainQueue()
+            let frame = CGRect(x: 0, y: 700, width: 400, height: 300)
+            terminal.snapshot.screenFrame = CGRect(x: 0, y: 0, width: 400, height: 1000)
+            coordinator.keyboardUITestReceiveKeyboardEndFrame(frame, isLocal: true)
+            coordinator.activeTerminalSceneWillDeactivate(for: pane)
+            await drainMainQueue()
+            #expect(coordinator.softwareKeyboardEndFrame == frame)
+            #expect(coordinator.isComposerVisible(for: pane))
+            #expect(composer.active)
+            terminal.snapshot.windowIsKey = false
+            coordinator.activeTerminalSceneDidActivate(for: pane)
+            await drainMainQueue()
+            #expect(!coordinator.activeTerminalSceneIsForeground)
+            #expect(composer.active)
+            #expect(coordinator.softwareKeyboardEndFrame == frame)
+            terminal.snapshot.windowIsKey = true
+            coordinator.activeTerminalWindowDidBecomeKey(for: pane)
+            coordinator.activeTerminalSceneDidActivate(for: pane)
+            await drainMainQueue()
+            #expect(coordinator.activeTerminalSceneIsForeground)
+            #expect(coordinator.softwareKeyboardEndFrame == frame)
+            #expect(composer.active)
+            #expect(terminal.rebuildCount == 0)
+        }
+
+        @Test @MainActor
         func terminalTapDismissesChatUntilExplicitFocusReturns() async {
             let pane = UUID()
             let terminal = TerminalKeyboardInputSessionSpy()

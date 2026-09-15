@@ -3,6 +3,32 @@ import Testing
 @testable import VVTerm
 
 struct TerminalKeyboardRouteActivationPolicyTests {
+    @Test
+    func privacyShieldSuspendsChatButBackgroundAndLockReleaseInput() {
+        #expect(TerminalKeyboardRouteActivationPolicy.effect(
+            routeVisible: true, terminalSelected: true, sceneActivation: .foregroundInactive,
+            contentObscured: true, appLockRequired: true, inputMode: .chat) == .deactivate)
+        #expect(TerminalKeyboardRouteActivationPolicy.effect(
+            routeVisible: true, terminalSelected: true, sceneActivation: .foregroundInactive,
+            contentObscured: true, inputMode: .chat) == .suspend)
+        #expect(TerminalKeyboardRouteActivationPolicy.effect(
+            routeVisible: true, terminalSelected: true, sceneActivation: .background,
+            contentObscured: true, inputMode: .chat) == .deactivate)
+    }
+
+    @Test
+    func chatWaitsForKeyWindowAfterSystemOverlay() {
+        let effects = [
+            TerminalKeyboardRouteActivationPolicy.effect(routeVisible: true, terminalSelected: true,
+                sceneActivation: .foregroundInactive, windowOwnership: .key, inputMode: .chat),
+            TerminalKeyboardRouteActivationPolicy.effect(routeVisible: true, terminalSelected: true,
+                sceneActivation: .foregroundActive, windowOwnership: .notKey, inputMode: .chat),
+            TerminalKeyboardRouteActivationPolicy.effect(routeVisible: true, terminalSelected: true,
+                sceneActivation: .foregroundActive, windowOwnership: .key, inputMode: .chat)
+        ]
+        #expect(effects == [.suspend, .suspend, .activate])
+    }
+
     @Test(arguments: [false, true])
     func temporarySystemOverlayPreservesKeyboardIntent(userHidKeyboard: Bool) {
         let effects = [
