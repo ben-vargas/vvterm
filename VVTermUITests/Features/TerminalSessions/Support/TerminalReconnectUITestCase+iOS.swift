@@ -19,6 +19,8 @@ class TerminalReconnectUITestCase: XCTestCase {
         privacyModeEnabled: Bool = false,
         chatMode: Bool = false,
         keyboardOptions: Int = 0,
+        repeatsKeyboardUpdates: Bool = false,
+        repeatsKeyboardStateUpdates: Bool = false,
         themeName: String? = nil
     ) -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
@@ -40,6 +42,12 @@ class TerminalReconnectUITestCase: XCTestCase {
             "-security.fullAppLockEnabled", "NO",
             "-security.lockOnBackground", "NO",
         ]
+        if repeatsKeyboardUpdates {
+            app.launchArguments.append("--vvterm-ui-test-repeat-keyboard-updates")
+        }
+        if repeatsKeyboardStateUpdates {
+            app.launchArguments.append("--vvterm-ui-test-repeat-keyboard-state")
+        }
         if let themeName {
             app.launchArguments += [
                 "-terminalUsePerAppearanceTheme", "NO",

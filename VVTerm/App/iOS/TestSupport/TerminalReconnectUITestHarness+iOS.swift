@@ -1,4 +1,5 @@
 #if os(iOS) && DEBUG
+import Combine
 import SwiftUI
 import UIKit
 
@@ -486,9 +487,15 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
                     configuredTerminal = terminal
                 }
             }
+            if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-repeat-keyboard-updates") {
+                terminal.updateHardwareKeyboardState(reloadInputViewsIfNeeded: true)
+            }
             terminal.isAccessibilityElement = true
             terminal.accessibilityIdentifier = "vvterm.reconnectTest.terminalSurface"
             let keyboard = tabManager.keyboardCoordinator
+            if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-repeat-keyboard-state") {
+                keyboard.objectWillChange.send()
+            }
             let keyboardHeight = keyboard.softwareKeyboardEndFrame?.height ?? 0
             let shellId = tabManager.transportCoordinator.activeSSHRoute(for: paneId)?.shellId
             let terminalDiagnostics = terminal.keyboardUITestDiagnostics(
@@ -503,6 +510,7 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
                 "shell=\(shellId != nil)",
                 "shellId=\(shellId?.uuidString ?? "none")",
                 terminalDiagnostics,
+                "routeUpdates=\(TerminalRouteUITestRenderProbe.updateCount)",
             ].joined(separator: " "))
         }
 

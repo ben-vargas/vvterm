@@ -58,24 +58,18 @@ extension GhosttyTerminalView {
     func updateHardwareKeyboardState(reloadInputViewsIfNeeded: Bool) {
         let hasHardwareKeyboard = detectedHardwareKeyboardAttached
         let previousInputConfiguration = terminalInputConfiguration
-        let didChange = setHardwareKeyboardAttached(hasHardwareKeyboard)
-        if didChange {
-            logKeyboardLifecycle(
-                "hardware.changed",
-                detail: "attached=\(hasHardwareKeyboard) vendor=\(GCKeyboard.coalesced?.vendorName ?? "nil")"
-            )
-        }
-        if didChange {
-            notifyKeyboardBrowseModeChange(
-                previousInputConfiguration: previousInputConfiguration
-            )
-        }
+        // UIKit can report the same attachment more than once while presenting
+        // input UI. Reloading an unchanged input view can move an open menu.
+        guard setHardwareKeyboardAttached(hasHardwareKeyboard) else { return }
+        logKeyboardLifecycle(
+            "hardware.changed",
+            detail: "attached=\(hasHardwareKeyboard) vendor=\(GCKeyboard.coalesced?.vendorName ?? "nil")"
+        )
+        notifyKeyboardBrowseModeChange(previousInputConfiguration: previousInputConfiguration)
         if hasHardwareKeyboard {
             focusForHardwareKeyboardIfNeeded()
-        } else if didChange {
-            if isTerminalTextInputActive, isTextInputSessionEligible, !isFindNavigatorActive {
-                _ = requestKeyboardFocus(for: .initialActivation)
-            }
+        } else if isTerminalTextInputActive, isTextInputSessionEligible, !isFindNavigatorActive {
+            _ = requestKeyboardFocus(for: .initialActivation)
         }
         if reloadInputViewsIfNeeded,
            previousInputConfiguration == terminalInputConfiguration,

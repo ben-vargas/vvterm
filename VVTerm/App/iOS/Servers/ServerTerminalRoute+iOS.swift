@@ -32,7 +32,7 @@ struct ServerTerminalRoute: View {
     let onBack: () -> Void
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
 
-    @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
+    private let keyboardCoordinator: TerminalKeyboardCoordinator
     @StateObject private var toolbarProjection: TerminalServerToolbarProjection
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @EnvironmentObject private var appLockManager: AppLockManager
@@ -78,7 +78,7 @@ struct ServerTerminalRoute: View {
         self.route = route
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self.onBack = onBack
-        self._keyboardCoordinator = ObservedObject(wrappedValue: tabManager.keyboardCoordinator)
+        self.keyboardCoordinator = tabManager.keyboardCoordinator
         let toolbarProjection = TerminalServerToolbarProjection(
             serverId: route.serverId,
             tabManager: tabManager
@@ -145,6 +145,9 @@ struct ServerTerminalRoute: View {
     }
 
     var body: some View {
+        #if DEBUG
+        let _ = TerminalRouteUITestRenderProbe.recordUpdate()
+        #endif
         content
             .navigationBarBackButtonHidden(true)
             .navigationBarTitleDisplayMode(.inline)

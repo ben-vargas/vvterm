@@ -4,6 +4,51 @@ import UIKit
 
 final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
     @MainActor
+    func testNormalModeMenuIgnoresUnchangedKeyboardState() throws {
+        let (app, diagnostics) = launchProductionSSHTestHarness(repeatsKeyboardStateUpdates: true)
+        defer { app.terminate() }
+        _ = productionTerminal(in: app)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        openProductionTerminalMenu(in: app)
+        let settings = app.buttons["vvterm.terminal.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        let frame = settings.frame
+        let baseline = try terminalSnapshot(in: diagnostics, app: app)
+        let updates = try XCTUnwrap(diagnosticIntegerValue("routeUpdates", in: diagnostics))
+        for _ in 0..<5 {
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+            XCTAssertTrue(settings.exists && settings.isHittable)
+            XCTAssertEqual(settings.frame, frame)
+            XCTAssertTrue(app.keyboards.firstMatch.exists)
+            XCTAssertEqual(diagnosticIntegerValue("routeUpdates", in: diagnostics), updates)
+        }
+        assertSameSession(as: baseline, diagnostics: diagnostics, app: app)
+        settings.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["vvterm.settings.root"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testNormalModeMenuStaysStableWithKeyboardOptions() throws {
+        try assertProductionInitialKeyboardAndMenu(preserves: false, keyboardOptions: 63, repeatsKeyboardUpdates: true)
+    }
+
+    @MainActor
+    func testNormalModeHonorsAutoCapitalization() {
+        let (app, _) = launchProductionSSHTestHarness(keyboardOptions: 2)
+        defer { app.terminate() }
+        _ = productionTerminal(in: app)
+        XCTAssertFalse(app.textViews["vvterm.composer.text"].exists)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        for letter in ["h", "e", "l", "l", "o"] { app.keyboards.keys[letter].tap() }
+        app.keyboards.keys["more"].tap()
+        app.keyboards.keys["."].tap()
+        app.keyboards.keys["space"].tap()
+        XCTAssertTrue(app.keyboards.keys["A"].waitForExistence(timeout: 5))
+        app.keyboards.keys["A"].tap()
+        XCTAssertTrue(app.keyboards.keys["a"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testPrivacyControlCenterPreservesChatInput() throws {
         let (app, diagnostics) = launchProductionSSHTestHarness(privacyModeEnabled: true, chatMode: true)
         defer { app.terminate() }
@@ -31,22 +76,6 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
     }
 
     @MainActor
-    func testNormalModeHonorsAutoCapitalization() {
-        let (app, _) = launchProductionSSHTestHarness(keyboardOptions: 2)
-        defer { app.terminate() }
-        _ = productionTerminal(in: app)
-        XCTAssertFalse(app.textViews["vvterm.composer.text"].exists)
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
-        for letter in ["h", "e", "l", "l", "o"] { app.keyboards.keys[letter].tap() }
-        app.keyboards.keys["more"].tap()
-        app.keyboards.keys["."].tap()
-        app.keyboards.keys["space"].tap()
-        XCTAssertTrue(app.keyboards.keys["A"].waitForExistence(timeout: 5))
-        app.keyboards.keys["A"].tap()
-        XCTAssertTrue(app.keyboards.keys["a"].waitForExistence(timeout: 5))
-    }
-
-    @MainActor
     func testProductionInitialKeyboardAndMenuWithPreservationOff() throws {
         try assertProductionInitialKeyboardAndMenu(preserves: false)
     }
@@ -63,10 +92,11 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
 
     @MainActor
     private func assertProductionInitialKeyboardAndMenu(
-        preserves: Bool, privacyModeEnabled: Bool = false
+        preserves: Bool, privacyModeEnabled: Bool = false, keyboardOptions: Int = 0, repeatsKeyboardUpdates: Bool = false
     ) throws {
         let (app, diagnostics) = launchProductionSSHTestHarness(
-            preservesTerminalSize: preserves, privacyModeEnabled: privacyModeEnabled
+            preservesTerminalSize: preserves, privacyModeEnabled: privacyModeEnabled, keyboardOptions: keyboardOptions,
+            repeatsKeyboardUpdates: repeatsKeyboardUpdates
         )
         defer { app.terminate() }
         _ = productionTerminal(in: app)
@@ -75,13 +105,17 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), diagnosticText(in: app))
         XCTAssertTrue(app.keyboards.keys["a"].isHittable, diagnosticText(in: app))
         let baseline = try terminalSnapshot(in: diagnostics, app: app)
+        let reloads = diagnosticIntegerValue("inputReloads", in: diagnostics)
         openProductionTerminalMenu(in: app)
         let settings = app.buttons["vvterm.terminal.settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 5), diagnosticText(in: app))
+        let menuFrame = settings.frame
         for _ in 0..<5 {
             RunLoop.current.run(until: Date().addingTimeInterval(1))
             XCTAssertTrue(settings.exists && settings.isHittable, diagnosticText(in: app))
             XCTAssertTrue(app.keyboards.firstMatch.exists, diagnosticText(in: app))
+            XCTAssertEqual(settings.frame, menuFrame)
+            XCTAssertEqual(diagnosticIntegerValue("inputReloads", in: diagnostics), reloads)
         }
         assertSameSession(as: baseline, diagnostics: diagnostics, app: app)
     }
