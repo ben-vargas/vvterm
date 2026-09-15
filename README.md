@@ -39,6 +39,13 @@ VVTerm is a cross-platform SSH terminal app for Apple platforms. The current cod
 
 Eternal Terminal connections use the configured SSH authentication and SSH port to run `etterminal`, then connect to `etserver` on TCP port `2022` by default. Install Eternal Terminal on the host and allow inbound traffic to the configured ET port. VVTerm's working-directory and optional tmux startup, attach, installation, and cleanup behavior also applies to ET sessions.
 
+### Terminal link tests
+
+Run `./scripts/test_terminal_links.sh` inside VVTerm, or copy it to the remote
+host first. It prints plain URLs, OSC 8 links, email and file links, rejected
+targets, and a selection sample. Start outside tmux. Keep the script running
+while testing the temporary files; press Enter when done to remove them.
+
 ### Terminal notifications and progress tests
 
 VVTerm uses libghostty for OSC 9 and OSC 777 notifications and OSC 9;4 progress.
