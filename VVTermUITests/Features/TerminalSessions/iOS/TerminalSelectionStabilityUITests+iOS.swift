@@ -3,6 +3,24 @@ import XCTest
 
 final class TerminalSelectionStabilityUITests: TerminalKeyboardUITestCase {
     @MainActor
+    func testSelectionKeepsWritingToolsDisabled() throws {
+        let app = launchKeyboardHarness(simulatesKeyboardFrames: true, seedsTerminalSelectionFixture: true)
+        let terminal = waitForTerminal(in: app)
+        let height = try requiredDiagnosticMetric("linkCellHeight", in: app)
+        XCTAssertEqual(try requiredDiagnosticMetric("writingToolsDisabled", in: app), 1)
+        terminal.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: 20, dy: height * 20.5)).doubleTap()
+        waitForDiagnosticMetrics(in: app) { ($0["nativeSelectionLength"] ?? 0) > 0 }
+        XCTAssertEqual(try requiredDiagnosticMetric("writingToolsDisabled", in: app), 1)
+        let rebuilds = try requiredDiagnosticMetric("inputRebuilds", in: app)
+        app.buttons["vvterm.keyboardTest.selection.output"].tap()
+        waitForDiagnosticMetrics(in: app, timeout: 15) { $0["selectionOutputRows"] == 80 }
+        XCTAssertEqual(try requiredDiagnosticMetric("writingToolsDisabled", in: app), 1)
+        XCTAssertGreaterThan(try requiredDiagnosticMetric("nativeSelectionLength", in: app), 0)
+        XCTAssertEqual(try requiredDiagnosticMetric("inputRebuilds", in: app), rebuilds)
+    }
+
+    @MainActor
     func testSelectionSurvivesLiveOutputAndKeyboardLayoutChanges() throws {
         let app = launchKeyboardHarness(simulatesKeyboardFrames: true, seedsTerminalSelectionFixture: true)
         let terminal = waitForTerminal(in: app)

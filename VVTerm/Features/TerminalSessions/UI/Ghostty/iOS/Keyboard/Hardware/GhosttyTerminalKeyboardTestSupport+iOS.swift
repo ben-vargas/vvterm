@@ -19,6 +19,11 @@ extension GhosttyTerminalView {
     }
 
     func keyboardUITestDiagnostics(keyboardVisible: Bool, keyboardHeight: CGFloat) -> String {
+        let writingToolsDisabled: Bool = {
+            guard #available(iOS 18.0, *) else { return true }
+            let traits: any UITextInputTraits = imeProxyTextView
+            return traits.writingToolsBehavior == UIWritingToolsBehavior.none
+        }()
         let endHandleCenter: CGPoint? = {
             guard #available(iOS 17.0, *),
                   let display = imeProxyTextView.interactions.compactMap({ $0 as? UITextSelectionDisplayInteraction }).first,
@@ -80,6 +85,7 @@ extension GhosttyTerminalView {
             "inputViewMode=\(inputViewMode)",
             "browse=\(keyboardFocusPolicy.isBrowsing)",
             "find=\(isFindNavigatorActive)",
+            "writingToolsDisabled=\(writingToolsDisabled ? 1 : 0)",
             "nativeSelectionActive=\(hasActiveSelectionInteraction)",
             "nativeSelectionEndHandleX=\(endHandleCenter?.x ?? -1)",
             "nativeSelectionEndHandleY=\(endHandleCenter?.y ?? -1)",

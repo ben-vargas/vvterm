@@ -149,6 +149,14 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
         inputAssistantItem.trailingBarButtonGroups = []
     }
 
+    // Terminal output is a live remote buffer, not a document for system rewrites.
+    // Keep this constant so selecting output cannot add the Writing Tools keyboard bar.
+    @available(iOS 18.0, *)
+    var writingToolsBehavior: UIWritingToolsBehavior {
+        get { .none }
+        set { }
+    }
+
     var autocorrectionType: UITextAutocorrectionType = .no
 
     var autocapitalizationType: UITextAutocapitalizationType = .none
