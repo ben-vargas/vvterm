@@ -329,7 +329,9 @@ struct VVTermApp: App {
     @ViewBuilder
     private var iOSRootContent: some View {
         #if DEBUG
-        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-composer") {
+        if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-stats-collection") {
+            StatsCollectionUITestHarness()
+        } else if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-composer") {
             TerminalComposerUITestHarness(keyboard: tabManager.keyboardCoordinator)
                 .environmentObject(ghosttyApp)
         } else if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-custom-theme-duplicate") {
