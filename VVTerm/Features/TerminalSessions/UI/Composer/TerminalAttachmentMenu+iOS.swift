@@ -212,8 +212,7 @@ private extension TerminalComposerStore.AttachmentSource {
         switch self {
         case .camera: assetName = "AttachmentCamera"
         case .photos: assetName = "AttachmentPhotos"
-        case .files: assetName = "AttachmentFiles"
-        case .paste: assetName = nil
+        case .files, .paste: assetName = nil
         }
         if let assetName, let image = UIImage(named: assetName) {
             let size = CGSize(width: 44, height: 44)
