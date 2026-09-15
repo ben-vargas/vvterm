@@ -169,6 +169,7 @@ private final class TerminalSceneActivationView: UIView {
 }
 
 struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
+    @AppStorage(TerminalKeyboardOptions.preferenceKey) private var storedKeyboardOptions = 0
     let paneId: UUID
     let server: Server
     let credentials: ServerCredentials
@@ -212,6 +213,7 @@ struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             coordinator.isTerminalReady = true
             coordinator.preservePane = true
             configureExistingTerminal(existingTerminal, coordinator: coordinator)
+            existingTerminal.imeProxyTextView.applyKeyboardOptions(.init(rawValue: storedKeyboardOptions))
             existingTerminal.acceptsTerminalInput = isActive
 
             if existingTerminal.superview != nil {
@@ -262,6 +264,7 @@ struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         }
         terminalView.onProcessExit = processExitHandler(for: terminalView)
         terminalView.showsVoiceAccessoryButton = showsVoiceAccessoryButton
+        terminalView.imeProxyTextView.applyKeyboardOptions(.init(rawValue: storedKeyboardOptions))
         terminalView.onVoiceButtonTapped = onVoiceTrigger
         terminalView.onAttachmentButtonTapped = attachmentAction
         terminalView.onPwdChange = { [paneId] rawDirectory in
@@ -342,6 +345,7 @@ struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             terminalView.applyPresentationOverrides(presentationOverrides)
         }
         terminalView.showsVoiceAccessoryButton = showsVoiceAccessoryButton
+        terminalView.imeProxyTextView.applyKeyboardOptions(.init(rawValue: storedKeyboardOptions))
         terminalView.onVoiceButtonTapped = onVoiceTrigger
         terminalView.onAttachmentButtonTapped = attachmentAction
         terminalView.applyTerminalAccessoryInputSnapshot(terminalAccessoryInputSnapshot)

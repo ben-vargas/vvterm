@@ -27,6 +27,7 @@ struct TerminalInputModeSettingsView: View {
                     Text("Review text and attachments before sending. Choose what the Send button does.")
                 }
             }
+            TerminalKeyboardSettings()
             if inputMode == .chat {
                 Section {
                     NavigationLink("Send Actions") { TerminalComposerSendActionsSettingsView() }

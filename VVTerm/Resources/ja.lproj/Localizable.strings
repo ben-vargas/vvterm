@@ -2295,3 +2295,11 @@
 "Text" = "テキスト";
 
 "Text length: %lld/%lld" = "テキストの長さ: %lld/%lld";
+
+"Auto-Correction" = "自動修正";
+"Auto-Capitalization" = "自動大文字入力";
+"Check Spelling" = "スペルチェック";
+"Inline Predictions" = "インライン予測";
+"Smart Quotes and Dashes" = "スマート引用符とダッシュ";
+"Smart Insert and Delete" = "スマート挿入と削除";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "端末コマンドを変更しないよう、初期状態ではオフです。候補表示はキーボードとシステム設定によって異なります。";

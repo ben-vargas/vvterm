@@ -2297,3 +2297,11 @@
 "Text" = "Texte";
 
 "Text length: %lld/%lld" = "Longueur du texte : %lld/%lld";
+
+"Auto-Correction" = "Correction automatique";
+"Auto-Capitalization" = "Majuscules automatiques";
+"Check Spelling" = "Vérifier l’orthographe";
+"Inline Predictions" = "Prédictions intégrées";
+"Smart Quotes and Dashes" = "Guillemets et tirets intelligents";
+"Smart Insert and Delete" = "Insertion et suppression intelligentes";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Désactivé par défaut pour préserver les commandes du terminal. Les suggestions dépendent du clavier et des réglages système.";

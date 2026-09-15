@@ -4,6 +4,22 @@ import UIKit
 
 final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
     @MainActor
+    func testNormalModeHonorsAutoCapitalization() {
+        let (app, _) = launchProductionSSHTestHarness(keyboardOptions: 2)
+        defer { app.terminate() }
+        _ = productionTerminal(in: app)
+        XCTAssertFalse(app.textViews["vvterm.composer.text"].exists)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        for letter in ["h", "e", "l", "l", "o"] { app.keyboards.keys[letter].tap() }
+        app.keyboards.keys["more"].tap()
+        app.keyboards.keys["."].tap()
+        app.keyboards.keys["space"].tap()
+        XCTAssertTrue(app.keyboards.keys["A"].waitForExistence(timeout: 5))
+        app.keyboards.keys["A"].tap()
+        XCTAssertTrue(app.keyboards.keys["a"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testProductionInitialKeyboardAndMenuWithPreservationOff() throws {
         try assertProductionInitialKeyboardAndMenu(preserves: false)
     }

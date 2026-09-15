@@ -2294,3 +2294,11 @@
 "Text" = "텍스트";
 
 "Text length: %lld/%lld" = "텍스트 길이: %lld/%lld";
+
+"Auto-Correction" = "자동 수정";
+"Auto-Capitalization" = "자동 대문자";
+"Check Spelling" = "맞춤법 검사";
+"Inline Predictions" = "인라인 예측";
+"Smart Quotes and Dashes" = "스마트 따옴표 및 대시";
+"Smart Insert and Delete" = "스마트 삽입 및 삭제";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "터미널 명령이 변경되지 않도록 기본적으로 꺼져 있습니다. 제안은 키보드와 시스템 설정에 따라 달라집니다.";

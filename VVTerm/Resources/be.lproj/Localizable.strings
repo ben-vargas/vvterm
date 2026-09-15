@@ -2296,3 +2296,11 @@
 "Text" = "Тэкст";
 
 "Text length: %lld/%lld" = "Даўжыня тэксту: %lld/%lld";
+
+"Auto-Correction" = "Аўтавыпраўленне";
+"Auto-Capitalization" = "Аўтаматычныя вялікія літары";
+"Check Spelling" = "Праверка правапісу";
+"Inline Predictions" = "Падказкі ў радку";
+"Smart Quotes and Dashes" = "Разумныя двукоссі і працяжнікі";
+"Smart Insert and Delete" = "Разумная ўстаўка і выдаленне";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Тыпова выключана, каб не змяняць каманды тэрмінала. Падказкі залежаць ад клавіятуры і сістэмных налад.";

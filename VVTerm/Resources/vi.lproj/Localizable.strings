@@ -2340,3 +2340,11 @@
 "Text" = "Văn bản";
 
 "Text length: %lld/%lld" = "Độ dài văn bản: %lld/%lld";
+
+"Auto-Correction" = "Tự động sửa";
+"Auto-Capitalization" = "Tự động viết hoa";
+"Check Spelling" = "Kiểm tra chính tả";
+"Inline Predictions" = "Dự đoán trong dòng";
+"Smart Quotes and Dashes" = "Dấu ngoặc kép và gạch ngang thông minh";
+"Smart Insert and Delete" = "Chèn và xóa thông minh";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Mặc định tắt để giữ nguyên lệnh terminal. Gợi ý phụ thuộc vào bàn phím và cài đặt hệ thống.";

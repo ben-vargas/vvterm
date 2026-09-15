@@ -27,6 +27,31 @@ final class TerminalComposerUITests: XCTestCase {
     }
 
     @MainActor
+    func testChatKeyboardOptionsPersistAndCommandsStayLiteral() {
+        let app = launch()
+        app.buttons["composer.test.settings"].tap()
+        app.buttons["Input Mode"].tap()
+        XCTAssertTrue(app.switches["vvterm.composer.keyboard-option.1"].exists)
+        let correction = app.switches["vvterm.composer.keyboard-option.1"]
+        XCTAssertEqual(correction.value as? String, "0")
+        correction.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(correction.value as? String, "1")
+        app.segmentedControls["vvterm.input-mode"].buttons["Chat Mode"].tap()
+        XCTAssertEqual(correction.value as? String, "1")
+        app.navigationBars["Input Mode"].buttons["BackButton"].tap()
+        app.buttons["Input Mode"].tap()
+        XCTAssertEqual(correction.value as? String, "1")
+        correction.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        app.navigationBars["Input Mode"].buttons["BackButton"].tap()
+        app.buttons["Done"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        let command = "git chekc --name='a--b' "
+        editor.typeText(command)
+        XCTAssertEqual(editor.value as? String, command)
+    }
+
+    @MainActor
     func testTextStepsAppendToDraftAndSendInOrder() {
         let app = launch(arguments: ["--composer-text-fixture"])
         app.buttons["vvterm.composer.toggle"].tap()

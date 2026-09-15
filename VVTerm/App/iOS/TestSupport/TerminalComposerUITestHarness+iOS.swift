@@ -61,6 +61,7 @@ final class TerminalComposerUITestModel: ObservableObject {
         self.keyboard = keyboard
         if !Foundation.ProcessInfo.processInfo.arguments.contains("--preserve-composer-actions") {
             UserDefaults.standard.removeObject(forKey: TerminalComposerSendActions.preferenceKey)
+            UserDefaults.standard.removeObject(forKey: TerminalKeyboardOptions.preferenceKey)
         }
         if Foundation.ProcessInfo.processInfo.arguments.contains("--composer-text-fixture") {
             let action = TerminalComposerSendAction(name: "Review", steps: [

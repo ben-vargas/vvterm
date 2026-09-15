@@ -17,6 +17,7 @@ class TerminalReconnectUITestCase: XCTestCase {
         exposesKeyboardLossControl: Bool = false,
         preservesTerminalSize: Bool = false,
         privacyModeEnabled: Bool = false,
+        keyboardOptions: Int = 0,
         themeName: String? = nil
     ) -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
@@ -33,6 +34,7 @@ class TerminalReconnectUITestCase: XCTestCase {
             "-terminalPreserveSizeForKeyboard", preservesTerminalSize ? "YES" : "NO",
             "-terminalVoiceButtonEnabled", "YES",
             "-terminalInputMode", "direct",
+            "-terminalComposerKeyboardOptions", String(keyboardOptions),
             "-security.privacyModeEnabled", privacyModeEnabled ? "YES" : "NO",
             "-security.fullAppLockEnabled", "NO",
             "-security.lockOnBackground", "NO",

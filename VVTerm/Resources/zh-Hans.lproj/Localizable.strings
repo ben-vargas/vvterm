@@ -2292,3 +2292,11 @@
 "Text" = "文本";
 
 "Text length: %lld/%lld" = "文本长度：%lld/%lld";
+
+"Auto-Correction" = "自动纠正";
+"Auto-Capitalization" = "自动大写";
+"Check Spelling" = "检查拼写";
+"Inline Predictions" = "行内预测";
+"Smart Quotes and Dashes" = "智能引号和破折号";
+"Smart Insert and Delete" = "智能插入和删除";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "默认关闭，以保持终端命令不变。键盘建议取决于键盘和系统设置。";

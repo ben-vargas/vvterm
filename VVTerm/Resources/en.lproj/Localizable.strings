@@ -2294,3 +2294,11 @@
 "Text" = "Text";
 
 "Text length: %lld/%lld" = "Text length: %lld/%lld";
+
+"Auto-Correction" = "Auto-Correction";
+"Auto-Capitalization" = "Auto-Capitalization";
+"Check Spelling" = "Check Spelling";
+"Inline Predictions" = "Inline Predictions";
+"Smart Quotes and Dashes" = "Smart Quotes and Dashes";
+"Smart Insert and Delete" = "Smart Insert and Delete";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings.";

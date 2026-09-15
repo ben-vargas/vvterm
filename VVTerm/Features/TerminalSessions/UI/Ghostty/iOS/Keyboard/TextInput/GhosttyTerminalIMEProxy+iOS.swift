@@ -149,40 +149,24 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
         inputAssistantItem.trailingBarButtonGroups = []
     }
 
-    var autocorrectionType: UITextAutocorrectionType {
-        get { .no }
-        set { }
-    }
+    var autocorrectionType: UITextAutocorrectionType = .no
 
-    var autocapitalizationType: UITextAutocapitalizationType {
-        get { .none }
-        set { }
-    }
+    var autocapitalizationType: UITextAutocapitalizationType = .none
 
-    var spellCheckingType: UITextSpellCheckingType {
-        get { .no }
-        set { }
-    }
+    var spellCheckingType: UITextSpellCheckingType = .no
 
-    var smartQuotesType: UITextSmartQuotesType {
-        get { .no }
-        set { }
-    }
+    var smartQuotesType: UITextSmartQuotesType = .no
 
-    var smartDashesType: UITextSmartDashesType {
-        get { .no }
-        set { }
-    }
+    var smartDashesType: UITextSmartDashesType = .no
 
-    var smartInsertDeleteType: UITextSmartInsertDeleteType {
-        get { .no }
-        set { }
-    }
+    var smartInsertDeleteType: UITextSmartInsertDeleteType = .no
+
+    private var inlinePredictionRawValue: Int?
 
     @available(iOS 17.0, *)
     var inlinePredictionType: UITextInlinePredictionType {
-        get { .no }
-        set { }
+        get { inlinePredictionRawValue.flatMap(UITextInlinePredictionType.init(rawValue:)) ?? .no }
+        set { inlinePredictionRawValue = newValue.rawValue }
     }
 
     var enablesReturnKeyAutomatically: Bool {

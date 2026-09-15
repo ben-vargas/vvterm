@@ -2295,3 +2295,11 @@
 "Text" = "Текст";
 
 "Text length: %lld/%lld" = "Длина текста: %lld/%lld";
+
+"Auto-Correction" = "Автокоррекция";
+"Auto-Capitalization" = "Автопрописные";
+"Check Spelling" = "Проверка правописания";
+"Inline Predictions" = "Подсказки в строке";
+"Smart Quotes and Dashes" = "Умные кавычки и тире";
+"Smart Insert and Delete" = "Умная вставка и удаление";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "По умолчанию выключено, чтобы не менять команды терминала. Подсказки зависят от клавиатуры и системных настроек.";

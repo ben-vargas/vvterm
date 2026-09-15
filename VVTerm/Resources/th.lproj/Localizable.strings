@@ -2295,3 +2295,11 @@
 "Text" = "ข้อความ";
 
 "Text length: %lld/%lld" = "ความยาวข้อความ: %lld/%lld";
+
+"Auto-Correction" = "การแก้ไขอัตโนมัติ";
+"Auto-Capitalization" = "ตัวพิมพ์ใหญ่อัตโนมัติ";
+"Check Spelling" = "ตรวจการสะกด";
+"Inline Predictions" = "การคาดเดาในบรรทัด";
+"Smart Quotes and Dashes" = "เครื่องหมายคำพูดและขีดอัจฉริยะ";
+"Smart Insert and Delete" = "การแทรกและลบอัจฉริยะ";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "ปิดไว้ตามค่าเริ่มต้นเพื่อไม่ให้คำสั่งเทอร์มินัลเปลี่ยนแปลง คำแนะนำขึ้นอยู่กับแป้นพิมพ์และการตั้งค่าระบบ";

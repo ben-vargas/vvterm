@@ -2295,3 +2295,11 @@
 "Text" = "Texto";
 
 "Text length: %lld/%lld" = "Longitud del texto: %lld/%lld";
+
+"Auto-Correction" = "Autocorrección";
+"Auto-Capitalization" = "Mayúsculas automáticas";
+"Check Spelling" = "Revisar ortografía";
+"Inline Predictions" = "Predicciones en línea";
+"Smart Quotes and Dashes" = "Comillas y guiones inteligentes";
+"Smart Insert and Delete" = "Inserción y eliminación inteligentes";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Desactivado de forma predeterminada para no modificar los comandos. Las sugerencias dependen del teclado y los ajustes del sistema.";

@@ -2302,3 +2302,11 @@
 "Text" = "Текст";
 
 "Text length: %lld/%lld" = "Довжина тексту: %lld/%lld";
+
+"Auto-Correction" = "Автокорекція";
+"Auto-Capitalization" = "Автоматичні великі літери";
+"Check Spelling" = "Перевірка правопису";
+"Inline Predictions" = "Підказки в рядку";
+"Smart Quotes and Dashes" = "Розумні лапки й тире";
+"Smart Insert and Delete" = "Розумне вставлення й видалення";
+"Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Типово вимкнено, щоб не змінювати команди термінала. Підказки залежать від клавіатури та системних параметрів.";
