@@ -2266,3 +2266,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "พิมพ์ในเทอร์มินัลโดยตรง ไฟล์แนบจะถูกส่งทันที";
 "Review text and attachments before sending. Send also presses Enter." = "ตรวจสอบข้อความและไฟล์แนบก่อนส่ง การส่งจะกด Enter ด้วย";
+
+// Chat send actions
+"Insert draft" = "แทรกฉบับร่าง";
+"Touch and hold for send actions." = "แตะค้างเพื่อดูการดำเนินการส่ง";
+"Could not read send actions. Reset them in Input Mode settings." = "อ่านการดำเนินการส่งไม่ได้ โปรดรีเซ็ตในการตั้งค่าโหมดป้อนข้อมูล";
+"Send Actions" = "การดำเนินการส่ง";
+"Could not save send actions." = "บันทึกการดำเนินการส่งไม่ได้";
+"Tap Action" = "การดำเนินการเมื่อแตะ";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "แตะเพื่อเรียกใช้การดำเนินการแรก แตะค้างเพื่อดูทั้งหมด หากฉบับร่างว่าง จะส่งเฉพาะปุ่มกด";
+"Name (optional)" = "ชื่อ (ไม่บังคับ)";
+"Add Step" = "เพิ่มขั้นตอน";
+"Steps" = "ขั้นตอน";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "ขั้นตอนจะทำงานตามลำดับ การแทรกฉบับร่างรวมไฟล์แนบด้วย ปุ่มกดใช้โหมดป้อนข้อมูลปัจจุบันของเทอร์มินัล";
+"Send Action" = "การดำเนินการส่ง";
+"Step" = "ขั้นตอน";
+"Modifiers" = "ปุ่มปรับเปลี่ยน";
+"Review text and attachments before sending. Choose what the Send button does." = "ตรวจสอบข้อความและไฟล์แนบก่อนส่ง เลือกการทำงานของปุ่มส่ง";
+
+"Steps run in order." = "ขั้นตอนจะทำงานตามลำดับ";
+
+"Insert draft includes text and attachments from Chat Mode." = "การแทรกฉบับร่างรวมข้อความและไฟล์แนบจากโหมดแชท";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "ขอข้อความทุกครั้งที่เรียกใช้การดำเนินการนี้ คำตอบจะแทรกในขั้นตอนนี้";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "แตะเพื่อเรียกใช้การดำเนินการแรก แตะค้างเพื่อดูทั้งหมด การดำเนินการยังทำงานได้เมื่อฉบับร่างว่าง";
+
+"Text" = "ข้อความ";
+
+"Text length: %lld/%lld" = "ความยาวข้อความ: %lld/%lld";

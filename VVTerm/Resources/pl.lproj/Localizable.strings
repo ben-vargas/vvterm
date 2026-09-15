@@ -2268,3 +2268,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "Pisz bezpośrednio w terminalu. Załączniki są wysyłane natychmiast.";
 "Review text and attachments before sending. Send also presses Enter." = "Sprawdź tekst i załączniki przed wysłaniem. Wysłanie naciska również Enter.";
+
+// Chat send actions
+"Insert draft" = "Wstaw szkic";
+"Touch and hold for send actions." = "Przytrzymaj, aby wybrać działanie wysyłania.";
+"Could not read send actions. Reset them in Input Mode settings." = "Nie można odczytać działań wysyłania. Zresetuj je w ustawieniach trybu wprowadzania.";
+"Send Actions" = "Działania wysyłania";
+"Could not save send actions." = "Nie można zapisać działań wysyłania.";
+"Tap Action" = "Działanie po stuknięciu";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "Stuknij, aby wykonać pierwsze działanie. Przytrzymaj, aby zobaczyć wszystkie działania. Gdy szkic jest pusty, wysyłane są tylko klawisze.";
+"Name (optional)" = "Nazwa (opcjonalna)";
+"Add Step" = "Dodaj krok";
+"Steps" = "Kroki";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "Kroki są wykonywane po kolei. Wstawienie szkicu obejmuje załączniki. Klawisze używają bieżącego trybu wprowadzania terminala.";
+"Send Action" = "Działanie wysyłania";
+"Step" = "Krok";
+"Modifiers" = "Modyfikatory";
+"Review text and attachments before sending. Choose what the Send button does." = "Sprawdź tekst i załączniki przed wysłaniem. Wybierz działanie przycisku wysyłania.";
+
+"Steps run in order." = "Kroki są wykonywane po kolei.";
+
+"Insert draft includes text and attachments from Chat Mode." = "Wstawienie szkicu obejmuje tekst i załączniki z trybu czatu.";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "Pytaj o tekst przy każdym uruchomieniu działania. Odpowiedź jest wstawiana w tym kroku.";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "Stuknij, aby wykonać pierwsze działanie. Przytrzymaj, aby zobaczyć wszystkie działania. Działania działają także przy pustym szkicu.";
+
+"Text" = "Tekst";
+
+"Text length: %lld/%lld" = "Długość tekstu: %lld/%lld";

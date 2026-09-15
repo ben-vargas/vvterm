@@ -3,6 +3,160 @@ import XCTest
 
 final class TerminalComposerUITests: XCTestCase {
     @MainActor
+    func testDisabledVoiceInputHidesMicrophoneAndRestoresTyping() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let record = app.buttons["vvterm.composer.record"]
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
+        record.tap()
+        app.buttons["composer.test.voice-availability"].tap()
+        XCTAssertFalse(record.exists)
+        let editor = app.textViews["vvterm.composer.text"]
+        editor.tap()
+        editor.typeText("text")
+        XCTAssertEqual(editor.value as? String, "text")
+        editor.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4))
+        XCTAssertFalse(record.exists)
+        app.buttons["composer.test.voice-availability"].tap()
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
+        record.press(forDuration: 1)
+        XCTAssertTrue(app.buttons["vvterm.composer.stop-recording"].exists)
+        app.buttons["composer.test.voice-availability"].tap()
+        XCTAssertFalse(app.buttons["vvterm.composer.stop-recording"].exists)
+        XCTAssertFalse(record.exists)
+    }
+
+    @MainActor
+    func testTextStepsAppendToDraftAndSendInOrder() {
+        let app = launch(arguments: ["--composer-text-fixture"])
+        app.buttons["vvterm.composer.toggle"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("draft")
+        app.buttons["vvterm.composer.send"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "Review: draft briefly<CR>"), evaluatedWith: app.staticTexts["composer.test.bytes"])
+        waitForExpectations(timeout: 5)
+        XCTAssertEqual(editor.value as? String, "")
+        editor.typeText("next")
+        XCTAssertEqual(editor.value as? String, "next")
+    }
+
+    @MainActor
+    func testSendSettingsAreChatOnlyAndTextStepsUseCommandEditor() {
+        let app = launch()
+        app.buttons["composer.test.settings"].tap()
+        app.buttons["Input Mode"].tap()
+        XCTAssertFalse(app.buttons["Send Actions"].exists)
+        app.segmentedControls["vvterm.input-mode"].buttons["Chat Mode"].tap()
+        app.buttons["Send Actions"].tap()
+        app.buttons["vvterm.composer.add-action"].tap()
+        app.textFields["vvterm.composer.action-name"].tap()
+        app.textFields["vvterm.composer.action-name"].typeText("Saved prompt")
+        app.buttons["vvterm.composer.add-step"].tap()
+        XCTAssertFalse(app.buttons["Prompt"].exists)
+        app.buttons["Text"].tap()
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'vvterm.composer.step.' AND label BEGINSWITH 'Text'")).firstMatch.tap()
+        let text = app.textViews["vvterm.composer.step-text"]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        text.tap()
+        text.typeText("Review this code.\n")
+        XCTAssertEqual(text.value as? String, "Review this code.\n")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Saved text step editor"
+        shot.lifetime = .keepAlways
+        add(shot)
+        app.navigationBars["Text"].buttons["BackButton"].tap()
+        app.buttons["vvterm.composer.save-action"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Saved prompt'")).firstMatch.waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Saved prompt'")).firstMatch.tap()
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'vvterm.composer.step.' AND label BEGINSWITH 'Text'")).firstMatch.tap()
+        XCTAssertEqual(text.value as? String, "Review this code.\n")
+        app.navigationBars["Text"].buttons["BackButton"].tap()
+        app.buttons["vvterm.composer.save-action"].tap()
+        app.navigationBars["Send Actions"].buttons["BackButton"].tap()
+        app.segmentedControls["vvterm.input-mode"].buttons["Normal Mode"].tap()
+        XCTAssertFalse(app.buttons["Send Actions"].exists)
+    }
+
+    @MainActor
+    func testEmptySendAndHoldMenuKeepChatFocus() {
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let send = app.buttons["vvterm.composer.send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        XCTAssertTrue(send.isEnabled)
+        let record = app.buttons["vvterm.composer.record"]
+        XCTAssertGreaterThan(record.frame.minX, send.frame.maxX)
+        XCTAssertEqual(record.frame.width, 40, accuracy: 1)
+        XCTAssertEqual(record.frame.midY, app.buttons["vvterm.composer.attach"].frame.midY, accuracy: 1)
+        let layout = XCTAttachment(screenshot: app.screenshot())
+        layout.name = "Separate microphone button"
+        layout.lifetime = .keepAlways
+        add(layout)
+        send.tap()
+        let bytes = app.staticTexts["composer.test.bytes"]
+        expectation(for: NSPredicate(format: "label == %@", "<CR>"), evaluatedWith: bytes)
+        waitForExpectations(timeout: 5)
+        send.press(forDuration: 0.7)
+        app.buttons["vvterm.composer.action.704D03A6-3602-462F-8DF1-1A7D2A0EE003"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "<CR><TAB>"), evaluatedWith: bytes)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        let editor = app.textViews["vvterm.composer.text"]
+        editor.typeText("insert")
+        XCTAssertFalse(record.exists)
+        send.press(forDuration: 0.7)
+        app.buttons["vvterm.composer.action.704D03A6-3602-462F-8DF1-1A7D2A0EE002"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "<CR><TAB>insert"), evaluatedWith: bytes)
+        waitForExpectations(timeout: 5)
+        XCTAssertEqual(editor.value as? String, "")
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
+        editor.typeText("queue")
+        send.press(forDuration: 0.7)
+        app.buttons["vvterm.composer.action.704D03A6-3602-462F-8DF1-1A7D2A0EE003"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "<CR><TAB>insertqueue<TAB>"), evaluatedWith: bytes)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        add(XCTAttachment(screenshot: app.screenshot()))
+    }
+
+    @MainActor
+    func testCustomSequenceCanBecomePrimaryAndSurvivesRelaunch() {
+        var app = launch()
+        app.buttons["composer.test.settings"].tap()
+        app.buttons["Input Mode"].tap()
+        XCTAssertFalse(app.buttons["Send Actions"].exists)
+        app.segmentedControls["vvterm.input-mode"].buttons["Chat Mode"].tap()
+        app.buttons["Send Actions"].tap()
+        app.buttons["vvterm.composer.add-action"].tap()
+        let name = app.textFields["vvterm.composer.action-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap()
+        name.typeText("Double Enter")
+        app.buttons["vvterm.composer.add-step"].tap()
+        app.buttons["Shortcut"].tap()
+        app.buttons["vvterm.composer.save-action"].tap()
+        app.buttons["vvterm.composer.primary-action"].tap()
+        app.buttons["Double Enter"].tap()
+        add(XCTAttachment(screenshot: app.screenshot()))
+        app.terminate()
+        app = launch(arguments: ["--preserve-composer-actions"])
+        app.buttons["vvterm.composer.toggle"].tap()
+        let send = app.buttons["vvterm.composer.send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        XCTAssertEqual(send.value as? String, "Double Enter")
+        app.textViews["vvterm.composer.text"].typeText("twice")
+        send.tap()
+        let bytes = app.staticTexts["composer.test.bytes"]
+        expectation(for: NSPredicate(format: "label == %@", "twice<CR><CR>"), evaluatedWith: bytes)
+        waitForExpectations(timeout: 5)
+        send.tap()
+        expectation(for: NSPredicate(format: "label == %@", "twice<CR><CR><CR><CR>"), evaluatedWith: bytes)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+    }
+
+    @MainActor
     func testGalleryVideoUsesChatDraftAndNormalImmediateSending() throws {
         // Seed a short video and a photo with simctl addmedia, then enable this in the test runner.
         guard ProcessInfo.processInfo.environment["VVTERM_UI_TEST_GALLERY"] == "1" else {
@@ -258,7 +412,7 @@ final class TerminalComposerUITests: XCTestCase {
         app.buttons["Input Mode"].tap()
         app.segmentedControls["vvterm.input-mode"].buttons["Chat Mode"].tap()
         XCTAssertEqual(app.otherElements["vvterm.settings.inputMode.preview"].value as? String, "Chat Mode")
-        XCTAssertTrue(app.staticTexts["Review text and attachments before sending. Send also presses Enter."].exists)
+        XCTAssertTrue(app.staticTexts["Review text and attachments before sending. Choose what the Send button does."].exists)
         let chatPreview = XCTAttachment(screenshot: app.screenshot())
         chatPreview.name = "Chat Mode settings preview"
         chatPreview.lifetime = .keepAlways
@@ -287,7 +441,7 @@ final class TerminalComposerUITests: XCTestCase {
         app.buttons["vvterm.composer.toggle"].tap()
         let record = app.buttons["vvterm.composer.record"]
         XCTAssertTrue(record.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["vvterm.composer.send"].exists)
+        XCTAssertTrue(app.buttons["vvterm.composer.send"].exists)
         let emptyScreenshot = XCTAttachment(screenshot: app.screenshot())
         emptyScreenshot.name = "Centered placeholder and record control"
         emptyScreenshot.lifetime = .keepAlways
@@ -304,10 +458,11 @@ final class TerminalComposerUITests: XCTestCase {
         app.textViews["vvterm.composer.text"].tap()
         app.textViews["vvterm.composer.text"].typeText("typed")
         XCTAssertEqual(app.textViews["vvterm.composer.text"].value as? String, "typed")
+        XCTAssertFalse(record.exists)
         app.textViews["vvterm.composer.text"].typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 5))
-        record.tap()
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
         let keyboardTop = app.keyboards.firstMatch.frame.minY
-        app.textViews["vvterm.composer.text"].press(forDuration: 1.5)
+        record.press(forDuration: 1.5)
         XCTAssertEqual(app.staticTexts["composer.test.recording-focus"].label, "Recording kept editor")
         XCTAssertTrue(app.keyboards.firstMatch.exists)
         XCTAssertEqual(app.keyboards.firstMatch.frame.minY, keyboardTop, accuracy: 1)
@@ -525,6 +680,7 @@ final class TerminalComposerUITests: XCTestCase {
     @MainActor
     private func launch(arguments: [String] = []) -> XCUIApplication {
         continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.terminate()
         app.launchArguments = ["--vvterm-ui-test-composer", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-AppleInterfaceStyle", "Dark"] + arguments

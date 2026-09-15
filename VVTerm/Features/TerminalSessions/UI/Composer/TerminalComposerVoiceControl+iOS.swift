@@ -4,19 +4,19 @@ import UIKit
 
 /// Native gestures distinguish a tap from the hold that starts recording.
 struct TerminalComposerVoiceControl: UIViewRepresentable {
-    enum Style { case waveform, prompt }
-    var style = Style.waveform
+    enum Style { case microphone, prompt }
+    var style = Style.microphone
     let onTap: () -> Void
     let onHold: () -> Void
 
     func makeUIView(context: Context) -> UIButton {
         let button = UIButton(type: .system)
-        if style == .waveform {
-            button.setImage(UIImage(systemName: "waveform", withConfiguration: UIImage.SymbolConfiguration(pointSize: 14)), for: .normal)
+        if style == .microphone {
+            button.setImage(UIImage(systemName: "mic", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18)), for: .normal)
         }
         button.tintColor = .secondaryLabel
-        button.accessibilityLabel = style == .waveform ? String(localized: "Voice input") : String(localized: "Touch and hold to record")
-        button.accessibilityIdentifier = style == .waveform ? "vvterm.composer.record" : "vvterm.composer.hold-prompt"
+        button.accessibilityLabel = style == .microphone ? String(localized: "Voice input") : String(localized: "Touch and hold to record")
+        button.accessibilityIdentifier = style == .microphone ? "vvterm.composer.record" : "vvterm.composer.hold-prompt"
         button.addTarget(context.coordinator, action: #selector(Coordinator.tapped), for: .touchUpInside)
         let hold = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.held(_:)))
         hold.minimumPressDuration = 0.25

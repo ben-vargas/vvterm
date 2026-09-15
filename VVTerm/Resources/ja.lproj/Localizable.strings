@@ -2266,3 +2266,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "ターミナルに直接入力します。添付ファイルはすぐに送信されます。";
 "Review text and attachments before sending. Send also presses Enter." = "送信前にテキストと添付ファイルを確認できます。送信するとEnterキーも押されます。";
+
+// Chat send actions
+"Insert draft" = "下書きを挿入";
+"Touch and hold for send actions." = "長押しして送信アクションを表示します。";
+"Could not read send actions. Reset them in Input Mode settings." = "送信アクションを読み込めませんでした。入力モード設定でリセットしてください。";
+"Send Actions" = "送信アクション";
+"Could not save send actions." = "送信アクションを保存できませんでした。";
+"Tap Action" = "タップ時のアクション";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "タップすると最初のアクションを実行します。長押しですべてのアクションを表示します。下書きが空の場合はキーのみを送信します。";
+"Name (optional)" = "名前（任意）";
+"Add Step" = "ステップを追加";
+"Steps" = "ステップ";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "ステップは順番に実行されます。下書きの挿入には添付ファイルが含まれます。キーはターミナルの現在の入力モードを使用します。";
+"Send Action" = "送信アクション";
+"Step" = "ステップ";
+"Modifiers" = "修飾キー";
+"Review text and attachments before sending. Choose what the Send button does." = "送信前にテキストと添付ファイルを確認します。送信ボタンの動作を選択できます。";
+
+"Steps run in order." = "ステップは順番に実行されます。";
+
+"Insert draft includes text and attachments from Chat Mode." = "下書きの挿入にはチャットモードのテキストと添付ファイルが含まれます。";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "このアクションの実行時に毎回テキストの入力を求めます。回答はこのステップで挿入されます。";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "タップで最初のアクションを実行します。長押しですべてのアクションを表示します。下書きが空でもアクションは実行されます。";
+
+"Text" = "テキスト";
+
+"Text length: %lld/%lld" = "テキストの長さ: %lld/%lld";

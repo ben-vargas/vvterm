@@ -2263,3 +2263,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "直接在终端中输入。附件会立即发送。";
 "Review text and attachments before sending. Send also presses Enter." = "发送前检查文本和附件。发送时也会按下回车键。";
+
+// Chat send actions
+"Insert draft" = "插入草稿";
+"Touch and hold for send actions." = "长按以查看发送操作。";
+"Could not read send actions. Reset them in Input Mode settings." = "无法读取发送操作。请在输入模式设置中重置。";
+"Send Actions" = "发送操作";
+"Could not save send actions." = "无法保存发送操作。";
+"Tap Action" = "轻点操作";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "轻点以执行第一个操作。长按以查看所有操作。草稿为空时，仅发送按键。";
+"Name (optional)" = "名称（可选）";
+"Add Step" = "添加步骤";
+"Steps" = "步骤";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "步骤按顺序执行。插入草稿会包含附件。按键使用终端当前的输入模式。";
+"Send Action" = "发送操作";
+"Step" = "步骤";
+"Modifiers" = "修饰键";
+"Review text and attachments before sending. Choose what the Send button does." = "发送前检查文本和附件。选择发送按钮的功能。";
+
+"Steps run in order." = "步骤按顺序执行。";
+
+"Insert draft includes text and attachments from Chat Mode." = "插入草稿会包含聊天模式中的文本和附件。";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "每次运行此操作时都要求输入文本。回答将在此步骤插入。";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "轻点以执行第一个操作。长按以查看所有操作。草稿为空时也会执行操作。";
+
+"Text" = "文本";
+
+"Text length: %lld/%lld" = "文本长度：%lld/%lld";

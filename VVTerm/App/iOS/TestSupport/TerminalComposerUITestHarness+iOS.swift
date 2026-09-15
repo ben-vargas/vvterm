@@ -20,6 +20,7 @@ final class TerminalComposerUITestModel: ObservableObject {
         resumeUpload?.resume()
         resumeUpload = nil
     }
+    @Published var voiceButtonEnabled = true
     @Published var attachmentButtonEnabled = true
     @Published var connected = true
     @Published var recordingKeptEditor = false
@@ -42,11 +43,11 @@ final class TerminalComposerUITestModel: ObservableObject {
             return RemoteClipboardUpload(remotePath: "/tmp/\(attachment.suggestedFilename)",
                                          pastedPathToken: "/tmp/\(attachment.suggestedFilename)",
                                          mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes)
-        }, remove: { _ in }, submit: { [weak self] text, mode in
+        }, remove: { _ in }, submit: { [weak self] text, action in
             guard let self, self.keyboard.canSubmitComposedInput(for: self.paneID), let terminal = self.terminal else {
                 throw TerminalAttachmentError.unavailable
             }
-            try terminal.sendComposedText(text, mode: mode)
+            try terminal.sendComposedText(text, action: action)
             self.sent = text
         })
     }, modeChanged: { [weak self] _ in
@@ -56,7 +57,19 @@ final class TerminalComposerUITestModel: ObservableObject {
 
     }
 
-    init(keyboard: TerminalKeyboardCoordinator) { self.keyboard = keyboard }
+    init(keyboard: TerminalKeyboardCoordinator) {
+        self.keyboard = keyboard
+        if !Foundation.ProcessInfo.processInfo.arguments.contains("--preserve-composer-actions") {
+            UserDefaults.standard.removeObject(forKey: TerminalComposerSendActions.preferenceKey)
+        }
+        if Foundation.ProcessInfo.processInfo.arguments.contains("--composer-text-fixture") {
+            let action = TerminalComposerSendAction(name: "Review", steps: [
+                .text("Review: "), .insertDraft, .text(" briefly"), .key(.enter, .none)
+            ])
+            UserDefaults.standard.set(try! TerminalComposerSendActions(actions: [action]).encoded(),
+                                      forKey: TerminalComposerSendActions.preferenceKey)
+        }
+    }
 
     func attach(_ terminal: GhosttyTerminalView) {
         self.terminal = terminal
@@ -180,6 +193,11 @@ private struct TerminalComposerUITestContent: View {
                     .accessibilityIdentifier("composer.test.fail")
                 Toggle("Attachment button", isOn: $model.attachmentButtonEnabled).accessibilityIdentifier("composer.test.visibility")
             }
+            Button("Toggle voice availability") {
+                model.voiceButtonEnabled.toggle()
+                if !model.voiceButtonEnabled { model.voicePhase = .idle }
+            }
+            .accessibilityIdentifier("composer.test.voice-availability")
             if model.pausesUploads {
                 Button("Finish uploads") { model.finishUploads() }
             }
@@ -212,7 +230,7 @@ private struct TerminalComposerUITestContent: View {
             Text(model.sent.isEmpty ? "No input sent" : model.sent)
                 .accessibilityIdentifier("composer.test.sent")
                 .font(.caption)
-            Text(model.received.replacingOccurrences(of: "\r", with: "<CR>").replacingOccurrences(of: "\n", with: "<LF>"))
+            Text(model.received.replacingOccurrences(of: "\r", with: "<CR>").replacingOccurrences(of: "\n", with: "<LF>").replacingOccurrences(of: "\t", with: "<TAB>"))
                 .accessibilityIdentifier("composer.test.bytes")
                 .font(.caption)
             if runtime.app != nil {
@@ -220,7 +238,7 @@ private struct TerminalComposerUITestContent: View {
                     .frame(minHeight: 70, maxHeight: .infinity)
             }
             if composer.mode == .chat {
-                TerminalPaneComposerView(keyboard: model.keyboard, composer: composer, paneID: model.paneID, isActive: !showsSettings, acceptsInput: model.connected, voice: .init(
+                TerminalPaneComposerView(keyboard: model.keyboard, composer: composer, paneID: model.paneID, isActive: !showsSettings, acceptsInput: model.connected, voice: model.voiceButtonEnabled ? .init(
                     phase: model.voicePhase, audioLevel: 0.4, duration: 2,
                     toggle: {
                         if model.voicePhase.isActive {
@@ -229,7 +247,7 @@ private struct TerminalComposerUITestContent: View {
                         } else { model.voicePhase = .recording(operationID: UUID()) }
                     },
                     cancel: { model.voicePhase = .idle }
-                ))
+                ) : nil)
             }
         }
         .terminalKeyboardAvoidance(

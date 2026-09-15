@@ -2268,3 +2268,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "Saisissez le texte directement dans le terminal. Les pièces jointes sont envoyées immédiatement.";
 "Review text and attachments before sending. Send also presses Enter." = "Vérifiez le texte et les pièces jointes avant l’envoi. Envoyer appuie aussi sur Entrée.";
+
+// Chat send actions
+"Insert draft" = "Insérer le brouillon";
+"Touch and hold for send actions." = "Maintenez appuyé pour afficher les actions d’envoi.";
+"Could not read send actions. Reset them in Input Mode settings." = "Impossible de lire les actions d’envoi. Réinitialisez-les dans les réglages du mode de saisie.";
+"Send Actions" = "Actions d’envoi";
+"Could not save send actions." = "Impossible d’enregistrer les actions d’envoi.";
+"Tap Action" = "Action au toucher";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "Touchez pour exécuter la première action. Maintenez appuyé pour afficher toutes les actions. Si le brouillon est vide, seules les touches sont envoyées.";
+"Name (optional)" = "Nom (facultatif)";
+"Add Step" = "Ajouter une étape";
+"Steps" = "Étapes";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "Les étapes s’exécutent dans l’ordre. L’insertion du brouillon inclut les pièces jointes. Les touches utilisent le mode de saisie actuel du terminal.";
+"Send Action" = "Action d’envoi";
+"Step" = "Étape";
+"Modifiers" = "Modificateurs";
+"Review text and attachments before sending. Choose what the Send button does." = "Vérifiez le texte et les pièces jointes avant l’envoi. Choisissez la fonction du bouton d’envoi.";
+
+"Steps run in order." = "Les étapes sont exécutées dans l’ordre.";
+
+"Insert draft includes text and attachments from Chat Mode." = "L’insertion du brouillon inclut le texte et les pièces jointes du mode chat.";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "Demander du texte à chaque exécution de cette action. La réponse est insérée à cette étape.";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "Touchez pour exécuter la première action. Maintenez appuyé pour afficher toutes les actions. Les actions fonctionnent aussi avec un brouillon vide.";
+
+"Text" = "Texte";
+
+"Text length: %lld/%lld" = "Longueur du texte : %lld/%lld";

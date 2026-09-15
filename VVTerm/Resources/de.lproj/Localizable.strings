@@ -2266,3 +2266,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "Schreiben Sie direkt im Terminal. Anhänge werden sofort gesendet.";
 "Review text and attachments before sending. Send also presses Enter." = "Prüfen Sie Text und Anhänge vor dem Senden. Senden betätigt auch die Eingabetaste.";
+
+// Chat send actions
+"Insert draft" = "Entwurf einfügen";
+"Touch and hold for send actions." = "Gedrückt halten, um Sendeaktionen anzuzeigen.";
+"Could not read send actions. Reset them in Input Mode settings." = "Sendeaktionen konnten nicht gelesen werden. Setze sie in den Einstellungen für den Eingabemodus zurück.";
+"Send Actions" = "Sendeaktionen";
+"Could not save send actions." = "Sendeaktionen konnten nicht gespeichert werden.";
+"Tap Action" = "Aktion beim Tippen";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "Tippe, um die erste Aktion auszuführen. Halte gedrückt, um alle Aktionen anzuzeigen. Bei leerem Entwurf werden nur die Tasten gesendet.";
+"Name (optional)" = "Name (optional)";
+"Add Step" = "Schritt hinzufügen";
+"Steps" = "Schritte";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "Schritte werden der Reihe nach ausgeführt. Das Einfügen des Entwurfs schließt Anhänge ein. Tasten verwenden den aktuellen Eingabemodus des Terminals.";
+"Send Action" = "Sendeaktion";
+"Step" = "Schritt";
+"Modifiers" = "Modifikatortasten";
+"Review text and attachments before sending. Choose what the Send button does." = "Prüfe Text und Anhänge vor dem Senden. Wähle die Funktion der Sendetaste.";
+
+"Steps run in order." = "Schritte werden der Reihe nach ausgeführt.";
+
+"Insert draft includes text and attachments from Chat Mode." = "Das Einfügen des Entwurfs umfasst Text und Anhänge aus dem Chatmodus.";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "Bei jeder Ausführung dieser Aktion nach Text fragen. Die Antwort wird an diesem Schritt eingefügt.";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "Tippe, um die erste Aktion auszuführen. Halte gedrückt, um alle Aktionen anzuzeigen. Aktionen funktionieren auch bei leerem Entwurf.";
+
+"Text" = "Text";
+
+"Text length: %lld/%lld" = "Textlänge: %lld/%lld";

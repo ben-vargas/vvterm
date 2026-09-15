@@ -8,6 +8,85 @@ import UIKit
 
 @MainActor
 final class TerminalComposerStoreTests: XCTestCase {
+    func testTextStepsSurroundDraftWithoutChangingOrder() async {
+        let fixture = Fixture()
+        let store = fixture.store()
+        store.setMode(.chat)
+        store.draft = "draft"
+        let action = TerminalComposerSendAction(steps: [.text("Review: "), .insertDraft, .text(" briefly"), .key(.enter, .none)])
+        await finish(store) { store.send(action: action) }
+        XCTAssertEqual(fixture.sent, ["draft"])
+        XCTAssertEqual(fixture.sentActions, [action])
+        XCTAssertEqual(store.draft, "")
+    }
+
+    func testEmptyChatCanSendEnterAndTab() async {
+        let fixture = Fixture()
+        let store = fixture.store()
+        store.setMode(.chat)
+        XCTAssertTrue(store.canSend)
+        await finish(store) { store.send(action: .send) }
+        await finish(store) { store.send(action: .queue) }
+        XCTAssertEqual(fixture.sent, ["", ""])
+        XCTAssertEqual(fixture.sentActions, [.send, .queue])
+    }
+
+    func testInsertOnlyClearsDraftWithoutAddingEnter() async {
+        let fixture = Fixture()
+        let store = fixture.store()
+        store.setMode(.chat)
+        store.draft = "draft"
+        await finish(store) { store.send(action: .insert) }
+        XCTAssertEqual(fixture.sent, ["draft"])
+        XCTAssertEqual(fixture.sentActions, [.insert])
+        XCTAssertEqual(store.draft, "")
+    }
+
+    func testKeyOnlyActionKeepsDraftAndPreparedAttachments() async throws {
+        let fixture = Fixture()
+        let store = fixture.store()
+        store.setMode(.chat)
+        store.draft = "keep"
+        try store.add([payload("keep.png")])
+        await finish(store)
+        let action = TerminalComposerSendAction(steps: [.key(.escape, .none)])
+        await finish(store) { store.send(action: action) }
+        XCTAssertEqual(fixture.sent, [""])
+        XCTAssertEqual(store.draft, "keep")
+        XCTAssertEqual(store.attachments.count, 1)
+        await finish(store) { store.send(action: .queue) }
+        XCTAssertEqual(fixture.uploaded, ["keep.png"])
+        XCTAssertEqual(fixture.sent.last, "keep /tmp/keep.png")
+        XCTAssertTrue(fixture.removed.isEmpty)
+    }
+
+    func testFailedKeyOnlyActionKeepsPreparedAttachmentsForRetry() async throws {
+        let fixture = Fixture()
+        let store = fixture.store()
+        store.setMode(.chat)
+        try store.add([payload("keep.png")])
+        await finish(store)
+        fixture.rejectSubmit = true
+        await finish(store) { store.send(action: .init(steps: [.key(.escape, .none)])) }
+        XCTAssertTrue(fixture.removed.isEmpty)
+        XCTAssertEqual(store.attachments.count, 1)
+        fixture.rejectSubmit = false
+        await finish(store) { store.send() }
+        XCTAssertEqual(fixture.uploaded, ["keep.png"])
+    }
+
+    func testFailedCustomActionKeepsDraft() async {
+        let fixture = Fixture()
+        fixture.rejectSubmit = true
+        let store = fixture.store()
+        store.setMode(.chat)
+        store.draft = "retry"
+        await finish(store) { store.send(action: .queue) }
+        XCTAssertEqual(store.draft, "retry")
+        XCTAssertTrue(fixture.sent.isEmpty)
+        if case .failed = store.operation {} else { XCTFail("Must report failure") }
+    }
+
     func testTranscriptionStaysInChatDraftAndNeverSubmits() {
         let store = TerminalComposerStore(resolveRoute: { throw TerminalAttachmentError.unavailable })
         store.setMode(.chat)
@@ -201,7 +280,7 @@ final class TerminalComposerStoreTests: XCTestCase {
         await finish(store) { store.send() }
         XCTAssertEqual(fixture.uploaded, ["one.png", "two.pdf"])
         XCTAssertEqual(fixture.sent, ["review\nthese /tmp/one.png /tmp/two.pdf"])
-        XCTAssertEqual(fixture.sentModes, [.chat])
+        XCTAssertEqual(fixture.sentActions, [.send])
         XCTAssertTrue(store.draft.isEmpty)
         XCTAssertTrue(store.attachments.isEmpty)
         XCTAssertTrue(fixture.removed.isEmpty)
@@ -249,7 +328,7 @@ final class TerminalComposerStoreTests: XCTestCase {
         let file = payload("file.txt")
         await finish(store) { store.load { [file] } }
         XCTAssertEqual(fixture.sent, ["/tmp/file.txt"])
-        XCTAssertEqual(fixture.sentModes, [.direct])
+        XCTAssertEqual(fixture.sentActions, [.insert])
         XCTAssertEqual(store.draft, "saved chat draft")
     }
 
@@ -440,7 +519,7 @@ final class TerminalComposerStoreTests: XCTestCase {
         var uploaded: [String] = []
         var removed: [String] = []
         var sent: [String] = []
-        var sentModes: [TerminalInputMode] = []
+        var sentActions: [TerminalComposerSendAction] = []
         var failingName: String?
         var rejectSubmit = false
         func store() -> TerminalComposerStore {
@@ -452,7 +531,7 @@ final class TerminalComposerStoreTests: XCTestCase {
                 }, remove: { [self] uploads in removed += uploads.map(\.remotePath) }, submit: { [self] text, mode in
                     if rejectSubmit { throw TerminalAttachmentError.unavailable }
                     sent.append(text)
-                    sentModes.append(mode)
+                    sentActions.append(mode)
                 })
             })
         }

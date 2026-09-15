@@ -43,7 +43,7 @@ final class TerminalComposerStore: ObservableObject {
         }
     }
 
-    var canSend: Bool { !isBusy && ((mode == .chat && !draft.isEmpty) || !attachments.isEmpty) }
+    var canSend: Bool { !isBusy && (mode == .chat || !attachments.isEmpty) }
 
     func isUploading(_ attachment: TerminalAttachmentPayload) -> Bool {
         if case .uploading(let id, _) = operation { return id == attachment.id }
@@ -80,7 +80,7 @@ final class TerminalComposerStore: ObservableObject {
         guard !isBusy else { return }
         attachments.append(contentsOf: payloads)
         operation = .idle
-        if mode == .chat { prepare(submit: false) }
+        if mode == .chat { prepare(action: nil) }
     }
 
     func load(_ loader: @escaping @Sendable () async throws -> [TerminalAttachmentPayload]) {
@@ -97,7 +97,7 @@ final class TerminalComposerStore: ObservableObject {
                 self.attachments.append(contentsOf: payloads)
                 self.task = nil
                 self.taskID = nil
-                self.prepare(submit: self.mode == .direct)
+                self.prepare(action: self.mode == .direct ? .insert : nil)
             } catch {
                 guard let self, self.taskID == id else { return }
                 self.operation = .failed(error.localizedDescription)
@@ -107,9 +107,9 @@ final class TerminalComposerStore: ObservableObject {
         }
     }
 
-    func send() {
-        guard canSend else { return }
-        prepare(submit: true)
+    func send(action: TerminalComposerSendAction = .send) {
+        guard canSend, !action.steps.isEmpty else { return }
+        prepare(action: mode == .direct ? .insert : action)
     }
 
     func dismissCleanupError() { cleanupError = nil }
@@ -137,10 +137,11 @@ final class TerminalComposerStore: ObservableObject {
         ([text].filter { !$0.isEmpty } + pathTokens).joined(separator: " ")
     }
 
-    private func prepare(submit: Bool) {
+    private func prepare(action: TerminalComposerSendAction?) {
         let inputMode = mode
-        let text = inputMode == .chat ? draft : ""
-        let payloads = attachments
+        let insertsDraft = action?.insertsDraft ?? true
+        let text = inputMode == .chat && insertsDraft ? draft : ""
+        let payloads = insertsDraft ? attachments : []
         let id = UUID()
         taskID = id
         operation = .uploading(id: payloads.first?.id, filename: payloads.first?.suggestedFilename ?? "")
@@ -178,26 +179,26 @@ final class TerminalComposerStore: ObservableObject {
                 try Task.checkCancellation()
                 guard let self, self.taskID == id else { return }
                 guard route.isCurrent() else { throw TerminalAttachmentError.unavailable }
-                if submit {
+                if let action {
                     let sentPayloads = payloads.filter { payload in self.attachments.contains { $0.id == payload.id } }
                     let paths = try sentPayloads.map { payload in
                         guard let upload = self.prepared?.uploads[payload.id] else { throw TerminalAttachmentError.unavailable }
                         return upload.pastedPathToken
                     }
                     let composed = Self.compose(text: text, pathTokens: paths)
-                    if !composed.isEmpty { try route.submit(composed, inputMode) }
-                    if self.mode == .chat, self.draft == text { self.draft = "" }
+                    try route.submit(composed, action)
+                    if insertsDraft, self.mode == .chat, self.draft == text { self.draft = "" }
                     let sentIDs = Set(sentPayloads.map(\.id))
                     self.attachments.removeAll { sentIDs.contains($0.id) }
-                    // Submitted files now belong to the terminal command.
-                    self.prepared = nil
+                    // Only an action that inserts the draft transfers attachment ownership.
+                    if insertsDraft { self.prepared = nil }
                 }
                 self.operation = .idle
                 self.task = nil
                 self.taskID = nil
             } catch {
                 guard let self, self.taskID == id else { return }
-                let cleanup = self.discardPrepared()
+                let cleanup = insertsDraft ? self.discardPrepared() : nil
                 await cleanup?.value
                 guard self.taskID == id else { return }
                 // Normal Mode has no draft to retry. A later selection starts

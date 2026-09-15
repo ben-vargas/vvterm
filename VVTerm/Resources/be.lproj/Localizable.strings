@@ -2267,3 +2267,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "Уводзьце тэкст непасрэдна ў тэрмінале. Укладанні адпраўляюцца адразу.";
 "Review text and attachments before sending. Send also presses Enter." = "Правярайце тэкст і ўкладанні перад адпраўкай. Кнопка адпраўкі таксама націскае Enter.";
+
+// Chat send actions
+"Insert draft" = "Уставіць чарнавік";
+"Touch and hold for send actions." = "Націсніце і ўтрымлівайце для выбару дзеяння адпраўкі.";
+"Could not read send actions. Reset them in Input Mode settings." = "Не ўдалося прачытаць дзеянні адпраўкі. Скіньце іх у наладах рэжыму ўводу.";
+"Send Actions" = "Дзеянні адпраўкі";
+"Could not save send actions." = "Не ўдалося захаваць дзеянні адпраўкі.";
+"Tap Action" = "Дзеянне пры націску";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "Націсніце, каб выканаць першае дзеянне. Утрымлівайце для выбару ўсіх дзеянняў. Калі чарнавік пусты, адпраўляюцца толькі клавішы.";
+"Name (optional)" = "Назва (неабавязкова)";
+"Add Step" = "Дадаць крок";
+"Steps" = "Крокі";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "Крокі выконваюцца па парадку. Устаўка чарнавіка ўключае далучэнні. Клавішы выкарыстоўваюць бягучы рэжым уводу тэрмінала.";
+"Send Action" = "Дзеянне адпраўкі";
+"Step" = "Крок";
+"Modifiers" = "Мадыфікатары";
+"Review text and attachments before sending. Choose what the Send button does." = "Праверце тэкст і далучэнні перад адпраўкай. Выберыце дзеянне кнопкі адпраўкі.";
+
+"Steps run in order." = "Крокі выконваюцца па парадку.";
+
+"Insert draft includes text and attachments from Chat Mode." = "Устаўка чарнавіка ўключае тэкст і далучэнні з рэжыму чата.";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "Пытацца пра тэкст пры кожным запуску дзеяння. Адказ устаўляецца на гэтым кроку.";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "Націсніце, каб выканаць першае дзеянне. Утрымлівайце для выбару ўсіх дзеянняў. Дзеянні працуюць і з пустым чарнавіком.";
+
+"Text" = "Тэкст";
+
+"Text length: %lld/%lld" = "Даўжыня тэксту: %lld/%lld";

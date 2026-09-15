@@ -24,7 +24,12 @@ struct TerminalInputModeSettingsView: View {
                 case .direct:
                     Text("Type directly in the terminal. Attachments are sent immediately.")
                 case .chat:
-                    Text("Review text and attachments before sending. Send also presses Enter.")
+                    Text("Review text and attachments before sending. Choose what the Send button does.")
+                }
+            }
+            if inputMode == .chat {
+                Section {
+                    NavigationLink("Send Actions") { TerminalComposerSendActionsSettingsView() }
                 }
             }
         }

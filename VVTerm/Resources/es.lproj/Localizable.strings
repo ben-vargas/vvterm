@@ -2266,3 +2266,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "Escribe directamente en el terminal. Los archivos adjuntos se envían de inmediato.";
 "Review text and attachments before sending. Send also presses Enter." = "Revisa el texto y los archivos adjuntos antes de enviarlos. Enviar también pulsa Intro.";
+
+// Chat send actions
+"Insert draft" = "Insertar borrador";
+"Touch and hold for send actions." = "Mantén pulsado para ver las acciones de envío.";
+"Could not read send actions. Reset them in Input Mode settings." = "No se pudieron leer las acciones de envío. Restablécelas en los ajustes del modo de entrada.";
+"Send Actions" = "Acciones de envío";
+"Could not save send actions." = "No se pudieron guardar las acciones de envío.";
+"Tap Action" = "Acción al tocar";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "Toca para ejecutar la primera acción. Mantén pulsado para ver todas las acciones. Si el borrador está vacío, solo se envían las teclas.";
+"Name (optional)" = "Nombre (opcional)";
+"Add Step" = "Añadir paso";
+"Steps" = "Pasos";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "Los pasos se ejecutan en orden. Insertar el borrador incluye los archivos adjuntos. Las teclas usan el modo de entrada actual del terminal.";
+"Send Action" = "Acción de envío";
+"Step" = "Paso";
+"Modifiers" = "Modificadores";
+"Review text and attachments before sending. Choose what the Send button does." = "Revisa el texto y los archivos adjuntos antes de enviar. Elige qué hace el botón de envío.";
+
+"Steps run in order." = "Los pasos se ejecutan en orden.";
+
+"Insert draft includes text and attachments from Chat Mode." = "Insertar el borrador incluye el texto y los archivos adjuntos del modo chat.";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "Pedir texto cada vez que se ejecute esta acción. La respuesta se inserta en este paso.";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "Toca para ejecutar la primera acción. Mantén pulsado para ver todas las acciones. Las acciones también funcionan con el borrador vacío.";
+
+"Text" = "Texto";
+
+"Text length: %lld/%lld" = "Longitud del texto: %lld/%lld";

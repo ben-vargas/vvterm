@@ -30,7 +30,7 @@ extension TerminalComposerStore {
                         }
                         if let failure { throw failure }
                     },
-                    submit: { [weak tabManager, weak terminal] text, mode in
+                    submit: { [weak tabManager, weak terminal] text, action in
                         guard let tabManager, let terminal, isCurrent() else {
                             throw TerminalAttachmentError.unavailable
                         }
@@ -39,7 +39,7 @@ extension TerminalComposerStore {
                               let ghostty = terminal as? GhosttyTerminalView else {
                             throw TerminalAttachmentError.unavailable
                         }
-                        try ghostty.sendComposedText(text, mode: mode)
+                        try ghostty.sendComposedText(text, action: action)
                         #else
                         terminal.sendText(text)
                         #endif

@@ -2273,3 +2273,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "Вводьте текст безпосередньо в терміналі. Вкладення надсилаються відразу.";
 "Review text and attachments before sending. Send also presses Enter." = "Перевіряйте текст і вкладення перед надсиланням. Кнопка надсилання також натискає Enter.";
+
+// Chat send actions
+"Insert draft" = "Вставити чернетку";
+"Touch and hold for send actions." = "Натисніть і утримуйте для вибору дії надсилання.";
+"Could not read send actions. Reset them in Input Mode settings." = "Не вдалося прочитати дії надсилання. Скиньте їх у налаштуваннях режиму введення.";
+"Send Actions" = "Дії надсилання";
+"Could not save send actions." = "Не вдалося зберегти дії надсилання.";
+"Tap Action" = "Дія при натисканні";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "Натисніть, щоб виконати першу дію. Утримуйте для вибору всіх дій. Якщо чернетка порожня, надсилаються лише клавіші.";
+"Name (optional)" = "Назва (необов’язково)";
+"Add Step" = "Додати крок";
+"Steps" = "Кроки";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "Кроки виконуються по порядку. Вставлення чернетки включає вкладення. Клавіші використовують поточний режим введення термінала.";
+"Send Action" = "Дія надсилання";
+"Step" = "Крок";
+"Modifiers" = "Модифікатори";
+"Review text and attachments before sending. Choose what the Send button does." = "Перевірте текст і вкладення перед надсиланням. Виберіть дію кнопки надсилання.";
+
+"Steps run in order." = "Кроки виконуються по черзі.";
+
+"Insert draft includes text and attachments from Chat Mode." = "Вставлення чернетки включає текст і вкладення з режиму чату.";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "Запитувати текст під час кожного запуску дії. Відповідь вставляється на цьому кроці.";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "Натисніть, щоб виконати першу дію. Утримуйте для вибору всіх дій. Дії працюють і з порожньою чернеткою.";
+
+"Text" = "Текст";
+
+"Text length: %lld/%lld" = "Довжина тексту: %lld/%lld";

@@ -2266,3 +2266,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "Вводите текст прямо в терминале. Вложения отправляются сразу.";
 "Review text and attachments before sending. Send also presses Enter." = "Проверяйте текст и вложения перед отправкой. Кнопка отправки также нажимает Enter.";
+
+// Chat send actions
+"Insert draft" = "Вставить черновик";
+"Touch and hold for send actions." = "Нажмите и удерживайте для выбора действия отправки.";
+"Could not read send actions. Reset them in Input Mode settings." = "Не удалось прочитать действия отправки. Сбросьте их в настройках режима ввода.";
+"Send Actions" = "Действия отправки";
+"Could not save send actions." = "Не удалось сохранить действия отправки.";
+"Tap Action" = "Действие при нажатии";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "Нажмите, чтобы выполнить первое действие. Удерживайте для выбора всех действий. Если черновик пуст, отправляются только клавиши.";
+"Name (optional)" = "Название (необязательно)";
+"Add Step" = "Добавить шаг";
+"Steps" = "Шаги";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "Шаги выполняются по порядку. Вставка черновика включает вложения. Клавиши используют текущий режим ввода терминала.";
+"Send Action" = "Действие отправки";
+"Step" = "Шаг";
+"Modifiers" = "Модификаторы";
+"Review text and attachments before sending. Choose what the Send button does." = "Проверьте текст и вложения перед отправкой. Выберите действие кнопки отправки.";
+
+"Steps run in order." = "Шаги выполняются по порядку.";
+
+"Insert draft includes text and attachments from Chat Mode." = "Вставка черновика включает текст и вложения из режима чата.";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "Запрашивать текст при каждом запуске действия. Ответ вставляется на этом шаге.";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "Нажмите, чтобы выполнить первое действие. Удерживайте для выбора всех действий. Действия работают и с пустым черновиком.";
+
+"Text" = "Текст";
+
+"Text length: %lld/%lld" = "Длина текста: %lld/%lld";

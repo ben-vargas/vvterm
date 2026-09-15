@@ -2265,3 +2265,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "Type directly in the terminal. Attachments are sent immediately.";
 "Review text and attachments before sending. Send also presses Enter." = "Review text and attachments before sending. Send also presses Enter.";
+
+// Chat send actions
+"Insert draft" = "Insert draft";
+"Touch and hold for send actions." = "Touch and hold for send actions.";
+"Could not read send actions. Reset them in Input Mode settings." = "Could not read send actions. Reset them in Input Mode settings.";
+"Send Actions" = "Send Actions";
+"Could not save send actions." = "Could not save send actions.";
+"Tap Action" = "Tap Action";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent.";
+"Name (optional)" = "Name (optional)";
+"Add Step" = "Add Step";
+"Steps" = "Steps";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode.";
+"Send Action" = "Send Action";
+"Step" = "Step";
+"Modifiers" = "Modifiers";
+"Review text and attachments before sending. Choose what the Send button does." = "Review text and attachments before sending. Choose what the Send button does.";
+
+"Steps run in order." = "Steps run in order.";
+
+"Insert draft includes text and attachments from Chat Mode." = "Insert draft includes text and attachments from Chat Mode.";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "Ask for text each time this action runs. The answer is inserted at this step.";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty.";
+
+"Text" = "Text";
+
+"Text length: %lld/%lld" = "Text length: %lld/%lld";

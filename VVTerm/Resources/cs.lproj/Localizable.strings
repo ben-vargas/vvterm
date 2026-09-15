@@ -2267,3 +2267,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "Pište přímo do terminálu. Přílohy se odesílají okamžitě.";
 "Review text and attachments before sending. Send also presses Enter." = "Před odesláním zkontrolujte text a přílohy. Odeslání také stiskne Enter.";
+
+// Chat send actions
+"Insert draft" = "Vložit koncept";
+"Touch and hold for send actions." = "Podržením zobrazíte akce odeslání.";
+"Could not read send actions. Reset them in Input Mode settings." = "Akce odeslání nelze načíst. Obnovte je v nastavení režimu zadávání.";
+"Send Actions" = "Akce odeslání";
+"Could not save send actions." = "Akce odeslání nelze uložit.";
+"Tap Action" = "Akce při klepnutí";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "Klepnutím spustíte první akci. Podržením zobrazíte všechny akce. Je-li koncept prázdný, odešlou se pouze klávesy.";
+"Name (optional)" = "Název (volitelný)";
+"Add Step" = "Přidat krok";
+"Steps" = "Kroky";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "Kroky se provádějí v uvedeném pořadí. Vložení konceptu zahrnuje přílohy. Klávesy používají aktuální režim vstupu terminálu.";
+"Send Action" = "Akce odeslání";
+"Step" = "Krok";
+"Modifiers" = "Modifikátory";
+"Review text and attachments before sending. Choose what the Send button does." = "Před odesláním zkontrolujte text a přílohy. Zvolte funkci tlačítka odeslání.";
+
+"Steps run in order." = "Kroky se provádějí v pořadí.";
+
+"Insert draft includes text and attachments from Chat Mode." = "Vložení konceptu zahrnuje text a přílohy z režimu chatu.";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "Při každém spuštění akce se zeptat na text. Odpověď se vloží v tomto kroku.";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "Klepnutím spustíte první akci. Podržením zobrazíte všechny akce. Akce fungují i s prázdným konceptem.";
+
+"Text" = "Text";
+
+"Text length: %lld/%lld" = "Délka textu: %lld/%lld";

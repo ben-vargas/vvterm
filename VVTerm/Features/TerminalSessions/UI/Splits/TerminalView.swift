@@ -138,6 +138,9 @@ struct TerminalTabView: View {
         .onAppear {
             updateKeyMonitor()
         }
+        .onChange(of: voiceSettingsStore.settings.terminalVoiceButtonEnabled) { enabled in
+            if !enabled { cancelVoiceRecording() }
+        }
         .onChange(of: isSelected) { _ in
             updateKeyMonitor()
             if !isSelected {
@@ -222,13 +225,13 @@ struct TerminalTabView: View {
                     recording: showingVoiceRecording
                 ),
                 onVoiceTrigger: { toggleVoiceRecording(style: $0) },
-                composerVoice: TerminalComposerVoiceInput(
+                composerVoice: voiceSettingsStore.settings.terminalVoiceButtonEnabled ? TerminalComposerVoiceInput(
                     phase: tab.focusedPaneId == paneId ? voiceRecordingOperation.phase : .idle,
                     audioLevel: audioService.audioLevel,
                     duration: audioService.recordingDuration,
                     toggle: { toggleVoiceRecording(style: .panel) },
                     cancel: cancelVoiceRecording
-                )
+                ) : nil
             )
             .id("\(paneId)-\(layoutVersion)")
         )

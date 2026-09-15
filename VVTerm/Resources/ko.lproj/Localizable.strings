@@ -2265,3 +2265,32 @@
 // Input mode preview
 "Type directly in the terminal. Attachments are sent immediately." = "터미널에 직접 입력합니다. 첨부 파일은 즉시 전송됩니다.";
 "Review text and attachments before sending. Send also presses Enter." = "전송 전에 텍스트와 첨부 파일을 확인합니다. 전송하면 Enter 키도 입력됩니다.";
+
+// Chat send actions
+"Insert draft" = "초안 삽입";
+"Touch and hold for send actions." = "길게 눌러 전송 동작을 확인하세요.";
+"Could not read send actions. Reset them in Input Mode settings." = "전송 동작을 읽을 수 없습니다. 입력 모드 설정에서 초기화하세요.";
+"Send Actions" = "전송 동작";
+"Could not save send actions." = "전송 동작을 저장할 수 없습니다.";
+"Tap Action" = "탭 동작";
+"Tap to run the first action. Touch and hold for all actions. With an empty draft, only the keys are sent." = "탭하면 첫 번째 동작을 실행합니다. 길게 누르면 모든 동작이 표시됩니다. 초안이 비어 있으면 키만 전송됩니다.";
+"Name (optional)" = "이름(선택 사항)";
+"Add Step" = "단계 추가";
+"Steps" = "단계";
+"Steps run in order. Insert draft includes attachments. Keys use the terminal’s current input mode." = "단계는 순서대로 실행됩니다. 초안 삽입에는 첨부 파일이 포함됩니다. 키는 터미널의 현재 입력 모드를 사용합니다.";
+"Send Action" = "전송 동작";
+"Step" = "단계";
+"Modifiers" = "보조 키";
+"Review text and attachments before sending. Choose what the Send button does." = "전송 전에 텍스트와 첨부 파일을 검토하세요. 전송 버튼의 동작을 선택할 수 있습니다.";
+
+"Steps run in order." = "단계는 순서대로 실행됩니다.";
+
+"Insert draft includes text and attachments from Chat Mode." = "초안 삽입에는 채팅 모드의 텍스트와 첨부 파일이 포함됩니다.";
+
+"Ask for text each time this action runs. The answer is inserted at this step." = "이 동작을 실행할 때마다 텍스트를 요청합니다. 입력한 답변은 이 단계에서 삽입됩니다.";
+
+"Tap to run the first action. Touch and hold for all actions. Actions also run when the draft is empty." = "탭하면 첫 번째 동작을 실행합니다. 길게 누르면 모든 동작이 표시됩니다. 초안이 비어 있어도 동작이 실행됩니다.";
+
+"Text" = "텍스트";
+
+"Text length: %lld/%lld" = "텍스트 길이: %lld/%lld";

@@ -6,9 +6,11 @@ struct TerminalComposerView: View {
     let keyboard: TerminalKeyboardCoordinator
     let paneID: UUID
     let isActive: Bool
+    let isKeyboardVisible: Bool
     var acceptsInput = true
     var voice: TerminalComposerVoiceInput? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var recordingTransition
     @State private var voiceInteraction = VoiceInteraction.text
 
     private enum VoiceInteraction { case text, ready }
@@ -23,6 +25,9 @@ struct TerminalComposerView: View {
         )) {
             Button("OK") { composer.dismissCleanupError() }
         } message: { Text(composer.cleanupError ?? "") }
+        .onChange(of: voice != nil) { available in
+            if !available { voiceInteraction = .text }
+        }
         .onAppear(perform: stopUnavailableInput)
         .onChange(of: acceptsInput) { _ in stopUnavailableInput() }
     }
@@ -68,7 +73,8 @@ struct TerminalComposerView: View {
                         }
                         HStack(alignment: .bottom, spacing: 4) {
                             editor
-                            sendControl.opacity(isRecording ? 0 : 1)
+                            TerminalComposerSendButton(composer: composer, isActive: isActive && !isRecording)
+                                .opacity(isRecording ? 0 : 1)
                         }
                     }
                     .padding(.leading, 12)
@@ -79,12 +85,30 @@ struct TerminalComposerView: View {
                             .adaptiveGlassRect(cornerRadius: composer.attachments.isEmpty ? 20 : 28)
                             .opacity(isRecording ? 0 : 1)
                     }
+                    if voice != nil, composer.draft.isEmpty {
+                        TerminalComposerVoiceControl(
+                            onTap: { voiceInteraction = voiceInteraction == .ready ? .text : .ready },
+                            onHold: startRecording
+                        )
+                        .frame(width: 40, height: 40)
+                        .background {
+                            Color.clear.adaptiveGlassCircle()
+                                .matchedGeometryEffect(id: "voice", in: recordingTransition, isSource: !isRecording)
+                        }
+                        .disabled(!isActive || composer.isBusy || isRecording)
+                        .opacity(isRecording ? 0 : 1)
+                        .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                    }
                 }
+                .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.86), value: composer.draft.isEmpty)
                 if let voice, isRecording {
                     recordingBar(voice)
                         .padding(.horizontal, 14)
                         .frame(height: 64)
-                        .adaptiveGlass()
+                        .background {
+                            Color.clear.adaptiveGlass()
+                                .matchedGeometryEffect(id: "voice", in: recordingTransition)
+                        }
                         .padding(.horizontal, -6)
                         .contextMenu { Button("Cancel voice input", action: voice.cancel) }
                         .accessibilityAction(named: Text("Cancel voice input"), voice.cancel)
@@ -94,7 +118,7 @@ struct TerminalComposerView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.bottom, isKeyboardVisible ? 16 : 0)
         .buttonStyle(.plain)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.86), value: voice?.phase)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.86), value: composer.attachments.map(\.id))
@@ -128,28 +152,6 @@ struct TerminalComposerView: View {
     private var attachmentButton: some View {
         TerminalAttachmentMenu { composer.attachmentSource = $0 }
             .frame(width: 40, height: 40)
-    }
-
-    @ViewBuilder
-    private var sendControl: some View {
-        if composer.draft.isEmpty, composer.attachments.isEmpty, !composer.isBusy, voice != nil {
-            TerminalComposerVoiceControl(
-                onTap: { voiceInteraction = voiceInteraction == .ready ? .text : .ready },
-                onHold: startRecording
-            )
-            .frame(width: 40, height: 40)
-            .disabled(!isActive)
-        } else {
-            Button { composer.send() } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 26))
-                    .foregroundStyle(composer.canSend && isActive ? Color.accentColor : Color.secondary)
-                    .frame(width: 40, height: 40)
-            }
-            .accessibilityLabel("Send")
-            .accessibilityIdentifier("vvterm.composer.send")
-            .disabled(!composer.canSend || !isActive)
-        }
     }
 
     private func recordingBar(_ voice: TerminalComposerVoiceInput) -> some View {
@@ -195,6 +197,7 @@ struct TerminalPaneComposerView: View {
 
     var body: some View {
         TerminalComposerView(composer: composer, keyboard: keyboard, paneID: paneID, isActive: isActive,
+                             isKeyboardVisible: keyboard.isSoftwareKeyboardVisible,
                              acceptsInput: acceptsInput && keyboard.isComposerVisible(for: paneID), voice: voice)
     }
 }
