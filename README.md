@@ -227,9 +227,8 @@ open VVTerm.xcodeproj
 ```
 
 `./scripts/build.sh` supports `all`, `ghostty`, `ssh`, `clean`, and `help`.
-The Ghostty build applies `scripts/patches/ghostty-host-selection.patch` to the pinned
-fork revision. This patch exposes tracked selection and viewport text to native iOS
-selection controls. `Vendor/libghostty/VERSION` records the base fork revision.
+The pinned Ghostty fork includes tracked selection and viewport text for native iOS
+selection controls. `Vendor/libghostty/VERSION` records that fork revision.
 
 ## Dependencies
 

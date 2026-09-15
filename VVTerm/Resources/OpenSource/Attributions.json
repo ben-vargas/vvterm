@@ -97,7 +97,7 @@
       {
         "id": "ghostty",
         "sourceURL": "https://github.com/wiedymi/ghostty.git",
-        "version": "02af5158c76036291183e746d436eb8f15356662",
+        "version": "e843e0c58cdac8e434b214555f3005ff9d97e923",
         "sourceSHA256": null,
         "attributionID": "ghostty"
       },
@@ -218,7 +218,7 @@
       "id": "ghostty",
       "name": "Ghostty",
       "role": "terminalEngine",
-      "projectURL": "https://github.com/wiedymi/ghostty/tree/02af5158c76036291183e746d436eb8f15356662",
+      "projectURL": "https://github.com/wiedymi/ghostty/tree/e843e0c58cdac8e434b214555f3005ff9d97e923",
       "licenseName": "MIT",
       "licenseResource": "Ghostty.txt"
     },

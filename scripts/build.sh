@@ -18,7 +18,7 @@ MACOS_DEPLOYMENT_TARGET="13.3"
 IOS_DEPLOYMENT_TARGET="16.0"
 
 GHOSTTY_REPO="https://github.com/wiedymi/ghostty.git"
-GHOSTTY_COMMIT="${GHOSTTY_COMMIT:-eeb31967a0697160bb044650b6cf9e487a509a2c}"
+GHOSTTY_COMMIT="${GHOSTTY_COMMIT:-e843e0c58cdac8e434b214555f3005ff9d97e923}"
 BUNDLE_ID="app.vivy.VivyTerm"
 NATIVE_ARTIFACT_MANIFEST="$PROJECT_ROOT/Vendor/native-artifacts.sha256"
 
@@ -212,9 +212,6 @@ build_ghosttykit() {
         log_error "Fetched Ghostty commit does not match the requested commit"
         return 1
     fi
-
-    # Extend the pinned bridge for native UIKit selection without mouse events.
-    git -C "${workdir}/ghostty" apply "${SCRIPT_DIR}/patches/ghostty-host-selection.patch"
 
     local embedded_path="${workdir}/ghostty/src/apprt/embedded.zig"
     if [ -f "${embedded_path}" ]; then
