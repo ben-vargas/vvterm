@@ -1264,11 +1264,14 @@ typedef struct {
   bool unchanged;
   uintptr_t selection_start;
   uintptr_t selection_len;
+  bool selection_start_visible;
+  bool selection_end_visible;
 } ghostty_selection_snapshot_s;
 ghostty_selection_snapshot_t ghostty_surface_selection_snapshot_new(ghostty_surface_t, ghostty_selection_snapshot_t, ghostty_selection_snapshot_s*);
 void ghostty_surface_selection_snapshot_free(ghostty_surface_t, ghostty_selection_snapshot_t);
 bool ghostty_surface_selection_snapshot_select(ghostty_surface_t, ghostty_selection_snapshot_t, uintptr_t, uintptr_t, ghostty_selection_anchor_t);
 ghostty_selection_anchor_t ghostty_surface_selection_anchor_new(ghostty_surface_t);
+ghostty_selection_anchor_t ghostty_surface_selection_anchor_new_endpoint(ghostty_surface_t, bool);
 void ghostty_surface_selection_anchor_free(ghostty_surface_t, ghostty_selection_anchor_t);
 void ghostty_surface_clear_selection(ghostty_surface_t);
 

@@ -135,6 +135,7 @@ struct TerminalKeyboardUITestHarness: View {
     @State private var outputBurstRequestID = 0
     @State private var selectionOutputRequestID = 0
     @State private var selectionOutputRows = 0
+    @State private var selectionRedraws = 0
     @State private var completedOutputBurstCount = 0
     @State private var zoomActionCount = 0
     @State private var lastZoomAction = "none"
@@ -583,6 +584,20 @@ struct TerminalKeyboardUITestHarness: View {
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.geometry.docked")
 
+                    Button("Suggestions") {
+                        applySimulatedKeyboardGeometry(.docked, additionalHeight: 44)
+                    }
+                    .accessibilityIdentifier("vvterm.keyboardTest.geometry.suggestions")
+
+                    Button("Bottom Text") {
+                        Task { @MainActor in
+                            guard let terminalView, let size = terminalView.terminalSize() else { return }
+                            let row = max(1, Int(size.rows) - 1)
+                            _ = await terminalView.receiveTerminalOutput(Data("\u{1B}[?1049h\u{1B}[\(row);1Hbottom selection fixture".utf8))
+                        }
+                    }
+                    .accessibilityIdentifier("vvterm.keyboardTest.selection.bottom")
+
                     Button("Floating") {
                         applySimulatedKeyboardGeometry(.floating)
                     }
@@ -656,13 +671,19 @@ struct TerminalKeyboardUITestHarness: View {
                     }
                     .accessibilityIdentifier("vvterm.keyboardTest.privacy.resume")
 
-                    Button("Erase Selection") {
+                    Button("Reset Terminal") {
                         Task {
                             guard let terminalView else { return }
-                            _ = await terminalView.receiveTerminalOutput(Data("\u{1B}[3J\u{1B}[2J\u{1B}[Hreplacement text".utf8))
+                            _ = await terminalView.receiveTerminalOutput(Data("\u{1B}c".utf8))
                         }
                     }
-                    .accessibilityIdentifier("vvterm.keyboardTest.selection.erase")
+                    .accessibilityIdentifier("vvterm.keyboardTest.selection.reset")
+
+                    Button("Latest Output") {
+                        _ = terminalView?.surface?.perform(action: "scroll_to_bottom")
+                        terminalView?.requestRender()
+                    }
+                    .accessibilityIdentifier("vvterm.keyboardTest.selection.latest")
 
                     Button("Selection Output") {
                         selectionOutputRequestID += 1
@@ -739,6 +760,27 @@ struct TerminalKeyboardUITestHarness: View {
             terminalView?.onVoiceButtonTapped = { style in toggleVoiceTest(style: style) }
             terminalView?.showsVoiceAccessoryButton = true
             await configureLifecycleHarness()
+            if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-selection-bottom-redraws"), let terminalView {
+                for frame in 0..<600 {
+                    guard !Task.isCancelled else { return }
+                    let rows = Int(terminalView.terminalSize()?.rows ?? 3)
+                    let footer = frame.isMultiple(of: 2) ? "" : "Footer animation \(frame % 10)"
+                    let output = "\u{1B}[\(max(1, rows - 2));1Hselected text above footer\u{1B}[\(max(1, rows - 1));1H\u{1B}[2K\(footer)"
+                    guard await terminalView.receiveTerminalOutput(Data(output.utf8)) else { return }
+                    selectionRedraws += 1
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                }
+            }
+            if Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-selection-redraws"), let terminalView {
+                for frame in 0..<600 {
+                    guard !Task.isCancelled else { return }
+                    // Change an unrelated visible row, as a TUI status line does.
+                    let output = "\u{1B}7\u{1B}[2;1H\u{1B}[2KStatus \(frame)\u{1B}8"
+                    guard await terminalView.receiveTerminalOutput(Data(output.utf8)) else { return }
+                    selectionRedraws += 1
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                }
+            }
         }
         .task(id: selectionOutputRequestID) {
             guard selectionOutputRequestID > 0, let terminalView else { return }
@@ -1030,7 +1072,7 @@ struct TerminalKeyboardUITestHarness: View {
             + " reconnect=\(lifecycleStatus.rawValue) inputHex=\(receivedInputHex)"
             + " returnInputs=\(returnInputCount) codexResponses=\(codexResponseCount)"
             + " outputBursts=\(completedOutputBurstCount)"
-            + " selectionOutputRows=\(selectionOutputRows)"
+            + " selectionOutputRows=\(selectionOutputRows) selectionRedraws=\(selectionRedraws)"
             + " linkCellHeight=\(terminalView.cellSize.height)"
             + " selectionCellWidth=\(terminalView.cellSize.width)"
             + " openedLink=\(openedLink?.absoluteString ?? "none")"
@@ -1178,12 +1220,13 @@ struct TerminalKeyboardUITestHarness: View {
         }
     }
 
-    private func applySimulatedKeyboardGeometry(_ geometry: SimulatedKeyboardGeometry) {
+    private func applySimulatedKeyboardGeometry(_ geometry: SimulatedKeyboardGeometry, additionalHeight: CGFloat = 0) {
         guard let screenBounds = terminalView?.window?.screen.bounds else { return }
         let frame: CGRect?
         switch geometry {
         case .docked:
-            let height = min(360, screenBounds.height * 0.38)
+            // Leave room for the docked iPad keyboard in geometry-driven tests.
+            let height = min(screenBounds.width >= 768 ? 480 : 360, screenBounds.height * 0.46) + additionalHeight
             frame = CGRect(
                 x: screenBounds.minX,
                 y: screenBounds.maxY - height,

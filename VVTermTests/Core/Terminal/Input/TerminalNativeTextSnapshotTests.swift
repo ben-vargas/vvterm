@@ -7,6 +7,22 @@ import UIKit
 @MainActor
 struct TerminalNativeTextSnapshotTests {
     @Test
+    func clippedHighlightsDoNotClaimOffscreenEndpoints() {
+        for startVisible in [false, true] {
+            for endVisible in [false, true] {
+                let snapshot = TerminalNativeTextSnapshot(
+                    lines: ["first", "last"], cellSize: .init(width: 10, height: 20), columns: 5,
+                    selectionStartIsVisible: startVisible, selectionEndIsVisible: endVisible
+                )
+                let rects = snapshot.selectionRects(for: NSRange(location: 0, length: snapshot.length))
+                #expect(rects.count == 2)
+                #expect(rects.contains(where: \.containsStart) == startVisible)
+                #expect(rects.contains(where: \.containsEnd) == endVisible)
+            }
+        }
+    }
+
+    @Test
     func staleUIKitRangeCannotSelectTextInANewSnapshot() {
         let first = TerminalNativeTextSnapshot(lines: ["before"], cellSize: .init(width: 10, height: 20), columns: 20)
         let range = first.nativeRange(NSRange(location: 0, length: 3))

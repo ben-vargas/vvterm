@@ -281,16 +281,20 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
     let text: String
     let cellSize: CGSize
     let columns: Int
+    let selectionStartIsVisible: Bool
+    let selectionEndIsVisible: Bool
 
     private var nsText: NSString {
         text as NSString
     }
 
-    init(lines rawLines: [String], cellSize: CGSize, columns: Int, cells: [Cell]? = nil, documentID: UUID = UUID()) {
+    init(lines rawLines: [String], cellSize: CGSize, columns: Int, cells: [Cell]? = nil, documentID: UUID = UUID(), selectionStartIsVisible: Bool = true, selectionEndIsVisible: Bool = true) {
         let sanitizedCellSize = CGSize(width: max(cellSize.width, 1), height: max(cellSize.height, 1))
         self.cellSize = sanitizedCellSize
         self.columns = max(columns, 1)
         self.documentID = documentID
+        self.selectionStartIsVisible = selectionStartIsVisible
+        self.selectionEndIsVisible = selectionEndIsVisible
 
         var runningOffset = 0
         var cellIndex = 0
@@ -428,8 +432,8 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
             rects.append(
                 TerminalNativeSelectionRect(
                     rect: rect,
-                    containsStart: selectionStart == lowerBound,
-                    containsEnd: selectionEnd == upperBound
+                    containsStart: selectionStartIsVisible && selectionStart == lowerBound,
+                    containsEnd: selectionEndIsVisible && selectionEnd == upperBound
                 )
             )
         }

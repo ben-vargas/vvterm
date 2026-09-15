@@ -116,6 +116,8 @@ class TerminalKeyboardUITestCase: XCTestCase {
         splitPaneFocus: Bool = false,
         testsAppShortcutInputs: Bool = false,
         simulatesTerminalMetadataChurn: Bool = false,
+        simulatesSelectionRedraws: Bool = false,
+        simulatesSelectionBottomRedraws: Bool = false,
         floatingControlArguments: [String] = []
     ) -> XCUIApplication {
         let app = XCUIApplication()
@@ -146,6 +148,12 @@ class TerminalKeyboardUITestCase: XCTestCase {
         }
         if simulatesTerminalMouseCapture {
             app.launchArguments.append("--vvterm-ui-test-terminal-mouse-capture")
+        }
+        if simulatesSelectionBottomRedraws {
+            app.launchArguments.append("--vvterm-ui-test-selection-bottom-redraws")
+        }
+        if simulatesSelectionRedraws {
+            app.launchArguments.append("--vvterm-ui-test-selection-redraws")
         }
         if seedsTerminalSelectionFixture {
             app.launchArguments.append("--vvterm-ui-test-terminal-selection-fixture")

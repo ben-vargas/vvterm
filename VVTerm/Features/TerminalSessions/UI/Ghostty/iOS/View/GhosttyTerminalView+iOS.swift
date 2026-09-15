@@ -213,11 +213,19 @@ class GhosttyTerminalView: UIView {
     var nativeSelectionSnapshotHandle: ghostty_selection_snapshot_t?
     var nativeSelectionSnapshot = TerminalNativeTextSnapshot.empty
     var nativeSelectionLifecycle = TerminalNativeSelectionLifecycle()
-    var nativeSelectionLongPressAnchor: ghostty_selection_anchor_t?
+    var nativeSelectionDragAnchor: ghostty_selection_anchor_t?
     var nativeSelectedRange: NSRange? { nativeSelectionLifecycle.selection }
     var nativeSelectionInteractionActive: Bool { nativeSelectionLifecycle.interactionIsActive }
     var prefersNativeSelectionFirstResponder: Bool { nativeSelectionLifecycle.keepsFirstResponder }
     var nativeTextInteraction: UITextInteraction?
+    var nativeSelectionHandleDrag: (handle: TerminalSelectionHandle, touchOffset: CGPoint)?
+    lazy var nativeSelectionHandlePanRecognizer: UIPanGestureRecognizer = {
+        let recognizer = UIPanGestureRecognizer(target: self, action: #selector(handleNativeSelectionHandlePan(_:)))
+        recognizer.maximumNumberOfTouches = 1
+        recognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        recognizer.delegate = self
+        return recognizer
+    }()
     var nativeFindInteraction: UIFindInteraction?
     @available(iOS 16.0, *)
     var nativeFindSession: GhosttyNativeFindSession?
@@ -496,6 +504,7 @@ class GhosttyTerminalView: UIView {
     var momentumVelocity: CGPoint = .zero
     var momentumPhase: Ghostty.Input.Momentum = .none
     var selectionAutoscrollDisplayLink: CADisplayLink?
+    var selectionAutoscrollRemainder: Double = 0
     var selectionAutoscrollLocation: CGPoint?
     var selectionAutoscrollMods: Ghostty.Input.Mods = []
 

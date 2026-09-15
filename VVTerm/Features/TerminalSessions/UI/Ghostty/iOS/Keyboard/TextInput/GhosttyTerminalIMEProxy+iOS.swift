@@ -469,7 +469,8 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
         }
         set {
             if documentMode == .nativeSelection {
-                guard let terminalOwner else { return }
+                // Display-only selection is changed by our terminal gestures, not UIKit caret updates.
+                guard let terminalOwner, terminalOwner.nativeTextInteraction != nil else { return }
                 if let newValue {
                     guard let range = terminalOwner.nativeSelectionSnapshot.nativeRange(from: newValue) else { return }
                     // UIKit resets its caret during layout. Only an active

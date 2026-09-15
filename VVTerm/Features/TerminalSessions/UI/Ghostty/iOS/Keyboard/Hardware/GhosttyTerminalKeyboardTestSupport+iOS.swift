@@ -24,6 +24,13 @@ extension GhosttyTerminalView {
             let traits: any UITextInputTraits = imeProxyTextView
             return traits.writingToolsBehavior == UIWritingToolsBehavior.none
         }()
+        let startHandleCenter: CGPoint? = {
+            guard #available(iOS 17.0, *),
+                  let display = imeProxyTextView.interactions.compactMap({ $0 as? UITextSelectionDisplayInteraction }).first,
+                  let handle = display.handleViews.first,
+                  !handle.isHidden, !handle.bounds.isEmpty else { return nil }
+            return handle.convert(CGPoint(x: handle.bounds.midX, y: handle.bounds.midY), to: self)
+        }()
         let endHandleCenter: CGPoint? = {
             guard #available(iOS 17.0, *),
                   let display = imeProxyTextView.interactions.compactMap({ $0 as? UITextSelectionDisplayInteraction }).first,
@@ -85,8 +92,13 @@ extension GhosttyTerminalView {
             "inputViewMode=\(inputViewMode)",
             "browse=\(keyboardFocusPolicy.isBrowsing)",
             "find=\(isFindNavigatorActive)",
+            "selectionAutoscrolling=\(selectionAutoscrollDisplayLink == nil ? 0 : 1)",
             "writingToolsDisabled=\(writingToolsDisabled ? 1 : 0)",
+            "selectionStartVisible=\(nativeSelectionSnapshot.selectionStartIsVisible ? 1 : 0)",
+            "selectionEndVisible=\(nativeSelectionSnapshot.selectionEndIsVisible ? 1 : 0)",
             "nativeSelectionActive=\(hasActiveSelectionInteraction)",
+            "nativeSelectionStartHandleX=\(startHandleCenter?.x ?? -1)",
+            "nativeSelectionStartHandleY=\(startHandleCenter?.y ?? -1)",
             "nativeSelectionEndHandleX=\(endHandleCenter?.x ?? -1)",
             "nativeSelectionEndHandleY=\(endHandleCenter?.y ?? -1)",
             "nativeSelectionLength=\(nativeSelectedRange?.length ?? 0)",

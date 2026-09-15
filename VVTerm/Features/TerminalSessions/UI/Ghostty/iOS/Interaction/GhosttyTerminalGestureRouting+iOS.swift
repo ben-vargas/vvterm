@@ -13,6 +13,22 @@ import os
 
 extension GhosttyTerminalView: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        if gestureRecognizer == nativeSelectionHandlePanRecognizer {
+            guard #available(iOS 17.0, *) else { return false }
+            let point = touch.location(in: self)
+            guard canInteractWithTerminalContent,
+                  let handle = nativeSelectionHandle(at: point),
+                  let range = nativeSelectedRange else {
+                nativeSelectionHandleDrag = nil
+                return false
+            }
+            let offset = handle == .start ? range.location : nativeSelectionSnapshot.upperBound(of: range)
+            let caret = nativeSelectionSnapshot.caretRect(for: offset)
+            // UIKit may reset pan translation when recognition starts. Retain the
+            // accepted touch position instead of reconstructing it at that point.
+            nativeSelectionHandleDrag = (handle, CGPoint(x: caret.minX - point.x, y: caret.midY - point.y))
+            return true
+        }
         if gestureRecognizer == nativeSelectionLongPressRecognizer {
             guard canInteractWithTerminalContent else { return false }
             return !isPointOnNativeSelectionHandleHitArea(touch.location(in: self))
@@ -48,6 +64,9 @@ extension GhosttyTerminalView: UIGestureRecognizerDelegate {
         _ gestureRecognizer: UIGestureRecognizer,
         shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool {
+        if gestureRecognizer == nativeSelectionHandlePanRecognizer || otherGestureRecognizer == nativeSelectionHandlePanRecognizer {
+            return false
+        }
         if gestureRecognizer == directTouchTapRecognizer || otherGestureRecognizer == directTouchTapRecognizer {
             return false
         }
@@ -360,8 +379,8 @@ extension GhosttyTerminalView {
     func updateSelectionAutoscroll(location: CGPoint, mods: Ghostty.Input.Mods) {
         guard allowsHostTextSelection,
               TerminalSelectionAutoscrollPolicy.decision(
-                locationY: Double(location.y),
-                viewportHeight: Double(bounds.height),
+                locationY: Double(location.y - selectionAutoscrollViewport.minY),
+                viewportHeight: Double(selectionAutoscrollViewport.height),
                 edgeInset: Self.selectionAutoscrollEdgeInset,
                 maximumScrollDelta: Self.selectionAutoscrollMaximumDelta
               ) != nil else {
@@ -385,13 +404,27 @@ extension GhosttyTerminalView {
         selectionAutoscrollDisplayLink?.invalidate()
         selectionAutoscrollDisplayLink = nil
         selectionAutoscrollLocation = nil
+        selectionAutoscrollRemainder = 0
         selectionAutoscrollMods = []
     }
 
+    var selectionAutoscrollViewport: CGRect {
+        var visible = bounds
+        var ancestor = superview
+        while let view = ancestor {
+            if view.clipsToBounds || view is UIWindow {
+                visible = visible.intersection(view.convert(view.bounds, to: self))
+            }
+            ancestor = view.superview
+        }
+        return visible.isNull ? .zero : visible
+    }
+
     func clampedSelectionAutoscrollLocation(_ location: CGPoint) -> CGPoint {
-        CGPoint(
-            x: min(max(location.x, 0), bounds.width),
-            y: min(max(location.y, 0), bounds.height)
+        let viewport = selectionAutoscrollViewport
+        return CGPoint(
+            x: min(max(location.x, viewport.minX), viewport.maxX),
+            y: min(max(location.y, viewport.minY), viewport.maxY)
         )
     }
 
@@ -404,12 +437,35 @@ extension GhosttyTerminalView {
         }
 
         guard let decision = TerminalSelectionAutoscrollPolicy.decision(
-            locationY: Double(location.y),
-            viewportHeight: Double(bounds.height),
+            locationY: Double(location.y - selectionAutoscrollViewport.minY),
+            viewportHeight: Double(selectionAutoscrollViewport.height),
             edgeInset: Self.selectionAutoscrollEdgeInset,
             maximumScrollDelta: Self.selectionAutoscrollMaximumDelta
         ) else {
             stopSelectionAutoscroll()
+            return
+        }
+
+        if nativeSelectionDragAnchor != nil {
+            guard nativeSelectionInteractionActive, canInteractWithTerminalContent else {
+                stopSelectionAutoscroll()
+                return
+            }
+            // Extend from the latest viewport first. Binding actions scroll the host
+            // buffer and never send wheel events to a mouse-capturing remote app.
+            if nativeSelectionHandleDrag != nil {
+                moveNativeSelectionHandle(to: location)
+            } else {
+                extendNativeSelection(to: location)
+            }
+            let duration = selectionAutoscrollDisplayLink.map { $0.targetTimestamp - $0.timestamp } ?? (1.0 / 60)
+            selectionAutoscrollRemainder -= decision.scrollDelta * min(max(duration, 0), 0.1) * 60 / max(Double(cellSize.height), 1)
+            let rows = Int(selectionAutoscrollRemainder.rounded(.towardZero))
+            if rows != 0 {
+                selectionAutoscrollRemainder -= Double(rows)
+                if !surface.perform(action: "scroll_page_lines:\(rows)") { stopSelectionAutoscroll() }
+            }
+            requestRender()
             return
         }
 

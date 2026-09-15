@@ -42,9 +42,13 @@ extension GhosttyTerminalView {
     @objc func handleNativeSelectionLongPress(_ recognizer: UILongPressGestureRecognizer) {
         switch recognizer.state {
         case .began:
-            beginNativeSelection(at: recognizer.location(in: self))
+            let point = recognizer.location(in: self)
+            beginNativeSelection(at: point)
+            updateSelectionAutoscroll(location: point, mods: [])
         case .changed:
-            extendNativeSelection(to: recognizer.location(in: self))
+            let point = recognizer.location(in: self)
+            extendNativeSelection(to: point)
+            updateSelectionAutoscroll(location: point, mods: [])
         case .ended:
             finishNativeSelectionInteraction(
                 presentingMenuAt: recognizer.location(in: self)
@@ -111,20 +115,21 @@ extension GhosttyTerminalView {
             ?? nativeSelectionSnapshot.characterRange(at: point)
         setNativeSelectedRange(range)
         if keepsDragAnchor, let surface = surface?.unsafeCValue {
-            nativeSelectionLongPressAnchor = ghostty_surface_selection_anchor_new(surface)
+            nativeSelectionDragAnchor = ghostty_surface_selection_anchor_new(surface)
         }
     }
 
-    private func extendNativeSelection(to point: CGPoint) {
+    func extendNativeSelection(to point: CGPoint) {
+        refreshNativeSelectionSnapshot()
         guard nativeSelectionLifecycle.hasSelection,
-              let anchor = nativeSelectionLongPressAnchor,
-              let target = nativeSelectionSnapshot.characterRange(at: point) else {
+              let anchor = nativeSelectionDragAnchor,
+              let target = nativeSelectionSnapshot.characterRange(at: clampedSelectionAutoscrollLocation(point)) else {
             return
         }
         applyNativeSelectionRange(target, anchor: anchor)
     }
 
-    private func finishNativeSelectionInteraction(presentingMenuAt point: CGPoint?) {
+    func finishNativeSelectionInteraction(presentingMenuAt point: CGPoint?) {
         freeNativeSelectionDragAnchor()
         if nativeSelectionLifecycle.interactionIsActive {
             let restorationID = nativeSelectionLifecycle.endInteraction()
@@ -136,21 +141,23 @@ extension GhosttyTerminalView {
     }
 
     func setupNativeTextSelectionInteractions() {
-        let interaction = UITextInteraction(for: .editable)
-        interaction.delegate = self
-        interaction.textInput = imeProxyTextView
-        imeProxyTextView.addInteraction(interaction)
-        nativeTextInteraction = interaction
         scrollRecognizer.require(toFail: nativeSelectionLongPressRecognizer)
         if #available(iOS 17.0, *) {
-            let display = UITextSelectionDisplayInteraction(textInput: imeProxyTextView, delegate: self)
-            // Ghostty draws the highlight using the terminal theme.
+            let display = TerminalSelectionDisplayInteraction(textInput: imeProxyTextView, delegate: self)
+            // Ghostty owns selection changes; UIKit supplies their visual presentation.
             display.highlightView.alpha = 0
             display.isActivated = false
             imeProxyTextView.addInteraction(display)
-        }
-        for gesture in interaction.gesturesForFailureRequirements {
-            scrollRecognizer.require(toFail: gesture)
+            imeProxyTextView.addGestureRecognizer(nativeSelectionHandlePanRecognizer)
+        } else {
+            let interaction = UITextInteraction(for: .editable)
+            interaction.delegate = self
+            interaction.textInput = imeProxyTextView
+            imeProxyTextView.addInteraction(interaction)
+            nativeTextInteraction = interaction
+            for gesture in interaction.gesturesForFailureRequirements {
+                scrollRecognizer.require(toFail: gesture)
+            }
         }
 
         let nativeSelectionDoubleTap = UITapGestureRecognizer(
@@ -177,7 +184,7 @@ extension GhosttyTerminalView {
 
         nativeSelectionDoubleTap.require(toFail: nativeSelectionTripleTap)
         directTouchTapRecognizer.require(toFail: nativeSelectionDoubleTap)
-        for gesture in interaction.gesturesForFailureRequirements {
+        for gesture in nativeTextInteraction?.gesturesForFailureRequirements ?? [] {
             gesture.require(toFail: directTouchTapRecognizer)
             gesture.require(toFail: nativeSelectionLongPressRecognizer)
             gesture.require(toFail: nativeSelectionDoubleTap)
@@ -210,13 +217,17 @@ extension GhosttyTerminalView {
         let snapshot = TerminalNativeTextSnapshot(
             lines: text.components(separatedBy: "\n"),
             cellSize: metrics.cellSize, columns: Int(view.columns), cells: cells,
-            documentID: view.unchanged ? nativeSelectionSnapshot.documentID : UUID()
+            documentID: view.unchanged ? nativeSelectionSnapshot.documentID : UUID(),
+            selectionStartIsVisible: view.selection_start_visible,
+            selectionEndIsVisible: view.selection_end_visible
         )
         let range = view.has_selection && view.selection_len > 0 && !resetSelection
             ? NSRange(location: Int(view.selection_start), length: Int(view.selection_len)) : nil
         let textChanged = !view.unchanged
             || nativeSelectionSnapshot.cellSize != snapshot.cellSize
         let selectionChanged = nativeSelectionLifecycle.selection != range
+            || nativeSelectionSnapshot.selectionStartIsVisible != snapshot.selectionStartIsVisible
+            || nativeSelectionSnapshot.selectionEndIsVisible != snapshot.selectionEndIsVisible
         if textChanged { imeProxyTextView.inputDelegate?.textWillChange(imeProxyTextView) }
         if selectionChanged { imeProxyTextView.inputDelegate?.selectionWillChange(imeProxyTextView) }
         nativeSelectionSnapshot = snapshot
@@ -240,15 +251,17 @@ extension GhosttyTerminalView {
         if #available(iOS 17.0, *),
            let display = imeProxyTextView.interactions.compactMap({ $0 as? UITextSelectionDisplayInteraction }).first {
             display.isActivated = nativeSelectedRange != nil
-            display.setNeedsSelectionUpdate()
+            display.layoutManagedSubviews()
         }
     }
 
     func freeNativeSelectionDragAnchor() {
-        if let anchor = nativeSelectionLongPressAnchor, let surface = surface?.unsafeCValue {
+        stopSelectionAutoscroll()
+        nativeSelectionHandleDrag = nil
+        if let anchor = nativeSelectionDragAnchor, let surface = surface?.unsafeCValue {
             ghostty_surface_selection_anchor_free(surface, anchor)
         }
-        nativeSelectionLongPressAnchor = nil
+        nativeSelectionDragAnchor = nil
     }
 
     func freeNativeSelectionSnapshot() {
@@ -271,15 +284,17 @@ extension GhosttyTerminalView {
         applyNativeSelectionRange(range, anchor: nil)
     }
 
-    private func applyNativeSelectionRange(_ range: NSRange, anchor: ghostty_selection_anchor_t?) {
+    @discardableResult
+    func applyNativeSelectionRange(_ range: NSRange, anchor: ghostty_selection_anchor_t?) -> Bool {
         guard let surface = surface?.unsafeCValue,
               let handle = nativeSelectionSnapshotHandle,
               let offset = UInt(exactly: range.location),
-              let length = UInt(exactly: range.length) else { return }
+              let length = UInt(exactly: range.length) else { return false }
         // On concurrent output the native bridge rejects the stale range.
         // Refresh the projection; never retry old offsets against new text.
-        _ = ghostty_surface_selection_snapshot_select(surface, handle, offset, length, anchor)
+        let accepted = ghostty_surface_selection_snapshot_select(surface, handle, offset, length, anchor)
         refreshNativeSelectionSnapshot()
+        return accepted
     }
 
     func scheduleNativeSelectionTerminalInputRestoration(_ restorationID: UUID?) {
@@ -297,6 +312,9 @@ extension GhosttyTerminalView {
     }
 
     func isPointOnNativeSelectionHandleHitArea(_ point: CGPoint) -> Bool {
+        if #available(iOS 17.0, *) {
+            return nativeSelectionHandle(at: point) != nil
+        }
         guard let nativeSelectedRange = nativeSelectionLifecycle.selection,
               nativeSelectedRange.length > 0 else {
             return false
