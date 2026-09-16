@@ -92,7 +92,8 @@ struct RemoteTerminalPaneWrapper: View {
                     acceptsInput: acceptsInput,
                     voice: composerVoice,
                     retainsInactiveInput: !isActive && isPaneFocused,
-                    inputAccessory: { tabManager.terminalSurfaceStore.ghosttySurface(for: paneId)?.sharedInputAccessoryView() }
+                    accessorySnapshot: terminalAccessoryInputSnapshot,
+                    terminalProvider: { tabManager.terminalSurfaceStore.ghosttySurface(for: paneId) }
                 )
             }
         }

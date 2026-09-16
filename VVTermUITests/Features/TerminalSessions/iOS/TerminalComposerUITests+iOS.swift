@@ -5,7 +5,7 @@ import UIKit
 final class TerminalComposerUITests: XCTestCase {
     @MainActor
     func testChatAccessorySendsToTerminalAndPreservesDraft() {
-        let app = launch(arguments: ["--composer-accessory"])
+        let app = launch(arguments: ["--composer-accessory", "--vvterm-debug-log=keyboard"])
         app.buttons["vvterm.composer.toggle"].tap()
         let editor = app.textViews["vvterm.composer.text"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
@@ -14,17 +14,110 @@ final class TerminalComposerUITests: XCTestCase {
         screenshot.name = "Chat accessory bar"
         screenshot.lifetime = .keepAlways
         add(screenshot)
-        let tab = app.buttons["vvterm.keyboard.accessory.system.tab"]
+        let tab = app.buttons["vvterm.composer.accessory.system.tab"]
         XCTAssertTrue(tab.waitForExistence(timeout: 5))
         tab.tap()
         expectation(for: NSPredicate(format: "label == %@", "<TAB>"), evaluatedWith: app.staticTexts["composer.test.bytes"])
         waitForExpectations(timeout: 5)
         XCTAssertEqual(editor.value as? String, "keep draft")
-        app.buttons["vvterm.keyboard.accessory.hide"].tap()
-        XCTAssertFalse(tab.waitForExistence(timeout: 1))
+        XCTAssertLessThanOrEqual(tab.frame.maxY, editor.frame.minY)
+        for id in ["modifier.ctrl", "modifier.alt", "modifier.shift", "system.commandModifier"] {
+            XCTAssertFalse(app.buttons["vvterm.composer.accessory.\(id)"].exists)
+        }
+        for id in ["voice", "attachments", "hide"] {
+            XCTAssertFalse(app.buttons["vvterm.keyboard.accessory.\(id)"].exists)
+        }
+        app.otherElements["composer.test.terminal"]
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(tab.isHittable)
+        XCTAssertLessThanOrEqual(tab.frame.maxY, editor.frame.minY)
+        tab.tap()
+        expectation(for: NSPredicate(format: "label == %@", "<TAB><TAB>"), evaluatedWith: app.staticTexts["composer.test.bytes"])
+        waitForExpectations(timeout: 5)
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
         editor.tap()
         XCTAssertTrue(tab.waitForExistence(timeout: 5))
         XCTAssertEqual(editor.value as? String, "keep draft")
+        app.scrollViews["vvterm.composer.accessory.keys"].swipeLeft()
+        let scrolledShot = XCTAttachment(screenshot: app.screenshot())
+        scrolledShot.name = "Chat accessory scrolled edges"
+        scrolledShot.lifetime = .keepAlways
+        add(scrolledShot)
+        app.buttons["vvterm.composer.toggle"].tap()
+        // Normal mode preserves an explicit keyboard dismissal. Open it through its command.
+        if !app.buttons["vvterm.keyboard.accessory.system.tab"].exists {
+            app.buttons["composer.test.menu"].tap()
+            app.buttons["Keyboard"].tap()
+        }
+        XCTAssertTrue(app.buttons["vvterm.keyboard.accessory.system.tab"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["vvterm.keyboard.accessory.hide"].exists)
+        XCTAssertTrue(app.buttons["vvterm.keyboard.accessory.attachments"].exists)
+        XCTAssertFalse(tab.exists)
+        let normalShot = XCTAttachment(screenshot: app.screenshot())
+        normalShot.name = "Normal capsule accessory"
+        normalShot.lifetime = .keepAlways
+        add(normalShot)
+    }
+
+    @MainActor
+    func testChatAccessoryFadesAtPaneEdges() {
+        let app = launch(arguments: ["--composer-accessory"])
+        app.buttons["vvterm.composer.toggle"].tap()
+        let row = app.scrollViews["vvterm.composer.accessory.keys"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        let terminal = app.otherElements["composer.test.terminal"]
+        XCTAssertEqual(row.frame.minX, terminal.frame.minX, accuracy: 1)
+        XCTAssertEqual(row.frame.maxX, terminal.frame.maxX, accuracy: 1)
+        row.swipeLeft()
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Pane edge accessory fade"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    @MainActor
+    func testInputModePreviewRespondsToKeysAndSend() {
+        let app = launch()
+        app.buttons["composer.test.settings"].tap()
+        app.buttons["Input Mode"].tap()
+        let output = app.staticTexts["vvterm.settings.inputMode.preview.output"]
+        let ctrl = app.buttons["vvterm.keyboard.accessory.modifier.ctrl"]
+        XCTAssertTrue(ctrl.waitForExistence(timeout: 5))
+        ctrl.tap()
+        let row = app.scrollViews["vvterm.keyboard.accessory.keys"]
+        row.swipeLeft()
+        let tab = app.buttons["vvterm.keyboard.accessory.system.tab"]
+        // Move back if the full swipe passed Tab on a narrow device.
+        if !tab.isHittable { row.swipeRight() }
+        if !tab.isHittable { row.swipeLeft(velocity: .slow) }
+        tab.tap()
+        XCTAssertEqual(output.label, "Ctrl+Tab")
+        XCTAssertFalse(ctrl.isSelected)
+        let normalShot = XCTAttachment(screenshot: app.screenshot())
+        normalShot.name = "Normal interactive preview"
+        normalShot.lifetime = .keepAlways
+        add(normalShot)
+        app.segmentedControls["vvterm.input-mode"].buttons["Chat Mode"].tap()
+        let accessory = app.switches["vvterm.chat.accessory"]
+        accessory.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        app.buttons["vvterm.composer.accessory.system.tab"].tap()
+        XCTAssertEqual(output.label, "Tab")
+        app.buttons["vvterm.settings.inputMode.preview.send"].tap()
+        XCTAssertEqual(output.label, "server:~ $ ls -la")
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        let draft = app.textFields["vvterm.settings.inputMode.preview.draft"]
+        draft.tap()
+        draft.typeText("sample")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.buttons["vvterm.settings.inputMode.preview.done"].tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(draft.value as? String, "sample")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Interactive input preview"
+        shot.lifetime = .keepAlways
+        add(shot)
     }
 
     @MainActor
@@ -123,6 +216,10 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertEqual(accessory.value as? String, "0")
         accessory.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
         XCTAssertEqual(accessory.value as? String, "1")
+        let previewShot = XCTAttachment(screenshot: app.screenshot())
+        previewShot.name = "Chat accessory settings preview"
+        previewShot.lifetime = .keepAlways
+        add(previewShot)
         app.buttons["Customize Send Action"].tap()
         app.buttons["vvterm.composer.add-action"].tap()
         app.textFields["vvterm.composer.action-name"].tap()

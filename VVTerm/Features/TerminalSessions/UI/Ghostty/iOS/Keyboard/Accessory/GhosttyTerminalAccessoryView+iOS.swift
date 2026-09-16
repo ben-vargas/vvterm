@@ -83,7 +83,7 @@ final class TerminalInputAccessoryView: UIInputView {
     #endif
 
     init(
-        terminalOwner: GhosttyTerminalView,
+        terminalOwner: GhosttyTerminalView?,
         inputSnapshot: TerminalAccessoryInputSnapshot,
         onKey: @escaping (TerminalKey) -> Void,
         onCustomAction: @escaping (TerminalAccessoryCustomAction) -> Void,
@@ -172,16 +172,16 @@ final class TerminalInputAccessoryView: UIInputView {
         backgroundEffectView = blur
         updateBackgroundEffect()
 
-        let scrollView = UIScrollView()
+        let keyRow = TerminalAccessoryKeyRow(contentInset: 8)
+        keyRow.scroll.accessibilityIdentifier = "vvterm.keyboard.accessory.keys"
+        let scrollView = keyRow
         scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.showsHorizontalScrollIndicator = false
-        scrollView.alwaysBounceHorizontal = true
         addSubview(scrollView)
 
         let leadingStack = UIStackView()
         leadingStack.translatesAutoresizingMaskIntoConstraints = false
         leadingStack.axis = .horizontal
-        leadingStack.spacing = 8
+        leadingStack.spacing = 0
         leadingStack.alignment = .center
         leadingStack.distribution = .fill
         addSubview(leadingStack)
@@ -234,21 +234,7 @@ final class TerminalInputAccessoryView: UIInputView {
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
 
-        let stack = UIStackView()
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .horizontal
-        stack.spacing = 8
-        stack.alignment = .center
-        stack.distribution = .fill
-        stack.isLayoutMarginsRelativeArrangement = false
-        scrollView.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 8),
-            stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -8),
-            stack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 12),
-            stack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -12),
-            stack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor, constant: -16)
-        ])
+        let stack = keyRow.stack
 
         // Modifier buttons (always first, separated)
         let ctrl = makeModifierButton(title: String(localized: "Ctrl")) { [weak self] in
@@ -277,7 +263,7 @@ final class TerminalInputAccessoryView: UIInputView {
         let dynamicStack = UIStackView()
         dynamicStack.translatesAutoresizingMaskIntoConstraints = false
         dynamicStack.axis = .horizontal
-        dynamicStack.spacing = 8
+        dynamicStack.spacing = 0
         dynamicStack.alignment = .center
         // Keep intrinsic widths for text buttons and let UIScrollView handle overflow.
         dynamicStack.setContentHuggingPriority(.required, for: .horizontal)
@@ -305,6 +291,13 @@ final class TerminalInputAccessoryView: UIInputView {
 
     private func updateBackgroundEffect() {
         guard let backgroundEffectView else { return }
+        // A standalone Settings preview inherits its card's appearance.
+        guard terminalOwner != nil else {
+            overrideUserInterfaceStyle = .unspecified
+            backgroundColor = .clear
+            backgroundEffectView.backgroundColor = .clear
+            return
+        }
         let interfaceStyle = resolvedInterfaceStyle
         let backgroundColor = resolveThemeBackgroundColor(for: interfaceStyle)
             .resolvedColor(with: appearanceTraits(for: interfaceStyle))
@@ -525,177 +518,38 @@ final class TerminalInputAccessoryView: UIInputView {
 
     private func makePillButton(title: String, onTap: @escaping () -> Void) -> UIButton {
         let button = UIButton(type: .system)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.contentHorizontalAlignment = .center
-        button.clipsToBounds = true
-        button.setContentHuggingPriority(.required, for: .horizontal)
-        button.setContentCompressionResistancePriority(.required, for: .horizontal)
-        if #available(iOS 15.0, *) {
-            var config = UIButton.Configuration.plain()
-            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
-            config.attributedTitle = AttributedString(
-                title,
-                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 15, weight: .medium)])
-            )
-            config.baseForegroundColor = .label
-            button.configuration = config
-        } else {
-            button.setTitle(title, for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
-            button.setTitleColor(.label, for: .normal)
-            button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
-        }
-        button.backgroundColor = UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor.white.withAlphaComponent(0.12)
-                : UIColor.black.withAlphaComponent(0.06)
-        }
-        button.layer.cornerRadius = 16
-        button.addAction(UIAction { _ in
-            onTap()
-        }, for: .touchUpInside)
-
-        NSLayoutConstraint.activate([
-            button.heightAnchor.constraint(equalToConstant: 32)
-        ])
-
-        return button
-    }
-
-    private func makeRepeatablePillButton(title: String, key: TerminalKey) -> UIButton {
-        let button = RepeatableKeyButton(type: .system)
-        button.key = key
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.contentHorizontalAlignment = .center
-        button.clipsToBounds = true
-        button.setContentHuggingPriority(.required, for: .horizontal)
-        button.setContentCompressionResistancePriority(.required, for: .horizontal)
-        if #available(iOS 15.0, *) {
-            var config = UIButton.Configuration.plain()
-            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
-            config.attributedTitle = AttributedString(
-                title,
-                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 15, weight: .medium)])
-            )
-            config.baseForegroundColor = .label
-            button.configuration = config
-        } else {
-            button.setTitle(title, for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
-            button.setTitleColor(.label, for: .normal)
-            button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
-        }
-        button.backgroundColor = UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor.white.withAlphaComponent(0.12)
-                : UIColor.black.withAlphaComponent(0.06)
-        }
-        button.layer.cornerRadius = 16
-
-        button.addTarget(self, action: #selector(repeatButtonDown(_:)), for: .touchDown)
-        button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchUpInside)
-        button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchUpOutside)
-        button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchCancel)
-        button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchDragExit)
-
-        NSLayoutConstraint.activate([
-            button.heightAnchor.constraint(equalToConstant: 32)
-        ])
-
+        TerminalAccessoryButtonStyle.apply(to: button, title: title)
+        button.addAction(UIAction { _ in onTap() }, for: .touchUpInside)
         return button
     }
 
     private func makeIconButton(icon: String, onTap: @escaping () -> Void) -> UIButton {
         let button = UIButton(type: .system)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        button.setImage(UIImage(systemName: icon, withConfiguration: config), for: .normal)
-        button.tintColor = .label
-        button.backgroundColor = UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor.white.withAlphaComponent(0.12)
-                : UIColor.black.withAlphaComponent(0.06)
-        }
-        button.layer.cornerRadius = 16
-        button.addAction(UIAction { _ in
-            onTap()
-        }, for: .touchUpInside)
-
-        NSLayoutConstraint.activate([
-            button.widthAnchor.constraint(equalToConstant: 36),
-            button.heightAnchor.constraint(equalToConstant: 32)
-        ])
-
+        TerminalAccessoryButtonStyle.apply(to: button, icon: icon)
+        button.addAction(UIAction { _ in onTap() }, for: .touchUpInside)
         return button
     }
 
+    private func makeRepeatablePillButton(title: String, key: TerminalKey) -> UIButton {
+        makeRepeatableButton(title: title, key: key)
+    }
+
     private func makeRepeatableIconButton(icon: String, key: TerminalKey) -> UIButton {
+        makeRepeatableButton(icon: icon, key: key)
+    }
+
+    private func makeRepeatableButton(title: String = "", icon: String? = nil, key: TerminalKey) -> UIButton {
         let button = RepeatableKeyButton(type: .system)
         button.key = key
-        button.translatesAutoresizingMaskIntoConstraints = false
-        let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        button.setImage(UIImage(systemName: icon, withConfiguration: config), for: .normal)
-        button.tintColor = .label
-        button.backgroundColor = UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor.white.withAlphaComponent(0.12)
-                : UIColor.black.withAlphaComponent(0.06)
-        }
-        button.layer.cornerRadius = 16
-
+        TerminalAccessoryButtonStyle.apply(to: button, title: title, icon: icon)
         button.addTarget(self, action: #selector(repeatButtonDown(_:)), for: .touchDown)
-        button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchUpInside)
-        button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchUpOutside)
-        button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchCancel)
-        button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchDragExit)
-
-        NSLayoutConstraint.activate([
-            button.widthAnchor.constraint(equalToConstant: 36),
-            button.heightAnchor.constraint(equalToConstant: 32)
-        ])
-
+        button.addTarget(self, action: #selector(repeatButtonUp(_:)),
+                         for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
         return button
     }
 
     private func makeModifierButton(title: String, onTap: @escaping () -> Void) -> UIButton {
-        let button = UIButton(type: .system)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.contentHorizontalAlignment = .center
-        button.setContentHuggingPriority(.required, for: .horizontal)
-        button.setContentCompressionResistancePriority(.required, for: .horizontal)
-        if #available(iOS 15.0, *) {
-            var config = UIButton.Configuration.plain()
-            config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
-            config.attributedTitle = AttributedString(
-                title,
-                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 13, weight: .semibold)])
-            )
-            config.baseForegroundColor = .secondaryLabel
-            button.configuration = config
-        } else {
-            button.setTitle(title, for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
-            button.setTitleColor(.secondaryLabel, for: .normal)
-            button.contentEdgeInsets = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
-        }
-        button.backgroundColor = UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor.white.withAlphaComponent(0.08)
-                : UIColor.black.withAlphaComponent(0.04)
-        }
-        button.layer.cornerRadius = 14
-        button.layer.borderWidth = 1
-        button.layer.borderColor = UIColor.separator.withAlphaComponent(0.3).cgColor
-        button.addAction(UIAction { _ in
-            onTap()
-        }, for: .touchUpInside)
-
-        NSLayoutConstraint.activate([
-            button.heightAnchor.constraint(equalToConstant: 28),
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 40)
-        ])
-
-        return button
+        makePillButton(title: title, onTap: onTap)
     }
 
     private func makeSeparator() -> UIView {
@@ -808,29 +662,14 @@ final class TerminalInputAccessoryView: UIInputView {
 
     private func updateModifierButton(_ button: UIButton?, isActive: Bool) {
         guard let button else { return }
+        var configuration = TerminalAccessoryButtonStyle.configuration()
+        configuration.attributedTitle = button.configuration?.attributedTitle
         if isActive {
-            button.backgroundColor = .systemBlue
-            button.layer.borderColor = UIColor.clear.cgColor
-            if #available(iOS 15.0, *), var config = button.configuration {
-                config.baseForegroundColor = .white
-                button.configuration = config
-            } else {
-                button.setTitleColor(.white, for: .normal)
-            }
-        } else {
-            button.backgroundColor = UIColor { traits in
-                traits.userInterfaceStyle == .dark
-                    ? UIColor.white.withAlphaComponent(0.08)
-                    : UIColor.black.withAlphaComponent(0.04)
-            }
-            button.layer.borderColor = UIColor.separator.withAlphaComponent(0.3).cgColor
-            if #available(iOS 15.0, *), var config = button.configuration {
-                config.baseForegroundColor = .secondaryLabel
-                button.configuration = config
-            } else {
-                button.setTitleColor(.secondaryLabel, for: .normal)
-            }
+            configuration.baseForegroundColor = .white
+            configuration.background.backgroundColor = .systemBlue
         }
+        button.configuration = configuration
+        button.accessibilityTraits = isActive ? [.button, .selected] : [.button]
     }
 
     private func updateLeadingButtonsState() {

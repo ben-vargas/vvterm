@@ -253,7 +253,10 @@ private struct TerminalComposerUITestContent: View {
                         } else { model.voicePhase = .recording(operationID: UUID()) }
                     },
                     cancel: { model.voicePhase = .idle }
-                ) : nil, inputAccessory: { model.terminal?.sharedInputAccessoryView() })
+                ) : nil, accessorySnapshot: .init(profile: .defaultValue(lastWriterDeviceId: "composer-ui-test"),
+                                                showsDismissKeyboardButton: true,
+                                                showsAttachmentButton: model.attachmentButtonEnabled),
+                   terminalProvider: { model.terminal })
             }
         }
         .terminalKeyboardAvoidance(

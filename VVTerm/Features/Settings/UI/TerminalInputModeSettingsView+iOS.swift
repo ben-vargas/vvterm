@@ -9,7 +9,7 @@ struct TerminalInputModeSettingsView: View {
     var body: some View {
         Form {
             Section("Preview") {
-                TerminalInputModePreview(mode: inputMode)
+                TerminalInputModePreview(mode: inputMode, showsChatAccessory: chatAccessoryEnabled)
                     .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
