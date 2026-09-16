@@ -19,6 +19,10 @@ final class TerminalZenModeUITests: XCTestCase {
                 .waitForExistence(timeout: 15)
         )
         app.buttons["vvterm.terminal.moreMenu"].tap()
+        XCTAssertTrue(app.buttons["vvterm.terminal.sessions"].exists)
+        XCTAssertTrue(app.buttons["vvterm.terminal.find"].exists)
+        XCTAssertTrue(app.buttons["vvterm.terminal.inputMenu"].exists)
+        XCTAssertFalse(app.buttons["vvterm.terminal.duplicateServer"].exists)
         let enterZenMode = app.buttons["vvterm.terminal.enterZenMode"]
         XCTAssertTrue(enterZenMode.waitForExistence(timeout: 5))
         enterZenMode.tap()
@@ -38,6 +42,12 @@ final class TerminalZenModeUITests: XCTestCase {
             app.buttons["vvterm.terminal.zen.view.terminal"].waitForExistence(timeout: 5),
             "Zen launcher remained visible but did not open the control panel"
         )
+        app.buttons["vvterm.terminal.inputMenu"].tap()
+        XCTAssertTrue(app.buttons["vvterm.composer.toggle"].waitForExistence(timeout: 5))
+        let keyboardAction = app.buttons["vvterm.terminal.input.keyboard"]
+        XCTAssertTrue(keyboardAction.exists)
+        keyboardAction.tap()
+        XCTAssertTrue(app.buttons["vvterm.terminal.zen.view.terminal"].waitForNonExistence(timeout: 5))
     }
 
     @MainActor
@@ -125,7 +135,11 @@ final class TerminalZenModeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["vvterm.terminal.zen.view.files"].exists)
         XCTAssertTrue(app.buttons["vvterm.terminal.zen.newTab"].exists)
         XCTAssertTrue(app.buttons["vvterm.terminal.zen.settings"].exists)
-        XCTAssertTrue(app.buttons["vvterm.terminal.zen.editServer"].exists)
+        XCTAssertFalse(app.buttons["vvterm.terminal.zen.editServer"].exists)
+        XCTAssertFalse(app.buttons["vvterm.terminal.zen.duplicateServer"].exists)
+        XCTAssertTrue(app.buttons["vvterm.terminal.zen.sessions"].exists)
+        XCTAssertTrue(app.buttons["vvterm.terminal.zen.find"].exists)
+        XCTAssertTrue(app.buttons["vvterm.terminal.inputMenu"].exists)
         XCTAssertTrue(app.buttons["vvterm.terminal.zen.back"].exists)
         XCTAssertTrue(app.buttons["vvterm.terminal.zen.disconnect"].exists)
 

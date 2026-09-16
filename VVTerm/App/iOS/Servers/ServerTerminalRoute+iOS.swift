@@ -13,7 +13,7 @@ import UIKit
 struct ServerTerminalRoute: View {
     private enum PresentedRouteSheet: Hashable, Identifiable {
         case settings
-        case serverForm(ServerFormIntent)
+        case sessions
 
         var id: Self { self }
     }
@@ -29,6 +29,8 @@ struct ServerTerminalRoute: View {
     let voiceInputRuntimeStore: VoiceInputRuntimeStore
     let analyticsOptOutAction: AnalyticsOptOutAction
     let route: ServerTerminalNavigationRoute
+    let onToggleSidebar: (() -> Void)?
+    let onSessionServerSelected: ((Server) -> Void)?
     let onBack: () -> Void
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
 
@@ -63,6 +65,8 @@ struct ServerTerminalRoute: View {
         analyticsOptOutAction: AnalyticsOptOutAction,
         route: ServerTerminalNavigationRoute,
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
+        onToggleSidebar: (() -> Void)? = nil,
+        onSessionServerSelected: ((Server) -> Void)? = nil,
         onBack: @escaping () -> Void
     ) {
         self.tabManager = tabManager
@@ -77,6 +81,8 @@ struct ServerTerminalRoute: View {
         self.analyticsOptOutAction = analyticsOptOutAction
         self.route = route
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
+        self.onToggleSidebar = onToggleSidebar
+        self.onSessionServerSelected = onSessionServerSelected
         self.onBack = onBack
         self.keyboardCoordinator = tabManager.keyboardCoordinator
         let toolbarProjection = TerminalServerToolbarProjection(
@@ -157,6 +163,12 @@ struct ServerTerminalRoute: View {
             .limitReachedAlert(.fileTabs, isPresented: $showingFileTabLimitAlert)
             .sheet(item: $presentedRouteSheet, onDismiss: updateTerminalRouteActivation) { sheet in
                 switch sheet {
+                case .sessions:
+                    SessionsScreen(serverManager: serverManager, tabManager: tabManager,
+                                   fileTabs: fileTabs, fileBrowser: fileBrowser, selectedServerID: route.serverId) { server in
+                        presentedRouteSheet = nil
+                        onSessionServerSelected?(server)
+                    }
                 case .settings:
                     SettingsView(
                         statsPreferencesStore: statsDependencies.preferencesStore,
@@ -166,20 +178,7 @@ struct ServerTerminalRoute: View {
                     )
                         .modifier(AppearanceModifier())
                         .adaptiveSoftScrollEdges()
-                case .serverForm(let intent):
-                    NavigationStack {
-                        ServerFormSheet(
-                            serverManager: serverManager,
-                            workspace: intent.sourceServer.flatMap { sourceServer in
-                                serverManager.workspaces.first { $0.id == sourceServer.workspaceId }
-                            },
-                            intent: intent,
-                            dependencies: serverFormDependencies,
-                            makeLocalDiscoveryManager: makeLocalDiscoveryManager,
-                            onSave: { _ in presentedRouteSheet = nil }
-                        )
-                    }
-                    .adaptiveSoftScrollEdges()
+
                 }
             }
             .onAppear {
@@ -270,7 +269,9 @@ struct ServerTerminalRoute: View {
                 onToggleSidebar: {},
                 onOpenSettings: { presentRouteSheet(.settings) },
                 onLeaveRoute: leaveRoute,
-                onDisconnectRoute: { disconnect(server) }
+                onDisconnectRoute: { disconnect(server) },
+                canOpenSessions: onSessionServerSelected != nil,
+                onSessionCommand: performSessionCommand
             )
             .navigationTitle(server.name)
         } else if route.isConnecting {
@@ -287,12 +288,15 @@ struct ServerTerminalRoute: View {
     @ToolbarContentBuilder
     private var navigationToolbar: some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
-            Button {
-                leaveRoute()
-            } label: {
-                Image(systemName: "chevron.left")
+            if let onToggleSidebar {
+                Button(action: onToggleSidebar) { Image(systemName: "sidebar.left") }
+                    .accessibilityLabel("Sidebar")
+                    .accessibilityIdentifier("vvterm.sidebar.toggle")
+                    .keyboardShortcut("s", modifiers: [.control, .command])
+            } else {
+                Button { leaveRoute() } label: { Image(systemName: "chevron.left") }
+                    .accessibilityIdentifier("vvterm.terminal.back")
             }
-            .accessibilityIdentifier("vvterm.terminal.back")
         }
 
         if let server = selectedServer, viewTabConfig.currentVisibleTabs.count > 1 {
@@ -332,82 +336,43 @@ struct ServerTerminalRoute: View {
             }
 
             Menu {
-                if let server = selectedServer {
-                    if selectedView == .terminal {
-                        Button {
-                            focusedTerminal?.showFindNavigator()
-                        } label: {
-                            Label("Find", systemImage: "magnifyingglass")
-                        }
-
-                        Button {
-                            performKeyboardCommandForFocusedTerminal()
-                        } label: {
-                            Label("Keyboard", systemImage: "keyboard")
-                        }
-
-                        if let focusedPaneId {
-                            TerminalComposerMenuButton(composer: tabManager.richPasteRuntimeStore.runtime(
-                                for: focusedPaneId, tabManager: tabManager
-                            ).composer)
-                        }
-
-                        if canEnterZenMode {
-                            Button {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-                                    isZenModeEnabled = true
-                                }
-                            } label: {
-                                Label(
-                                    "Enter Zen Mode",
-                                    systemImage: "arrow.up.left.and.arrow.down.right"
-                                )
-                            }
-                            .accessibilityIdentifier("vvterm.terminal.enterZenMode")
-                        }
-
-                        Divider()
-                    }
-
-                    Button {
-                        presentRouteSheet(.serverForm(.edit(server)))
-                    } label: {
-                        Label("Edit Server", systemImage: "pencil")
-                    }
-
-                    Button {
-                        presentRouteSheet(.serverForm(.duplicate(server)))
-                    } label: {
-                        Label("Duplicate", systemImage: "plus.square.on.square")
-                    }
-                    .accessibilityIdentifier("vvterm.terminal.duplicateServer")
-
-                    Button {
-                        presentRouteSheet(.settings)
-                    } label: {
-                        Label("Settings", systemImage: "gear")
-                    }
-                    .accessibilityIdentifier("vvterm.terminal.settings")
-
-                    Divider()
-
-                    Button(role: .destructive) {
-                        disconnect(server)
-                    } label: {
-                        Label("Disconnect", systemImage: "xmark.circle")
-                    }
-                } else {
-                    Button {
-                        presentRouteSheet(.settings)
-                    } label: {
-                        Label("Settings", systemImage: "gear")
-                    }
-                    .accessibilityIdentifier("vvterm.terminal.settings")
-                }
+                TerminalSessionMenuActions(
+                    style: .menu,
+                    isTerminalSelected: selectedServer != nil && selectedView == .terminal,
+                    zenMode: canEnterZenMode ? (isZenModeEnabled ? .active : .inactive) : .unavailable,
+                    composer: focusedPaneId.map {
+                        tabManager.richPasteRuntimeStore.runtime(for: $0, tabManager: tabManager).composer
+                    },
+                    canOpenSessions: onSessionServerSelected != nil,
+                    canDisconnect: selectedServer != nil,
+                    perform: performSessionCommand
+                )
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
             .accessibilityIdentifier("vvterm.terminal.moreMenu")
+        }
+    }
+
+    private func performSessionCommand(_ command: TerminalSessionCommand) {
+        switch command {
+        case .sessions:
+            presentRouteSheet(.sessions)
+        case .find:
+            focusedTerminal?.showFindNavigator()
+        case .keyboard:
+            performKeyboardCommandForFocusedTerminal()
+        case .toggleZen:
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                isZenModeEnabled.toggle()
+            }
+        case .settings:
+            presentRouteSheet(.settings)
+        case .disconnect:
+            if let server = selectedServer {
+                statsDependencies.runtimeStore.releaseCollector(for: server.id)
+                disconnect(server)
+            }
         }
     }
 

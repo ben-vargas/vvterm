@@ -2310,3 +2310,17 @@
 "Customize Send Action" = "Personnaliser l’action d’envoi";
 "Show Accessory Bar" = "Afficher la barre de touches";
 "Accessory keys and custom actions go directly to the terminal." = "Les touches de la barre et les actions personnalisées sont envoyées directement au terminal.";
+
+"Sessions" = "Sessions";
+
+"Ended" = "Terminée";
+
+"No sessions" = "Aucune session";
+
+"Disconnect Server" = "Déconnecter le serveur";
+
+"This closes only this tab. Other tabs remain open." = "Seul cet onglet sera fermé. Les autres onglets resteront ouverts.";
+
+"Sidebar" = "Barre latérale";
+
+"Terminal tab %lld" = "Onglet de terminal %lld";

@@ -2305,3 +2305,17 @@
 "Customize Send Action" = "自定义发送操作";
 "Show Accessory Bar" = "显示辅助栏";
 "Accessory keys and custom actions go directly to the terminal." = "辅助栏按键和自定义操作会直接发送到终端。";
+
+"Sessions" = "会话";
+
+"Ended" = "已结束";
+
+"No sessions" = "没有会话";
+
+"Disconnect Server" = "断开服务器连接";
+
+"This closes only this tab. Other tabs remain open." = "仅关闭此标签页。其他标签页将保持打开。";
+
+"Sidebar" = "侧边栏";
+
+"Terminal tab %lld" = "终端标签页 %lld";

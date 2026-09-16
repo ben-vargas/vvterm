@@ -284,7 +284,8 @@ final class TerminalProductionSSHUITests: TerminalReconnectUITestCase {
         )
 
         openProductionTerminalMenu(in: app)
-        let keyboardItem = app.buttons["Keyboard"]
+        app.buttons["vvterm.terminal.inputMenu"].tap()
+        let keyboardItem = app.buttons["vvterm.terminal.input.keyboard"]
         XCTAssertTrue(keyboardItem.waitForExistence(timeout: 5), diagnosticText(in: app))
         keyboardItem.tap()
 

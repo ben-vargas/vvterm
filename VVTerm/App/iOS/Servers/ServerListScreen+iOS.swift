@@ -19,13 +19,14 @@ struct ServerListScreen: View {
     let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedEnvironment: ServerEnvironment?
+    let selectedServerID: UUID?
+    let isSidebar: Bool
     let onServerSelected: (Server) -> Void
     let onActiveConnectionSelected: (Server) -> Void
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var appLockManager: AppLockManager
-    @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
-    @ObservedObject private var sessionState: TerminalSessionStateStore
     @State private var showingAddWorkspace = false
     @State private var showingSettings = false
     @State private var showingWorkspacePicker = false
@@ -52,6 +53,8 @@ struct ServerListScreen: View {
         makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
         selectedWorkspace: Binding<Workspace?>,
         selectedEnvironment: Binding<ServerEnvironment?>,
+        selectedServerID: UUID? = nil,
+        isSidebar: Bool = false,
         onServerSelected: @escaping (Server) -> Void,
         onActiveConnectionSelected: @escaping (Server) -> Void
     ) {
@@ -67,19 +70,39 @@ struct ServerListScreen: View {
         self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
         self._selectedWorkspace = selectedWorkspace
         self._selectedEnvironment = selectedEnvironment
+        self.selectedServerID = selectedServerID
+        self.isSidebar = isSidebar
         self.onServerSelected = onServerSelected
         self.onActiveConnectionSelected = onActiveConnectionSelected
-        self._sessionState = ObservedObject(wrappedValue: tabManager.sessionState)
     }
 
     private var canAddServer: Bool {
         !serverManager.workspaces.isEmpty
     }
 
-    var body: some View {
+    private var compactSidebar: Bool {
+        isSidebar && horizontalSizeClass == .compact
+    }
+
+    private var compactRowBackground: Color? {
+        compactSidebar ? Color(uiColor: .secondarySystemGroupedBackground) : nil
+    }
+
+    private var serverList: some View {
         List {
-            serversSection
-            activeConnectionsSection
+            if isSidebar {
+                workspaceToolbarButton
+                    .accessibilityIdentifier("vvterm.sidebar.workspace")
+                    .listRowBackground(compactRowBackground)
+            }
+            if !isSidebar || !filteredServers.isEmpty {
+                serversSection
+                    .listRowBackground(compactRowBackground)
+                SessionListSection(servers: filteredServers, tabManager: tabManager,
+                                   fileTabs: fileTabs, fileBrowser: fileBrowser, selectedServerID: selectedServerID,
+                                   onOpen: onActiveConnectionSelected)
+                    .listRowBackground(compactRowBackground)
+            }
         }
         .accessibilityIdentifier("vvterm.serverList.list")
         .overlay(alignment: .center) {
@@ -91,31 +114,70 @@ struct ServerListScreen: View {
                 )
             }
         }
-        .searchable(text: $searchText, prompt: "Search servers")
-        .navigationTitle("Servers")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                workspaceToolbarButton
-            }
+    }
 
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    presentAddServer()
-                } label: {
-                    Image(systemName: "plus")
+    @ViewBuilder
+    private var navigationContent: some View {
+        if isSidebar {
+            Group {
+                if #available(iOS 26.0, *) {
+                    serverList
+                        .contentMargins(.top, 8, for: .scrollContent)
+                        .searchable(text: $searchText, prompt: "Search servers")
+                        .searchToolbarBehavior(.minimize)
+                } else {
+                    serverList
+                        .searchable(text: $searchText, placement: .navigationBarDrawer, prompt: "Search servers")
                 }
             }
-
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    showingSettings = true
-                } label: {
-                    Image(systemName: "gear")
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+                .background {
+                    if compactSidebar {
+                        Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+                    }
                 }
-                .accessibilityIdentifier("vvterm.serverList.settings")
-            }
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: { presentAddServer() }) {
+                            Label("Add Server", systemImage: "plus")
+                        }
+                        .accessibilityIdentifier("vvterm.serverList.add")
+                    }
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Label("Settings", systemImage: "gear")
+                        }
+                        .accessibilityIdentifier("vvterm.serverList.settings")
+                    }
+                }
+        } else {
+            serverList
+                .listStyle(.sidebar)
+                .searchable(text: $searchText, prompt: "Search servers")
+                .navigationTitle("Servers")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .principal) { workspaceToolbarButton }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: { presentAddServer() }) { Image(systemName: "plus") }
+                    }
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Image(systemName: "gear")
+                        }
+                        .accessibilityIdentifier("vvterm.serverList.settings")
+                    }
+                }
         }
+    }
+
+    var body: some View {
+        navigationContent
         .sheet(isPresented: $showingAddWorkspace) {
             NavigationStack {
                 WorkspaceFormSheet(
@@ -319,11 +381,13 @@ struct ServerListScreen: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
 
+                if isSidebar { Spacer(minLength: 8) }
+
                 Image(systemName: "chevron.down")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: 220)
+            .frame(maxWidth: isSidebar ? .infinity : 220, alignment: isSidebar ? .leading : .center)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(selectedWorkspaceName)
@@ -394,39 +458,6 @@ struct ServerListScreen: View {
         }
     }
 
-    @ViewBuilder
-    private var activeConnectionsSection: some View {
-        if !activeConnections.isEmpty && !filteredServers.isEmpty {
-            Section {
-                ForEach(activeConnections) { connection in
-                    ActiveConnectionListRow(
-                        title: connection.title,
-                        status: connection.status,
-                        remoteSessionStatus: connection.remoteSessionStatus,
-                        remoteSessionBackendName: connection.remoteSessionBackendName,
-                        tabCount: connection.tabCount,
-                        onOpen: { openActiveConnection(connection) },
-                        onDisconnect: { disconnectActiveConnection(connection) }
-                    )
-                    .accessibilityIdentifier(
-                        "vvterm.serverList.activeConnection.\(connection.id.uuidString)"
-                    )
-                }
-            } header: {
-                Text("Active Connections")
-            }
-        }
-    }
-
-    private var activeConnections: [ActiveServerSummary] {
-        ActiveServerSummary.makeAll(
-            tabManager: tabManager,
-            fileTabs: fileTabs,
-            server: { server(for: $0) },
-            viewTabConfig: viewTabConfig
-        )
-    }
-
     private var filteredServers: [Server] {
         guard let workspace = selectedWorkspace else {
             // If no workspace selected, show all servers
@@ -477,30 +508,6 @@ struct ServerListScreen: View {
     private func workspace(for intent: ServerFormIntent) -> Workspace? {
         guard let sourceServer = intent.sourceServer else { return selectedWorkspace }
         return serverManager.workspaces.first { $0.id == sourceServer.workspaceId }
-    }
-
-    private func openActiveConnection(_ connection: ActiveServerSummary) {
-        Task {
-            guard let serverToUnlock = server(for: connection.id) else { return }
-            guard await appLockManager.ensureServerUnlocked(serverToUnlock) else { return }
-            guard let currentConnection = activeConnections.first(where: {
-                $0.id == connection.id
-            }), let currentServer = server(for: connection.id) else {
-                return
-            }
-
-            if let tab = currentConnection.terminalTab {
-                tabManager.sessionState.selectTab(tab.id, for: currentServer.id)
-            }
-            tabManager.sessionState.selectView(currentConnection.targetView, for: currentServer.id)
-            onActiveConnectionSelected(currentServer)
-        }
-    }
-
-    private func disconnectActiveConnection(_ connection: ActiveServerSummary) {
-        fileBrowser.disconnect(serverId: connection.id)
-        fileTabs.disconnect(serverId: connection.id)
-        tabManager.disconnectServer(connection.id)
     }
 
     private func startWake(for server: Server) {

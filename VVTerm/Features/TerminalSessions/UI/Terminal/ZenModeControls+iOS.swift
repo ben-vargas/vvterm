@@ -21,12 +21,8 @@ struct IOSZenModePanel: View {
     @Binding var floatingControlIsShown: Bool
     let onNewTerminalTab: () -> Void
     let onNewFileTab: () -> Void
-    let onOpenSettings: () -> Void
-    let onEditServer: () -> Void
-    let onDuplicateServer: () -> Void
-    let onDisconnect: () -> Void
+    let sessionActions: TerminalSessionMenuActions
     let onBack: () -> Void
-    let onExitZen: () -> Void
 
     var body: some View {
         ZenModePanelCard(width: width) {
@@ -70,42 +66,12 @@ struct IOSZenModePanel: View {
                 tabList
             }
 
-            ZenModeSection("Server") {
-                ZenModeActionButton(title: "Settings", systemImage: "gear", action: onOpenSettings)
-                    .accessibilityIdentifier("vvterm.terminal.zen.settings")
-
-                ZenModeActionButton(title: "Edit Server", systemImage: "pencil", action: onEditServer)
-                    .accessibilityIdentifier("vvterm.terminal.zen.editServer")
-
-                ZenModeActionButton(
-                    title: "Duplicate",
-                    systemImage: "plus.square.on.square",
-                    action: onDuplicateServer
-                )
-                .accessibilityIdentifier("vvterm.terminal.zen.duplicateServer")
-
-                ZenModeActionButton(title: "Back", systemImage: "chevron.left", action: onBack)
+            ZenModeSection("Session") {
+                sessionActions
+                ZenModeActionButton(title: "Servers", systemImage: "chevron.left", action: onBack)
                     .accessibilityIdentifier("vvterm.terminal.zen.back")
             }
 
-            ZenModeSection("Session") {
-                ZenModeActionButton(
-                    title: "Disconnect",
-                    systemImage: "xmark.circle",
-                    tint: .red,
-                    action: onDisconnect
-                )
-                .accessibilityIdentifier("vvterm.terminal.zen.disconnect")
-            }
-
-            ZenModeSection("Zen") {
-                ZenModeActionButton(
-                    title: "Exit Zen Mode",
-                    systemImage: "arrow.down.right.and.arrow.up.left",
-                    action: onExitZen
-                )
-                .accessibilityIdentifier("vvterm.terminal.exitZenMode")
-            }
         }
         .accessibilityIdentifier("vvterm.terminal.zenPanel")
     }

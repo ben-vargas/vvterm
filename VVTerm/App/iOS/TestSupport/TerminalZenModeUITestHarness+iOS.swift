@@ -96,14 +96,8 @@ struct TerminalZenModeUITestHarness: View {
 
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Menu {
-                            Button {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-                                    isZenModeEnabled = true
-                                }
-                            } label: {
-                                Label("Enter Zen Mode", systemImage: "arrow.up.left.and.arrow.down.right")
-                            }
-                            .accessibilityIdentifier("vvterm.terminal.enterZenMode")
+                            sessionActions(style: .menu)
+
                         } label: {
                             Image(systemName: "ellipsis.circle")
                         }
@@ -152,6 +146,26 @@ struct TerminalZenModeUITestHarness: View {
         }
     }
 
+    private func sessionActions(style: TerminalSessionMenuActions.Style) -> TerminalSessionMenuActions {
+        TerminalSessionMenuActions(
+            style: style, isTerminalSelected: selectedView == .terminal,
+            zenMode: isZenModeEnabled ? .active : .inactive,
+            composer: tabManager.richPasteRuntimeStore.runtime(for: Self.paneId, tabManager: tabManager).composer,
+            canOpenSessions: true,
+            canDisconnect: true,
+            perform: { command in
+                showingZenPanel = false
+                switch command {
+                case .find: terminalView?.showFindNavigator()
+                case .keyboard: keyboardCoordinator.userRequestedKeyboardCommand()
+                case .toggleZen:
+                    if isZenModeEnabled { exitZenMode() } else { isZenModeEnabled = true }
+                case .sessions, .settings, .disconnect: break
+                }
+            }
+        )
+    }
+
     private var zenModeOverlay: some View {
         ZenModeFloatingOverlay(isPanelPresented: $showingZenPanel) { width in
             IOSZenModePanel(
@@ -174,12 +188,9 @@ struct TerminalZenModeUITestHarness: View {
                 floatingControlIsShown: $showsFloatingControl,
                 onNewTerminalTab: {},
                 onNewFileTab: {},
-                onOpenSettings: {},
-                onEditServer: {},
-                onDuplicateServer: {},
-                onDisconnect: {},
-                onBack: {},
-                onExitZen: exitZenMode
+                sessionActions: sessionActions(style: .zen),
+                onBack: {}
+
             )
         }
     }

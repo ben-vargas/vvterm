@@ -5,43 +5,17 @@ import Testing
 
 struct EternalTerminalStatePolicyTests {
     #if os(iOS)
-    @Test
+    @Test @MainActor
     func restoredETCheckpointIsPresentedAsReadyToResumeNotDisconnected() {
-        #expect(
-            ActiveConnectionPresentationStatus(
-                connectionState: .disconnected,
-                connectionMode: .eternalTerminal,
-                hasResumeCheckpoint: true
-            ) == .resumable
-        )
-        #expect(
-            ActiveConnectionPresentationStatus(
-                connectionState: .disconnected,
-                connectionMode: .eternalTerminal,
-                hasResumeCheckpoint: false
-            ) == .disconnected
-        )
-        #expect(
-            ActiveConnectionPresentationStatus(
-                connectionState: .connected,
-                connectionMode: .eternalTerminal,
-                hasResumeCheckpoint: true
-            ) == .connected
-        )
-        #expect(
-            ActiveConnectionPresentationStatus(
-                connectionState: .disconnected,
-                connectionMode: .standard,
-                hasResumeCheckpoint: true
-            ) == .disconnected
-        )
-        #expect(
-            ActiveConnectionPresentationStatus(
-                connectionState: .disconnected,
-                connectionMode: .mosh,
-                hasResumeCheckpoint: true
-            ) == .resumable
-        )
+        var pane = TerminalPaneState(paneId: UUID(), tabId: UUID(), serverId: UUID())
+        pane.connectionState = .disconnected
+        #expect(SessionConnectionStatus(pane: pane, hasResumeCheckpoint: true) == .resumable)
+        #expect(SessionConnectionStatus(pane: pane, hasResumeCheckpoint: false) == .ended)
+        pane.connectionState = .connected
+        #expect(SessionConnectionStatus(pane: pane, hasResumeCheckpoint: true) == .connected)
+        pane.connectionState = .disconnected
+        pane.disconnectReason = .sessionEnded
+        #expect(SessionConnectionStatus(pane: pane, hasResumeCheckpoint: true) == .ended)
     }
 
     #endif

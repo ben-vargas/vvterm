@@ -81,48 +81,89 @@ struct iOSContentView: View {
         )
     }
 
-    private var navigationContent: some View {
-        NavigationStack {
-            ServerListScreen(
-                serverManager: serverManager,
+    private func serverList(onSelection: @escaping () -> Void) -> some View {
+        ServerListScreen(
+            serverManager: serverManager,
+            tabManager: tabManager,
+            fileTabs: fileTabs,
+            fileBrowser: fileBrowser,
+            statsDependencies: statsDependencies,
+            analyticsOptOutAction: analyticsOptOutAction,
+            serverFormDependencies: serverFormDependencies,
+            serverWakeCoordinator: serverWakeCoordinator,
+            voiceModelManagers: voiceModelManagers,
+            makeLocalDiscoveryManager: makeLocalDiscoveryManager,
+            selectedWorkspace: $selectedWorkspace,
+            selectedEnvironment: $selectedEnvironment,
+            selectedServerID: terminalRoute?.serverId,
+            isSidebar: UIDevice.current.userInterfaceIdiom == .pad,
+            onServerSelected: { server in
+                beginConnection(to: server)
+                onSelection()
+            },
+            onActiveConnectionSelected: { server in
+                terminalRoute = .active(serverId: server.id)
+                onSelection()
+            }
+        )
+        .safeAreaInset(edge: .top, spacing: 0) {
+            ServerLocalStorageNotice(serverManager: serverManager)
+        }
+    }
+    @ViewBuilder
+    private func terminalDestination(onToggleSidebar: (() -> Void)? = nil) -> some View {
+        if let terminalRoute {
+            ServerTerminalRoute(
                 tabManager: tabManager,
+                serverManager: serverManager,
                 fileTabs: fileTabs,
                 fileBrowser: fileBrowser,
                 statsDependencies: statsDependencies,
-                analyticsOptOutAction: analyticsOptOutAction,
+                terminalSecurityActions: terminalSecurityActions,
                 serverFormDependencies: serverFormDependencies,
-                serverWakeCoordinator: serverWakeCoordinator,
                 voiceModelManagers: voiceModelManagers,
+                voiceInputRuntimeStore: voiceInputRuntimeStore,
+                analyticsOptOutAction: analyticsOptOutAction,
+                route: terminalRoute,
                 makeLocalDiscoveryManager: makeLocalDiscoveryManager,
-                selectedWorkspace: $selectedWorkspace,
-                selectedEnvironment: $selectedEnvironment,
-                onServerSelected: { server in
-                    beginConnection(to: server)
-                },
-                onActiveConnectionSelected: { server in
-                    terminalRoute = .active(serverId: server.id)
-                }
+                onToggleSidebar: onToggleSidebar,
+                onSessionServerSelected: { self.terminalRoute = .active(serverId: $0.id) },
+                onBack: { self.terminalRoute = nil }
             )
-            .safeAreaInset(edge: .top, spacing: 0) {
-                ServerLocalStorageNotice(serverManager: serverManager)
+            .id(terminalRoute.serverId)
+        } else {
+            VStack(spacing: 12) {
+                Image(systemName: "terminal").font(.largeTitle).foregroundStyle(.secondary)
+                Text("Choose a server from the sidebar to connect").foregroundStyle(.secondary)
             }
-            .navigationDestination(isPresented: terminalPresentation) {
-                if let terminalRoute {
-                    ServerTerminalRoute(
-                        tabManager: tabManager,
-                        serverManager: serverManager,
-                        fileTabs: fileTabs,
-                        fileBrowser: fileBrowser,
-                        statsDependencies: statsDependencies,
-                        terminalSecurityActions: terminalSecurityActions,
-                        serverFormDependencies: serverFormDependencies,
-                        voiceModelManagers: voiceModelManagers,
-                        voiceInputRuntimeStore: voiceInputRuntimeStore,
-                        analyticsOptOutAction: analyticsOptOutAction,
-                        route: terminalRoute,
-                        makeLocalDiscoveryManager: makeLocalDiscoveryManager,
-                        onBack: { self.terminalRoute = nil }
-                    )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .toolbar {
+                if let onToggleSidebar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: onToggleSidebar) { Label("Sidebar", systemImage: "sidebar.left") }
+                            .accessibilityIdentifier("vvterm.sidebar.toggle")
+                    }
+                }
+            }
+        }
+    }
+
+    private var navigationContent: some View {
+        Group {
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                AdaptiveServerNavigation(hasSelection: terminalRoute != nil) { showDetail in
+                    serverList(onSelection: showDetail)
+                } detail: { toggleSidebar in
+                    terminalDestination(onToggleSidebar: toggleSidebar)
+                }
+                // UIKit owns the column safe areas, including iPad window controls.
+                .ignoresSafeArea(.container)
+            } else {
+                NavigationStack {
+                    serverList(onSelection: {})
+                        .navigationDestination(isPresented: terminalPresentation) {
+                            terminalDestination()
+                        }
                 }
             }
         }
@@ -188,7 +229,15 @@ struct iOSContentView: View {
     }
 
     private func beginConnection(to server: Server) {
-        guard terminalRoute == nil else { return }
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            if !tabManager.sessionState.tabs(for: server.id).isEmpty || !fileTabs.tabs(for: server.id).isEmpty {
+                terminalRoute = .active(serverId: server.id)
+                return
+            }
+            guard terminalRoute?.serverId != server.id else { return }
+        } else {
+            guard terminalRoute == nil else { return }
+        }
 
         let attemptID = UUID()
         terminalRoute = .connecting(server: server, attemptID: attemptID)

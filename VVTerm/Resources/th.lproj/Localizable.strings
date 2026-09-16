@@ -2308,3 +2308,17 @@
 "Customize Send Action" = "ปรับแต่งการส่ง";
 "Show Accessory Bar" = "แสดงแถบปุ่มเสริม";
 "Accessory keys and custom actions go directly to the terminal." = "ปุ่มบนแถบและการทำงานที่กำหนดเองจะส่งไปยังเทอร์มินัลโดยตรง";
+
+"Sessions" = "เซสชัน";
+
+"Ended" = "สิ้นสุดแล้ว";
+
+"No sessions" = "ไม่มีเซสชัน";
+
+"Disconnect Server" = "ตัดการเชื่อมต่อเซิร์ฟเวอร์";
+
+"This closes only this tab. Other tabs remain open." = "ปิดเฉพาะแท็บนี้ แท็บอื่นจะยังเปิดอยู่";
+
+"Sidebar" = "แถบด้านข้าง";
+
+"Terminal tab %lld" = "แท็บเทอร์มินัล %lld";

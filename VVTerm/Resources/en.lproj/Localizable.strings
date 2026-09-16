@@ -2307,3 +2307,17 @@
 "Customize Send Action" = "Customize Send Action";
 "Show Accessory Bar" = "Show Accessory Bar";
 "Accessory keys and custom actions go directly to the terminal." = "Accessory keys and custom actions go directly to the terminal.";
+
+"Sessions" = "Sessions";
+
+"Ended" = "Ended";
+
+"No sessions" = "No sessions";
+
+"Disconnect Server" = "Disconnect Server";
+
+"This closes only this tab. Other tabs remain open." = "This closes only this tab. Other tabs remain open.";
+
+"Sidebar" = "Sidebar";
+
+"Terminal tab %lld" = "Terminal tab %lld";

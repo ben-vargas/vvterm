@@ -94,7 +94,7 @@ struct TerminalReconnectUITestHarness: View {
                     .allowsHitTesting(false)
             }
             .overlay(alignment: .trailing) {
-                if usesTabSwitchHarness, let server = activeServer {
+                if usesTabSwitchHarness && !usesSessionsHarness, let server = activeServer {
                     VStack {
                         ForEach(Array(tabManager.sessionState.tabs(for: server.id).enumerated()), id: \.element.id) { index, tab in
                             Button("Tab \(index)") { tabManager.sessionState.selectTab(tab.id, for: server.id) }
@@ -202,8 +202,12 @@ struct TerminalReconnectUITestHarness: View {
         return server
     }
 
+    private var usesSessionsHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-sessions")
+    }
+
     private var usesTabSwitchHarness: Bool {
-        Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-tab-switch")
+        usesSessionsHarness || Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-tab-switch")
     }
 
     private var exposesKeyboardLossControl: Bool {
@@ -219,7 +223,7 @@ struct TerminalReconnectUITestHarness: View {
     }
 
     private var usesNavigationHarness: Bool {
-        Foundation.ProcessInfo.processInfo.arguments.contains(
+        usesSessionsHarness || Foundation.ProcessInfo.processInfo.arguments.contains(
             "--vvterm-ui-test-server-navigation"
         )
     }
@@ -376,6 +380,10 @@ struct TerminalReconnectUITestHarness: View {
             } else if tabManager.sessionState.tabs(for: server.id).isEmpty {
                 throw VVTermError.connectionFailed("Cold relaunch snapshot was not restored")
             }
+            if usesSessionsHarness {
+                fileTabs.disconnect(serverId: server.id)
+                _ = fileTabs.openTab(for: server, seedPath: "/tmp", hasProAccess: true)
+            }
             tabManager.sessionState.selectView(.terminal, for: server.id)
             fixtureState = .ready(server)
         } catch {
@@ -399,6 +407,7 @@ struct TerminalReconnectUITestHarness: View {
     }
 
     private func navigationFixtureServers(activeServer: Server) -> [Server] {
+        if usesSessionsHarness { return [activeServer] }
         let fillerServers = (1...24).map { index in
             Server(
                 workspaceId: Self.workspaceId,

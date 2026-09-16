@@ -2308,3 +2308,17 @@
 "Customize Send Action" = "Sendeaktion anpassen";
 "Show Accessory Bar" = "Zusatzleiste anzeigen";
 "Accessory keys and custom actions go directly to the terminal." = "Tasten der Zusatzleiste und eigene Aktionen werden direkt an das Terminal gesendet.";
+
+"Sessions" = "Sitzungen";
+
+"Ended" = "Beendet";
+
+"No sessions" = "Keine Sitzungen";
+
+"Disconnect Server" = "Server trennen";
+
+"This closes only this tab. Other tabs remain open." = "Nur dieser Tab wird geschlossen. Andere Tabs bleiben geöffnet.";
+
+"Sidebar" = "Seitenleiste";
+
+"Terminal tab %lld" = "Terminal-Tab %lld";

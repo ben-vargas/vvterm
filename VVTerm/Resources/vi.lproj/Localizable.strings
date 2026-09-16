@@ -2353,3 +2353,17 @@
 "Customize Send Action" = "Tùy chỉnh thao tác gửi";
 "Show Accessory Bar" = "Hiện thanh phím bổ trợ";
 "Accessory keys and custom actions go directly to the terminal." = "Các phím trên thanh và thao tác tùy chỉnh được gửi thẳng đến cửa sổ dòng lệnh.";
+
+"Sessions" = "Phiên";
+
+"Ended" = "Đã kết thúc";
+
+"No sessions" = "Không có phiên";
+
+"Disconnect Server" = "Ngắt kết nối máy chủ";
+
+"This closes only this tab. Other tabs remain open." = "Chỉ đóng thẻ này. Các thẻ khác vẫn mở.";
+
+"Sidebar" = "Thanh bên";
+
+"Terminal tab %lld" = "Thẻ terminal %lld";

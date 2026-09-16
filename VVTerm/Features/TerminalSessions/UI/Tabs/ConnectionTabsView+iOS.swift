@@ -275,32 +275,24 @@ extension ConnectionTerminalContainer {
                     showingZenPanel = false
                     openNewFileTab(selectFilesViewOnSuccess: true)
                 },
-                onOpenSettings: {
-                    showingZenPanel = false
-                    onOpenSettings?()
-                },
-                onEditServer: {
-                    showingZenPanel = false
-                    serverFormIntent = .edit(server)
-                },
-                onDuplicateServer: {
-                    showingZenPanel = false
-                    serverFormIntent = .duplicate(server)
-                },
-                onDisconnect: {
-                    showingZenPanel = false
-                    statsDependencies.runtimeStore.releaseCollector(for: server.id)
-                    if let onDisconnectRoute {
-                        onDisconnectRoute()
-                    } else {
-                        disconnectFromServer()
+                sessionActions: TerminalSessionMenuActions(
+                    style: .zen,
+                    isTerminalSelected: selectedView == .terminal,
+                    zenMode: .active,
+                    composer: selectedTab.map {
+                        tabManager.richPasteRuntimeStore.runtime(for: $0.focusedPaneId, tabManager: tabManager).composer
+                    },
+                    canOpenSessions: canOpenSessions,
+                    canDisconnect: true,
+                    perform: { command in
+                        showingZenPanel = false
+                        onSessionCommand?(command)
                     }
-                },
+                ),
                 onBack: {
                     showingZenPanel = false
                     onLeaveRoute?()
-                },
-                onExitZen: exitZenMode
+                }
             )
         }
     }
@@ -364,13 +356,6 @@ extension ConnectionTerminalContainer {
             return
         }
         tabManager.presentationState.applyVoiceEvent(.pendingReturnDismissed, for: paneID)
-    }
-
-    private func exitZenMode() {
-        showingZenPanel = false
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-            isZenModeEnabled = false
-        }
     }
 
     private var disconnectAlertTitle: String {

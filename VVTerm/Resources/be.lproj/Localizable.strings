@@ -2309,3 +2309,17 @@
 "Customize Send Action" = "Наладзіць дзеянне адпраўкі";
 "Show Accessory Bar" = "Паказваць панэль клавіш";
 "Accessory keys and custom actions go directly to the terminal." = "Клавішы панэлі і ўласныя дзеянні адпраўляюцца непасрэдна ў тэрмінал.";
+
+"Sessions" = "Сеансы";
+
+"Ended" = "Завершаны";
+
+"No sessions" = "Няма сеансаў";
+
+"Disconnect Server" = "Адключыць сервер";
+
+"This closes only this tab. Other tabs remain open." = "Закрыецца толькі гэтая ўкладка. Іншыя ўкладкі застануцца адкрытымі.";
+
+"Sidebar" = "Бакавая панэль";
+
+"Terminal tab %lld" = "Укладка тэрмінала %lld";

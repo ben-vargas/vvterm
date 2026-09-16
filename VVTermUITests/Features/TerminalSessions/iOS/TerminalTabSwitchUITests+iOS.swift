@@ -55,7 +55,8 @@ final class TerminalTabSwitchUITests: TerminalReconnectUITestCase {
             // Establish a visible software keyboard before measuring continuity.
             if diagnosticValue("keyboardVisible", in: diagnostics) != "true" {
                 openProductionTerminalMenu(in: app)
-                app.buttons["Keyboard"].tap()
+                app.buttons["vvterm.terminal.inputMenu"].tap()
+                app.buttons["vvterm.terminal.input.keyboard"].tap()
                 wait(for: diagnostics, containing: "keyboardVisible=true", timeout: 8, app: app)
             }
         }

@@ -50,6 +50,8 @@ struct ConnectionTerminalContainer: View {
     let onOpenSettings: (() -> Void)?
     let onLeaveRoute: (() -> Void)?
     let onDisconnectRoute: (() -> Void)?
+    let canOpenSessions: Bool
+    let onSessionCommand: ((TerminalSessionCommand) -> Void)?
 
     @EnvironmentObject var ghosttyApp: GhosttyRuntime
     @EnvironmentObject var storeManager: StoreManager
@@ -94,7 +96,9 @@ struct ConnectionTerminalContainer: View {
         onToggleSidebar: @escaping () -> Void,
         onOpenSettings: (() -> Void)?,
         onLeaveRoute: (() -> Void)?,
-        onDisconnectRoute: (() -> Void)?
+        onDisconnectRoute: (() -> Void)?,
+        canOpenSessions: Bool = false,
+        onSessionCommand: ((TerminalSessionCommand) -> Void)? = nil
     ) {
         self.tabManager = tabManager
         self.terminalToolbarProjection = terminalToolbarProjection
@@ -115,6 +119,8 @@ struct ConnectionTerminalContainer: View {
         self.onOpenSettings = onOpenSettings
         self.onLeaveRoute = onLeaveRoute
         self.onDisconnectRoute = onDisconnectRoute
+        self.canOpenSessions = canOpenSessions
+        self.onSessionCommand = onSessionCommand
     }
 
     /// Selected view type - persisted per server

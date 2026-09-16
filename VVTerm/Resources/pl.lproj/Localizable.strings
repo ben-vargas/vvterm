@@ -2310,3 +2310,17 @@
 "Customize Send Action" = "Dostosuj czynność wysyłania";
 "Show Accessory Bar" = "Pokaż pasek klawiszy";
 "Accessory keys and custom actions go directly to the terminal." = "Klawisze paska i własne czynności są wysyłane bezpośrednio do terminala.";
+
+"Sessions" = "Sesje";
+
+"Ended" = "Zakończono";
+
+"No sessions" = "Brak sesji";
+
+"Disconnect Server" = "Rozłącz serwer";
+
+"This closes only this tab. Other tabs remain open." = "Zamknięta zostanie tylko ta karta. Pozostałe karty pozostaną otwarte.";
+
+"Sidebar" = "Pasek boczny";
+
+"Terminal tab %lld" = "Karta terminala %lld";

@@ -2308,3 +2308,17 @@
 "Customize Send Action" = "Настроить действие отправки";
 "Show Accessory Bar" = "Показывать панель клавиш";
 "Accessory keys and custom actions go directly to the terminal." = "Клавиши панели и пользовательские действия отправляются прямо в терминал.";
+
+"Sessions" = "Сеансы";
+
+"Ended" = "Завершён";
+
+"No sessions" = "Нет сеансов";
+
+"Disconnect Server" = "Отключить сервер";
+
+"This closes only this tab. Other tabs remain open." = "Закроется только эта вкладка. Другие вкладки останутся открытыми.";
+
+"Sidebar" = "Боковая панель";
+
+"Terminal tab %lld" = "Вкладка терминала %lld";

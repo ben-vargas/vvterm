@@ -1,5 +1,6 @@
 #if os(iOS)
 import XCTest
+import UIKit
 
 final class ServerNavigationUITests: XCTestCase {
     override func setUpWithError() throws {
@@ -8,6 +9,7 @@ final class ServerNavigationUITests: XCTestCase {
 
     @MainActor
     func testServerEntryShowsKeyboardAndKeepsMenuStableWithPrivacyMode() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "iPhone stack flow; iPad uses SessionsNavigationUITests")
         let app = launchNavigationHarness(privacyModeEnabled: true)
         defer { app.terminate() }
         let diagnostics = app.staticTexts["vvterm.reconnectTest.diagnostics"]
@@ -56,6 +58,7 @@ final class ServerNavigationUITests: XCTestCase {
 
     @MainActor
     func testActiveTerminalPushPopPreservesListPositionAndSession() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "iPhone stack flow; iPad uses SessionsNavigationUITests")
         let app = launchNavigationHarness()
         let diagnostics = app.staticTexts["vvterm.reconnectTest.diagnostics"]
         XCTAssertTrue(diagnostics.waitForExistence(timeout: 45))
@@ -66,10 +69,11 @@ final class ServerNavigationUITests: XCTestCase {
                 identifier: "vvterm.serverList.server.D3A03FD5-453E-43AC-8BB5-838E5D5D1990"
             )
             .firstMatch
-        let activeRow = app.descendants(matching: .any)
+        let activeRow = app.buttons
             .matching(
-                identifier: "vvterm.serverList.activeConnection.D3A03FD5-453E-43AC-8BB5-838E5D5D1990"
+                NSPredicate(format: "identifier BEGINSWITH %@", "vvterm.sessions.tab.")
             )
+            .containing(.image, identifier: "terminal")
             .firstMatch
         let list = app.descendants(matching: .any)
             .matching(identifier: "vvterm.serverList.list")
@@ -168,15 +172,17 @@ final class ServerNavigationUITests: XCTestCase {
 
     @MainActor
     func testBackgroundReturnPreservesSessionKeyboardAndBackResponsiveness() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "iPhone stack flow; iPad uses SessionsNavigationUITests")
         let app = launchNavigationHarness()
         let diagnostics = app.staticTexts["vvterm.reconnectTest.diagnostics"]
         XCTAssertTrue(diagnostics.waitForExistence(timeout: 45))
         wait(for: diagnostics, containing: "setup=ready", app: app)
 
-        let activeRow = app.descendants(matching: .any)
+        let activeRow = app.buttons
             .matching(
-                identifier: "vvterm.serverList.activeConnection.D3A03FD5-453E-43AC-8BB5-838E5D5D1990"
+                NSPredicate(format: "identifier BEGINSWITH %@", "vvterm.sessions.tab.")
             )
+            .containing(.image, identifier: "terminal")
             .firstMatch
         let list = app.descendants(matching: .any)
             .matching(identifier: "vvterm.serverList.list")
@@ -235,6 +241,7 @@ final class ServerNavigationUITests: XCTestCase {
             "-iCloudSyncEnabled", "NO",
             "-sshAutoReconnect", "YES",
             "-terminalTmuxEnabledDefault", "NO",
+            "-terminalInputMode", "direct",
             "-security.privacyModeEnabled", privacyModeEnabled ? "YES" : "NO",
             "-security.fullAppLockEnabled", "NO",
             "-security.lockOnBackground", "NO",

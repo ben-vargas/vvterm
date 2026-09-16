@@ -2309,3 +2309,17 @@
 "Customize Send Action" = "Přizpůsobit akci odeslání";
 "Show Accessory Bar" = "Zobrazit panel kláves";
 "Accessory keys and custom actions go directly to the terminal." = "Klávesy panelu a vlastní akce se odesílají přímo do terminálu.";
+
+"Sessions" = "Relace";
+
+"Ended" = "Ukončeno";
+
+"No sessions" = "Žádné relace";
+
+"Disconnect Server" = "Odpojit server";
+
+"This closes only this tab. Other tabs remain open." = "Zavře se pouze tato karta. Ostatní karty zůstanou otevřené.";
+
+"Sidebar" = "Boční panel";
+
+"Terminal tab %lld" = "Karta terminálu %lld";
