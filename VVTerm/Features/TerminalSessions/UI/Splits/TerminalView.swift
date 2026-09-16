@@ -84,14 +84,8 @@ struct TerminalTabView: View {
     @ViewBuilder
     private func withTerminalKeyboardAvoidance<Content: View>(_ content: Content) -> some View {
         #if os(iOS)
-        content.terminalKeyboardAvoidance(
-            focusedPaneId: isSelected ? tab.focusedPaneId : nil,
-            paneIds: tab.allPaneIds,
-            terminalSurfaceChange: tabManager.terminalSurfaceStore.latestChange,
-            terminalProvider: { tabManager.terminalSurfaceStore.ghosttySurface(for: $0) },
-            keyboardCoordinator: tabManager.keyboardCoordinator,
-            scope: .container
-        )
+        // The iOS tab container owns the stationary keyboard viewport.
+        content
         #else
         content.terminalKeyboardAvoidance(
             focusedPaneId: isSelected ? tab.focusedPaneId : nil,
@@ -1064,6 +1058,7 @@ struct TerminalPaneView: View {
             onVoiceTrigger: voiceTriggerHandlerForTerminal,
             onSceneActivation: reconcileAutomaticReconnect,
             acceptsInput: connectionState.isConnected,
+            isPaneFocused: isFocused,
             composerVoice: composerVoice,
             composer: tabManager.richPasteRuntimeStore.runtime(for: paneId, tabManager: tabManager).composer
         )

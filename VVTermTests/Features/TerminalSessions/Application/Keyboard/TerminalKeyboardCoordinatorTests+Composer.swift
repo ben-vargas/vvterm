@@ -8,6 +8,31 @@ extension TerminalKeyboardCoordinatorTests {
     @Suite(.serialized)
     struct Composer {
         @Test @MainActor
+        func tabTransferAcquiresIncomingEditorBeforeReleasingOutgoingEditor() async {
+            let first = UUID(), second = UUID()
+            let terminal = TerminalKeyboardInputSessionSpy()
+            let outgoing = ComposerInputSpy(), incoming = ComposerInputSpy()
+            let coordinator = makeTerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { _ in terminal }
+            coordinator.inputModeProvider = { _ in .chat }
+            for pane in [first, second] {
+                coordinator.setPaneInputEligible(true, for: pane)
+                coordinator.setWindowAttached(true, for: pane)
+            }
+            coordinator.setActivePane(first)
+            coordinator.setViewActive(true)
+            coordinator.registerComposerInput(outgoing, for: first)
+            coordinator.registerComposerInput(incoming, for: second)
+            await drainMainQueue()
+            var events: [String] = []
+            outgoing.onSetInput = { active in if !active { events.append("release") } }
+            incoming.onSetInput = { active in if active { events.append("acquire") } }
+            coordinator.setActivePane(second)
+            await drainMainQueue()
+            #expect(events.prefix(2).elementsEqual(["acquire", "release"]))
+        }
+
+        @Test @MainActor
         func nativeDismissalKeepsChatHiddenUntilExplicitShow() async {
             let pane = UUID()
             let terminal = TerminalKeyboardInputSessionSpy()
@@ -404,6 +429,7 @@ extension TerminalKeyboardCoordinatorTests {
 }
 @MainActor
 private final class ComposerInputSpy: TerminalComposerInputSession {
+    var onSetInput: ((Bool) -> Void)?
     var allowsComposerFocus = true
     var active = false
     var allowsAcquisition = false
@@ -411,6 +437,7 @@ private final class ComposerInputSpy: TerminalComposerInputSession {
     var isComposerFirstResponder: Bool { active }
     func preventComposerInputAcquisition() { allowsAcquisition = false }
     func setComposerInput(active: Bool, softwareKeyboardHidden: Bool) {
+        onSetInput?(active)
         self.active = active
         allowsAcquisition = active
         keyboardHidden = softwareKeyboardHidden

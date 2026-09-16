@@ -91,6 +91,16 @@ struct TerminalReconnectUITestHarness: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .allowsHitTesting(false)
             }
+            .overlay(alignment: .trailing) {
+                if usesTabSwitchHarness, let server = activeServer {
+                    VStack {
+                        ForEach(Array(tabManager.sessionState.tabs(for: server.id).enumerated()), id: \.element.id) { index, tab in
+                            Button("Tab \(index)") { tabManager.sessionState.selectTab(tab.id, for: server.id) }
+                                .accessibilityIdentifier("vvterm.tabSwitch.\(index)")
+                        }
+                    }
+                }
+            }
             .overlay(alignment: .topLeading) {
                 if exposesKeyboardLossControl {
                     HStack(spacing: 6) {
@@ -188,6 +198,10 @@ struct TerminalReconnectUITestHarness: View {
     private var activeServer: Server? {
         guard case .ready(let server) = fixtureState else { return nil }
         return server
+    }
+
+    private var usesTabSwitchHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains("--vvterm-ui-test-tab-switch")
     }
 
     private var exposesKeyboardLossControl: Bool {
@@ -341,7 +355,10 @@ struct TerminalReconnectUITestHarness: View {
 
             if !usesColdRelaunchHarness || seedsColdRelaunchHarness {
                 let firstTab = try await tabManager.openTab(for: server)
-                if usesColdRelaunchHarness {
+                if usesTabSwitchHarness {
+                    _ = try await tabManager.openTab(for: server)
+                    tabManager.sessionState.selectTab(firstTab.id, for: server.id)
+                } else if usesColdRelaunchHarness {
                     guard tabManager.splitHorizontal(
                         tab: firstTab,
                         paneId: firstTab.rootPaneId,
@@ -433,6 +450,8 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
         private var serverId: UUID?
         private var fallback = "setup=preparing"
         private var timer: Timer?
+        private var keyboardHideObserver: NSObjectProtocol?
+        private var keyboardHideCount = 0
 
         init(tabManager: TerminalTabManager) {
             self.tabManager = tabManager
@@ -440,6 +459,9 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
 
         func install(_ label: UILabel) {
             self.label = label
+            keyboardHideObserver = NotificationCenter.default.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.keyboardHideCount += 1 }
+            }
             let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.refresh()
@@ -459,6 +481,8 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
         func invalidate() {
             timer?.invalidate()
             timer = nil
+            if let keyboardHideObserver { NotificationCenter.default.removeObserver(keyboardHideObserver) }
+            keyboardHideObserver = nil
         }
 
         private func refresh() {
@@ -477,6 +501,7 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
             }
 
             if configuredTerminal !== terminal {
+                configuredTerminal?.accessibilityIdentifier = nil
                 terminal.keyboardUITestSetHardwareKeyboardAttached(false)
                 if usesKeyboardFrameSimulation {
                     if let frame = terminalReconnectVisibleKeyboardFrame(for: terminal) {
@@ -502,7 +527,14 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
                 keyboardVisible: keyboard.isSoftwareKeyboardVisible,
                 keyboardHeight: keyboardHeight
             )
+            let tabSurfaces = tabManager.sessionState.tabs(for: serverId).flatMap(\.allPaneIds)
+                .compactMap { tabManager.terminalSurfaceStore.ghosttySurface(for: $0) }
             publish([
+                "tabAttached=\(tabSurfaces.filter { $0.window != nil }.count)",
+                "tabPaused=\(tabSurfaces.filter(\.isRenderingPaused).count)",
+                "tabResizes=\(tabSurfaces.reduce(0) { $0 + $1.keyboardUITestGridResizeCount })",
+                "keyboardHides=\(keyboardHideCount)",
+                "draft=\(tabManager.richPasteRuntimeStore.runtime(for: paneId, tabManager: tabManager).composer.draft)|",
                 "setup=ready",
                 "state=\(connectionToken(state))",
                 "title=\(title)",

@@ -675,11 +675,15 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     }
 
     private func syncComposerInput() {
-        for (paneId, input) in composerInputs {
-            let active = activePaneId == paneId && Self.desiredComposerInputActive(inputs: currentInputs)
-            guard let session = input.session else { continue }
-            if active && session.allowsComposerFocus && presentationVerifyTask != nil { continue }
+        let active = Self.desiredComposerInputActive(inputs: currentInputs)
+        // UIKit can transfer directly only while the outgoing responder is still owned.
+        // Acquire the attached incoming editor before releasing the other tab's editor.
+        if let session = activeComposerInput,
+           !(active && session.allowsComposerFocus && presentationVerifyTask != nil) {
             session.setComposerInput(active: active, softwareKeyboardHidden: isUserHidden)
+        }
+        for (paneId, input) in composerInputs where paneId != activePaneId {
+            input.session?.setComposerInput(active: false, softwareKeyboardHidden: isUserHidden)
         }
     }
 

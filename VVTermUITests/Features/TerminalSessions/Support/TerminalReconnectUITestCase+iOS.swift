@@ -15,6 +15,7 @@ class TerminalReconnectUITestCase: XCTestCase {
     @MainActor
     func launchProductionSSHTestHarness(
         exposesKeyboardLossControl: Bool = false,
+        tabSwitching: Bool = false,
         preservesTerminalSize: Bool = false,
         privacyModeEnabled: Bool = false,
         chatMode: Bool = false,
@@ -42,6 +43,7 @@ class TerminalReconnectUITestCase: XCTestCase {
             "-security.fullAppLockEnabled", "NO",
             "-security.lockOnBackground", "NO",
         ]
+        if tabSwitching { app.launchArguments.append("--vvterm-ui-test-tab-switch") }
         if repeatsKeyboardUpdates {
             app.launchArguments.append("--vvterm-ui-test-repeat-keyboard-updates")
         }

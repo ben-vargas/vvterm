@@ -88,7 +88,7 @@ extension ConnectionTerminalContainer {
             case .files:
                 filesLayer
             case .terminal:
-                terminalLayer
+                terminalLayer(backgroundColor: backgroundColor)
             }
         }
         // View switches must swap content without implicit animations: animating
@@ -117,33 +117,47 @@ extension ConnectionTerminalContainer {
         }
     }
 
-    @ViewBuilder
-    var terminalLayer: some View {
-        if selectedView == .terminal, let tab = selectedTab {
-            let voiceRuntime = voiceInputRuntimeStore.runtime(for: tab.id)
-            TerminalTabView(
-                tab: tab,
-                server: server,
-                tabManager: tabManager,
-                securityActions: terminalSecurityActions,
-                isSelected: true,
-                isSplitZoomed: terminalContent.state.splitZoomedTabIds.contains(tab.id),
-                appearance: terminalAppearanceSnapshot,
-                voiceSettingsStore: voiceInputRuntimeStore.settingsStore,
-                audioService: voiceRuntime.audioService,
-                voiceRecordingOperation: voiceRuntime.recordingOperation
-            )
-            // Per-tab identity: without it SwiftUI reuses the previous tab's
-            // representable (and its Ghostty view + SSH coordinator) when the
-            // selected tab changes.
-            .id(tab.id)
-        }
-
-        if selectedView == .terminal && serverTabs.isEmpty {
-            TerminalEmptyStateView(server: server) {
-                openNewTab()
+    private func terminalLayer(backgroundColor: Color) -> some View {
+        ZStack {
+            ForEach(serverTabs.filter { tab in
+                tab.id == selectedTabId || tab.allPaneIds.contains {
+                    tabManager.terminalSurfaceStore.surface(for: $0) != nil
+                }
+            }) { tab in
+                let selected = tab.id == selectedTabId
+                let voiceRuntime = voiceInputRuntimeStore.runtime(for: tab.id)
+                TerminalTabView(
+                    tab: tab,
+                    server: server,
+                    tabManager: tabManager,
+                    securityActions: terminalSecurityActions,
+                    isSelected: selected,
+                    isSplitZoomed: terminalContent.state.splitZoomedTabIds.contains(tab.id),
+                    appearance: terminalAppearanceSnapshot,
+                    voiceSettingsStore: voiceInputRuntimeStore.settingsStore,
+                    audioService: voiceRuntime.audioService,
+                    voiceRecordingOperation: voiceRuntime.recordingOperation
+                )
+                // Retain visited tab UI and input views. Unvisited tabs stay lazy.
+                .id(tab.id)
+                // The opaque selected tab covers inactive tabs. Do not disable their
+                // hit testing here: UIKit would resign before the coordinator transfers focus.
+                .background(backgroundColor)
+                .zIndex(selected ? 1 : 0)
+                .accessibilityHidden(!selected)
+            }
+            if serverTabs.isEmpty {
+                TerminalEmptyStateView(server: server) { openNewTab() }
             }
         }
+        .terminalKeyboardAvoidance(
+            focusedPaneId: selectedTab?.focusedPaneId,
+            paneIds: selectedTab?.allPaneIds ?? [],
+            terminalSurfaceChange: tabManager.terminalSurfaceStore.latestChange,
+            terminalProvider: { tabManager.terminalSurfaceStore.ghosttySurface(for: $0) },
+            keyboardCoordinator: tabManager.keyboardCoordinator,
+            scope: .container
+        )
     }
 
     @ViewBuilder

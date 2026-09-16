@@ -194,11 +194,12 @@ struct TerminalPaneComposerView: View {
     let isActive: Bool
     let acceptsInput: Bool
     let voice: TerminalComposerVoiceInput?
+    var retainsInactiveInput = false
 
     var body: some View {
         TerminalComposerView(composer: composer, keyboard: keyboard, paneID: paneID, isActive: isActive,
                              isKeyboardVisible: keyboard.isSoftwareKeyboardVisible,
-                             acceptsInput: acceptsInput && keyboard.isComposerVisible(for: paneID), voice: voice)
+                             acceptsInput: acceptsInput && (retainsInactiveInput || keyboard.isComposerVisible(for: paneID)), voice: voice)
     }
 }
 

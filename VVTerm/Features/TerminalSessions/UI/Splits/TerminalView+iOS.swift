@@ -40,6 +40,7 @@ struct RemoteTerminalPaneWrapper: View {
     let onSceneActivation: () -> Void
 
     let acceptsInput: Bool
+    let isPaneFocused: Bool
     let composerVoice: TerminalComposerVoiceInput?
     @ObservedObject var composer: TerminalComposerStore
     @AppStorage(TerminalInputMode.preferenceKey) private var inputMode = TerminalInputMode.direct
@@ -83,7 +84,15 @@ struct RemoteTerminalPaneWrapper: View {
                 }
             }
             if composer.mode == .chat {
-                TerminalPaneComposerView(keyboard: tabManager.keyboardCoordinator, composer: composer, paneID: paneId, isActive: isActive, acceptsInput: acceptsInput, voice: composerVoice)
+                TerminalPaneComposerView(
+                    keyboard: tabManager.keyboardCoordinator,
+                    composer: composer,
+                    paneID: paneId,
+                    isActive: isActive,
+                    acceptsInput: acceptsInput,
+                    voice: composerVoice,
+                    retainsInactiveInput: !isActive && isPaneFocused
+                )
             }
         }
         .onAppear { composer.setMode(inputMode) }
