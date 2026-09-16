@@ -8,6 +8,90 @@ extension TerminalKeyboardCoordinatorTests {
     @Suite(.serialized)
     struct Composer {
         @Test @MainActor
+        func nativeDismissalKeepsChatHiddenUntilExplicitShow() async {
+            let pane = UUID()
+            let terminal = TerminalKeyboardInputSessionSpy()
+            let composer = ComposerInputSpy()
+            let coordinator = makeTerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { _ in terminal }
+            coordinator.inputModeProvider = { _ in .chat }
+            coordinator.setActivePane(pane)
+            coordinator.setViewActive(true)
+            coordinator.setWindowAttached(true, for: pane)
+            coordinator.setPaneInputEligible(true, for: pane)
+            coordinator.registerComposerInput(composer, for: pane)
+            await drainMainQueue()
+            terminal.snapshot.screenFrame = CGRect(x: 0, y: 0, width: 1024, height: 1000)
+            terminal.snapshot.isSoftwareInputActive = false
+            terminal.snapshot.isSoftwareKeyboardSuppressed = true
+            coordinator.keyboardUITestReceiveKeyboardEndFrame(CGRect(x: 0, y: 700, width: 1024, height: 300), isLocal: true)
+            #expect(coordinator.isSoftwareKeyboardVisible)
+            composer.active = false // UIKit may resign before it sends the hidden frame.
+            coordinator.keyboardUITestReceiveKeyboardEndFrame(CGRect(x: 0, y: 1000, width: 1024, height: 300), isLocal: true)
+            coordinator.keyboardUITestReceiveSoftwareKeyboardHidden()
+            await drainMainQueue()
+            #expect(!composer.active) // A geometry update must not reopen the keyboard.
+            try? await Task.sleep(for: .milliseconds(1100))
+            await drainMainQueue()
+            #expect(coordinator.isUserHidden)
+            #expect(composer.keyboardHidden)
+            coordinator.composerInputAvailabilityDidChange()
+            await drainMainQueue()
+            #expect(composer.keyboardHidden)
+            coordinator.userRequestedShow()
+            await drainMainQueue()
+            #expect(!composer.keyboardHidden)
+        }
+
+        enum NativeHideInterruption: CaseIterable {
+            case picker, scene, hardwareKeyboard, returningFrame, explicitShow, replacement, modeChange
+        }
+
+        @Test(arguments: NativeHideInterruption.allCases) @MainActor
+        func interruptedChatHideDoesNotBecomeUserDismissal(_ interruption: NativeHideInterruption) async {
+            let pane = UUID()
+            let terminal = TerminalKeyboardInputSessionSpy()
+            let composer = ComposerInputSpy()
+            let replacement = ComposerInputSpy()
+            let coordinator = makeTerminalKeyboardCoordinator()
+            var mode = TerminalInputMode.chat
+            coordinator.terminalProvider = { _ in terminal }
+            coordinator.inputModeProvider = { _ in mode }
+            coordinator.setActivePane(pane)
+            coordinator.setViewActive(true)
+            coordinator.setWindowAttached(true, for: pane)
+            coordinator.setPaneInputEligible(true, for: pane)
+            coordinator.registerComposerInput(composer, for: pane)
+            await drainMainQueue()
+            terminal.snapshot.screenFrame = CGRect(x: 0, y: 0, width: 1024, height: 1000)
+            let frame = CGRect(x: 0, y: 700, width: 1024, height: 300)
+            coordinator.keyboardUITestReceiveKeyboardEndFrame(frame, isLocal: true)
+            coordinator.keyboardUITestReceiveSoftwareKeyboardHidden()
+            switch interruption {
+            case .picker:
+                composer.allowsComposerFocus = false
+                coordinator.composerInputAvailabilityDidChange()
+            case .scene:
+                coordinator.activeTerminalSceneWillDeactivate(for: pane)
+            case .hardwareKeyboard:
+                terminal.snapshot.hasHardwareKeyboardAttached = true
+            case .returningFrame:
+                coordinator.keyboardUITestReceiveKeyboardEndFrame(frame, isLocal: true)
+            case .explicitShow:
+                coordinator.userRequestedShow()
+            case .replacement:
+                coordinator.registerComposerInput(replacement, for: pane)
+            case .modeChange:
+                mode = .direct
+                coordinator.composerModeDidChange(for: pane)
+            }
+            try? await Task.sleep(for: .milliseconds(1100))
+            await drainMainQueue()
+            #expect(!coordinator.isUserHidden)
+            if interruption == .replacement { #expect(replacement.active) }
+        }
+
+        @Test @MainActor
         func systemOverlayPreservesChatKeyboardPresentation() async {
             let pane = UUID()
             let terminal = TerminalKeyboardInputSessionSpy()
@@ -320,6 +404,7 @@ extension TerminalKeyboardCoordinatorTests {
 }
 @MainActor
 private final class ComposerInputSpy: TerminalComposerInputSession {
+    var allowsComposerFocus = true
     var active = false
     var allowsAcquisition = false
     var keyboardHidden = false

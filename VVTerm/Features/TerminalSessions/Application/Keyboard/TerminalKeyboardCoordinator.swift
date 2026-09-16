@@ -646,6 +646,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
 
     func registerComposerInput(_ session: any TerminalComposerInputSession, for paneId: UUID) {
         guard composerInputs[paneId]?.session !== session else { return }
+        if activePaneId == paneId { cancelPresentationVerify() }
         composerInputs[paneId]?.session?.setComposerInput(active: false, softwareKeyboardHidden: false)
         composerInputs[paneId] = ComposerInput(session: session)
         markDirty(reason: "composerAttached")
@@ -653,6 +654,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
 
     func unregisterComposerInput(_ session: any TerminalComposerInputSession, for paneId: UUID) {
         guard composerInputs[paneId]?.session === session else { return }
+        if activePaneId == paneId { cancelPresentationVerify() }
         session.setComposerInput(active: false, softwareKeyboardHidden: false)
         composerInputs.removeValue(forKey: paneId)
     }
@@ -668,12 +670,16 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         inputs.inputMode == .chat && desiredPaneInputActive(inputs: inputs)
     }
 
+    private var activeComposerInput: (any TerminalComposerInputSession)? {
+        activePaneId.flatMap { composerInputs[$0]?.session }
+    }
+
     private func syncComposerInput() {
         for (paneId, input) in composerInputs {
-            input.session?.setComposerInput(
-                active: activePaneId == paneId && Self.desiredComposerInputActive(inputs: currentInputs),
-                softwareKeyboardHidden: isUserHidden
-            )
+            let active = activePaneId == paneId && Self.desiredComposerInputActive(inputs: currentInputs)
+            guard let session = input.session else { continue }
+            if active && session.allowsComposerFocus && presentationVerifyTask != nil { continue }
+            session.setComposerInput(active: active, softwareKeyboardHidden: isUserHidden)
         }
     }
 
@@ -810,6 +816,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
     }
 
     func userRequestedShow() {
+        cancelPresentationVerify()
         claimLocalInputOwnershipForExplicitInteraction()
         logExplicitPresentationRequest()
         if explicitPresentationRecovery?.phase == .waitingForActivation {
@@ -882,31 +889,20 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         #if DEBUG
         guard !Self.usesUITestKeyboardFrameSimulation else { return }
         #endif
-        let composerOwnsInput = activePaneId.flatMap { composerInputs[$0]?.session }?.isComposerFirstResponder == true
-        guard composerOwnsInput || Self.desiredKeyboardVisible(inputs: currentInputs) else {
-            clearSoftwareKeyboardObservation()
-            return
-        }
         guard activeTerminalSceneIsForeground,
               inputOwnership.allowsLocalAcquisition,
               viewActive,
               let frame,
-              let terminal = activeTerminal else {
-            return
-        }
-        updateKeyboardAnimation(duration: animationDuration, curve: animationCurve)
+              let terminal = activeTerminal else { return }
         let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
-        if snapshot.isSoftwareKeyboardSuppressed && !composerOwnsInput {
-            setSoftwareKeyboardPresentation(.hidden, terminal: terminal)
-            return
-        }
-        guard snapshot.windowAttached,
-              snapshot.windowIsKey,
-              (snapshot.isSoftwareInputActive || composerOwnsInput),
+        guard snapshot.windowAttached, snapshot.windowIsKey,
               Self.keyboardNotificationMatchesActiveScreen(
                   sourceScreenIdentifier: sourceScreenIdentifier,
                   activeScreenIdentifier: snapshot.screenIdentifier
-              ) else {
+              ) else { return }
+        updateKeyboardAnimation(duration: animationDuration, curve: animationCurve)
+        if activeInputMode == .direct, snapshot.isSoftwareKeyboardSuppressed {
+            setSoftwareKeyboardPresentation(.hidden, terminal: terminal)
             return
         }
         let presentation = Self.softwareKeyboardPresentation(
@@ -921,6 +917,9 @@ final class TerminalKeyboardCoordinator: ObservableObject {
                 animationCurve: animationCurve
             )
         } else {
+            let composerOwnsInput = activeInputMode == .chat && activeComposerInput?.isComposerFirstResponder == true
+            guard composerOwnsInput || (Self.desiredKeyboardVisible(inputs: currentInputs)
+                && snapshot.isSoftwareInputActive && !snapshot.isSoftwareKeyboardSuppressed) else { return }
             hardwareKeyboardAttachedWhenShown = snapshot.hasHardwareKeyboardAttached
             setSoftwareKeyboardPresentation(presentation, terminal: terminal)
         }
@@ -962,7 +961,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             ) else {
                 return
             }
-            if snapshot.isSoftwareKeyboardSuppressed {
+            if activeInputMode == .direct, snapshot.isSoftwareKeyboardSuppressed {
                 setSoftwareKeyboardPresentation(.hidden, terminal: terminal)
                 return
             }
@@ -976,11 +975,14 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         guard let paneId = activePaneId,
               let terminal = activeTerminal else { return }
         let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
-        guard Self.desiredKeyboardVisible(inputs: currentInputs),
-              snapshot.windowAttached,
-              snapshot.windowIsKey,
-              snapshot.isSoftwareInputActive,
-              !snapshot.isSoftwareKeyboardSuppressed else { return }
+        guard Self.desiredPaneInputActive(inputs: currentInputs), !isUserHidden,
+              snapshot.windowAttached, snapshot.windowIsKey else { return }
+        switch activeInputMode {
+        case .direct:
+            guard snapshot.isSoftwareInputActive, !snapshot.isSoftwareKeyboardSuppressed else { return }
+        case .chat:
+            guard activeComposerInput?.allowsComposerFocus == true, hardwareKeyboardWasAttached != nil else { return }
+        }
         schedulePresentationVerify(
             for: paneId,
             terminal: terminal,
@@ -1174,7 +1176,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         let inputs = currentInputs
         let inputSessionDesired = Self.desiredInputSessionActive(inputs: inputs)
         let keyboardPresentationDesired = Self.desiredKeyboardVisible(inputs: inputs)
-        if !keyboardPresentationDesired {
+        if !Self.desiredPaneInputActive(inputs: inputs) || inputs.userHidKeyboard {
             cancelPresentationVerify()
         }
 
@@ -1693,6 +1695,8 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         layoutSource: PresentationVerificationLayoutSource = .currentLayoutFrame
     ) {
         let ownershipGeneration = inputOwnership.generation
+        let inputMode = activeInputMode
+        let composer = activeComposerInput
         presentationVerifyTask?.cancel()
         presentationVerifyTask = Task { @MainActor [weak self] in
             do {
@@ -1706,10 +1710,11 @@ final class TerminalKeyboardCoordinator: ObservableObject {
                   self.activeTerminalSceneIsForeground,
                   self.inputOwnership.allowsLocalAcquisition,
                   self.activePaneId == paneId,
+                  self.activeInputMode == inputMode,
                   let activeTerminal = self.terminalProvider?(paneId),
                   activeTerminal === terminal else { return }
             let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
-            guard !snapshot.hasNativeSelection else { return }
+            guard inputMode == .chat || !snapshot.hasNativeSelection else { return }
             if layoutSource.reconcilesLayoutFrameAtDeadline {
                 self.reconcileSoftwareKeyboardPresentation(
                     terminal: terminal,
@@ -1718,27 +1723,35 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             }
             guard !self.isSoftwareKeyboardVisible else { return }
             let inputs = self.currentInputs
-            guard Self.desiredKeyboardVisible(inputs: inputs) else { return }
-            guard snapshot.windowAttached,
-                  snapshot.windowIsKey,
-                  snapshot.isSoftwareInputActive,
-                  !snapshot.isSoftwareKeyboardSuppressed else { return }
-            if self.pendingPresentationRequest != .none {
-                self.markDirty(reason: "presentationUnverified")
-                return
+            guard Self.desiredPaneInputActive(inputs: inputs), !inputs.userHidKeyboard,
+                  snapshot.windowAttached, snapshot.windowIsKey else { return }
+            switch inputMode {
+            case .direct:
+                guard snapshot.isSoftwareInputActive, !snapshot.isSoftwareKeyboardSuppressed else { return }
+            case .chat:
+                guard let composer, self.activeComposerInput === composer,
+                      composer.allowsComposerFocus else { return }
             }
-            if let retryRequest,
-               self.presentationRefreshAttemptCount < self.presentationRefreshAttemptLimit {
-                self.pendingPresentationRequest = retryRequest
-                self.markDirty(reason: "presentationUnverified")
-                return
+            if inputMode == .direct {
+                if self.pendingPresentationRequest != .none {
+                    self.markDirty(reason: "presentationUnverified")
+                    return
+                }
+                if let retryRequest,
+                   self.presentationRefreshAttemptCount < self.presentationRefreshAttemptLimit {
+                    self.pendingPresentationRequest = retryRequest
+                    self.markDirty(reason: "presentationUnverified")
+                    return
+                }
             }
+            // UIKit supplies no reason. Stable local hides use the explicit browse state.
             if case let .observedDismissal(hardwareKeyboardWasAttached) = layoutSource,
                snapshot.hasHardwareKeyboardAttached == hardwareKeyboardWasAttached {
-                // UIKit does not supply a dismissal reason. A previously
-                // visible keyboard that stays hidden in the same active input
-                // session uses the same browse state as the accessory action.
                 self.userRequestedHide()
+                return
+            }
+            if inputMode == .chat {
+                self.markDirty(reason: "composerDismissalCancelled")
                 return
             }
             // Settled with an active session and no keyboard: hardware mode

@@ -1,5 +1,6 @@
 #if os(iOS)
 import XCTest
+import UIKit
 
 final class TerminalComposerUITests: XCTestCase {
     @MainActor
@@ -316,6 +317,37 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         editor.typeText("from menu")
         XCTAssertEqual(editor.value as? String, "from menu")
+    }
+
+    @MainActor
+    func testNativeIPadDismissKeepsChatDraftAndRestoresOnTap() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Native dismiss button requires iPad") }
+        let app = launch()
+        app.buttons["vvterm.composer.toggle"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("keep draft")
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.frame.width < app.frame.width * 0.8 {
+            keyboard.pinch(withScale: 3, velocity: 2)
+        }
+        let dismiss = keyboard.descendants(matching: .any)
+            .matching(NSPredicate(format: "label ==[c] %@", "Hide keyboard")).firstMatch
+        XCTAssertTrue(dismiss.waitForExistence(timeout: 5), app.debugDescription)
+        dismiss.tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 5)
+        // A scene round trip must preserve native dismissal and the draft.
+        sleep(2)
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertEqual(editor.value as? String, "keep draft")
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        editor.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        editor.typeText(" again")
+        XCTAssertEqual(editor.value as? String, "keep draft again")
     }
 
     @MainActor
