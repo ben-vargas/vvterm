@@ -91,7 +91,8 @@ struct RemoteTerminalPaneWrapper: View {
                     isActive: isActive,
                     acceptsInput: acceptsInput,
                     voice: composerVoice,
-                    retainsInactiveInput: !isActive && isPaneFocused
+                    retainsInactiveInput: !isActive && isPaneFocused,
+                    inputAccessory: { tabManager.terminalSurfaceStore.ghosttySurface(for: paneId)?.sharedInputAccessoryView() }
                 )
             }
         }

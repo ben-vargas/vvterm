@@ -3,4 +3,5 @@ nonisolated enum TerminalInputMode: String, Equatable, Sendable {
     case chat
 
     static let preferenceKey = "terminalInputMode"
+    static let chatAccessoryPreferenceKey = "terminalChatAccessoryEnabled"
 }

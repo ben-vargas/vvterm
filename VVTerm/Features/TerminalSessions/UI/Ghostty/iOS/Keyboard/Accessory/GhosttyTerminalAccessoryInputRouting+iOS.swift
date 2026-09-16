@@ -9,6 +9,18 @@
 import UIKit
 
 extension GhosttyTerminalView {
+    enum KeyInputOrigin {
+        case textInput
+        case accessory
+    }
+
+    func canRouteKeyInput(from origin: KeyInputOrigin) -> Bool {
+        switch origin {
+        case .textInput: canRouteTerminalInput
+        case .accessory: canInteractWithTerminalContent && isTextInputSessionEligible
+        }
+    }
+
     @discardableResult
     func performAccessorySystemAction(_ actionID: TerminalAccessorySystemActionID) -> Bool {
         guard canRouteTerminalInput, let terminalKey = actionID.terminalKey else { return false }
@@ -16,9 +28,10 @@ extension GhosttyTerminalView {
         return true
     }
 
-    func sendToolbarKey(_ key: TerminalKey, accumulatedMods: Ghostty.Input.Mods = []) {
+    func sendToolbarKey(_ key: TerminalKey, accumulatedMods: Ghostty.Input.Mods = [], origin: KeyInputOrigin = .textInput) {
+        guard canRouteKeyInput(from: origin) else { return }
         if case .modified(let baseKey, let mods) = key {
-            sendToolbarKey(baseKey, accumulatedMods: accumulatedMods.union(mods))
+            sendToolbarKey(baseKey, accumulatedMods: accumulatedMods.union(mods), origin: origin)
             return
         }
         if accumulatedMods.contains(.super),
@@ -34,82 +47,82 @@ extension GhosttyTerminalView {
         case .modified:
             return
         case .escape:
-            if accumulatedMods.isEmpty, hasLocalTextInputSession {
+            if accumulatedMods.isEmpty, canRouteTerminalInput, hasLocalTextInputSession {
                 invalidateLocalTextInputSession()
-                sendToolbarGhosttyKey(.escape, mods: accumulatedMods, invalidateLocalSession: false)
+                sendToolbarGhosttyKey(.escape, mods: accumulatedMods, invalidateLocalSession: false, origin: origin)
             } else {
-                sendToolbarGhosttyKey(.escape, mods: accumulatedMods, invalidateLocalSession: false)
+                sendToolbarGhosttyKey(.escape, mods: accumulatedMods, invalidateLocalSession: false, origin: origin)
             }
         case .tab:
-            sendToolbarGhosttyKey(.tab, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.tab, mods: accumulatedMods, origin: origin)
         case .enter:
-            sendToolbarGhosttyKey(.enter, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.enter, mods: accumulatedMods, origin: origin)
         case .backspace:
-            if accumulatedMods.isEmpty, hasLocalTextInputSession {
+            if accumulatedMods.isEmpty, canRouteTerminalInput, hasLocalTextInputSession {
                 imeProxyTextView.deleteBackward()
             } else {
-                sendToolbarGhosttyKey(.backspace, mods: accumulatedMods)
+                sendToolbarGhosttyKey(.backspace, mods: accumulatedMods, origin: origin)
             }
         case .delete:
-            sendToolbarGhosttyKey(.delete, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.delete, mods: accumulatedMods, origin: origin)
         case .insert:
-            sendToolbarGhosttyKey(.insert, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.insert, mods: accumulatedMods, origin: origin)
         case .arrowUp:
-            sendToolbarGhosttyKey(.arrowUp, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.arrowUp, mods: accumulatedMods, origin: origin)
         case .arrowDown:
-            sendToolbarGhosttyKey(.arrowDown, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.arrowDown, mods: accumulatedMods, origin: origin)
         case .arrowLeft:
-            sendToolbarGhosttyKey(.arrowLeft, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.arrowLeft, mods: accumulatedMods, origin: origin)
         case .arrowRight:
-            sendToolbarGhosttyKey(.arrowRight, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.arrowRight, mods: accumulatedMods, origin: origin)
         case .home:
-            sendToolbarGhosttyKey(.home, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.home, mods: accumulatedMods, origin: origin)
         case .end:
-            sendToolbarGhosttyKey(.end, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.end, mods: accumulatedMods, origin: origin)
         case .pageUp:
-            sendToolbarGhosttyKey(.pageUp, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.pageUp, mods: accumulatedMods, origin: origin)
         case .pageDown:
-            sendToolbarGhosttyKey(.pageDown, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.pageDown, mods: accumulatedMods, origin: origin)
         case .f1:
-            sendToolbarGhosttyKey(.f1, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f1, mods: accumulatedMods, origin: origin)
         case .f2:
-            sendToolbarGhosttyKey(.f2, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f2, mods: accumulatedMods, origin: origin)
         case .f3:
-            sendToolbarGhosttyKey(.f3, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f3, mods: accumulatedMods, origin: origin)
         case .f4:
-            sendToolbarGhosttyKey(.f4, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f4, mods: accumulatedMods, origin: origin)
         case .f5:
-            sendToolbarGhosttyKey(.f5, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f5, mods: accumulatedMods, origin: origin)
         case .f6:
-            sendToolbarGhosttyKey(.f6, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f6, mods: accumulatedMods, origin: origin)
         case .f7:
-            sendToolbarGhosttyKey(.f7, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f7, mods: accumulatedMods, origin: origin)
         case .f8:
-            sendToolbarGhosttyKey(.f8, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f8, mods: accumulatedMods, origin: origin)
         case .f9:
-            sendToolbarGhosttyKey(.f9, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f9, mods: accumulatedMods, origin: origin)
         case .f10:
-            sendToolbarGhosttyKey(.f10, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f10, mods: accumulatedMods, origin: origin)
         case .f11:
-            sendToolbarGhosttyKey(.f11, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f11, mods: accumulatedMods, origin: origin)
         case .f12:
-            sendToolbarGhosttyKey(.f12, mods: accumulatedMods)
+            sendToolbarGhosttyKey(.f12, mods: accumulatedMods, origin: origin)
         case .ctrlC:
-            sendToolbarControlShortcut(.c, letter: "c", mods: accumulatedMods)
+            sendToolbarControlShortcut(.c, letter: "c", mods: accumulatedMods, origin: origin)
         case .ctrlD:
-            sendToolbarControlShortcut(.d, letter: "d", mods: accumulatedMods)
+            sendToolbarControlShortcut(.d, letter: "d", mods: accumulatedMods, origin: origin)
         case .ctrlZ:
-            sendToolbarControlShortcut(.z, letter: "z", mods: accumulatedMods)
+            sendToolbarControlShortcut(.z, letter: "z", mods: accumulatedMods, origin: origin)
         case .ctrlL:
-            sendToolbarControlShortcut(.l, letter: "l", mods: accumulatedMods)
+            sendToolbarControlShortcut(.l, letter: "l", mods: accumulatedMods, origin: origin)
         case .ctrlA:
-            sendToolbarControlShortcut(.a, letter: "a", mods: accumulatedMods)
+            sendToolbarControlShortcut(.a, letter: "a", mods: accumulatedMods, origin: origin)
         case .ctrlE:
-            sendToolbarControlShortcut(.e, letter: "e", mods: accumulatedMods)
+            sendToolbarControlShortcut(.e, letter: "e", mods: accumulatedMods, origin: origin)
         case .ctrlK:
-            sendToolbarControlShortcut(.k, letter: "k", mods: accumulatedMods)
+            sendToolbarControlShortcut(.k, letter: "k", mods: accumulatedMods, origin: origin)
         case .ctrlU:
-            sendToolbarControlShortcut(.u, letter: "u", mods: accumulatedMods)
+            sendToolbarControlShortcut(.u, letter: "u", mods: accumulatedMods, origin: origin)
         }
     }
 
@@ -118,35 +131,41 @@ extension GhosttyTerminalView {
         mods: Ghostty.Input.Mods,
         text: String? = nil,
         unshiftedCodepoint: UInt32? = nil,
-        invalidateLocalSession: Bool = true
+        invalidateLocalSession: Bool = true,
+        origin: KeyInputOrigin = .textInput
     ) {
+        guard canRouteKeyInput(from: origin) else { return }
         let codepoint = unshiftedCodepoint ?? text?.unicodeScalars.first?.value ?? 0
         sendModifiedKey(
             key,
             mods: mods,
             text: text,
             unshiftedCodepoint: codepoint,
-            invalidateLocalSession: invalidateLocalSession
+            invalidateLocalSession: invalidateLocalSession,
+            origin: origin
         )
     }
 
     private func sendToolbarControlShortcut(
         _ key: Ghostty.Input.Key,
         letter: String,
-        mods: Ghostty.Input.Mods
+        mods: Ghostty.Input.Mods,
+        origin: KeyInputOrigin
     ) {
         var mergedMods = mods
         mergedMods.insert(.ctrl)
         let codepoint = letter.unicodeScalars.first?.value ?? 0
-        sendToolbarGhosttyKey(key, mods: mergedMods, text: nil, unshiftedCodepoint: codepoint)
+        sendToolbarGhosttyKey(key, mods: mergedMods, text: nil, unshiftedCodepoint: codepoint, origin: origin)
     }
 
     func handleToolbarCustomAction(_ action: TerminalAccessoryCustomAction) {
+        guard canInteractWithTerminalContent, isTextInputSessionEligible else { return }
         switch action.kind {
         case .command:
-            sendText(action.commandContent)
+            surface?.sendText(action.commandContent)
+            requestRender()
             if action.commandSendMode == .insertAndEnter {
-                sendKeyPress(.enter)
+                sendToolbarGhosttyKey(.enter, mods: [], origin: .accessory)
             }
         case .shortcut:
             if action.shortcutModifiers.command,
@@ -169,7 +188,7 @@ extension GhosttyTerminalView {
             }
 
             let codepoint = action.shortcutKey.unshiftedText?.unicodeScalars.first?.value ?? 0
-            sendToolbarGhosttyKey(key, mods: mods, text: text, unshiftedCodepoint: codepoint)
+            sendToolbarGhosttyKey(key, mods: mods, text: text, unshiftedCodepoint: codepoint, origin: .accessory)
         }
     }
 

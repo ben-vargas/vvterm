@@ -2303,3 +2303,8 @@
 "Smart Quotes and Dashes" = "Умные кавычки и тире";
 "Smart Insert and Delete" = "Умная вставка и удаление";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "По умолчанию выключено, чтобы не менять команды терминала. Подсказки зависят от клавиатуры и системных настроек.";
+
+// Chat input controls
+"Customize Send Action" = "Настроить действие отправки";
+"Show Accessory Bar" = "Показывать панель клавиш";
+"Accessory keys and custom actions go directly to the terminal." = "Клавиши панели и пользовательские действия отправляются прямо в терминал.";

@@ -2304,3 +2304,8 @@
 "Smart Quotes and Dashes" = "Разумныя двукоссі і працяжнікі";
 "Smart Insert and Delete" = "Разумная ўстаўка і выдаленне";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Тыпова выключана, каб не змяняць каманды тэрмінала. Падказкі залежаць ад клавіятуры і сістэмных налад.";
+
+// Chat input controls
+"Customize Send Action" = "Наладзіць дзеянне адпраўкі";
+"Show Accessory Bar" = "Паказваць панэль клавіш";
+"Accessory keys and custom actions go directly to the terminal." = "Клавішы панэлі і ўласныя дзеянні адпраўляюцца непасрэдна ў тэрмінал.";

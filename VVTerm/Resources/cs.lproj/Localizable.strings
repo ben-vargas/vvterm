@@ -2304,3 +2304,8 @@
 "Smart Quotes and Dashes" = "Chytré uvozovky a pomlčky";
 "Smart Insert and Delete" = "Chytré vkládání a mazání";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Ve výchozím stavu vypnuto, aby se příkazy terminálu neměnily. Návrhy závisí na klávesnici a nastavení systému.";
+
+// Chat input controls
+"Customize Send Action" = "Přizpůsobit akci odeslání";
+"Show Accessory Bar" = "Zobrazit panel kláves";
+"Accessory keys and custom actions go directly to the terminal." = "Klávesy panelu a vlastní akce se odesílají přímo do terminálu.";

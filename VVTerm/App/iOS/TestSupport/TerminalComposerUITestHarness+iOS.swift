@@ -59,6 +59,8 @@ final class TerminalComposerUITestModel: ObservableObject {
 
     init(keyboard: TerminalKeyboardCoordinator) {
         self.keyboard = keyboard
+        UserDefaults.standard.set(Foundation.ProcessInfo.processInfo.arguments.contains("--composer-accessory"),
+                                  forKey: TerminalInputMode.chatAccessoryPreferenceKey)
         if Foundation.ProcessInfo.processInfo.arguments.contains("--composer-clipboard-text") {
             UIPasteboard.general.string = "clipboard text"
         }
@@ -251,7 +253,7 @@ private struct TerminalComposerUITestContent: View {
                         } else { model.voicePhase = .recording(operationID: UUID()) }
                     },
                     cancel: { model.voicePhase = .idle }
-                ) : nil)
+                ) : nil, inputAccessory: { model.terminal?.sharedInputAccessoryView() })
             }
         }
         .terminalKeyboardAvoidance(

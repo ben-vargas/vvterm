@@ -12,9 +12,9 @@ struct TerminalComposerVoiceControl: UIViewRepresentable {
     func makeUIView(context: Context) -> UIButton {
         let button = UIButton(type: .system)
         if style == .microphone {
-            button.setImage(UIImage(systemName: "mic", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18)), for: .normal)
+            button.setImage(UIImage(systemName: "mic", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16)), for: .normal)
         }
-        button.tintColor = .secondaryLabel
+        button.tintColor = .label
         button.accessibilityLabel = style == .microphone ? String(localized: "Voice input") : String(localized: "Touch and hold to record")
         button.accessibilityIdentifier = style == .microphone ? "vvterm.composer.record" : "vvterm.composer.hold-prompt"
         button.addTarget(context.coordinator, action: #selector(Coordinator.tapped), for: .touchUpInside)

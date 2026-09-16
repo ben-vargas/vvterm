@@ -20,6 +20,10 @@ extension GhosttyTerminalView {
         guard !shouldHideKeyboardAccessoryBar else {
             return nil
         }
+        return sharedInputAccessoryView()
+    }
+
+    func sharedInputAccessoryView() -> UIView? {
         if keyboardToolbar == nil {
             let toolbar = TerminalInputAccessoryView(
                 terminalOwner: self,
@@ -38,10 +42,8 @@ extension GhosttyTerminalView {
                 }
             )
             keyboardToolbar = toolbar
-        } else {
-            refreshVoiceAccessoryAction()
+            toolbar.onAttachment = onAttachmentButtonTapped
         }
-        keyboardToolbar?.onAttachment = onAttachmentButtonTapped
         return keyboardToolbar
     }
 
@@ -56,7 +58,7 @@ extension GhosttyTerminalView {
     }
 
     private func handleToolbarKey(_ key: TerminalKey) {
-        sendToolbarKey(key)
+        sendToolbarKey(key, origin: .accessory)
     }
 }
 

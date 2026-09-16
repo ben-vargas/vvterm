@@ -36,10 +36,11 @@ extension GhosttyTerminalView {
         mods: Ghostty.Input.Mods,
         text: String? = nil,
         unshiftedCodepoint: UInt32 = 0,
-        invalidateLocalSession: Bool = true
+        invalidateLocalSession: Bool = true,
+        origin: KeyInputOrigin = .textInput
     ) {
-        guard canRouteTerminalInput else { return }
-        guard let surface = surface else { return }
+        guard canRouteKeyInput(from: origin) else { return }
+        guard let surface else { return }
         if invalidateLocalSession {
             invalidateLocalTextInputSession()
         }

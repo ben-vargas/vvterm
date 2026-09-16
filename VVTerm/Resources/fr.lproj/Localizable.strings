@@ -2305,3 +2305,8 @@
 "Smart Quotes and Dashes" = "Guillemets et tirets intelligents";
 "Smart Insert and Delete" = "Insertion et suppression intelligentes";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Désactivé par défaut pour préserver les commandes du terminal. Les suggestions dépendent du clavier et des réglages système.";
+
+// Chat input controls
+"Customize Send Action" = "Personnaliser l’action d’envoi";
+"Show Accessory Bar" = "Afficher la barre de touches";
+"Accessory keys and custom actions go directly to the terminal." = "Les touches de la barre et les actions personnalisées sont envoyées directement au terminal.";

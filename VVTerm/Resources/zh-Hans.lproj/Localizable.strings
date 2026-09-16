@@ -2300,3 +2300,8 @@
 "Smart Quotes and Dashes" = "智能引号和破折号";
 "Smart Insert and Delete" = "智能插入和删除";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "默认关闭，以保持终端命令不变。键盘建议取决于键盘和系统设置。";
+
+// Chat input controls
+"Customize Send Action" = "自定义发送操作";
+"Show Accessory Bar" = "显示辅助栏";
+"Accessory keys and custom actions go directly to the terminal." = "辅助栏按键和自定义操作会直接发送到终端。";

@@ -2303,3 +2303,8 @@
 "Smart Quotes and Dashes" = "スマート引用符とダッシュ";
 "Smart Insert and Delete" = "スマート挿入と削除";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "端末コマンドを変更しないよう、初期状態ではオフです。候補表示はキーボードとシステム設定によって異なります。";
+
+// Chat input controls
+"Customize Send Action" = "送信アクションをカスタマイズ";
+"Show Accessory Bar" = "補助バーを表示";
+"Accessory keys and custom actions go directly to the terminal." = "補助バーのキーとカスタムアクションはターミナルに直接送信されます。";

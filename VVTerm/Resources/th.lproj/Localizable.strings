@@ -2303,3 +2303,8 @@
 "Smart Quotes and Dashes" = "เครื่องหมายคำพูดและขีดอัจฉริยะ";
 "Smart Insert and Delete" = "การแทรกและลบอัจฉริยะ";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "ปิดไว้ตามค่าเริ่มต้นเพื่อไม่ให้คำสั่งเทอร์มินัลเปลี่ยนแปลง คำแนะนำขึ้นอยู่กับแป้นพิมพ์และการตั้งค่าระบบ";
+
+// Chat input controls
+"Customize Send Action" = "ปรับแต่งการส่ง";
+"Show Accessory Bar" = "แสดงแถบปุ่มเสริม";
+"Accessory keys and custom actions go directly to the terminal." = "ปุ่มบนแถบและการทำงานที่กำหนดเองจะส่งไปยังเทอร์มินัลโดยตรง";

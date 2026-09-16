@@ -4,6 +4,8 @@ import SwiftUI
 struct TerminalInputModeSettingsView: View {
     @AppStorage(TerminalInputMode.preferenceKey) private var inputMode = TerminalInputMode.direct
 
+    @AppStorage(TerminalInputMode.chatAccessoryPreferenceKey) private var chatAccessoryEnabled = false
+
     var body: some View {
         Form {
             Section("Preview") {
@@ -27,12 +29,16 @@ struct TerminalInputModeSettingsView: View {
                     Text("Review text and attachments before sending. Choose what the Send button does.")
                 }
             }
-            TerminalKeyboardSettings()
             if inputMode == .chat {
                 Section {
-                    NavigationLink("Send Actions") { TerminalComposerSendActionsSettingsView() }
+                    NavigationLink("Customize Send Action") { TerminalComposerSendActionsSettingsView() }
+                    Toggle("Show Accessory Bar", isOn: $chatAccessoryEnabled)
+                        .accessibilityIdentifier("vvterm.chat.accessory")
+                } footer: {
+                    Text("Accessory keys and custom actions go directly to the terminal.")
                 }
             }
+            TerminalKeyboardSettings()
         }
         .formStyle(.grouped)
         .navigationTitle("Input Mode")

@@ -2302,3 +2302,8 @@
 "Smart Quotes and Dashes" = "스마트 따옴표 및 대시";
 "Smart Insert and Delete" = "스마트 삽입 및 삭제";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "터미널 명령이 변경되지 않도록 기본적으로 꺼져 있습니다. 제안은 키보드와 시스템 설정에 따라 달라집니다.";
+
+// Chat input controls
+"Customize Send Action" = "전송 동작 사용자화";
+"Show Accessory Bar" = "보조 막대 표시";
+"Accessory keys and custom actions go directly to the terminal." = "보조 막대의 키와 사용자 지정 동작은 터미널로 바로 전송됩니다.";

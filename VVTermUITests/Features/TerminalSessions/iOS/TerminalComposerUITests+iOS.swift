@@ -4,6 +4,30 @@ import UIKit
 
 final class TerminalComposerUITests: XCTestCase {
     @MainActor
+    func testChatAccessorySendsToTerminalAndPreservesDraft() {
+        let app = launch(arguments: ["--composer-accessory"])
+        app.buttons["vvterm.composer.toggle"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("keep draft")
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Chat accessory bar"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        let tab = app.buttons["vvterm.keyboard.accessory.system.tab"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 5))
+        tab.tap()
+        expectation(for: NSPredicate(format: "label == %@", "<TAB>"), evaluatedWith: app.staticTexts["composer.test.bytes"])
+        waitForExpectations(timeout: 5)
+        XCTAssertEqual(editor.value as? String, "keep draft")
+        app.buttons["vvterm.keyboard.accessory.hide"].tap()
+        XCTAssertFalse(tab.waitForExistence(timeout: 1))
+        editor.tap()
+        XCTAssertTrue(tab.waitForExistence(timeout: 5))
+        XCTAssertEqual(editor.value as? String, "keep draft")
+    }
+
+    @MainActor
     func testAttachmentMenuPastesTextIntoChatAndNormalInput() {
         let app = launch(arguments: ["--composer-clipboard-text"])
         app.buttons["vvterm.composer.toggle"].tap()
@@ -92,9 +116,14 @@ final class TerminalComposerUITests: XCTestCase {
         let app = launch()
         app.buttons["composer.test.settings"].tap()
         app.buttons["Input Mode"].tap()
-        XCTAssertFalse(app.buttons["Send Actions"].exists)
+        XCTAssertFalse(app.buttons["Customize Send Action"].exists)
+        XCTAssertFalse(app.switches["vvterm.chat.accessory"].exists)
         app.segmentedControls["vvterm.input-mode"].buttons["Chat Mode"].tap()
-        app.buttons["Send Actions"].tap()
+        let accessory = app.switches["vvterm.chat.accessory"]
+        XCTAssertEqual(accessory.value as? String, "0")
+        accessory.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(accessory.value as? String, "1")
+        app.buttons["Customize Send Action"].tap()
         app.buttons["vvterm.composer.add-action"].tap()
         app.textFields["vvterm.composer.action-name"].tap()
         app.textFields["vvterm.composer.action-name"].typeText("Saved prompt")
@@ -119,9 +148,9 @@ final class TerminalComposerUITests: XCTestCase {
         XCTAssertEqual(text.value as? String, "Review this code.\n")
         app.navigationBars["Text"].buttons["BackButton"].tap()
         app.buttons["vvterm.composer.save-action"].tap()
-        app.navigationBars["Send Actions"].buttons["BackButton"].tap()
+        app.navigationBars["Customize Send Action"].buttons["BackButton"].tap()
         app.segmentedControls["vvterm.input-mode"].buttons["Normal Mode"].tap()
-        XCTAssertFalse(app.buttons["Send Actions"].exists)
+        XCTAssertFalse(app.buttons["Customize Send Action"].exists)
     }
 
     @MainActor
@@ -171,9 +200,9 @@ final class TerminalComposerUITests: XCTestCase {
         var app = launch()
         app.buttons["composer.test.settings"].tap()
         app.buttons["Input Mode"].tap()
-        XCTAssertFalse(app.buttons["Send Actions"].exists)
+        XCTAssertFalse(app.buttons["Customize Send Action"].exists)
         app.segmentedControls["vvterm.input-mode"].buttons["Chat Mode"].tap()
-        app.buttons["Send Actions"].tap()
+        app.buttons["Customize Send Action"].tap()
         app.buttons["vvterm.composer.add-action"].tap()
         let name = app.textFields["vvterm.composer.action-name"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))

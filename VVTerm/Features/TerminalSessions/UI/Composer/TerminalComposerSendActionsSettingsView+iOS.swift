@@ -19,7 +19,7 @@ struct TerminalComposerSendActionsSettingsView: View {
                 }
             }
         }
-        .navigationTitle("Send Actions")
+        .navigationTitle("Customize Send Action")
         .navigationBarTitleDisplayMode(.inline)
         .adaptiveSoftScrollEdges()
         .alert("Could not save send actions.", isPresented: $saveFailed) { Button("OK") {} }

@@ -2302,3 +2302,8 @@
 "Smart Quotes and Dashes" = "Smart Quotes and Dashes";
 "Smart Insert and Delete" = "Smart Insert and Delete";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings.";
+
+// Chat input controls
+"Customize Send Action" = "Customize Send Action";
+"Show Accessory Bar" = "Show Accessory Bar";
+"Accessory keys and custom actions go directly to the terminal." = "Accessory keys and custom actions go directly to the terminal.";

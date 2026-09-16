@@ -9,6 +9,7 @@ struct TerminalComposerView: View {
     let isKeyboardVisible: Bool
     var acceptsInput = true
     var voice: TerminalComposerVoiceInput? = nil
+    var inputAccessory: () -> UIView? = { nil }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var recordingTransition
     @State private var voiceInteraction = VoiceInteraction.text
@@ -131,7 +132,8 @@ struct TerminalComposerView: View {
             keyboard: keyboard, paneID: paneID,
             acceptsEdits: voiceInteraction == .text && !isRecording,
             placeholder: voiceInteraction == .ready ? String(localized: "Touch and hold to record") : String(localized: "Type anything"),
-            showsContent: !isRecording
+            showsContent: !isRecording,
+            inputAccessory: inputAccessory
         ) { images, urls in
             composer.load { images + (try await TerminalAttachmentLoader.files(urls)) }
         }
@@ -195,11 +197,12 @@ struct TerminalPaneComposerView: View {
     let acceptsInput: Bool
     let voice: TerminalComposerVoiceInput?
     var retainsInactiveInput = false
+    var inputAccessory: () -> UIView? = { nil }
 
     var body: some View {
         TerminalComposerView(composer: composer, keyboard: keyboard, paneID: paneID, isActive: isActive,
                              isKeyboardVisible: keyboard.isSoftwareKeyboardVisible,
-                             acceptsInput: acceptsInput && (retainsInactiveInput || keyboard.isComposerVisible(for: paneID)), voice: voice)
+                             acceptsInput: acceptsInput && (retainsInactiveInput || keyboard.isComposerVisible(for: paneID)), voice: voice, inputAccessory: inputAccessory)
     }
 }
 

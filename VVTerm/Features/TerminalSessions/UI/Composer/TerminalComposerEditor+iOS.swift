@@ -5,6 +5,7 @@ import UIKit
 /// A native editor preserves text editing and IME behavior while routing file paste to attachments.
 struct TerminalComposerEditor: UIViewRepresentable {
     @AppStorage(TerminalKeyboardOptions.preferenceKey) private var storedKeyboardOptions = 0
+    @AppStorage(TerminalInputMode.chatAccessoryPreferenceKey) private var chatAccessoryEnabled = false
     @Binding var text: String
     let isActive: Bool
     let keyboard: TerminalKeyboardCoordinator
@@ -12,6 +13,7 @@ struct TerminalComposerEditor: UIViewRepresentable {
     var acceptsEdits = true
     var placeholder = String(localized: "Type anything")
     var showsContent = true
+    var inputAccessory: () -> UIView? = { nil }
     let onPasteAttachments: ([TerminalAttachmentPayload], [URL]) -> Void
 
     func makeUIView(context: Context) -> ComposerTextView {
@@ -42,6 +44,11 @@ struct TerminalComposerEditor: UIViewRepresentable {
 
     func updateUIView(_ view: ComposerTextView, context: Context) {
         context.coordinator.parent = self
+        let accessory = chatAccessoryEnabled ? inputAccessory() : nil
+        if view.inputAccessoryView !== accessory {
+            view.inputAccessoryView = accessory
+            if view.isFirstResponder { view.reloadInputViews() }
+        }
         view.applyKeyboardOptions(.init(rawValue: storedKeyboardOptions))
         let returnsToEditing = showsContent && !view.showsContent
         view.placeholderText = placeholder

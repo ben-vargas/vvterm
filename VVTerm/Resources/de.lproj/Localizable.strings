@@ -2303,3 +2303,8 @@
 "Smart Quotes and Dashes" = "Intelligente Anführungs- und Gedankenstriche";
 "Smart Insert and Delete" = "Intelligentes Einfügen und Löschen";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Standardmäßig deaktiviert, damit Terminalbefehle unverändert bleiben. Vorschläge hängen von Tastatur und Systemeinstellungen ab.";
+
+// Chat input controls
+"Customize Send Action" = "Sendeaktion anpassen";
+"Show Accessory Bar" = "Zusatzleiste anzeigen";
+"Accessory keys and custom actions go directly to the terminal." = "Tasten der Zusatzleiste und eigene Aktionen werden direkt an das Terminal gesendet.";

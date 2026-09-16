@@ -2348,3 +2348,8 @@
 "Smart Quotes and Dashes" = "Dấu ngoặc kép và gạch ngang thông minh";
 "Smart Insert and Delete" = "Chèn và xóa thông minh";
 "Off by default to keep terminal commands unchanged. Keyboard suggestions depend on your keyboard and system settings." = "Mặc định tắt để giữ nguyên lệnh terminal. Gợi ý phụ thuộc vào bàn phím và cài đặt hệ thống.";
+
+// Chat input controls
+"Customize Send Action" = "Tùy chỉnh thao tác gửi";
+"Show Accessory Bar" = "Hiện thanh phím bổ trợ";
+"Accessory keys and custom actions go directly to the terminal." = "Các phím trên thanh và thao tác tùy chỉnh được gửi thẳng đến cửa sổ dòng lệnh.";

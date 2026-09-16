@@ -53,7 +53,7 @@ struct TerminalInputModePreview: View {
     private var composerPreview: some View {
         HStack(spacing: 12) {
             Image(systemName: "plus")
-                .font(.system(size: 18))
+                .font(.system(size: 16))
                 .frame(width: 40, height: 40)
                 .adaptiveGlass()
             HStack(spacing: 4) {
@@ -61,10 +61,12 @@ struct TerminalInputModePreview: View {
                     .font(.body)
                     .padding(.leading, 12)
                 Spacer(minLength: 0)
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 26))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 40, height: 40)
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 32)
+                    .background(Color.accentColor, in: Capsule())
+                    .frame(width: 48, height: 40)
             }
             .padding(.trailing, 2)
             .adaptiveGlassRect(cornerRadius: 20)
