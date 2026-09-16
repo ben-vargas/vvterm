@@ -4,7 +4,7 @@ import SwiftUI
 struct TerminalInputModePreview: View {
     let mode: TerminalInputMode
     let showsChatAccessory: Bool
-    @FocusState private var isDraftFocused: Bool
+    var draftFocus: FocusState<Bool>.Binding
     @State private var draft = "ls -la"
     @State private var output = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -53,14 +53,7 @@ struct TerminalInputModePreview: View {
         .accessibilityValue(mode == .direct ? Text("Normal Mode") : Text("Chat Mode"))
         .accessibilityIdentifier("vvterm.settings.inputMode.preview")
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: mode)
-        .onChange(of: mode) { _ in isDraftFocused = false }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { isDraftFocused = false }
-                    .accessibilityIdentifier("vvterm.settings.inputMode.preview.done")
-            }
-        }
+        .onChange(of: mode) { _ in draftFocus.wrappedValue = false }
     }
 
     private var accessoryPreview: some View {
@@ -94,9 +87,9 @@ struct TerminalInputModePreview: View {
                 .adaptiveGlass()
             HStack(spacing: 4) {
                 TextField("Type anything", text: $draft)
-                    .focused($isDraftFocused)
+                    .focused(draftFocus)
                     .submitLabel(.done)
-                    .onSubmit { isDraftFocused = false }
+                    .onSubmit { draftFocus.wrappedValue = false }
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("vvterm.settings.inputMode.preview.draft")

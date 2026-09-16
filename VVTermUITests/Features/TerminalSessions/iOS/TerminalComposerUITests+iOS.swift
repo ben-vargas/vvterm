@@ -111,9 +111,17 @@ final class TerminalComposerUITests: XCTestCase {
         draft.tap()
         draft.typeText("sample")
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
-        app.buttons["vvterm.settings.inputMode.preview.done"].tap()
+        XCTAssertFalse(app.buttons["vvterm.settings.inputMode.preview.done"].exists)
+        draft.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        output.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
         XCTAssertEqual(draft.value as? String, "sample")
+        draft.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.buttons["vvterm.settings.inputMode.preview.send"].tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(output.label, "server:~ $ sample")
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Interactive input preview"
         shot.lifetime = .keepAlways

@@ -6,10 +6,13 @@ struct TerminalInputModeSettingsView: View {
 
     @AppStorage(TerminalInputMode.chatAccessoryPreferenceKey) private var chatAccessoryEnabled = false
 
+    @FocusState private var isPreviewDraftFocused: Bool
+
     var body: some View {
         Form {
             Section("Preview") {
-                TerminalInputModePreview(mode: inputMode, showsChatAccessory: chatAccessoryEnabled)
+                TerminalInputModePreview(mode: inputMode, showsChatAccessory: chatAccessoryEnabled,
+                                         draftFocus: $isPreviewDraftFocused)
                     .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -40,6 +43,12 @@ struct TerminalInputModeSettingsView: View {
             }
             TerminalKeyboardSettings()
         }
+        .background {
+            InputModePreviewKeyboardDismissArea {
+                isPreviewDraftFocused = false
+            }
+        }
+        .scrollDismissesKeyboard(.interactively)
         .formStyle(.grouped)
         .navigationTitle("Input Mode")
         .adaptiveSoftScrollEdges()
