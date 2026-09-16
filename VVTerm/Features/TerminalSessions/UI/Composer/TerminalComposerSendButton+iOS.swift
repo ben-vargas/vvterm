@@ -18,9 +18,9 @@ struct TerminalComposerSendButton: View {
                 }
             } label: {
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 44, height: 32)
+                    .frame(width: 40, height: 28)
                     .background(composer.canSend && isActive ? Color.accentColor : Color.secondary, in: Capsule())
                     .frame(width: 48, height: 40)
             } primaryAction: {
