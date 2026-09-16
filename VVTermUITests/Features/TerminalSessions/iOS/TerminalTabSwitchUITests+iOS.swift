@@ -33,6 +33,37 @@ final class TerminalTabSwitchUITests: TerminalReconnectUITestCase {
     }
 
     @MainActor
+    func testNormalTabSwitchKeepsTerminalAboveKeyboard() throws {
+        let (app, diagnostics) = launchProductionSSHTestHarness(tabSwitching: true)
+        defer { app.terminate() }
+        let tabs = app.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH %@", "vvterm.terminal.tab."
+        ))
+        XCTAssertEqual(tabs.count, 2)
+        let keyboard = app.keyboards.firstMatch
+        if diagnosticValue("keyboardVisible", in: diagnostics) != "true" {
+            openProductionTerminalMenu(in: app)
+            app.buttons["vvterm.terminal.inputMenu"].tap()
+            app.buttons["vvterm.terminal.input.keyboard"].tap()
+            wait(for: diagnostics, containing: "keyboardVisible=true", timeout: 8, app: app)
+        }
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 8))
+
+        for index in [1, 0, 1, 0] {
+            tabs.element(boundBy: index).tap()
+            wait(for: diagnostics, containing: "state=connected", timeout: 20, app: app)
+            XCTAssertTrue(keyboard.exists, diagnosticText(in: app))
+            XCTAssertEqual(diagnosticValue("keyboardVisible", in: diagnostics), "true")
+            let terminal = productionTerminal(in: app)
+            XCTAssertLessThanOrEqual(
+                terminal.frame.maxY,
+                keyboard.frame.minY + 2,
+                "The selected terminal extends under the visible keyboard. \(diagnosticText(in: app))"
+            )
+        }
+    }
+
+    @MainActor
     func testChatTabsPreserveKeyboardGridAndDrafts() throws {
         try checkTabSwitches(chat: true)
     }

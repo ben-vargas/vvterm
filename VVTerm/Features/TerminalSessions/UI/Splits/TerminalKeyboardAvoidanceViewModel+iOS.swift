@@ -112,15 +112,15 @@ final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
         )
         let geometry: TerminalKeyboardAvoidancePolicy.KeyboardGeometry
         let useNativeGuide: Bool
-        if case .docked = observedGeometry { useNativeGuide = true }
-        else { useNativeGuide = inputMode == .chat }
-        if inputMode == .chat, userHidKeyboard {
+        if case .floating = observedGeometry { useNativeGuide = false }
+        else { useNativeGuide = true }
+        if userHidKeyboard {
             // A dismissed iPad keyboard can leave its native guide at the old height.
             geometry = .hidden
         } else if useNativeGuide, !usesSimulatedKeyboardGeometry {
             // The default native guide tracks docked obstruction only. Hidden
-            // safe-area height is not a keyboard. Chat also reads this guide after
-            // app activation, when UIKit can restore the keyboard without a frame notification.
+            // safe-area height is not a keyboard. It also updates after a tab
+            // switch that keeps the keyboard visible without a frame notification.
             let guide = viewport.keyboardLayoutGuide.layoutFrame
             let dockedFrame = viewport.convert(guide, to: window)
             let safeAreaBottom = window.bounds.maxY - window.safeAreaInsets.bottom

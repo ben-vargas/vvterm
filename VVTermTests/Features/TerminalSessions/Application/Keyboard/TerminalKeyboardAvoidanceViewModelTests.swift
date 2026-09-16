@@ -37,6 +37,39 @@ struct TerminalKeyboardAvoidanceViewModelTests {
         model.update(terminal: nil, scope: .container, isFocused: true,
                      preservesTerminalSize: false, keyboardFrame: nil,
                      usesSimulatedKeyboardGeometry: false, inputMode: .direct)
+        #expect(model.layout.bottomInset > 0)
+        model.detach()
+    }
+
+    @Test(arguments: [false, true])
+    func directTabReturnUsesVisibleDockedGuideWithoutFrameNotification(preserves: Bool) throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 600, height: 700)
+        let viewport = ComposerKeyboardViewport(frame: window.bounds)
+        window.addSubview(viewport)
+        viewport.guide.frameForTest = CGRect(x: 0, y: 500, width: 600, height: 200)
+        let model = TerminalKeyboardAvoidanceViewModel()
+        model.attachViewport(viewport)
+
+        model.update(terminal: nil, scope: .container, isFocused: true,
+                     preservesTerminalSize: preserves, keyboardFrame: nil,
+                     usesSimulatedKeyboardGeometry: false, inputMode: .direct)
+        #expect(model.layout.bottomInset == 200 - window.safeAreaInsets.bottom)
+        #expect(model.layout.preservesTerminalSurfaceSize == preserves)
+
+        let floating = window.convert(
+            CGRect(x: 200, y: 450, width: 200, height: 200),
+            to: window.screen.coordinateSpace
+        )
+        model.update(terminal: nil, scope: .container, isFocused: true,
+                     preservesTerminalSize: preserves, keyboardFrame: floating,
+                     usesSimulatedKeyboardGeometry: false, inputMode: .direct)
+        #expect(model.layout.bottomInset == 0)
+
+        model.update(terminal: nil, scope: .container, isFocused: true,
+                     preservesTerminalSize: preserves, keyboardFrame: nil,
+                     usesSimulatedKeyboardGeometry: false, inputMode: .direct, userHidKeyboard: true)
         #expect(model.layout.bottomInset == 0)
         model.detach()
     }
