@@ -8,6 +8,39 @@ import UIKit
 
 @MainActor
 final class TerminalComposerStoreTests: XCTestCase {
+    func testTextAndKeyActionsDoNotResolveAttachmentTransport() async {
+        let fixture = Fixture()
+        let store = fixture.store()
+        store.setMode(.chat)
+        store.draft = "echo hello"
+        await finish(store) { store.send() }
+        await finish(store) { store.send(action: .queue) }
+        XCTAssertEqual(fixture.sent, ["echo hello", ""])
+        XCTAssertEqual(fixture.routeResolutions, 0)
+    }
+
+    func testTextAndShortcutsWorkWithoutAnSSHAttachmentRoute() async {
+        var sent: [String] = []
+        var actions: [TerminalComposerSendAction] = []
+        let store = TerminalComposerStore(resolveRoute: {
+            throw TerminalAttachmentError.unavailable
+        }, submit: { text, action in
+            sent.append(text)
+            actions.append(action)
+        })
+        store.setMode(.chat)
+        store.draft = "echo hello"
+        await finish(store) { store.send() }
+        await finish(store) { store.send(action: .queue) }
+        XCTAssertEqual(sent, ["echo hello", ""])
+        XCTAssertEqual(actions, [.send, .queue])
+        XCTAssertEqual(store.operation, .idle)
+        let file = payload("file.txt")
+        await finish(store) { store.load { [file] } }
+        guard case .failed = store.operation else { return XCTFail("Files still need an upload route") }
+        XCTAssertEqual(sent.count, 2)
+    }
+
     func testTextStepsSurroundDraftWithoutChangingOrder() async {
         let fixture = Fixture()
         let store = fixture.store()
@@ -88,7 +121,7 @@ final class TerminalComposerStoreTests: XCTestCase {
     }
 
     func testTranscriptionStaysInChatDraftAndNeverSubmits() {
-        let store = TerminalComposerStore(resolveRoute: { throw TerminalAttachmentError.unavailable })
+        let store = TerminalComposerStore(resolveRoute: { throw TerminalAttachmentError.unavailable }, submit: { _, _ in })
         store.setMode(.chat)
         store.draft = "Review"
         store.appendTranscription("  these files  ")
@@ -107,8 +140,8 @@ final class TerminalComposerStoreTests: XCTestCase {
             TerminalAttachmentRoute(upload: { payload in
                 await withCheckedContinuation { finishUpload = $0 }
                 return RemoteClipboardUpload(remotePath: "/tmp/file", pastedPathToken: "/tmp/file", mimeType: payload.mimeType, sizeBytes: payload.sizeBytes)
-            }, remove: { _ in }, submit: { _, _ in })
-        })
+            }, remove: { _ in })
+        }, submit: { _, _ in })
         store.setMode(.chat)
         let first = TerminalAttachmentPayload(data: Data([1]), contentType: .png, suggestedFilename: "same.png")
         let second = TerminalAttachmentPayload(data: Data([2]), contentType: .png, suggestedFilename: "same.png")
@@ -343,8 +376,8 @@ final class TerminalComposerStoreTests: XCTestCase {
             }, remove: { uploads in
                 XCTAssertEqual(uploads.map(\.remotePath), ["/tmp/one"])
                 cleaned.fulfill()
-            }, submit: { _, _ in sent = true })
-        })
+            })
+        }, submit: { _, _ in sent = true })
         store.setMode(.chat)
         store.draft = "keep"
         try store.add([payload("one")])
@@ -430,8 +463,8 @@ final class TerminalComposerStoreTests: XCTestCase {
         let store = TerminalComposerStore(resolveRoute: {
             TerminalAttachmentRoute(upload: { _ in
                 await withCheckedContinuation { continuation = $0; began.fulfill() }
-            }, remove: { _ in cleaned.fulfill() }, submit: { _, _ in sent = true })
-        })
+            }, remove: { _ in cleaned.fulfill() })
+        }, submit: { _, _ in sent = true })
         store.setMode(.chat)
         let file = payload("one")
         try store.add([file])
@@ -454,8 +487,8 @@ final class TerminalComposerStoreTests: XCTestCase {
             return TerminalAttachmentRoute(isCurrent: { connection == selected }, upload: { _ in
                 uploads.append(selected)
                 return RemoteClipboardUpload(remotePath: "/tmp/file", pastedPathToken: "/tmp/file", mimeType: "text/plain", sizeBytes: 1)
-            }, remove: { _ in removed.append(selected) }, submit: { _, _ in sent.append(selected) })
-        })
+            }, remove: { _ in removed.append(selected) })
+        }, submit: { _, _ in sent.append(connection) })
         store.setMode(.chat)
         try store.add([payload("one")])
         await finish(store)
@@ -470,8 +503,8 @@ final class TerminalComposerStoreTests: XCTestCase {
         let store = TerminalComposerStore(resolveRoute: {
             TerminalAttachmentRoute(upload: { _ in
                 RemoteClipboardUpload(remotePath: "/tmp/file", pastedPathToken: "/tmp/file", mimeType: "text/plain", sizeBytes: 1)
-            }, remove: { _ in throw TerminalAttachmentError.unavailable }, submit: { _, _ in })
-        })
+            }, remove: { _ in throw TerminalAttachmentError.unavailable })
+        }, submit: { _, _ in })
         store.setMode(.chat)
         let file = payload("one")
         try store.add([file])
@@ -516,6 +549,7 @@ final class TerminalComposerStoreTests: XCTestCase {
 
     @MainActor
     private final class Fixture {
+        var routeResolutions = 0
         var uploaded: [String] = []
         var removed: [String] = []
         var sent: [String] = []
@@ -524,15 +558,16 @@ final class TerminalComposerStoreTests: XCTestCase {
         var rejectSubmit = false
         func store() -> TerminalComposerStore {
             TerminalComposerStore(resolveRoute: { [self] in
-                TerminalAttachmentRoute(upload: { [self] attachment in
+                routeResolutions += 1
+                return TerminalAttachmentRoute(upload: { [self] attachment in
                     if attachment.suggestedFilename == failingName { throw TerminalAttachmentError.unreadable }
                     uploaded.append(attachment.suggestedFilename)
                     return RemoteClipboardUpload(remotePath: "/tmp/\(attachment.suggestedFilename)", pastedPathToken: "/tmp/\(attachment.suggestedFilename)", mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes)
-                }, remove: { [self] uploads in removed += uploads.map(\.remotePath) }, submit: { [self] text, mode in
-                    if rejectSubmit { throw TerminalAttachmentError.unavailable }
-                    sent.append(text)
-                    sentActions.append(mode)
-                })
+                }, remove: { [self] uploads in removed += uploads.map(\.remotePath) })
+            }, submit: { [self] text, mode in
+                if rejectSubmit { throw TerminalAttachmentError.unavailable }
+                sent.append(text)
+                sentActions.append(mode)
             })
         }
     }

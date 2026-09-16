@@ -34,27 +34,27 @@ final class TerminalComposerUITestModel: ObservableObject {
 
     private func makeComposer() -> TerminalComposerStore {
         TerminalComposerStore(resolveRoute: { [weak self] in
-        guard let self, self.connected else { throw TerminalAttachmentError.unavailable }
-        return TerminalAttachmentRoute(upload: { [weak self] attachment in
-            if let self, self.pausesUploads {
-                await withCheckedContinuation { self.resumeUpload = $0 }
-            } else { try await Task.sleep(for: .milliseconds(100)) }
-            if self?.failUpload == true { throw TerminalAttachmentError.unreadable }
-            return RemoteClipboardUpload(remotePath: "/tmp/\(attachment.suggestedFilename)",
-                                         pastedPathToken: "/tmp/\(attachment.suggestedFilename)",
-                                         mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes)
-        }, remove: { _ in }, submit: { [weak self] text, action in
-            guard let self, self.keyboard.canSubmitComposedInput(for: self.paneID), let terminal = self.terminal else {
+            guard let self, self.connected else { throw TerminalAttachmentError.unavailable }
+            return TerminalAttachmentRoute(upload: { [weak self] attachment in
+                if let self, self.pausesUploads {
+                    await withCheckedContinuation { self.resumeUpload = $0 }
+                } else { try await Task.sleep(for: .milliseconds(100)) }
+                if self?.failUpload == true { throw TerminalAttachmentError.unreadable }
+                return RemoteClipboardUpload(remotePath: "/tmp/\(attachment.suggestedFilename)",
+                                             pastedPathToken: "/tmp/\(attachment.suggestedFilename)",
+                                             mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes)
+            }, remove: { _ in })
+        }, submit: { [weak self] text, action in
+            guard let self, self.connected,
+                  self.keyboard.canSubmitComposedInput(for: self.paneID), let terminal = self.terminal else {
                 throw TerminalAttachmentError.unavailable
             }
             try terminal.sendComposedText(text, action: action)
             self.sent = text
+        }, modeChanged: { [weak self] _ in
+            guard let self else { return }
+            self.keyboard.composerModeDidChange(for: self.paneID)
         })
-    }, modeChanged: { [weak self] _ in
-        guard let self else { return }
-        self.keyboard.composerModeDidChange(for: self.paneID)
-    })
-
     }
 
     init(keyboard: TerminalKeyboardCoordinator) {

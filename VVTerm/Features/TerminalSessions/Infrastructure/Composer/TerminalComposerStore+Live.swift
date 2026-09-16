@@ -29,22 +29,24 @@ extension TerminalComposerStore {
                             catch { failure = error }
                         }
                         if let failure { throw failure }
-                    },
-                    submit: { [weak tabManager, weak terminal] text, action in
-                        guard let tabManager, let terminal, isCurrent() else {
-                            throw TerminalAttachmentError.unavailable
-                        }
-                        #if os(iOS)
-                        guard tabManager.keyboardCoordinator.canSubmitComposedInput(for: paneId),
-                              let ghostty = terminal as? GhosttyTerminalView else {
-                            throw TerminalAttachmentError.unavailable
-                        }
-                        try ghostty.sendComposedText(text, action: action)
-                        #else
-                        terminal.sendText(text)
-                        #endif
                     }
                 )
+            },
+            submit: { [weak tabManager] text, action in
+                guard let tabManager,
+                      tabManager.sessionState.paneState(for: paneId)?.connectionState.isConnected == true,
+                      let terminal = tabManager.terminalSurfaceStore.surface(for: paneId) else {
+                    throw TerminalAttachmentError.unavailable
+                }
+                #if os(iOS)
+                guard tabManager.keyboardCoordinator.canSubmitComposedInput(for: paneId),
+                      let ghostty = terminal as? GhosttyTerminalView else {
+                    throw TerminalAttachmentError.unavailable
+                }
+                try ghostty.sendComposedText(text, action: action)
+                #else
+                terminal.sendText(text)
+                #endif
             },
             modeChanged: { [weak tabManager] _ in
                 #if os(iOS)

@@ -21,6 +21,7 @@ final class TerminalComposerStore: ObservableObject {
     @Published var attachmentSource: AttachmentSource?
 
     private let resolveRoute: @MainActor () async throws -> TerminalAttachmentRoute
+    private let submit: @MainActor (String, TerminalComposerSendAction) throws -> Void
     private let modeChanged: @MainActor (TerminalInputMode) -> Void
     private var task: Task<Void, Never>?
     private var taskID: UUID?
@@ -31,7 +32,9 @@ final class TerminalComposerStore: ObservableObject {
     private var prepared: PreparedAttachments?
 
     init(resolveRoute: @escaping @MainActor () async throws -> TerminalAttachmentRoute,
+         submit: @escaping @MainActor (String, TerminalComposerSendAction) throws -> Void,
          modeChanged: @escaping @MainActor (TerminalInputMode) -> Void = { _ in }) {
+        self.submit = submit
         self.resolveRoute = resolveRoute
         self.modeChanged = modeChanged
     }
@@ -150,18 +153,19 @@ final class TerminalComposerStore: ObservableObject {
             var filename: String?
             do {
                 if self?.prepared?.route.isCurrent() == false { self?.discardPrepared() }
-                let route: TerminalAttachmentRoute
-                if let existing = self?.prepared?.route { route = existing }
-                else { route = try await resolveRoute() }
-                try Task.checkCancellation()
-                guard self?.taskID == id else { return }
-                if self?.prepared == nil { self?.prepared = PreparedAttachments(route: route) }
+                if !payloads.isEmpty, self?.prepared == nil {
+                    let route = try await resolveRoute()
+                    try Task.checkCancellation()
+                    guard self?.taskID == id else { return }
+                    self?.prepared = PreparedAttachments(route: route)
+                }
                 for payload in payloads {
                     try Task.checkCancellation()
                     guard self?.attachments.contains(where: { $0.id == payload.id }) == true,
                           self?.prepared?.uploads[payload.id] == nil else { continue }
                     filename = payload.suggestedFilename
                     self?.operation = .uploading(id: payload.id, filename: payload.suggestedFilename)
+                    guard let route = self?.prepared?.route else { throw TerminalAttachmentError.unavailable }
                     let upload = try await route.upload(payload)
                     // The picker may be dismissed or a file removed while an
                     // uncancellable transport operation is finishing.
@@ -178,7 +182,9 @@ final class TerminalComposerStore: ObservableObject {
                 }
                 try Task.checkCancellation()
                 guard let self, self.taskID == id else { return }
-                guard route.isCurrent() else { throw TerminalAttachmentError.unavailable }
+                if !payloads.isEmpty, self.prepared?.route.isCurrent() != true {
+                    throw TerminalAttachmentError.unavailable
+                }
                 if let action {
                     let sentPayloads = payloads.filter { payload in self.attachments.contains { $0.id == payload.id } }
                     let paths = try sentPayloads.map { payload in
@@ -186,7 +192,7 @@ final class TerminalComposerStore: ObservableObject {
                         return upload.pastedPathToken
                     }
                     let composed = Self.compose(text: text, pathTokens: paths)
-                    try route.submit(composed, action)
+                    try self.submit(composed, action)
                     if insertsDraft, self.mode == .chat, self.draft == text { self.draft = "" }
                     let sentIDs = Set(sentPayloads.map(\.id))
                     self.attachments.removeAll { sentIDs.contains($0.id) }
