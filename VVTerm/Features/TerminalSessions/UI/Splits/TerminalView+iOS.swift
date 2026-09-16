@@ -101,7 +101,14 @@ struct RemoteTerminalPaneWrapper: View {
             composer.setMode(mode)
         }
         .background {
-            TerminalAttachmentPicker(composer: composer) {
+            TerminalAttachmentPicker(composer: composer, onPasteText: { text in
+                guard tabManager.keyboardCoordinator.canSubmitComposedInput(for: paneId) else { return }
+                if composer.mode == .chat {
+                    tabManager.keyboardCoordinator.insertComposerText(text, for: paneId)
+                } else {
+                    tabManager.terminalSurfaceStore.ghosttySurface(for: paneId)?.pasteTextFromClipboard()
+                }
+            }) {
                 guard tabManager.keyboardCoordinator.canSubmitComposedInput(for: paneId) else { return }
                 tabManager.keyboardCoordinator.userRequestedShow()
             }

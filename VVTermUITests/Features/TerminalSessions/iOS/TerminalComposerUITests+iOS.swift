@@ -4,6 +4,26 @@ import UIKit
 
 final class TerminalComposerUITests: XCTestCase {
     @MainActor
+    func testAttachmentMenuPastesTextIntoChatAndNormalInput() {
+        let app = launch(arguments: ["--composer-clipboard-text"])
+        app.buttons["vvterm.composer.toggle"].tap()
+        let editor = app.textViews["vvterm.composer.text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("draft ")
+        app.buttons["vvterm.composer.attach"].tap()
+        app.buttons["vvterm.attachments.paste"].tap()
+        expectation(for: NSPredicate(format: "value == %@", "draft clipboard text"), evaluatedWith: editor)
+        waitForExpectations(timeout: 5)
+        XCTAssertEqual(app.staticTexts["composer.test.bytes"].label, "")
+        XCTAssertFalse(app.staticTexts["vvterm.composer.error"].exists)
+        app.buttons["vvterm.composer.toggle"].tap()
+        app.buttons["vvterm.keyboard.accessory.attachments"].tap()
+        app.buttons["vvterm.attachments.paste"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "clipboard text"), evaluatedWith: app.staticTexts["composer.test.bytes"])
+        waitForExpectations(timeout: 5)
+    }
+
+    @MainActor
     func testDisabledVoiceInputHidesMicrophoneAndRestoresTyping() {
         let app = launch()
         app.buttons["vvterm.composer.toggle"].tap()

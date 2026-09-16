@@ -659,6 +659,11 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         composerInputs.removeValue(forKey: paneId)
     }
 
+    func insertComposerText(_ text: String, for paneId: UUID) {
+        guard activeInputMode == .chat, canSubmitComposedInput(for: paneId) else { return }
+        composerInputs[paneId]?.session?.insertComposerText(text)
+    }
+
     func composerInputAvailabilityDidChange() { markDirty(reason: "composerAvailability") }
 
     func isComposerVisible(for paneId: UUID) -> Bool {

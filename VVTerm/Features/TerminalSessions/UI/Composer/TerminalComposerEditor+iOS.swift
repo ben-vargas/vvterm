@@ -103,6 +103,11 @@ final class ComposerTextView: UITextView, TerminalComposerInputSession {
 
     override var canBecomeFirstResponder: Bool { coordinatorAllowsFocus && allowsComposerFocus && super.canBecomeFirstResponder }
 
+    func insertComposerText(_ text: String) {
+        guard acceptsEdits else { return }
+        insertText(text)
+    }
+
     func preventComposerInputAcquisition() {
         // Navigation removes the view and releases UIKit input during dismantling.
         coordinatorAllowsFocus = false

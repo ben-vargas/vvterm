@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct TerminalAttachmentPicker: View {
     @ObservedObject var composer: TerminalComposerStore
+    let onPasteText: (String) -> Void
     var onDismiss: () -> Void = {}
     @State private var photos: [PhotosPickerItem] = []
 
@@ -46,9 +47,13 @@ struct TerminalAttachmentPicker: View {
                 composer.attachmentSource = nil
                 let images = Clipboard.attachmentPayloads()
                 let urls = (UIPasteboard.general.urls ?? []).filter(\.isFileURL)
+                if let text = UIPasteboard.general.string,
+                   !urls.contains(where: { $0.absoluteString == text || $0.path == text }) {
+                    onPasteText(text)
+                }
+                guard !images.isEmpty || !urls.isEmpty else { return }
                 composer.load {
                     let files = try await TerminalAttachmentLoader.files(urls)
-                    guard !images.isEmpty || !files.isEmpty else { throw TerminalAttachmentError.unreadable }
                     return images + files
                 }
             }

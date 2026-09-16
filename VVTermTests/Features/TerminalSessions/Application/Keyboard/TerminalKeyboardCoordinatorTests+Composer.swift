@@ -8,6 +8,32 @@ extension TerminalKeyboardCoordinatorTests {
     @Suite(.serialized)
     struct Composer {
         @Test @MainActor
+        func pasteOnlyEditsTheEligibleChatPane() async {
+            let pane = UUID(), other = UUID()
+            let terminal = TerminalKeyboardInputSessionSpy()
+            let editor = ComposerInputSpy()
+            let coordinator = makeTerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { _ in terminal }
+            coordinator.inputModeProvider = { _ in .chat }
+            coordinator.setActivePane(pane)
+            coordinator.setViewActive(true)
+            coordinator.setWindowAttached(true, for: pane)
+            coordinator.setPaneInputEligible(true, for: pane)
+            coordinator.registerComposerInput(editor, for: pane)
+            await drainMainQueue()
+            coordinator.insertComposerText("paste", for: pane)
+            #expect(editor.insertedText == "paste")
+            coordinator.insertComposerText("wrong pane", for: other)
+            coordinator.setPaneInputEligible(false, for: pane)
+            coordinator.insertComposerText("disconnected", for: pane)
+            #expect(editor.insertedText == "paste")
+            coordinator.setPaneInputEligible(true, for: pane)
+            coordinator.inputModeProvider = { _ in .direct }
+            coordinator.insertComposerText("normal", for: pane)
+            #expect(editor.insertedText == "paste")
+        }
+
+        @Test @MainActor
         func tabTransferAcquiresIncomingEditorBeforeReleasingOutgoingEditor() async {
             let first = UUID(), second = UUID()
             let terminal = TerminalKeyboardInputSessionSpy()
@@ -429,6 +455,8 @@ extension TerminalKeyboardCoordinatorTests {
 }
 @MainActor
 private final class ComposerInputSpy: TerminalComposerInputSession {
+    var insertedText = ""
+    func insertComposerText(_ text: String) { insertedText += text }
     var onSetInput: ((Bool) -> Void)?
     var allowsComposerFocus = true
     var active = false

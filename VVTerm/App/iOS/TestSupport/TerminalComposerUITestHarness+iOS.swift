@@ -59,6 +59,9 @@ final class TerminalComposerUITestModel: ObservableObject {
 
     init(keyboard: TerminalKeyboardCoordinator) {
         self.keyboard = keyboard
+        if Foundation.ProcessInfo.processInfo.arguments.contains("--composer-clipboard-text") {
+            UIPasteboard.general.string = "clipboard text"
+        }
         if !Foundation.ProcessInfo.processInfo.arguments.contains("--preserve-composer-actions") {
             UserDefaults.standard.removeObject(forKey: TerminalComposerSendActions.preferenceKey)
             UserDefaults.standard.removeObject(forKey: TerminalKeyboardOptions.preferenceKey)
@@ -296,7 +299,11 @@ private struct TerminalComposerUITestContent: View {
             }
         }
         .background {
-            TerminalAttachmentPicker(composer: composer) {
+            TerminalAttachmentPicker(composer: composer, onPasteText: { text in
+                if composer.mode == .chat {
+                    model.keyboard.insertComposerText(text, for: model.paneID)
+                } else { model.terminal?.pasteTextFromClipboard() }
+            }) {
                 model.keyboard.userRequestedShow()
             }
         }

@@ -4,6 +4,7 @@
 protocol TerminalComposerInputSession: AnyObject {
     var allowsComposerFocus: Bool { get }
     var isComposerFirstResponder: Bool { get }
+    func insertComposerText(_ text: String)
     func preventComposerInputAcquisition()
     func setComposerInput(active: Bool, softwareKeyboardHidden: Bool)
 }
