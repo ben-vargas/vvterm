@@ -18,6 +18,24 @@ final class StatsCardsLayoutUITests: XCTestCase {
     }
 
     @MainActor
+    func testLockedDockerDoesNotReduceAvailableColumns() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad grid") }
+        layoutConfiguration = .detailed
+        launch(extraArguments: ["--vvterm-ui-test-stats-cards-locked-docker"])
+        XCTAssertGreaterThan(layoutConfiguration.columnCount(for: container.frame.width), 1)
+        try assertExpectedColumnsAndContainment()
+    }
+
+    @MainActor
+    func testLockedDockerCompactUsesAvailableColumns() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad grid") }
+        layoutConfiguration = .compact
+        launch(extraArguments: ["--vvterm-ui-test-stats-cards-compact", "--vvterm-ui-test-stats-cards-locked-docker"])
+        XCTAssertGreaterThan(layoutConfiguration.columnCount(for: container.frame.width), 1)
+        try assertExpectedColumnsAndContainment()
+    }
+
+    @MainActor
     func testDetailedCardsRemainContainedAcrossWideNarrowAndWideTransitions() throws {
         layoutConfiguration = .detailed
         launch()
@@ -51,7 +69,7 @@ final class StatsCardsLayoutUITests: XCTestCase {
 
     @MainActor
     func testLockedDockerCardRemainsContainedAfterRepeatedRotation() throws {
-        layoutConfiguration = .lockedDockerDetailed
+        layoutConfiguration = .detailed
         launch(extraArguments: ["--vvterm-ui-test-stats-cards-locked-docker"])
         try assertExpectedColumnsAndContainment()
 
@@ -159,11 +177,11 @@ final class StatsCardsLayoutUITests: XCTestCase {
     }
 
     private var container: XCUIElement {
-        app.descendants(matching: .any)["vvterm.stats.layout.container"]
+        app.descendants(matching: .any).matching(identifier: "vvterm.stats.layout.container").firstMatch
     }
 
     private func card(_ identifier: String) -> XCUIElement {
-        app.descendants(matching: .any)["vvterm.stats.card.\(identifier)"]
+        app.descendants(matching: .any).matching(identifier: "vvterm.stats.card.\(identifier)").firstMatch
     }
 
     private struct LayoutConfiguration {
@@ -180,12 +198,6 @@ final class StatsCardsLayoutUITests: XCTestCase {
         )
         static let detailed = LayoutConfiguration(
             minimumColumnWidth: 320,
-            spacing: 18,
-            horizontalPadding: 18,
-            maximumWidth: 1_360
-        )
-        static let lockedDockerDetailed = LayoutConfiguration(
-            minimumColumnWidth: 560,
             spacing: 18,
             horizontalPadding: 18,
             maximumWidth: 1_360

@@ -20,28 +20,6 @@ final class StatsGridLayoutPolicyTests: XCTestCase {
         )
     }
 
-    func testLockedDockerCompactBreakpointsUseItsWiderMinimumWithoutRetainingAColumnCount() {
-        assertBreakpoints(
-            minimumColumnWidth: 560,
-            spacing: 14,
-            twoColumnWidth: 1_134,
-            threeColumnWidth: 1_708
-        )
-
-        XCTAssertEqual(columnCount(width: 1_708, minimumColumnWidth: 560, spacing: 14), 3)
-        XCTAssertEqual(columnCount(width: 1_133.5, minimumColumnWidth: 560, spacing: 14), 1)
-        XCTAssertEqual(columnCount(width: 1_134, minimumColumnWidth: 560, spacing: 14), 2)
-    }
-
-    func testLockedDockerDetailedBreakpointsUseItsWiderMinimum() {
-        assertBreakpoints(
-            minimumColumnWidth: 560,
-            spacing: 18,
-            twoColumnWidth: 1_138,
-            threeColumnWidth: 1_716
-        )
-    }
-
     func testInvalidDimensionsResolveSafely() {
         XCTAssertEqual(columnCount(width: 0, minimumColumnWidth: 292, spacing: 14), 1)
         XCTAssertEqual(columnCount(width: -1, minimumColumnWidth: 292, spacing: 14), 1)

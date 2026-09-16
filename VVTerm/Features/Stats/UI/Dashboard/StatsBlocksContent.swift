@@ -304,7 +304,7 @@ struct StatsBlocksContent: View {
 
     private func responsiveGrid(style: StatsVisualStyle) -> some View {
         StatsCardsGridLayout(
-            minimumColumnWidth: effectiveMinimumColumnWidth(for: style),
+            minimumColumnWidth: style.gridMinimumColumnWidth,
             spacing: style.cardSpacing,
             preferredColumnSpans: renderedBlocks.map { blockID in
                 blockID == .docker && isDockerUnlocked ? 2 : 1
@@ -312,17 +312,11 @@ struct StatsBlocksContent: View {
         ) {
             ForEach(renderedBlocks, id: \.self) { blockID in
                 statsBlock(blockID, style: style)
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("vvterm.stats.card.\(blockID.rawValue)")
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    private func effectiveMinimumColumnWidth(for style: StatsVisualStyle) -> CGFloat {
-        guard renderedBlocks.contains(.docker), !isDockerUnlocked, dockerUpgradeAction != nil else {
-            return style.gridMinimumColumnWidth
-        }
-        return max(style.gridMinimumColumnWidth, LockedDockerCard.wideLayoutMinimumWidth)
     }
 
     private func shouldRenderBlock(_ blockID: StatsPreferences.BlockID) -> Bool {
