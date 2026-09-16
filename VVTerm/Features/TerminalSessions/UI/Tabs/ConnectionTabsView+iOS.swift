@@ -163,12 +163,16 @@ extension ConnectionTerminalContainer {
     @ViewBuilder
     private var headerTabsBar: some View {
         if selectedView == .terminal && serverTabs.count > 1 {
-            SharedTerminalTabsBar(
-                tabs: serverTabs,
-                selectedTabId: selectedTabIdBinding,
-                projection: terminalToolbarProjection.tabStrip,
-                onClose: { tabManager.closeTab($0) }
-            )
+            NavigationBarAlignedContainer {
+                SharedTerminalTabsBar(
+                    tabs: serverTabs,
+                    selectedTabId: selectedTabIdBinding,
+                    projection: terminalToolbarProjection.tabStrip,
+                    onClose: { tabManager.closeTab($0) }
+                )
+            }
+            .frame(height: ServerViewTopTabBarMetrics.barHeight)
+            .padding(.vertical, 6)
         }
 
         if selectedView == .files && serverFileTabs.count > 1 {
@@ -403,6 +407,9 @@ private struct SharedTerminalTabsBar: View {
     @ObservedObject var projection: TerminalServerToolbarTabStripProjection
     let onClose: (TerminalTab) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var selectionNamespace
+
     private let minTabWidth: CGFloat = 120
 
     var body: some View {
@@ -419,10 +426,12 @@ private struct SharedTerminalTabsBar: View {
                         ForEach(tabs) { tab in
                             let item = tabItem(for: tab)
                             SharedTerminalTabButton(
+                                tabId: tab.id,
                                 title: item?.title ?? tab.title,
                                 statusColor: statusColor(for: item),
                                 isSelected: selectedTabId == tab.id,
                                 fixedWidth: itemWidth,
+                                selectionNamespace: selectionNamespace,
                                 onSelect: { selectedTabId = tab.id },
                                 onClose: { onClose(tab) }
                             )
@@ -437,10 +446,12 @@ private struct SharedTerminalTabsBar: View {
                             ForEach(tabs) { tab in
                                 let item = tabItem(for: tab)
                                 SharedTerminalTabButton(
+                                    tabId: tab.id,
                                     title: item?.title ?? tab.title,
                                     statusColor: statusColor(for: item),
                                     isSelected: selectedTabId == tab.id,
                                     fixedWidth: nil,
+                                    selectionNamespace: selectionNamespace,
                                     onSelect: { selectedTabId = tab.id },
                                     onClose: { onClose(tab) }
                                 )
@@ -453,9 +464,10 @@ private struct SharedTerminalTabsBar: View {
                     }
                 }
             }
-            .transaction { transaction in
-                transaction.animation = nil
-            }
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.82),
+                value: selectedTabId
+            )
         }
         .frame(height: ServerViewTopTabBarMetrics.barHeight)
         .background(
@@ -467,8 +479,8 @@ private struct SharedTerminalTabsBar: View {
                 )
         )
         .clipShape(Capsule(style: .continuous))
-        .padding(.horizontal, 24)
-        .padding(.vertical, 6)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("vvterm.terminal.tabs")
     }
 
     private func tabItem(for tab: TerminalTab) -> TerminalServerToolbarTabItem? {
@@ -490,33 +502,44 @@ private struct SharedTerminalTabsBar: View {
 }
 
 private struct SharedTerminalTabButton: View {
+    let tabId: UUID
     let title: String
     let statusColor: Color
     let isSelected: Bool
     let fixedWidth: CGFloat?
+    let selectionNamespace: Namespace.ID
     let onSelect: () -> Void
     let onClose: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 6, height: 6)
+        Button(action: onSelect) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 6, height: 6)
 
-            Text(title)
-                .font(.callout)
-                .lineLimit(1)
+                Text(title)
+                    .font(.callout)
+                    .lineLimit(1)
+            }
+            .padding(.leading, 14)
+            .padding(.trailing, 36)
+            .padding(.vertical, ServerViewTopTabBarMetrics.tabVerticalPadding)
+            .frame(height: ServerViewTopTabBarMetrics.tabHeight)
+            .frame(width: fixedWidth, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 36)
-        .padding(.vertical, ServerViewTopTabBarMetrics.tabVerticalPadding)
-        .frame(height: ServerViewTopTabBarMetrics.tabHeight)
-        .frame(width: fixedWidth, alignment: .leading)
+        .buttonStyle(.plain)
         .foregroundStyle(.primary)
-        .background(
-            isSelected ? Color.primary.opacity(0.18) : Color.clear,
-            in: Capsule(style: .continuous)
-        )
+        .accessibilityIdentifier("vvterm.terminal.tab.\(tabId)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .background {
+            if isSelected {
+                Capsule(style: .continuous)
+                    .fill(Color.primary.opacity(0.18))
+                    .matchedGeometryEffect(id: "selection", in: selectionNamespace)
+            }
+        }
         .overlay(alignment: .trailing) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
@@ -533,14 +556,10 @@ private struct SharedTerminalTabButton: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "Close Tab"))
+            .accessibilityIdentifier("vvterm.terminal.closeTab.\(tabId)")
             .padding(.trailing, 8)
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onSelect()
-        }
-        .accessibilityAddTraits(.isButton)
-        .animation(.easeInOut(duration: 0.12), value: isSelected)
     }
 }
 #endif

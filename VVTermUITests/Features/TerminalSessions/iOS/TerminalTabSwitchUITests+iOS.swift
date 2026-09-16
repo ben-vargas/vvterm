@@ -6,6 +6,28 @@ import XCTest
 /// each submitted line; that response verifies input reached the selected shell.
 final class TerminalTabSwitchUITests: TerminalReconnectUITestCase {
     @MainActor
+    func testTabStripAlignsWithToolbar() throws {
+        let (app, _) = launchProductionSSHTestHarness(tabSwitching: true)
+        defer { app.terminate() }
+
+        let tabs = app.otherElements["vvterm.terminal.tabs"]
+        XCTAssertTrue(tabs.waitForExistence(timeout: 5))
+        let navigationBar = app.navigationBars.firstMatch
+        let back = navigationBar.otherElements["vvterm.terminal.back"]
+        let menu = navigationBar.otherElements["vvterm.terminal.moreMenu"]
+        // Native glass extends four points outside the toolbar content's
+        // accessibility frame. Compare the visible outer edges.
+        if #available(iOS 26, *) {
+            XCTAssertEqual(tabs.frame.minX, back.frame.minX - 4, accuracy: 1)
+            XCTAssertEqual(tabs.frame.maxX, menu.frame.maxX + 4, accuracy: 1)
+        }
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Terminal tabs aligned with toolbar"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    @MainActor
     func testNormalTabsPreserveKeyboardGridAndInputRouting() throws {
         try checkTabSwitches(chat: false)
     }
@@ -19,9 +41,14 @@ final class TerminalTabSwitchUITests: TerminalReconnectUITestCase {
     private func checkTabSwitches(chat: Bool) throws {
         let (app, diagnostics) = launchProductionSSHTestHarness(tabSwitching: true, chatMode: chat)
         defer { app.terminate() }
+        let tabs = app.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH %@", "vvterm.terminal.tab."
+        ))
+        XCTAssertEqual(tabs.count, 2)
         XCTAssertEqual(diagnosticIntegerValue("tabAttached", in: diagnostics), 1)
         for index in [1, 0] {
-            app.buttons["vvterm.tabSwitch.\(index)"].tap()
+            tabs.element(boundBy: index).tap()
+            XCTAssertTrue(tabs.element(boundBy: index).isSelected)
             wait(for: diagnostics, containing: "state=connected", timeout: 20, app: app)
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
             sleep(2)
@@ -39,7 +66,8 @@ final class TerminalTabSwitchUITests: TerminalReconnectUITestCase {
         var grids: [Int: String] = [:]
         var titles: [Int: String] = [:]
         for (step, index) in [0, 1, 0, 1, 0, 1].enumerated() {
-            app.buttons["vvterm.tabSwitch.\(index)"].tap()
+            tabs.element(boundBy: index).tap()
+            XCTAssertTrue(tabs.element(boundBy: index).isSelected)
             sleep(1)
             XCTAssertTrue(app.keyboards.firstMatch.exists, diagnosticText(in: app))
             XCTAssertEqual(diagnosticValue("keyboardVisible", in: diagnostics), "true")

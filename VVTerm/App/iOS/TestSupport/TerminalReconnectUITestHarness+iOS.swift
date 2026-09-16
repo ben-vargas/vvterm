@@ -87,6 +87,8 @@ struct TerminalReconnectUITestHarness: View {
                     serverId: activeServer?.id,
                     fallback: fixtureDiagnosticFallback
                 )
+                    // Keep diagnostics from covering the controls under test.
+                    .frame(height: 12)
                     .padding(6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .allowsHitTesting(false)
