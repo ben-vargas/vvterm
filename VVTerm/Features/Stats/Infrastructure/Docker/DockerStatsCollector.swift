@@ -159,12 +159,13 @@ nonisolated struct DockerStatsCollector: Sendable {
         return (error as NSError).domain == "Swift.CancellationError"
     }
 
-    private func unavailableState(from output: String) -> DockerAvailability? {
+    func unavailableState(from output: String) -> DockerAvailability? {
         let cleaned = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return nil }
 
         let lowercased = cleaned.lowercased()
-        if lowercased.contains("command not found")
+        if lowercased.contains("docker: not found")
+            || lowercased.contains("command not found")
             || lowercased.contains("not recognized as")
             || lowercased.contains("the term 'docker' is not recognized")
             || lowercased.contains("the term \"docker\" is not recognized")

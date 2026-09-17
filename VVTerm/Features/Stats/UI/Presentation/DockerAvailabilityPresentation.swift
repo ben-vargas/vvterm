@@ -8,7 +8,7 @@ extension DockerAvailability {
         case .available:
             return ""
         case .commandMissing:
-            return String(localized: "Docker command not found")
+            return String(localized: "Docker not found")
         case .daemonUnavailable(let message),
              .permissionDenied(let message),
              .unavailable(let message):

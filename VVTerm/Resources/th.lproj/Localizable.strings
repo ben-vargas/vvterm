@@ -1568,7 +1568,7 @@
 "Dead" = "ไม่ทำงาน";
 "Docker" = "Docker";
 "Docker Unavailable" = "Docker ไม่พร้อมใช้งาน";
-"Docker command not found" = "ไม่พบคำสั่ง Docker";
+"Docker not found" = "ไม่พบ Docker";
 "Docker metrics are unavailable on this server." = "เมตริก Docker ไม่พร้อมใช้งานบนเซิร์ฟเวอร์นี้";
 "Docker monitoring" = "การตรวจสอบ Docker";
 "Docker monitoring included on Pro" = "การตรวจสอบ Docker รวมอยู่ใน Pro";

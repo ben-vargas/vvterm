@@ -1568,7 +1568,7 @@
 "Dead" = "停止不能";
 "Docker" = "Docker";
 "Docker Unavailable" = "Docker を利用できません";
-"Docker command not found" = "Docker コマンドが見つかりません";
+"Docker not found" = "Docker が見つかりません";
 "Docker metrics are unavailable on this server." = "このサーバーでは Docker メトリクスを利用できません。";
 "Docker monitoring" = "Docker モニタリング";
 "Docker monitoring included on Pro" = "Docker モニタリングは Pro に含まれます";

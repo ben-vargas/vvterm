@@ -1565,7 +1565,7 @@
 "Dead" = "失效";
 "Docker" = "Docker";
 "Docker Unavailable" = "Docker 不可用";
-"Docker command not found" = "未找到 Docker 命令";
+"Docker not found" = "未找到 Docker";
 "Docker metrics are unavailable on this server." = "此服务器上的 Docker 指标不可用。";
 "Docker monitoring" = "Docker 监控";
 "Docker monitoring included on Pro" = "Docker 监控包含在 Pro 中";

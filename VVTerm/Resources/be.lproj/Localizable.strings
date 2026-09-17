@@ -1569,7 +1569,7 @@
 "Dead" = "Неактыўны";
 "Docker" = "Docker";
 "Docker Unavailable" = "Docker недаступны";
-"Docker command not found" = "Каманда Docker не знойдзена";
+"Docker not found" = "Docker не знойдзены";
 "Docker metrics are unavailable on this server." = "Метрыкі Docker недаступныя на гэтым серверы.";
 "Docker monitoring" = "Маніторынг Docker";
 "Docker monitoring included on Pro" = "Маніторынг Docker уключаны ў Pro";

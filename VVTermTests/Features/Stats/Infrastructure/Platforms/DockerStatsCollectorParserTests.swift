@@ -2,6 +2,21 @@ import XCTest
 @testable import VVTerm
 
 final class DockerStatsCollectorParserTests: XCTestCase {
+    func testMissingDockerShellErrorsUseCommandMissingState() {
+        let collector = DockerStatsCollector()
+        for output in [
+            "sh: 1: exec: docker: not found\n",
+            "sh: docker: not found",
+            "bash: docker: command not found",
+            "exec: docker: No such file or directory",
+            "'docker' is not recognized as an internal or external command"
+        ] {
+            XCTAssertEqual(collector.unavailableState(from: output), .commandMissing, output)
+        }
+        XCTAssertNil(collector.unavailableState(from: "container not found"))
+        XCTAssertNil(collector.unavailableState(from: "network not found"))
+    }
+
     func testStructuredProcessCancellationKeepsExistingCancellationPolicy() {
         let collector = DockerStatsCollector()
         XCTAssertTrue(collector.isCancellation(RemoteProcessFailure(reason: .cancelled, dispatch: .unknown)))

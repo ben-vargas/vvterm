@@ -1613,7 +1613,7 @@
 "Dead" = "Không hoạt động";
 "Docker" = "Docker";
 "Docker Unavailable" = "Docker không khả dụng";
-"Docker command not found" = "Không tìm thấy lệnh Docker";
+"Docker not found" = "Không tìm thấy Docker";
 "Docker metrics are unavailable on this server." = "Số liệu Docker không khả dụng trên máy chủ này.";
 "Docker monitoring" = "Giám sát Docker";
 "Docker monitoring included on Pro" = "Giám sát Docker có trong Pro";

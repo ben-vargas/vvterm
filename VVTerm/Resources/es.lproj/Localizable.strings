@@ -1568,7 +1568,7 @@
 "Dead" = "Inactivo";
 "Docker" = "Docker";
 "Docker Unavailable" = "Docker no disponible";
-"Docker command not found" = "Comando Docker no encontrado";
+"Docker not found" = "Docker no encontrado";
 "Docker metrics are unavailable on this server." = "Las métricas de Docker no están disponibles en este servidor.";
 "Docker monitoring" = "Supervisión de Docker";
 "Docker monitoring included on Pro" = "Supervisión de Docker incluida en Pro";

@@ -1569,7 +1569,7 @@
 "Dead" = "Neaktivní";
 "Docker" = "Docker";
 "Docker Unavailable" = "Docker není dostupný";
-"Docker command not found" = "Příkaz Docker nebyl nalezen";
+"Docker not found" = "Docker nenalezen";
 "Docker metrics are unavailable on this server." = "Metriky Dockeru nejsou na tomto serveru dostupné.";
 "Docker monitoring" = "Monitorování Dockeru";
 "Docker monitoring included on Pro" = "Monitorování Dockeru je součástí Pro";

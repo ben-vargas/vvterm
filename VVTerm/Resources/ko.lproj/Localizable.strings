@@ -1567,7 +1567,7 @@
 "Dead" = "비활성";
 "Docker" = "Docker";
 "Docker Unavailable" = "Docker를 사용할 수 없음";
-"Docker command not found" = "Docker 명령을 찾을 수 없음";
+"Docker not found" = "Docker를 찾을 수 없음";
 "Docker metrics are unavailable on this server." = "이 서버에서 Docker 메트릭을 사용할 수 없습니다.";
 "Docker monitoring" = "Docker 모니터링";
 "Docker monitoring included on Pro" = "Docker 모니터링은 Pro에 포함됨";
