@@ -24,6 +24,59 @@ VVTerm is a cross-platform SSH terminal app for Apple platforms. The current cod
 - App-owned code is organized under `VVTerm/App`, `VVTerm/Core`, and `VVTerm/Features`
 - The repo also contains tests, native vendor builds, and the marketing site under `web/`
 
+## Remote command processes
+
+`SSHClient.runProcess` returns separate byte buffers for stdout and stderr, optional
+exit status and signal, and explicit truncation flags. `startProcess` provides
+bounded throwing streams plus stdin, EOF, wait, and cancellation operations.
+Drain both streams concurrently. Each stream queues at most 16 chunks of 32 KiB;
+a slow consumer fails with `outputOverflow` instead of losing output silently.
+Capture limits apply independently, default to 1 MiB per stream, and have a 64 MiB
+maximum. Initial stdin and each write are limited to 1 MiB; concurrent pending
+writes fail with `stdinBusy`. A timeout is required (20 seconds by default,
+24 hours maximum), and starts when the exec request enters the SSH session.
+
+The SSH session owns channels, I/O, and cleanup. Process failures include dispatch
+certainty: `notDispatched`, `unknown` while waiting for the exec reply, or
+`dispatched` after acceptance. Neither `unknown` nor `dispatched` permits blind
+replay. Cancellation closes the SSH channel; this does not guarantee termination
+of remote descendants that detached from that channel. A native cleanup failure
+invalidates the connection rather than retaining an unreleased channel.
+
+`RemoteProcessRenderer` owns POSIX, PowerShell, and cmd syntax. POSIX and
+PowerShell invocations support argument lists, environment values, and a working
+directory. PowerShell uses an encoded native-process launcher to preserve empty
+and quoted arguments. The limited cmd path rejects embedded quotes, percent and
+exclamation expansion, line breaks, environment overrides, and working-directory
+overrides. Typed calls prefer a detected PowerShell host over cmd when available. Script input supports
+POSIX and PowerShell and owns stdin until EOF. Explicit raw shell requests remain
+available for user commands and integration adapters. No request content is logged,
+including requests marked as public metadata. A requested PTY can merge remote
+stderr into stdout; omit it when output separation is required.
+
+The existing `execute` API uses the same channel engine and retains its combined
+output-budget error and client timeout scope. Docker container-list collection is
+the first typed integration. Interactive shell channels, Mosh, Eternal Terminal,
+and SFTP retain their existing data paths.
+
+The vendor build applies `scripts/patches/libssh2-exit-status-presence.patch` to
+pinned libssh2 source. It adds a status-presence flag and getter without changing
+the old getter. Run `bash scripts/build.sh ssh` to rebuild all three libraries,
+then `bash scripts/tests/libssh2_exit_status_test.sh` to test real packet parsing.
+The native artifact manifest records the rebuilt binary hashes.
+
+Run process tests against a disposable loopback SSH server:
+
+```sh
+python3 -m venv .build/remote-process-tests
+.build/remote-process-tests/bin/pip install paramiko==4.0.0
+bash scripts/tests/remote_process_integration.sh
+```
+
+The live PowerShell test uses `/opt/homebrew/bin/pwsh`. The fixture is test-only,
+runs local commands, and creates temporary credentials outside the repository.
+No server software is required by the production process layer.
+
 ## Implemented Feature Areas
 
 ### Terminal and connections

@@ -1,34 +1,17 @@
 import Foundation
 
 nonisolated extension DockerStatsCollector {
-    func psCommands(platform: RemotePlatform, environment: RemoteEnvironment, limit: Int?) -> [String] {
-        if let limit {
-            return [
-                psCommand(platform: platform, environment: environment, limit: nil, allContainers: false),
-                psCommand(platform: platform, environment: environment, limit: limit, allContainers: true)
-            ]
+    func psInvocations(limit: Int?) -> [RemoteInvocation] {
+        func invocation(all: Bool, limit: Int?) -> RemoteInvocation {
+            var arguments = ["ps"]
+            if all { arguments.append("-a") }
+            arguments.append("--no-trunc")
+            if let limit { arguments += ["--last", String(limit)] }
+            arguments += ["--format", "{{json .}}"]
+            return RemoteInvocation(executable: "docker", arguments: arguments)
         }
-        return [
-            psCommand(platform: platform, environment: environment, limit: nil, allContainers: true)
-        ]
-    }
-
-    func psCommand(
-        platform: RemotePlatform,
-        environment: RemoteEnvironment,
-        limit: Int?,
-        allContainers: Bool
-    ) -> String {
-        var parts = ["docker", "ps"]
-        if allContainers {
-            parts.append("-a")
-        }
-        parts.append("--no-trunc")
-        if let limit {
-            parts.append(contentsOf: ["--last", "\(limit)"])
-        }
-        parts.append(contentsOf: ["--format", dockerFormatArgument(platform: platform, environment: environment), "2>&1"])
-        return parts.joined(separator: " ")
+        if let limit { return [invocation(all: false, limit: nil), invocation(all: true, limit: limit)] }
+        return [invocation(all: true, limit: nil)]
     }
 
     func statsCommand(platform: RemotePlatform, environment: RemoteEnvironment, containerIDs: [String]) -> String {

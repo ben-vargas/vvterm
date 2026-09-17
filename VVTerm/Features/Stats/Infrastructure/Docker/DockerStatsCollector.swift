@@ -18,8 +18,6 @@ nonisolated struct DockerStatsCollector: Sendable {
         do {
             let psOutput = try await collectContainerList(
                 client: client,
-                platform: platform,
-                environment: environment,
                 limit: limit
             )
             if let availability = unavailableState(from: psOutput) {
@@ -104,23 +102,28 @@ nonisolated struct DockerStatsCollector: Sendable {
 
     private func collectContainerList(
         client: SSHClient,
-        platform: RemotePlatform,
-        environment: RemoteEnvironment,
         limit: Int?
     ) async throws -> String {
         var outputs: [String] = []
         var lastError: Error?
 
-        for command in psCommands(platform: platform, environment: environment, limit: limit) {
+        for invocation in psInvocations(limit: limit) {
             do {
-                let output = try await executeDockerCommand(
-                    command,
-                    client: client,
-                    platform: platform,
-                    environment: environment,
-                    timeout: collectionTimeout
-                )
-                outputs.append(output)
+                var request = RemoteProcessRequest(payload: .invocation(invocation))
+                request.timeout = collectionTimeout
+                let result = try await client.runProcess(request)
+                guard !result.stdoutTruncated, !result.stderrTruncated else {
+                    throw SSHError.outputLimitExceeded
+                }
+                let output = String(decoding: result.stdout, as: UTF8.self)
+                let errorOutput = String(decoding: result.stderr, as: UTF8.self)
+                if result.exitStatus == 0, result.exitSignal == nil {
+                    outputs.append(output)
+                } else if unavailableState(from: errorOutput) != nil {
+                    outputs.append(errorOutput)
+                } else {
+                    throw DockerControlError.commandFailed(errorOutput.isEmpty ? String(localized: "Docker command failed.") : errorOutput.firstLine)
+                }
             } catch {
                 if isCancellation(error) {
                     throw CancellationError()
@@ -148,7 +151,8 @@ nonisolated struct DockerStatsCollector: Sendable {
         )
     }
 
-    private func isCancellation(_ error: Error) -> Bool {
+    func isCancellation(_ error: Error) -> Bool {
+        if let failure = error as? RemoteProcessFailure, failure.reason == .cancelled { return true }
         if error is CancellationError {
             return true
         }

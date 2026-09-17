@@ -75,6 +75,7 @@ check_deps_ssh() {
     require_cmd curl
     require_cmd tar
     require_cmd cmake
+    require_cmd patch
     require_cmd make
     require_cmd rsync
     require_cmd xcrun
@@ -383,6 +384,8 @@ download_sources() {
         "${LIBSSH2_SHA256}"
     rm -rf "libssh2-${LIBSSH2_VERSION}"
     tar xzf "libssh2-${LIBSSH2_VERSION}.tar.gz"
+    patch --batch --fuzz=0 -p1 -d "libssh2-${LIBSSH2_VERSION}" \
+        < "${SCRIPT_DIR}/patches/libssh2-exit-status-presence.patch"
 }
 
 build_openssl_macos() {

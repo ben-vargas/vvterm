@@ -2,6 +2,13 @@ import XCTest
 @testable import VVTerm
 
 final class DockerStatsCollectorParserTests: XCTestCase {
+    func testStructuredProcessCancellationKeepsExistingCancellationPolicy() {
+        let collector = DockerStatsCollector()
+        XCTAssertTrue(collector.isCancellation(RemoteProcessFailure(reason: .cancelled, dispatch: .unknown)))
+        XCTAssertTrue(collector.isCancellation(CancellationError()))
+        XCTAssertFalse(collector.isCancellation(RemoteProcessFailure(reason: .timeout, dispatch: .dispatched)))
+    }
+
     func testDockerParserMergesContainerRowsWithStatsRows() {
         let psOutput = """
         {"ID":"abcdef1234567890","Names":"api","Image":"ghcr.io/app/api:latest","Command":"./api","CreatedAt":"2026-07-06 10:00:00 +0000 UTC","RunningFor":"2 hours ago","Ports":"0.0.0.0:8080->8080/tcp","Status":"Up 2 hours (healthy)","State":"running"}
@@ -68,10 +75,10 @@ final class DockerStatsCollectorParserTests: XCTestCase {
         let collector = DockerStatsCollector()
 
         XCTAssertEqual(
-            collector.psCommands(platform: .windows, environment: environment, limit: 24),
+            collector.psInvocations(limit: 24).map(\.arguments),
             [
-                "docker ps --no-trunc --format '{{json .}}' 2>&1",
-                "docker ps -a --no-trunc --last 24 --format '{{json .}}' 2>&1"
+                ["ps", "--no-trunc", "--format", "{{json .}}"],
+                ["ps", "-a", "--no-trunc", "--last", "24", "--format", "{{json .}}"]
             ]
         )
         XCTAssertEqual(
@@ -146,8 +153,8 @@ final class DockerStatsCollectorParserTests: XCTestCase {
         let collector = DockerStatsCollector()
 
         XCTAssertEqual(
-            collector.psCommands(platform: .linux, environment: .fallbackPOSIX, limit: nil),
-            ["docker ps -a --no-trunc --format '{{json .}}' 2>&1"]
+            collector.psInvocations(limit: nil).map(\.arguments),
+            [["ps", "-a", "--no-trunc", "--format", "{{json .}}"]]
         )
         XCTAssertEqual(
             collector.shellCommand(
