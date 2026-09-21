@@ -6,7 +6,7 @@ export const SITE = {
   siteUrl: "https://vvterm.com",
   title: "VVTerm - SSH Terminal and SFTP Client for iPhone, iPad, and Mac",
   description:
-    "Your servers. Everywhere. Native SSH terminal and SFTP client for iPhone, iPad, and Mac with Mosh, Tailscale SSH, Cloudflare Tunnel SSH, iCloud sync, and Keychain security.",
+    "Your servers, always with you. Native SSH terminal and SFTP client for iPhone, iPad, and Mac with Mosh, Tailscale SSH, Cloudflare Tunnel SSH, iCloud sync, and Keychain security.",
   appStoreUrl: "https://apps.apple.com/app/vvterm/id6757482822",
   githubUrl: "https://github.com/vivy-company/vvterm",
   discordUrl: "https://discord.gg/zemMZtrkSb",

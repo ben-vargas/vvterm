@@ -7,7 +7,7 @@
 [![Binary License](https://img.shields.io/badge/Binary-App%20Store%20EULA-6e7681?style=flat-square)](LICENSE-APPSTORE.md)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ff69b4?style=flat-square&logo=github)](https://github.com/sponsors/vivy-company)
 
-Your servers. Everywhere.
+Your servers, always with you.
 
 ![VVTerm macOS](/web/src/preview.png)
 
