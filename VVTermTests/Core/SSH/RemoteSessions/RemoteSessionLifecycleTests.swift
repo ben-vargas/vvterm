@@ -4,6 +4,28 @@ import Testing
 
 struct RemoteSessionLifecycleTests {
     @Test
+    func generatedTokenIsValidAndSurvivesPersistence() throws {
+        let envelope = RemoteSessionLifecycleEnvelope.make()
+
+        #expect(RemoteSessionLifecycleEnvelope.isValidToken(envelope.token))
+        #expect(try JSONDecoder().decode(
+            RemoteSessionLifecycleEnvelope.self,
+            from: JSONEncoder().encode(envelope)
+        ) == envelope)
+    }
+
+    @Test
+    func tokenValidationAcceptsOnlyBoundedASCII() {
+        #expect(RemoteSessionLifecycleEnvelope.isValidToken("A-z_09"))
+        #expect(!RemoteSessionLifecycleEnvelope.isValidToken(""))
+        #expect(!RemoteSessionLifecycleEnvelope.isValidToken("é"))
+        #expect(!RemoteSessionLifecycleEnvelope.isValidToken("a;b"))
+        #expect(!RemoteSessionLifecycleEnvelope.isValidToken(
+            String(repeating: "a", count: RemoteSessionLifecycleEnvelope.maximumTokenLength + 1)
+        ))
+    }
+
+    @Test
     func existingSessionWithoutEventResolvesAsDetach() {
         let reason = TerminalShellEndReason.resolve(
             lifecycle: lifecycle(ownership: .managed),
