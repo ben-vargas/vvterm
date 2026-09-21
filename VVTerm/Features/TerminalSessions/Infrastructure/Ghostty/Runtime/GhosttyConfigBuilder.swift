@@ -90,7 +90,8 @@ extension Ghostty {
             window-padding-balance = false
             window-padding-x = \(contentPadding.horizontal)
             window-padding-y = \(contentPadding.vertical)
-            window-padding-color = extend-always
+            # Keep colored prompts out of the space below the last row.
+            window-padding-color = extend
 
             # Enable shell integration (resources dir auto-detected from app bundle)
             shell-integration = \(shellName)

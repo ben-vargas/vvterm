@@ -165,7 +165,7 @@ struct GhosttyConfigBuilderTests {
 
         #expect(content.contains("window-padding-x = 12"))
         #expect(content.contains("window-padding-y = 18"))
-        #expect(content.contains("window-padding-color = extend-always"))
+        #expect(content.split(separator: "\n").contains("window-padding-color = extend"))
     }
 
     @Test
